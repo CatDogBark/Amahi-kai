@@ -23,3 +23,12 @@ pickle-email-*.html
 /docker/*
 
 public/assets
+
+# OpenClaw agent workspace files
+BOOTSTRAP.md
+AGENTS.md
+IDENTITY.md
+SOUL.md
+TOOLS.md
+USER.md
+/memory/

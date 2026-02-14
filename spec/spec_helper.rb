@@ -5,82 +5,53 @@ require 'simplecov_helper'
 require File.expand_path("../../config/environment", __FILE__)
 require 'rspec/rails'
 require 'capybara/rspec'
-require 'capybara/poltergeist'
 require 'factory_bot_rails'
 
 # turn this to true to get screenshots and html in tmp/capybara/*
-SCREENSHOTS_ON_FAILURES=false
+SCREENSHOTS_ON_FAILURES = false unless defined?(SCREENSHOTS_ON_FAILURES)
 
 if SCREENSHOTS_ON_FAILURES
-	require 'capybara-screenshot/rspec'
+  require 'capybara-screenshot/rspec'
 end
 
-#reguired for using transactional fixtures with javascript driver
+# Required for using transactional fixtures with javascript driver
 ActiveRecord::ConnectionAdapters::ConnectionPool.class_eval do
-	def current_connection_id
-		Thread.main.object_id
-	end
+  def current_connection_id
+    Thread.main.object_id
+  end
 end
 
 # Requires supporting ruby files with custom matchers and macros, etc,
 # in spec/support/ and its subdirectories.
-Dir[Rails.root.join("spec/support/**/*.rb")].each {|f| require f}
+Dir[Rails.root.join("spec/support/**/*.rb")].each { |f| require f }
 
 RSpec.configure do |config|
-	# ## Mock Framework
-	#
-	# If you prefer to use mocha, flexmock or RR, uncomment the appropriate line:
-	#
-	# config.mock_with :mocha
-	# config.mock_with :flexmock
-	# config.mock_with :rr
-	# config.mock_with :rspec
+  config.use_transactional_fixtures = false
+  config.infer_base_class_for_anonymous_controllers = false
+  config.order = "random"
 
-	# Remove this line if you're not using ActiveRecord or ActiveRecord fixtures
-	# config.fixture_path = "#{::Rails.root}/spec/fixtures"
+  config.include FactoryBot::Syntax::Methods
 
-	# If you're not using ActiveRecord, or you'd prefer not to run each of your
-	# examples within a transaction, remove the following line or assign false
-	# instead of true.
-	config.use_transactional_fixtures = false
+  # Use rack_test by default (fast, no browser needed)
+  # Feature specs requiring JS will need a real browser driver (e.g. selenium + chromium)
+  config.before(:suite) do
+    Capybara.default_driver = :rack_test
+  end
 
-	# If true, the base class of anonymous controllers will be inferred
-	# automatically. This will be the default behavior in future versions of
-	# rspec-rails.
-	config.infer_base_class_for_anonymous_controllers = false
+  config.before(:each) do
+    DatabaseCleaner.start
+    # load the seed to get the minimum env going
+    load "#{Rails.root}/db/seeds.rb"
+  end
 
-	# Run specs in random order to surface order dependencies. If you find an
-	# order dependency and want to debug it, you can fix the order by providing
-	# the seed, which is printed after each run.
-	#     --seed 1234
-	config.order = "random"
+  config.after(:each) do
+    DatabaseCleaner.clean
+    Capybara.reset_sessions!
+  end
 
-	config.include FactoryBot::Syntax::Methods
-
-	#change the default javascript driver to webkit
-	config.before(:suite) do
-		Capybara.javascript_driver = :poltergeist
-		Capybara.default_driver = :poltergeist
-	end
-
-	config.before(:each) do
-		DatabaseCleaner.start
-		# load the seed to get the minimum env going, and to ensure
-		# that we don't get the initilization page on every scenario
-		load "#{Rails.root}/db/seeds.rb"
-	end
-	config.after(:each) do
-		DatabaseCleaner.clean
-		Capybara.reset_sessions!
-	end
-
-	if SCREENSHOTS_ON_FAILURES
-		Capybara::Screenshot.autosave_on_failure = true
-	end
-
+  if SCREENSHOTS_ON_FAILURES
+    Capybara::Screenshot.autosave_on_failure = true
+  end
 end
 
 # This is to stub with RSpec in FactoryBot
-FactoryBot::SyntaxRunner.class_eval do
-  include RSpec::Mocks::ExampleMethods
-end

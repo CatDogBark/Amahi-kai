@@ -1,99 +1,78 @@
 source 'https://rubygems.org'
 
 gem 'rake'
+gem 'rails', '~> 5.2.0'
 
-gem "rails", '~>5.2.0'
+# Caching
+gem 'dalli'
+gem 'actionpack-action_caching'
 
-gem "dalli"
+# Configuration
+gem 'yettings'
 
-gem "yettings"
-
+# Asset pipeline
 gem 'sass-rails'
 gem 'coffee-rails'
-
 gem 'uglifier'
 
-gem 'rest-client'
+# UI
+gem 'bootstrap', '~> 4.1.1'
+gem 'popper_js', '~> 1.12.9'
+gem 'jquery-rails'
+gem 'jquery-ui-rails'
+gem 'slim'
+gem 'jbuilder'
 
+# API & serialization
+gem 'rest-client'
 gem 'activeresource'
-gem 'actionpack-action_caching'
+gem 'ya2yaml'
+
+# Rails extensions
 gem 'actionview'
 gem 'rails-observers'
 
-gem 'jbuilder'
-gem 'ya2yaml'
-
-gem 'bootstrap', '~> 4.1.1'
-gem 'popper_js', '~> 1.12.9'
-
-gem 'jquery-rails'
-gem 'jquery-ui-rails'
-
-gem 'slim'
-
-gem 'scrypt' # required for authlogic even though it's not used
+# Authentication
+gem 'scrypt'       # required by authlogic
 gem 'authlogic'
-
 gem 'bcrypt'
 
+# Server
 gem 'unicorn'
 
-gem 'rb-readline', require: false
+# Docker integration
+gem 'docker-api'
 
-gem 'docker-api' # required to create and manage docker containers
+# Misc
+gem 'rb-readline', require: false
+gem 'nokogiri', require: 'nokogiri'
+
+# Ruby 2.7 compatibility pins
+gem 'ffi', '< 1.17'
+gem 'psych'  # needed for YAML alias support with yettings
 
 group :development do
-	# turn this on to enable reporting on best practices with:
-	#	rails_best_practices -f html .
-	# gem 'rails_best_practices'
-
-	gem 'listen'
-
-	# FIXME: for Fedora only
-	if ((open('/etc/issue').grep(/fedora/i).length > 0) rescue false)
-		gem "minitest"
-	end
-
-	gem 'better_errors'
-	gem 'binding_of_caller'
-
-	gem 'puma'
-
-	# DB performance warnings
-  gem 'bullet'
+  gem 'listen'
+  gem 'better_errors'
+  gem 'binding_of_caller'
+  gem 'puma'
+  gem 'bullet'   # DB performance warnings
 end
 
-gem "rspec-rails", :group => [:test, :development]
+gem 'rspec-rails', group: [:test, :development]
 
 group :test do
-  gem "factory_bot_rails"
-  gem "capybara"
+  gem 'factory_bot_rails'
+  gem 'capybara'
   gem 'capybara-screenshot'
   gem 'database_cleaner'
-
-  # FIXME: required in Fedora 18 for some (packaging?) reason
-  # gem 'minitest'
-  # required for javascript test in selenium
-  gem 'poltergeist'
-  gem 'simplecov', :require => false
+  gem 'simplecov', require: false
 end
-
-# FIXME - temporary work-around for Fedora 19
-# see https://bugzilla.redhat.com/show_bug.cgi?id=979133
-gem 'psych'
 
 group :development, :production do
-	gem 'mysql2'
-end
-
-group :production do
-	gem 'mini_racer'
+  gem 'mysql2'
 end
 
 group :development, :test do
-	gem 'sqlite3'
+  gem 'sqlite3', '< 1.7'
 end
-
-# this is somehow needed for nokogiri
-gem 'mini_portile2',  '~> 2.3.0'
-gem "nokogiri", :require => "nokogiri"

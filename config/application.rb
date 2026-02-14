@@ -1,3 +1,4 @@
+require_relative "psych_patch"
 require_relative 'boot'
 
 require 'rails/all'
