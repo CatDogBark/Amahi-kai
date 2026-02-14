@@ -1,22 +1,43 @@
+# Amahi Platform Makefile
 
-bundle:
-	bin/bundle install --without test --path vendor/bundle --binstubs bin/ --deployment
-	(cd vendor/bundle/ruby/ && rm -rf cache) || true
-	(cd vendor/bundle/ruby/gems && rm -rf rails-*/guides */spec */doc */doc-api) || true
-	(cd vendor/bundle/ruby/gems && rm -rf */test */tests) || true
-	(cd vendor/bundle/ruby/ && find . \( -name '*.[coa]' -or -name '*.cc' -or -name '*.md' -or -name '.git' \) -exec rm -rf {} \;) || true
+# Development setup
+setup:
+	bin/dev-setup
 
+# Start the development server
+serve:
+	BUNDLE_APP_CONFIG=/tmp/.bundle bundle exec rails s -b 0.0.0.0
+
+# Run all non-JS tests
+test:
+	BUNDLE_APP_CONFIG=/tmp/.bundle bundle exec rspec --tag ~js
+
+# Run all tests (requires chromium + chromedriver)
+test-all:
+	BUNDLE_APP_CONFIG=/tmp/.bundle bundle exec rspec
+
+# Run model specs only
+test-models:
+	BUNDLE_APP_CONFIG=/tmp/.bundle bundle exec rspec spec/models/
+
+# Precompile assets for production
 assets:
-	RAILS_ENV=production bin/rails assets:precompile
+	RAILS_ENV=production BUNDLE_APP_CONFIG=/tmp/.bundle bundle exec rails assets:precompile
 
-distclean: clean
-	rm -rf vendor/bundle
+# Database tasks
+db-create:
+	BUNDLE_APP_CONFIG=/tmp/.bundle bundle exec rake db:create
 
-# this is needed to package v8 for fedora 18, using the system v8
-bundle-config:
-	bin/bundle config build.libv8 --with-system-v8
+db-migrate:
+	BUNDLE_APP_CONFIG=/tmp/.bundle bundle exec rake db:migrate
 
-# cleanup misc files that bloat things up
+db-seed:
+	BUNDLE_APP_CONFIG=/tmp/.bundle bundle exec rake db:seed
+
+db-reset:
+	BUNDLE_APP_CONFIG=/tmp/.bundle bundle exec rake db:drop db:create db:migrate db:seed
+
+# Cleanup
 clean:
 	rm -f log/development.log
 	rm -f log/test.log
@@ -26,12 +47,14 @@ clean:
 	rm -rf tmp/smb*
 	rm -rf tmp/key*
 	rm -rf tmp/capybara
+	rm -rf coverage/
 
-# install necessary packages (FIXME: this is for fedora 18 only so far)
-devel-rpms:
-	sudo dnf -y install git rpm-build ruby ruby-devel gcc gcc-c++ mysql mysql-devel \
-		libxml2-devel libxslt-devel sqlite sqlite-devel v8 v8-devel rubygem-bundler
+# Install dev dependencies (Ubuntu/Debian)
+devel-deps:
+	sudo apt-get install -y ruby ruby-dev build-essential \
+		libmariadb-dev mariadb-client mariadb-server \
+		libsqlite3-dev libxml2-dev libxslt-dev zlib1g-dev \
+		libffi-dev libssl-dev libreadline-dev libyaml-dev \
+		git curl unzip nodejs
 
-run-tests:
-	bin/bundle exec rake db:test:prepare
-	bin/bundle exec rspec spec
+.PHONY: setup serve test test-all test-models assets db-create db-migrate db-seed db-reset clean devel-deps
