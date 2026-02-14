@@ -119,22 +119,22 @@ class AliasesController < ApplicationController
 		addr = params[:value].strip
 		# FIXME - report errors to the user!
 		unless valid_address?(addr)
-			render :text => a.address
+			render plain: a.address
 			return
 		end
 		if ((valid_short_address?(a.address) and not valid_short_address?(addr)) or
 			(is_address_full?(a.address) and not is_address_full?(addr)))
-			render :text => a.address
+			render plain: a.address
 			return
 		end
 		a.address = addr
 		a.save
 		a.reload
 		if a.address.blank?
-			render :text => "(hda)"
+			render plain: "(hda)"
 			return
 		end
-		render :text => a.address
+		render plain: a.address
 	end
 
 

@@ -31,7 +31,7 @@ class ShareController < ApplicationController
 		s.name = params[:value]
 		s.save
 		s.reload
-		render :text => s.name
+		render plain: s.name
 	end
 
 	def update_extras
@@ -41,7 +41,7 @@ class ShareController < ApplicationController
 		s.save
 		s.reload
 		extras = s.extras.blank? ? t('add_extra_parameters') : s.extras
-		render :text => extras
+		render plain: extras
 	end
 
 	def update_path
@@ -50,7 +50,7 @@ class ShareController < ApplicationController
 		s.path = params[:value]
 		s.save
 		s.reload
-		render :text => s.path
+		render plain: s.path
 	end
 
 	def update_tags
@@ -59,7 +59,7 @@ class ShareController < ApplicationController
 		s.tags = params[:value].downcase
 		s.save
 		s.reload
-		render :text => s.tags
+		render plain: s.tags
 	end
 
 	def delete
@@ -74,11 +74,11 @@ class ShareController < ApplicationController
 		path = params[:path]
 		if nm.nil? or nm.blank? or ((not (valid_name?(nm))) or (nm.size > 32) or (path.size > 64))
 			flash.now[:error] = "Bad share name!"
-			render :text => "", :status => 403
+			render plain: "", :status => 403
 			return
 		end
 		if path.nil? or path.blank?
-			render :text => "", :status => 401
+			render plain: "", :status => 401
 			return
 		end
 		v = params[:visible] ? true : false
@@ -273,7 +273,7 @@ class ShareController < ApplicationController
 			Share.push_shares
 		end
 		s.reload
-		render :text => s.value
+		render plain: s.value
 	end
 
 	def toggle_disk_pool_enabled

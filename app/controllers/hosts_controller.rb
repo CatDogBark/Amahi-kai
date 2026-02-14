@@ -119,7 +119,7 @@ class HostsController < ApplicationController
 		addr = params[:value].strip
 		# FIXME - report errors to the user!
 		unless valid_short_address?(addr)
-			render :text => a.address
+			render plain: a.address
 			return
 		end
 		h = Host.where(:address=>addr).first
@@ -129,7 +129,7 @@ class HostsController < ApplicationController
 			a.save
 			a.reload
 		end
-		render :text => a.address
+		render plain: a.address
 	end
 
 	def update_mac
@@ -137,7 +137,7 @@ class HostsController < ApplicationController
 		mac = params[:value].strip
 		# FIXME - report errors to the user!
 		unless valid_mac?(mac)
-			render :text => a.mac
+			render plain: a.mac
 			return
 		end
 		h = Host.where(:mac=>mac).first
@@ -147,7 +147,7 @@ class HostsController < ApplicationController
 			a.save
 			a.reload
 		end
-		render :text => a.mac
+		render plain: a.mac
 	end
 
 	def delete

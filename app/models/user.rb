@@ -31,7 +31,8 @@ class User < ApplicationRecord
 			# c.logged_in_timeout = 1.minute
 
 			# authlogic switchted to SCrypt default recently
-			c.crypto_provider = Authlogic::CryptoProviders::Sha512
+			c.crypto_provider = Authlogic::CryptoProviders::SCrypt
+			c.transition_from_crypto_providers = [Authlogic::CryptoProviders::Sha512]
 		end
 	rescue
 		# NOTE: ignore errors - only happens when using from a

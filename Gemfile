@@ -66,6 +66,7 @@ group :test do
   gem 'capybara'
   gem 'capybara-screenshot'
   gem 'database_cleaner'
+  # gem 'selenium-webdriver'  # TODO: uncomment when chromium is in sandbox image
   gem 'simplecov', require: false
 end
 

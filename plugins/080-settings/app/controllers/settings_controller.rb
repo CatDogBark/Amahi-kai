@@ -65,13 +65,13 @@ class SettingsController < ApplicationController
 	def reboot
 		c = Command.new("reboot")
 		c.execute
-		render :text => t('rebooting')
+		render plain: t('rebooting')
 	end
 
 	def poweroff
 		c = Command.new("poweroff")
 		c.execute
-		render :text => t('powering_off')
+		render plain: t('powering_off')
 	end
 
   def refresh
