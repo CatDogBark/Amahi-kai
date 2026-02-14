@@ -62,7 +62,7 @@ feature "Front page" do
 		click_button "Log In"
 		expect(page).to have_content("Dashboard")
 		expect(page).to have_content("Logout")
-		click_link "Logout"
+		first(:link, "Logout").click
 		expect(page).to have_content("Amahi Server Login")
 	end
 end

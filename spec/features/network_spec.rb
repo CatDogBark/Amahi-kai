@@ -1,6 +1,6 @@
 require 'spec_helper'
 
-feature "Network tab" do
+feature "Network tab", js: true do
 	before do
 		@admin = create(:admin)
 		visit root_path

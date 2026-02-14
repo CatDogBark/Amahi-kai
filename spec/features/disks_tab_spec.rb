@@ -19,7 +19,7 @@ feature "Disks tab" do
 		expect(page).to have_content "25"
 	end
 
-	scenario "Switching to Fahrenheit then back to Celsius" do
+	scenario "Switching to Fahrenheit then back to Celsius", js: true do
 		click_link "C"
 		expect(page).to have_content I18n.translate('temperature')+" (F)"
 		expect(page).to have_content "77"

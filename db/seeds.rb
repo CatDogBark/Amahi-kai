@@ -23,15 +23,14 @@ Setting.set('self-address', '10')
 Setting.set('domain', 'amahi.net')
 Setting.set('api-key', '1b6727c9170b11d6f80437eac13d7a2e143fd895')
 
-# Authlogic 6.x no longer provides password_confirmation= as a virtual attribute
-# by default. Set password directly and skip confirmation validation.
 admin = User.new(
   login: 'admin',
   name: 'Admin User',
+  password: 'secretpassword',
+  password_confirmation: 'secretpassword',
   admin: true,
   pin: nil
 )
-admin.password = 'secretpassword'
 admin.save!(validate: false)
 
 Setting.set('advanced', '1')

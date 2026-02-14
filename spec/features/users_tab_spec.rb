@@ -94,7 +94,7 @@ feature "Users tab" do
 		expect(user_link.find("table.settings")).to have_content("changedname")
 		expect(@user.reload.name).to eq "changedname"
 	end
-	scenario "should allow an admin user to change his password" do
+	scenario "should allow an admin user to change his password", js: true do
 		user_link = find("#whole_user_#{@admin.id}")
 		user_link.find("tr").click_link @admin.login
 		within(user_link) do
@@ -113,7 +113,7 @@ feature "Users tab" do
 		end
 		expect(@admin.reload.password).to eq "secretpassword"
 	end
-	scenario "should allow an admin user to change another user's password" do
+	scenario "should allow an admin user to change another user's password", js: true do
 		user_link = find("#whole_user_#{@user.id}")
 		user_link.find("tr").click_link @user.login
 		within(user_link) do
@@ -132,7 +132,7 @@ feature "Users tab" do
 		end
 		expect(@user.reload.password).to eq "secretpassword"
     end
-    scenario "should allow an admin user to change another user's pin" do
+    scenario "should allow an admin user to change another user's pin", js: true do
     	user_link = find("#whole_user_#{@user.id}")
 		user_link.find("tr").click_link @user.login
 		within(user_link) do

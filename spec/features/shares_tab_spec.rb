@@ -1,6 +1,6 @@
 require 'spec_helper'
 
-feature "Shares tab" do
+feature "Shares tab", js: true do
 	before do
 		@admin = create(:admin)
 		visit root_path

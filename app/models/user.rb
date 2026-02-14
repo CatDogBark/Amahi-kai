@@ -19,6 +19,10 @@ require 'command'
 
 class User < ApplicationRecord
 
+	# Authlogic 6.x no longer provides password_confirmation as a virtual attribute.
+	# Re-add it since the UI forms and controllers expect it.
+	attr_accessor :password_confirmation
+
 	scope :admins, ->{ where(:admin => true)}
 
 	begin

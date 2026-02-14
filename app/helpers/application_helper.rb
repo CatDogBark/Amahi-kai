@@ -135,7 +135,7 @@ module ApplicationHelper
 	end
 
 	def path2uri(name)
-		name = URI.escape name
+		name = URI.encode_www_form_component(name)
 		is_a_mac? ? "smb://hda/#{name}" : "file://///hda/#{name}"
 	end
 

@@ -27,7 +27,7 @@ feature "Users tab" do
     expect(page).to have_content("fullname")
   end
 
-  feature 'user information must be valid to be created' do
+  feature 'user information must be valid to be created', js: true do
     scenario 'with no username' do
       visit users_engine.users_path
       click_button "New User"
