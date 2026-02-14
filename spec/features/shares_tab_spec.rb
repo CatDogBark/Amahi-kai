@@ -49,7 +49,9 @@ feature "Shares tab", js: true do
 		scenario "Admin should be able to delete share" do
 			visit shares_path
 			click_link @share.name
-			click_link "Delete #{@share.name}"
+			accept_confirm do
+				click_link "Delete #{@share.name}"
+			end
 			wait_for_ajax
 			visit shares_path
 			expect(page).not_to have_content @share.name

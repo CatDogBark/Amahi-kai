@@ -24,6 +24,7 @@ begin
     options.add_argument('--disable-dev-shm-usage')
     options.add_argument('--disable-gpu')
     options.add_argument('--window-size=1400,900')
+    options.binary = '/usr/bin/chromium'
     Capybara::Selenium::Driver.new(app, browser: :chrome, options: options)
   end
 

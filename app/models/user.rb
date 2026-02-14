@@ -53,7 +53,10 @@ class User < ApplicationRecord
 	validates_uniqueness_of :pin, :allow_nil => true
 	validate :validate_pin,  unless: Proc.new { |user| user.pin.blank? }
 
-	#NOTE: validation for password and password_confirmation is set by authlogic
+	# Authlogic 6.x no longer auto-adds password validations.
+	# We add them explicitly to match the original Amahi behavior.
+	validates :password, :length => { :minimum => 8 }, :if => :require_password?
+	validates :password, :confirmation => true, :if => :require_password?
 
 	before_create :before_create_hook
 	before_save :before_save_hook
@@ -135,6 +138,10 @@ class User < ApplicationRecord
 
 
 	protected
+
+	def require_password?
+		new_record? || password.present?
+	end
 
 	def before_create_hook
 		# FIXME: this is an issue with fedora 12 and usernames in lowercase

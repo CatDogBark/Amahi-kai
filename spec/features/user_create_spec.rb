@@ -36,7 +36,7 @@ feature "Users tab" do
       fill_in "user_password_confirmation", :with => "secretpassword"
       click_button "user_create_button"
       wait_for_ajax
-      expect(page).to have_content "is too short (minimum is 3 characters)"
+      expect(page).to have_content "can't be blank"
     end
     scenario 'with no full name' do
       visit users_engine.users_path

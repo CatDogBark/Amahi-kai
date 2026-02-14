@@ -30,8 +30,10 @@ feature "Users tab" do
 	scenario "should allow an admin user to delete a regular user", :js => true do
 		find("#whole_user_#{@user.id}").find("tr").click_link @user.login
 		expect(page).to have_selector("a#delete-user-#{@user.id}", :visible => true)
-		click_link "delete-user-#{@user.id}"
-		expect(page).to have_no_content(@user.name)
+		accept_confirm do
+			click_link "delete-user-#{@user.id}"
+		end
+		expect(page).to have_no_selector("#whole_user_#{@user.id}")
 	end
 	scenario "should not allow an admin user to delete its own account" do
 		find("#whole_user_#{@admin.id}").find("tr").click_link @admin.login
@@ -39,7 +41,7 @@ feature "Users tab" do
 	end
 	scenario "should not allow an admin user to revoke its own admin rights", :js => true do
 		find("#whole_user_#{@admin.id}").find("tr").click_link @admin.login
-		expect(page.find_by_id("checkbox_user_admin_#{@admin.id}")[:disabled]).to eq true
+		expect(page.find_by_id("checkbox_user_admin_#{@admin.id}")[:disabled]).to eq "true"
 	end
 	scenario "should allow an admin user to revoke admin rights to another user", :js => true do
 		user = create(:admin)
