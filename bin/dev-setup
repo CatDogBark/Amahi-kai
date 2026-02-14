@@ -1,0 +1,51 @@
+#!/bin/bash
+# Development setup script for Amahi Platform
+# Run this after cloning and starting MariaDB
+
+set -e
+
+echo "🌊 Amahi Platform Development Setup"
+echo "===================================="
+
+# Check for Ruby
+ruby --version || { echo "❌ Ruby not found. Install Ruby 2.7+"; exit 1; }
+
+# Check for MariaDB
+mysql --socket=/tmp/mysqld.sock -e "SELECT 1" > /dev/null 2>&1 || {
+    echo "Starting MariaDB..."
+    start-mariadb 2>/dev/null || {
+        echo "❌ MariaDB not available. Start it manually."
+        exit 1
+    }
+}
+echo "✅ MariaDB running"
+
+# Create database if needed
+mysql --socket=/tmp/mysqld.sock -e "CREATE DATABASE IF NOT EXISTS hda_development" 2>/dev/null
+echo "✅ Database ready"
+
+# Check bundle
+export BUNDLE_APP_CONFIG=/tmp/.bundle
+bundle check > /dev/null 2>&1 || {
+    echo "Running bundle install..."
+    bundle install --local
+}
+echo "✅ Gems installed"
+
+# Run migrations
+bundle exec rake db:migrate
+echo "✅ Migrations complete"
+
+# Seed if empty
+USER_COUNT=$(bundle exec rails runner "puts User.count" 2>/dev/null)
+if [ "$USER_COUNT" = "0" ]; then
+    bundle exec rake db:seed
+    echo "✅ Database seeded (admin/secretpassword)"
+else
+    echo "✅ Database already seeded ($USER_COUNT users)"
+fi
+
+echo ""
+echo "🎉 Ready! Run: bundle exec rails s -b 0.0.0.0"
+echo "   Then visit: http://localhost:3000"
+echo "   Login: admin / secretpassword"
