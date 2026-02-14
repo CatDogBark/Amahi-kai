@@ -36,7 +36,7 @@ class SearchController < ApplicationController
 
 		if params[:button] && params[:button] == "Web"
 			require 'uri'
-			redirect_to URI.escape("http://www.google.com/search?q=#{params[:query]}")
+			redirect_to "http://www.google.com/search?q=#{URI.encode_www_form_component(params[:query])}"
 		else
 			@query = params[:query]
 			@page = (params[:page] && params[:page].to_i.abs) || 1
