@@ -59,7 +59,7 @@ class Platform
 			:named => 'bind9',
 			:smb => 'smbd',
 			:nmb => 'nmbd',
-			:mysql => 'mysql',
+			:mysql => 'mariadb',
 		},
 		'debian' => {
 			:apache => 'apache2',
@@ -67,7 +67,7 @@ class Platform
 			:named => 'bind9',
 			:smb => 'samba',
 			:nmb => 'samba',
-			:mysql => 'mysql',
+			:mysql => 'mariadb',
 		},
 		'mac' => {
 			:apache => 'apache2',
@@ -222,66 +222,29 @@ class Platform
 			pkguninstall(pkgs)
 		end
 
+		# All modern Linux distros use systemd now
 		def service_start_command(name)
 			service = service_name(name)
-			if fedora? or arch? or centos?
-				"/usr/bin/systemctl start #{service}.service"
-			elsif ubuntu? and File.exist?(UPSTART_CONF % service)
-				"/sbin/initctl start #{service}"
-			else
-				# legacy fallback
-				tmp = service + " start"
-				(tmp =~ /^\//) ? tmp : File.join(LEGACY_INIT_PATH, tmp)
-			end
+			"/usr/bin/systemctl start #{service}.service"
 		end
 
 		def service_stop_command(name)
 			service = service_name(name)
-			if fedora? or arch? or centos?
-				"/usr/bin/systemctl stop #{service}.service"
-			elsif ubuntu? and File.exist?(UPSTART_CONF % service)
-				"/sbin/initctl stop #{service}"
-			else
-				# legacy fallback
-				tmp = service + " stop"
-				(tmp =~ /^\//) ? tmp : File.join(LEGACY_INIT_PATH, tmp)
-			end
+			"/usr/bin/systemctl stop #{service}.service"
 		end
 
 		def service_enable_command(name)
 			service = service_name(name)
-			if fedora? or arch? or centos?
-				"/usr/bin/systemctl enable #{service}.service"
-			elsif ubuntu? and File.exist?(UPSTART_CONF % service)
-				"/sbin/initctl enable #{service}"
-			else
-				# legacy fallback
-				tmp = service + " enable"
-				(tmp =~ /^\//) ? tmp : File.join(LEGACY_INIT_PATH, tmp)
-			end
+			"/usr/bin/systemctl enable #{service}.service"
 		end
 
 		def service_disable_command(name)
 			service = service_name(name)
-			if fedora? or arch? or centos?
-				"/usr/bin/systemctl enable #{service}.service"
-			elsif ubuntu? and File.exist?(UPSTART_CONF % service)
-				"/sbin/initctl disable #{service}"
-			else
-				# legacy fallback
-				tmp = service + " disable"
-				(tmp =~ /^\//) ? tmp : File.join(LEGACY_INIT_PATH, tmp)
-			end
+			"/usr/bin/systemctl disable #{service}.service"
 		end
 
-		# watchdog restart command
 		def watchdog_restart_command
-			if fedora? or centos?
-				"service monit condrestart"
-			else
-				# FIXME - this will restart it forcefully, even if not running
-				"service monit stop; service monit start"
-			end
+			"systemctl restart monit.service"
 		end
 
 		# make a user admin -- sudo capable
