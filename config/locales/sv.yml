@@ -1,0 +1,594 @@
+--- 
+sv: 
+  new_user: "Ny användare"
+  alias_is_taken_already: "Alias är redan taget eller är reserverat"
+  storage: Lagring
+  user_name_is_not_available: "Användarnamnet är inte tillgängligt"
+  platform: Plattform
+  are_you_sure_share: "Är du säker på att du vill ta bort utdelningen '%{share}' ?"
+  these_rules_are_used_to_restrict_ips: "Dessa regler används för att begränsa datapaket från en IP i ditt lokala nätverk till Internet. Användning av sådana filter kan vara till hjälp för att säkra eller begränsa ditt lokala nätverk."
+  this_looks_like_a_database_corruption_please_report_it: "Detta ser ut som en databaskorruption eller en bug (vänligen <a href=\"http://bugs.amahi.org\">rapportera den</a>)."
+  mac_looks_good: MAC verkar bra
+  wiki: Wiki
+  confirm_email: "Bekräfta E-post"
+  last_login: Senaste inloggning
+  setup: Setup
+  start_at_boot_time: "Börja vid uppstart"
+  news_about_applications: "Nyheter om program som körs på Amahi"
+  delete_user: "Radera användare"
+  delete_profile: "Radera profil för"
+  running: "Igång"
+  start_building_a_new_hda: "Börja bygga en ny HDA!"
+  delete: Radera
+  name_is_taken_already: "Namnet är redan taget "
+  unleash_the_power_of_your_home_network: "Släpp loss kraften i ditt hemnätverk."
+  are_you_sure_webapp: "Är du säker på att du vill ta bort webbapplikationen '%{webapp}' ?"
+  automated_install: Automatiserad installation
+  need_help_logging_in: "Behöver du hjälp att logga in?"
+  confirm_password: "Bekräfta lösenord"
+  installed_paren: (Installerad)
+  tour: Rundtur
+  address_already_allocated: "Adress är redan tilldelad"
+  new: Ny
+  are_you_sure_you_want_to_stop_the_server: "Är du säker på att du vill stoppa '%{name}' ?"
+  disabling_pdc_will_enable_workgroup_mode: "Avaktivering av PDC läge kommer att aktivera Workgroup läge. Det är en stor förändring i hur utdelningar fungerar. Detta är avsett för hemnätverk (kolla wiki för mer). Är du säker på att du vill avaktivera PDC läge?"
+  address_looks_good: Adressen ser bra ut
+  finalize_settings: "Slutför Inställningar"
+  confirmation_must_match: "Bekräftelsen måste överensstämma"
+  stopped: Stoppad
+  applications: Applikationer
+  this_ip_address_will_always_be_statically_associated_to_the_mac_address: Denna IP-adress (1-%{max}) kommer alltid att vara statiskt knutna till MAC-adressen nedan.
+  this_path_exists_already: "Denna sökväg finns redan"
+  poweroff: "Stäng av"
+  router_control: Router Kontroll
+  openvpn_server: OpenVPN Server
+  port_range_looks_good: Portintervallet ser bra ut
+  pictures: Bilder
+  disk: "Hårddisk"
+  location: Plats
+  require_login: "Kräver inloggning"
+  theme: Tema
+  disks: "Hårddiskar"
+  rule: Regel
+  static_ips: Statiska IP
+  mac_address_to_be_filtered_in_format: MAC-adressen som ska filtreras (i form 00:11:22:33:44:55).
+  my_apps: Min Apps
+  disk_pool_copies: Extra kopior
+  cancel: Avbryt
+  port_range_ports_must_be_increasing_order: "Den första porten måste vara mindre än eller lika med den andra porten"
+  password_is_too_short: "Lösenord är för kort"
+  preparing_to_install: "Förbereder installationen ..."
+  model: Modell
+  are_you_sure_you_want_to_start_the_server: "Är du säker på att du vill starta '%{name}' ?"
+  nickname_info: "\"Smeknamnet\" är en unik identifierare för din HDA. Du behöver för att logga in på ditt  <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN</a> med <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPNWindows\">Windows klienten</a> (och en behörig användare och lösenord på ditt hemmanätverk)."
+  files: Filer
+  by_signing_up_you_agree_to_the_terms_of_service: "Genom att anmäla dig, samtycker du och har läst <a href=\"http://www.amahi.org/home/tos\" target=\"_blank\">våra användarvillkor</a>"
+  the_url_looks_good: Webbadressen ser bra ut
+  application_uninstalled: Applikation avinstallerad
+  delete_web_app: Radera Web App
+  free_space: Ledigt utrymme
+  url: URL
+  are_you_sure_you_would_like_to_uninstall: "Är du säker på att du vill avinstallera programmet? \r\n\
+    Alla uppgifter med samband till detta program KOMMER ATT RADERAS."
+  temperature: Temperatur
+  users: "Användare"
+  debug: Debug
+  the_ip_address_can_be: IP-adressen kan vara
+  read_only: Skrivskyddad
+  install_code_info: "Denna installationskod fångar in alla inställningar för din HDA och det användas en gång som det sista steget i att installera din HDA. Du bör inte återanvända det för två eller flera system som kör, eftersom det kommer att bryta den dynamiska DNS och VPN. Skapa en profil för varje HDA du kör."
+  url_filtering: URL-filtrering
+  available: "Tillgänglig"
+  this_will_power_off: "Detta kommer stänga av din HDA.\r\n\
+    Kanske borde du starta din routers DHCP-server om din HDA också agerat DHCP-server.\r\n\
+    Vill du verkligen fortsätta?"
+  add_extra_parameters: "(lägg till extra parametrar)"
+  edit_static_ip: "Ändra Statiskt IP"
+  system_info: Systeminformation
+  this_path_is_not_available: "Denna sökväg är inte tillgänglig"
+  firewall_port_filter_message: "Portfilterregler används för att begränsa datapaket från ditt lokala nätverk till Internet."
+  press: Press
+  share_path_cannot_be_blank: "Utdelningssökväg får inte lämnas tom"
+  address_is_not_valid: "Adressen är ogiltig"
+  create_alias: Skapa Alias
+  web: Web
+  delete_alias: Radera alias
+  recover: "Återställ"
+  installed: Installerad
+  core: "Kärna"
+  start_now: "Börja nu"
+  the_amahi_platform_has_encountered_an_error_you_will_be_forwarded: Programmet har hittat ett fel. Du kommer inom kort till en sida som visar felloggen.
+  application: Applikation
+  advanced_settings: "Avancerade inställningar"
+  check_the_features_take_the_tour: "Kolla de funktioner som för närvarande finns tillgängliga, ta rundturen, eller om du inte kan vänta -"
+  this_will_stop_the_server_permanently: Detta stoppar %{name} PERMANENT.
+  your_control_panel: Din kontrollpanel
+  full_name: "Fullständigt namn"
+  shares: Utdelningar
+  manage_themes: Hantera teman
+  discussion_forum_for: "Diskussionsforum för"
+  tracker: Tracker
+  rule_type: Regeltyp
+  aliases: Alias
+  network: "Nätverk"
+  change_your_account_settings: "Ändra dina kontoinställningar"
+  port_range_ports_must_be_0_to_64k: "Portarna måste vara i intervallet mellan 0-65535"
+  share_path_is_available: "Utdelningssökvägen är tillgänglig"
+  this_could_be_due_to_lack_of_network_connectivity: "Detta kan bero på brist på nätverksanslutning."
+  enabling_lan_manager_is_less_secure: "Aktivering av Windows 95/98-läges autentisering är mindre säker och kan hjälpa åtkomster för äldre maskiner. Är du säker på att du vill aktivera Windows 95/98 LanManager autentisering?"
+  special_instructions: "Särskilda anvisningar"
+  there_are_no_dynamic_dhcp_leases_outstanding: "Det finns inga DHCP lease utestående vid denna tid."
+  login: Inloggning
+  edit_share: "Ändra utdelning"
+  dhcp_lease: "DHCP lån"
+  change: "Ändra"
+  status: Status
+  not_updating: Uppdaterar Inte
+  videos: Videos
+  dhcp_active: Aktiv
+  name_is_not_valid: "Namn är inte giltigt"
+  restart: Starta om
+  confirm: "Bekräfta"
+  sign_out: Logga ut
+  this_application_is_installed_already_please_refresh: "Denna applikation är redan installerat. Uppdatera denna webbsida."
+  state: Status
+  new_web_app: Ny Web App
+  email: E-post
+  full_name_looks_good: "Fullständigt namn är bra"
+  workgroup_name: Arbetsgruppsnamn
+  name_looks_good: Namn verkar bra
+  new_alias: Nytt Alias
+  must_be_logged_in: "Du måste vara inloggad för att komma åt denna del"
+  rebooting: "Omstart pågår ..."
+  uptime: Upptid
+  disk_pooling: Lagringspool
+  this_will_reboot: "Detta startar om din HDA.\r\n\
+    Vill du verkligen fortsätta"
+  dns_aliases: DNS Alias
+  used_space: "Använt utrymme"
+  static_ip_address_for_your_hda: "Statisk IP-adress för din HDA"
+  comment: Kommentera
+  the_alias_name_you_input_will_be_added: "Namnet du matar in ovan kommer att läggas till DNS-servern som ett alias för IP-adressen nedan."
+  root_path: "Rotsökväg"
+  search: "Sök"
+  upcoming: Kommande
+  username_or_email: "Användarnamn eller e-post"
+  network_settings: "Nätverksinställningar"
+  no_documents_found: Inga Dokument Hittade
+  visible: Synlig
+  create_a_new_share: Skapa en ny utdelning
+  enabling_pdc_is_a_major_share_change: "Aktivering av PDC läge är en stor förändring i hur utdelningar fungerar. Detta kommer att aktivera Domain-läge och Inaktivera Workgroup läge och kräva att alla maskiner är företags- (eller &quot;PRO&quot;) maskiner som använder rätt referenser. Det är avsett för företagsnätverk. Är du säker på att du vill aktivera PDC läge?"
+  all_users: "Alla användare"
+  delete_static_ip: Radera Statisk IP
+  audio: Ljud
+  dashboard: Panel
+  this_ip_will_be_filtered: Denna IP-adress kommer att filtreras.
+  dns_alias: DNS Alias
+  url_to_filter: URL att filtrera
+  the_boot_option_is_a_critical_setting: "Uppstartsalternativet är en KRITISK inställning. Att inte starta en server process REKOMMENDERAS INTE. Detta är tänkt att inleda trafik på din HDA vid varje uppstart. Är du säker på att du vill inte starta denna process vid uppstart?"
+  greyhole_not_installed: "VARNING: Greyhole är inte installerat på systemet!"
+  must_be_admin: "Du måste ha administratörsbehörighet för att komma åt denna del"
+  valid_email_required_for_service: "Giltig e-postadress krävs för aktivering. Vi kommer inte <a href=\"http://www.amahi.org/privacy\" target=\"_blank\">skicka skräppost</a> till dig"
+  are_you_sure_you_want_to_delete_alias: "Är du säker på att du vill ta bort alias för '%{name}' ?"
+  is_not_being_monitored_24x7: "övervakas <b>inte</b> 24x7"
+  activerecord: 
+    errors: 
+      messages: 
+        greater_than_or_equal_to: "måste vara större än eller lika med %{count}"
+        record_invalid: "Ett fel uppstod: %{errors}"
+        confirmation: "stämmer inte överens"
+        less_than_or_equal_to: "måste vara mindre än eller lika med %{count}"
+        blank: "måste anges"
+        exclusion: "är reserverat"
+        invalid: "är ogiltigt"
+        odd: "måste vara udda"
+        even: "måste vara jämnt"
+        too_short: "är för kort (minimum är %{count} tecken)"
+        wrong_length: "har fel längd (ska vara %{count} tecken)"
+        empty: "får ej vara tom"
+        less_than: "måste vara mindre än %{count}"
+        greater_than: "måste vara större än %{count}"
+        equal_to: "måste vara samma som %{count}"
+        too_long: "är för långt (maximum är %{count} tecken)"
+        taken: "är upptaget"
+        accepted: "måste vara accepterad"
+        inclusion: finns inte i listan
+        not_a_number: "är inte ett nummer"
+      full_messages: 
+        format: "%{attribute} %{message}"
+      template: 
+        body: "Det fanns problem med följande fält:"
+        header: 
+          one: "Ett fel förhindrade denna %{model} från att sparas"
+          other: "%{count} fel förhindrade denna ((modell)) från att sparas"
+  there_are_no_static_dhcp_leases: "Det finns inga statiska DHCP lease utestående vid denna tid."
+  live_help: "Live Hjälp"
+  edit_user: "Ändra användare"
+  control_panel: Kontrollpanel
+  share_name_cannot_be_blank: "Utdelningsnamn får inte vara tomt"
+  get_started: "Börja!"
+  my_account: Mitt Konto
+  gallery: Galleri
+  transmission_bittorrent_server: Transmission Bittorrent Server
+  ip_address: IP-adress
+  number: 
+    format: 
+      separator: ","
+      precision: 2
+      delimiter: ","
+    human: 
+      format: 
+        precision: 1
+      storage_units: 
+        format: "%n %u"
+        units: 
+          kb: KB
+          tb: TB
+          gb: GB
+          byte: 
+            one: Byte
+            other: Bytes
+          mb: MB
+    percentage: 
+      format: 
+    currency: 
+      format: 
+        format: "%n %u"
+        unit: kr
+        separator: .
+        delimiter: ","
+    precision: 
+      format: 
+  mariadb_database_server: MariaDB Server
+  edit_and_rate_beta_apps: "Redigera och betygsätt Beta-applikationer"
+  username: "Användarnamn"
+  are_you_sure_you_want_to_restart_the_server: "Är du säker på att du vill starta om '%{name}' ?"
+  done_final_check: Klar! Slutlig Kontroll
+  this_application_is_not_installed_please_refresh: "Programmet är inte installerat. Uppdatera denna webbsida."
+  user_name_is_available: "Användarnamn tillgängligt"
+  first_time_admin_setup: "Första admin-kontot. Vänligen återskapa ditt användarlösenord."
+  news: Nyheter
+  password: "Lösenord"
+  access: "Åtkomst"
+  avanced_settings_is_for_developers: "Aktivering av Avancerade funktioner är endast för avancerade / tekniska användare och utvecklare."
+  there_are_no_shares_created: Det finns inga utdelningar skapade i ditt system just nu.
+  created: Skapad
+  watchdog: Watchdog
+  stop: Stopp
+  device: Enhet
+  initial_user: "Användarnamn"
+  admin_setup_worked: "Konfigureringen för admin fungerade. Det går bra att logga in nu"
+  preparing_to_uninstall: "Förbereder att avinstallera ..."
+  time: 
+    am: fm
+    formats: 
+      default: "%a, %d %b %Y %H:%M:%S %z"
+      short: "%d %b %H:%M"
+      long: "%d %B, %Y %H:%M"
+    pm: em
+  dns_server: DNS-server
+  sign_up_here: "Anmäl dig här"
+  servers: Servrar
+  router_ip: Router Ip
+  general_amahi_news: "Allmänna Amahi nyheter"
+  feedback: "Återkoppling"
+  name: Namn
+  awake_this_device_via_wol: "Sätt på denna enhet"
+  port_forwarding: Port Forwarding
+  datetime: 
+    prompts: 
+      minute: Minut
+      month: "Månad"
+      second: Sekund
+      hour: Timme
+      day: Dag
+      year: "År"
+    distance_in_words: 
+      less_than_x_minutes: 
+        one: "mindre än en minut"
+        other: "mindre än %{count} minuter"
+      almost_x_years: 
+        one: "nästan ett år"
+        other: "nästan %{count} år"
+      x_days: 
+        one: en dag
+        other: "%{count} dagar"
+      x_seconds: 
+        one: en sekund
+        other: "%{count} sekunder"
+      about_x_hours: 
+        one: "ungefär en timme"
+        other: "ungefär %{count} timmar"
+      less_than_x_seconds: 
+        one: "mindre än en sekund"
+        other: "mindre än %{count} sekunder"
+      x_months: 
+        one: "en månad"
+        other: "%{count} månader"
+      x_minutes: 
+        one: en minut
+        other: "%{count} minuter"
+      about_x_years: 
+        one: "ungefär ett år"
+        other: "ungefär %{count} år"
+      about_x_months: 
+        one: "ungefär en månad"
+        other: "ungefär %{count} månader"
+      over_x_years: 
+        one: "mer än ett år"
+        other: "mer än %{count} år"
+      half_a_minute: en halv minut
+  nickname: Smeknamn
+  pooled: Poolad
+  edit_web_app: "Ändra Web App"
+  movies: Filmer
+  mac_already_allocated: MAC redan allokerad
+  dyndns_info: "Amahi erbjuder en kostnadsfri, dynamisk DNS-adress till dig. Det är utanför ditt hemnätverk. Du kan använda den för <a target=\"_blank\" \r\n\
+    href=\"http://wiki.amahi.org/index.php/VPN\">Mac</a> eller <a target=\"_blank\" \r\n\
+    href=\"http://wiki.amahi.org/index.php/VPNLinux\">Linux</a> <a \r\n\
+    target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN-klienter</a> (tekniska användare kan använda den för att logga in med a target=\"_blank\" \r\n\
+    href=\"http://wiki.amahi.org/index.php/Ssh-ports\">SSH</a>). Tekniska användare kan använda den för att vara värd för webbplatser, spelservrar eller andra tjänster från ditt hemnätverk (om du har bråttom prova, bara att fråga på IRC-kanal eller söka i wikin)."
+  confirmation_matches: "Bekräftelsen överensstämmer"
+  setting_dmz_failed: "Inställning av DMZ misslyckades. Kontrollera dina inställningar."
+  logs: Loggar
+  this_name_is_not_available: "Detta namn är inte tillgänglig"
+  password_changed_successfully: "Lösenordet ändrades"
+  will_start_at_boot_time: kommer att starta vid uppstart
+  this_application_install_ended_with_an_error_please_uninstall_status_is: "Denna programinstallation avslutades med ett fel. Avinstallera det och försök igen! Programstatus är"
+  mac_filtering: MAC-filtrering
+  tags: Taggar
+  router_firewall_settings: "Router- / Brandväggsinställningar"
+  firewall_mac_address_filter_info: "Inlägg i denna tabell används för att begränsa vissa typer av datapaket från ditt lokala nätverk till Internet via en gateway. Användning av sådana filter kan vara till hjälp för att säkra eller begränsa ditt lokala nätverk."
+  static_ip_address: Statisk IP-adress
+  are_you_sure_advanced_features: "Är du säker på att du vill aktivera Avancerade Funktioner?"
+  dhcp_server: DHCP Server
+  app_logs: Applikationsloggar
+  changelog: "Ändringslogg"
+  contribute: Bidra
+  back: Tillbaka
+  notifications_from_amahi: "Meddelande från Amahi"
+  support_win_95_98: "Stöd Windows 95/98 - aktiverar (osäker) LanManager autentisering"
+  enabling_debug_may_generate_a_lot_of_logs_are_you_sure: "Aktivering av felsökning kommer eventuellt skapa mycket stora loggfiler. Är du säker på att du vill aktivera Samba felsökning?"
+  the_mac_is_invalid: "MAC-adressen är ogiltig"
+  making_home_networking_simple: "Gör Hemnätverk Enkelt"
+  disk_pool_details: "Välj partitionerna du vill inkludera i lagringspoolen för %{greyhole} och se till att %{shares} använder den."
+  a_single_number_0_254_to_point_to_a_given_machine: "Ett nummer (0-254) att peka på en viss maskin i ditt nätverk"
+  writeable: Skrivbar
+  port_range_ports_must_be_numbers: "Portarna måste vara siffror"
+  help: "Hjälp"
+  new_firewall_rule: "Ny brandväggsregel"
+  video: Video
+  thanks_for_visiting: "Tack för besöket. Stöd våra sponsorer!"
+  install_code: Installera kod
+  new_static_ip: Nya Statiskt IP
+  this_share_name_is_not_valid: "Denna utdelningsnamn är inte giltigt"
+  there_are_no_applications_available: "Det finns inga program som är tillgängliga just nu."
+  ip_filtering: IP-filtrering
+  create: Skapa
+  guest_dashboard: "Gästpanel"
+  music: Musik
+  permissions: "Rättigheter"
+  initial_password: "Lösenord"
+  your_domain_info: "Detta är ditt hemnätverks domän. Den är <b>bara</b> tillgänglig i ditt hemmanätverk. För mer information om detta se <a target=\"_blank\" href=\"http://www.amahi.org/faq#what-home-domain-should-i-use\">Vanliga frågor</a>."
+  there_are_no_firewall_rules_defined: "Det finns inga brandväggsregler definierade vid denna tidpunkt."
+  firewall_url_filter_message: "Poster i denna tabell används för att begränsa webbadresser genom Gatewayen."
+  dhcp_leases: "DHCP Lån"
+  dynamic_dns: Dynamisk DNS
+  the_ip_must_be_1_to_254: "IP måste vara i intervallet 1-254"
+  not_a_valid_user_or_password: "Fel: Felaktigt användarnamn eller lösenord"
+  create_your_hda_profile: Skapa din HDA-profil
+  your_home_dns_domain: Din DNS Domain
+  theme_by: Tema gjort av
+  forums: Forum
+  there_are_no_aliases_defined: Det finns inga Alias definieras vid denna tidpunkt
+  user_name_is_not_valid: "Användarnamnet är inte giltigt"
+  all_you_need: "Allt du behöver!"
+  system: System
+  name_is_taken_already_or_is_reserved: "Namnet är redan taget eller är reserverat"
+  webapps: Webapps
+  submit_for_debug: "Skicka till felsökning"
+  more: mer
+  protocol: Protokoll
+  no_account_yet: "Inget konto än?"
+  delete_this_rule: "Ta bort den här regeln"
+  images: Bilder
+  language: "Språk"
+  this_application_is_installed: "Denna applikation är installerad."
+  share: Dela ut
+  partitions: Partitioner
+  router_setting_failed: "Router inställning misslyckades. Kontrollera dina inställningar."
+  global_settings_for_shares: "Globala inställningar för utdelningar"
+  the_watchdog_is_a_critical_setting: "Övervakaren är en KRITISK inställning. Att stoppa övervakningen av en server process REKOMMENDERAS INTE. Detta är utformat för att hålla tjänster i ditt HDA igång tillförlitligt även i närvaro av glitches. Är du säker på att du vill avsluta övervakningen i denna server?"
+  warning_this_application_is_in_testing: "VARNING: Det här programmet håller på att testas!"
+  is_being_monitored_24x7: "övervakas 24x7"
+  computer: Dator
+  an_external_ip_address_to_make_the_alias: "En extern IP-adress för att peka mot en specifik IP-adress"
+  file_server_samba: Filserver (Samba)
+  mac_is_invalid: "MAC är ogiltig"
+  edit_alias: "Ändra alias"
+  port_range_ports_are_already_allocated: "Portar i detta område hrr redan tilldelats"
+  please_double_check_the_settings: "<strong>Dubbelkolla inställningarna</strong>, eftersom de är avgörande för att få din HDA att fungera."
+  otherwise_you_can_go_to_the_error_log: "Annars kan du gå direkt till <a href=\"/setup?tab=debug\">felloggen</a>."
+  description: Beskrivning
+  there_are_no_users: "Det finns inga användare i ditt system just nu."
+  are_you_sure: "Är du säker?"
+  efficiently_manage_your_network: "Hantera  effektivt nätverk och backup av alla datorer, spelkonsoler och andra enheter i nätverket, och kom åt nätverket säkert från Internet. Det är bara början på vad du kan göra med Amahi."
+  port_range_field_cannot_be_empty: "Fälten kan inte vara tomma"
+  available_for_installation: "(Tillgängligt för installation)"
+  create_share: Skapa denna utdelning
+  apps: Apps
+  translate_amahi: "Översätt Amahi"
+  alias_looks_good: Alias ser bra ut
+  support: 
+    array: 
+      words_connector: ", "
+      last_word_connector: " och "
+      two_words_connector: " och "
+    select: 
+      prompt: "Välj"
+  delete_share: Radera utdelning
+  ushare_upnp_media_server: Ushare UPnP Media Server
+  sign_in: Logga in
+  disk_pooling_enabled: Pool aktiverad
+  new_dns_alias: Nytt DNS Alias
+  community: Community
+  create_a_new_user: "Skapa en ny användare"
+  suggest: "Föreslå!"
+  port_filtering: Portfiltrering
+  results_found: resultat hittade
+  the_mac_looks_good: MAC ser bra ut
+  when_there_are_major_announcements: "När det finns stora tillkännagivanden"
+  no_description_supplied: Ingen beskrivning levererad!
+  manage_your_contributed_apps: Hantera din bidragna apps
+  global_settings: "Globala inställningar"
+  networking: "Nätverk"
+  firewall: "Brandvägg"
+  there_are_no_servers_available: "Det finns inga servrar tillgängliga just nu."
+  port_range: Portintervall
+  network_gateway: "Nätverksgateway"
+  path_looks_good: "Sökvägen är bra"
+  please_select: "Välj ..."
+  mac_address: MAC-adress
+  anonymous_guests: "Gäster"
+  settings: "Inställningar"
+  initial_user_info: "Första användaren"
+  control: Kontrollera
+  disk_pool_replication: Replikering
+  date: 
+    month_names: 
+    - 
+    - januari
+    - februari
+    - mars
+    - april
+    - maj
+    - juni
+    - juli
+    - augusti
+    - september
+    - oktober
+    - november
+    - december
+    order: 
+    - :day
+    - :month
+    - :year
+    abbr_day_names: 
+    - "sön"
+    - "mån"
+    - tis
+    - ons
+    - tor
+    - fre
+    - "lör"
+    formats: 
+      default: "%Y-%m-%d"
+      short: "%e %b"
+      long: "%e %B, %Y"
+    day_names: 
+    - "söndag"
+    - "måndag"
+    - tisdag
+    - onsdag
+    - torsdag
+    - fredag
+    - "lördag"
+    abbr_month_names: 
+    - 
+    - jan
+    - feb
+    - mar
+    - apr
+    - maj
+    - jun
+    - jul
+    - aug
+    - sep
+    - okt
+    - nov
+    - dec
+  username_cannot_be_blank: "Användarnamnet får inte lämnas tom"
+  reboot: Starta om
+  the_ip_looks good: IP ser bra ut
+  this_feature_is_under_heavy_development: "Denna funktion är under aktiv utveckling"
+  there_are_no_webapps: Det finns inga webbprogram konfigurerade i systemet just nu.
+  are_you_sure_you_want_to_delete_the_static_ip: "Är du säker på att du vill ta bort det statiska IP:t '%{name}' ?"
+  the_name_cannot_be_blank: "Namnet får inte vara tomt"
+  uninstall: Avinstallera
+  details: Detaljer
+  is_now_uninstalled: "är nu avinstallerat"
+  themes: Teman
+  the_name_you_input_above_will_be_added_to_the_DNS_server: "Namnet du matar in ovan kommer att läggas till DNS-servern och associerade till MAC-och IP-adresser nedan."
+  new_share: Ny utdelning
+  this_path_is_not_valid: "Denna sökväg är inte giltig"
+  log_in: Logga in
+  are_you_sure_user: "Är du säker på att du vill ta bort användare '%{user}' ?"
+  extra_parameters: Extra parametrar
+  try_installing_some_apps: "Försök med att ominstallera några applikationer"
+  testimonials: "Användarkommentarer"
+  version: Version
+  powering_off: "Avstängning pågår ..."
+  get_involved: Engagera dig!
+  stop_it: Sluta
+  home_domain: "Hemma Domän"
+  total_space: Total yta
+  never_email_me: E-posta aldrig  mig
+  is_now_installed: "är nu installerad"
+  this_shares_files_deleted: "Denna utdelning kommer inte längre att vara tillgänglig (filer i den kommer inte tas bort)."
+  alias_is_not_valid: "Alias är ogiltigt"
+  mac_address_of_the_device: "MAC-adressen för enheten (i form 00:11:22:33:44:55)"
+  next: "Nästa"
+  web_apps: Web Apps
+  activemodel: 
+    errors: 
+      template: 
+        body: "Det var problem med följande fält:"
+        header: 
+          one: "Ett fel förhindrade denna %{model} från att sparas"
+          other: "%{count} fel förhindrade denna %{model} från att sparas"
+  remember_me: "Kom ihåg mig"
+  password_looks_good: "Lösenord verkar bra"
+  docs: Dokumentation
+  the_ip_address_cannot_be_empty: IP-adressen kan inte vara tom
+  pdc_primary_domain_controller: "PDC - Primär Domän Kontrollant"
+  computer_name: Datornamn
+  close: "stäng"
+  this_file_was_automatically_generated_on: "# Den här filen genererades automatiskt på %{time} - VARNING - alla manuella ändringar går förlorade!"
+  installation_instructions: Installationsanvisningar
+  control_panel_for_your_amahi_hdas: "Kontrollpanelen för ditt Amahi HDAs"
+  please_select_the_type_of_rule_you_want: "Välj den typ av regel som du vill lägga till."
+  create_a_new_webapp: Skapa en ny webbapplikation
+  refresh_status: Uppdateringsstatus
+  home: Hem
+  will_not_start_at_boot_time: startar <b>inte</b> vid uppstart
+  there_are_no_static_ips_defined: Det finns inga statiska IP-adresser definierade vid denna tid.
+  share_name_is_available: "Utdelningsnamn är tillgängligt"
+  powerful_simple_home_networking: "Kraftfullt, Enkelt, Hemnätverk"
+  about: Om
+  email_me: E-posta mig
+  there_are_no_applications_installed: Det finns inga Apps installeras vid denna tid.
+  firewall_port_forward_message: "Dessa regler låter dig automatiskt styra portar för nättjänster till en specifik maskin innanför brandväggen. Dessa inställningar är endast nödvändiga om du vill använda någon form av server, typ en webbserver eller mailserver på det privata lokala nätverket innanför brandväggen."
+  to_recover_your_password: "För att få tillbaka ditt lösenord eller aktiveringsmail, fyll i din e-postadress nedan"
+  apache_web_server: Webbservern Apache
+  seconds: sekunder
+  partition: Partition
+  dhcp: DHCP
+  dhcp_free: Inaktiv
+  this_users_files_deleted: "Filerna i den här användarens hemmapp KOMMER ATT TAS BORT"
+  configured: Konfigurerad
+  disabling_lan_manager_will_not_allow_older_machines: "Avaktivering av Windows 95/98 LanManager autentisering kommer inte tillåta äldre maskiner att använda utdelningarna. Är du säker på att du vill inaktivera Windows 95/98 autentiseringsläge?"
+  you_have_been_logged_out: Du har loggats ut.
+  permanently: permanent
+  the_url_is_invalid: "Webbadressen är inte giltig"
+  it_will_be_restarted_by_the_watchdog: (det kommer att startas om av watchdog)
+  amahi_dyndns_updater: Amahi Dynamisk DNS Uppdaterare
+  pdc_domain: "PDC Domän"
+  path: S
+  features: Funktioner
+  password_cannot_be_blank: "Lösenordet får inte vara tomt"
+  the_watchdog_is_running_and_will_restart_it_in_a_few_seconds: "OBS! Övervakningen är igång och startas om om några sekunder."
+  your_existing_network_gatweay: "Din Befintliga NätverksGateway / Router"
+  warning: VARNING
+  dhcp_ip_address: DHCP IP-adress
+  beta_apps: Beta Apps
+  logout: Logga ut
+  there_is_no_undo: "det finns INGEN ÅNGRA TILL DENNA RADERING"

@@ -1,0 +1,586 @@
+--- 
+pt-pt: 
+  new_user: Novo Utilizador
+  alias_is_taken_already: "Alias já está a ser usado ou está reservado"
+  storage: Discos
+  user_name_is_not_available: "Nome de utilizador não disponível"
+  platform: Plataforma
+  are_you_sure_share: Tem a certeza de que pretende apagar a partilha '%{share}' ?
+  these_rules_are_used_to_restrict_ips: "Estas regras são utilizadas para restringir o envio de pacotes de dados a partir de um IP na sua rede local para a Internet. O uso destes filtros pode ser útil para tornar a sua rede segura ou restringi-la."
+  this_looks_like_a_database_corruption_please_report_it: Parece uma falha no banco de dados ou um bug (por favor <a href="http://bugs.amahi.org">reporte-o</a>).
+  mac_looks_good: MAC parece OK
+  wiki: Wiki
+  confirm_email: Confirme o Email
+  last_login: "Último acesso"
+  setup: "Configuração"
+  start_at_boot_time: "Iniciar com o início do sistema"
+  news_about_applications: "Novidades sobre Aplicações compatíveis com Amahi"
+  delete_user: "Apagar utilizador "
+  delete_profile: Apagar perfil de
+  running: "Em execução"
+  start_building_a_new_hda: Comece a criar um novo HDA!
+  delete: Apagar
+  name_is_taken_already: "Nome está já a ser usado"
+  unleash_the_power_of_your_home_network: "Libere o poder da sua rede doméstica."
+  are_you_sure_webapp: "Tem a certeza de que pretende apagar a aplicação web '%{webapp}' ?"
+  automated_install: "Instalação Automática"
+  need_help_logging_in: Precisa de ajuda para Entrar?
+  confirm_password: Confirme a Senha
+  installed_paren: (Instalado)
+  tour: Tour
+  address_already_allocated: "Endereço já está alocado"
+  new: Nova
+  are_you_sure_you_want_to_stop_the_server: Tem a certeza de que pretende parar o %{name}?
+  disabling_pdc_will_enable_workgroup_mode: "Desactivar o modo PDC irá activar o modo de Grupo de Trabalho.\r\n\
+    Esta é uma GRANDE mudança na forma como os directórios partilhados funcionam. Este modo adequa-se a redes domésticas (para mais informação consulte a wiki). \r\n\
+    Tem a certeza de que pretende desactivar o modo PDC?"
+  address_looks_good: "Endereço parece OK"
+  finalize_settings: "Terminar Configurações"
+  confirmation_must_match: "Confirmações devem ser iguais"
+  stopped: Parado
+  applications: "Aplicações"
+  this_ip_address_will_always_be_statically_associated_to_the_mac_address: "Este Endereço IP (1-%{max}) estará sempre associado ao endereço MAC abaixo."
+  this_path_exists_already: "Este caminho já existe"
+  poweroff: Encerrar
+  router_control: Controlo do Router
+  openvpn_server: Servidor OpenVPN
+  port_range_looks_good: O intervalo de portas parece OK
+  pictures: Fotos
+  disk: Disco
+  location: Local
+  require_login: Requer login
+  theme: Tema
+  disks: Discos
+  rule: Regra
+  static_ips: IPs Fixos
+  mac_address_to_be_filtered_in_format: "Endereço MAC a ser filtrado (na forma 00:11:22:33:44:55)."
+  my_apps: "As Minhas Aplicações"
+  disk_pool_copies: "Cópias adicionais"
+  cancel: Cancelar
+  port_range_ports_must_be_increasing_order: "A primeira porta deve ser inferior ou igual à segunda porta"
+  password_is_too_short: "A senha é muito curta"
+  preparing_to_install: A preparar para instalar...
+  model: Modelo
+  are_you_sure_you_want_to_start_the_server: Tem a certeza de que pretende iniciar o %{name}?
+  nickname_info: "A \"alcunha\" é um identificador único para o HDA. Você vai precisar dele para fazer login no seu <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN</a> com o <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPNWindows\">cliente Windows</a> (e um utilizador e senha autorizados na sua rede doméstica)."
+  files: Arquivos
+  by_signing_up_you_agree_to_the_terms_of_service: "Ao efectuar o registo, você declara ter lido e concordado com <a href=\"http://www.amahi.org/home/tos\" target=\"_blank\">os nossos termos de serviço</a>"
+  the_url_looks_good: O URL parece OK
+  application_uninstalled: "Aplicação desinstalada."
+  delete_web_app: "Apagar Aplicação Web"
+  free_space: "Espaço livre"
+  url: URL
+  are_you_sure_you_would_like_to_uninstall: "Tem a certeza de que pretende desinstalar esta aplicação?\r\n\
+    Quaisquer dados associados a este aplicativo SERÃO EXCLUÍDOS."
+  temperature: Temperatura
+  users: Utilizadores
+  debug: Depurar
+  the_ip_address_can_be: "O endereço IP pode ser"
+  read_only: Apenas Leitura
+  install_code_info: "Este código de instalação agrega todas as configurações para o seu HDA e é usado apenas uma vez como etapa final na instalação do HDA. Você NÃO deve voltar a utilizá-lo em dois ou mais sistemas em execução, porque isto irá fazer com que o DNS dinâmico e a VPN deixem de funcionar. Crie um perfil para cada HDA que você estiver a utilizar."
+  url_filtering: Filtro de URL
+  available: "Disponível"
+  this_will_power_off: "O seu HDA irá ser encerrado.\r\n\
+    Se o seu HDA estiver a ser utilizado como servidor DHCP você poderá ter de activar essa funcionalidade no seu router.\r\n\
+    Tem a certeza de que pretende continuar?"
+  add_extra_parameters: "(acrescentar parâmetros adicionais)"
+  edit_static_ip: Editar IP Fixo
+  system_info: "Informações do Sistema"
+  this_path_is_not_available: "Este caminho não está disponível"
+  firewall_port_filter_message: "Regras de filtro de porta são usadas para restringir o envio de pacotes de dados da sua rede local para a Internet."
+  press: Pressione
+  share_path_cannot_be_blank: "O Caminho da Partilha não pode estar em branco"
+  address_is_not_valid: "Endereço não é válido"
+  create_alias: Criar Alias
+  web: Web
+  delete_alias: Apagar Alias
+  recover: Recuperar
+  installed: Instalado
+  core: "Núcleo"
+  start_now: "Começar Agora"
+  the_amahi_platform_has_encountered_an_error_you_will_be_forwarded: "A aplicação encontrou um erro. Em breve será redireccionado para uma página que mostra o log de erro."
+  application: "Aplicação"
+  advanced_settings: "Configurações Avançadas"
+  check_the_features_take_the_tour: "Verifique os recursos actualmente disponíveis, faça o tour, ou se não consegue esperar -"
+  this_will_stop_the_server_permanently: "Isto irá parar o %{name} PERMANENTEMENTE."
+  your_control_panel: Painel de Controlo
+  full_name: Nome Completo
+  shares: Partilhas
+  manage_themes: Gerir Temas
+  discussion_forum_for: "Fórum de discussão para"
+  tracker: Tracker
+  rule_type: Tipo de Regra
+  aliases: Aliases
+  network: Rede
+  change_your_account_settings: "Alterar as suas configurações de conta"
+  port_range_ports_must_be_0_to_64k: As portas devem pertencer ao intervalo 0-65535
+  share_path_is_available: "Caminho da Partilha disponível"
+  this_could_be_due_to_lack_of_network_connectivity: "Pode ser devido à falta de conexão de rede."
+  enabling_lan_manager_is_less_secure: "Activar o modo de autenticação do Windows 95/98 é menos seguro e pode ajudar a aceder com máquinas mais antigas. Tem a certeza de que pretende activar a autenticação LanManager do Windows 95/98?"
+  special_instructions: "Instruções Especiais"
+  there_are_no_dynamic_dhcp_leases_outstanding: "De momento não há concessões de DHCP dinâmico pendentes."
+  login: Entrar
+  edit_share: Editar partilha
+  dhcp_lease: Aluguer de DHCP
+  change: Alterar
+  status: Status
+  not_updating: "Não está a actualizar"
+  videos: "Vídeos"
+  dhcp_active: Activo
+  restart: Reiniciar
+  confirm: Confirme
+  name_is_not_valid: "Nome inválido"
+  sign_out: Sair
+  this_application_is_installed_already_please_refresh: "Esta aplicação já está instalada. Por favor actualize esta página web."
+  state: Estado
+  new_web_app: "Nova Aplicação Web"
+  email: Email
+  full_name_looks_good: Nome completo parece OK
+  workgroup_name: Nome do Grupo de Trabalho
+  name_looks_good: Nome parece OK
+  new_alias: Novo Alias
+  must_be_logged_in: "Precisa de estar logado para aceder a esta área"
+  rebooting: A reiniciar...
+  uptime: Tempo de funcionamento
+  disk_pooling: Pool de Armazenamento
+  this_will_reboot: "O seu HDA irá ser reiniciado.\r\n\
+    Tem a certeza de que pretende continuar?"
+  dns_aliases: DNS Aliases
+  used_space: "Espaço usado"
+  static_ip_address_for_your_hda: "Endereço IP Fixo para o seu HDA"
+  comment: "Comentário"
+  the_alias_name_you_input_will_be_added: "O nome que você forneceu acima será adicionado ao servidor DNS como um alias para o endereço IP abaixo."
+  root_path: Raiz&nbsp;Caminho
+  search: Procurar
+  upcoming: "Próximos"
+  username_or_email: Nome de utilizador ou email
+  network_settings: "Configurações de Rede"
+  no_documents_found: Nenhum Documento Encontrado
+  visible: "Visível"
+  create_a_new_share: Criar Nova Partilha
+  enabling_pdc_is_a_major_share_change: "Activar o modo PDC é uma GRANDE mudança na forma como os directórios partilhados funcionam.\r\n\
+    Será activado o modo Domínio, desactivado o modo Grupo de Trabalho e requerer que TODAS as máquinas sejam \"enterprise\" (ou \"pro\") a utilizar credenciais adequadas. Este modo adequa-se a redes corporativas.\r\n\
+    Tem a certeza de que pretende activar o modo PDC?"
+  all_users: Todos os utilizadores
+  delete_static_ip: Apagar IP Fixo
+  audio: "Áudio"
+  dashboard: Dashboard
+  this_ip_will_be_filtered: "Este endereço IP será filtrado."
+  dns_alias: "DNS Alias "
+  url_to_filter: URL a filtrar
+  the_boot_option_is_a_critical_setting: "A opção de inicialização é uma definição CRÍTICA. Não iniciar um processo de servidor é FORTEMENTE DESENCORAJADO. Isto é projectado para iniciar os serviços no seu HDA a cada arranque do sistema. Tem certeza de que não quer que este processo seja iniciado no arranque?"
+  greyhole_not_installed: "AVISO: Greyhole não está instalado neste sistema!"
+  must_be_admin: "Precisa  ter privilégios de administrador para aceder esta área"
+  valid_email_required_for_service: "Um email válido é requerido para ativação. Nós <a href=\"http://www.amahi.org/privacy\" target=\"_blank\">não vamos enviar spam a você</a>"
+  are_you_sure_you_want_to_delete_alias: Tem a certeza de que pretende apagar o alias de '%{name}'?
+  is_not_being_monitored_24x7: "<b>não</b> está a ser monitorizado 24x7"
+  activerecord: 
+    errors: 
+      messages: 
+        greater_than_or_equal_to: deve ser maior ou igual a %{count}
+        record_invalid: "Validação falhou: %{errors}"
+        confirmation: "não está de acordo com a confirmação"
+        less_than_or_equal_to: deve ser menor ou igual a %{count}
+        blank: "não pode ficar em branco"
+        exclusion: "não está disponível"
+        invalid: "não é válido"
+        odd: "deve ser ímpar"
+        even: deve ser par
+        too_short: "é muito curto (mínimo: %{count} caracteres)"
+        wrong_length: "não possui o tamanho esperado (%{count} caracteres)"
+        empty: "não pode ficar vazio"
+        less_than: deve ser menor do que %{count}
+        greater_than: deve ser maior do que %{count}
+        equal_to: deve ser igual a %{count}
+        too_long: "é muito longo (máximo: %{count} caracteres)"
+        taken: "já está em uso"
+        accepted: deve ser aceite
+        inclusion: "não está incluído na lista"
+        not_a_number: "não é um número"
+      full_messages: 
+        format: "%{attribute} %{message}"
+      template: 
+        body: "Por favor, verifique o(s) seguinte(s) campo(s):"
+        header: 
+          one: "Não foi possível gravar %{model}: 1 erro"
+          other: "Não foi possível gravar %{model}: %{count} erros."
+  there_are_no_static_dhcp_leases: "De momento não há concessões de DHCP fixo neste momento."
+  live_help: Ajuda Ao Vivo
+  edit_user: Editar utilizador
+  control_panel: Painel de Controlo
+  share_name_cannot_be_blank: "O Nome da Partilha não pode estar em branco"
+  get_started: "Comece Já!"
+  my_account: A Minha Conta
+  gallery: Galeria
+  transmission_bittorrent_server: "Servidor de Transmissão Bittorrent"
+  ip_address: "Endereço IP"
+  number: 
+    format: 
+      separator: .
+      precision: 3
+      delimiter: ","
+    human: 
+      format: 
+        precision: 1
+        delimiter: .
+      storage_units: 
+        format: "%n %u"
+        units: 
+          kb: KB
+          tb: TB
+          gb: GB
+          byte: 
+            one: Byte
+            other: Bytes
+          mb: MB
+    percentage: 
+      format: 
+        delimiter: .
+    currency: 
+      format: 
+        format: "%u%n"
+        unit: "€"
+        separator: ","
+        precision: 2
+        delimiter: ","
+    precision: 
+      format: 
+        delimiter: .
+  mariadb_database_server: Servidor MariaDB
+  edit_and_rate_beta_apps: "Editar e avaliar Aplicações Beta"
+  username: Nome de utilizador
+  are_you_sure_you_want_to_restart_the_server: Tem a certeza de que pretende reiniciar o %{name}?
+  done_final_check: "Concluído! Verificação Final"
+  this_application_is_not_installed_please_refresh: "Esta aplicação não está instalada. Por favor actualize esta página web."
+  user_name_is_available: "Nome de utilizador disponível"
+  first_time_admin_setup: ""
+  news: Novidades
+  password: Senha
+  access: Acesso
+  avanced_settings_is_for_developers: "Activar Recursos Avançados é sugerido apenas para utilizadores avançados/técnicos e programadores."
+  there_are_no_shares_created: "De momento não há Partilhas criadas no seu sistema."
+  created: Criado
+  watchdog: Supervisor
+  stop: Parar
+  device: Dispositivo
+  initial_user: Nome de Utilizador
+  admin_setup_worked: "Configuração de Administrador funcionou. Faça o login agora"
+  preparing_to_uninstall: A preparar para desinstalar...
+  time: 
+    am: AM
+    formats: 
+      default: "%A, %d de %B de %Y, %H:%M h"
+      short: "%d/%m, %H:%M h"
+      long: "%A, %d de %B de %Y, %H:%M h"
+    pm: PM
+  dns_server: Servidor DNS
+  sign_up_here: Registe-se aqui
+  servers: Servidores
+  router_ip: IP do Router
+  general_amahi_news: "Notícias Gerais Amahi"
+  feedback: Feedback
+  name: Nome
+  awake_this_device_via_wol: Ligue o dispositivo
+  port_forwarding: Redireccionamento de Portas
+  datetime: 
+    prompts: 
+      minute: Minuto
+      second: Segundos
+      month: "Mês"
+      hour: Hora
+      day: Dia
+      year: Ano
+    distance_in_words: 
+      less_than_x_minutes: 
+        one: menos de um minuto
+        other: menos de %{count} minutos
+      x_days: 
+        one: 1 dia
+        other: "%{count} dias"
+      x_seconds: 
+        one: 1 segundo
+        other: "%{count} segundos"
+      about_x_hours: 
+        one: aproximadamente 1 hora
+        other: aproximadamente %{count} horas
+      less_than_x_seconds: 
+        one: menos de 1 segundo
+        other: menos de %{count} segundos
+      x_months: 
+        one: "1 mês"
+        other: "%{count} meses"
+      x_minutes: 
+        one: 1 minuto
+        other: "%{count} minutos"
+      about_x_years: 
+        one: aproximadamente 1 ano
+        other: aproximadamente %{count} anos
+      about_x_months: 
+        one: "aproximadamente 1 mês"
+        other: aproximadamente %{count} meses
+      over_x_years: 
+        one: mais de 1 ano
+        other: mais de %{count} anos
+      half_a_minute: meio minuto
+  nickname: Alcunha
+  pooled: "Adicionar à pool"
+  edit_web_app: "Editar Aplicação Web"
+  movies: Filmes
+  mac_already_allocated: "MAC já alocado"
+  dyndns_info: "Amahi fornece-lhe um endereço DNS dinâmico GRATUITAMENTE, sem necessidade de configuração. Ele é externo à sua rede doméstica. Você pode usá-lo com clientes <a\r\n\
+    target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN</a> no <a target=\"_blank\"\r\n\
+    href=\"http://wiki.amahi.org/index.php/VPN\">Mac</a> ou <a target=\"_blank\"\r\n\
+    href=\"http://wiki.amahi.org/index.php/VPNLinux\">Linux</a> (utilizadores técnicos podem usá-lo para fazer login com <a target=\"_blank\"\r\n\
+    href=\"http://wiki.amahi.org/index.php/Ssh-ports\">SSH</a>). Utilizadores técnicos podem usá-lo para alojar sites da Web, servidores de jogos ou outros serviços a partir da sua rede doméstica (se você estiver ansioso para tentar, basta perguntar no canal de IRC ou pesquisar na wiki)."
+  confirmation_matches: "Confirmações combinam"
+  setting_dmz_failed: "Definição do DMZ falhou. Por favor verifique as definições."
+  logs: Logs
+  this_name_is_not_available: "Este nome não está disponível"
+  password_changed_successfully: A senha foi alterada com sucesso
+  will_start_at_boot_time: "irá começar na inicialização"
+  this_application_install_ended_with_an_error_please_uninstall_status_is: "A instalação desta aplicação terminou com um erro. Por favor, desinstale-a e tente novamente! O estado da aplicação é"
+  mac_filtering: Filtro de MAC
+  tags: Tags
+  router_firewall_settings: "Definições do Router/Firewall"
+  firewall_mac_address_filter_info: "Entradas nesta tabela são usadas para restringir o envio de certos tipos de pacotes de dados da sua rede local para a Internet através da Gateway. O uso destes filtros pode ser útil para tornar a sua rede local mais segura ou restrita."
+  static_ip_address: "Endereço IP Fixo"
+  are_you_sure_advanced_features: "Tem a certeza que pretende activar Recursos Avançados?"
+  dhcp_server: Servidor DHCP
+  app_logs: "Logs de Aplicação"
+  changelog: LogMudanca
+  contribute: Contribuir
+  back: Voltar
+  notifications_from_amahi: "Notificações de Amahi"
+  support_win_95_98: "Suporte a Windows 95/98 - habilita a autenticação LanManager (insegura)"
+  enabling_debug_may_generate_a_lot_of_logs_are_you_sure: "Activar a depuração poderá gerar arquivos de log muito grandes. Tem a certeza de que pretende activar a depuração do Samba?"
+  the_mac_is_invalid: "O endereço MAC é inválido"
+  making_home_networking_simple: "Tornar Rede Doméstica Simples"
+  disk_pool_details: "Seleccione as partições que pretende incluir na pool de armazenamento %{greyhole} e depois faça com que as %{shares} utilizem a pool de armazenamento."
+  a_single_number_0_254_to_point_to_a_given_machine: "Um número único (0-254) para apontar para uma determinada máquina na sua rede"
+  writeable: "Escrevível"
+  port_range_ports_must_be_numbers: "As portas devem ser números"
+  help: Ajuda
+  new_firewall_rule: Nova Regra de Firewall
+  video: "Vídeo"
+  thanks_for_visiting: Obrigado por nos visitar. Apoie os nossos patrocinadores!
+  install_code: "Código de Instalação"
+  new_static_ip: Novo IP Fixo
+  this_share_name_is_not_valid: "O Nome para esta Partilha não é válido"
+  there_are_no_applications_available: "De momento não há aplicações disponíveis."
+  ip_filtering: Filtro de IP
+  create: Criar
+  guest_dashboard: Painel de Convidado
+  music: "Música"
+  permissions: "Permissões"
+  initial_password: Senha
+  your_domain_info: "Este é o domínio inicial da sua rede. Ele está disponível <b>somente</b> dentro da sua rede doméstica. Para mais detalhes sobre isto, veja o <a target=\"_blank\" href=\"http://www.amahi.org/faq#what-home-domain-should-i-use\">FAQ</a>."
+  there_are_no_firewall_rules_defined: "De momento não há regras de Firewall definidas."
+  firewall_url_filter_message: "Entradas nesta tabela são usadas para restringir URLs através da Gateway."
+  dhcp_leases: Aluguer de DHCP
+  dynamic_dns: "DNS Dinâmico"
+  the_ip_must_be_1_to_254: O IP deve estar no intervalo 1-254
+  not_a_valid_user_or_password: "Erro: nome de utilizador ou senha incorrectos"
+  create_your_hda_profile: Criar o seu perfil HDA
+  your_home_dns_domain: "Seu Domínio DNS Inicial"
+  theme_by: Tema por
+  forums: "Fóruns"
+  there_are_no_aliases_defined: "Neste momento não há Aliases definidos"
+  user_name_is_not_valid: "Nome de utilizador inválido"
+  all_you_need: "Tudo o que você precisa!"
+  system: Sistema
+  name_is_taken_already_or_is_reserved: "Nome está já a ser usado ou está reservado"
+  webapps: "Aplicações Web"
+  submit_for_debug: "Submeter para Análise"
+  more: mais
+  protocol: Protocolo
+  no_account_yet: "Ainda não tem conta?"
+  delete_this_rule: Apagar esta regra
+  images: Imagens
+  language: Idioma
+  this_application_is_installed: "Esta aplicação está instalada."
+  share: Partilha
+  partitions: "Partições"
+  router_setting_failed: "Definição do router falhou. Por favor, verifique as definições."
+  global_settings_for_shares: "Configurações Globais das Partilhas"
+  the_watchdog_is_a_critical_setting: "O supervisor é uma configuração CRÍTICA. Parar de monitorizar um processo de servidor é FORTEMENTE DESENCORAJADO. Isto é projectado para manter os serviços do seu HDA em execução de forma segura, mesmo na presença de problemas. Tem certeza de que quer parar o supervisor neste servidor?"
+  warning_this_application_is_in_testing: "ATENÇÃO: Esta aplicação está em fase de teste!"
+  is_being_monitored_24x7: "está a ser monitorizado 24x7"
+  computer: Computador
+  an_external_ip_address_to_make_the_alias: "Um endereço IP externo para o fazer apontar para um endereço IP específico"
+  file_server_samba: Servidor de Arquivos (Samba)
+  mac_is_invalid: "MAC inválido"
+  edit_alias: Editar alias
+  port_range_ports_are_already_allocated: "As Portas neste intervalo já estão alocadas"
+  please_double_check_the_settings: "Por favor, <strong>verifique novamente estas definições</strong>, uma vez que são cruciais para poder ter o seu HDA a funcionar."
+  otherwise_you_can_go_to_the_error_log: "Caso contrário, você pode ir directamente para o <a href=\"/setup?tab=debug\">log de erro</a>."
+  description: "Descrição"
+  there_are_no_users: "De momento não há utilizadores no seu sistema."
+  are_you_sure: Tem a certeza?
+  efficiently_manage_your_network: "Faça uma gestão eficiente dos backups de todos os computadores, consolas de jogos e outros dispositivos na sua rede, e aceda com segurança à sua rede a partir da Internet. Isto é apenas o início do que conseguirá fazer com Amahi."
+  port_range_field_cannot_be_empty: "Os campos não podem estar vazios"
+  available_for_installation: "(Disponível para Instalação)"
+  create_share: Criar esta Partilha
+  apps: "Aplicações"
+  translate_amahi: Traduza o Amahi
+  alias_looks_good: Alias parece OK
+  support: Apoio
+  delete_share: Apagar partilha
+  ushare_upnp_media_server: Ushare UPnP Media Server
+  sign_in: Entrar
+  disk_pooling_enabled: Utiliza a pool
+  new_dns_alias: Novo DNS Alias
+  community: Comunidade
+  create_a_new_user: Criar Novo Utilizador
+  suggest: Sugira!
+  port_filtering: Filtro de Portas
+  results_found: resultados encontrados
+  the_mac_looks_good: O MAC parece OK
+  when_there_are_major_announcements: "Quando houver anúncios importantes"
+  no_description_supplied: "Nenhuma descrição fornecida!"
+  manage_your_contributed_apps: "Faça a gestão das aplicações com que contribuiu"
+  global_settings: "Configurações Globais"
+  networking: Rede
+  firewall: Firewall
+  there_are_no_servers_available: "De momento não há servidores disponíveis."
+  port_range: Faixa de Portas
+  network_gateway: Gateway da Rede
+  path_looks_good: Caminho parece OK
+  please_select: Por favor selecione...
+  mac_address: "Endereço MAC"
+  anonymous_guests: Convidados
+  settings: "Definições"
+  initial_user_info: Utilizador Inicial
+  control: Controlo
+  disk_pool_replication: "Réplica"
+  date: 
+    month_names: 
+    - 
+    - Janeiro
+    - Fevereiro
+    - "Março"
+    - Abril
+    - Maio
+    - Junho
+    - Julho
+    - Agosto
+    - Setembro
+    - Outubro
+    - Novembro
+    - Dezembro
+    abbr_day_names: 
+    - Dom
+    - Seg
+    - Ter
+    - Qua
+    - Qui
+    - Sex
+    - "Sáb"
+    order: 
+    - :day
+    - :month
+    - :year
+    formats: 
+      default: "%d/%m/%Y"
+      short: "%d de %B"
+      long: "%d de %B de %Y"
+    day_names: 
+    - Domingo
+    - Segunda
+    - "Terça"
+    - Quarta
+    - Quinta
+    - Sexta
+    - "Sábado"
+    abbr_month_names: 
+    - 
+    - Jan
+    - Fev
+    - Mar
+    - Abr
+    - Mai
+    - Jun
+    - Jul
+    - Ago
+    - Set
+    - Out
+    - Nov
+    - Dez
+  username_cannot_be_blank: "Nome de utilizador não pode ficar em branco"
+  reboot: Reiniciar
+  the_ip_looks good: O IP parece OK
+  this_feature_is_under_heavy_development: "este recurso está sob forte desenvolvimento"
+  there_are_no_webapps: "De momento não há aplicações web configuradas no seu sistema."
+  are_you_sure_you_want_to_delete_the_static_ip: Tem a certeza de que pretende apagar o IP fixo '%{name}' ?
+  the_name_cannot_be_blank: "O nome não pode ficar em branco"
+  uninstall: Desinstalar
+  details: Detalhes
+  is_now_uninstalled: "está agora Desinstalado"
+  themes: Temas
+  the_name_you_input_above_will_be_added_to_the_DNS_server: "O nome que você forneceu acima será adicionado ao servidor DNS e associado aos endereços MAC e IP abaixo."
+  new_share: Nova Partilha
+  this_path_is_not_valid: "Este caminho não é válido"
+  log_in: Entrar
+  are_you_sure_user: Tem a certeza que pretende apagar o utilizador '%{user}' ?
+  extra_parameters: "Parâmetros Adicionais"
+  try_installing_some_apps: "Experimente instalar algumas Aplicações"
+  testimonials: Testemunhos
+  version: "Versão"
+  powering_off: A encerrar...
+  get_involved: Envolva-se!
+  stop_it: "Pará-lo"
+  home_domain: "Domínio Inicial"
+  total_space: "Espaço total"
+  never_email_me: Nunca me envie emails
+  is_now_installed: "está agora Instalado"
+  this_shares_files_deleted: "Este Directório deixará de ser Partilhado (os arquivos nele contidos NÃO serão eliminados)."
+  alias_is_not_valid: "Alias inválido"
+  mac_address_of_the_device: "Endereço MAC do dispositivo (na forma 00:11:22:33:44:55)"
+  next: "Próximo"
+  web_apps: "Aplicações Web"
+  remember_me: Lembrar-me
+  password_looks_good: Senha parece ok
+  docs: Documentos
+  the_ip_address_cannot_be_empty: "O endereço IP não pode ser vazio."
+  pdc_primary_domain_controller: "PDC - Primary Domain Controller (Controlador de Domínio Primário)"
+  computer_name: Nome do Computador
+  close: fechar
+  this_file_was_automatically_generated_on: "# Este arquivo foi gerado automaticamente em %{time}. ATENÇÃO - quaisquer edições manuais SERÃO perdidas!"
+  installation_instructions: "Instruções de instalação"
+  control_panel_for_your_amahi_hdas: Painel de Controlo para os seus HDAs Amahi
+  please_select_the_type_of_rule_you_want: Por favor selecione o tipo de regra que deseja adicionar.
+  create_a_new_webapp: "Criar Nova Aplicação Web"
+  refresh_status: Actualizar estado
+  home: "Início"
+  will_not_start_at_boot_time: "<b>não</b> irá começar na inicialização"
+  there_are_no_static_ips_defined: "De momento não há IPs fixos definidos."
+  share_name_is_available: "Nome de Partilha disponível"
+  powerful_simple_home_networking: "Rede Doméstica Poderosa e Simples"
+  about: Sobre
+  email_me: Envie-me um email
+  there_are_no_applications_installed: "De momento não há Aplicações instaladas."
+  firewall_port_forward_message: "Estas regras permitem-lhe redireccionar automaticamente portas de serviços de rede para uma máquina específica dentro da firewall. Estas configurações são necessárias apenas se pretender alojar algum tipo de servidor, como um servidor Web ou servidor de correio, na rede local privada dentro da firewall."
+  to_recover_your_password: "Para recuperar sua senha ou email de ativação, por favor informe seu email abaixo."
+  apache_web_server: Servidor Web Apache
+  seconds: segundos
+  partition: "Partição"
+  dhcp: DHCP
+  dhcp_free: Inactivo
+  this_users_files_deleted: "Os arquivos na pasta inicial deste utilizador SERÃO APAGADOS."
+  configured: Configurado
+  disabling_lan_manager_will_not_allow_older_machines: "Desactivar a autenticação LanManager do Windows 95/98 não irá permitir que máquinas mais antigas utilizem os directórios partilhados. Tem a certeza de que pretende desactivar o modo de autenticação do Windows 95/98?"
+  you_have_been_logged_out: "Você foi desconectado."
+  permanently: permanentemente
+  the_url_is_invalid: "O URL não é válido"
+  it_will_be_restarted_by_the_watchdog: "(será reiniciado pelo supervisor)"
+  amahi_dyndns_updater: "Amahi Actualizador de DNS Dinâmico"
+  pdc_domain: "Domínio PDC"
+  path: Caminho
+  features: Funcionalidades
+  password_cannot_be_blank: "A senha não pode ficar em branco"
+  the_watchdog_is_running_and_will_restart_it_in_a_few_seconds: "NOTA: O supervisor está EM EXECUÇÃO e irá reiniciar em alguns segundos."
+  your_existing_network_gatweay: Seu Gateway/Roteador de Rede Existente
+  warning: "ATENÇÃO"
+  dhcp_ip_address: "Endereço IP do DHCP"
+  beta_apps: "Aplicações Beta"
+  logout: Sair
+  there_is_no_undo: "NÃO PODERÁ REVERTER ESTA OPERAÇÃO."

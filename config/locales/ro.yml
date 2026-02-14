@@ -1,0 +1,589 @@
+--- 
+ro: 
+  new_user: Utilizator nou
+  alias_is_taken_already: Alias-ul este deja alocat sau este rezervat
+  storage: Memorie
+  user_name_is_not_available: Nume de utilizator nu este disponibil
+  platform: "Platformă"
+  are_you_sure_share: "Sunteţi sigur că doriţi să ştergeţi resursa partajată '%{share}' ?"
+  these_rules_are_used_to_restrict_ips: "Aceste reguli sunt utilizate pentru a restricţiona pachete de date de la un IP din reţea locală la Internet. Utilizarea unor astfel de filtre pot fi de ajutor în asigurarea sau restricţionarea reţelei locale."
+  this_looks_like_a_database_corruption_please_report_it: "Se pare că baza de date este coruptă sau aţi descoperit un bug (vă rugăm să <a href=\"http://bugs.amahi.org\">îl raportaţi</a>)."
+  mac_looks_good: "Adresa MAC arată bine"
+  wiki: Wiki
+  confirm_email: Confirmare email
+  last_login: "Data ultimei conectări"
+  setup: Setup
+  start_at_boot_time: "Lansează în momentul pornirii"
+  news_about_applications: "Ştiri despre aplicaţiile care rulează pe Amahi"
+  delete_user: "Ştergeţi utilizator"
+  delete_profile: "Ştergere profilul"
+  running: "Se execută"
+  start_building_a_new_hda: "Începe construirea unui nou HDA!"
+  delete: "Şterge"
+  name_is_taken_already: Numele este deja folosit
+  unleash_the_power_of_your_home_network: "Dezlănţuie puterea reţelei tale de domiciliu."
+  are_you_sure_webapp: "Sunteţi sigur că doriţi să ştergeţi aplicaţia web '%{webapp}' ?"
+  automated_install: "Instalare automată"
+  need_help_logging_in: Aveti nevoie de ajutor pentru logare?
+  confirm_password: "Confirmare parolă"
+  installed_paren: (Instalate)
+  tour: Tur
+  address_already_allocated: "Adresa este deja alocată"
+  new: Nou
+  are_you_sure_you_want_to_stop_the_server: "Sunteţi sigur că doriţi să opriţi %{name}?"
+  disabling_pdc_will_enable_workgroup_mode: "Dezactivarea modului PDC va permite folosirea modului grup de lucru (Workgroup). Aceasta este o schimbare majoră în modul de gestionare a resurselor partajate. Acest mod de lucru este destinat pentru reţelele de domiciliu (verifică wiki pentru mai multe detalii). Sunteţi sigur ca doriţi să dezactivaţi modul PDC?"
+  address_looks_good: Adresa arata bine
+  finalize_settings: "Finalizarea Setări"
+  confirmation_must_match: "Confirmarea trebuie să se potrivească"
+  stopped: Oprit
+  applications: "Aplicaţii"
+  this_ip_address_will_always_be_statically_associated_to_the_mac_address: "Această adresă IP (1-%{max}) va fi întotdeauna asociată static la adresa MAC de mai jos."
+  this_path_exists_already: "Această cale există deja"
+  poweroff: Oprire
+  router_control: Controlul routerului
+  openvpn_server: "Server OpenVPN "
+  port_range_looks_good: "Intervalul de porturi arată bine"
+  pictures: Imagini
+  disk: Disc
+  location: "Locaţie"
+  require_login: "Necesită autentificare"
+  theme: "Temă"
+  disks: Discuri
+  rule: "Regulă"
+  static_ips: IP-uri statice
+  mac_address_to_be_filtered_in_format: "Adresa MAC care trebuie filtrată (în forma 00:11:22:33:44:55)."
+  my_apps: "Aplicaţiile mele"
+  disk_pool_copies: Copii suplimentare
+  cancel: "Renunţă"
+  port_range_ports_must_be_increasing_order: "Primul port trebuie să fie mai mic sau egal cu al doilea port"
+  password_is_too_short: "Parola este prea scurtă"
+  preparing_to_install: "Pregătirea pentru instalare ..."
+  model: Model
+  are_you_sure_you_want_to_start_the_server: "Sunteţi sigur că doriţi să porniţi %{name}?"
+  nickname_info: "\"Porecla\" este un identificator unic pentru HDA dumneavoastră. Ea este necesară pentru a vă conecta prin <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN</a> folosind <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPNWindows\">clientul pentru Windows</a> (un utilizator autorizat şi o parolă pe reţeaua de domiciliu)."
+  files: "Fişiere"
+  by_signing_up_you_agree_to_the_terms_of_service: "Prin semnătura dumneavoastră confirmaţi ca aţi citit si sunteţi de acord cu <a href=\"http://www.amahi.org/home/tos\" target=\"_blank\">condiţiile de utilizare ale acestui serviciu</a>"
+  the_url_looks_good: "URL-ul arată bine"
+  application_uninstalled: "Aplicaţia a fost dezinstalată."
+  delete_web_app: "Ştergeţi Applicaţia Web"
+  free_space: "Spaţiu liber"
+  url: URL-ul
+  are_you_sure_you_would_like_to_uninstall: "Sunteţi sigur că doriţi să dezinstalaţi această aplicaţie?\r\n\
+    Toate datele asociate cu această aplicaţie VOR FI ŞTERSE."
+  temperature: "Temperatură"
+  users: Utilizatori
+  debug: Depanare
+  the_ip_address_can_be: Adresa IP poate fi
+  read_only: Doar Citire
+  install_code_info: "Acest cod de instalare surprinde toate setările pentru HDA-ul dumneavoastră şi este utilizat o singură dată ca ultimul pas în instalarea HDA -ului dumneavoastră. Acest cod NU trebuie utilizat pentru două sau mai multe sisteme deoarce va întrerupe funcţionarea DNS-ul dinamic şi a VPN-ul. Trebuie să creaţi un profil pentru fiecare HDA."
+  url_filtering: Filtrare URL
+  available: Disponibile
+  this_will_power_off: "Aceasta va opri HDA dumneavoastră. Dacă HDA-ul dumneavoastră a fost folosit si ca server DHCP ar trebui să porniţi serverul DHCP al routerului. Sunteţi sigur că doriţi să continuaţi?"
+  add_extra_parameters: "(Adaugă parametri suplimentari)"
+  edit_static_ip: Editare IP static
+  system_info: " Informaţii despre sistem"
+  this_path_is_not_available: "Această cale nu este disponibilă"
+  firewall_port_filter_message: "Regulile de filtrare pentru porturi sunt utilizate pentru a restricţiona pachetele de date de la reţeaua locală la Internet."
+  press: "Apăsaţi"
+  share_path_cannot_be_blank: "Calea către resursa partajată nu poate fi goală"
+  address_is_not_valid: "Adresa este invalidă"
+  create_alias: "Creaţi Alias"
+  web: Web
+  delete_alias: "Ştergeţi Alias-ul"
+  recover: Recuperare
+  installed: Instalate
+  core: Miez
+  start_now: "Lansează acum"
+  the_amahi_platform_has_encountered_an_error_you_will_be_forwarded: "Aplicaţia a generat o eroare. Veţi fi transferat imediat către pagina ce conţine jurnalul de erori."
+  application: "Aplicaţie"
+  advanced_settings: "Setări avansate"
+  check_the_features_take_the_tour: "Verificati caracteristicile disponibile în prezent, faceţi un tur, sau dacă nu puteţi să aşteptaţi -"
+  this_will_stop_the_server_permanently: Acest lucru va opri %{name} permanent.
+  your_control_panel: "Panoul dumneavoastră de control"
+  full_name: Numele complet
+  shares: Resurse partajate
+  manage_themes: Administreaza Teme
+  discussion_forum_for: "Forum de discuţii pentru"
+  tracker: Tracker
+  rule_type: Tipul regulei
+  aliases: Aliasuri
+  network: "Reţea"
+  change_your_account_settings: "Modificaţi setările contului dumneavoastră"
+  port_range_ports_must_be_0_to_64k: "Porturilor trebuie să fie în intervalul 0-65535"
+  share_path_is_available: "Calea către resursa partajată este disponibilă"
+  this_could_be_due_to_lack_of_network_connectivity: "Acest lucru ar putea fi din cauza lipsei de conectivitate la reţea."
+  enabling_lan_manager_is_less_secure: "Activarea modului de autentificare Windows 95/98  este mai puţin sigur şi poate ajuta la avvesarea  masinilor mai vechi. Sunteti sigur că doriţi să activaţi autentificarea prin Windows 95/98 LanManager?"
+  special_instructions: "Instrucţiuni speciale"
+  there_are_no_dynamic_dhcp_leases_outstanding: "Nu există  DHCP leases dinamice restante în acest moment."
+  login: Conectare
+  edit_share: Editare resurse partajate
+  dhcp_lease: DHCP Lease
+  change: "Modifică"
+  status: Status
+  not_updating: Nu se actualizarea
+  videos: Videoclipuri
+  dhcp_active: Activ
+  restart: "Reporneşte"
+  confirm: Confirma
+  name_is_not_valid: Numele este invalid
+  sign_out: "Ieşire"
+  this_application_is_installed_already_please_refresh: "Aceasta aplicatie este deja instalat. Vă rugăm să actualizaţi această pagină web."
+  state: Stare
+  new_web_app: "Aplicaţie web nouă"
+  email: E-mail
+  full_name_looks_good: "Numele complet arată bine"
+  workgroup_name: Nume grup de lucru
+  name_looks_good: Numele arata bine
+  new_alias: Alias nou
+  must_be_logged_in: "Trebuie să fiţi logat pentru a accesa această secţiune"
+  rebooting: "Repornire în curs..."
+  uptime: Uptime
+  disk_pooling: Fondul comun de stocare
+  this_will_reboot: "Acest lucru va reporni HDA dumneavoastră.\r\n\
+    Sunteţi sigur că doriţi să continuaţi?"
+  dns_aliases: Aliasurile DNS
+  used_space: "Spaţiu folosit"
+  static_ip_address_for_your_hda: "Adresă IP statică pentru HDA dumneavoastră"
+  comment: Comentariu
+  the_alias_name_you_input_will_be_added: "Numele pe care îl introduceţi mai sus va fi adăugat la serverul DNS ca un alias pentru adresa IP de mai jos."
+  root_path: Root&nbsp; Cale
+  search: "Căutare"
+  upcoming: Viitoare
+  username_or_email: Nume de utilizator sau e-mail
+  network_settings: "Setările reţelei"
+  no_documents_found: Nu sunt  documentele disponibile
+  visible: Vizibil
+  create_a_new_share: "Creaţi o resursă partajată nouă"
+  enabling_pdc_is_a_major_share_change: "Activarea modului PDC reprezintă o schimbare majoră în modul de operare al resurselor partajate. Acest lucru va permite lucrul cu Domenii şi va dezactiva grupul de lucru (workgroup). Toate maşinile trebuie să fie de tipul enterprise. Acest mod este destinat reţelelor de tip enterprise. Sunteti sigur că doriţi să activaţi modul PDC?"
+  all_users: "Toţi utilizatorii"
+  delete_static_ip: "Ştergeţi IP static"
+  audio: Audio
+  dashboard: Tablou de comanda
+  this_ip_will_be_filtered: "Această adresă IP va fi filtrată."
+  dns_alias: Aliasul DNS
+  url_to_filter: URL-ul ce trebuie filtrat
+  the_boot_option_is_a_critical_setting: "Opţiune de boot este o setare CRITICA. Anularea porniri unui proces de server este PUTERNIC DESCURAJATA. Acesta este conceput pentru a porni serviciile în HDA-ul  dumneavoastră la fiecare boot. Sunteţi sigur că doriţi să anulaţi pornirea acestui proces în momentul boot-ului?"
+  greyhole_not_installed: "ATENŢIE: Greyhole nu este instalat în acest sistem!"
+  must_be_admin: "Trebuie să aveţi privilegii de administrator pentru a acesa această secţiune"
+  valid_email_required_for_service: "Un adresă de e-mail validă este necesară pentru activare. Nu iţi vom trimite <a href=\"http://www.amahi.org/privacy\" target=\"_blank\">mesaje nesolicitate (spam)</a>"
+  are_you_sure_you_want_to_delete_alias: "Sunteţi sigur că doriţi să ştergeţi aliasul pentru '%{name}' ?"
+  is_not_being_monitored_24x7: <b>nu</b> este monitorizat 24x7
+  activerecord: 
+    errors: 
+      messages: 
+        greater_than_or_equal_to: "trebuie să fie mai mare sau egal cu %{count}"
+        record_invalid: "Validare nereuşită %{errors}"
+        confirmation: nu este confirmat
+        less_than_or_equal_to: "trebuie să fie mai mic sau egal cu %{count}"
+        blank: nu poate fi gol
+        exclusion: este rezervat
+        invalid: este invalid
+        odd: "trebuie să fie impar"
+        even: "trebuie să fie par"
+        too_short: este pre scurt (minumim de caractere este %{count})
+        wrong_length: "nu are lungimea corectă (trebuie să aiba %{count} caractere)"
+        empty: nu poate fi gol
+        less_than: "trebuie să fie mai mic decât %{count}"
+        greater_than: "trebuie să fie mai mare decât %{count}"
+        equal_to: "trebuie să fie egal cu %{count}"
+        too_long: este prea lung (se pot folosi maximum %{count} caractere)
+        taken: este deja folosit
+        accepted: trebuie dat acceptul
+        inclusion: "nu este inclus în listă"
+        not_a_number: "nu este un număr"
+      full_messages: 
+        format: "%{attribute} %{message}"
+      template: 
+        body: "Încearcă să corectezi urmatoarele câmpuri:"
+        header: 
+          one: "Nu am putut salva acest %{model}: o eroare"
+          other: "Nu am putut salva acest %{model}: %{count} erori."
+  there_are_no_static_dhcp_leases: "Nu există  DHCP leases statice restante în acest moment."
+  live_help: Ajutor in direct
+  edit_user: Editare utilizator
+  control_panel: Panoul de control
+  share_name_cannot_be_blank: Numele resursei partajate nu poate fi gol
+  get_started: "Începeţi!"
+  my_account: Contul meu
+  gallery: Galerie
+  transmission_bittorrent_server: Transmisie Server de Bittorrent
+  ip_address: Adresa IP
+  number: 
+    format: 
+      separator: .
+      precision: 3
+      delimiter: ","
+    human: 
+      format: 
+        precision: 1
+        delimiter: ","
+      storage_units: 
+        format: "%n %u"
+        units: 
+          kb: KB
+          tb: TB
+          gb: GB
+          byte: 
+            one: Byte
+            other: Bytes
+          mb: MB
+    percentage: 
+      format: 
+        delimiter: ","
+    currency: 
+      format: 
+        format: "%n %u"
+        unit: RON
+        separator: .
+        precision: 2
+        delimiter: ","
+    precision: 
+      format: 
+        delimiter: ""
+  mariadb_database_server: MariaDB Server
+  edit_and_rate_beta_apps: "Editare şi evaluare aplicaţii Beta"
+  username: Nume de utilizator
+  are_you_sure_you_want_to_restart_the_server: "Sunteţi sigur că doriţi să reporniţi %{name}?"
+  done_final_check: "Gata! Verificare finală"
+  this_application_is_not_installed_please_refresh: "Această aplicaţie nu este instalată. Vă rugăm să actualizaţi această pagină web."
+  user_name_is_available: Nume de utilizator este disponibil
+  first_time_admin_setup: "Prima configurare pentru administrator. Vă rugăm să recreaţi parola de utilizator."
+  news: "Ştiri"
+  password: Parola
+  access: Acces
+  avanced_settings_is_for_developers: "Activarea caracteristicilor avansate este numai pentru utilizatorii avansaţi şi dezvoltatori."
+  there_are_no_shares_created: "Nu există resurse partajate în sistemul dumneavoastră în acest moment."
+  created: Creat
+  watchdog: Watchdog
+  stop: "Opreşte"
+  device: Dispozitiv
+  initial_user: Nume de utilizator
+  admin_setup_worked: "Configurarea contului de administrator a reuşit. Vă rugăm să vă conectaţi"
+  preparing_to_uninstall: "Pregătirea pentru dezinstalare ..."
+  time: 
+    am: am
+    formats: 
+      default: "%a %d %b %Y, %H:%M:%S %z"
+      short: "%d %b %H:%M"
+      long: "%d %B %Y %H:%M"
+    pm: pm
+  dns_server: Server DNS
+  sign_up_here: "Înscriete aici"
+  servers: Servere
+  router_ip: Adresa IP a router-ului
+  general_amahi_news: " Ştiri General Amahi"
+  feedback: "Aprecierile clienţilor"
+  name: Nume
+  awake_this_device_via_wol: "Trezeşte acest aparat"
+  port_forwarding: Port Forwarding
+  datetime: 
+    prompts: 
+      minute: Minutul
+      second: Secunda
+      month: Luna
+      hour: Ora
+      day: Ziua
+      year: Anul
+    distance_in_words: 
+      less_than_x_minutes: 
+        one: "mai puțin de un minut"
+        other: "mai puțin de %{count} minute"
+      almost_x_years: 
+        one: aproape 1 an
+        other: aproape %{count} ani
+      x_days: 
+        one: 1 zi
+        other: "%{count} zile"
+      x_seconds: 
+        one: "1 secundă"
+        other: "%{count} secunde"
+      about_x_hours: 
+        one: "aproximativ o oră"
+        other: aproximativ %{count} ore
+      less_than_x_seconds: 
+        one: "mai puțin de o secundă"
+        other: "mai puțin de %{count} secunde"
+      x_months: 
+        one: "1 lună"
+        other: "%{count} luni"
+      x_minutes: 
+        one: 1 minut
+        other: "%{count} minute"
+      about_x_years: 
+        one: aproximativ un an
+        other: aproximativ %{count} ani
+      about_x_months: 
+        one: "aproximativ o lună"
+        other: aproximativ %{count} luni
+      over_x_years: 
+        one: mai mult de un an
+        other: mai mult de%{count} ani
+      half_a_minute: "jumătate de minut"
+  nickname: Porecla
+  pooled: Grupate
+  edit_web_app: "Editare Aplicaţii Web"
+  movies: Filme
+  mac_already_allocated: "Adresa MAC este deja alocată"
+  dyndns_info: "Amahi oferă GRATUIT o adresă  DNS dinamică, ce nu necesită configurare . Este extern reţelei de domiciliu. Puteţi să-l utilizaţi pentru clienţi<a target=\"_blank\"\r\n\
+    href=\"http://wiki.amahi.org/index.php/VPN\">Mac</a> or <a target=\"_blank\"\r\n\
+    href=\"http://wiki.amahi.org/index.php/VPNLinux\">Linux</a> <a\r\n\
+    target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN</a> (utilizatorii avansaţi pot folosi conectarea cu <a target=\"_blank\"\r\n\
+    href=\"http://wiki.amahi.org/index.php/Ssh-ports\">SSH</a>) . Utilizatorii avansaţi pot folosi Amahi pentru a găzdui web site-uri web, servere de jocuri, sau alte servicii din reţeaua de domiciliu (dacă sunteţi nerăbdător să încercaţi, întrebaţi  în canalul IRC sau căutaţi în wiki)."
+  confirmation_matches: "Confirmarea se potriveşte"
+  setting_dmz_failed: "Setarea DMZ-ului a eşuat. Vă rugăm să verificaţi setările."
+  logs: Jurnale
+  this_name_is_not_available: Acest nume nu este disponibil
+  password_changed_successfully: "Parola a fost schimbată cu succes"
+  will_start_at_boot_time: va porni la boot
+  this_application_install_ended_with_an_error_please_uninstall_status_is: "Instalarea aceste aplicaţii s-a încheiat cu o eroare. Vă rugăm să o dezinstalaţi şi să încercaţi din nou! Starea  aplicaţiei este"
+  mac_filtering: Filtrare adrese MAC
+  tags: Etichete
+  router_firewall_settings: "Setări pentru Router/Firewall"
+  firewall_mac_address_filter_info: "Intrările din acest tabel sunt utilizate pentru a restricţiona anumite tipuri de pachete de date de la nivel reţelei locale la Internet prin Gateway. Utilizarea unor astfel de filtre pot fi de ajutor în asigurarea sau restricţionarea reţelei locale."
+  static_ip_address: "Adresă IP statică"
+  are_you_sure_advanced_features: "Sunteţi sigur că doriţi să activaţi caracteristicile avansate?"
+  dhcp_server: Server DHCP
+  app_logs: "Jurnal aplicaţii"
+  changelog: "Jurnal de modificări"
+  contribute: "Implică-te"
+  back: "Înapoi"
+  notifications_from_amahi: "Notificări din partea Amahi"
+  support_win_95_98: Suport pentru Windows 95/98 &mdash - permite autentificare LanManager (nesecurizat)
+  enabling_debug_may_generate_a_lot_of_logs_are_you_sure: "Activarea depanării poate genera fişiere jurnal foarte mari. Sunteti sigur că doriţi să activaţi depanarea pentru Samba?"
+  the_mac_is_invalid: "Adresa MAC este invalidă"
+  making_home_networking_simple: "Simplifică reţeaua de domiciliu"
+  disk_pool_details: "Selectaţi partiţiile pe care doriţi să le includeţi în fondul comun de stocare %{greyhole}, şi apoi permiteţi %{shares} să folosească  fondul comun de stocare."
+  a_single_number_0_254_to_point_to_a_given_machine: "Un număr unic (0-254) pentru a indica o maşină dată în reţeaua dumneavoastră"
+  writeable: Inscriptibile
+  port_range_ports_must_be_numbers: "Porturilor trebuie să fie numere"
+  help: Ajutor
+  new_firewall_rule: "Regulă nouă pentru firewall"
+  video: Videoclip
+  thanks_for_visiting: "Multumim pentru vizită. Sprijiniţi sponsorii noştri!"
+  install_code: Codul de instalare
+  new_static_ip: "Adresă IP statică nouă"
+  this_share_name_is_not_valid: "Acest nume de resursă partajată este invalid"
+  there_are_no_applications_available: "Nu există aplicaţii disponibile în acest moment."
+  ip_filtering: Filtrare IP
+  create: "Creaţi"
+  guest_dashboard: "Tabloul de control pentru oaspeţi"
+  music: Muzica
+  permissions: Permisiuni
+  initial_password: Parola
+  your_domain_info: "Acesta este domeniul retelei dumnneavoastră.de domiciliu. Domeniul este disponibil <b>numai</b> în interiorul reţelei de domiciliu. Pentru mai multe detalii despre acest lucru citiţi FAQ."
+  there_are_no_firewall_rules_defined: "Nu există reguli pentru Firewall definite în acest moment."
+  firewall_url_filter_message: "Intrările din acest tabel sunt utilizate pentru a restricţiona URL-uri prin intermediul Gateway."
+  dhcp_leases: DHCP Leases
+  dynamic_dns: DNS Dinamic
+  the_ip_must_be_1_to_254: "Adresa IP trebuie să fie în intervalul 1-254"
+  not_a_valid_user_or_password: "Eroare:  Numele de utilizator sau parola sunt greşite"
+  create_your_hda_profile: "Creaţi profilul HDA"
+  your_home_dns_domain: "Domeniul dumneavoastră. DNS"
+  theme_by: "Temă creată de"
+  forums: Forumuri
+  there_are_no_aliases_defined: "Nu sunt alias-uri definite în acest moment"
+  user_name_is_not_valid: Numele utilizatorului este invalid
+  all_you_need: Tot ce ai nevoie!
+  system: Sistem
+  name_is_taken_already_or_is_reserved: Numele este deja folosit sau este rezervat
+  webapps: "Aplicaţii web"
+  submit_for_debug: "Trimiteţi pentru depanare"
+  more: mai mult
+  protocol: Protocolul
+  no_account_yet: "Nu ai cont încă?"
+  delete_this_rule: "Ştergeţi această regulă"
+  images: Imagini
+  language: Limba
+  this_application_is_installed: "Această aplicaţie este instalată."
+  share: Resurse partajate
+  partitions: "Partiţii"
+  router_setting_failed: "Setarea router-ului a eşuat. Vă rugăm să verificaţi setările."
+  global_settings_for_shares: "Setări globale pentru resurse partajate"
+  the_watchdog_is_a_critical_setting: "Warchdog este o setare CRITICA. Oprirea monitorizări  unui proces de server este PUTERNIC DESCURAJATA. Acesta este conceput pentru a menţine  funcţionale serviciile HDA-ul dumneavoastră chiar şi în prezenţa mici defecţiuni. Sunteţi sigur că doriţi să opriţi Watchdog-ul pe acest server?"
+  warning_this_application_is_in_testing: "ATENŢIE: Această aplicaţie este în teste!"
+  is_being_monitored_24x7: este monitorizat 24x7
+  computer: Calculator
+  an_external_ip_address_to_make_the_alias: "O adresa de IP externă pentru a indica o anumită adresă IP"
+  file_server_samba: "Serverul de fişiere (Samba)"
+  mac_is_invalid: "Adresa MAC este invalidă"
+  edit_alias: Editare alias
+  port_range_ports_are_already_allocated: Porturile din acest interval sunt deja alocate
+  please_double_check_the_settings: "Vă rugăm să verificaţi aceste setări deoarece sunt cruciale pentru ca HDA-ul dumneavoastră  să rulează fara modificări suplimentare."
+  otherwise_you_can_go_to_the_error_log: "În caz contrar, puteţi merge direct la <a href=\"/setup?tab=debug\"> jurnalul de erori</a>."
+  description: Descriere
+  there_are_no_users: "Nu sunt utilizatori în sistemul dvs. în acest moment."
+  are_you_sure: "Sunteţi sigur?"
+  efficiently_manage_your_network: "Gestioneză în mod eficient reţeaua, crează  backup-uri la toate calculatoarele, consolele de jocuri şi alte dispozitive din reţea,  accesează securizat reţeaua personală de pe Internet. Asta e doar începutul a ceea ce veţi avea posibilitatea de a face cu Amahi."
+  port_range_field_cannot_be_empty: "Câmpurile nu pot fi goale"
+  available_for_installation: (Disponibil pentru instalare)
+  create_share: "Creaţi această resursă partajată"
+  apps: "Aplicaţii"
+  translate_amahi: "Crează traducere pentru Amahi"
+  alias_looks_good: "Alias-ul arată bine"
+  support: 
+    array: 
+      words_connector: ", "
+      last_word_connector: " şi "
+      two_words_connector: " şi "
+    select: 
+      prompt: "Alegeţi"
+  delete_share: "Ştergeţi resursa partajată"
+  ushare_upnp_media_server: Ushare UPnP Media Server
+  sign_in: "În semn"
+  disk_pooling_enabled: "Utilizează fondul comun"
+  new_dns_alias: DNS Alias nou
+  community: Comunitate
+  create_a_new_user: "Creaţi un utilizator nou"
+  suggest: "Sugerează!"
+  port_filtering: Filtrare porturi
+  results_found: "rezultate găsite"
+  the_mac_looks_good: "Adresa MAC arată bine"
+  when_there_are_major_announcements: "Atunci când există anunţuri importante"
+  no_description_supplied: "Nici o descriere furnizată!"
+  manage_your_contributed_apps: "Gestionaţi aplicaţiile la care aţi contribuit"
+  global_settings: "Setări Globale"
+  networking: "Reţea"
+  firewall: Firewall
+  there_are_no_servers_available: "Nu sunt servere disponibile în acest moment."
+  port_range: Interval porturi
+  network_gateway: "Gateway pentru reţea"
+  path_looks_good: "Calea arată bine"
+  please_select: "Vă rugăm să selectaţi ..."
+  mac_address: Adresa MAC
+  anonymous_guests: Vizitatori
+  settings: "Setări"
+  initial_user_info: "Utilizator Iniţial"
+  control: Control
+  disk_pool_replication: Replicare
+  date: 
+    month_names: 
+    - 
+    - Ianuarie
+    - Februarie
+    - Martie
+    - Aprilie
+    - Mai
+    - Iunie
+    - Iulie
+    - August
+    - Septembrie
+    - Octombrie
+    - Noiembrie
+    - Decembrie
+    order: 
+    - :day
+    - :month
+    - :year
+    abbr_day_names: 
+    - Dum
+    - Lun
+    - Mar
+    - Mie
+    - Joi
+    - Vin
+    - "Sâm"
+    formats: 
+      default: "%d-%m-%Y"
+      short: "%d %b"
+      long: "%d %B %Y"
+    day_names: 
+    - "Duminică"
+    - Luni
+    - "Marți"
+    - Miercuri
+    - Joi
+    - Vineri
+    - "Sâmbată"
+    abbr_month_names: 
+    - 
+    - Ian
+    - Feb
+    - Mar
+    - Apr
+    - Mai
+    - Iun
+    - Iul
+    - Aug
+    - Sep
+    - Oct
+    - Noi
+    - Dec
+  username_cannot_be_blank: Numele de utilizator nu poate fi gol
+  reboot: Repornire
+  the_ip_looks good: "Adresa IP arată bine"
+  this_feature_is_under_heavy_development: "Această caracteristică este în curs de dezvoltare"
+  there_are_no_webapps: "Nu există aplicaţii web configurat în sistemul dvs. în acest moment."
+  are_you_sure_you_want_to_delete_the_static_ip: "Sunteţi sigur că doriţi să ştergeţi IP-ul static '%{name}'?"
+  the_name_cannot_be_blank: Numele nu poate fi gol
+  uninstall: Dezinstalare
+  details: Detalii
+  is_now_uninstalled: este Dezinstalat
+  themes: Teme
+  the_name_you_input_above_will_be_added_to_the_DNS_server: "Numele pe care îl introduceţi mai sus va fi adăugat la serverul DNS si va fi asociat cu adresa MAC şi adresele IP de mai jos."
+  new_share: "Resursă partajată nouă"
+  this_path_is_not_valid: "Această cale este invalidă"
+  log_in: Conectare
+  are_you_sure_user: "Sunteţi sigur că doriţi să ştergeţi utilizator '%{user}' ?"
+  extra_parameters: Parametri suplimentari
+  try_installing_some_apps: "Încercaţi să instalaţi unele aplicaţii"
+  testimonials: "Mărturii"
+  version: Versiunea
+  powering_off: "Oprire în curs ..."
+  get_involved: "Implică-te!"
+  stop_it: "Opreşte"
+  home_domain: Domeniu Home
+  total_space: "Spaţiul total"
+  never_email_me: " Nu imi trimite e-mail niciodată"
+  is_now_installed: este Instalat
+  this_shares_files_deleted: "Această resursă partajată nu va mai fi disponibilă (fişierele din ea NU vor fi şterse)."
+  alias_is_not_valid: Alias-ul este invalid
+  mac_address_of_the_device: "Adresa MAC a dispozitivului (în forma 00:11:22:33:44:55)"
+  next: "Următorul"
+  web_apps: "Aplicaţii Web"
+  remember_me: "Tine-mă minte"
+  password_looks_good: "Parola arată bine"
+  docs: Documente
+  the_ip_address_cannot_be_empty: "Adresa IP nu poate fi goală"
+  pdc_primary_domain_controller: PDC - controlerul de domeniu principal
+  computer_name: " Numele Calculatorului"
+  close: "închide"
+  this_file_was_automatically_generated_on: "# Acest fişier a fost generat automat la %{time} - ATENŢIE - orice modificărimanuale vor fi pierdute!"
+  installation_instructions: "Instrucţiunile de instalare"
+  control_panel_for_your_amahi_hdas: Panoul de control pentru Amahi HDAs
+  please_select_the_type_of_rule_you_want: "Vă rugăm să selectaţi tipul de regula pe care doriţi să o adăugaţi."
+  create_a_new_webapp: "Creaţi o Aplicaţie Web nouă"
+  refresh_status: "Actualizează statusul"
+  home: "Acasă"
+  will_not_start_at_boot_time: <b>nu</b> va porni la boot
+  there_are_no_static_ips_defined: "Nu sunt IP-uri statice definite în acest moment."
+  share_name_is_available: Numele resursei partajate este disponibile
+  powerful_simple_home_networking: "Managementul reţelei de domiciliu în mod simplu şi eficient"
+  about: Despre
+  email_me: Trimite-mi un e-mail
+  there_are_no_applications_installed: "Nu sunt aplicaţii instalate în acest moment."
+  firewall_port_forward_message: "Aceste reguli vă permit să redirecţionaţi în mod automat porturi pentru serviciile de reţea la o anumită maşină în spatele firewall-ului. Aceste setări sunt necesare doar dacă doriţi să găzduiţi un anumit server, spre exemplu un server de web sau un server de mail, în reţeaua locală, în spatele firewall-ului."
+  to_recover_your_password: "Pentru a recupera parola sau email-ul de activare, vă rugăm să introduceţi adresa dvs. de email mai jos"
+  apache_web_server: Apache Web Server
+  seconds: secunde
+  partition: "Partiţie"
+  dhcp: DHCP
+  dhcp_free: Inactiv
+  this_users_files_deleted: "Fişierele din home folder-ul acestui utilizator VOR FI ŞTERSE"
+  configured: Configurat
+  disabling_lan_manager_will_not_allow_older_machines: "Dezactivarea autentificări Windows 95/98 LanManager nu va permite masinilor mai vechi să utilizeze resursele partajate. Sunteţi sigur că doriţi să dezactivaţi modul de autentificare Windows 95 / 98?"
+  you_have_been_logged_out: "Aţi fost deconectat."
+  permanently: permanent
+  the_url_is_invalid: URL-ul este invalid
+  it_will_be_restarted_by_the_watchdog: "(acesta va fi repornit de către watchdog)"
+  amahi_dyndns_updater: Dynamic DNS Updater Amahi
+  pdc_domain: Domeniu PDC
+  path: Cale
+  features: Caracteristici
+  password_cannot_be_blank: "Parola nu poate fi goală"
+  the_watchdog_is_running_and_will_restart_it_in_a_few_seconds: "NOTĂ: WATCHDOG RULEAZA şi va reporni în câteva secunde."
+  your_existing_network_gatweay: "Gateway-ul/Routerul dumneavoastră. de reţea existent deja"
+  warning: "ATENŢIE"
+  dhcp_ip_address: Adresa IP a DHCP
+  beta_apps: "Aplicaţii beta"
+  logout: Deconectare
+  there_is_no_undo: "Această commandă de ştergere NU POATE FI ANULATA"

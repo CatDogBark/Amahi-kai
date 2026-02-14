@@ -1,0 +1,62 @@
+// --------------------------------------------------
+// Amahi - Import Default Theme mixins and variables
+// --------------------------------------------------
+@import "../../default/src/_mixins.scss";
+
+// --------------------------------------------------
+// Amahi - Custom theme css/sass
+// --------------------------------------------------
+// --------------------------------------------------
+// Dashboard
+// --------------------------------------------------
+
+#tabs {
+  width: 145px;
+  float: left;
+  border: 1px solid #e8e8e8;
+  border-bottom-color: #dfdfdf;
+  @include border-radius(5px 0 0 5px);
+  @include background-gradient(#fcfcfc, #f7f7f7);
+}
+
+
+#preferences {
+  width: 770px;
+  float: left;
+  border: 1px solid #e8e8e8;
+  @include border-radius(0 5px 5px 5px);
+}
+
+
+// App Navigation
+// --------------------------------------------------
+
+nav.preftab {
+  position: static;
+  li {
+    width: 145px;
+    &.active {
+      > ul { display: inline; }
+    }
+    &:hover {
+      ul { display: inline; }
+    }
+    a {
+      width: 145px;
+    }
+    // secondary navigation
+    ul {
+      position: static;
+      width: 145;
+      display: inline;
+      li > a {
+        padding: 0 40px;
+      }
+    }
+  }// end li
+}// end preftab
+
+.settings-actions {float: right;}
+.settings-fields {float: left;}
+
+#systems-result {padding: 5px 0 5px 0;}

@@ -1,0 +1,29 @@
+#login
+  #logo
+    h1
+      a[href="http://www.amahi.org/" title="Powered by Amahi"] Amahi Server Login
+
+  - flash.each do |name, msg|
+    div[class="alert alert-#{name}"]= msg.html_safe
+
+  = form_for @user_session do |f|
+    p
+      = text_field_tag 'username', @login, :autofocus => true, :placeholder => t('username')
+    p
+      = password_field_tag 'password', nil, :placeholder => t('password')
+
+    p[class="rememberme"]
+      label[for="remember_me"]
+        = check_box_tag 'remember_me', '1', @remember_me
+        | &nbsp;
+        = t 'remember_me'
+
+    p[class="submit"]
+      = submit_tag t('log_in')
+
+script
+  | function try_focus() {
+  |   var field = document.getElementById('username');
+  |   if (field) { field.focus(); field.select(); }
+  | }
+  | try_focus();

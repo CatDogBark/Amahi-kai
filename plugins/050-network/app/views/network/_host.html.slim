@@ -1,0 +1,43 @@
+div.entry
+
+  table.settings.stretchtoggle
+    tr.hover-style
+      td.settings-col1.settings-col1-pad
+        = link_to host.name, '#'
+      td
+        = @net + '.' + host.address
+
+  .settings-stretcher.collapsed-div-style[style="display:none;"]
+    fieldset
+      legend
+        | &nbsp; &nbsp;
+        b = host.name
+        | &nbsp; &nbsp;
+
+      .settings-actions
+        span.delete
+          = spinner
+          = link_to t('delete') + ' ' + host.name,
+            network_engine.destroy_host_path(host),
+            :method => :delete,
+            :data => {:confirm => confirm_host_destroy_message(host.name)},
+            :remote => true,
+            :class => 'btn-delete remote-btn btn btn-sm pull-right'
+
+      .settings-fields
+        table
+          tr
+            td
+              label #{t('host')}
+            td
+              = host.name
+          tr
+            td
+              label #{t('mac')}
+            td
+              = host.mac
+          tr
+            td
+              label #{t('ip')}
+            td
+              = @net + '.' + host.address

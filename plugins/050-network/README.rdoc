@@ -1,0 +1,5 @@
+= Amahi plugin for Network Setup
+
+Network tab for the Amahi platform
+
+(C) 2013 Amahi

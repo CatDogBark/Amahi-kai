@@ -1,0 +1,620 @@
+--- 
+lv: 
+  new_user: "Jauns lietotājs"
+  alias_is_taken_already: "Aizstājvārds ir jau aizņemts vai rezervēts"
+  storage: "Krātuve"
+  user_name_is_not_available: "Lietotājvārds nav pieejams"
+  are_you_sure_share: ""
+  this_looks_like_a_database_corruption_please_report_it: ""
+  mac_looks_good: "MAC izskatās labi"
+  wiki: Wiki
+  these_rules_are_used_to_restrict_ips: ""
+  confirm_email: "Apstiprināt e-pastu"
+  last_login: "Pēdējā pieslēgšanās"
+  setup: Iestatne
+  start_at_boot_time: ""
+  news_about_applications: ""
+  delete_profile: "Dzēst profilu"
+  delete_user: "Dzēst lietotāju"
+  running: Darbojas
+  start_building_a_new_hda: "Sākt būvēt jaunu HDA!"
+  delete: "Dzēst"
+  name_is_taken_already: "Vārds jau ir aizņemts"
+  are_you_sure_webapp: ""
+  unleash_the_power_of_your_home_network: ""
+  installed_paren: "(Instalēts)"
+  automated_install: "Automatizētā instalācija"
+  need_help_logging_in: "Vajag palīdzību pieslēgties?"
+  confirm_password: "Apstiprināt paroli"
+  tour: ""
+  address_already_allocated: "Adrese jau ir piešķirta"
+  new: Jauns
+  are_you_sure_you_want_to_stop_the_server: ""
+  disabling_pdc_will_enable_workgroup_mode: ""
+  finalize_settings: "Pabeigt iestatījumus"
+  address_looks_good: "Adrese izskatās labi"
+  confirmation_must_match: "Apstiprinājumam jāsakrīt"
+  stopped: "Apstādināts"
+  applications: "Aplikācijas"
+  this_ip_address_will_always_be_statically_associated_to_the_mac_address: ""
+  this_path_exists_already: ""
+  poweroff: "Izslēgt"
+  router_control: "Maršrutētāja vadība"
+  openvpn_server: ""
+  port_range_looks_good: ""
+  disk: Disks
+  location: Vieta
+  require_login: "Prasīt pieslēgšanos"
+  theme: "Tēma"
+  disks: Diski
+  rule: ""
+  static_ips: "Statiskās IP"
+  mac_address_to_be_filtered_in_format: "MAC adreses filtrēšani (formā 00:11:22:33:44:55)"
+  my_apps: ""
+  disk_pool_copies: Papildus kopijas
+  cancel: Atcelt
+  port_range_ports_must_be_increasing_order: ""
+  password_is_too_short: "Parole ir par īsu"
+  preparing_to_install: "Gatavojas instalācijai..."
+  model: Modelis
+  are_you_sure_you_want_to_start_the_server: ""
+  nickname_info: ""
+  files: Faili
+  by_signing_up_you_agree_to_the_terms_of_service: ""
+  the_url_looks_good: "URL izskatās labi"
+  application_uninstalled: "Aplikācija atinstalēta."
+  delete_web_app: ""
+  free_space: "Brīva vieta"
+  url: URL
+  are_you_sure_you_would_like_to_uninstall: ""
+  temperature: "Temperatūra"
+  users: "Lietotāji"
+  debug: "Atkļūdošana"
+  the_ip_address_can_be: "IP adrese var būt"
+  read_only: "Tikai lasāms"
+  install_code_info: ""
+  url_filtering: "URL filtrēšana"
+  available: Pieejams
+  this_will_power_off: ""
+  edit_static_ip: "Rediģēt statisko IP"
+  add_extra_parameters: (pievienot papildus parametrus)
+  system_info: "Sistēmas info"
+  this_path_is_not_available: ""
+  firewall_port_filter_message: ""
+  press: Nospiest
+  share_path_cannot_be_blank: ""
+  address_is_not_valid: "Adrese ir nederīga"
+  create_alias: "Izveidot aizstājvārdu"
+  installed: "Instalēts"
+  helpers: 
+    submit: 
+      submit: "Saglabāt %{model}"
+      create: Izveidot %{model}
+      update: "Atjaunināt %{model}"
+    select: 
+      prompt: "Lūdzu izvēlies"
+  web: "Tīmeklī"
+  delete_alias: "Dzēst aizstājvārdu"
+  recover: "Atgūt"
+  start_now: "Sākt tagad"
+  the_amahi_platform_has_encountered_an_error_you_will_be_forwarded: ""
+  core: ""
+  application: "Aplikācija"
+  advanced_settings: "Papildu iestatījumi"
+  check_the_features_take_the_tour: ""
+  this_will_stop_the_server_permanently: ""
+  your_control_panel: "Jūsu vadības panelis"
+  full_name: "Pilns vārds"
+  shares: "Koplietošana"
+  manage_themes: "Pārvaldīt tēmas"
+  tracker: ""
+  discussion_forum_for: Diskusiju forums
+  rule_type: ""
+  aliases: "Aizstājvārdi"
+  network: "Tīkls"
+  change_your_account_settings: "Mainīt sava konta iestatījumus"
+  port_range_ports_must_be_0_to_64k: ""
+  share_path_is_available: ""
+  this_could_be_due_to_lack_of_network_connectivity: ""
+  enabling_lan_manager_is_less_secure: ""
+  special_instructions: "Īpašas instrukcijas"
+  there_are_no_dynamic_dhcp_leases_outstanding: ""
+  login: "Pieslēgties"
+  edit_share: ""
+  dhcp_lease: ""
+  change: "Izmainīt"
+  status: Status
+  dhcp_active: "Aktīvs"
+  not_updating: ""
+  videos: Video
+  restart: "Restartēt"
+  confirm: "Apstiprināt"
+  name_is_not_valid: "Vārds nav derīgs"
+  sign_out: "Atslēgties"
+  this_application_is_installed_already_please_refresh: ""
+  state: "Stāvoklis"
+  new_web_app: ""
+  email: E-pasts
+  full_name_looks_good: "Pilns vārds izskatās labi"
+  workgroup_name: Darbgrupas nosaukums
+  name_looks_good: "Vārds izskatās labi"
+  new_alias: "Jauns aizstājvārds"
+  must_be_logged_in: ""
+  rebooting: Notiek restarts...
+  uptime: "Darbspējas laiks"
+  disk_pooling: ""
+  this_will_reboot: "HDA tiks restartēts.\r\n Vai esat pārliecināts, ka vēlaties turpināt?"
+  dns_aliases: ""
+  used_space: "Izmantotā vieta"
+  static_ip_address_for_your_hda: "Jūsu HDA statiskā IP adrese"
+  comment: "Komentārs"
+  the_alias_name_you_input_will_be_added: ""
+  root_path: "Saknes&nbsp;ceļš"
+  search: "Meklēt"
+  upcoming: "Gaidāms"
+  username_or_email: "Lietotājvārds vai e-pasts"
+  network_settings: "Tīkla iestatījumi"
+  no_documents_found: ""
+  all_users: "Visi lietotāji"
+  visible: Redzams
+  create_a_new_share: ""
+  enabling_pdc_is_a_major_share_change: ""
+  delete_static_ip: "Dzēst statisko IP"
+  audio: Audio
+  dashboard: Panelis
+  this_ip_will_be_filtered: ""
+  dns_alias: "DNS aizstājvārds"
+  url_to_filter: "Filtrējamais URL"
+  the_boot_option_is_a_critical_setting: ""
+  greyhole_not_installed: ""
+  must_be_admin: ""
+  valid_email_required_for_service: ""
+  are_you_sure_you_want_to_delete_alias: ""
+  is_not_being_monitored_24x7: ""
+  activerecord: 
+    errors: 
+      messages: 
+        greater_than_or_equal_to: "ir jābūt lielākam vai vienādam ar %{count}"
+        record_invalid: "Pārbaude neizdevās: %{errors}"
+        confirmation: "nesakrīt ar apstiprinājumu"
+        less_than_or_equal_to: "ir jābūt mazākam vai vienādam ar %{count}"
+        not_an_integer: "ir jābūt veselam skaitlim"
+        blank: "ir jābūt aizpildītam"
+        exclusion: nav pieejams
+        invalid: "nav derīgs"
+        odd: "ir jābūt nepāra skaitlim"
+        even: "ir jābūt pāra skaitlim"
+        too_short: "ir par īsu (minimums ir %{count} zīmes)"
+        wrong_length: "ir nepareizs garums (jābūt %{count} zīmēm)"
+        empty: "ir jābūt aizpildītam"
+        less_than: "ir jābūt mazākam par %{count}"
+        greater_than: "ir jābūt lielākam par %{count}"
+        equal_to: "ir jābūt vienādam ar %{count}"
+        too_long: "ir par garu (maksimums ir %{count} zīmes)"
+        taken: "ir jau aizņemts"
+        accepted: "ir jāpiekrīt"
+        inclusion: "nav iekļauts sarakstā"
+        not_a_number: nav skaitlis
+      full_messages: 
+        format: "%{attribute}%{message}"
+      template: 
+        body: "Problēmas ir šajos ievades laukos:"
+        header: 
+          one: "Dēļ 1 kļūdas šis %{model} netika saglabāts"
+          other: "Dēļ %{count} kļūdām šis %{model} netika saglabāts"
+  there_are_no_static_dhcp_leases: ""
+  live_help: "Dzīvā palīdzība"
+  edit_user: "Rediģēt lietotāju"
+  control_panel: "Vadības panelis"
+  share_name_cannot_be_blank: ""
+  get_started: ""
+  transmission_bittorrent_server: Transmission Bittorrent serveris
+  my_account: Mans konts
+  gallery: Galerija
+  ip_address: IP adrese
+  number: 
+    format: 
+      separator: ","
+      precision: 2
+      delimiter: .
+      significant: false
+      strip_insignificant_zeros: false
+    human: 
+      format: 
+        precision: 1
+        delimiter: ""
+        significant: false
+        strip_insignificant_zeros: false
+      storage_units: 
+        format: "%n %u"
+        units: 
+          kb: KB
+          tb: TB
+          gb: GB
+          byte: 
+            one: Baits
+            other: Baiti
+          mb: MB
+      decimal_units: 
+        format: "%n %u"
+        units: 
+          trillion: Triljons
+          billion: Biljons
+          quadrillion: Kvadriljons
+          million: Miljons
+          unit: ""
+          thousand: "Tūkstotis"
+    percentage: 
+      format: 
+        delimiter: ""
+    currency: 
+      format: 
+        format: "%u %n"
+        unit: LVL
+        separator: ","
+        precision: 2
+        delimiter: .
+        significant: false
+        strip_insignificant_zeros: false
+    precision: 
+      format: 
+        delimiter: ""
+  mariadb_database_server: MariaDB serveris
+  edit_and_rate_beta_apps: ""
+  username: "Lietotājvārds"
+  are_you_sure_you_want_to_restart_the_server: ""
+  done_final_check: "Darīts! Noslēdzošā pārbaude"
+  this_application_is_not_installed_please_refresh: ""
+  user_name_is_available: "Lietotājvārds ir pieejams"
+  first_time_admin_setup: ""
+  password: Parole
+  access: "Piekļuve"
+  news: Jaunumi
+  avanced_settings_is_for_developers: ""
+  there_are_no_shares_created: ""
+  created: Izveidots
+  watchdog: Sargsuns
+  stop: Stop
+  device: "Iekārta"
+  preparing_to_uninstall: "Gatavojas atinstalēt..."
+  initial_user: "Lietotājvārds"
+  admin_setup_worked: ""
+  time: 
+    am: "priekšpusdiena"
+    formats: 
+      default: "%Y. gada %e. %B, %H:%M"
+      short: "%d.%m.%Y., %H:%M"
+      long: "%Y. gada %e. %B, %H:%M:%S"
+    pm: "pēcpusdiena"
+  dns_server: DNS serveris
+  sign_up_here: "Piereģistrēties šeit"
+  servers: Serveri
+  router_ip: "Maršrutētāja IP"
+  general_amahi_news: "Vispārējas Amahi ziņas"
+  feedback: Atsauksmes
+  name: "Vārds"
+  awake_this_device_via_wol: "Pamodināt šo ierīci"
+  port_forwarding: ""
+  datetime: 
+    prompts: 
+      minute: "minūte"
+      second: sekunde
+      month: "mēnesis"
+      hour: stunda
+      day: diena
+      year: gads
+    distance_in_words: 
+      less_than_x_minutes: 
+        one: "mazāk par vienu minūti"
+        other: "mazāk par %{count} minūtēm"
+      almost_x_years: 
+        one: "gandrīz 1 gads"
+        other: "gandrīz %{count} gadi"
+      x_days: 
+        one: 1 diena
+        other: "%{count} dienas"
+      x_seconds: 
+        one: 1 sekunde
+        other: "%{count} sekundes"
+      about_x_hours: 
+        one: "apmēram 1 stunda"
+        other: "apmēram %{count} stundas"
+      less_than_x_seconds: 
+        one: "mazāk par vienu sekundi"
+        other: "mazāk par %{count} sekundēm"
+      x_months: 
+        one: "1 mēnesis"
+        other: "%{count} mēneši"
+      x_minutes: 
+        one: "1 minūte"
+        other: "%{count} minūtes"
+      about_x_years: 
+        one: "apmēram 1 gads"
+        other: "apmēram %{count} gadi"
+      about_x_months: 
+        one: "apmēram 1 mēnesis"
+        other: "apmēram %{count} mēneši"
+      over_x_years: 
+        one: "vairāk kā gads"
+        other: "vairāk kā %{count} gadi"
+      half_a_minute: "pusminūte"
+  nickname: Iesauka
+  pooled: ""
+  edit_web_app: ""
+  movies: Filmas
+  mac_already_allocated: "MAC jau piešķirta"
+  dyndns_info: ""
+  confirmation_matches: "Apstiprinājums sakrīt"
+  setting_dmz_failed: ""
+  logs: "Žurnāli"
+  this_name_is_not_available: "Vārds nav pieejams"
+  password_changed_successfully: "Parole veikmīgi nomainīta"
+  will_start_at_boot_time: ""
+  this_application_install_ended_with_an_error_please_uninstall_status_is: ""
+  mac_filtering: "MAC filtrēšana"
+  tags: Birkas
+  router_firewall_settings: "Maršrutētāja/Ugunsmūra iestatījumi"
+  firewall_mac_address_filter_info: ""
+  static_ip_address: Statiska IP adrese
+  are_you_sure_advanced_features: ""
+  dhcp_server: DHCP serveris
+  app_logs: ""
+  contribute: "Dot ieguldījumu"
+  back: "Atpakaļ"
+  changelog: ""
+  notifications_from_amahi: "Ziņojumi no Amahi"
+  support_win_95_98: ""
+  the_mac_is_invalid: "MAC adrese ir nederīga"
+  making_home_networking_simple: ""
+  disk_pool_details: ""
+  a_single_number_0_254_to_point_to_a_given_machine: ""
+  enabling_debug_may_generate_a_lot_of_logs_are_you_sure: ""
+  writeable: "Rakstāms"
+  port_range_ports_must_be_numbers: ""
+  help: "Palīdzība"
+  new_firewall_rule: ""
+  video: Video
+  errors: 
+    format: "%{attribute} %{message}"
+    messages: 
+      greater_than_or_equal_to: "ir jābūt lielākam vai vienādam ar %{count}"
+      confirmation: "nesakrīt ar apstiprinājumu"
+      less_than_or_equal_to: "ir jābūt mazākam vai vienādam ar %{count}"
+      not_an_integer: "ir jābūt veselam skaitlim"
+      blank: "ir jābūt aizpildītam"
+      exclusion: nav pieejams
+      invalid: "nav derīgs"
+      odd: "ir jābūt nepāra skaitlim"
+      even: "ir jābūt pāra skaitlim"
+      too_short: "ir par īsu (minimums ir %{count} zīmes)"
+      wrong_length: "ir nepareizs garums (jābūt %{count} zīmēm)"
+      empty: "ir jābūt aizpildītam"
+      less_than: "ir jābūt mazākam par %{count}"
+      greater_than: "ir jābūt lielākam par %{count}"
+      equal_to: "ir jābūt vienādam ar %{count}"
+      too_long: "ir par garu (maksimums ir %{count} zīmes)"
+      taken: "ir jau aizņemts"
+      accepted: "ir jāpiekrīt"
+      inclusion: "nav iekļauts sarakstā"
+      not_a_number: nav skaitlis
+  there_are_no_applications_available: ""
+  thanks_for_visiting: "Paldies par apmeklējumu! Atbalstiet mūsu sponsorus!"
+  install_code: "Instalācijas kods"
+  new_static_ip: "Jauna statiskā IP"
+  this_share_name_is_not_valid: ""
+  ip_filtering: "IP filtrēšana"
+  create: Izveidot
+  guest_dashboard: Viesu panelis
+  music: "Mūzika"
+  initial_password: Parole
+  your_domain_info: ""
+  there_are_no_firewall_rules_defined: ""
+  firewall_url_filter_message: ""
+  dhcp_leases: ""
+  dynamic_dns: Dinamiskais DNS
+  the_ip_must_be_1_to_254: "IP jābūt diapazonā 1-254"
+  not_a_valid_user_or_password: "Kļūda: Nepareizs lietotājvārds vai parole"
+  create_your_hda_profile: "Izveidot jūsu HDA profilu"
+  your_home_dns_domain: "Jūsu mājas DNS domēns"
+  theme_by: "Tēmas autors"
+  forums: Forumi
+  there_are_no_aliases_defined: ""
+  user_name_is_not_valid: "Lietotājvārds ir nederīgs"
+  all_you_need: Viss ko vajag!
+  system: "Sistēma"
+  name_is_taken_already_or_is_reserved: "Vārds jau ir aizņemts vai rezervēts"
+  webapps: ""
+  submit_for_debug: ""
+  more: "vairāk"
+  protocol: Protokols
+  no_account_yet: "Vēl nav konta?"
+  delete_this_rule: "Dzēst šo kārtulu"
+  images: "Attēli"
+  language: Valoda
+  this_application_is_installed: ""
+  share: ""
+  partitions: "Nodalījumi"
+  router_setting_failed: ""
+  global_settings_for_shares: ""
+  the_watchdog_is_a_critical_setting: ""
+  warning_this_application_is_in_testing: "BRĪDINĀJUMS: Šī aplikācija ir testēšanā!"
+  an_external_ip_address_to_make_the_alias: ""
+  is_being_monitored_24x7: "tiek uzraudzīts 24x7"
+  computer: Dators
+  file_server_samba: Failu serveris (Samba)
+  port_range_ports_are_already_allocated: ""
+  mac_is_invalid: "MAC ir nederīga"
+  edit_alias: ""
+  please_double_check_the_settings: ""
+  otherwise_you_can_go_to_the_error_log: ""
+  description: Apraksts
+  there_are_no_users: ""
+  are_you_sure: "Vai esat pārliecināts?"
+  efficiently_manage_your_network: ""
+  port_range_field_cannot_be_empty: ""
+  available_for_installation: "(Pieejams instalācijai)"
+  create_share: ""
+  apps: ""
+  translate_amahi: Tulkot Amahi
+  alias_looks_good: "Aizstājvārds izskatās labi"
+  support: 
+    array: 
+      words_connector: ", "
+      last_word_connector: " un "
+      two_words_connector: " un "
+    select: 
+      prompt: "Lūdzu izvēlies"
+  delete_share: ""
+  ushare_upnp_media_server: Ushare UPnP Mediju serveris
+  sign_in: "Pieslēgties"
+  disk_pooling_enabled: ""
+  community: Kopiena
+  new_dns_alias: "Jauns DNS aizstājvārds"
+  create_a_new_user: "Izveidot jaunu lietotāju"
+  suggest: Ierosini!
+  port_filtering: ""
+  results_found: ""
+  the_mac_looks_good: "MAC izskatās labi"
+  when_there_are_major_announcements: ""
+  no_description_supplied: ""
+  manage_your_contributed_apps: ""
+  global_settings: "Vispārējie iestatījumi"
+  networking: "Tīkls"
+  firewall: "Ugunsmūris"
+  there_are_no_servers_available: "Pašlaik nav pieejams neviens serveris."
+  port_range: ""
+  network_gateway: "Tīkla vārteja"
+  mac_address: MAC adrese
+  anonymous_guests: Viesi
+  settings: "Iestatījumi"
+  initial_user_info: "Sākotnējais lietotājs"
+  control: "Vadīt"
+  disk_pool_replication: "Replikācija"
+  date: 
+    month_names: 
+    - 
+    - "janvārī"
+    - "februārī"
+    - "martā"
+    - "aprīlī"
+    - "maijā"
+    - "jūnijā"
+    - "jūlijā"
+    - "augustā"
+    - "septembrī"
+    - "oktobrī"
+    - "novembrī"
+    - "decembrī"
+    abbr_day_names: 
+    - Sv.
+    - P.
+    - O.
+    - T.
+    - C.
+    - Pk.
+    - S.
+    order: 
+    - :year
+    - :month
+    - :day
+    formats: 
+      default: "%d.%m.%Y."
+      short: "%e. %B"
+      long: "%Y. gada %e. %B"
+    day_names: 
+    - "svētdiena"
+    - pirmdiena
+    - otrdiena
+    - "trešdiena"
+    - ceturtdiena
+    - piektdiena
+    - sestdiena
+    abbr_month_names: 
+    - 
+    - Janv
+    - Febr
+    - Marts
+    - Apr
+    - Maijs
+    - "Jūn"
+    - "Jūl"
+    - Aug
+    - Sept
+    - Okt
+    - Nov
+    - Dec
+  username_cannot_be_blank: "Lietotājvārds nevar būt tukšs"
+  reboot: "Restartēt"
+  this_feature_is_under_heavy_development: ""
+  there_are_no_webapps: ""
+  are_you_sure_you_want_to_delete_the_static_ip: ""
+  the_ip_looks good: "IP adrese izskatās labi"
+  the_name_cannot_be_blank: "Vārds nevar būt tukš"
+  uninstall: "Atinstalēt"
+  details: "Detaļas"
+  the_name_you_input_above_will_be_added_to_the_DNS_server: ""
+  is_now_uninstalled: ""
+  themes: "Tēmas"
+  new_share: ""
+  this_path_is_not_valid: ""
+  are_you_sure_user: ""
+  extra_parameters: Papildus parametri
+  log_in: "Pieslēgties"
+  try_installing_some_apps: ""
+  testimonials: Atsauksmes
+  version: Versija
+  powering_off: ""
+  get_involved: Iesaisties!
+  stop_it: "Apstādināt"
+  home_domain: "Mājas domēns"
+  total_space: "Kopējā ietilpība"
+  never_email_me: "Nekad nesūtīt man e-pastu"
+  is_now_installed: ""
+  this_shares_files_deleted: ""
+  alias_is_not_valid: "Aizstājvārds ir nederīgs"
+  mac_address_of_the_device: "Ierīces MAC adrese (formā 00:11:22:33:44:55)"
+  next: "Tālāk"
+  web_apps: ""
+  remember_me: Atceries mani
+  password_looks_good: "Parole izskatās labi"
+  docs: Dokumenti
+  the_ip_address_cannot_be_empty: "IP adrese nevar būt tukša"
+  computer_name: Datora nosaukums
+  close: "aizvērt"
+  this_file_was_automatically_generated_on: ""
+  installation_instructions: "Instalācijas instrukcijas"
+  control_panel_for_your_amahi_hdas: "Jūsu HDA vadības panelis"
+  please_select_the_type_of_rule_you_want: ""
+  create_a_new_webapp: ""
+  refresh_status: ""
+  home: "Sākums"
+  share_name_is_available: ""
+  will_not_start_at_boot_time: ""
+  there_are_no_static_ips_defined: ""
+  powerful_simple_home_networking: "Jaudīgs, Vienkārš, Mājas tīkls"
+  about: Par
+  email_me: "Atsūtīt man e-pastu"
+  there_are_no_applications_installed: ""
+  firewall_port_forward_message: ""
+  to_recover_your_password: "Lai atgūtu savu paroli vai aktivācijas e-pastu, lūdzu, ievadiet zemāk jūsu e-pastu"
+  apache_web_server: "Apache tīmekļa serveris"
+  seconds: sekundes
+  partition: "Nodalījums"
+  dhcp: DHCP
+  dhcp_free: "Neaktīvs"
+  this_users_files_deleted: ""
+  configured: "Konfigurēts"
+  disabling_lan_manager_will_not_allow_older_machines: ""
+  you_have_been_logged_out: "Jūs tikāt atslēgti"
+  the_url_is_invalid: "URL ir nederīgs"
+  it_will_be_restarted_by_the_watchdog: ""
+  amahi_dyndns_updater: ""
+  features: "Iespējas"
+  password_cannot_be_blank: "Parole nevar būt tukša"
+  the_watchdog_is_running_and_will_restart_it_in_a_few_seconds: ""
+  your_existing_network_gatweay: ""
+  warning: "BRĪDINĀJUMS"
+  beta_apps: ""
+  logout: "Atslēgties"
+  there_is_no_undo: ""
+  dhcp_ip_address: DHCP IP adrese
