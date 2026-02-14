@@ -12,7 +12,6 @@ gem 'yettings'
 
 # Asset pipeline
 gem 'sass-rails'
-gem 'coffee-rails'
 gem 'uglifier'
 
 # UI

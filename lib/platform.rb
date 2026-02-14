@@ -65,8 +65,8 @@ class Platform
 			:apache => 'apache2',
 			:dhcp => 'isc-dhcp-server',
 			:named => 'bind9',
-			:smb => 'samba',
-			:nmb => 'samba',
+			:smb => 'smbd',
+			:nmb => 'nmbd',
 			:mysql => 'mariadb',
 		},
 		'mac' => {
@@ -116,7 +116,7 @@ class Platform
 		},
 		'debian' => {
 			:apache_pid => 'apache2.pid',
-			:dhcpleasefile => '/var/lib/dhcp/dhcpd.leases',
+			:dhcpleasefile => dnsmasq? ? '/var/lib/misc/dnsmasq.leases' : '/var/lib/dhcp/dhcpd.leases',
 			:samba_pid => 'samba/smbd.pid',
 			:dhcpd_pid => 'dhcp-server/dhcpd.pid',
 			:monit_dir => '/etc/monit/conf.d',
@@ -287,7 +287,7 @@ class Platform
 						end
 					end
 				end
-			elsif ubuntu?
+			elsif ubuntu? or debian?
 				open("|apt-cache show hda-platform | grep Version") do |f|
 					f.gets
 					line = $_
