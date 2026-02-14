@@ -169,11 +169,11 @@ protected
 		ret = []
 		begin
 			# check if the pid file is there
-			if File.exists?(pf) && File.readable?(pf)
+			if File.exist?(pf) && File.readable?(pf)
 				# check the pid file and check for the process existance
 				open(pf) do |p|
 					list = p.readlines.map{ |line| line.gsub(/\n/, '').split(' ') }.flatten
-					ret = list.map{|pid| File.exists?("/proc/#{pid}") ? pid : nil }.compact
+					ret = list.map{|pid| File.exist?("/proc/#{pid}") ? pid : nil }.compact
 				end
 			end
 		rescue

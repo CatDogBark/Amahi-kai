@@ -107,7 +107,7 @@ class SharesController < ApplicationController
 		@workgroup = Setting.find(params[:id]) if params[:id]
 		if @workgroup && @workgroup.name.eql?("workgroup")
 			params[:share][:value].strip!
-			@saved = @workgroup.update_attributes(params_update_workgroup)
+			@saved = @workgroup.update(params_update_workgroup)
 			@errors = @workgroup.errors.full_messages.join(', ') unless @saved
 			name = @workgroup.value
 			Share.push_shares

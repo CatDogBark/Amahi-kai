@@ -36,7 +36,7 @@ class Leases
 
 	def self.read_lease(file)
 		res = []
-		return res unless File.exists?(file)
+		return res unless File.exist?(file)
 		current = {}
 		File.foreach(file) do |line|
 			next if line =~ /^\s*\#/
@@ -66,7 +66,7 @@ class Leases
 		# ISC DHCP server
 		def self.read_lease(file)
 			res = {}
-			return res unless File.exists?(file)
+			return res unless File.exist?(file)
 			current = {}
 			File.foreach(file) do |l|
 				next if l =~ /^\s*\#/

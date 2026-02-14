@@ -33,7 +33,7 @@ class Downloader
 		TempCache.expire_unused_files
 		FileUtils.mkdir_p(HDA_DOWNLOAD_CACHE)
 		cached_filename = File.join(HDA_DOWNLOAD_CACHE, sha1)
-		if File.exists?(cached_filename)
+		if File.exist?(cached_filename)
 			file = IO.binread(cached_filename)
 			new_sha1 = Digest::SHA1.hexdigest(file)
 			if new_sha1 == sha1

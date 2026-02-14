@@ -98,7 +98,7 @@ class UsersController < ApplicationController
 			errors = true
 			error = t("password_cannot_be_blank")
 		else
-			@user.update_attributes(params_password_update)
+			@user.update(params_password_update)
 			errors = @user.errors.any?
 			error = @user.errors.full_messages.join(', ')
 		end
@@ -107,7 +107,7 @@ class UsersController < ApplicationController
 
 	def update_name
 		@user = User.find(params[:id])
-		@user.update_attributes(params_name_update)
+		@user.update(params_name_update)
 		render :json => { :status => @user.errors.any? ? :not_acceptable : :ok }
 	end
 
@@ -121,7 +121,7 @@ class UsersController < ApplicationController
 			errors = true
 			error = t("pins_do_not_match")
 		else
-			@user.update_attributes(params_pin_update)
+			@user.update(params_pin_update)
 			errors = @user.errors.any?
 			error = @user.errors.full_messages.join(', ')
 		end

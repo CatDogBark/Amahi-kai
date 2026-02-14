@@ -8,7 +8,7 @@ class TempCache
 		def expire_unused_files
 			Dir.glob(File.join(HDA_TMP_DIR, "**/**")) do |f|
 				begin
-					if File.exists?(f) && File.atime(f) < 3.months.ago
+					if File.exist?(f) && File.atime(f) < 3.months.ago
 						FileUtils.rm_rf(f)
 					end
 				rescue

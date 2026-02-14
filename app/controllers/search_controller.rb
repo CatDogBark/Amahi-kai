@@ -118,7 +118,7 @@ protected
 			FileUtils.rm_f(f) if Time.now - File.mtime(f) > 12.hours
 		end
 		# is the search already in the cache? if so, return it, if not make it
-		if File.exists?(cache)
+		if File.exist?(cache)
 			cache
 		else
 			# ignore case unless the search is done with some capitalization

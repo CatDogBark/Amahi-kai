@@ -70,7 +70,7 @@ class Command
 			s = f.readline
 			f.close
 			s.chomp!
-			File.exists?("/proc/#{s}") ? true : false
+			File.exist?("/proc/#{s}") ? true : false
 		rescue
 			false
 		end
