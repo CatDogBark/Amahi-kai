@@ -23,12 +23,14 @@ begin
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
     options.add_argument('--disable-gpu')
+    options.add_argument('--single-process')
     options.add_argument('--window-size=1400,900')
     options.binary = '/usr/bin/chromium'
     Capybara::Selenium::Driver.new(app, browser: :chrome, options: options)
   end
 
   Capybara.javascript_driver = :headless_chrome
+  Capybara.default_max_wait_time = 5
 rescue LoadError
   # selenium-webdriver not available; JS specs will be skipped
 end
@@ -65,6 +67,11 @@ RSpec.configure do |config|
   config.after(:each) do
     DatabaseCleaner.clean
     Capybara.reset_sessions!
+  end
+
+  # Explicitly quit the browser when the suite finishes to prevent zombie chromium processes
+  config.after(:suite) do
+    Capybara.current_session.driver.quit rescue nil
   end
 
   if SCREENSHOTS_ON_FAILURES
