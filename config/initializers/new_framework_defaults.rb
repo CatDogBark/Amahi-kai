@@ -13,6 +13,5 @@ Rails.application.config.action_controller.forgery_protection_origin_check = tru
 ActiveSupport.to_time_preserves_timezone = true
 
 # Require `belongs_to` associations by default.
-# NOTE: Disabled for now — enabling this requires auditing all belongs_to
-# associations for optional: true where nil foreign keys are expected.
-Rails.application.config.active_record.belongs_to_required_by_default = false
+# Models needing nullable FKs already have `optional: true` (e.g., App model).
+Rails.application.config.active_record.belongs_to_required_by_default = true
