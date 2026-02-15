@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2018_06_06_185129) do
+ActiveRecord::Schema[7.2].define(version: 2018_06_06_185129) do
   create_table "app_dependencies", force: :cascade do |t|
     t.integer "app_id"
     t.integer "dependency_id"
@@ -171,5 +171,4 @@ ActiveRecord::Schema[7.1].define(version: 2018_06_06_185129) do
     t.datetime "created_at", precision: nil
     t.datetime "updated_at", precision: nil
   end
-
 end
