@@ -22,13 +22,10 @@ gem 'jquery-ui-rails'
 gem 'slim'
 gem 'jbuilder'
 
-# API & serialization
-gem 'rest-client'
+# API
 gem 'activeresource'
-gem 'ya2yaml'
 
 # Rails extensions
-gem 'actionview'
 gem 'rails-observers'
 
 # Authentication
@@ -36,19 +33,11 @@ gem 'scrypt'       # required by authlogic
 gem 'authlogic'
 gem 'bcrypt'
 
-# Server
-gem 'unicorn'
-
 # Docker integration
 gem 'docker-api'
 
-# Misc
-gem 'rb-readline', require: false
-gem 'nokogiri', require: 'nokogiri'
-
 # Ruby 2.7 compatibility pins
 gem 'ffi', '< 1.17'
-# logger loaded early via config/boot.rb to fix Rails 6.0 + Ruby 2.7 compat
 gem 'psych'  # needed for YAML alias support with yettings
 
 group :development do
