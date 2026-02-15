@@ -3,18 +3,13 @@ source 'https://rubygems.org'
 gem 'rake'
 gem 'rails', '~> 7.2.0'
 
-# Caching
 gem 'dalli'
 gem 'actionpack-action_caching'
-
-# Configuration
 gem 'yettings'
 
-# Asset pipeline
 gem 'sass-rails'
 gem 'uglifier'
 
-# UI
 gem 'bootstrap', '~> 4.1.1'
 gem 'popper_js', '~> 1.12.9'
 gem 'jquery-rails'
@@ -22,29 +17,22 @@ gem 'jquery-ui-rails'
 gem 'slim'
 gem 'jbuilder'
 
-# API
 gem 'activeresource'
-
-# Rails extensions
 gem 'rails-observers'
 
-# Authentication
-gem 'scrypt'       # required by authlogic
+gem 'scrypt'
 gem 'authlogic'
 gem 'bcrypt'
 
-# Docker integration
 gem 'docker-api'
-
-# Ruby 2.7 compatibility pins
-gem 'psych'  # needed for YAML alias support with yettings
+gem 'psych'
 
 group :development do
   gem 'listen'
   gem 'better_errors'
   gem 'binding_of_caller'
   gem 'puma'
-  gem 'bullet'   # DB performance warnings
+  gem 'bullet'
 end
 
 gem 'rspec-rails', group: [:test, :development]
