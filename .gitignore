@@ -34,3 +34,6 @@ USER.md
 /memory/
 .cache/
 .config/
+config/secrets.yml
+config/master.key
+config/credentials.yml.enc
