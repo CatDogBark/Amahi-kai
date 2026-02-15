@@ -1,7 +1,7 @@
 # Amahi-kai Modernization Gameplan
 
 ## Current State
-- Ruby 2.7.8, Rails 6.0.6.1, MariaDB 10.5, Debian 11 sandbox
+- Ruby 2.7.8, Rails 6.1.7.10, MariaDB 10.5, Debian 11 sandbox
 - App boots and serves pages ✅
 - DB migrates and seeds ✅
 - **Full test suite: 43 examples, 0 failures, 1 pending** ✅
@@ -68,10 +68,10 @@
 - [x] Removed obsolete framework defaults initializers
 - [x] All 43 tests passing, 0 failures
 
-### 3.2 Rails 6.0 → 6.1
-- [ ] Switch to Zeitwerk autoloader
-- [ ] `form_with` defaults
-- [ ] Run tests, fix failures
+### 3.2 Rails 6.0 → 6.1 ✅
+- [x] Update Gemfile to rails ~> 6.1.0
+- [x] Set load_defaults 6.1 (Zeitwerk now default)
+- [x] All 43 tests passing — zero code changes needed
 
 ### 3.3 Rails 6.1 → 7.0
 - [ ] Ruby 3.0+ required
