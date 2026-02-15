@@ -1,0 +1,85 @@
+NOTICE - Amahi-kai Platform
+============================
+
+This software is a modernized fork of the Amahi Home Server Platform.
+
+ORIGINAL WORK
+-------------
+Amahi Home Server Platform
+Copyright (C) 2007-2013, Amahi
+https://github.com/amahi/platform
+Licensed under GNU AGPL v3
+
+DERIVATIVE WORK
+---------------
+Amahi-kai Platform (modernized fork)
+Copyright (C) 2026, Troy (CatDogBark)
+https://github.com/CatDogBark/Amahi-kai
+Licensed under GNU AGPL v3 (inherited from original)
+
+MODERNIZATION HISTORY
+---------------------
+This fork was created in February 2026 to modernize the Amahi Platform
+for current Ubuntu/Debian systems with updated dependencies.
+
+Modernization performed by:
+- Kai 🌊 (OpenClaw AI Agent) - Technical implementation
+- Troy - Project direction and infrastructure
+
+Key Changes:
+- Platform: Migrated from Fedora to Ubuntu 24.04 / Debian 12
+- Ruby: Upgraded from 2.4.3 to 2.7.8 (Rails 6.x path to 3.x planned)
+- Rails: Upgraded from 5.2.8 → 6.0.6 → 6.1.7 (continuing to 7.x)
+- Database: Migrated to MariaDB (from MySQL)
+- Services: Modernized for systemd (removed upstart/init.d)
+- Authentication: Migrated to SCrypt password hashing (from Sha512)
+- Asset Pipeline: Converted CoffeeScript to JavaScript, removed coffee-rails
+- Testing: Added headless Chromium support for JavaScript feature specs
+- Dependencies: Updated all gems for compatibility with modern Ruby/Rails
+
+All changes maintain backward compatibility with Amahi's plugin architecture
+and user data structures where possible.
+
+LICENSE COMPLIANCE
+------------------
+This derivative work is distributed under the GNU AGPL v3 license as
+required by the original Amahi Platform license.
+
+As required by the original license (see COPYING), this software:
+- Retains all Amahi logos and branding
+- Maintains URLs pointing to amahi.org resources
+- Makes source code available to all users
+- Requires derivative works to be licensed under AGPL v3
+
+For the full license text, see the COPYING file.
+
+ATTRIBUTION
+-----------
+The Amahi team created an excellent home server platform that served
+thousands of users for over a decade. This fork aims to extend that
+legacy by making the platform viable on modern Linux distributions.
+
+We are grateful to:
+- The original Amahi team for creating and open-sourcing this platform
+- The Fedora, Ubuntu, Debian, and Rails communities
+- All contributors to the dependencies that make this software possible
+
+CONTACT
+-------
+For questions about this fork:
+- Repository: https://github.com/CatDogBark/Amahi-kai
+- Issues: https://github.com/CatDogBark/Amahi-kai/issues
+
+For questions about the original Amahi Platform:
+- Website: http://www.amahi.org
+- Contact: http://www.amahi.org/contact
+
+TRADEMARK NOTICE
+----------------
+"Amahi" is a trademark of the Amahi team. This fork is not officially
+endorsed by or affiliated with Amahi. The Amahi name and logos are used
+in accordance with the original AGPL license terms.
+
+---
+Generated: 2026-02-15
+Last Updated: 2026-02-15 (Rails 6.1 upgrade phase)
