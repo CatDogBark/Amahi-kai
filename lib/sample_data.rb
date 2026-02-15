@@ -25,7 +25,7 @@
 #
 
 # require the server model here because we have some Server class data being loaded
-require 'server'
+# Removed: Zeitwerk autoloads Server model on first reference
 
 class SampleData
 	ROOT = "#{Rails.root}/db/sample-data/%s.yml.gz"

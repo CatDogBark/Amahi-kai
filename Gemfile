@@ -1,7 +1,7 @@
 source 'https://rubygems.org'
 
 gem 'rake'
-gem 'rails', '~> 7.0.0'
+gem 'rails', '~> 7.1.0'
 
 # Caching
 gem 'dalli'
@@ -63,5 +63,5 @@ group :development, :production do
 end
 
 group :development, :test do
-  gem 'sqlite3', '~> 1.7.0'
+  gem 'sqlite3', '~> 2.0'
 end

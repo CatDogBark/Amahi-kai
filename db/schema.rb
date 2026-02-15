@@ -10,15 +10,15 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.0].define(version: 2018_06_06_185129) do
-  create_table "app_dependencies", charset: "utf8mb4", collation: "utf8mb4_general_ci", force: :cascade do |t|
+ActiveRecord::Schema[7.1].define(version: 2018_06_06_185129) do
+  create_table "app_dependencies", force: :cascade do |t|
     t.integer "app_id"
     t.integer "dependency_id"
     t.datetime "created_at", precision: nil
     t.datetime "updated_at", precision: nil
   end
 
-  create_table "apps", charset: "utf8mb4", collation: "utf8mb4_general_ci", force: :cascade do |t|
+  create_table "apps", force: :cascade do |t|
     t.boolean "installed"
     t.string "name"
     t.string "screenshot_url"
@@ -43,32 +43,32 @@ ActiveRecord::Schema[7.0].define(version: 2018_06_06_185129) do
     t.integer "plugin_id"
   end
 
-  create_table "cap_accesses", charset: "utf8mb4", collation: "utf8mb4_general_ci", force: :cascade do |t|
+  create_table "cap_accesses", force: :cascade do |t|
     t.integer "user_id"
     t.integer "share_id"
     t.datetime "created_at", precision: nil
     t.datetime "updated_at", precision: nil
   end
 
-  create_table "cap_writers", charset: "utf8mb4", collation: "utf8mb4_general_ci", force: :cascade do |t|
+  create_table "cap_writers", force: :cascade do |t|
     t.integer "user_id"
     t.integer "share_id"
     t.datetime "created_at", precision: nil
     t.datetime "updated_at", precision: nil
   end
 
-  create_table "dbs", charset: "utf8mb4", collation: "utf8mb4_general_ci", force: :cascade do |t|
+  create_table "dbs", force: :cascade do |t|
     t.string "name", null: false
     t.datetime "created_at", precision: nil
     t.datetime "updated_at", precision: nil
   end
 
-  create_table "dns_aliases", charset: "utf8mb4", collation: "utf8mb4_general_ci", force: :cascade do |t|
+  create_table "dns_aliases", force: :cascade do |t|
     t.string "name", default: "", null: false
     t.string "address", default: "", null: false
   end
 
-  create_table "firewalls", charset: "utf8mb4", collation: "utf8mb4_general_ci", force: :cascade do |t|
+  create_table "firewalls", force: :cascade do |t|
     t.string "kind", default: ""
     t.boolean "state", default: true
     t.string "ip", default: ""
@@ -81,20 +81,20 @@ ActiveRecord::Schema[7.0].define(version: 2018_06_06_185129) do
     t.datetime "updated_at", precision: nil
   end
 
-  create_table "hosts", charset: "utf8mb4", collation: "utf8mb4_general_ci", force: :cascade do |t|
+  create_table "hosts", force: :cascade do |t|
     t.string "name", null: false
     t.string "mac", default: ""
     t.string "address"
   end
 
-  create_table "plugins", charset: "utf8mb4", collation: "utf8mb4_general_ci", force: :cascade do |t|
+  create_table "plugins", force: :cascade do |t|
     t.string "name"
     t.string "path"
     t.datetime "created_at", precision: nil
     t.datetime "updated_at", precision: nil
   end
 
-  create_table "servers", charset: "utf8mb4", collation: "utf8mb4_general_ci", force: :cascade do |t|
+  create_table "servers", force: :cascade do |t|
     t.string "name", null: false
     t.string "comment", default: ""
     t.string "pidfile"
@@ -106,13 +106,13 @@ ActiveRecord::Schema[7.0].define(version: 2018_06_06_185129) do
     t.datetime "updated_at", precision: nil
   end
 
-  create_table "settings", charset: "utf8mb4", collation: "utf8mb4_general_ci", force: :cascade do |t|
+  create_table "settings", force: :cascade do |t|
     t.string "name"
     t.string "value"
     t.string "kind", default: "general"
   end
 
-  create_table "shares", charset: "utf8mb4", collation: "utf8mb4_general_ci", force: :cascade do |t|
+  create_table "shares", force: :cascade do |t|
     t.string "name"
     t.string "path"
     t.boolean "rdonly"
@@ -127,12 +127,12 @@ ActiveRecord::Schema[7.0].define(version: 2018_06_06_185129) do
     t.datetime "updated_at", precision: nil
   end
 
-  create_table "themes", charset: "utf8mb4", collation: "utf8mb4_general_ci", force: :cascade do |t|
+  create_table "themes", force: :cascade do |t|
     t.string "name", default: "", null: false
     t.string "css", default: "", null: false
   end
 
-  create_table "users", charset: "utf8mb4", collation: "utf8mb4_general_ci", force: :cascade do |t|
+  create_table "users", force: :cascade do |t|
     t.string "login", null: false
     t.string "name"
     t.string "crypted_password"
@@ -151,14 +151,14 @@ ActiveRecord::Schema[7.0].define(version: 2018_06_06_185129) do
     t.text "pin"
   end
 
-  create_table "webapp_aliases", charset: "utf8mb4", collation: "utf8mb4_general_ci", force: :cascade do |t|
+  create_table "webapp_aliases", force: :cascade do |t|
     t.string "name"
     t.integer "webapp_id"
     t.datetime "created_at", precision: nil
     t.datetime "updated_at", precision: nil
   end
 
-  create_table "webapps", charset: "utf8mb4", collation: "utf8mb4_general_ci", force: :cascade do |t|
+  create_table "webapps", force: :cascade do |t|
     t.string "name", null: false
     t.string "path", default: ""
     t.string "kind", default: ""
