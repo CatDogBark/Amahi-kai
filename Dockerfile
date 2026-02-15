@@ -1,5 +1,6 @@
 # Amahi Platform - Development Environment
 # Updated for Ubuntu 24.04 (was Fedora 29)
+# Ruby 3.2.x via system packages, Rails 7.2
 FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
