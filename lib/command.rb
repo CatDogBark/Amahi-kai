@@ -15,7 +15,7 @@
 # team at http://www.amahi.org/ under "Contact Us."
 
 require 'socket'
-require 'yettings'
+require_relative 'yetting'
 
 class Command
 

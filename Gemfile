@@ -5,7 +5,6 @@ gem 'rails', '~> 7.2.0'
 
 gem 'dalli'
 gem 'actionpack-action_caching'
-gem 'yettings'
 
 gem 'sass-rails'
 gem 'uglifier'
@@ -25,7 +24,6 @@ gem 'authlogic'
 gem 'bcrypt'
 
 gem 'docker-api'
-gem 'psych'
 
 group :development do
   gem 'listen'
