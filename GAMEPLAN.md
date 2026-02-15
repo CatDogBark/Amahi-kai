@@ -1,7 +1,7 @@
 # Amahi-kai Modernization Gameplan
 
 ## Current State
-- Ruby 2.7.8, Rails 5.2.8.1, MariaDB 10.5, Debian 11 sandbox
+- Ruby 2.7.8, Rails 6.0.6.1, MariaDB 10.5, Debian 11 sandbox
 - App boots and serves pages ✅
 - DB migrates and seeds ✅
 - **Full test suite: 43 examples, 0 failures, 1 pending** ✅
@@ -40,10 +40,10 @@
 - [x] SCrypt crypto with Sha512 transition
 - [x] Password validations (length ≥8, confirmation)
 
-### 2.4 CoffeeScript → JavaScript 🔄 IN PROGRESS
-- [ ] Convert 12 .coffee files to plain .js
-- [ ] Remove `coffee-rails` gem dependency
-- [ ] Verify assets compile and all specs pass
+### 2.4 CoffeeScript → JavaScript ✅
+- [x] Convert 12 .coffee files to plain .js
+- [x] Remove `coffee-rails` gem dependency
+- [x] Verify assets compile and all specs pass
 
 ### 2.5 Platform Cleanup
 - [ ] Fix Debian samba service names (smbd/nmbd) ✅
@@ -60,12 +60,13 @@
 ## Phase 3: Rails Upgrade Path
 *Goal: Step through Rails versions incrementally*
 
-### 3.1 Rails 5.2 → 6.0
-- [ ] Update Gemfile: `gem 'rails', '~> 6.0.0'`
-- [ ] Run `rails app:update` — review each conflict
-- [ ] Autoloading: prepare for Zeitwerk (default in 6.1)
-- [ ] Run tests, fix failures
-- **🔧 NEED:** Rails 6.0 gems pre-installed in sandbox image
+### 3.1 Rails 5.2 → 6.0 ✅
+- [x] Update Gemfile: `gem 'rails', '~> 6.0.0'`
+- [x] Zeitwerk autoloader enabled (load_defaults 6.0)
+- [x] Fixed UsersController#create JSON format handling
+- [x] Added data-type: json to user form for jquery_ujs compat
+- [x] Removed obsolete framework defaults initializers
+- [x] All 43 tests passing, 0 failures
 
 ### 3.2 Rails 6.0 → 6.1
 - [ ] Switch to Zeitwerk autoloader
