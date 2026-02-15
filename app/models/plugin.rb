@@ -39,7 +39,7 @@ class Plugin < ApplicationRecord
 				files = Dir.glob '*'
 				if files.size == 1
 					dir = files.first
-					config = YAML.load(StringIO.new(File.read "#{dir}/config/amahi-plugin.yml").read)
+					config = YAML.safe_load(File.read("#{dir}/config/amahi-plugin.yml"), permitted_classes: [Symbol])
 					plugin = dir2plugin(dir, config)
 				else
 					# FIXME what to do if more file are unpacked

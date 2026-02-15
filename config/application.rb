@@ -53,7 +53,7 @@ module AmahiHDA
   	Dir.glob(File.join(PLUGIN_LOCATION, '*')).sort.each do |dir|
   		file = "#{dir}/config/amahi-plugin.yml"
   		if File.file?(file) and File.readable?(file)
-  			plugin = YAML.load(File.read(file)).symbolize_keys
+  			plugin = YAML.safe_load(File.read(file), permitted_classes: [Symbol]).symbolize_keys
   			plugin[:dir] = File.basename(dir)
   			amahi_plugins << plugin
   			$LOAD_PATH << "#{dir}/lib"
