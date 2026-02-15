@@ -12,10 +12,11 @@ updated to run on Ubuntu/Debian with modern Ruby and dependencies.
 
 - **Platform**: Ubuntu 24.04 / Debian 12 (was Fedora)
 - **Database**: MariaDB (was MySQL)
-- **Ruby**: 2.7+ (upgrading to 3.x planned)
-- **Rails**: 5.2.8 (upgrading to 7.x planned)
+- **Ruby**: 2.7.8 (upgrading to 3.x planned)
+- **Rails**: 6.1.7 → 7.0 in progress (was 5.2.8)
 - **Services**: systemd (removed upstart/init.d support)
 - **Auth**: SCrypt password hashing (migrated from Sha512)
+- **Assets**: Plain JavaScript (migrated from CoffeeScript)
 
 ## Quick Start with Docker
 
@@ -94,4 +95,4 @@ The platform is organized as a Rails app with a plugin system:
 
 ## License
 
-Licensed under the AGPL. See [COPYING](COPYING) for details.
+Licensed under the GNU AGPL v3. See [COPYING](COPYING) for full license text and [NOTICE.md](NOTICE.md) for attribution and fork details.

@@ -13,7 +13,7 @@ Bundler.require(:default, :assets, Rails.env)
 module AmahiHDA
   class Application < Rails::Application
 
-    config.load_defaults 6.1
+    config.load_defaults 7.0
 
     # Settings in config/environments/* take precedence over those specified here.
     # Application configuration should go into files in config/initializers
@@ -35,6 +35,7 @@ module AmahiHDA
     # config.i18n.enforce_available_locales = true
 
     # initialize tabs app variable
+    require_relative "../lib/tab"
     config.tabs = []
 
     # in case we need to debug assets

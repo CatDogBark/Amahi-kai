@@ -10,13 +10,12 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 2018_06_06_185129) do
-
+ActiveRecord::Schema[7.0].define(version: 2018_06_06_185129) do
   create_table "app_dependencies", force: :cascade do |t|
     t.integer "app_id"
     t.integer "dependency_id"
-    t.datetime "created_at"
-    t.datetime "updated_at"
+    t.datetime "created_at", precision: nil
+    t.datetime "updated_at", precision: nil
   end
 
   create_table "apps", force: :cascade do |t|
@@ -39,29 +38,29 @@ ActiveRecord::Schema.define(version: 2018_06_06_185129) do
     t.integer "share_id"
     t.string "initial_user"
     t.string "initial_password"
-    t.datetime "created_at"
-    t.datetime "updated_at"
+    t.datetime "created_at", precision: nil
+    t.datetime "updated_at", precision: nil
     t.integer "plugin_id"
   end
 
   create_table "cap_accesses", force: :cascade do |t|
     t.integer "user_id"
     t.integer "share_id"
-    t.datetime "created_at"
-    t.datetime "updated_at"
+    t.datetime "created_at", precision: nil
+    t.datetime "updated_at", precision: nil
   end
 
   create_table "cap_writers", force: :cascade do |t|
     t.integer "user_id"
     t.integer "share_id"
-    t.datetime "created_at"
-    t.datetime "updated_at"
+    t.datetime "created_at", precision: nil
+    t.datetime "updated_at", precision: nil
   end
 
   create_table "dbs", force: :cascade do |t|
     t.string "name", null: false
-    t.datetime "created_at"
-    t.datetime "updated_at"
+    t.datetime "created_at", precision: nil
+    t.datetime "updated_at", precision: nil
   end
 
   create_table "dns_aliases", force: :cascade do |t|
@@ -78,8 +77,8 @@ ActiveRecord::Schema.define(version: 2018_06_06_185129) do
     t.string "mac", default: ""
     t.string "url", default: ""
     t.string "comment", default: ""
-    t.datetime "created_at"
-    t.datetime "updated_at"
+    t.datetime "created_at", precision: nil
+    t.datetime "updated_at", precision: nil
   end
 
   create_table "hosts", force: :cascade do |t|
@@ -91,8 +90,8 @@ ActiveRecord::Schema.define(version: 2018_06_06_185129) do
   create_table "plugins", force: :cascade do |t|
     t.string "name"
     t.string "path"
-    t.datetime "created_at"
-    t.datetime "updated_at"
+    t.datetime "created_at", precision: nil
+    t.datetime "updated_at", precision: nil
   end
 
   create_table "servers", force: :cascade do |t|
@@ -103,8 +102,8 @@ ActiveRecord::Schema.define(version: 2018_06_06_185129) do
     t.string "stop"
     t.boolean "monitored", default: true
     t.boolean "start_at_boot", default: true
-    t.datetime "created_at"
-    t.datetime "updated_at"
+    t.datetime "created_at", precision: nil
+    t.datetime "updated_at", precision: nil
   end
 
   create_table "settings", force: :cascade do |t|
@@ -124,8 +123,8 @@ ActiveRecord::Schema.define(version: 2018_06_06_185129) do
     t.integer "disk_pool_copies", default: 0
     t.boolean "guest_access", default: false
     t.boolean "guest_writeable", default: false
-    t.datetime "created_at"
-    t.datetime "updated_at"
+    t.datetime "created_at", precision: nil
+    t.datetime "updated_at", precision: nil
   end
 
   create_table "themes", force: :cascade do |t|
@@ -140,23 +139,23 @@ ActiveRecord::Schema.define(version: 2018_06_06_185129) do
     t.string "password_salt"
     t.string "persistence_token"
     t.integer "login_count", default: 0, null: false
-    t.datetime "last_request_at"
-    t.datetime "last_login_at"
-    t.datetime "current_login_at"
+    t.datetime "last_request_at", precision: nil
+    t.datetime "last_login_at", precision: nil
+    t.datetime "current_login_at", precision: nil
     t.string "last_login_ip"
     t.string "current_login_ip"
     t.boolean "admin"
     t.text "public_key"
-    t.datetime "created_at"
-    t.datetime "updated_at"
+    t.datetime "created_at", precision: nil
+    t.datetime "updated_at", precision: nil
     t.text "pin"
   end
 
   create_table "webapp_aliases", force: :cascade do |t|
     t.string "name"
     t.integer "webapp_id"
-    t.datetime "created_at"
-    t.datetime "updated_at"
+    t.datetime "created_at", precision: nil
+    t.datetime "updated_at", precision: nil
   end
 
   create_table "webapps", force: :cascade do |t|
@@ -169,8 +168,8 @@ ActiveRecord::Schema.define(version: 2018_06_06_185129) do
     t.boolean "login_required", default: false
     t.integer "dns_alias_id"
     t.text "custom_options"
-    t.datetime "created_at"
-    t.datetime "updated_at"
+    t.datetime "created_at", precision: nil
+    t.datetime "updated_at", precision: nil
   end
 
 end

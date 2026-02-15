@@ -1,7 +1,7 @@
 source 'https://rubygems.org'
 
 gem 'rake'
-gem 'rails', '~> 6.1.0'
+gem 'rails', '~> 7.0.0'
 
 # Caching
 gem 'dalli'
