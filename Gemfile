@@ -7,7 +7,7 @@ gem 'dalli'
 gem 'actionpack-action_caching'
 
 gem 'sass-rails'
-gem 'uglifier'
+# gem 'uglifier'  # Deprecated, JS compression disabled
 
 gem 'bootstrap', '~> 4.1.1'
 gem 'popper_js', '~> 1.12.9'
