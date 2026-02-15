@@ -222,11 +222,11 @@ module ApplicationHelper
 
 	# theme helpers
 	def theme_stylesheet_link_tag(a)
-		tag.link({
+		tag.link(
 			href: File.join('/themes', @theme.path, 'stylesheets', "#{a}.css"),
 			rel: "stylesheet",
-      media: "screen"
-			})
+			media: "screen"
+		)
 	end
 
 	def theme_stylesheet_path(a, theme)
