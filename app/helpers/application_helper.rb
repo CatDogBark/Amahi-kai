@@ -154,47 +154,6 @@ module ApplicationHelper
 		(request.env["HTTP_USER_AGENT"] =~ /Firefox/) ? true : false
 	end
 
-	def editable_content(options)
-		options[:content] = { :element => 'span' }.merge(options[:content])
-		options[:url] = {}.merge(options[:url])
-		options[:ajax] = { :okText => "'Save'", :cancelText => "'Cancel'"}.merge(options[:ajax] || {})
-		script = Array.new
-		script << "new Ajax.InPlaceEditor("
-		script << "  '#{options[:content][:options][:id]}',"
-		script << "  '#{url_for(options[:url])}',"
-		script << "  {"
-		script << options[:ajax].map{ |key, value| "#{key.to_s}: #{value}" }.join(", ")
-		script << "  }"
-		script << ")"
-
-		content_tag(
-		options[:content][:element],
-		options[:content][:text],
-		options[:content][:options]
-		) + javascript_tag( script.join("\n") )
-	end
-
-	# FIXME-cpg: somehow generate <input ... /> instead of
-	# <input>...</input>
-	def checkbox_to_function(checked = true, *args, &block)
-		html_options = args.extract_options!
-		function = args[0] || ''
-
-		html_options.symbolize_keys!
-		function = update_page(&block) if block_given?
-		tag("input",
-		html_options.merge({
-			:type => "checkbox",
-			:checked => ("checked" if checked),
-			# FIXME-cpg: href should not be needed? :href => html_options[:href] || "#",
-			:onclick => (html_options[:onclick] ? "#{html_options[:onclick]}; " : "") + "#{function}; return false;"
-		})
-		)
-	end
-
-	def checkbox_to_remote( checked = true, options = {}, html_options = nil)
-		checkbox_to_function(checked, remote_function(options), html_options || options.delete(:html))
-	end
 
 
 
@@ -256,21 +215,10 @@ module ApplicationHelper
 		theme_image_tag("delete.png", :title => title)
 	end
 
-	def inline_event
-		page << "new Effect.Event({queue: 'end', afterFinish:function(){"
-		yield
-		page << "}})"
-	end
 
 
 
-	def spinner_show id
-		"Element.show('spinner-#{id}');"
-	end
 
-	def spinner_hide id
-		"Element.hide('spinner-#{id}');"
-	end
 
 	# theme helpers
 	def theme_stylesheet_link_tag(a)
