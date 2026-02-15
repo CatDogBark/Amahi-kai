@@ -31,6 +31,10 @@ class UsersController < ApplicationController
 		@user = User.new(params_user_create)
 		@user.save
 		@users = User.all_users	unless @user.errors.any?
+		respond_to do |format|
+			format.html
+			format.json
+		end
 	end
 
 	def update

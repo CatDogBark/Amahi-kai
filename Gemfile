@@ -1,7 +1,7 @@
 source 'https://rubygems.org'
 
 gem 'rake'
-gem 'rails', '~> 5.2.0'
+gem 'rails', '~> 6.0.0'
 
 # Caching
 gem 'dalli'
@@ -48,6 +48,7 @@ gem 'nokogiri', require: 'nokogiri'
 
 # Ruby 2.7 compatibility pins
 gem 'ffi', '< 1.17'
+# logger loaded early via config/boot.rb to fix Rails 6.0 + Ruby 2.7 compat
 gem 'psych'  # needed for YAML alias support with yettings
 
 group :development do
