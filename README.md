@@ -12,8 +12,8 @@ updated to run on Ubuntu/Debian with modern Ruby and dependencies.
 
 - **Platform**: Ubuntu 24.04 / Debian 12 (was Fedora)
 - **Database**: MariaDB (was MySQL)
-- **Ruby**: 2.7.8 (upgrading to 3.x planned)
-- **Rails**: 6.1.7 → 7.0 in progress (was 5.2.8)
+- **Ruby**: 3.2.10 (was 2.4.3 → 2.7.8 → 3.2.10)
+- **Rails**: 7.0.10 (was 5.2.8 → 6.0 → 6.1 → 7.0)
 - **Services**: systemd (removed upstart/init.d support)
 - **Auth**: SCrypt password hashing (migrated from Sha512)
 - **Assets**: Plain JavaScript (migrated from CoffeeScript)

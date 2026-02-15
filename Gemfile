@@ -37,7 +37,6 @@ gem 'bcrypt'
 gem 'docker-api'
 
 # Ruby 2.7 compatibility pins
-gem 'ffi', '< 1.17'
 gem 'psych'  # needed for YAML alias support with yettings
 
 group :development do
@@ -64,5 +63,5 @@ group :development, :production do
 end
 
 group :development, :test do
-  gem 'sqlite3', '< 1.7'
+  gem 'sqlite3', '~> 1.7.0'
 end

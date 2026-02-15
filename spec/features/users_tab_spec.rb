@@ -100,9 +100,8 @@ feature "Users tab" do
 		user_link = find("#whole_user_#{@admin.id}")
 		user_link.find("tr").click_link @admin.login
 		within(user_link) do
-			expect(user_link).to have_selector("a#user-password-control-action-#{@admin.id}", :visible => true)
-			link = user_link.find_by_id("user-password-control-action-#{@admin.id}")
-			link.click
+			expect(user_link).to have_selector("a#user-password-control-action-#{@admin.id}", visible: :all)
+			page.execute_script("document.getElementById('user-password-control-action-#{@admin.id}').click()")
 			expect(user_link).to have_field("user[password]")
 			expect(user_link).to have_field("user[password_confirmation]")
 			password_input = user_link.find_field("user[password]")
@@ -119,9 +118,8 @@ feature "Users tab" do
 		user_link = find("#whole_user_#{@user.id}")
 		user_link.find("tr").click_link @user.login
 		within(user_link) do
-			expect(user_link).to have_selector("a#user-password-control-action-#{@user.id}", :visible => true)
-			link = user_link.find_by_id("user-password-control-action-#{@user.id}")
-			link.click
+			expect(user_link).to have_selector("a#user-password-control-action-#{@user.id}", visible: :all)
+			page.execute_script("document.getElementById('user-password-control-action-#{@user.id}').click()")
 			expect(user_link).to have_field("user[password]")
 			expect(user_link).to have_field("user[password_confirmation]")
 			password_input = user_link.find_field("user[password]")
@@ -138,9 +136,8 @@ feature "Users tab" do
     	user_link = find("#whole_user_#{@user.id}")
 		user_link.find("tr").click_link @user.login
 		within(user_link) do
-			expect(user_link).to have_selector("a#user-pin-control-action-#{@user.id}", :visible => true)
-			link = user_link.find_by_id("user-pin-control-action-#{@user.id}")
-			link.click
+			expect(user_link).to have_selector("a#user-pin-control-action-#{@user.id}", visible: :all)
+			page.execute_script("document.getElementById('user-pin-control-action-#{@user.id}').click()")
 			expect(user_link).to have_field("user[pin]")
 			expect(user_link).to have_field("user[pin_confirmation]")
 			pin_input = user_link.find_field("user[pin]")

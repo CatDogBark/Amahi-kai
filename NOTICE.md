@@ -27,8 +27,8 @@ This fork was created in **February 2026** to modernize the Amahi Platform for c
 ### Key Changes
 
 - **Platform**: Migrated from Fedora to Ubuntu 24.04 / Debian 12
-- **Ruby**: Upgraded from 2.4.3 to 2.7.8 (Rails 6.x path to 3.x planned)
-- **Rails**: Upgraded from 5.2.8 → 6.0.6 → 6.1.7 (continuing to 7.x)
+- **Ruby**: Upgraded from 2.4.3 → 2.7.8 → 3.2.10
+- **Rails**: Upgraded from 5.2.8 → 6.0.6 → 6.1.7 → 7.0.10
 - **Database**: Migrated to MariaDB (from MySQL)
 - **Services**: Modernized for systemd (removed upstart/init.d)
 - **Authentication**: Migrated to SCrypt password hashing (from Sha512)
@@ -76,4 +76,4 @@ The Amahi team created an excellent home server platform that served thousands o
 ---
 
 **Generated**: 2026-02-15
-**Last Updated**: 2026-02-15 (Rails 7.0 upgrade phase)
+**Last Updated**: 2026-02-15 (Ruby 3.2 + Rails 7.0 complete)

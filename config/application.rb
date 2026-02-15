@@ -3,6 +3,13 @@ require_relative 'boot'
 
 require 'rails/all'
 
+# Monkey-patch File.exists? for gems that still use it (removed in Ruby 3.2)
+unless File.respond_to?(:exists?)
+  class << File
+    alias_method :exists?, :exist?
+  end
+end
+
 # Require the gems listed in Gemfile, including any gems
 # you've limited to :test, :development, or :production.
 Bundler.require(*Rails.groups)
