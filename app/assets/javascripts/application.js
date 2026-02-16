@@ -1,6 +1,5 @@
 //= require jquery3
 //= require jquery-ui
-//= require jquery_ujs
 
 //= require turbo
 //= require stimulus.min
