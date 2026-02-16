@@ -55,11 +55,11 @@
 - [x] JS codebase: ~742 lines total (from thousands)
 
 ### Test Coverage
-- [x] 248 specs total (101 model, 88 request, 35 feature, 24 lib)
-- [x] All models covered: User, Share, Host, DnsAlias, Setting, Server, Plugin, App, Webapp
+- [x] 334 specs total (119 model, 88 request, 35 feature, 92 lib)
+- [x] All models covered: User, Share, Host, DnsAlias, Setting, Server, Plugin, App, Webapp, Db, CapAccess, CapWriter, WebappAlias
 - [x] All controllers covered: network, settings, apps, disks, shares, users, debug, front, search
-- [x] Lib covered: Command (3 modes), Platform
-- [x] Coverage: ~48%
+- [x] Lib covered: Command, Platform, Yetting, TempCache, Leases, Tab, Ping, SampleData, SetTheme, AmahiApi, AmahiNews, Downloader, SystemUtils, CredentialEncryption, Container, PartitionUtils
+- [x] Coverage: ~52%
 - [x] Flaky test ordering bug FIXED (was caused by jQuery template references)
 
 ### Code Quality
@@ -69,6 +69,12 @@
 - [x] Shared csrfHeaders() helper (DRY across 8 Stimulus controllers)
 - [x] Deprecated Kernel#open calls fixed (File.open, URI.open, IO.popen)
 - [x] SampleData YAML crash fixed (servers.yml.gz safe_load compatibility)
+- [x] Dead ServerController removed (unrouted, all actions in SettingsController)
+- [x] Container.rb typo fixed (alse → false)
+- [x] database.yml uses ENV vars for DB name
+- [x] docker-compose.yml fixed (correct DB name, health check start_period)
+- [x] jQuery gems removed from Gemfile (were already commented out)
+- [x] README.md updated (jQuery-free stack, security features)
 
 ---
 
@@ -76,8 +82,8 @@
 
 ### 1.1 Remaining Security Items
 - [ ] Enable `config.force_ssl` in production (needs HTTPS setup guidance)
-- [ ] Audit remaining shell interpolation in install/uninstall scripts
-- [ ] Review app install scripts for injection vectors (`install_bg`, `uninstall_bg`)
+- [x] Audit remaining shell interpolation — fixed in app.rb (install/uninstall), system_utils.rb (unpack, run_script), db.rb (mysqldump)
+- [x] Fix SQL injection in Db model (parameterized with quote/quote_column_name)
 
 ---
 
@@ -109,9 +115,10 @@
 ## 🔵 Priority 4: Features & Future
 
 ### 4.1 Increase Test Coverage to 70%+
-- **Current:** ~50% (306 specs: 101 model, 88 request, 35 feature, 82 lib)
-- **Lib coverage:** Command, Platform, Yetting, TempCache, Leases, Tab, credential encryption
-- **Remaining:** Edge cases, error paths, more integration scenarios
+- **Current:** ~52% (334 specs: 119 model, 88 request, 35 feature, 92 lib)
+- **All models covered** (13/13 with specs)
+- **All lib files covered** (16/17 — only plugin_generator uncovered)
+- **Remaining:** Edge cases, error paths, more integration scenarios, controller specs
 
 ### 4.2 Firewall Plugin
 - **Need:** New plugin from scratch with nftables integration
