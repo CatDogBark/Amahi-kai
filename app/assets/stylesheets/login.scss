@@ -1,13 +1,9 @@
 // BORDER RADIUS
 @mixin border-radius($radius: 5px) {
-  -moz-border-radius: $radius;
-  -webkit-border-radius: $radius;
   border-radius: $radius;
 }
 // BOX SHADOW
 @mixin box-shadow($shadow...) {
-  -webkit-box-shadow: $shadow;
-  -moz-box-shadow: $shadow;
   box-shadow: $shadow;
 }
 
@@ -17,17 +13,8 @@ body {
 }
 
 html {
-	background-image: url(/assets/body_bg.jpg);
-	background-clip: border-box;
-	background-color: transparent;
-	background-image: url(/assets/body_bg.jpg);
-	background-origin: padding-box;
-	background-position: center center;
-	background-repeat: no-repeat;
-	background-size: cover;
+	background: url(/assets/body_bg.jpg) center center / cover no-repeat;
 	min-height: 100%;
-	background-attachment: scroll;
-	background-attachment: scroll;
 	height: 100%;
 }
 
