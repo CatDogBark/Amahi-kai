@@ -13,6 +13,8 @@
 //= require controllers/progress_controller
 //= require controllers/server_action_controller
 //= require controllers/locale_controller
+//= require controllers/user_controller
+//= require controllers/create_form_controller
 
 //= require forms/remote-radios
 //= require forms/remote-checkboxes

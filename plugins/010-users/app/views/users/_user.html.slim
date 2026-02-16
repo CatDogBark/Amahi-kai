@@ -1,9 +1,9 @@
-div.user[id="whole_user_#{user.id}"]
+div.user[id="whole_user_#{user.id}" data-controller="user"]
   table.settings.stretchtoggle
     tr.hover-style
       td.settings-col1.settings-col1-pad.users-col1
         = link_to user.login, '#'
-        span[class="user_icons #{user_icon_class(user)}"]
+        span.user_icons[class="#{user_icon_class(user)}" data-user-target="userIcons"]
       td.settings-col2.users-col2= user.name
 
   div.settings-stretcher[id="about_user_#{user.id}" style="display:none;"]
@@ -17,14 +17,15 @@ div.user[id="whole_user_#{user.id}"]
           small = "#{t('created')} #{formatted_date(user.created_at)}"
 
         .settings-actions
-          span.delete[style="#{user.admin? ? 'display:none' : ''}"]
+          span.delete[style="#{user.admin? ? 'display:none' : ''}" data-user-target="deleteArea"]
             = spinner
-            = link_to (t('delete') + ' ' + user.login), users_engine.user_path(user),
-                      :remote => true,
-                      :method => :delete,
-                      :id => "delete-user-#{user.id}",
-                      :data => { :confirm => confirm_user_destroy_message(user.login) },
-                      :class => 'btn-delete remote-btn navbar-right btn btn-sm'
+            a.btn-delete.remote-btn.navbar-right.btn.btn-sm[
+              href="#"
+              id="delete-user-#{user.id}"
+              data-action="click->user#destroy"
+              data-url=users_engine.user_path(user)
+              data-confirm=confirm_user_destroy_message(user.login)]
+              = t('delete') + ' ' + user.login
 
         .settings-fields
           table
@@ -32,22 +33,22 @@ div.user[id="whole_user_#{user.id}"]
               td
                 label #{t('name')}
               td
-                a.name_click_change  #{user.name}
-                = simple_remote_text     :id => "#{user.id}",
-                                         :input_id =>"text_user_#{user.id}",
-                                         :form_id => "form_user_#{user.id}",
-                                         :button_id => "change_fullname_user_#{user.id}",
-                                         :url => users_engine.user_path(:id => user.id),
-                                         :label => t("change"),
-                                         :disabled => !current_user.admin?,
-                                         :value => "#{user.name}",
-                                         :name => :name,
-                                         :method => :put,
-                                         :remote => true,
-                                         :input_css_class=>'form-control input-sm',
-                                         :form_css_class => "edit_name_form form_hidden form-inline",
-                                         :cancel_class => "name_cancel_link left-margin-10 cancel-btn-style"
-                .messages
+                a.name_click_change[data-user-target="nameDisplay" data-action="click->user#editName"]  #{user.name}
+                form.edit_name_form.form_hidden.form-inline[
+                  action=users_engine.user_path(id: user.id)
+                  method="post"
+                  style="display:none"
+                  data-user-target="nameForm"
+                  data-action="submit->user#submitName"]
+                  input type="hidden" name="_method" value="put"
+                  input.form-control.input-sm[type="text" name="name" value="#{user.name}" data-user-target="nameInput"]
+                  |  
+                  button.btnn.btn.btn-info.btn-create.btn-sm.margin-for-message type="submit"
+                    = t("change")
+                  a.name_cancel_link.left-margin-10.cancel-btn-style[href="#" data-action="click->user#cancelName"]
+                    | Cancel
+                  span.spinner.theme-image style="display:none"
+                .messages data-user-target="message"
 
             - if advanced?
               tr
@@ -59,12 +60,17 @@ div.user[id="whole_user_#{user.id}"]
             tr
               td
                 label #{t('admin')}
-              td = simple_remote_checkbox :id => "user_admin_#{user.id}",
-                                         :css_class => 'user_admin_checkbox action-checkbox',
-                                         :url => users_engine.toggle_admin_user_path(:id => user.id),
-                                         :label => "",
-                                         :checked => user.admin?,
-                                         :disabled => !can_i_toggle_admin?(user)
+              td
+                span
+                  input.user_admin_checkbox.action-checkbox.form-check-input[
+                    type="checkbox"
+                    id="user_admin_#{user.id}"
+                    checked=user.admin?
+                    disabled=(!can_i_toggle_admin?(user))
+                    data-action="click->user#toggleAdmin"
+                    data-url=users_engine.toggle_admin_user_path(id: user.id)]
+                  |  
+                  span.spinner.theme-image style="display:none"
             tr
               = render partial: 'password', locals: { user: user }
             tr
