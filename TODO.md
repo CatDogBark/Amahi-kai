@@ -124,9 +124,9 @@
 - **Scope:** Large — new features
 
 ### 4.4 Increase Test Coverage to 70%+
-- **Current:** ~45% (214 specs)
-- **Covered:** All controllers (network, settings, apps, disks, shares, users, debug, front, search), Command, Platform
-- **Remaining:** App model, more lib/ utilities, edge cases
+- **Current:** ~48% (248 specs: 101 model, 88 request, 35 feature, 24 lib)
+- **Covered:** All controllers, all models (User, Share, Host, DnsAlias, Setting, Server, Plugin, App, Webapp), Command, Platform
+- **Remaining:** More edge cases, integration scenarios
 
 ---
 
