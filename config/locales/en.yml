@@ -79,7 +79,6 @@
   warning: WARNING
   state: State
   there_is_no_undo: There is NO UNDO TO THIS DELETION.
-  ip_address: IP Address
   path: Path
   install_apps: Install apps!
   open: Open
@@ -451,7 +450,6 @@
   logs: Logs
   system: System
   logout: Logout
-  log_in: Log In
 
 ### amahi.org
 
@@ -488,7 +486,6 @@
   more: more
   back: Back
   next: Next
-  network_settings: Network Settings
   your_home_dns_domain: Your Home DNS Domain
   done_final_check: "Done! Final Check"
   please_double_check_the_settings: Please <strong>double check these settings</strong>, as they are crucial to getting your HDA running out of the box.
@@ -501,13 +498,11 @@
   when_there_are_major_announcements: When there are major announcements
   news_about_applications: News about Applications that run on Amahi
   general_amahi_news: General Amahi news
-  available: Available
   upcoming: Upcoming
   suggest: Suggest!
   changelog: ChangeLog
   press: Press
   get_involved: Get Involved!
-  contribute: Contribute
   close: close
   delete_profile: Delete profile for
 
@@ -549,7 +544,6 @@
   valid_email_required_for_service: Valid email required for activation. We will <a href="http://www.amahi.org/privacy" target="_blank">not spam you</a>
   sign_in: Sign In
   username_or_email: Username or email
-  remember_me: Remember me
   must_be_logged_in: You must be logged in to access this area
   must_be_admin: You must have admin privileges to access this area
   admin_setup_worked: Admin setup worked. Please login now
