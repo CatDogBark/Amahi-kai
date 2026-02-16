@@ -18,15 +18,7 @@
         #new-share-step1.area[style="display:none;"]
           = render 'form'
 
-= content_for(:js_templates) do
-  script[id='updateTagsTemplate' type='text/x-jquery-tmpl']
-    = render '/js_templates/shares/tags_form'
-  script[id='updatePathTemplate' type='text/x-jquery-tmpl']
-    = render '/js_templates/shares/path_form'
-  script[id='updateExtrasTemplate' type='text/x-jquery-tmpl']
-    = render '/js_templates/shares/extras_form'
-
 - js_include = include_javascript rescue true
 
-- if js_include 
+- if js_include
   = javascript_include_tag 'shares'
