@@ -64,7 +64,7 @@ class PartitionUtils
 		# FIXME!: this is 137 in x86_64!!
 		# asm/unistd.h __NR_statfs 99
 		begin
-			open('|uname -i') do |uname|
+			IO.popen('uname -i') do |uname|
 				arch = uname.gets
 				if (arch =~ /64/)
 					syscall(137, path, buffer)

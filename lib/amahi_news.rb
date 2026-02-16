@@ -38,7 +38,7 @@ class AmahiNews
 
 	def self.parse_feed (url, length = 5)
 		output = [];
-		open(url) do |http|
+		URI.open(url) do |http|
 			result = ActiveSupport::JSON.decode(http.read)
 			result['news'].each_with_index do |item, i|
 				return output if ++i == length

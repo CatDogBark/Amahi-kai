@@ -121,7 +121,7 @@ protected
 
 	def monit_file_add
 		fname = TempCache.unique_filename "server-#{self.name}"
-		open(fname, "w") { |f| f.write cmd_file }
+		File.open(fname, "w") { |f| f.write cmd_file }
 		c = Command.new "cp -f #{fname} #{File.join(Platform.file_name(:monit_dir), Platform.service_name(self.name))}.conf"
 		c.submit "rm -f #{fname}"
 		c.submit Platform.watchdog_restart_command
@@ -171,7 +171,7 @@ protected
 			# check if the pid file is there
 			if File.exist?(pf) && File.readable?(pf)
 				# check the pid file and check for the process existance
-				open(pf) do |p|
+				File.open(pf) do |p|
 					list = p.readlines.map{ |line| line.gsub(/\n/, '').split(' ') }.flatten
 					ret = list.map{|pid| File.exist?("/proc/#{pid}") ? pid : nil }.compact
 				end
