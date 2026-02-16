@@ -58,7 +58,7 @@ class Container
   end
 
   def exists?
-    return alse if @container.nil? # Container is not initialized or created yet
+    return false if @container.nil? # Container is not initialized or created yet
     begin
       # Container.get raises an exception
       container = Docker::Container.get(@id)

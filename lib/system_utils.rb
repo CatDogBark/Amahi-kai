@@ -29,6 +29,7 @@ class SystemUtils
 
 	def self.run_script(script, name, environment = {})
 		require 'tempfile'
+		require 'shellwords'
 		include Process
 
 		# number of linear backoff steps to wait. 22 ~= 160s
@@ -40,14 +41,15 @@ class SystemUtils
 		f.write(script)
 		f.close
 		ret = 0
+		safe_name = Shellwords.escape(name)
 		pid = fork
 		unless pid
 			# child
 			environment.each_pair { |k,v| ENV[k] =v }
 			if script[0..1] =~ /^#!/
-				exec("#{f.path} \"#{name}\" 2>&1")
+				exec("#{f.path} #{safe_name} 2>&1")
 			else
-				exec("bash #{f.path} \"#{name}\" 2>&1")
+				exec("bash #{f.path} #{safe_name} 2>&1")
 			end
 		else
 			# parent
@@ -71,12 +73,14 @@ class SystemUtils
 	end
 
 	def self.unpack(url, fname)
+		require 'shellwords'
+		safe_fname = Shellwords.escape(fname)
 		if (url =~ /\.zip$/)
-			system("unzip -q #{fname}")
+			system("unzip -q #{safe_fname}")
 		elsif (url =~ /\.(tar.gz|tgz)$/)
-			system("tar -xzf #{fname}")
+			system("tar -xzf #{safe_fname}")
 		elsif (url =~ /\.(tar.bz2)$/)
-			system("tar -xjf #{fname}")
+			system("tar -xjf #{safe_fname}")
 		else
 			raise "File #{url} is not supported for unpacking please report it to the Amahi community!"
 		end

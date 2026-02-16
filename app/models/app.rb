@@ -112,7 +112,7 @@ class App < ApplicationRecord
 		Rails.cache.write("app-id", identifier)
 
 		# run the kickoff script
-		cmd = File.join(Rails.root, "script/install-app --environment=#{Rails.env} #{identifier} >> #{INSTALLER_LOG} 2>&1 &")
+		cmd = File.join(Rails.root, "script/install-app --environment=#{Shellwords.escape(Rails.env)} #{Shellwords.escape(identifier)} >> #{Shellwords.escape(INSTALLER_LOG)} 2>&1 &")
 
 		if Rails.env == "production"
 			c = Command.new cmd
@@ -133,7 +133,7 @@ class App < ApplicationRecord
 		Rails.cache.write("app-id", self.identifier)
 
 		# run the kickoff script
-		cmd = File.join(Rails.root, "script/install-app -u --environment=#{Rails.env} #{self.identifier} >>  #{INSTALLER_LOG} 2>&1 &")
+		cmd = File.join(Rails.root, "script/install-app -u --environment=#{Shellwords.escape(Rails.env)} #{Shellwords.escape(self.identifier)} >> #{Shellwords.escape(INSTALLER_LOG)} 2>&1 &")
 
 		if Rails.env == "production"
 			c = Command.new cmd

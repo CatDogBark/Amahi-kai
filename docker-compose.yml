@@ -6,18 +6,19 @@ services:
       - db_data:/var/lib/mysql
     environment:
       MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: "yes"
-      MARIADB_DATABASE: hda_development
+      MARIADB_DATABASE: amahi_dev
     ports:
       - "3306:3306"
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
       timeout: 5s
-      retries: 3
+      retries: 5
+      start_period: 30s
 
   web:
     build: .
-    command: bundle exec puma -b 0.0.0.0 -p 3000
+    command: bundle exec puma -b tcp://0.0.0.0 -p 3000
     volumes:
       - .:/amahi
       - bundle_cache:/usr/local/bundle
@@ -30,6 +31,8 @@ services:
       DATABASE_HOST: db
       RAILS_ENV: development
       SECRET_KEY_BASE: dev-secret-key-do-not-use-in-production
+    stdin_open: true
+    tty: true
 
 volumes:
   db_data:

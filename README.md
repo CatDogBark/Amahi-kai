@@ -7,7 +7,7 @@ Modernized fork of the [original Amahi Platform](https://github.com/amahi/platfo
 ## Stack
 
 - **Ruby** 3.2 / **Rails** 8.0
-- **Bootstrap** 5.3 / jQuery
+- **Bootstrap** 5.3 / **Stimulus** + vanilla JS (jQuery-free)
 - **MariaDB** (production) / SQLite (test)
 - **Ubuntu** 24.04 / Debian 12
 - **systemd** service management
@@ -57,6 +57,8 @@ Rails app with a plugin system:
 - **Content Security Policy** headers
 - **SCrypt** password hashing (with Sha512 transition)
 - **Shellwords.escape** on all shell commands
+- **AES-256-GCM** encryption for stored credentials
+- **Parameterized SQL** in database management
 - Direct **systemd** integration (no more hda-ctl daemon)
 
 ## Credits
