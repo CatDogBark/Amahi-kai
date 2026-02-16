@@ -23,17 +23,14 @@ Rails.application.configure do
   config.public_file_server.enabled = ENV['RAILS_SERVE_STATIC_FILES'].present?
 
   # Compress JavaScripts and CSS.
-  # config.assets.js_compressor = :uglifier  # Removed: uglifier depends on deprecated ExecJS
+  config.assets.js_compressor = :terser
   config.assets.css_compressor = :sass
 
   # Fallback to assets pipeline if a precompiled asset is missed
   config.assets.compile = true
-  config.serve_static_assets = true
 
-  # for some reason, if we do not set asset debug to true, we observe errors in some js
-  # being loaded. maybe this table helps, but it's not clear why this is necessary:
-  # https://codingitwrong.com/2016/04/15/a-definitive-guide-to-asset-pipeline-settings.html
-  config.assets.debug = true
+  # Do not expand asset paths in production (concatenate + minify)
+  config.assets.debug = false
 
   # `config.assets.precompile` and `config.assets.version` have moved to config/initializers/assets.rb
 
