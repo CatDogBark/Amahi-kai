@@ -31,8 +31,15 @@
 - [x] Ruby 2.7.8 → 3.2.10
 
 ### Test Coverage
-- [x] 179 specs total (67 model, 79 request, 12 feature, 24 lib)
-- [x] Coverage: ~39% → improving
+- [x] 214 specs total (67 model, 88 request, 35 feature, 24 lib)
+- [x] Coverage: ~45% → improving
+
+### Frontend: jQuery UJS → Stimulus Migration
+- [x] Turbo + Stimulus wired up with Sprockets (Phase 0)
+- [x] 8 Stimulus controllers: toggle, delete, inline_edit, progress, server_action, locale, user, create_form
+- [x] All 6 plugins converted: Disks, Settings, Users, Network, Shares, Apps
+- [x] Removed: simple_remote_checkbox/text/select/radio helpers, SmartLinks, RemoteCheckbox, FormHelpers, Templates, jQuery templates
+- [x] ~974 lines of dead jQuery UJS infrastructure deleted
 
 ---
 
@@ -88,12 +95,11 @@
 
 ## 🟢 Priority 3: Frontend Modernization
 
-### 3.1 jQuery UJS → Turbo + Stimulus
-- **Why:** `jquery_ujs` is unmaintained, Rails 8 standard is Turbo
-- **Scope:** 38 remote forms, 52 AJAX handlers across 7 JS files
-- **Strategy:** Incremental — convert one plugin at a time, keep jQuery for existing code
-- **Gems:** turbo-rails, stimulus-rails, importmap-rails (all installed)
-- **Risk:** High — biggest frontend change, do after test coverage is solid
+### 3.1 jQuery UJS → Turbo + Stimulus ✅ COMPLETE
+- All 6 plugins converted to Stimulus controllers
+- jQuery still loaded (used for stretch-toggle, hover effects, search form)
+- **Next:** Can remove jquery_ujs entirely once confirmed no remaining `data-remote` usage
+- **Future:** Remove jQuery itself (replace remaining ~30 lines of vanilla jQuery with plain JS)
 
 ### 3.2 Sprockets → Propshaft
 - **Blocked:** Bootstrap gem hard-depends on Sprockets
@@ -118,10 +124,9 @@
 - **Scope:** Large — new features
 
 ### 4.4 Increase Test Coverage to 70%+
-- **Current:** ~45% (179 specs)
+- **Current:** ~45% (214 specs)
 - **Covered:** All controllers (network, settings, apps, disks, shares, users, debug, front, search), Command, Platform
 - **Remaining:** App model, more lib/ utilities, edge cases
-- **When:** Before jQuery → Turbo migration
 
 ---
 
