@@ -14,10 +14,6 @@
 //= require controllers/user_controller
 //= require controllers/create_form_controller
 
-//= require lib/core-ext
-//= require lib/ajax-setup
 //= require lib/application
-//= require lib/debug
-//= require spinner
 
 //= require bootstrap
