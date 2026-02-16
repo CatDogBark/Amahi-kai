@@ -15,6 +15,7 @@
 # team at http://www.amahi.org/ under "Contact Us."
 
 require 'downloader'
+require 'shellwords'
 
 class Platform
 
@@ -249,24 +250,23 @@ class Platform
 
 		# make a user admin -- sudo capable
 		def make_admin(username, is_admin)
-			# WARNING-cpg: tested on Fedora only
 			admin_groups = is_admin ? ",wheel" : ''
+			esc_user = Shellwords.escape(username)
 			c = Command.new
-			c.submit("usermod -G #{DEFAULT_GROUP}#{admin_groups} #{username}")
+			c.submit("usermod -G #{DEFAULT_GROUP}#{admin_groups} #{esc_user}")
 			c.execute
 		end
 
 		# update the public key for the user
 		def update_user_pubkey(username, key)
-			# WARNING-cpg: tested on Fedora only
 			fname = TempCache.unique_filename "key"
 			File.open(fname, "w") { |f| f.write(key) }
-			home = "/home/#{username}"
+			esc_user = Shellwords.escape(username)
+			home = "/home/#{esc_user}"
 			c = Command.new
 			c.submit("mkdir -p #{home}/.ssh/")
-			# if the key is nil (allowed), empty the file
 			c.submit("mv #{fname} #{home}/.ssh/authorized_keys")
-			c.submit("chown -R #{username}:#{DEFAULT_GROUP} #{home}/.ssh")
+			c.submit("chown -R #{esc_user}:#{DEFAULT_GROUP} #{home}/.ssh")
 			c.submit("chmod u+rwx,go-rwx #{home}/.ssh")
 			c.submit("chmod u+rw,go-rwx #{home}/.ssh/authorized_keys")
 			c.execute
@@ -360,8 +360,9 @@ class Platform
 		end
 
 		def pkginstall(pkgs, sha1 = nil)
+			esc_pkgs = Shellwords.escape(pkgs)
 			if debian? or ubuntu? or mint?
-				c = Command.new "DEBIAN_FRONTEND=noninteractive apt-get -y install #{pkgs}"
+				c = Command.new "DEBIAN_FRONTEND=noninteractive apt-get -y install #{esc_pkgs}"
 				c.run_now
 			elsif fedora? or centos?
 				if pkgs =~ /^\w+:\/\//
@@ -383,8 +384,9 @@ class Platform
 		end
 
 		def pkguninstall(pkgs)
+			esc_pkgs = Shellwords.escape(pkgs)
 			if debian? or ubuntu? or mint?
-				c = Command.new "DEBIAN_FRONTEND=noninteractive apt-get -y remove #{pkgs}"
+				c = Command.new "DEBIAN_FRONTEND=noninteractive apt-get -y remove #{esc_pkgs}"
 				c.run_now
 			elsif fedora? or centos?
 				if pkgs =~ /^\w+:\/\/.*\/([^\/]*)\.rpm/

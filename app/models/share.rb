@@ -17,6 +17,7 @@
 require 'command'
 require 'platform'
 require 'temp_cache'
+require 'shellwords'
 
 class Share < ApplicationRecord
 
@@ -274,7 +275,7 @@ class Share < ApplicationRecord
 		c = Command.new
 		c.submit("rmdir \"#{self.path_was}\"") unless self.path_was.blank?
 		c.submit("mkdir -p \"#{self.path}\"")
-		c.submit("chown #{user}:users \"#{self.path}\"")
+		c.submit("chown #{Shellwords.escape(user)}:users #{Shellwords.escape(self.path)}")
 		c.submit("chmod g+w \"#{self.path}\"")
 		c.execute
 	end

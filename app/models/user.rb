@@ -16,6 +16,7 @@
 
 require 'strscan'
 require 'command'
+require 'shellwords'
 
 class User < ApplicationRecord
 
@@ -115,18 +116,20 @@ class User < ApplicationRecord
 
 	# add to the group called "users" so that it's like the rest
 	def add_to_users_group
-		c = Command.new("usermod -g users -a -G users \"#{self.login}\"")
+		esc_login = Shellwords.escape(self.login)
+		c = Command.new("usermod -g users -a -G users #{esc_login}")
 		c.execute
 	end
 
 	def add_or_passwd_change_samba_user
-		# adds samba user or simply chages it's password
+		# adds samba user or simply changes its password
+		esc_login = Shellwords.escape(self.login)
 		pwd_option = password_option()
-		c = Command.new("usermod #{pwd_option} \"#{self.login}\"")
+		c = Command.new("usermod #{pwd_option} #{esc_login}")
 		c.execute
 		unless self.password.nil? && self.password.blank?
-			p = self.password
-			c = Command.new "(echo '#{p}'; echo '#{p}') | pdbedit -d0 -t -a -u \"#{self.login}\""
+			esc_pwd = Shellwords.escape(self.password)
+			c = Command.new "(echo #{esc_pwd}; echo #{esc_pwd}) | pdbedit -d0 -t -a -u #{esc_login}"
 			c.execute
 		end
 	end
@@ -144,18 +147,15 @@ class User < ApplicationRecord
 	end
 
 	def before_create_hook
-		# FIXME: this is an issue with fedora 12 and usernames in lowercase
-		# https://bugzilla.redhat.com/show_bug.cgi?id=550732
-		# http://bugs.amahi.org/issues/show/392
 		self.login = self.login.downcase
 		return if User.system_user_exists? self.login
+		esc_login = Shellwords.escape(self.login)
+		esc_name = Shellwords.escape(self.name)
 		pwd_option = password_option()
-		# FIXME: use a different (programmable) group
-		c = Command.new "useradd -m -g users -c \"#{self.name}\" #{pwd_option} \"#{self.login}\""
-		# FIXME - we should use add_or_passwd_change_samba_user above! DRY
+		c = Command.new "useradd -m -g users -c #{esc_name} #{pwd_option} #{esc_login}"
 		unless self.password.nil? && self.password.blank?
-			p = self.password
-			c.submit("(echo '#{p}'; echo '#{p}') | pdbedit -d0 -t -a -u \"#{self.login}\"")
+			esc_pwd = Shellwords.escape(self.password)
+			c.submit("(echo #{esc_pwd}; echo #{esc_pwd}) | pdbedit -d0 -t -a -u #{esc_login}")
 		end
 		c.execute
 	end
@@ -167,7 +167,7 @@ class User < ApplicationRecord
 		salt = ('a'..'z').to_a + ('A'..'Z').to_a + ('0'..'9').to_a + ['.', '/']
 		salt = (salt.sort_by{rand}.join)[0,2]
 		sys_crypted_password = password.crypt(salt)
-		"-p \"#{sys_crypted_password}\""
+		"-p #{Shellwords.escape(sys_crypted_password)}"
 	end
 
 	def before_save_hook
@@ -181,8 +181,10 @@ class User < ApplicationRecord
 		end
 
 		return unless User.system_user_exists? self.login
+		esc_login = Shellwords.escape(self.login)
+		esc_name = Shellwords.escape(self.name)
 		pwd_option = password_option()
-		c = Command.new("usermod -c \"#{self.name}\" #{pwd_option} \"#{self.login}\"")
+		c = Command.new("usermod -c #{esc_name} #{pwd_option} #{esc_login}")
 		c.execute
 	end
 
@@ -195,8 +197,9 @@ class User < ApplicationRecord
 	end
 
 	def before_destroy_hook
-		c = Command.new("pdbedit -d0 -x -u \"#{self.login}\"")
-		c.submit("userdel -r \"#{self.login}\"")
+		esc_login = Shellwords.escape(self.login)
+		c = Command.new("pdbedit -d0 -x -u #{esc_login}")
+		c.submit("userdel -r #{esc_login}")
 		c.execute
 	end
 
