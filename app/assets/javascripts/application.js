@@ -10,6 +10,7 @@
 //= require controllers/toggle_controller
 //= require controllers/delete_controller
 //= require controllers/inline_edit_controller
+//= require controllers/progress_controller
 
 //= require forms/remote-radios
 //= require forms/remote-checkboxes
