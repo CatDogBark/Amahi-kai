@@ -155,7 +155,8 @@ class ShareController < ApplicationController
 				share.everyone = true
 			end
 			share.save
-		rescue
+		rescue => e
+			Rails.logger.error("Share action failed: #{e.message}")
 		end
 		render :partial => 'share/access', :locals => { :share => share }
 	end
@@ -194,7 +195,8 @@ class ShareController < ApplicationController
 				share.users_with_share_access += [user]
 			end
 			share.save
-		rescue
+		rescue => e
+			Rails.logger.error("Share action failed: #{e.message}")
 		end
 		render :partial => 'share/access', :locals => { :share => share }
 	end
@@ -213,7 +215,8 @@ class ShareController < ApplicationController
 				share.users_with_write_access += [user]
 			end
 			share.save
-		rescue
+		rescue => e
+			Rails.logger.error("Share action failed: #{e.message}")
 		end
 		render :partial => 'share/access', :locals => { :share => share }
 	end
@@ -223,7 +226,8 @@ class ShareController < ApplicationController
 			share = Share.find params[:id]
 			share.rdonly = ! share.rdonly
 			share.save
-		rescue
+		rescue => e
+			Rails.logger.error("Share action failed: #{e.message}")
 		end
 		render :partial => 'share/access', :locals => { :share => share }
 	end
@@ -233,7 +237,8 @@ class ShareController < ApplicationController
 			share = Share.find params[:id]
 			share.visible = ! share.visible
 			share.save
-		rescue
+		rescue => e
+			Rails.logger.error("Share action failed: #{e.message}")
 		end
 		render :partial => 'share/visible', :locals => { :share => share }
 	end
@@ -251,7 +256,8 @@ class ShareController < ApplicationController
 			share.tags = st.join ", "
 			share.save
 			share.reload
-		rescue
+		rescue => e
+			Rails.logger.error("Share action failed: #{e.message}")
 		end
 		render :partial => 'share/tags', :locals => { :share => share }
 	end

@@ -176,7 +176,7 @@ protected
 					ret = list.map{|pid| File.exist?("/proc/#{pid}") ? pid : nil }.compact
 				end
 			end
-		rescue
+		rescue => e
 			# something went wrong
 		end
 		return ret unless ret.empty?
@@ -192,7 +192,7 @@ protected
 			IO.popen("pgrep #{name}") do |p|
 				ret = p.readlines.map {|pid| pid.gsub(/\n/, '')}
 			end
-		rescue
+		rescue => e
 			[]
 		end
 		ret
