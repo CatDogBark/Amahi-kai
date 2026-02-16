@@ -57,7 +57,6 @@ class UserSessionsController < ApplicationController
 	def destroy
 		@user_session = UserSession.find
 		@user_session.destroy
-		# FIXME-translate
 		flash[:info] = t('you_have_been_logged_out')
 		redirect_to root_path
 	end
@@ -78,7 +77,7 @@ class UserSessionsController < ApplicationController
 		# here we have a possible user: new in the system (truly new or the user may have
 		# mistyped a username?), or an old user
 		(name, uid, systemusername) = User.system_find_name_by_username(username)
-		# FIXME-cpg: very hackish constant for regular uid (1000)
+		# Linux convention: regular users have uid >= 1000
 		unless name and uid and uid >= 1000
 			# not a system user. should we create one?
 			flash[:danger] = t 'not_a_valid_user_or_password'
@@ -140,19 +139,17 @@ private
 		true
 	end
 
-	# FIXME: this is busted! PAM will not authenticate other
-	# than the caller's user (apache)!
-	# we would need to do our own authentication solution!
+	# NOTE: PAM auth only works for the calling process user (e.g. www-data).
+	# Full PAM auth would require a privileged helper or switching to DB-only auth.
 	def valid_system_credentials?(user, password)
 		User.valid_pam_auth?(user, password)
 	end
 
-	# for admins, slightly stronger password, by length
-	# FIXME - strength
+	# Admin password: minimum 8 chars, must match confirmation
 	def valid_admin_password?(pwd, conf)
-		return false if pwd.nil? or pwd.blank?
-		return true if conf.size > 4 and pwd == conf
-		false
+		return false if pwd.blank? || conf.blank?
+		return false unless pwd == conf
+		pwd.length >= 8
 	end
 
 	def initialized?
