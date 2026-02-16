@@ -36,7 +36,7 @@ class SettingsController < ApplicationController
 				@servers = Server.all
 			else
 				@message = "NOTE: these servers are fake data! Interacting with them will not work."
-				@servers = SampleData.load('servers')
+				@servers = SampleData.load('servers').map { |h| Server.new(h.slice(*Server.column_names)) }
 			end
 		end
 	end

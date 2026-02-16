@@ -33,7 +33,10 @@ class SampleData
 	class << self
 		def load(filename)
 			file = ROOT % filename
-			YAML.safe_load(Zlib::GzipReader.new(StringIO.new(File.read file)).read, permitted_classes: [Symbol])
+			YAML.safe_load(
+				Zlib::GzipReader.new(StringIO.new(File.read(file))).read,
+				permitted_classes: [Symbol, Date, Time]
+			)
 		end
 	end
 end
