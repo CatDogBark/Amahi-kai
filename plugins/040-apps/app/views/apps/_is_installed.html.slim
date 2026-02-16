@@ -15,7 +15,7 @@
 - if app.special_instructions and ! app.special_instructions.blank?
   fieldset.special-instructions-block
     legend.auto-width-legend #{t('special_instructions')}
-    = app.special_instructions.html_safe
+    = sanitize(app.special_instructions)
 
 - if app.webapp
   div.app-url= link_to(app.full_url, app.full_url, :target => '_blank', :class => 'f-size22')

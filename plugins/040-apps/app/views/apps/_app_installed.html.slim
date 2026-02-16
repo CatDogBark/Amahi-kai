@@ -19,7 +19,7 @@
 
           .app-content.m-0.col-md-6.col-xs-12.col-sm-12
             div.app-description 
-              = app.description.try(:html_safe) || t('no_description_supplied')
+              = app.description.present? ? sanitize(app.description) : t('no_description_supplied')
 
             = render 'is_installed', :app => app
 
