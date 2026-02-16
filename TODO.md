@@ -81,6 +81,10 @@
 - [x] Dead firewall helpers removed from application_helper.rb
 - [x] .dockerignore added, Dockerfile improved
 - [x] CI config fixed (SQLite, lib specs step)
+- [x] XSS hardening: sanitize() for app descriptions in views
+- [x] CONTRIBUTING.md added (dev setup, testing, conventions)
+- [x] Expanded filter_parameter_logging (pin, password_confirmation)
+- [x] CSS cleanup: vendor prefixes removed, duplicate properties fixed
 
 ---
 
