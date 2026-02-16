@@ -1,5 +1,4 @@
-= simple_remote_checkbox :id => "in_dashboard_#{app.id}",
-                         :css_class => 'in_dashboard_checkbox',
-                         :url => apps_engine.toggle_in_dashboard_path(:id => app.identifier),
-                         :label => "&nbsp; List in dashboard &nbsp;",
-                         :checked => app.show_in_dashboard
+span data-controller="toggle" data-toggle-url-value=apps_engine.toggle_in_dashboard_path(id: app.identifier)
+  input.in_dashboard_checkbox.form-check-input type="checkbox" id="in_dashboard_#{app.id}" checked=app.show_in_dashboard data-toggle-target="checkbox" data-action="click->toggle#toggle"
+  |  List in dashboard 
+  span.spinner.theme-image data-toggle-target="spinner" style="display:none"
