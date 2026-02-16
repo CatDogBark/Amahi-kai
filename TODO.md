@@ -30,76 +30,73 @@
 - [x] Rails 5.2 → 6.0 → 6.1 → 7.0 → 7.1 → 7.2 → 8.0.4
 - [x] Ruby 2.7.8 → 3.2.10
 
-### Test Coverage
-- [x] 214 specs total (67 model, 88 request, 35 feature, 24 lib)
-- [x] Coverage: ~45% → improving
+### Security Hardening
+- [x] Shellwords.escape in user.rb, share.rb, platform.rb, app.rb
+- [x] Rack::Attack rate limiting
+- [x] Content Security Policy (CSP) in report-only mode
+- [x] ROT13 → real encryption (AES-256-GCM via MessageEncryptor)
+- [x] AmahiApi stubbed (raises instead of hanging on dead server)
+- [x] hda-ctl replaced with direct Command execution (3 modes: dummy/direct/hdactl)
+- [x] Platform detection cleanup (only Ubuntu/Debian remain)
+- [x] Session cookies hardened (httponly, same_site: :lax)
+- [x] CSRF tokens in all Stimulus fetch requests via shared csrfHeaders()
+- [x] jquery_ujs fully removed from asset pipeline
 
-### Frontend: jQuery UJS → Stimulus Migration
+### Frontend: jQuery UJS → Stimulus Migration ✅ COMPLETE
 - [x] Turbo + Stimulus wired up with Sprockets (Phase 0)
 - [x] 8 Stimulus controllers: toggle, delete, inline_edit, progress, server_action, locale, user, create_form
 - [x] All 6 plugins converted: Disks, Settings, Users, Network, Shares, Apps
-- [x] Removed: simple_remote_checkbox/text/select/radio helpers, SmartLinks, RemoteCheckbox, FormHelpers, Templates, jQuery templates
-- [x] ~974 lines of dead jQuery UJS infrastructure deleted
+- [x] Removed all simple_remote_* helpers from application_helper.rb
+- [x] Removed: SmartLinks, RemoteCheckbox, FormHelpers, Templates, jQuery templates
+- [x] Removed: spinner.js, ajax-setup.js, core-ext.js, debug.js
+- [x] Removed: remote-checkboxes.js, remote-radios.js, remote-selects.js, form-helper.js
+- [x] Removed: jquery.ui.templates.js, smart-links.js, templates.js
+- [x] ~1,200+ lines of dead jQuery/UJS infrastructure deleted total
+- [x] JS codebase: ~742 lines total (from thousands)
+
+### Test Coverage
+- [x] 248 specs total (101 model, 88 request, 35 feature, 24 lib)
+- [x] All models covered: User, Share, Host, DnsAlias, Setting, Server, Plugin, App, Webapp
+- [x] All controllers covered: network, settings, apps, disks, shares, users, debug, front, search
+- [x] Lib covered: Command (3 modes), Platform
+- [x] Coverage: ~48%
+- [x] Flaky test ordering bug FIXED (was caused by jQuery template references)
+
+### Code Quality
+- [x] CI config (GitHub Actions)
+- [x] NOTICE.md updated with current stack info
+- [x] Duplicate locale keys cleaned (6 intra-file dupes, hello_world boilerplate)
+- [x] Shared csrfHeaders() helper (DRY across 8 Stimulus controllers)
+- [x] Deprecated Kernel#open calls fixed (File.open, URI.open, IO.popen)
+- [x] SampleData YAML crash fixed (servers.yml.gz safe_load compatibility)
 
 ---
 
 ## 🔴 Priority 1: Security & Stability
 
-### 1.1 Command Injection Hardening
-- **Problem:** `Command` class and model hooks build shell commands via string interpolation
-  - `"useradd -m -g users -c \"#{self.name}\" #{pwd_option} \"#{self.login}\""`
-  - User-controlled values (login, name, password) injected directly into shell strings
-- **Impact:** Critical — any user with admin access could inject shell commands via crafted usernames/names
-- **Fix:** Use `Open3.capture2e` with argument arrays, or at minimum `Shellwords.escape` all interpolated values
-- **Scope:** `app/models/user.rb`, `app/models/server.rb`, `app/models/share.rb`, `lib/command.rb`
-- **Risk:** Low — mechanical replacement, testable
-
-### 1.2 Security Hardening
-- [x] Add `Rack::Attack` for rate limiting (gem installed)
-- [x] Configure Content Security Policy (CSP)
-- [x] Replace ROT13 "encryption" for router passwords with real encryption (MessageEncryptor)
-- [ ] Enable `config.force_ssl` in production
-- [ ] Audit session/cookie security settings
-- [ ] Review CSRF protection across AJAX endpoints
-
-### 1.3 Stub Out Dead AmahiApi
-- **Problem:** App calls `api.amahi.org` (dead service) via ActiveResource
-- **Impact:** App marketplace page hangs/errors, potential startup delays
-- **Fix:** Replace with local stub that returns empty results, log warnings
-- **Scope:** `lib/amahi_api.rb`, `plugins/040-apps/`
-- **Risk:** Low — just preventing calls to a dead server
+### 1.1 Remaining Security Items
+- [ ] Enable `config.force_ssl` in production (needs HTTPS setup guidance)
+- [ ] Audit remaining shell interpolation in install/uninstall scripts
+- [ ] Review app install scripts for injection vectors (`install_bg`, `uninstall_bg`)
 
 ---
 
 ## 🟡 Priority 2: Platform — Make It Actually Run
 
-### 2.1 Systemd Integration (Replace hda-ctl)
-- **Problem:** All service management goes through `hda-ctl` daemon (doesn't exist on Ubuntu)
-- **Current:** `Command` class queues instructions, sends to hda-ctl via named pipe
-- **Fix:** Replace with direct `systemctl` calls for start/stop/restart/enable/disable
-- **Scope:** `lib/command.rb`, `app/models/server.rb`, `lib/platform.rb`
-- **Risk:** Medium — core system management, needs careful testing on real hardware
-
-### 2.2 Platform Detection Cleanup
-- **Problem:** Platform class has dead code for Fedora, CentOS, Mac, Mint, Arch
-- **Fix:** Keep only Debian/Ubuntu paths, add proper dpkg-based version detection
-- **Scope:** `lib/platform.rb`
-- **Risk:** Low
-
-### 2.3 Docker Compose for Development
-- **Goal:** `docker compose up` gives a working dev environment
-- **Includes:** MariaDB, the Rails app, proper volume mounts
+### 2.1 Docker Compose for Development
+- **Status:** Basic `docker-compose.yml` exists (MariaDB + Rails)
+- **Remaining:** Test it end-to-end, add health checks, volume mounts for hot reload
 - **Risk:** Low
 
 ---
 
-## 🟢 Priority 3: Frontend Modernization
+## 🟢 Priority 3: Frontend — Remaining Cleanup
 
-### 3.1 jQuery UJS → Turbo + Stimulus ✅ COMPLETE
-- All 6 plugins converted to Stimulus controllers
-- jQuery still loaded (used for stretch-toggle, hover effects, search form)
-- **Next:** Can remove jquery_ujs entirely once confirmed no remaining `data-remote` usage
-- **Future:** Remove jQuery itself (replace remaining ~30 lines of vanilla jQuery with plain JS)
+### 3.1 Remove jQuery Entirely
+- **Status:** jQuery still loaded for ~30 lines of vanilla usage (stretch-toggle, hover, search form)
+- **Fix:** Replace with plain JS event listeners
+- **Risk:** Low — straightforward mechanical replacement
+- **Benefit:** Remove jquery3 + jquery-ui gems, shrink asset bundle significantly
 
 ### 3.2 Sprockets → Propshaft
 - **Blocked:** Bootstrap gem hard-depends on Sprockets
@@ -111,30 +108,21 @@
 
 ## 🔵 Priority 4: Features & Future
 
-### 4.1 Firewall Plugin
+### 4.1 Increase Test Coverage to 70%+
+- **Current:** ~48% (248 specs)
+- **Remaining:** Edge cases, error paths, more integration scenarios
+
+### 4.2 Firewall Plugin
 - **Need:** New plugin from scratch with nftables integration
 - **Scope:** Large — new feature
 
-### 4.2 App Marketplace
+### 4.3 App Marketplace
 - **Need:** Decide on app distribution (Docker-based? Native packages?)
 - **Blocked:** Needs decision on Amahi cloud integration
 
-### 4.3 Storage/Disk Management
+### 4.4 Storage/Disk Management
 - **Need:** ZFS/Btrfs support, SMART monitoring, pool management
 - **Scope:** Large — new features
-
-### 4.4 Increase Test Coverage to 70%+
-- **Current:** ~48% (248 specs: 101 model, 88 request, 35 feature, 24 lib)
-- **Covered:** All controllers, all models (User, Share, Host, DnsAlias, Setting, Server, Plugin, App, Webapp), Command, Platform
-- **Remaining:** More edge cases, integration scenarios
-
----
-
-## 📋 Quick Wins (Do Anytime)
-
-- [x] Add CI config (GitHub Actions)
-- [x] Update NOTICE.md with current Rails 8 / Ruby 3.2 versions
-- [ ] Consolidate duplicate locale keys across plugins
 
 ---
 
