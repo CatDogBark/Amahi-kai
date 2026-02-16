@@ -1,44 +1,33 @@
-# Amahi Platform - Development Environment
-# Updated for Ubuntu 24.04 (was Fedora 29)
-# Ruby 3.2.x via system packages, Rails 7.2
+# Amahi-kai — Development Environment
+# Ubuntu 24.04, Ruby 3.2, Rails 8.0, MariaDB
 FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV RAILS_ENV=development
 
 WORKDIR /amahi
 
-# Install system dependencies
+# System dependencies
 RUN apt-get update && apt-get install -y \
-  ruby ruby-dev \
+  ruby ruby-dev ruby-bundler \
   build-essential \
-  libmariadb-dev mariadb-client mariadb-server \
+  libmariadb-dev mariadb-client \
   libsqlite3-dev \
   libxml2-dev libxslt-dev \
   zlib1g-dev libffi-dev libssl-dev libreadline-dev libyaml-dev \
   git curl unzip \
-  smbclient dnsmasq \
-  mlocate \
-  nodejs \
+  smbclient \
+  plocate \
+  chromium-browser chromium-chromedriver \
   && rm -rf /var/lib/apt/lists/*
 
-# Install bundler
-RUN gem install bundler --no-document
+# Copy Gemfile first for layer caching
+COPY Gemfile Gemfile.lock /amahi/
+RUN bundle install --jobs 4
 
-# Copy Gemfile and install dependencies
-COPY Gemfile /amahi/Gemfile
-RUN bundle install --without production
-
-# Copy application code
+# Copy application
 COPY . /amahi
-
-# Initialize MariaDB data directory
-RUN mkdir -p /run/mysqld && chown mysql:mysql /run/mysqld && \
-    mysql_install_db --user=mysql && \
-    mysqld_safe & sleep 3 && \
-    mysql -e "CREATE DATABASE IF NOT EXISTS hda_development;" && \
-    mysql -e "CREATE DATABASE IF NOT EXISTS hda_test;" && \
-    mysqladmin shutdown
 
 EXPOSE 3000
 
-CMD ["bundle", "exec", "rails", "s", "-b", "0.0.0.0"]
+CMD ["bundle", "exec", "puma", "-b", "0.0.0.0", "-p", "3000"]

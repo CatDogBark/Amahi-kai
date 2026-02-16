@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: yes
+          MARIADB_DATABASE: hda_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
+    env:
+      RAILS_ENV: test
+      DATABASE_HOST: 127.0.0.1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+
+      - name: Set up Chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+
+      - name: Database setup
+        run: |
+          bundle exec rails db:create db:migrate db:seed
+
+      - name: Run model specs
+        run: bundle exec rspec spec/models/ --format progress
+
+      - name: Run request specs
+        run: bundle exec rspec spec/requests/ --format progress
+
+      - name: Run feature specs (non-JS)
+        run: bundle exec rspec spec/features/ --tag ~js --format progress
+
+      - name: Run JS feature specs
+        run: bundle exec rspec spec/features/ --tag js --format progress
+
+      - name: Security audit
+        run: |
+          gem install bundler-audit
+          bundle audit check --update || true

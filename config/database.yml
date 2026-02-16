@@ -3,8 +3,8 @@ development:
   encoding: utf8
   pool: 5
   database: hda_development
-  host: localhost
-  socket: /tmp/mysqld.sock
+  host: <%= ENV.fetch('DATABASE_HOST', 'localhost') %>
+  socket: <%= ENV['DATABASE_HOST'] ? nil : '/tmp/mysqld.sock' %>
 
 test:
   adapter: sqlite3
@@ -12,18 +12,10 @@ test:
   pool: 5
   timeout: 5000
 
-system:
-  adapter: mysql2
-  encoding: utf8
-  pool: 5
-  database: hda_development
-  host: localhost
-  socket: /tmp/mysqld.sock
-
 production:
   adapter: mysql2
   encoding: utf8
   pool: 5
   database: hda_production
-  host: localhost
-  socket: /tmp/mysqld.sock
+  host: <%= ENV.fetch('DATABASE_HOST', 'localhost') %>
+  socket: <%= ENV['DATABASE_HOST'] ? nil : '/tmp/mysqld.sock' %>

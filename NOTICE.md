@@ -28,12 +28,14 @@ This fork was created in **February 2026** to modernize the Amahi Platform for c
 
 - **Platform**: Migrated from Fedora to Ubuntu 24.04 / Debian 12
 - **Ruby**: Upgraded from 2.4.3 → 2.7.8 → 3.2.10
-- **Rails**: Upgraded from 5.2.8 → 6.0.6 → 6.1.7 → 7.0.10
+- **Rails**: Upgraded from 5.2.8 → 6.0 → 6.1 → 7.0 → 7.1 → 7.2 → 8.0.4
+- **Bootstrap**: Upgraded from 3/4 → 5.3
 - **Database**: Migrated to MariaDB (from MySQL)
-- **Services**: Modernized for systemd (removed upstart/init.d)
+- **Services**: Modernized for systemd, replaced hda-ctl with direct execution
 - **Authentication**: Migrated to SCrypt password hashing (from Sha512)
-- **Asset Pipeline**: Converted CoffeeScript to JavaScript, removed coffee-rails
-- **Testing**: Added headless Chromium support for JavaScript feature specs
+- **Asset Pipeline**: Converted CoffeeScript to JavaScript, replaced uglifier with terser
+- **Security**: Shellwords.escape on shell commands, Rack::Attack rate limiting, CSP headers
+- **Testing**: 115+ specs (model, request, feature), headless Chromium for JS specs
 - **Dependencies**: Updated all gems for compatibility with modern Ruby/Rails
 
 All changes maintain backward compatibility with Amahi's plugin architecture and user data structures where possible.
@@ -76,4 +78,4 @@ The Amahi team created an excellent home server platform that served thousands o
 ---
 
 **Generated**: 2026-02-15
-**Last Updated**: 2026-02-15 (Ruby 3.2 + Rails 7.0 complete)
+**Last Updated**: 2026-02-16 (Ruby 3.2 + Rails 8.0 + Bootstrap 5 + security hardening)

@@ -19,13 +19,7 @@ require 'shellwords'
 
 class Platform
 
-	# upstart conf file for an ubuntu system
-	UPSTART_CONF = "/etc/init/%s.conf"
-
-	# legacy fallback
-	LEGACY_INIT_PATH = "/etc/init.d"
-
-	# default group for users (may change for each platform one day?)
+	# default group for users
 	DEFAULT_GROUP = "users"
 
 	# Using DNSMASQ
@@ -35,25 +29,9 @@ class Platform
 		DNSMASQ ? true : false
 	end
 
-	PLATFORMS=['fedora', 'centos', 'ubuntu', 'debian', 'mac', 'mint', 'arch']
+	PLATFORMS = ['ubuntu', 'debian']
 
-	SERVICES={
-		'fedora' => {
-			:apache => 'httpd',
-			:dhcp => 'dhcpd',
-			:named => 'named',
-			:smb => 'smb',
-			:nmb => 'nmb',
-			:mysql => 'mariadb',
-		},
-		'centos' => {
-			:apache => 'httpd',
-			:dhcp => 'dhcpd',
-			:named => 'named',
-			:smb => 'smb',
-			:nmb => 'nmb',
-			:mysql => 'mysqld',
-		},
+	SERVICES = {
 		'ubuntu' => {
 			:apache => 'apache2',
 			:dhcp => 'isc-dhcp-server',
@@ -70,41 +48,9 @@ class Platform
 			:nmb => 'nmbd',
 			:mysql => 'mariadb',
 		},
-		'mac' => {
-			:apache => 'apache2',
-			:dhcp => 'notsure', # FIXME
-			:named => 'notsure', # FIXME
-			:smb => 'smbd',
-			:nmb => 'nmbd',
-		},
-		'mint' => {
-			:apache => 'apache2',
-			:dhcp => 'isc-dhcp-server',
-			:named => 'bind9',
-			:smb => 'smbd',
-			:nmb => 'nmbd',
-			:mysql => 'mysql',
-		},
-		'arch'   => {
-			:apache => 'httpd',
-			:dhcp => 'dhcpd',
-			:named => 'named',
-			:smb => 'smbd',
-			:nmb => 'nmbd',
-			:mysql => 'mysqld',
-		}
 	}
-	FILENAMES={
-		'fedora' => {
-			:apache_pid => 'httpd/httpd.pid',
-			:dhcpleasefile => dnsmasq? ? '/var/lib/dnsmasq/dnsmasq.leases' : '/var/lib/dhcpd/dhcpd.leases',
-			:samba_pid => 'smbd.pid',
-			:dhcpd_pid => 'dhcpd.pid',
-			:monit_dir => '/etc/monit.d',
-			:monit_conf => '/etc/monit.conf',
-			:monit_log => '/var/log/monit',
-			:syslog => '/var/log/messages',
-		},
+
+	FILENAMES = {
 		'ubuntu' => {
 			:apache_pid => 'apache2.pid',
 			:dhcpleasefile => dnsmasq? ? '/var/lib/dnsmasq/dnsmasq.leases' : '/var/lib/dhcp3/dhcpd.leases',
@@ -125,47 +71,8 @@ class Platform
 			:monit_log => '/var/log/monit.log',
 			:syslog => '/var/log/syslog',
 		},
-		'centos' => {
-			:apache_pid => 'httpd/httpd.pid',
-			:dhcpleasefile => dnsmasq? ? '/var/lib/dnsmasq/dnsmasq.leases' : '/var/lib/dhcpd/dhcpd.leases',
-			:samba_pid => 'smbd.pid',
-			:dhcpd_pid => nil,
-			:monit_dir => '/etc/monit.d',
-			:monit_conf => '/etc/monit.conf',
-			:monit_log => '/var/log/monit',
-			:syslog => '/var/log/messages',
-		},
-		'mac' => {
-			:apache_pid => 'apache2.pid', # not sure; best guess; FIXME
-			:dhcpleasefile => 'notsure', # FIXME
-			:samba_pid => 'samba/smbd.pid',
-			:dhcpd_pid => 'junk',
-			:monit_conf => 'junk',
-			:monit_dir => 'junk',
-			:monit_log => 'junk',
-			:syslog => '/var/log/system.log',
-		},
-		'mint' => {
-			:apache_pid => 'apache2.pid',
-			:dhcpleasefile => dnsmasq? ? '/var/lib/dnsmasq/dnsmasq.leases' : '/var/lib/dhcp3/dhcpd.leases',
-			:samba_pid => 'samba/smbd.pid',
-			:dhcpd_pid => 'dhcp-server/dhcpd.pid',
-			:monit_dir => '/etc/monit/conf.d',
-			:monit_conf => '/etc/monit/monitrc',
-			:monit_log => '/var/log/monit.log',
-			:syslog => '/var/log/syslog',
-		},
-		'arch' => {
-			:apache_pid => 'httpd/httpd.pid',
-			:dhcpleasefile => dnsmasq? ? '/var/lib/dnsmasq/dnsmasq.leases' : '/var/lib/dhcpd/dhcpd.leases',
-			:samba_pid => 'smbd.pid',
-			:dhcpd_pid => 'dhcpcd.pid',
-			:monit_dir => '/etc/monit.d',
-			:monit_conf => '/etc/monit.conf',
-			:monit_log => '/var/log/monit',
-			:syslog => '/var/log/messages',
-		}
 	}
+
 	class << self
 		def reload(service)
 			c = Command.new("sleep 4")
@@ -174,7 +81,6 @@ class Platform
 			c.execute
 		end
 
-		# serve file paths specific to the platform service is a symbol
 		def file_name(service)
 			file2name(service)
 		end
@@ -187,32 +93,12 @@ class Platform
 			@@platform
 		end
 
-		def arch?
-			@@platform == 'arch'
-		end
-
-		def fedora?
-			@@platform == 'fedora'
-		end
-
-		def centos?
-			@@platform == 'centos'
-		end
-
 		def ubuntu?
 			@@platform == 'ubuntu'
 		end
 
 		def debian?
 			@@platform == 'debian'
-		end
-
-		def mint?
-			@@platform == 'mint'
-		end
-
-		def mac?
-			@@platform == 'mac'
 		end
 
 		def install(pkgs, sha1 = nil)
@@ -223,34 +109,29 @@ class Platform
 			pkguninstall(pkgs)
 		end
 
-		# All modern Linux distros use systemd now
 		def service_start_command(name)
-			service = service_name(name)
-			"/usr/bin/systemctl start #{service}.service"
+			"/usr/bin/systemctl start #{service_name(name)}.service"
 		end
 
 		def service_stop_command(name)
-			service = service_name(name)
-			"/usr/bin/systemctl stop #{service}.service"
+			"/usr/bin/systemctl stop #{service_name(name)}.service"
 		end
 
 		def service_enable_command(name)
-			service = service_name(name)
-			"/usr/bin/systemctl enable #{service}.service"
+			"/usr/bin/systemctl enable #{service_name(name)}.service"
 		end
 
 		def service_disable_command(name)
-			service = service_name(name)
-			"/usr/bin/systemctl disable #{service}.service"
+			"/usr/bin/systemctl disable #{service_name(name)}.service"
 		end
 
 		def watchdog_restart_command
 			"systemctl restart monit.service"
 		end
 
-		# make a user admin -- sudo capable
+		# make a user admin — sudo capable
 		def make_admin(username, is_admin)
-			admin_groups = is_admin ? ",wheel" : ''
+			admin_groups = is_admin ? ",sudo" : ''
 			esc_user = Shellwords.escape(username)
 			c = Command.new
 			c.submit("usermod -G #{DEFAULT_GROUP}#{admin_groups} #{esc_user}")
@@ -275,40 +156,23 @@ class Platform
 		def platform_versions
 			platform = ""
 			hda_ctl = ""
-			if fedora? or centos?
-				open("|rpm -q hda-platform hda-ctl") do |f|
-					while f.gets
-						line = $_
-						if (line =~ /hda-platform-(.*)\./)
-							platform = $1
-						end
-						if (line =~ /hda-ctl-([0-9\.\-]+)\.\w+/)
-							hda_ctl = $1
-						end
-					end
+			begin
+				# Try dpkg for version info
+				result = `dpkg -s hda-platform 2>/dev/null`
+				if result =~ /Version: (.*)/
+					platform = $1
 				end
-			elsif ubuntu? or debian?
-				open("|apt-cache show hda-platform | grep Version") do |f|
-					f.gets
-					line = $_
-					if (line =~ /Version: (.*)/)
-						platform = $1
-					end
+				result = `dpkg -s hda-ctl 2>/dev/null`
+				if result =~ /Version: (.*)/
+					hda_ctl = $1
 				end
-				open("|apt-cache show hda-ctl | grep Version") do |f|
-					f.gets
-					line = $_
-					if (line =~ /Version: (.*)/)
-						hda_ctl = $1
-					end
-				end
-			elsif mac?
-				platform = "mac-platform"
-				hda_ctl = "mac-hda-ctl"
-			else
-				platform = "unknown-platform"
-				hda_ctl = "unknown-hda-ctl"
+			rescue
+				platform = "unknown"
+				hda_ctl = "unknown"
 			end
+			# If no packages found, report versions from the app itself
+			platform = "amahi-kai" if platform.blank?
+			hda_ctl = "direct-exec" if hda_ctl.blank?
 			{ :platform => platform, :core => hda_ctl }
 		end
 	end
@@ -317,35 +181,15 @@ class Platform
 
 	class << self
 		def set_platform
-			if File.exist?('/etc/amahi-release')
-				line = nil
-				File.open("/etc/amahi-release", "r") do |issue|
-					line = issue.gets
-				end
-				@@platform = "fedora" if line.include?("Fedora")
-			elsif File.exist?('/etc/system-release')
-				line = nil
-				File.open("/etc/system-release", "r") do |issue|
-					line = issue.gets
-				end
-				@@platform = "fedora" if line.include?("Fedora")
-				@@platform = "fedora" if line.include?("Generic")
-				@@platform = "centos" if line.include?("CentOS")
-			elsif File.exist?('/etc/issue')
-				line = nil
-				File.open("/etc/issue", "r") do |issue|
-					line = issue.gets
-				end
-				@@platform = "arch"   if line.include?("Arch")
+			if File.exist?('/etc/issue')
+				line = File.read('/etc/issue').to_s
 				@@platform = "debian" if line.include?("Debian")
 				@@platform = "ubuntu" if line.include?("Ubuntu")
-				@@platform = "mint"   if line.include?("Mint")
-			elsif File.exist?('/Volumes')
-				@@platform = "mac"
 			end
-			#To ensure that @@platform is either set or nil:
 			@@platform ||= nil
-			raise "unsupported platform #{@@platform}" unless PLATFORMS.include?(@@platform)
+			# Default to debian if we can't detect (most compatible)
+			@@platform ||= "debian" if File.exist?('/usr/bin/apt-get')
+			raise "unsupported platform: only Ubuntu and Debian are supported" unless PLATFORMS.include?(@@platform)
 		end
 
 		def service2name(service)
@@ -361,47 +205,14 @@ class Platform
 
 		def pkginstall(pkgs, sha1 = nil)
 			esc_pkgs = Shellwords.escape(pkgs)
-			if debian? or ubuntu? or mint?
-				c = Command.new "DEBIAN_FRONTEND=noninteractive apt-get -y install #{esc_pkgs}"
-				c.run_now
-			elsif fedora? or centos?
-				if pkgs =~ /^\w+:\/\//
-					# downloadable RPM
-					# FIXME - check the sha1sum
-					fname = Downloader.download_and_check_sha1(pkgs, sha1)
-					cmd = "rpm -Uvh #{fname}"
-				else
-					cmd = "yum -y install #{pkgs}"
-				end
-				c = Command.new cmd
-				c.run_now
-			elsif arch?
-				c = Command.new "pacman -S --noprogressbar --noconfirm \"#{pkgs}\""
-				c.run_now
-			else
-				raise "unsupported platform #{@@platform}" unless PLATFORMS.include?(@@platform)
-			end
+			c = Command.new "DEBIAN_FRONTEND=noninteractive apt-get -y install #{esc_pkgs}"
+			c.run_now
 		end
 
 		def pkguninstall(pkgs)
 			esc_pkgs = Shellwords.escape(pkgs)
-			if debian? or ubuntu? or mint?
-				c = Command.new "DEBIAN_FRONTEND=noninteractive apt-get -y remove #{esc_pkgs}"
-				c.run_now
-			elsif fedora? or centos?
-				if pkgs =~ /^\w+:\/\/.*\/([^\/]*)\.rpm/
-					cmd = "rpm -e #{$1}"
-				else
-					cmd = "rpm -e #{pkgs}"
-				end
-				c = Command.new cmd
-				c.run_now
-			elsif arch?
-				c = Command.new "pacman -R --noprogressbar --noconfirm \"#{pkgs}\""
-				c.run_now
-			else
-				raise "unsupported platform #{@@platform}" unless PLATFORMS.include?(@@platform)
-			end
+			c = Command.new "DEBIAN_FRONTEND=noninteractive apt-get -y remove #{esc_pkgs}"
+			c.run_now
 		end
 	end
 
