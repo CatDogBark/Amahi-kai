@@ -152,13 +152,31 @@ class ApplicationController < ActionController::Base
 		@locale_direction = Yetting.rtl_locales.include?(I18n.locale) ? 'rtl' : 'ltr'
 	end
 
-	# FIXME: these are simple rot13
+	# Credential encryption using Rails' MessageEncryptor.
+	# Falls back to legacy ROT13 decoding for pre-existing values.
+	CREDENTIAL_ENCRYPT_PREFIX = "enc:".freeze
+
 	def obfuscate(s)
-		s.tr("A-Ma-mN-Zn-z","N-Zn-zA-Ma-m")
+		return s if s.blank?
+		CREDENTIAL_ENCRYPT_PREFIX + credential_encryptor.encrypt_and_sign(s)
 	end
 
 	def unobfuscate(s)
-		s.tr("N-Zn-zA-Ma-m", "A-Ma-mN-Zn-z")
+		return s if s.blank?
+		if s.start_with?(CREDENTIAL_ENCRYPT_PREFIX)
+			credential_encryptor.decrypt_and_verify(s.delete_prefix(CREDENTIAL_ENCRYPT_PREFIX))
+		else
+			# Legacy ROT13 fallback for pre-existing values
+			s.tr("N-Zn-zA-Ma-m", "A-Ma-mN-Zn-z")
+		end
+	rescue ActiveSupport::MessageEncryptor::InvalidMessage
+		# If decryption fails, return empty string rather than crash
+		""
+	end
+
+	def credential_encryptor
+		key = Rails.application.secret_key_base[0..31]
+		ActiveSupport::MessageEncryptor.new(key)
 	end
 
 	def current_user_session

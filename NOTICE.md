@@ -35,7 +35,7 @@ This fork was created in **February 2026** to modernize the Amahi Platform for c
 - **Authentication**: Migrated to SCrypt password hashing (from Sha512)
 - **Asset Pipeline**: Converted CoffeeScript to JavaScript, replaced uglifier with terser
 - **Security**: Shellwords.escape on shell commands, Rack::Attack rate limiting, CSP headers
-- **Testing**: 115+ specs (model, request, feature), headless Chromium for JS specs
+- **Testing**: 160+ specs (model, request, feature), headless Chromium for JS specs
 - **Dependencies**: Updated all gems for compatibility with modern Ruby/Rails
 
 All changes maintain backward compatibility with Amahi's plugin architecture and user data structures where possible.

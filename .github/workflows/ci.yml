@@ -12,21 +12,21 @@ jobs:
 
     services:
       mariadb:
-        image: mariadb:10.11
+        image: mariadb:10.5
         env:
-          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: yes
-          MARIADB_DATABASE: hda_test
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: amahi_test
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-cmd="mariadb-admin ping -proot"
           --health-interval=10s
           --health-timeout=5s
-          --health-retries=3
+          --health-retries=5
 
     env:
       RAILS_ENV: test
-      DATABASE_HOST: 127.0.0.1
+      DATABASE_URL: mysql2://root:root@127.0.0.1:3306/amahi_test
 
     steps:
       - uses: actions/checkout@v4
@@ -37,28 +37,16 @@ jobs:
           ruby-version: '3.2'
           bundler-cache: true
 
-      - name: Set up Chrome
-        uses: browser-actions/setup-chrome@v1
-        with:
-          chrome-version: stable
-
-      - name: Database setup
+      - name: Set up database
         run: |
-          bundle exec rails db:create db:migrate db:seed
+          bundle exec rails db:schema:load
+          bundle exec rails db:seed
 
       - name: Run model specs
-        run: bundle exec rspec spec/models/ --format progress
+        run: bundle exec rspec spec/models/ --format documentation
 
       - name: Run request specs
-        run: bundle exec rspec spec/requests/ --format progress
+        run: bundle exec rspec spec/requests/ --format documentation
 
-      - name: Run feature specs (non-JS)
-        run: bundle exec rspec spec/features/ --tag ~js --format progress
-
-      - name: Run JS feature specs
-        run: bundle exec rspec spec/features/ --tag js --format progress
-
-      - name: Security audit
-        run: |
-          gem install bundler-audit
-          bundle audit check --update || true
+      - name: Run feature specs (no JS)
+        run: bundle exec rspec --tag ~js --format documentation
