@@ -209,7 +209,7 @@ class User < ApplicationRecord
 	end
 
 	def validate_pin
-		errors[:base] << "PIN length must be between 3 to 5" if self.pin.length < 3 || self.pin.length > 5
-		errors[:base] << "PIN format does not match" unless self.pin =~ /\A[A-Za-z0-9]+\z/
+		errors.add(:base, "PIN length must be between 3 to 5") if self.pin.length < 3 || self.pin.length > 5
+		errors.add(:base, "PIN format does not match") unless self.pin =~ /\A[A-Za-z0-9]+\z/
 	end
 end
