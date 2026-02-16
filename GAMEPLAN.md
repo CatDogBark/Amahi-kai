@@ -1,127 +1,98 @@
 # Amahi-kai Modernization Gameplan
 
 ## Current State
-- Ruby 2.7.8, Rails 6.1.7.10, MariaDB 10.5, Debian 11 sandbox
-- App boots and serves pages ✅
-- DB migrates and seeds ✅
-- **Full test suite: 43 examples, 0 failures, 1 pending** ✅
-- JS feature specs running with headless Chromium ✅
-- Assets compile cleanly ✅
+- Ruby 3.2.10, Rails 8.0.4, Bootstrap 5.3, MariaDB, Ubuntu 24.04
+- 115+ specs (model, request, feature), all passing
+- Security hardened (Rack::Attack, CSP, Shellwords, stubbed dead API)
+- Direct systemd execution (no hda-ctl dependency)
+- CI ready (GitHub Actions config)
 
 ---
 
-## Phase 1: Stabilize & Clean Up ✅ COMPLETE
-- [x] Gemfile cleaned, modern dependencies
-- [x] Binstubs regenerated
-- [x] db/seeds.rb fixed for authlogic 6.5
-- [x] Platform detection works on Debian
-- [x] All specs passing (model + feature, JS + non-JS)
-- [x] poltergeist → selenium-webdriver + headless Chromium
-- [x] Factories updated for factory_bot 6.x
+## ✅ Phase 1: Stabilize & Clean Up — COMPLETE
+- Gemfile cleaned, modern dependencies
+- All specs passing (model + feature, JS + non-JS)
+- poltergeist → selenium-webdriver + headless Chromium
+- Factories updated for factory_bot 6.x
+
+## ✅ Phase 2: Modernize the Codebase — COMPLETE
+- Dockerfile & Infrastructure (Ubuntu 24.04, docker-compose)
+- All deprecation fixes (update_attributes, File.exists?, URI.escape, render :text)
+- CoffeeScript → JavaScript (12 files)
+- SCrypt crypto with Sha512 transition
+- Bootstrap 4 → 5 migration
+- Dead Prototype.js code removed (62 files)
+- Dead routes cleaned (~60 routes)
+- yettings gem replaced
+- uglifier → terser
+
+## ✅ Phase 3: Rails Upgrade Ladder — COMPLETE
+- Rails: 5.2 → 6.0 → 6.1 → 7.0 → 7.1 → 7.2 → 8.0.4
+- Ruby: 2.7.8 → 3.2.10
+
+## ✅ Phase 4: Security & Infrastructure — COMPLETE
+- Shellwords.escape on all shell commands
+- Rack::Attack rate limiting
+- Content Security Policy (report-only)
+- Dead AmahiApi stubbed
+- hda-ctl replaced with direct execution
+- Platform cleanup (Ubuntu/Debian only)
+- GitHub Actions CI config
+- Docker Compose updated
+- Sudoers config template
 
 ---
 
-## Phase 2: Modernize the Codebase (still Rails 5.2)
-*Goal: Clean up code, fix deprecations, prepare for Rails 6*
+## Phase 5: Frontend Modernization (Next)
+*Goal: Replace jQuery/UJS with modern Rails frontend*
 
-### 2.1 Dockerfile & Infrastructure ✅
-- [x] Ubuntu 24.04 base, MariaDB, docker-compose
-- [x] systemd service commands everywhere
-- [x] bin/dev-setup, Makefile, README rewritten
+### 5.1 jQuery UJS → Turbo + Stimulus
+- 38 remote forms, 52 AJAX handlers across 7 JS files
+- Gems installed: turbo-rails, stimulus-rails, importmap-rails
+- Strategy: incremental, one plugin at a time
+- **Prerequisite:** test coverage at 70%+
 
-### 2.2 Deprecation Fixes ✅
-- [x] `update_attributes` → `update`
-- [x] `File.exists?` → `File.exist?`
-- [x] `URI.escape` → `URI.encode_www_form_component`
-- [x] `render :text` → `render plain:`
-- [x] No deprecation warnings on boot
-
-### 2.3 Security ✅
-- [x] SCrypt crypto with Sha512 transition
-- [x] Password validations (length ≥8, confirmation)
-
-### 2.4 CoffeeScript → JavaScript ✅
-- [x] Convert 12 .coffee files to plain .js
-- [x] Remove `coffee-rails` gem dependency
-- [x] Verify assets compile and all specs pass
-
-### 2.5 Platform Cleanup
-- [ ] Fix Debian samba service names (smbd/nmbd) ✅
-- [ ] Remove dead platform support (Fedora, CentOS, Mac, Mint, Arch) — or just leave them
-- [ ] `platform_versions` method: add Debian/Ubuntu dpkg-based version detection
-
-### 2.6 Code Quality
-- [ ] Clean up empty minitest stubs (test/functional/, test/unit/) — remove or convert to rspec
-- [ ] Review `Command` class for Debian compatibility
-- [ ] Audit unused routes and controllers
+### 5.2 Sprockets + Bootstrap gem
+- Staying on Sprockets (Bootstrap gem depends on it)
+- Propshaft blocked until Bootstrap dependency resolved
 
 ---
 
-## Phase 3: Rails Upgrade Path
-*Goal: Step through Rails versions incrementally*
-
-### 3.1 Rails 5.2 → 6.0 ✅
-- [x] Update Gemfile: `gem 'rails', '~> 6.0.0'`
-- [x] Zeitwerk autoloader enabled (load_defaults 6.0)
-- [x] Fixed UsersController#create JSON format handling
-- [x] Added data-type: json to user form for jquery_ujs compat
-- [x] Removed obsolete framework defaults initializers
-- [x] All 43 tests passing, 0 failures
-
-### 3.2 Rails 6.0 → 6.1 ✅
-- [x] Update Gemfile to rails ~> 6.1.0
-- [x] Set load_defaults 6.1 (Zeitwerk now default)
-- [x] All 43 tests passing — zero code changes needed
-
-### 3.3 Rails 6.1 → 7.0
-- [ ] Ruby 3.0+ required
-- [ ] `secrets` → `credentials` migration
-- [ ] Run tests, fix failures
-- **🔧 NEED:** Ruby 3.0+ in sandbox image
-
-### 3.4 Rails 7.0 → 7.1 → 7.2 (stretch goal)
-- [ ] Ruby 3.1+ required
-- [ ] Consider Hotwire/Turbo for jQuery replacement
-- [ ] Consider importmap for assets
+## Phase 6: Features & Polish (Future)
+- Firewall plugin (nftables)
+- App marketplace redesign (Docker-based?)
+- Storage management (ZFS/Btrfs, SMART)
+- Branding decision (keep Amahi name?)
+- Auth system decision (keep authlogic?)
 
 ---
 
-## Phase 4: Platform Modernization (stretch)
-*Goal: Make Amahi work on modern Ubuntu/Debian natively*
-
-### 4.1 Replace deprecated dependencies
-- [ ] `yettings` → Rails credentials or custom YAML config
-- [ ] `uglifier` → terser
-- [ ] `bootstrap 4` → bootstrap 5
-- [ ] `jquery-rails` → Stimulus/Turbo (with Rails 7)
-
-### 4.2 Security hardening
-- [ ] Authlogic → Devise (or keep authlogic fully modernized)
-- [ ] CSRF/session hardening
-- [ ] Content Security Policy headers
-
----
-
-## Tools Needed from Troy (by phase)
-
-| Phase | Tool | Why |
-|-------|------|-----|
-| 3.1 | Rails 6.0 gems pre-installed | Air-gapped sandbox |
-| 3.3 | Ruby 3.0+ image variant | Rails 7 requires it |
-
----
-
-## Commits So Far
+## Commits
 1. `ff3dc70` — Initial commit
 2. `5f9a2c4` — Phase 1: Stabilize for Debian/Ubuntu
 3. `0d074bf` — Authlogic 6.5 compat + feature spec cleanup
-4. `986e79e` — Deprecation fixes (update_attributes, File.exists?)
+4. `986e79e` — Deprecation fixes
 5. `b0fd64e` — Phase 2: Platform + Docker modernization
 6. `4d01c18` — URI.escape fix
 7. `337e38b` — Security + deprecation improvements
 8. `1d5e203` — README rewrite
 9. `762111c` — bin/dev-setup script
 10. `4665437` — Makefile modernization
-11. `b006175` — JS feature specs with headless Chromium + all specs green
+11. `b006175` — JS feature specs + all specs green
+12. `a204c3d` — Rails 6.0 upgrade
+13. `bef6113` — Rails 6.1 upgrade
+14. `5cd2376` — Rails 7.0 upgrade
+15. `1ba420b` — Ruby 3.2 upgrade
+16. `82965fc` — Rails 7.1 upgrade
+17. `fd4e174` — Rails 7.2 upgrade
+18. `29a6ec6` — Rails 8.0 upgrade + TODO cleanup + quick wins
+19. `9edba7e` — Bootstrap 4 → 5 + terser
+20. `4fd3ae3` — Model specs + pin validation fix
+21. `dc5f698` — Request specs + unsafe redirect fix
+22. `87eb4e1` — TODO reprioritized
+23. `b5992d8` — Shellwords.escape security hardening
+24. `325079e` — Rack::Attack + CSP + AmahiApi stub
+25. `e7bd9e3` — hda-ctl → direct command execution
+26. `9d1d8ca` — Platform cleanup + CI + Docker + docs
 
-*Last updated: 2026-02-14*
+*Last updated: 2026-02-16*
