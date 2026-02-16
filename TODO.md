@@ -31,8 +31,8 @@
 - [x] Ruby 2.7.8 → 3.2.10
 
 ### Test Coverage
-- [x] 115 specs total (67 model, 36 request, 12 feature)
-- [x] Coverage: ~39%
+- [x] 179 specs total (67 model, 79 request, 12 feature, 24 lib)
+- [x] Coverage: ~39% → improving
 
 ---
 
@@ -48,12 +48,12 @@
 - **Risk:** Low — mechanical replacement, testable
 
 ### 1.2 Security Hardening
-- [ ] Add `Rack::Attack` for rate limiting (gem installed)
-- [ ] Configure Content Security Policy (CSP)
+- [x] Add `Rack::Attack` for rate limiting (gem installed)
+- [x] Configure Content Security Policy (CSP)
+- [x] Replace ROT13 "encryption" for router passwords with real encryption (MessageEncryptor)
 - [ ] Enable `config.force_ssl` in production
 - [ ] Audit session/cookie security settings
 - [ ] Review CSRF protection across AJAX endpoints
-- [ ] Replace ROT13 "encryption" for router passwords with real encryption
 
 ### 1.3 Stub Out Dead AmahiApi
 - **Problem:** App calls `api.amahi.org` (dead service) via ActiveResource
@@ -118,16 +118,17 @@
 - **Scope:** Large — new features
 
 ### 4.4 Increase Test Coverage to 70%+
-- **Current:** 39% (115 specs)
-- **Remaining:** Share controller actions (toggles, disk pool), network controller, settings controller, lib/ utilities
+- **Current:** ~45% (179 specs)
+- **Covered:** All controllers (network, settings, apps, disks, shares, users, debug, front, search), Command, Platform
+- **Remaining:** App model, more lib/ utilities, edge cases
 - **When:** Before jQuery → Turbo migration
 
 ---
 
 ## 📋 Quick Wins (Do Anytime)
 
-- [ ] Add CI config (GitHub Actions)
-- [ ] Update NOTICE.md with current Rails 8 / Ruby 3.2 versions
+- [x] Add CI config (GitHub Actions)
+- [x] Update NOTICE.md with current Rails 8 / Ruby 3.2 versions
 - [ ] Consolidate duplicate locale keys across plugins
 
 ---
