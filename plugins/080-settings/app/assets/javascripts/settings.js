@@ -1,40 +1,16 @@
-var Servers = {
-  initialize: function() {
-    $(document).on('ajax:success', '.btn-refresh, .btn-start, .btn-stop, .btn-restart', function(data, results) {
-      var link = $(this);
-      var content = $(results["content"]);
-      content.find('.settings-stretcher').show();
-      link.parents('.server').replaceWith(content);
-    });
+// Settings plugin JS
+//
+// Server actions and checkbox toggles are now handled by Stimulus controllers:
+//   - server_action_controller.js — refresh/start/stop/restart + checkbox toggles
+//   - toggle_controller.js — advanced settings, guest dashboard toggles
+//   - locale_controller.js — language select → reload page
+//
+// The jQuery handlers below are kept temporarily for backward compatibility
+// during the Turbo migration. They will be removed once all plugins are converted.
 
-    RemoteCheckbox.initialize({
-      selector: ".server_monitored_checkbox, .server_start_at_boot_checkbox",
-      success: function(rc, checkbox, data) {
-        var content = $(data["content"]);
-        content.find('.settings-stretcher').show();
-        $(checkbox).parents('.server').replaceWith(content);
-      }
-    });
-  }
-};
-
+// Stretch-toggle behavior for server rows (expand/collapse detail panel)
 $(function() {
-  Servers.initialize();
-});
-
-// reload the page with locale change because the whole language has changed
-$(function() {
-  $(".preftab").on("ajax:success", "#locale", function() {
-    window.location.reload(true);
+  $(document).on("click", ".stretchtoggle", function() {
+    $(this).next(".settings-stretcher").slideToggle();
   });
-});
-
-$(document).on("click", ".remote-check", function(event) {
-  var checkbox = $(this);
-  checkbox.prop("checked", !checkbox.prop("checked"));
-  return true;
-});
-
-$(document).on("ajax:complete", ".remote-check", function() {
-  $(this).prop("checked", !$(this).prop("checked"));
 });

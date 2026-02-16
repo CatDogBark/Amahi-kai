@@ -8,27 +8,28 @@ div.settings-fields.settings-wrap.bg-white.p-2.mb-3
           label = t 'language'
         td
           = select_tag 'locale', options_for_select(@available_locales, I18n.locale.to_s),
-            data: { remote: true, url: settings_engine.change_language_path, update: 'language' },
-            class: 'remote-select form-control f-size13'
+            data: { controller: 'locale', action: 'change->locale#update',
+                    locale_url_value: settings_engine.change_language_path },
+            class: 'form-control f-size13'
           = spinner
       tr
         td
           label = t 'advanced_settings'
         td
-          = tag "input", id: "advanced", class: "remote-check", type: "checkbox", checked: @advanced_settings.set?,
-              data: { remote: true, url: settings_engine.toggle_setting_path(id: @advanced_settings),
-              confirm: @advanced_settings.set? ? nil : [t('avanced_settings_is_for_developers'),
-                                '', '', t('are_you_sure_advanced_features')].join("\n") }
-          = spinner
+          span data-controller="toggle" data-toggle-url-value=settings_engine.toggle_setting_path(id: @advanced_settings) data-toggle-confirm-value=(@advanced_settings.set? ? nil : [t('avanced_settings_is_for_developers'), '', '', t('are_you_sure_advanced_features')].join("\n"))
+            input.form-check-input type="checkbox" id="advanced" checked=@advanced_settings.set? data-toggle-target="checkbox" data-action="click->toggle#toggle"
+            |  
+            span.spinner.theme-image data-toggle-target="spinner" style="display:none"
           a href="http://wiki.amahi.org/index.php/Advanced_Settings" target="_blank" class="more-info"
             i.icon-more
       tr
         td
           label = t 'guest_dashboard'
         td
-          = tag "input", id: "guest", class: "remote-check", type: "checkbox", checked: @guest.set?,
-              data: { remote: true, url: settings_engine.toggle_setting_path(id: @guest) }
-          = spinner
+          span data-controller="toggle" data-toggle-url-value=settings_engine.toggle_setting_path(id: @guest)
+            input.form-check-input type="checkbox" id="guest" checked=@guest.set? data-toggle-target="checkbox" data-action="click->toggle#toggle"
+            |  
+            span.spinner.theme-image data-toggle-target="spinner" style="display:none"
 
 div.settings-fields.settings-wrap.bg-white.p-2
   fieldset
@@ -38,14 +39,12 @@ div.settings-fields.settings-wrap.bg-white.p-2
       span#systems-result.increase-font-30
         = link_to '',
               settings_engine.poweroff_path,
-              remote: true,
               method: :post,
               class: 'btn-system glyphicon glyphicon-off left-margin-40 float-start',
               id: 'btn-poweroff',
               data: {:confirm => t('this_will_power_off')}
         = link_to '',
               settings_engine.reboot_path,
-              remote: true,
               method: :post,
               data: {:confirm => t('this_will_reboot')},
               class: 'btn-system glyphicon glyphicon-repeat float-start',
