@@ -109,7 +109,8 @@
 ## 🔵 Priority 4: Features & Future
 
 ### 4.1 Increase Test Coverage to 70%+
-- **Current:** ~48% (248 specs)
+- **Current:** ~50% (283 specs: 101 model, 88 request, 35 feature, 59 lib)
+- **Lib coverage:** Command, Platform, Yetting, TempCache, Leases, Tab, credential encryption
 - **Remaining:** Edge cases, error paths, more integration scenarios
 
 ### 4.2 Firewall Plugin
