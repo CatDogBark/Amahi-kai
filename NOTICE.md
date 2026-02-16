@@ -34,8 +34,9 @@ This fork was created in **February 2026** to modernize the Amahi Platform for c
 - **Services**: Modernized for systemd, replaced hda-ctl with direct execution
 - **Authentication**: Migrated to SCrypt password hashing (from Sha512)
 - **Asset Pipeline**: Converted CoffeeScript to JavaScript, replaced uglifier with terser
-- **Security**: Shellwords.escape on shell commands, Rack::Attack rate limiting, CSP headers
-- **Testing**: 160+ specs (model, request, feature), headless Chromium for JS specs
+- **Frontend**: Removed jQuery entirely, migrated to Stimulus controllers + vanilla JS
+- **Security**: Shellwords.escape on shell commands, Rack::Attack rate limiting, CSP headers, AES-256-GCM credential encryption, parameterized SQL
+- **Testing**: 334 specs (119 model, 88 request, 35 feature, 92 lib), headless Chromium for JS specs
 - **Dependencies**: Updated all gems for compatibility with modern Ruby/Rails
 
 All changes maintain backward compatibility with Amahi's plugin architecture and user data structures where possible.
@@ -78,4 +79,4 @@ The Amahi team created an excellent home server platform that served thousands o
 ---
 
 **Generated**: 2026-02-15
-**Last Updated**: 2026-02-16 (Ruby 3.2 + Rails 8.0 + Bootstrap 5 + security hardening)
+**Last Updated**: 2026-02-16 (Ruby 3.2 + Rails 8.0 + Bootstrap 5 + Stimulus + security hardening)

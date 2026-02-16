@@ -67,76 +67,12 @@ module ApplicationHelper
 		is_a_mac? ? '&raquo; '.html_safe + h(name.gsub(/\//, ' ▸ ')) : h('\\\\hda\\' + name.gsub(/\//, fwd))
 	end
 
-	# to verify ################################################
-
 	def is_a_mac?
 		(request.env["HTTP_USER_AGENT"] =~ /Macintosh/) ? true : false
 	end
 
-	def is_firefox?
-		(request.env["HTTP_USER_AGENT"] =~ /Firefox/) ? true : false
-	end
-
-
-
-
-	def fw_rule_type(t)
-		case t
-		when 'port_filter'
-			'Port Filter'
-		when 'url_filter'
-			'URL Filter'
-		when 'mac_filter'
-			'MAC Filter'
-		when 'ip_filter'
-			'IP Filter'
-		when 'port_forward'
-			'Port Forwarding'
-		else
-			raise "type #{rule.kind} unknown"
-		end
-	end
-
-	def fw_rule_details(rule)
-		case rule.kind
-		when 'port_filter'
-			"Ports: #{rule.range}, Protocol: #{fw_prot(rule.protocol)}"
-		when 'ip_filter'
-			"IP: #{@net}.#{rule.ip}, Protocol: #{fw_prot(rule.protocol)}"
-		when 'mac_filter'
-			"MAC: #{rule.mac}"
-		when 'url_filter'
-			"URL: #{rule.url}"
-		when 'port_forward'
-			"IP: #{@net}.#{rule.ip}, Ports: #{rule.range}"
-		else
-			raise "details for #{rule.kind} unknown"
-		end
-	end
-
-	def fw_rule_state(rule)
-		Setting.get(rule.kind) == '1'
-	end
-
-	def fw_prot(p)
-		p == 'both' ? 'TCP &amp; UDP' : p.upcase
-	end
-
-	def msg_bad(s = "")
-		theme_image_tag("stop") + " " + s
-	end
-
-	def msg_good(s = "")
-		theme_image_tag("ok") + " " + s
-	end
-
-	def msg_warn(s = "")
-		theme_image_tag("warning") + " " + s
-	end
-
-	def delete_icon(title = "")
-		theme_image_tag("delete.png", :title => title)
-	end
+	# Firewall helpers removed — will be re-added when firewall plugin is built
+	# (fw_rule_type, fw_rule_details, fw_rule_state, fw_prot, msg_bad, msg_good, msg_warn, delete_icon)
 
 
 
