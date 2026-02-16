@@ -10,23 +10,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    services:
-      mariadb:
-        image: mariadb:10.5
-        env:
-          MARIADB_ROOT_PASSWORD: root
-          MARIADB_DATABASE: amahi_test
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mariadb-admin ping -proot"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-
     env:
       RAILS_ENV: test
-      DATABASE_URL: mysql2://root:root@127.0.0.1:3306/amahi_test
+      BUNDLE_JOBS: 4
 
     steps:
       - uses: actions/checkout@v4
@@ -37,10 +23,15 @@ jobs:
           ruby-version: '3.2'
           bundler-cache: true
 
-      - name: Set up database
+      - name: Install system dependencies
         run: |
+          sudo apt-get update
+          sudo apt-get install -y libsqlite3-dev
+
+      - name: Prepare test environment
+        run: |
+          mkdir -p tmp/cache/tmpfiles tmp/pids log
           bundle exec rails db:schema:load
-          bundle exec rails db:seed
 
       - name: Run model specs
         run: bundle exec rspec spec/models/ --format documentation
@@ -48,5 +39,8 @@ jobs:
       - name: Run request specs
         run: bundle exec rspec spec/requests/ --format documentation
 
+      - name: Run lib specs
+        run: bundle exec rspec spec/lib/ --format documentation
+
       - name: Run feature specs (no JS)
-        run: bundle exec rspec --tag ~js --format documentation
+        run: bundle exec rspec spec/features/ --tag ~js --format documentation
