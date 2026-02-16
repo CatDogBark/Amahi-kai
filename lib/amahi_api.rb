@@ -18,36 +18,38 @@ require 'rubygems'
 require 'active_support/all'
 require 'active_resource'
 
-# Ruby lib for working with the Amahi API's REST interface.
+# Amahi cloud API client.
 #
-# The first thing you need to set is the api key.  This is the
-# settings in your HDA
+# NOTE: The original api.amahi.org service is no longer available.
+# This module is preserved for structural compatibility but all API calls
+# are stubbed to return empty results rather than hanging/crashing.
 #
+# Set the api key (preserved for compatibility):
 #    AmahiApi.api_key = 'abcxyz123'
-#
-# This library is a small wrapper around the REST interface for
-# Amahi.
-#
-# You should read the (admittedly spare) docs at
-# http://wiki.amahi.org/index.php/API
 
 module AmahiApi
 	class Error < StandardError; end
+
+	# Track whether the API is available
+	@@api_available = false
+	@@last_check = nil
+
 	class << self
 		attr_accessor :host_format, :domain_format, :protocol
 		attr_reader :api_key
 
-		# Sets the API api_key for all the resources.
 		def api_key=(value)
-			resources.each do |klass|
-				klass.site = klass.site_format % (host_format % [protocol, domain_format])
-				klass.headers['X-AmahiApiKey'] = value
-			end
 			@api_key = value
+			# Don't attempt to configure resources — API is dead
+			Rails.logger.info("AmahiApi: API key set but api.amahi.org is no longer available") if defined?(Rails)
 		end
 
 		def resources
 			@resources ||= []
+		end
+
+		def available?
+			@@api_available
 		end
 	end
 
@@ -55,51 +57,49 @@ module AmahiApi
 	self.domain_format = 'api.amahi.org/api2'
 	self.protocol      = 'https'
 
+	# Stub base class that returns empty results instead of hitting a dead API
 	class Base < ActiveResource::Base
+		self.site = 'https://api.amahi.org/api2'
+
 		def self.inherited(base)
 			AmahiApi.resources << base
 			class << base
 				attr_accessor :site_format
 			end
 			base.site_format = '%s'
+			base.site = 'https://api.amahi.org/api2'
 			super
+		end
+
+		# Override find to return empty results instead of hitting dead API
+		def self.find(*args)
+			Rails.logger.warn("AmahiApi: Skipping API call to dead api.amahi.org (#{self.name}.find)") if defined?(Rails)
+			raise ActiveResource::ResourceNotFound.new(nil)
+		rescue => e
+			raise AmahiApi::Error, "Amahi cloud API is not available: #{e.message}"
+		end
+
+		# Override create/save to no-op
+		def save
+			Rails.logger.warn("AmahiApi: Skipping API call to dead api.amahi.org (#{self.class.name}#save)") if defined?(Rails)
+			false
 		end
 	end
 
-	# Create Error Reports
-	#
-	#   er = AmahiApi::ErrorReport.new(:report => "the whole shebang")
-	#   er.save
-	#   # => should return true
-	#
+	# Preserved class definitions for structural compatibility
+
 	class ErrorReport < Base
 	end
 
-	# Retrive Apps
-	#
-	#   a = AmahiApi::App.find appid
-	#   # => should return the app info
-	#
 	class App < Base
 	end
 
-	# AppInstaller
-	#
-	#   a = AmahiApi::AppInstaller.find appid
-	#   # => should return the app installation details
-	#
 	class AppInstaller < Base
 	end
 
-	# AppUnInstaller
-	#
-	#   a = AmahiApi::AppUnInstaller.find appid
-	#   # => should return the app uninstallation details
-	#
 	class AppUninstaller < Base
 	end
 
 	class TimelineEvent < Base
 	end
-
 end

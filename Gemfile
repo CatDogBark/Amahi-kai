@@ -26,6 +26,7 @@ gem 'bcrypt'
 gem 'docker-api'
 
 gem 'rack', '~> 3.2.5'
+gem 'rack-attack'
 
 group :development do
   gem 'listen'
