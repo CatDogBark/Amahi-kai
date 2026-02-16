@@ -4,11 +4,12 @@ FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV RAILS_ENV=development
+ENV LANG=C.UTF-8
 
 WORKDIR /amahi
 
 # System dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
   ruby ruby-dev ruby-bundler \
   build-essential \
   libmariadb-dev mariadb-client \
@@ -23,11 +24,18 @@ RUN apt-get update && apt-get install -y \
 
 # Copy Gemfile first for layer caching
 COPY Gemfile Gemfile.lock /amahi/
-RUN bundle install --jobs 4
+RUN bundle config set --local without '' \
+  && bundle install --jobs 4 --retry 3
 
 # Copy application
 COPY . /amahi
 
+# Precompile assets for faster first load
+RUN bundle exec rake assets:precompile 2>/dev/null || true
+
+# Create required directories
+RUN mkdir -p tmp/cache/tmpfiles tmp/pids log
+
 EXPOSE 3000
 
-CMD ["bundle", "exec", "puma", "-b", "0.0.0.0", "-p", "3000"]
+CMD ["bundle", "exec", "puma", "-b", "tcp://0.0.0.0", "-p", "3000"]
