@@ -1,258 +1,43 @@
-var Hosts = {
-  initialize: function() {
-    var _this = this;
-
-    $(document).on("ajax:success", "#new-host-form", function(data, results) {
-      if (results["status"] !== "ok") {
-        $('#new-host-form').replaceWith(results["content"]);
-      } else {
-        var parent = $("#hosts-table");
-        parent.replaceWith(results["content"]);
-      }
-    });
-
-    this.checkAndShowEmptyHint();
-
-    $(document).on("ajax:success", ".btn-delete", function() {
-      $(this).parents('div.entry').remove();
-      if ($('#hosts-table').find('.entry').length === 0) {
-        $('#hosts-table table').remove();
-      }
-      _this.checkAndShowEmptyHint();
-    });
-
-    $(document).on('keyup', '#host_address', function() {
-      $('#net-message').text($(this).val());
-    });
-  },
-
-  checkAndShowEmptyHint: function() {
-    if ($('#hosts-table').find('table').length === 0) {
-      $('#hosts-table .empty-hint').show();
-    }
-  }
-};
-
-var DnsAliases = {
-  initialize: function() {
-    var _this = this;
-
-    $(document).on("ajax:success", "#new-dns-alias-form", function(data, results) {
-      if (results["status"] !== "ok") {
-        $('#new-dns-alias-form').replaceWith(results["content"]);
-      } else {
-        var parent = $("#dns-aliases-table");
-        parent.replaceWith(results["content"]);
-      }
-    });
-
-    this.checkAndShowEmptyHint();
-
-    $(document).on("ajax:success", ".btn-delete", function() {
-      $(this).parents('div.entry').remove();
-      if ($('#dns-aliases-table').find('tr').length === 0) {
-        $('#dns-aliases-table table').remove();
-      }
-      _this.checkAndShowEmptyHint();
-    });
-
-    $(document).on('keyup', '#dns_alias_address', function() {
-      $('#net-message').text($(this).val());
-    });
-  },
-
-  checkAndShowEmptyHint: function() {
-    if ($('#dns-aliases-table').find('table').length === 0) {
-      $('#dns-aliases-table .empty-hint').show();
-    }
-  }
-};
-
-var NetworkSettings = {
-  initialize: function() {
-    var _this = this;
-
-    SmartLinks.initialize({
-      open_selector: ".open-update-lease-time-area",
-      close_selector: ".close-update-lease-time-area",
-      onShow: function(open_link) {
-        var form = open_link.next();
-        open_link.after(Templates.run("updateLeaseTime", { lease_time: open_link.text() }));
-        FormHelpers.update_first(form, open_link.text());
-        FormHelpers.focus_first(form);
-      }
-    });
-
-    SmartLinks.initialize({
-      open_selector: ".open-update-gateway-area",
-      close_selector: ".close-update-gateway-area",
-      onShow: function(open_link) {
-        var form = open_link.next();
-        var gateway = open_link.text().split('.').splice(-1)[0];
-        open_link.after(Templates.run("updateGateway", { gateway: gateway }));
-        FormHelpers.update_first(form, open_link.text());
-        FormHelpers.focus_first(form);
-        $('#net-message').text(gateway);
-      }
-    });
-
-    $(document).on("ajax:success", ".update-lease-time-form, .update-gateway-form", function(data, results) {
-      if (results["status"] === "ok") {
-        var form = $(this);
-        var link = form.prev();
-        var value = results["data"] || FormHelpers.find_first(form).val();
-        link.text(value);
-      }
-    });
-
-    $(document).on("ajax:complete", ".update-lease-time-form, .update-gateway-form", function() {
-      var form = $(this);
-      var link = form.prev();
-      form.hide("slow", function() {
-        form.remove();
-        link.show();
-      });
-    });
-
-    $(document).on('keyup', '#gateway', function() {
-      $('#net-message').text($(this).val());
-    });
-
-    RemoteSelect.initialize({
-      selector: "#setting_dns select",
-      success: function(rr, radio, data) {
-        if (radio.val() === "custom") {
-          $('.dns-ips-area').show();
-        } else {
-          $('.dns-ips-area').hide();
-        }
-      }
-    });
-
-    $(document).on("ajax:success", "#update-dns-ips-form", function(data, results) {
-      $('#update-dns-ips-form #error_explanation').remove();
-      if (results["status"] !== "ok") {
-        var $errorMessages = $("<div id='error_explanation'><ul></ul></div>");
-        if (results["ip_1_saved"] === false) {
-          $errorMessages.find('ul').append('<li>Format of DNS IP Primary is wrong</li>');
-        }
-        if (results["ip_2_saved"] === false) {
-          $errorMessages.find('ul').append('<li>Format of DNS IP Secondary is wrong</li>');
-        }
-        $('#update-dns-ips-form').prepend($errorMessages);
-      } else {
-        $('#update-dns-ips-form input[type=submit]').attr('disabled', 'disabled');
-      }
-    });
-
-    $(document).on("keyup", "#dns_ip_1, #dns_ip_2", function() {
-      $('#update-dns-ips-form input[type=submit]').removeAttr('disabled');
-    });
-
-    RemoteCheckbox.initialize({
-      selector: "#checkbox_setting_dnsmasq_dhcp"
-    });
-  }
-};
+// Network plugin JS
+//
+// Network interactions are now handled by Stimulus controllers:
+//   - create_form_controller.js — new host/dns alias forms
+//   - delete_controller.js — delete host/dns alias
+//   - toggle_controller.js — DHCP server toggle, DNS provider select
+//   - inline_edit_controller.js — lease time, gateway, DHCP range edits
+//
+// Only UI behaviors that don't involve AJAX remain here.
 
 $(function() {
-  Hosts.initialize();
-  DnsAliases.initialize();
-  NetworkSettings.initialize();
-});
-
-$(document).ready(function() {
-  $(".lease_click_change").click(function() {
-    $(this).hide();
-    $(".edit_lease_form").show();
+  // Stretch-toggle: expand/collapse entry detail panels
+  $(document).on("click", ".stretchtoggle", function() {
+    $(this).next(".settings-stretcher").slideToggle();
   });
 
-  $(".lease-cancel-link").click(function() {
-    $('.edit_lease_form').hide();
-    $(".lease_click_change").show();
-  });
-});
-
-$(document).on("ajax:success", ".edit_lease_form", function(event, results) {
-  var element = $(".lease_click_change");
-  var form = $('.edit_lease_form');
-  if (results.status === "ok") {
-    element.html($('#lease_time').val());
-    form.hide('slow');
-    element.show('slow');
-  }
-});
-
-$(document).ready(function() {
-  $(".gateway_click_change").click(function() {
-    $(this).hide();
-    $(".edit_gateway_form").show();
-    $('.gateway_messages').show();
+  // Open/close new entry form areas
+  $(document).on("click", ".open-area", function(event) {
+    event.preventDefault();
+    var related = $(this).data("related");
+    $(related).slideToggle();
   });
 
-  $(".gateway-cancel-link").click(function() {
-    $('.edit_gateway_form').hide();
-    $('.gateway_messages').hide();
-    $(".gateway_click_change").show();
-  });
-});
-
-$(document).on('keyup', '#gateway_input', function() {
-  $('.gateway_message_value').text($(this).val());
-});
-
-$(document).on("ajax:success", ".edit_gateway_form", function(event, results) {
-  var element = $(".gateway_click_change");
-  var element_child = $('.gateway_value');
-  var form = $('.edit_gateway_form');
-  if (results.status === "ok") {
-    element_child.html($('#gateway_input').val());
-    form.hide('slow');
-    $('.gateway_messages').hide();
-    element.show('slow');
-  }
-});
-
-$(document).ready(function() {
-  $(".dyn_lo_click_change").click(function() {
-    $(this).hide();
-    $(".edit_dyn_lo_form").show();
+  $(document).on("click", ".close-area", function(event) {
+    event.preventDefault();
+    var related = $(this).data("related");
+    $(related).slideUp();
   });
 
-  $(".dyn-lo-cancel-link").click(function() {
-    $('.edit_dyn_lo_form').hide();
-    $(".dyn_lo_click_change").show();
-  });
-});
-
-$(document).on("ajax:success", ".edit_dyn_lo_form", function(event, results) {
-  var element = $(".dyn_lo_click_change");
-  var form = $('.edit_dyn_lo_form');
-  if (results.status === "ok") {
-    element.html($('#dyn_lo_input').val());
-    form.hide('slow');
-    element.show('slow');
-  }
-});
-
-$(document).ready(function() {
-  $(".dyn_hi_click_change").click(function() {
-    $(this).hide();
-    $(".edit_dyn_hi_form").show();
+  // Live preview: update IP hint as user types address
+  $(document).on('keyup', '#host_address, #dns_alias_address', function() {
+    $('#net-message').text($(this).val());
   });
 
-  $(".dyn-hi-cancel-link").click(function() {
-    $('.edit_dyn_hi_form').hide();
-    $(".dyn_hi_click_change").show();
+  // DNS provider: show/hide custom IPs area
+  $(document).on('change', '#setting_dns', function() {
+    if ($(this).val() === 'custom') {
+      $('.dns-ips-area').show();
+    } else {
+      $('.dns-ips-area').hide();
+    }
   });
-});
-
-$(document).on("ajax:success", ".edit_dyn_hi_form", function(event, results) {
-  var element = $(".dyn_hi_click_change");
-  var form = $('.edit_dyn_hi_form');
-  if (results.status === "ok") {
-    element.html($('#dyn_hi_input').val());
-    form.hide('slow');
-    element.show('slow');
-  }
 });

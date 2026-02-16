@@ -1,21 +1,29 @@
 - @host = @host || Host.new
 
-= form_for @host, url: network_engine.hosts_path, remote: true, html: { class: 'host create-form form-horizontal col-md-6 bg-white p-2', id: 'new-host-form' } do |f|
+form.host.create-form.form-horizontal.col-md-6.bg-white.p-2[
+  action=network_engine.hosts_path
+  method="post"
+  id="new-host-form"
+  data-controller="create-form"
+  data-create-form-target-value="#hosts-table"
+  data-action="submit->create-form#submit"]
+  input type="hidden" name="authenticity_token" value=form_authenticity_token
   fieldset
     legend &nbsp; #{t('create_a_new_host')} &nbsp;
 
     .create-inside
-      /= render partial: 'shared/errors', object: @host
+      .control-group.form-group
+        .controls
+          input.form-control.input-sm.top-margin-10 type="text" name="host[name]" size="16" maxlength="20" placeholder=t('name')
 
       .control-group.form-group
-        .controls= f.text_field :name, size: 16, maxlength: 20, placeholder: t('name'),:class=>'form-control input-sm top-margin-10'
-
-      .control-group.form-group
-        .controls= f.text_field :mac, size: 16, maxlength: 20, placeholder: t('mac_address') ,:class=>'form-control input-sm top-margin-10'
+        .controls
+          input.form-control.input-sm.top-margin-10 type="text" name="host[mac]" size="16" maxlength="20" placeholder=t('mac_address')
         .messages= t('host_mac_hint')
 
       .control-group.form-group
-        .controls= f.text_field :address, size: 16, maxlength: 20, placeholder: t('ip_address') ,:class=>'form-control input-sm top-margin-10'
+        .controls
+          input.form-control.input-sm.top-margin-10 type="text" name="host[address]" size="16" maxlength="20" placeholder=t('ip_address')
         .messages
           = @net + '.'
           b#net-message = 'X'
@@ -23,5 +31,7 @@
       .control-group.create-btn.form-group
         .controls
           = spinner
-          = button_tag t('create'), type: 'submit', id: 'host_create_button', class: 'btnn btn-create btn btn-info btn-sm '
-          = link_to t('cancel'), '#', class: 'close-area cancel-link cancel-btn-style left-margin-10', data: { related: '#new-host-to-step1' }
+          button.btnn.btn-create.btn.btn-info.btn-sm type="submit" id="host_create_button"
+            = t('create')
+          a.close-area.cancel-link.cancel-btn-style.left-margin-10 href="#" data-related="#new-host-to-step1"
+            = t('cancel')

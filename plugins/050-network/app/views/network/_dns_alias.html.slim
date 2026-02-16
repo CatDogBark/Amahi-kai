@@ -1,5 +1,4 @@
-= javascript_include_tag 'network'
-div.entry
+div.entry data-controller="delete" data-delete-url-value=network_engine.destroy_dns_alias_path(dns_alias) data-delete-confirm-value=confirm_dns_alias_destroy_message(dns_alias.name)
   table.settings.stretchtoggle
     tr.hover-style
       td.settings-col1.settings-col1-pad
@@ -17,12 +16,8 @@ div.entry
       .settings-actions
         span.delete
           = spinner
-          = link_to t('delete') + ' ' + dns_alias.name,
-            network_engine.destroy_dns_alias_path(dns_alias),
-            :method => :delete,
-            :data => {:confirm => confirm_dns_alias_destroy_message(dns_alias.name)},
-            :remote => true,
-            :class => 'btn-delete remote-btn btn btn-sm pull-right'
+          a.btn-delete.remote-btn.btn.btn-sm.pull-right href="#" data-action="click->delete#destroy"
+            = t('delete') + ' ' + dns_alias.name
 
       .settings-fields
         table
@@ -36,4 +31,3 @@ div.entry
               label #{t('ip_address')}
             td
               = alias_ip(dns_alias)
-

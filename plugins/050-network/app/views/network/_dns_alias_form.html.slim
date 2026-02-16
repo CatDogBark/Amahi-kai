@@ -1,19 +1,24 @@
-= javascript_include_tag 'network'
-
 - @dns_alias = @dns_alias || DnsAlias.new
 
-= form_for @dns_alias, url: network_engine.dns_aliases_path, remote: true, html: { class: 'dns_alias create-form form-horizontal col-md-6 bg-white p-2', id: 'new-dns-alias-form' } do |f|
+form.dns_alias.create-form.form-horizontal.col-md-6.bg-white.p-2[
+  action=network_engine.dns_aliases_path
+  method="post"
+  id="new-dns-alias-form"
+  data-controller="create-form"
+  data-create-form-target-value="#dns-aliases-table"
+  data-action="submit->create-form#submit"]
+  input type="hidden" name="authenticity_token" value=form_authenticity_token
   fieldset
     legend &nbsp; #{t('create_a_new_dns_alias')} &nbsp;
 
     .create-inside
-      / = render partial: 'shared/errors', object: @dns_alias
+      .control-group.form-group
+        .controls
+          input.form-control.input-sm.top-margin-10 type="text" name="dns_alias[name]" size="16" maxlength="20" placeholder=t('name')
 
       .control-group.form-group
-        .controls= f.text_field :name, size: 16, maxlength: 20, placeholder: t('name'),:class=>'form-control input-sm top-margin-10'
-
-      .control-group.form-group
-        .controls= f.text_field :address, size: 16, maxlength: 20, placeholder: t('ip_address'),:class=>'form-control input-sm top-margin-10'
+        .controls
+          input.form-control.input-sm.top-margin-10 type="text" name="dns_alias[address]" size="16" maxlength="20" placeholder=t('ip_address')
         .messages
           = @net + '.'
           b#net-message = 'X'
@@ -21,5 +26,7 @@
       .control-group.create-btn.form-group
         .controls
           = spinner
-          = button_tag t('create'), type: 'submit', id: 'dns_alias_create_button', class: 'btnn btn-create btn btn-info btn-sm'
-          = link_to t('cancel'), '#', class: 'close-area cancel-link cancel-btn-style left-margin-10', data: { related: '#new-dns-alias-to-step1' }
+          button.btnn.btn-create.btn.btn-info.btn-sm type="submit" id="dns_alias_create_button"
+            = t('create')
+          a.close-area.cancel-link.cancel-btn-style.left-margin-10 href="#" data-related="#new-dns-alias-to-step1"
+            = t('cancel')
