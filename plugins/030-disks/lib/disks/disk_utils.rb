@@ -26,7 +26,7 @@ class DiskUtils
 
 			begin
 				s = TCPSocket.open(host, port)
-			rescue
+			rescue => e
 				return []
 			end
 

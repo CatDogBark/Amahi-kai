@@ -35,7 +35,7 @@ class User < ApplicationRecord
 			c.crypto_provider = Authlogic::CryptoProviders::SCrypt
 			c.transition_from_crypto_providers = [Authlogic::CryptoProviders::Sha512]
 		end
-	rescue
+	rescue => e
 		# NOTE: ignore errors - only happens when using from a
 		# non-fully active record compliant, e.g. from the app installer
 	end

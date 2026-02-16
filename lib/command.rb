@@ -143,7 +143,7 @@ class Command
       f.close
       s.chomp!
       File.exist?("/proc/#{s}") ? true : false
-    rescue
+    rescue => e
       false
     end
   end

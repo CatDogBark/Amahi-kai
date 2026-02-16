@@ -45,7 +45,7 @@ class DebugController < ApplicationController
 	      else
 	      	render :json =>{:status=>'failed',:errors=> er.errors}
 	      end
-	    rescue
+	    rescue => e
 	      	render :json =>{:status=>'failed',:errors=> er.errors}
 	    end
     end

@@ -150,7 +150,7 @@ class App < ApplicationRecord
 			AmahiApi::App.find(:all).map do |online_app|
 				App.where(identifier: online_app.id).first ? nil : App.new({identifier: online_app.id, app: online_app})
 			end.compact
-		rescue
+		rescue => e
 			[]
 		end
 	end

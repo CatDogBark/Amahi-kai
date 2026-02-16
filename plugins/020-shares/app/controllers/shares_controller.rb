@@ -159,7 +159,7 @@ class SharesController < ApplicationController
 
 	def get_share
 		@share = Share.find(params[:id]) if params[:id]
-	rescue
+	rescue => e
 	end
 
 	def get_shares

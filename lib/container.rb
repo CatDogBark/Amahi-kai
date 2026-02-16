@@ -7,7 +7,7 @@ class Container
     @options = options;
     begin
       @container = Docker::Container.get(@id)
-    rescue
+    rescue => e
       @container = nil
     end
   end

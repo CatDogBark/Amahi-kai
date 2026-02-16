@@ -24,7 +24,7 @@ class PartitionUtils
 		@info = []
 		begin
 			f = File.open('/etc/mtab')
-		rescue
+		rescue => e
 			return @info
 		end
 		while f.gets

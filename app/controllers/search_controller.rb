@@ -131,7 +131,7 @@ protected
 	def locate2result(file, path)
 		begin
 			stat = File::Stat.new file
-		rescue
+		rescue => e
 			return nil
 		end
 		unless ["directory", "file"].include? stat.ftype

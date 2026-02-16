@@ -166,7 +166,7 @@ class Platform
 				if result =~ /Version: (.*)/
 					hda_ctl = $1
 				end
-			rescue
+			rescue => e
 				platform = "unknown"
 				hda_ctl = "unknown"
 			end

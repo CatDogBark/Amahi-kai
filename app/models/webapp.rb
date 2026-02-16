@@ -134,7 +134,7 @@ class Webapp < ApplicationRecord
 
 		begin
 			conf = conf.gsub(/APP_CUSTOM_OPTIONS/, custom_options || '')
-		rescue
+		rescue => e
 			# this is to prevent migrations from
 			# failing in machines that take a while
 			# to upgrade

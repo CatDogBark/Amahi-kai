@@ -28,7 +28,7 @@ class AmahiNews
 			if Ping.pingecho(site, 2, 'http')
 				ret = parse_feed("https://#{site}/news/2/", nitems) rescue nil
 			end
-		rescue
+		rescue => e
 			ret = nil
 		end
 		ret
