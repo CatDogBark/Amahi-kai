@@ -26,40 +26,48 @@ class ShareController < ApplicationController
 	DP_MIN_FREE_ROOT = 20
 
 	def update_name
-		# FIXME - lots of checks missing!
 		s = Share.find(params[:id])
 		s.name = params[:value]
-		s.save
-		s.reload
-		render plain: s.name
+		if s.save
+			s.reload
+			render plain: s.name
+		else
+			render plain: s.errors.full_messages.join(", "), status: :unprocessable_entity
+		end
 	end
 
 	def update_extras
-		# FIXME - lots of checks missing!
 		s = Share.find(params[:id])
 		s.extras = params[:value]
-		s.save
-		s.reload
-		extras = s.extras.blank? ? t('add_extra_parameters') : s.extras
-		render plain: extras
+		if s.save
+			s.reload
+			extras = s.extras.blank? ? t('add_extra_parameters') : s.extras
+			render plain: extras
+		else
+			render plain: s.errors.full_messages.join(", "), status: :unprocessable_entity
+		end
 	end
 
 	def update_path
-		# FIXME - lots of checks missing!
 		s = Share.find(params[:id])
 		s.path = params[:value]
-		s.save
-		s.reload
-		render plain: s.path
+		if s.save
+			s.reload
+			render plain: s.path
+		else
+			render plain: s.errors.full_messages.join(", "), status: :unprocessable_entity
+		end
 	end
 
 	def update_tags
-		# FIXME - lots of checks missing!
 		s = Share.find(params[:id])
-		s.tags = params[:value].downcase
-		s.save
-		s.reload
-		render plain: s.tags
+		s.tags = params[:value].to_s.downcase
+		if s.save
+			s.reload
+			render plain: s.tags
+		else
+			render plain: s.errors.full_messages.join(", "), status: :unprocessable_entity
+		end
 	end
 
 	def delete
