@@ -15,13 +15,8 @@
       var locale = this.element.value;
       var url = this.urlValue;
 
-      var csrfToken = document.querySelector('meta[name="csrf-token"]');
-      var headers = {
-        "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
-        "Accept": "application/json",
-        "X-Requested-With": "XMLHttpRequest"
-      };
-      if (csrfToken) headers["X-CSRF-Token"] = csrfToken.content;
+      var headers = csrfHeaders();
+      headers["Content-Type"] = "application/x-www-form-urlencoded; charset=utf-8";
 
       fetch(url, {
         method: "POST",

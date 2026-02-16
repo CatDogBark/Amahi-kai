@@ -24,7 +24,6 @@
       event.preventDefault();
       var _this = this;
 
-      // Confirm dialog
       if (this.hasConfirmValue && this.confirmValue) {
         if (!confirm(this.confirmValue)) return;
       }
@@ -32,25 +31,16 @@
       var url = this.hasUrlValue ? this.urlValue : this.checkboxTarget.dataset.url;
       var method = this.hasMethodValue ? this.methodValue : "PUT";
 
-      // Show spinner
       if (this.hasSpinnerTarget) this.spinnerTarget.style.display = "";
 
-      var csrfToken = document.querySelector('meta[name="csrf-token"]');
-      var headers = {
-        "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
-        "Accept": "application/json",
-        "X-Requested-With": "XMLHttpRequest"
-      };
-      if (csrfToken) headers["X-CSRF-Token"] = csrfToken.content;
+      var headers = csrfHeaders();
+      headers["Content-Type"] = "application/x-www-form-urlencoded; charset=utf-8";
 
       fetch(url, { method: method, headers: headers, credentials: "same-origin" })
         .then(function(response) { return response.json(); })
         .then(function(data) {
           if (data.status === "ok") {
-            if (_this.hasCheckboxTarget) {
-              var cb = _this.checkboxTarget;
-              cb.checked = !cb.checked;
-            }
+            if (_this.hasCheckboxTarget) _this.checkboxTarget.checked = !_this.checkboxTarget.checked;
             if (typeof data.force !== "undefined" && _this.hasCheckboxTarget) {
               _this.checkboxTarget.checked = data.force;
             }

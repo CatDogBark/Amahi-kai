@@ -6,16 +6,6 @@
 // Mounted on each .user element (whole_user_N)
 
 (function() {
-  var csrfHeaders = function() {
-    var csrfToken = document.querySelector('meta[name="csrf-token"]');
-    var headers = {
-      "Accept": "application/json",
-      "X-Requested-With": "XMLHttpRequest"
-    };
-    if (csrfToken) headers["X-CSRF-Token"] = csrfToken.content;
-    return headers;
-  };
-
   var UserController = class extends Stimulus.Controller {
     static get targets() {
       return ["deleteArea", "adminCheckbox", "userIcons", "nameDisplay",

@@ -20,14 +20,7 @@
       var url = form.action;
       var method = form.method || "POST";
 
-      var csrfToken = document.querySelector('meta[name="csrf-token"]');
-      var headers = {
-        "Accept": "application/json",
-        "X-Requested-With": "XMLHttpRequest"
-      };
-      if (csrfToken) headers["X-CSRF-Token"] = csrfToken.content;
-
-      // Use FormData for proper encoding (supports file uploads too)
+      var headers = csrfHeaders();
       var body = new FormData(form);
 
       fetch(url, { method: method, headers: headers, body: body, credentials: "same-origin" })

@@ -46,14 +46,7 @@
 
     poll() {
       var _this = this;
-      var csrfToken = document.querySelector('meta[name="csrf-token"]');
-      var headers = {
-        "Accept": "application/json",
-        "X-Requested-With": "XMLHttpRequest"
-      };
-      if (csrfToken) headers["X-CSRF-Token"] = csrfToken.content;
-
-      fetch(this.urlValue, { headers: headers, credentials: "same-origin" })
+      fetch(this.urlValue, { headers: csrfHeaders(), credentials: "same-origin" })
         .then(function(response) { return response.json(); })
         .then(function(data) {
           var progress = data.progress || 0;

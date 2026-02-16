@@ -29,14 +29,7 @@
       var spinner = target.parentElement.querySelector('.spinner');
       if (spinner) spinner.style.display = '';
 
-      var csrfToken = document.querySelector('meta[name="csrf-token"]');
-      var headers = {
-        "Accept": "application/json",
-        "X-Requested-With": "XMLHttpRequest"
-      };
-      if (csrfToken) headers["X-CSRF-Token"] = csrfToken.content;
-
-      fetch(url, { method: method, headers: headers, credentials: "same-origin" })
+      fetch(url, { method: method, headers: csrfHeaders(), credentials: "same-origin" })
         .then(function(response) { return response.json(); })
         .then(function(data) {
           if (data.content) {

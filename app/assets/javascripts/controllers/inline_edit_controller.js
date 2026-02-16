@@ -46,13 +46,8 @@
 
       if (this.hasSpinnerTarget) this.spinnerTarget.style.display = "";
 
-      var csrfToken = document.querySelector('meta[name="csrf-token"]');
-      var headers = {
-        "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
-        "Accept": "application/json",
-        "X-Requested-With": "XMLHttpRequest"
-      };
-      if (csrfToken) headers["X-CSRF-Token"] = csrfToken.content;
+      var headers = csrfHeaders();
+      headers["Content-Type"] = "application/x-www-form-urlencoded; charset=utf-8";
 
       var body = new URLSearchParams(new FormData(this.formTarget)).toString();
 
