@@ -3,9 +3,9 @@
     thead
       tr
         th.settings-col1 = t 'expiration'
-        th.pl-1 = t 'mac'
-        th.pl-1 = t 'ip'
-        th.pl-1 = t 'name'
+        th.ps-1 = t 'mac'
+        th.ps-1 = t 'ip'
+        th.ps-1 = t 'name'
     tbody
       - @leases.each do |lease|
         tr class=cycle("odd", "even")

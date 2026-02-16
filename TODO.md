@@ -144,6 +144,8 @@
 4. **App system** — Docker-based apps? Snap? Native packages?
 5. **Authentication** — Keep authlogic or migrate to Devise/Rodauth?
 
+*Decisions 1, 2, and 5 deferred — not blocking current work. Will revisit later.*
+
 ---
 
 *Last updated: 2026-02-15*

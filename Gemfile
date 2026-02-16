@@ -7,10 +7,10 @@ gem 'dalli'
 gem 'actionpack-action_caching'
 
 gem 'sass-rails'
-# gem 'uglifier'  # Deprecated, JS compression disabled
+# gem 'propshaft'  # TODO: Replace sprockets with propshaft (requires full asset pipeline migration)
+gem 'terser'
 
-gem 'bootstrap', '~> 4.1.1'
-gem 'popper_js', '~> 1.12.9'
+gem 'bootstrap', '~> 5.3'
 gem 'jquery-rails'
 gem 'jquery-ui-rails'
 gem 'slim'
@@ -25,10 +25,12 @@ gem 'bcrypt'
 
 gem 'docker-api'
 
+gem 'rack', '~> 3.2.5'
+
 group :development do
   gem 'listen'
   gem 'better_errors'
-  gem 'binding_of_caller'
+  gem 'binding_of_caller', '~> 2.0'
   gem 'puma'
   gem 'bullet'
 end

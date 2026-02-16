@@ -16,5 +16,4 @@
 //= require lib/debug
 //= require spinner
 
-//= require popper
 //= require bootstrap

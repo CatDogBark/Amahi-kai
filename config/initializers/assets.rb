@@ -15,4 +15,4 @@ Rails.application.config.assets.paths << Rails.root.join('node_modules')
 
 Rails.application.config.assets.precompile += %w( login.css )
 
-Rails.application.config.assets.precompile += Dir[Rails.root.join('plugins', '**' , '[^_]*.{js,css,sass,coffee}')]
+Rails.application.config.assets.precompile += Dir[Rails.root.join('plugins', '**' , '[^_]*.{js,css,sass,scss}')]
