@@ -75,6 +75,12 @@
 - [x] docker-compose.yml fixed (correct DB name, health check start_period)
 - [x] jQuery gems removed from Gemfile (were already commented out)
 - [x] README.md updated (jQuery-free stack, security features)
+- [x] Share controller: proper error handling on update actions (422 on failure)
+- [x] Admin password minimum raised from 5 to 8 characters
+- [x] FIXME comments cleaned up (PAM, uid, translate)
+- [x] Dead firewall helpers removed from application_helper.rb
+- [x] .dockerignore added, Dockerfile improved
+- [x] CI config fixed (SQLite, lib specs step)
 
 ---
 
