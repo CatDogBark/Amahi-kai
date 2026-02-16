@@ -17,14 +17,10 @@ div.share[id="whole_share_#{share.id}"]
           small= "#{t('created')} #{formatted_date(share.created_at)}"
 
         .settings-actions
-          span.delete
+          span.delete data-controller="delete" data-delete-url-value=share_path(share) data-delete-confirm-value=confirm_share_destroy_message(share.name) data-delete-remove-selector-value="#whole_share_#{share.id}"
             = spinner
-            = link_to t('delete') + ' ' + share.name,
-              share_path(share),
-              :method => :delete,
-              :data => {:confirm => confirm_share_destroy_message(share.name)},
-              :remote => true,
-              :class => 'btn-delete remote-btn navbar-right btn btn-sm'
+            a.btn-delete.remote-btn.navbar-right.btn.btn-sm href="#" data-action="click->delete#destroy"
+              = t('delete') + ' ' + share.name
 
         .settings-fields
           table
@@ -36,11 +32,12 @@ div.share[id="whole_share_#{share.id}"]
             tr
               td
                 label #{t('visibility')}
-              td= simple_remote_checkbox :id => "share_visible_#{share.id}",
-                                        :css_class => 'share_visible_checkbox',
-                                        :url => toggle_visible_share_path(:id => share.id),
-                                        :label => "#{t('visible')}",
-                                        :checked => share.visible
+              td
+                span data-controller="toggle" data-toggle-url-value=toggle_visible_share_path(id: share.id)
+                  input.share_visible_checkbox.form-check-input type="checkbox" id="share_visible_#{share.id}" checked=share.visible data-toggle-target="checkbox" data-action="click->toggle#toggle"
+                  |  #{t('visible')}
+                  span.spinner.theme-image data-toggle-target="spinner" style="display:none"
+
             tr
               td
                 label #{t('permissions')}
@@ -55,25 +52,45 @@ div.share[id="whole_share_#{share.id}"]
             tr
               td
                 label #{t('location')}
-              td
-                span.open-update-path-area.focus= share.path
+              td data-controller="inline-edit" data-inline-edit-url-value=update_path_share_path(id: share.id) data-inline-edit-method-value="PUT"
+                a.open-update-path-area.focus href="#" data-inline-edit-target="display" data-action="click->inline-edit#edit"
+                  = share.path
+                form.update-path-form style="display:none" action=update_path_share_path(id: share.id) method="post" data-inline-edit-target="form" data-action="submit->inline-edit#submit"
+                  input type="hidden" name="_method" value="put"
+                  input type="hidden" name="authenticity_token" value=form_authenticity_token
+                  input.form-control.input-sm type="text" name="share[path]" value=share.path data-inline-edit-target="input"
+                  |  
+                  button.btnn.btn.btn-info.btn-sm type="submit"
+                    = t('change')
+                  a.cancel-btn-style.left-margin-10 href="#" data-action="click->inline-edit#cancel"
+                    | Cancel
+                span.messages data-inline-edit-target="message"
 
             tr
               td
                 label #{t('size')}
               td
-                = link_to  content_tag(:span, t('get_the_size') ) ,
-                shares_engine.update_size_path(share),
-                :method => :put,
-                :remote => true,
-                :class  =>"update-size-area focus remote-bt size#{share.id} remote-check"
-                = spinner
-
+                span.update-size-area data-controller="toggle" data-toggle-url-value=shares_engine.update_size_path(share) data-toggle-method-value="PUT"
+                  a.focus.remote-bt href="#" class="size#{share.id}" data-action="click->toggle#toggle"
+                    span= t('get_the_size')
+                  span.spinner.theme-image data-toggle-target="spinner" style="display:none"
 
             - if advanced?
               tr
                 td.top
                   label #{t('extra_parameters')}
-                td.top
-                  span.open-update-extras-area.focus= share.extras.blank? ? t('add_extra_parameters') : share.extras
-                  | <a href="http://wiki.amahi.org/index.php/Share_Extra_Parameters" class="app-more" target="_blank"></a>
+                td.top data-controller="inline-edit" data-inline-edit-url-value=update_extras_share_path(id: share.id) data-inline-edit-method-value="PUT"
+                  a.open-update-extras-area.focus href="#" data-inline-edit-target="display" data-action="click->inline-edit#edit"
+                    = share.extras.blank? ? t('add_extra_parameters') : share.extras
+                  form.update-extras-form style="display:none" action=update_extras_share_path(id: share.id) method="post" data-inline-edit-target="form" data-action="submit->inline-edit#submit"
+                    input type="hidden" name="_method" value="put"
+                    input type="hidden" name="authenticity_token" value=form_authenticity_token
+                    textarea.form-control.input-sm name="share[extras]" data-inline-edit-target="input" placeholder=t('add_extra_parameters')
+                      = share.extras
+                    button.btnn.btn.btn-info.btn-sm type="submit"
+                      = t('change')
+                    a.cancel-btn-style.left-margin-10 href="#" data-action="click->inline-edit#cancel"
+                      | Cancel
+                  span.messages data-inline-edit-target="message"
+                  |  
+                  a.app-more href="http://wiki.amahi.org/index.php/Share_Extra_Parameters" target="_blank"

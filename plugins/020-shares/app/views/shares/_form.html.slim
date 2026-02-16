@@ -1,28 +1,37 @@
 - @share = @share || Share.new
 
-= form_for @share, :remote => true, :html => { :class => 'share create-form form-horizontal p-1 mt-2 bg-white', :id => 'new-share-form' } do |f|
+form.share.create-form.form-horizontal.p-1.mt-2.bg-white[
+  action=shares_path
+  method="post"
+  id="new-share-form"
+  data-controller="create-form"
+  data-create-form-target-value="#shares-table"
+  data-action="submit->create-form#submit"]
+  input type="hidden" name="authenticity_token" value=form_authenticity_token
+  fieldset
+    legend &nbsp; #{t('create_a_new_share')} &nbsp;
 
-    fieldset
-      legend &nbsp; #{t('create_a_new_share')} &nbsp;
+    .create-inside
+      .control-group.form-group
+        .controls
+          input.form-control type="text" name="share[name]" size="16" maxlength="20" placeholder="Name"
 
-      .create-inside
-        / = render :partial => 'shared/errors', :object => @share
+      .control-group.form-group
+        .controls
+          input.right-margin-10 type="checkbox" name="share[visible]" value="1" checked="checked" id="share_visible"
+          label for="share_visible"
+            = t('visible')
 
-        .control-group.form-group
-          .controls = f.text_field :name, :size => 16, :maxlength => 20, :class=>'form-control', :placeholder => "Name"
+      .control-group.form-group
+        .controls
+          input.right-margin-10 type="checkbox" name="share[rdonly]" value="1" id="share_rdonly"
+          label for="share_rdonly"
+            = t('read_only')
 
-        .control-group.form-group
-          .controls
-            = f.check_box :visible, { :checked => true,:class => 'right-margin-10' }
-            = label(:visible, t('visible'))
-
-        .control-group.form-group
-          .controls
-            = f.check_box :rdonly, {:class => 'right-margin-10'}
-            = label(:rdonly, t('read_only'))
-
-        .control-group.create-btn.form-group
-          .controls
-            = spinner
-            = button_tag t('create'), :type => 'submit', :id => 'share_create_button', :class => 'btnn btn-create btn-info btn btn-sm'
-            = link_to t('cancel'), '#', :class => 'close-area cancel-link cancel-btn-style btn-sm left-margin-10', :data => {:related => '#new-share-to-step1'}
+      .control-group.create-btn.form-group
+        .controls
+          = spinner
+          button.btnn.btn-create.btn-info.btn.btn-sm type="submit" id="share_create_button"
+            = t('create')
+          a.close-area.cancel-link.cancel-btn-style.btn-sm.left-margin-10 href="#" data-related="#new-share-to-step1"
+            = t('cancel')

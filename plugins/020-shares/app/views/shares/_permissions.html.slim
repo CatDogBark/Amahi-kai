@@ -1,9 +1,7 @@
 - share = permissions
 
-.permissions
+.permissions data-controller="toggle" data-toggle-url-value=clear_permissions_share_path(share) data-toggle-confirm-value=t('this_will_clear_permissions_wide', share: share.name)
   = spinner
-  = link_to content_tag('span', '', :class => 'tools'), clear_permissions_share_path(share), :remote => true, :method => 'put',
-    :class => 'clear-permissions remote-btn glyphicon glyphicon-wrench',
-    :title => t('this_will_clear_permissions_wide', :share => share.name),
-    :data => { :confirm => t('this_will_clear_permissions_wide', :share => share.name), :success => t('permissions_cleared'), :error => t('permissions_clearning_error') }
+  a.clear-permissions.remote-btn.glyphicon.glyphicon-wrench href="#" title=t('this_will_clear_permissions_wide', share: share.name) data-action="click->toggle#toggle"
+    span.tools
   span.messages
