@@ -6,27 +6,9 @@
 //   - toggle_controller.js — visibility, access, permissions checkboxes
 //   - inline_edit_controller.js — path, extras, workgroup editing
 //
-// Only UI behaviors that don't involve AJAX remain here.
+// Global open/close area and stretch-toggle handlers are in lib/application.js
 
 $(function() {
-  // Stretch-toggle: expand/collapse share detail panels
-  $(document).on("click", ".stretchtoggle", function() {
-    $(this).next(".settings-stretcher").slideToggle();
-  });
-
-  // Open/close new share form area
-  $(document).on("click", ".open-area", function(event) {
-    event.preventDefault();
-    var related = $(this).data("related");
-    $(related).slideToggle();
-  });
-
-  $(document).on("click", ".close-area", function(event) {
-    event.preventDefault();
-    var related = $(this).data("related");
-    $(related).slideUp();
-  });
-
   // Auto-fill path when name is entered
   $(document).on("blur", "#share_name", function() {
     var nameField = $(this);

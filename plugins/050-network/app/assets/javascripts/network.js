@@ -6,27 +6,9 @@
 //   - toggle_controller.js — DHCP server toggle, DNS provider select
 //   - inline_edit_controller.js — lease time, gateway, DHCP range edits
 //
-// Only UI behaviors that don't involve AJAX remain here.
+// Global open/close area and stretch-toggle handlers are in lib/application.js
 
 $(function() {
-  // Stretch-toggle: expand/collapse entry detail panels
-  $(document).on("click", ".stretchtoggle", function() {
-    $(this).next(".settings-stretcher").slideToggle();
-  });
-
-  // Open/close new entry form areas
-  $(document).on("click", ".open-area", function(event) {
-    event.preventDefault();
-    var related = $(this).data("related");
-    $(related).slideToggle();
-  });
-
-  $(document).on("click", ".close-area", function(event) {
-    event.preventDefault();
-    var related = $(this).data("related");
-    $(related).slideUp();
-  });
-
   // Live preview: update IP hint as user types address
   $(document).on('keyup', '#host_address, #dns_alias_address', function() {
     $('#net-message').text($(this).val());
