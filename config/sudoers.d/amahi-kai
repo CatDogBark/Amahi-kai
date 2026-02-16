@@ -1,0 +1,36 @@
+# Sudoers configuration for Amahi-kai
+# Install to /etc/sudoers.d/amahi-kai
+#
+# This allows the web application user (www-data) to run specific
+# system management commands without a password.
+#
+# SECURITY NOTE: Only the specific commands needed are whitelisted.
+# The app uses Shellwords.escape on all user-provided values.
+
+# Service management
+www-data ALL=(root) NOPASSWD: /usr/bin/systemctl start *
+www-data ALL=(root) NOPASSWD: /usr/bin/systemctl stop *
+www-data ALL=(root) NOPASSWD: /usr/bin/systemctl restart *
+www-data ALL=(root) NOPASSWD: /usr/bin/systemctl reload *
+www-data ALL=(root) NOPASSWD: /usr/bin/systemctl enable *
+www-data ALL=(root) NOPASSWD: /usr/bin/systemctl disable *
+
+# User management
+www-data ALL=(root) NOPASSWD: /usr/sbin/useradd *
+www-data ALL=(root) NOPASSWD: /usr/sbin/usermod *
+www-data ALL=(root) NOPASSWD: /usr/sbin/userdel *
+
+# Samba user management
+www-data ALL=(root) NOPASSWD: /usr/bin/pdbedit *
+
+# File/share management
+www-data ALL=(root) NOPASSWD: /usr/bin/mkdir *
+www-data ALL=(root) NOPASSWD: /usr/bin/rmdir *
+www-data ALL=(root) NOPASSWD: /usr/bin/chmod *
+www-data ALL=(root) NOPASSWD: /usr/bin/chown *
+www-data ALL=(root) NOPASSWD: /usr/bin/cp *
+www-data ALL=(root) NOPASSWD: /usr/bin/mv *
+www-data ALL=(root) NOPASSWD: /usr/bin/rm *
+
+# Package management (for app installs)
+www-data ALL=(root) NOPASSWD: /usr/bin/apt-get *

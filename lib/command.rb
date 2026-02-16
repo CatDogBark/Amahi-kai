@@ -14,66 +14,137 @@
 # License along with this program; if not, write to the Amahi
 # team at http://www.amahi.org/ under "Contact Us."
 
-require 'socket'
+require 'open3'
 require_relative 'yetting'
 
 class Command
 
-	CMD_FIFO = "/var/run/hda-ctl/notify"
-	HDACTL_PID = "/var/run/hda-ctl.pid"
+  # Legacy hda-ctl constants (kept for reference)
+  CMD_FIFO = "/var/run/hda-ctl/notify"
+  HDACTL_PID = "/var/run/hda-ctl.pid"
 
-	@cmd = []
+  # Execution mode:
+  #   :direct  - execute commands directly via shell (default on Ubuntu)
+  #   :hdactl  - send commands to hda-ctl daemon (legacy Fedora mode)
+  #   :dummy   - don't execute anything (dev/test)
+  EXEC_MODE = if Yetting.dummy_mode
+    :dummy
+  elsif File.exist?(HDACTL_PID)
+    :hdactl
+  else
+    :direct
+  end
 
-	def initialize(cmd = nil)
-		@cmd = cmd ? [cmd] :  []
-		@dummy_mode = Yetting.dummy_mode
-	end
+  def initialize(cmd = nil)
+    @cmd = cmd ? [cmd] : []
+  end
 
-	def execute
-		return if @dummy_mode
-		puts "EXECUTING: #{@cmd.join "\n"}" if @debug
-		raise "hda-ctl does not appear to be running!" unless running?
-		command = @cmd.join "\n"
-		f = UNIXSocket.open(CMD_FIFO)
-		f.send(command, 0)
-		f.close
-		@cmd = []
-	end
+  def execute
+    return if EXEC_MODE == :dummy
 
-	def run_now
-		raise "hda-ctl does not appear to be running!" unless running?
-		confirm = "done" # Digest::SHA1.hexdigest(Time.now.to_s.split(//).sort_by {rand}.join)
-		@cmd.push "confirm: #{confirm}\n"
-		command = @cmd.join "\n"
-		f = UNIXSocket.open(CMD_FIFO)
-		f.send(command, 0)
-		f.flush
-		begin
-			r = f.read;
-			r.strip!
-		end until r == confirm or f.eof
-		raise "error run_now - did not get confirmation of command completion." unless r == confirm
-		f.close
-		@cmd = []
-	end
+    case EXEC_MODE
+    when :direct
+      execute_direct
+    when :hdactl
+      execute_hdactl
+    end
 
-	def submit(command)
-		# FIXME - check for allowed commands?
-		# here and perhaps in the daemon.
-		@cmd.push command
-	end
+    @cmd = []
+  end
 
-	private
-	def running?
-		begin
-			f = File.open HDACTL_PID
-			s = f.readline
-			f.close
-			s.chomp!
-			File.exist?("/proc/#{s}") ? true : false
-		rescue
-			false
-		end
-	end
+  def run_now
+    return if EXEC_MODE == :dummy
 
+    case EXEC_MODE
+    when :direct
+      execute_direct
+    when :hdactl
+      execute_hdactl_blocking
+    end
+
+    @cmd = []
+  end
+
+  def submit(command)
+    @cmd.push command
+  end
+
+  private
+
+  # Execute commands directly via shell
+  # Uses sudo for privileged commands when not running as root
+  def execute_direct
+    @cmd.each do |cmd|
+      actual_cmd = needs_sudo?(cmd) ? "sudo #{cmd}" : cmd
+      Rails.logger.info("Command.execute_direct: #{actual_cmd}") if defined?(Rails)
+
+      stdout, stderr, status = Open3.capture3(actual_cmd)
+      unless status.success?
+        Rails.logger.warn("Command failed (exit #{status.exitstatus}): #{actual_cmd}\nstderr: #{stderr}") if defined?(Rails)
+      end
+    end
+  end
+
+  # Determine if a command needs sudo
+  # Commands that modify system state need root privileges
+  def needs_sudo?(cmd)
+    return false if Process.uid == 0  # already root
+
+    privileged_prefixes = %w[
+      useradd usermod userdel
+      systemctl
+      chmod chown
+      mkdir rmdir cp mv rm
+      pdbedit
+      apt-get dpkg rpm yum pacman
+    ]
+
+    cmd_name = cmd.strip.split(/\s+/).first
+    # Handle env vars before command (e.g., "DEBIAN_FRONTEND=noninteractive apt-get ...")
+    if cmd_name&.include?('=')
+      cmd_name = cmd.strip.split(/\s+/).find { |part| !part.include?('=') }
+    end
+    # Handle full paths
+    cmd_name = File.basename(cmd_name.to_s)
+
+    privileged_prefixes.include?(cmd_name)
+  end
+
+  # Legacy: send commands to hda-ctl daemon
+  def execute_hdactl
+    raise "hda-ctl does not appear to be running!" unless hdactl_running?
+    command = @cmd.join "\n"
+    f = UNIXSocket.open(CMD_FIFO)
+    f.send(command, 0)
+    f.close
+  end
+
+  # Legacy: send commands to hda-ctl and wait for completion
+  def execute_hdactl_blocking
+    raise "hda-ctl does not appear to be running!" unless hdactl_running?
+    confirm = "done"
+    @cmd.push "confirm: #{confirm}\n"
+    command = @cmd.join "\n"
+    f = UNIXSocket.open(CMD_FIFO)
+    f.send(command, 0)
+    f.flush
+    begin
+      r = f.read
+      r.strip!
+    end until r == confirm or f.eof
+    raise "error run_now - did not get confirmation of command completion." unless r == confirm
+    f.close
+  end
+
+  def hdactl_running?
+    begin
+      f = File.open HDACTL_PID
+      s = f.readline
+      f.close
+      s.chomp!
+      File.exist?("/proc/#{s}") ? true : false
+    rescue
+      false
+    end
+  end
 end
