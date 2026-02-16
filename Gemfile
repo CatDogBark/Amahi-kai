@@ -11,8 +11,9 @@ gem 'sass-rails'
 gem 'terser'
 
 gem 'bootstrap', '~> 5.3'
-gem 'jquery-rails'
-gem 'jquery-ui-rails'
+# jQuery removed — all JS now uses Stimulus controllers + vanilla JS
+# gem 'jquery-rails'
+# gem 'jquery-ui-rails'
 gem 'slim'
 gem 'jbuilder'
 

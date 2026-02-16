@@ -1,21 +1,20 @@
 // Shares plugin JS
 //
-// Share interactions are now handled by Stimulus controllers:
+// All interactions handled by Stimulus controllers:
 //   - create_form_controller.js — new share form
 //   - delete_controller.js — delete share
 //   - toggle_controller.js — visibility, access, permissions checkboxes
 //   - inline_edit_controller.js — path, extras, workgroup editing
-//
-// Global open/close area and stretch-toggle handlers are in lib/application.js
 
-$(function() {
+document.addEventListener("DOMContentLoaded", function() {
   // Auto-fill path when name is entered
-  $(document).on("blur", "#share_name", function() {
-    var nameField = $(this);
-    var pathField = $("#share_path");
-    if (nameField.val() !== "" && pathField.length && pathField.val() === "") {
-      pathField.val(pathField.data("pre") + nameField.val());
-      pathField.focus();
+  document.addEventListener("blur", function(event) {
+    if (event.target.id === "share_name") {
+      var pathField = document.getElementById("share_path");
+      if (event.target.value !== "" && pathField && pathField.value === "") {
+        pathField.value = (pathField.dataset.pre || "") + event.target.value;
+        pathField.focus();
+      }
     }
-  });
+  }, true);
 });

@@ -1,43 +1,64 @@
-$(document).ready(function() {
+document.addEventListener("DOMContentLoaded", function() {
   // Stretch-toggle: expand/collapse settings panels
-  $(".preftab").on("click", ".stretchtoggle", function() {
-    $(this).parents("div:first").find(".settings-stretcher:first").toggle('slow');
-    return false;
+  document.addEventListener("click", function(event) {
+    var toggle = event.target.closest(".stretchtoggle");
+    if (!toggle) return;
+    event.preventDefault();
+    var parent = toggle.parentElement;
+    var stretcher = parent ? parent.querySelector(".settings-stretcher") : null;
+    if (!stretcher) {
+      stretcher = toggle.nextElementSibling;
+      while (stretcher && !stretcher.classList.contains("settings-stretcher")) {
+        stretcher = stretcher.nextElementSibling;
+      }
+    }
+    if (stretcher) {
+      stretcher.style.display = stretcher.style.display === "none" ? "" : "none";
+    }
   });
 
   // Open/close new entry form areas
-  $(document).on("click", ".open-area", function(event) {
-    event.preventDefault();
-    var related = $(this).data("related");
-    $(related).slideToggle();
-  });
+  document.addEventListener("click", function(event) {
+    var openBtn = event.target.closest(".open-area");
+    if (openBtn) {
+      event.preventDefault();
+      var related = document.querySelector(openBtn.dataset.related);
+      if (related) {
+        related.style.display = related.style.display === "none" ? "" : "none";
+      }
+      return;
+    }
 
-  $(document).on("click", ".close-area", function(event) {
-    event.preventDefault();
-    var related = $(this).data("related");
-    $(related).slideUp();
+    var closeBtn = event.target.closest(".close-area");
+    if (closeBtn) {
+      event.preventDefault();
+      var target = document.querySelector(closeBtn.dataset.related);
+      if (target) target.style.display = "none";
+    }
   });
 
   // Hover highlight for focusable elements
-  $(".focus").on({
-    mouseenter: function() {
-      $(this).css("background-color", "rgb(255,255,153)");
-    },
-    mouseleave: function() {
-      $(this).css("background-color", "transparent");
+  document.addEventListener("mouseenter", function(event) {
+    if (event.target.classList && event.target.classList.contains("focus")) {
+      event.target.style.backgroundColor = "rgb(255,255,153)";
     }
-  });
+  }, true);
+
+  document.addEventListener("mouseleave", function(event) {
+    if (event.target.classList && event.target.classList.contains("focus")) {
+      event.target.style.backgroundColor = "transparent";
+    }
+  }, true);
 
   // Search form target switching
-  $("#websearchbutton").on({
-    click: function() {
-      $('#searchform').attr('target', "_blank");
-    }
-  });
+  var webBtn = document.getElementById("websearchbutton");
+  var hdaBtn = document.getElementById("hdasearchbutton");
+  var searchForm = document.getElementById("searchform");
 
-  $("#hdasearchbutton").on({
-    click: function() {
-      $('#searchform').attr('target', "_self");
-    }
-  });
+  if (webBtn && searchForm) {
+    webBtn.addEventListener("click", function() { searchForm.target = "_blank"; });
+  }
+  if (hdaBtn && searchForm) {
+    hdaBtn.addEventListener("click", function() { searchForm.target = "_self"; });
+  }
 });
