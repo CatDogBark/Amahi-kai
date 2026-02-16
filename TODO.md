@@ -85,6 +85,9 @@
 - [x] CONTRIBUTING.md added (dev setup, testing, conventions)
 - [x] Expanded filter_parameter_logging (pin, password_confirmation)
 - [x] CSS cleanup: vendor prefixes removed, duplicate properties fixed
+- [x] All bare rescue blocks scoped to rescue => e (17 files)
+- [x] Production config: terser JS compression enabled, asset debug fixed
+- [x] Dead code removed: ServerController, firewall helpers, is_firefox?
 
 ---
 
