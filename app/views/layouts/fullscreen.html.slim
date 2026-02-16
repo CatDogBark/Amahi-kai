@@ -31,7 +31,7 @@ html[dir="#{@locale_direction}" lang="#{I18n.locale}" xml:lang="#{I18n.locale}"]
 
     = csrf_meta_tags
 
-  body.basic
+  body.basic data-turbo="false"
 
     = render 'layouts/header'
 

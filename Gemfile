@@ -16,6 +16,10 @@ gem 'jquery-ui-rails'
 gem 'slim'
 gem 'jbuilder'
 
+# Modern Rails frontend
+gem 'turbo-rails'
+gem 'stimulus-rails'
+
 gem 'activeresource'
 gem 'rails-observers'
 

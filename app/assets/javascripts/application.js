@@ -3,6 +3,14 @@
 //= require lib/jquery.ui.templates
 //= require jquery_ujs
 
+//= require turbo
+//= require stimulus.min
+
+//= require controllers/application_controller
+//= require controllers/toggle_controller
+//= require controllers/delete_controller
+//= require controllers/inline_edit_controller
+
 //= require forms/remote-radios
 //= require forms/remote-checkboxes
 //= require forms/remote-selects

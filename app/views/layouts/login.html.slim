@@ -11,5 +11,5 @@ html[dir="#{@locale_direction}" lang="#{I18n.locale}" xml:lang="#{I18n.locale}"]
   /[ if lt IE 9 ]
     = javascript_include_tag 'http://html5shim.googlecode.com/svn/trunk/html5.js'
 
-  body.login
+  body.login data-turbo="false"
     = yield
