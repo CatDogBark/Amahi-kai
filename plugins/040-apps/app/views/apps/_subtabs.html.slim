@@ -1,6 +1,0 @@
-ul.prefsubtab
-  li[class="#{subtab_class('index', 'apps')} first"]= link_to t('available'), '/tab/apps'
-  li[class="#{subtab_class('installed', 'apps')}"]= link_to t('installed'), '/tab/apps/installed'
-  li[class="#{subtab_class('docker_apps', 'apps')} #{advanced? ? 'other' : 'last'}"]= link_to t('docker_apps', default: 'Docker Apps'), '/tab/apps/docker_apps'
-  - if advanced?
-    li[class="#{subtab_class('webapps', 'apps')} last"]= link_to t('webapps'), '#'
