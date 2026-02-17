@@ -121,7 +121,7 @@ chown -R "$APP_USER:$APP_GROUP" "$APP_DIR"
 # 5. Bundle install
 # ---------------------------------------------------------------------------
 echo "==> Installing Ruby gems..."
-sudo -u "$APP_USER" bash -lc "cd $APP_DIR && bundle config set --local without 'development test' && bundle install --jobs 4"
+sudo -u "$APP_USER" bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && bundle config set --local without 'development test' && bundle install --jobs 4"
 
 # ---------------------------------------------------------------------------
 # 6. Create directories
@@ -186,10 +186,10 @@ EOSQL
 # 9. Database migrations
 # ---------------------------------------------------------------------------
 echo "==> Running database migrations..."
-sudo -u "$APP_USER" bash -lc "cd $APP_DIR && RAILS_ENV=production bin/rails db:migrate"
+sudo -u "$APP_USER" bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && RAILS_ENV=production bin/rails db:migrate"
 
 echo "==> Seeding database..."
-sudo -u "$APP_USER" bash -lc "cd $APP_DIR && RAILS_ENV=production bin/rails db:seed"
+sudo -u "$APP_USER" bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && RAILS_ENV=production bin/rails db:seed"
 
 # Detect host IP and patch network settings to match this machine
 HOST_IP=$(hostname -I | awk '{print $1}')
@@ -197,7 +197,7 @@ if [ -n "$HOST_IP" ]; then
   NET_PREFIX=$(echo "$HOST_IP" | cut -d. -f1-3)
   SELF_ADDR=$(echo "$HOST_IP" | cut -d. -f4)
   echo "==> Configuring network settings for $HOST_IP..."
-  sudo -u "$APP_USER" bash -lc "cd $APP_DIR && RAILS_ENV=production bin/rails runner \"
+  sudo -u "$APP_USER" bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && RAILS_ENV=production bin/rails runner \"
     Setting.set('net', '$NET_PREFIX')
     Setting.set('self-address', '$SELF_ADDR')
   \""
@@ -207,7 +207,7 @@ fi
 # 10. Asset precompilation
 # ---------------------------------------------------------------------------
 echo "==> Precompiling assets..."
-sudo -u "$APP_USER" bash -lc "cd $APP_DIR && RAILS_ENV=production bin/rails assets:precompile"
+sudo -u "$APP_USER" bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && RAILS_ENV=production bin/rails assets:precompile"
 
 # ---------------------------------------------------------------------------
 # 11. Sudoers allowlist
