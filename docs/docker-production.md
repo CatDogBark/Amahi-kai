@@ -1,13 +1,13 @@
 # Docker Production Deployment — Architecture Spec
 
-*Status: DRAFT — awaiting Troy's review before implementation.*
-*Author: Kai | Date: 2026-02-17*
+*Status: FINAL DRAFT — awaiting Troy's approval before implementation.*
+*Authors: Kai (app/Rails) + Claude Code (infrastructure) | Date: 2026-02-17*
 
 ---
 
 ## Overview
 
-Amahi-kai currently runs in Docker with `RAILS_ENV=development` and `dummy_mode: true`, which no-ops all system commands. This doc specifies how to make Docker the **real production deployment target** — where the container can manage users, shares, DNS, and services on the host system.
+Amahi-kai currently runs in Docker with `RAILS_ENV=development` and `dummy_mode: true`, which no-ops all system commands. This doc specifies how to make Docker the **real production deployment target** — where the container can manage users, shares, and services on the host.
 
 ### Why Docker?
 
@@ -15,6 +15,17 @@ Amahi-kai currently runs in Docker with `RAILS_ENV=development` and `dummy_mode:
 - **Reproducible builds** — the image is the same everywhere
 - **Easy rollback** — bad deploy? `docker compose pull && up -d` with the old image
 - **Simplified install** — users need Docker + docker-compose, not a full Ruby/Rails dev env
+
+### Design Decisions (agreed)
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Samba | Host install, container manages config | SMB needs LAN broadcast/mDNS; containerizing adds complexity for no gain |
+| dnsmasq | Host install, container manages config (Phase 2) | Same as Samba; needs new config generation code first |
+| Command execution | Direct (bind mounts + sudoers) | Phase 1 simplicity; host agent proxy deferred to Phase 2 |
+| Container user | Non-root `amahi` user with scoped sudoers | Least privilege within direct execution model |
+| Config persistence | `/etc/amahi-kai/amahi.env` (outside repo) | Survives rebuilds, can't be accidentally committed |
+| Install method | `bin/amahi-install` script (idempotent) | One command to go from blank Ubuntu to running system |
 
 ---
 
@@ -46,12 +57,16 @@ Every system call Amahi-kai makes, categorized by what it touches:
 
 **Host paths touched:** `/var/hda/files/*` (share data), `/etc/samba/smb.conf`, `/etc/samba/lmhosts`
 
-### 1.3 DNS (`dns_alias.rb`)
+### 1.3 DNS (`dns_alias.rb`) — PHASE 2
 | Action | Commands |
 |--------|----------|
-| Create/delete/update alias | `hda-ctl-hup` (legacy — sends HUP to dnsmasq) |
+| Create/delete/update alias | Currently: `system "hda-ctl-hup"` (broken — bypasses Command class, binary doesn't exist) |
 
-**Host paths touched:** dnsmasq config (if we rewrite this to generate config files instead)
+**Gap identified:** No code exists to generate dnsmasq config files. The old Amahi platform had a separate `hda-ctl` daemon that read aliases from the DB and wrote dnsmasq config. We need to write:
+- `DnsAlias#write_dnsmasq_config` — generates `/etc/dnsmasq.d/amahi-aliases.conf`
+- `DnsAlias#restart` — refactored to use `Command` class + `systemctl reload dnsmasq`
+
+**Deferred to Phase 2** — not blocking core functionality (users, shares, Samba).
 
 ### 1.4 Services (`server.rb`, `platform.rb`)
 | Action | Commands |
@@ -65,13 +80,12 @@ Every system call Amahi-kai makes, categorized by what it touches:
 
 **Host paths touched:** `/etc/monit/conf.d/*`, `/etc/monit/monitrc`
 
-### 1.5 Apps (`app.rb`)
+### 1.5 Docker Apps (`docker_app.rb`, `container_service.rb`)
 | Action | Commands |
 |--------|----------|
-| Install/uninstall | Shell scripts via `Command` |
-| Docker socket | `chmod 666 /var/run/docker.sock` |
+| Install/manage apps | Docker API via socket |
 
-**Host paths touched:** `/var/hda/apps/*`, `/var/hda/web-apps/*`, `/var/run/docker.sock`
+**Host paths touched:** `/var/run/docker.sock`
 
 ### 1.6 Databases (`db.rb`)
 | Action | Commands |
@@ -89,21 +103,39 @@ Every system call Amahi-kai makes, categorized by what it touches:
 
 **Host paths touched:** reads from share paths, writes to `tmp/cache/search/`
 
-### 1.8 Other
-| What | Path |
-|------|------|
-| Platform detection | Reads `/etc/issue` |
-| DHCP leases | Reads `/var/lib/dnsmasq/dnsmasq.leases` |
-| Disk info | Reads from system (fdisk, mount, df) — via Disks plugin |
-| Network info | Reads from system interfaces — via Network plugin |
-
 ---
 
-## 2. Proposed Architecture
+## 2. Architecture
 
-### 2.1 Execution Model: Host Command Proxy
+### 2.1 Phase 1: Direct Execution (bind mounts + sudoers)
 
-Rather than giving the container full root access to the host, we use a **command proxy** pattern:
+```
+┌─────────────────────────────┐
+│      Docker Container       │
+│                             │
+│  Rails App (user: amahi)    │
+│    ↓                        │
+│  Command class              │
+│    ↓                        │
+│  sudo (scoped sudoers)      │
+│    ↓                        │
+│  useradd / pdbedit / etc    │
+│  (via bind-mounted paths)   │
+└──────────┬──────────────────┘
+           │ bind mounts
+┌──────────▼──────────────────┐
+│      Host System            │
+│                             │
+│  /etc/passwd, /etc/shadow   │
+│  /etc/samba/                │
+│  /var/hda/files/            │
+│  /home/                     │
+│  /var/run/docker.sock       │
+│  /var/run/dbus/system_bus   │
+└─────────────────────────────┘
+```
+
+### 2.2 Phase 2 (Future): Host Agent Proxy
 
 ```
 ┌─────────────────────┐     ┌──────────────────────┐
@@ -118,90 +150,86 @@ Rather than giving the container full root access to the host, we use a **comman
 └─────────────────────┘     └──────────────────────┘
 ```
 
-**Why a proxy instead of direct bind mounts + capabilities?**
-
-- **Least privilege** — container never has root, CAP_SYS_ADMIN, or access to /etc/shadow
-- **Auditable** — every command goes through an allowlist on the host side
-- **Containable** — if the Rails app is compromised, the attacker can only run allowlisted commands
-- **Simpler Docker config** — no privileged mode, no complex capability sets
-
-**The host agent** is a small daemon (bash script or Go binary) that:
-1. Listens on a Unix socket mounted into the container
-2. Receives command requests (JSON: `{"cmd": "useradd", "args": [...]}`)
-3. Validates against an allowlist of permitted command patterns
-4. Executes as root and returns exit code + stdout/stderr
-5. Logs every command for audit
-
-### 2.2 Alternative: Direct Execution (Simpler, Less Secure)
-
-For users who want simplicity over security (home server context — single trusted admin):
-
-```yaml
-# docker-compose.prod-direct.yml
-services:
-  web:
-    privileged: false
-    cap_add:
-      - DAC_OVERRIDE    # file permission operations
-      - CHOWN           # chown on share dirs
-      - FOWNER          # chmod on files we don't own
-      - SETUID          # useradd/userdel need to set UIDs
-      - SETGID          # usermod group operations
-    volumes:
-      - /etc/passwd:/etc/passwd
-      - /etc/shadow:/etc/shadow
-      - /etc/group:/etc/group
-      - /etc/samba:/etc/samba
-      - /etc/dnsmasq.d:/etc/dnsmasq.d
-      - /etc/monit/conf.d:/etc/monit/conf.d
-      - /home:/home
-      - /var/hda:/var/hda
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /var/log/samba:/var/log/samba
-```
-
-**Problem:** This is basically giving the container root access to the host with extra steps. Any Rails RCE = full host compromise. Fine for a home server with a single admin, but not great practice.
-
-### 2.3 Recommendation
-
-**Phase 1 (now):** Direct execution model. Get it working, prove the concept.
-**Phase 2 (later):** Host agent proxy for users who want better isolation.
-
-Rationale: This is a home server, not a multi-tenant cloud. The admin running Docker already has root. Adding the proxy layer is good engineering but shouldn't block shipping.
+Deferred — adds security but requires writing a new daemon. The `Command` class is already mode-switchable (`:dummy`, `:direct`, `:hdactl`) so adding `:proxy` is straightforward when needed.
 
 ---
 
-## 3. Configuration Changes
+## 3. Security Boundary: Sudoers Allowlist
 
-### 3.1 `config/hda.yml` — Environment-Based Override
+This is the **real security enforcement.** The container runs as non-root user `amahi`. The sudoers file defines exactly what it can escalate to:
 
-```yaml
-defaults: &defaults
-  dummy_mode: false
+```sudoers
+# /etc/sudoers.d/amahi — Amahi-kai production allowlist
+# User management
+amahi ALL=(root) NOPASSWD: /usr/sbin/useradd
+amahi ALL=(root) NOPASSWD: /usr/sbin/usermod
+amahi ALL=(root) NOPASSWD: /usr/sbin/userdel
+amahi ALL=(root) NOPASSWD: /usr/bin/pdbedit
 
-development:
-  <<: *defaults
-  dummy_mode: true    # safe for dev
+# File/share management (scoped to /var/hda)
+amahi ALL=(root) NOPASSWD: /bin/mkdir -p /var/hda/*
+amahi ALL=(root) NOPASSWD: /bin/rmdir /var/hda/*
+amahi ALL=(root) NOPASSWD: /bin/chmod
+amahi ALL=(root) NOPASSWD: /bin/chown
 
-test:
-  <<: *defaults
-  dummy_mode: true    # safe for test
+# Samba config (scoped to specific files)
+amahi ALL=(root) NOPASSWD: /bin/cp * /etc/samba/smb.conf
+amahi ALL=(root) NOPASSWD: /bin/cp * /etc/samba/lmhosts
 
-production:
-  <<: *defaults
-  dummy_mode: false   # real commands
+# Service management (scoped to Amahi-managed services ONLY)
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start smbd.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop smbd.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart smbd.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl reload smbd.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable smbd.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl disable smbd.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start nmbd.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop nmbd.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart nmbd.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl reload nmbd.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable nmbd.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl disable nmbd.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start dnsmasq.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop dnsmasq.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart dnsmasq.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl reload dnsmasq.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable dnsmasq.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl disable dnsmasq.service
 ```
 
-No change needed here — production already has `dummy_mode: false`. The key is switching `RAILS_ENV=production` in docker-compose.
+### What's NOT allowed
 
-However, we should also support an **env var override** so users can run production Rails with dummy mode for testing:
+- No `rm`, `mv`, `cp` (except scoped Samba config copies)
+- No `apt-get`, `dpkg`, or package management
+- No `systemctl` for arbitrary services (no sshd, docker, etc.)
+- No shell access, no wildcards
 
-```ruby
-# lib/yetting.rb or config/hda.yml loader
-# ENV['AMAHI_DUMMY_MODE'] overrides config file
+### Code cleanup needed
+
+The `Command` class `needs_sudo?` method currently includes `rm`, `mv`, `cp`, `apt-get` in its prefix list. These should be removed to match the sudoers boundary. This is a defense-in-depth cleanup — sudoers is the real enforcement, but the code should reflect intent.
+
+---
+
+## 4. Configuration
+
+### 4.1 Persistent Config: `/etc/amahi-kai/amahi.env`
+
+Generated by the install script, **outside the repo**, sourced by docker-compose:
+
+```bash
+# /etc/amahi-kai/amahi.env
+SECRET_KEY_BASE=<64-char hex generated at install>
+DB_ROOT_PASSWORD=<generated>
+RAILS_ENV=production
+DATABASE_HOST=db
+DATABASE_NAME=amahi_production
+AMAHI_DUMMY_MODE=false
+# Optional:
+# RAILS_ALLOWED_HOST=nas.example.com
+# AMAHI_SHARE_ROOT=/var/hda/files
 ```
 
-### 3.2 `docker-compose.yml` — Production Profile
+### 4.2 `docker-compose.prod.yml`
 
 ```yaml
 services:
@@ -211,9 +239,11 @@ services:
     restart: unless-stopped
     volumes:
       - db_data:/var/lib/mysql
+    env_file:
+      - /etc/amahi-kai/amahi.env
     environment:
       MARIADB_ROOT_PASSWORD: "${DB_ROOT_PASSWORD:-amahi}"
-      MARIADB_DATABASE: amahi_production
+      MARIADB_DATABASE: "${DATABASE_NAME:-amahi_production}"
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
@@ -226,18 +256,12 @@ services:
     container_name: amahi_web
     restart: unless-stopped
     ports:
-      - "80:3000"       # or use reverse proxy
-      - "443:3000"      # if terminating TLS in the container
+      - "80:3000"
     depends_on:
       db:
         condition: service_healthy
-    environment:
-      RAILS_ENV: production
-      DATABASE_HOST: db
-      DATABASE_NAME: amahi_production
-      SECRET_KEY_BASE: "${SECRET_KEY_BASE}"    # MUST be set
-      RAILS_ALLOWED_HOST: "${RAILS_ALLOWED_HOST:-}"
-      AMAHI_DUMMY_MODE: "false"
+    env_file:
+      - /etc/amahi-kai/amahi.env
     cap_add:
       - DAC_OVERRIDE
       - CHOWN
@@ -245,22 +269,27 @@ services:
       - SETUID
       - SETGID
     volumes:
-      # Host system management
+      # Host user/group management
       - /etc/passwd:/etc/passwd
       - /etc/shadow:/etc/shadow
       - /etc/group:/etc/group
       - /etc/gshadow:/etc/gshadow
-      - /etc/samba:/etc/samba
-      - /etc/monit/conf.d:/etc/monit/conf.d:rw
-      - /var/log/samba:/var/log/samba
-      # Data
-      - /var/hda:/var/hda
       - /home:/home
-      # Docker socket (for Docker app management)
+
+      # Samba config
+      - /etc/samba:/etc/samba
+
+      # Share data
+      - /var/hda:/var/hda
+
+      # Docker socket (for Docker App System)
       - /var/run/docker.sock:/var/run/docker.sock
-      # Host systemctl access (read-only)
-      - /run/systemd/system:/run/systemd/system:ro
+
+      # Host systemctl access via D-Bus
       - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket
+
+      # Samba logs
+      - /var/log/samba:/var/log/samba
     stdin_open: true
     tty: true
 
@@ -268,7 +297,7 @@ volumes:
   db_data:
 ```
 
-### 3.3 Dockerfile Changes for Production
+### 4.3 Dockerfile Changes
 
 ```dockerfile
 # Additional packages for production
@@ -276,142 +305,200 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   # ... existing packages ...
   samba-common-bin \   # pdbedit for Samba user management
   dbus \               # systemctl needs D-Bus to talk to host systemd
-  sudo \               # Command class uses sudo for privileged ops
+  sudo \               # Scoped privilege escalation
   && rm -rf /var/lib/apt/lists/*
 
-# Run as non-root by default; sudo for privileged commands
-RUN useradd -m -s /bin/bash amahi && \
-    echo "amahi ALL=(ALL) NOPASSWD: /usr/sbin/useradd,/usr/sbin/usermod,/usr/sbin/userdel,/usr/bin/pdbedit,/bin/chmod,/bin/chown,/bin/mkdir,/bin/rmdir,/bin/cp,/bin/mv,/bin/rm,/usr/bin/systemctl" > /etc/sudoers.d/amahi
+# Non-root user with scoped sudo
+RUN useradd -m -s /bin/bash amahi
+COPY docker/sudoers-amahi /etc/sudoers.d/amahi
+RUN chmod 440 /etc/sudoers.d/amahi
 
 USER amahi
 ```
 
-### 3.4 DNS Alias Fix
-
-`dns_alias.rb` calls `system "hda-ctl-hup"` directly (bypasses `Command` class). This needs to be refactored to:
+### 4.4 `config/hda.yml` — Add Env Var Override
 
 ```ruby
-def restart
-  c = Command.new
-  c.submit("systemctl reload dnsmasq")
-  c.execute
+# In lib/yetting.rb or wherever dummy_mode is read:
+def self.dummy_mode
+  if ENV['AMAHI_DUMMY_MODE'].present?
+    ENV['AMAHI_DUMMY_MODE'] == 'true'
+  else
+    # Fall back to config file
+    config['dummy_mode']
+  end
 end
 ```
 
-Or, if we move to generating dnsmasq config files:
-
-```ruby
-def restart
-  write_dnsmasq_config  # write /etc/dnsmasq.d/amahi-aliases.conf
-  c = Command.new("systemctl reload dnsmasq")
-  c.execute
-end
-```
-
-### 3.5 systemctl from Inside Docker
-
-Running `systemctl` inside a container to control **host** services requires the D-Bus socket:
-
-```yaml
-volumes:
-  - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket
-```
-
-And the `dbus` package installed in the container. This lets `systemctl` send commands to the host's systemd over D-Bus.
-
-**Important:** This only works for `systemctl start/stop/restart/reload/enable/disable` on host services. It does NOT give the container ability to install systemd units — those are bind-mounted paths.
+This lets users run `RAILS_ENV=production` with `AMAHI_DUMMY_MODE=true` for testing the production stack without real system commands.
 
 ---
 
-## 4. Security Considerations
+## 5. Install Script: `bin/amahi-install`
 
-### 4.1 Threat Model
+Idempotent. Run it once on a blank Ubuntu 24.04 server. Run it again, nothing breaks.
 
-This is a **home server** managed by a **single trusted admin** on a **local network**. The threat model is:
+```bash
+#!/bin/bash
+# bin/amahi-install — Amahi-kai production installer
+set -euo pipefail
+
+CONFIG_DIR="/etc/amahi-kai"
+ENV_FILE="$CONFIG_DIR/amahi.env"
+SHARE_ROOT="/var/hda/files"
+
+echo "==> Amahi-kai Production Installer"
+
+# 1. Install Docker (if needed)
+if ! command -v docker &>/dev/null; then
+  echo "==> Installing Docker..."
+  curl -fsSL https://get.docker.com | sh
+  systemctl enable --now docker
+fi
+
+# 2. Install docker-compose plugin (if needed)
+if ! docker compose version &>/dev/null; then
+  echo "==> Installing docker-compose plugin..."
+  apt-get update && apt-get install -y docker-compose-plugin
+fi
+
+# 3. Install Samba (if needed)
+if ! command -v smbd &>/dev/null; then
+  echo "==> Installing Samba..."
+  apt-get update && apt-get install -y samba samba-common-bin
+  systemctl enable --now smbd nmbd
+fi
+
+# 4. Create directories
+echo "==> Creating directories..."
+mkdir -p "$SHARE_ROOT"
+mkdir -p "$CONFIG_DIR"
+mkdir -p /var/hda/dbs
+
+# 5. Generate .env file (if not exists)
+if [ ! -f "$ENV_FILE" ]; then
+  echo "==> Generating configuration..."
+  SECRET=$(openssl rand -hex 32)
+  DB_PASS=$(openssl rand -hex 16)
+  cat > "$ENV_FILE" <<EOF
+SECRET_KEY_BASE=$SECRET
+DB_ROOT_PASSWORD=$DB_PASS
+RAILS_ENV=production
+DATABASE_HOST=db
+DATABASE_NAME=amahi_production
+AMAHI_DUMMY_MODE=false
+EOF
+  chmod 600 "$ENV_FILE"
+  echo "==> Config written to $ENV_FILE"
+else
+  echo "==> Config already exists at $ENV_FILE (skipping)"
+fi
+
+# 6. Build and start
+echo "==> Starting Amahi-kai..."
+docker compose -f docker-compose.prod.yml up -d --build
+
+echo ""
+echo "==> Amahi-kai is starting up!"
+echo "    Visit: http://$(hostname -I | awk '{print $1}'):80"
+echo "    Login: admin / secretpassword (CHANGE THIS)"
+echo ""
+echo "    Config: $ENV_FILE"
+echo "    Shares: $SHARE_ROOT"
+```
+
+---
+
+## 6. Security Considerations
+
+### 6.1 Threat Model
+
+Home server, single trusted admin, local network. The threat model:
 
 - **Primary risk:** Rails RCE via unpatched vulnerability → attacker gets container access
-- **Mitigated by:** Allowlisted sudo commands, no shell access to host, container user is non-root
-- **Accepted risk:** Someone with Rails admin credentials can manage the system (that's the feature)
+- **Mitigated by:** Non-root user, scoped sudoers (no rm/mv/cp/apt-get, systemctl limited to 3 services)
+- **Accepted risk:** Admin with Rails credentials can manage system (that's the feature)
 
-### 4.2 Hardening Measures
+### 6.2 Docker Socket Warning
 
-| Measure | Status |
-|---------|--------|
-| Container runs as non-root user | Proposed |
-| Sudo limited to specific commands with NOPASSWD | Proposed |
-| No `--privileged` flag | Proposed |
-| Minimal Linux capabilities (no CAP_SYS_ADMIN) | Proposed |
-| `/etc/shadow` bind-mount (needed for useradd) | Required but sensitive |
-| Docker socket access (for Docker app management) | Required — inherently root-equivalent |
-| Rack::Attack rate limiting | Already implemented |
-| CSRF protection | Already implemented |
-| Shellwords.escape on all user input | Already implemented |
-| CSP headers | Already implemented (report-only) |
-| Session cookie hardening | Already implemented |
+Mounting `/var/run/docker.sock` is **effectively root access** to the host. Anyone who can create Docker containers can escape to the host. This is an accepted trade-off for the Docker App System.
 
-### 4.3 Docker Socket Warning
+Future mitigation: Docker socket proxy (e.g., Tecnativa/docker-socket-proxy) limiting API surface.
 
-Mounting `/var/run/docker.sock` is **effectively root access** to the host. Anyone who can hit the Docker API can create privileged containers, mount host filesystems, etc. This is an accepted trade-off for the Docker App System feature.
+### 6.3 `/etc/shadow` Access
 
-Mitigation options (future):
-- Docker socket proxy (e.g., Tecnativa/docker-socket-proxy) that only allows specific API calls
-- Run Docker App management as a separate sidecar with restricted socket access
+Required because `useradd`/`usermod` modify `/etc/shadow`. Container can read password hashes.
+Mitigation: non-root user, only sudo'd user management commands can touch it.
+Future: host agent proxy eliminates this exposure entirely.
 
-### 4.4 `/etc/shadow` Access
+### 6.4 Existing Hardening (already implemented)
 
-Needed because `useradd` modifies `/etc/shadow`. The container can read password hashes. Mitigation:
-- Container runs as non-root; only sudo'd `useradd`/`usermod`/`userdel` can touch it
-- Future: host agent proxy eliminates this exposure entirely
+- Rack::Attack rate limiting
+- CSRF protection
+- Shellwords.escape on all user input to shell commands
+- CSP headers (report-only)
+- Session cookie hardening (httponly, same_site: :lax)
+- SQL injection fixes (parameterized queries)
 
 ---
 
-## 5. Migration Path
+## 7. Implementation Phases
 
-### Step 1: Production Docker Compose (this spec)
-- New `docker-compose.prod.yml` with bind mounts and capabilities
-- Dockerfile adds `samba-common-bin`, `dbus`, `sudo`, sudoers config
-- Switch `RAILS_ENV=production`, `dummy_mode: false`
-- Fix `dns_alias.rb` to use `Command` class
-- Add `AMAHI_DUMMY_MODE` env var override
-- Generate `SECRET_KEY_BASE` and document it
+### Phase 1: Production Docker (implement now)
+- [ ] `docker-compose.prod.yml` with bind mounts, capabilities, env_file
+- [ ] Dockerfile: add `samba-common-bin`, `dbus`, `sudo`, non-root user
+- [ ] `docker/sudoers-amahi` — scoped allowlist (per Section 3)
+- [ ] `AMAHI_DUMMY_MODE` env var override in yetting/hda.yml loader
+- [ ] Fix `dns_alias.rb` — refactor `system "hda-ctl-hup"` to use `Command` class (no-op for now)
+- [ ] Clean up `Command#needs_sudo?` — remove `rm`, `mv`, `cp`, `apt-get` from prefix list
+- [ ] `bin/amahi-install` — idempotent installer script
+- [ ] Asset precompilation in Dockerfile (not at runtime)
+- [ ] Validate: user CRUD (Linux + Samba), share CRUD, Samba config generation, Docker apps
 
-### Step 2: Validate Core Features
-- User create/modify/delete (Linux + Samba)
-- Share create/delete with correct permissions on host filesystem
-- Samba config generation and reload
-- Service start/stop via systemctl
-- Docker app install/uninstall
+### Phase 2: DNS + Hardening (after core is proven)
+- [ ] `DnsAlias#write_dnsmasq_config` — generate `/etc/dnsmasq.d/amahi-aliases.conf`
+- [ ] dnsmasq install in `bin/amahi-install`
+- [ ] Add dnsmasq service entries to sudoers
+- [ ] Docker socket proxy for App System
+- [ ] `config.force_ssl` with reverse proxy documentation
+- [ ] Health check endpoint (`/healthz`)
+- [ ] Log rotation strategy
+- [ ] Backup documentation (DB + share data)
 
-### Step 3: Production Hardening
-- Non-root container user with sudoers allowlist
-- Asset precompilation in Dockerfile (not at runtime)
-- Log rotation
-- Backup strategy for DB + share data
-- Health check endpoint
-- `config.force_ssl` with reverse proxy (Cloudflare Tunnel handles this)
-
-### Step 4 (Future): Host Agent Proxy
-- Small daemon on host listening on Unix socket
-- Command allowlist with argument validation
-- Audit logging
-- Eliminates need for `/etc/shadow` mount and most capabilities
-
----
-
-## 6. Open Questions for Troy
-
-1. **Where are shares stored on the NAS?** Need to know the actual path to bind-mount (e.g., `/mnt/data`, `/srv/shares`, or keep `/var/hda/files`).
-
-2. **Is Samba already running on the host?** If so, we write config and reload. If not, should the container run Samba itself?
-
-3. **Is dnsmasq running on the host?** Same question — manage it from the container, or skip DNS management for now?
-
-4. **Is monit installed?** The service monitoring uses monit config files. Could replace with systemd-native monitoring if monit isn't in the picture.
-
-5. **Do you want the development and production compose files separate** (`docker-compose.yml` + `docker-compose.prod.yml`) or a single file with profiles?
-
-6. **Secret key management** — Docker secrets, `.env` file, or just document that the user must set `SECRET_KEY_BASE`?
+### Phase 3: Host Agent Proxy (future)
+- [ ] Small daemon on host listening on Unix socket
+- [ ] Command allowlist with argument validation
+- [ ] Audit logging
+- [ ] New `Command` execution mode: `:proxy`
+- [ ] Eliminates need for `/etc/shadow` mount and most capabilities
 
 ---
 
-*Next step: Troy reviews this spec, answers open questions, then Kai implements.*
+## 8. What Persists Across Container Rebuilds
+
+| What | Where | Type | Survives `docker compose down`? |
+|------|-------|------|--------------------------------|
+| Share files | `/var/hda/files/` | Host path | ✅ |
+| Database | `db_data` volume | Docker volume | ✅ |
+| Linux users | `/etc/passwd`, `/etc/shadow` | Host files | ✅ |
+| Samba users | `/var/lib/samba/` | Host path | ✅ |
+| Samba config | `/etc/samba/` | Host path | ✅ |
+| App config | `/etc/amahi-kai/amahi.env` | Host file | ✅ |
+| Rails code | Container image | Rebuilt on upgrade | N/A |
+| Assets, gems | Container image | Rebuilt on upgrade | N/A |
+
+---
+
+## 9. Upgrade Flow
+
+```bash
+cd /path/to/amahi-kai
+git pull
+docker compose -f docker-compose.prod.yml up -d --build
+# Entrypoint runs db:migrate automatically
+# Done.
+```
+
+---
+
+*Next step: Troy reviews and approves. Kai implements Phase 1.*
