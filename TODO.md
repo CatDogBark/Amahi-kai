@@ -91,7 +91,18 @@
 
 ---
 
-## 🔴 Priority 1: Security & Stability
+## 🔴 Priority 1: Production Docker Deployment
+
+### 1.0 Docker Production Model — SPEC COMPLETE, AWAITING REVIEW
+- **Spec:** `docs/docker-production.md`
+- [ ] Troy reviews spec and answers open questions
+- [ ] `docker-compose.prod.yml` with bind mounts and capabilities
+- [ ] Dockerfile: add `samba-common-bin`, `dbus`, `sudo`, non-root user, sudoers allowlist
+- [ ] Fix `dns_alias.rb` to use `Command` class (currently calls `system "hda-ctl-hup"` directly)
+- [ ] Add `AMAHI_DUMMY_MODE` env var override to `config/hda.yml` loader
+- [ ] Validate: user CRUD, share CRUD, Samba config, systemctl, Docker apps
+- [ ] Production hardening: secret key docs, asset precompile in build, log rotation
+- [ ] (Future) Host agent proxy for better isolation
 
 ### 1.1 Remaining Security Items
 - [ ] Enable `config.force_ssl` in production (needs HTTPS setup guidance)
