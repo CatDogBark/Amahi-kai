@@ -156,11 +156,13 @@ RAILS_ALLOWED_HOST=nas.enlightenedsolutionsllc.com
 # Share root (default: /var/hda/files)
 # AMAHI_SHARE_ROOT=/var/hda/files
 EOF
-  chmod 600 "$ENV_FILE"
-  chown root:root "$ENV_FILE"
+  chmod 640 "$ENV_FILE"
+  chown root:"$APP_USER" "$ENV_FILE"
   echo "    Config written to $ENV_FILE"
 else
   echo "    Config already exists at $ENV_FILE (skipping)"
+  chmod 640 "$ENV_FILE"
+  chown root:"$APP_USER" "$ENV_FILE"
 fi
 
 # Source the env file for DB setup
