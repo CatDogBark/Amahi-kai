@@ -130,6 +130,8 @@ echo "==> Creating data directories..."
 mkdir -p "$SHARE_ROOT"
 mkdir -p "$CONFIG_DIR"
 mkdir -p /var/hda/dbs
+mkdir -p /var/hda/tmp
+chown "$APP_USER:$APP_GROUP" /var/hda/tmp
 
 # ---------------------------------------------------------------------------
 # 7. Generate config (if not exists)

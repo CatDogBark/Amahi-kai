@@ -30,11 +30,12 @@ gem 'docker-api'
 gem 'rack', '~> 3.2.5'
 gem 'rack-attack'
 
+gem 'puma'
+
 group :development do
   gem 'listen'
   gem 'better_errors'
   gem 'binding_of_caller', '~> 2.0'
-  gem 'puma'
   gem 'bullet'
 end
 
