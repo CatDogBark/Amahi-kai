@@ -22,7 +22,7 @@ require 'amahi_api'
 require 'command'
 require 'downloader'
 require 'system_utils'
-require 'container'
+require 'container_service'
 require 'docker'
 
 class App < ApplicationRecord
@@ -360,8 +360,8 @@ class App < ApplicationRecord
 						:volume => webapp_path,
 						:port => BASE_PORT+self.id
 				}
-				container = Container.new(id=identifier, options=options)
-				container.create
+				# Legacy: create PHP5 container via ContainerService
+				ContainerService.create(image: "amahi/#{identifier}", name: identifier, ports: { '80' => (BASE_PORT+self.id).to_s }, volumes: { '/var/www/html' => "#{webapp_path}/html" })
 
 				# We skipped creation of webapp earlier so we will create now since we have obtained an id for our app
 				webapp = Webapp.create(:name => name, :path => webapp_path, :deletable => false, :custom_options => installer.webapp_custom_options, :kind => installer.kind)
@@ -424,8 +424,7 @@ class App < ApplicationRecord
 			# FIXME - what happens if this throws an exception?
 			if installer.kind=="PHP5"
 				# This one extra step is required to stop and remove the container
-				container = Container.new(id=identifier)
-				container.remove
+				ContainerService.remove(identifier)
 			end
 
 			# FIXME - set to nil to destroy??

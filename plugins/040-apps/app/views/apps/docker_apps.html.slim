@@ -1,0 +1,29 @@
+= render 'subtabs'
+
+.docker-apps-header.mb-3
+  .row.align-items-center
+    .col-md-6
+      h4.mb-0= t('docker_apps', default: 'Docker Apps')
+    .col-md-6.text-end
+      - if @categories.any?
+        .btn-group.btn-group-sm
+          = link_to t('all', default: 'All'), '/tab/apps/docker_apps', class: "btn btn-#{@current_category.blank? ? 'primary' : 'outline-primary'} btn-sm"
+          - @categories.each do |cat|
+            = link_to cat.capitalize, "/tab/apps/docker_apps?category=#{cat}", class: "btn btn-#{@current_category == cat ? 'primary' : 'outline-primary'} btn-sm"
+
+- if @docker_apps.any?
+  .settings-table
+    table.settings
+      tr
+        th.settings-col1.settings-col1-pad1.apps-col1[scope='col']= t('application')
+        th.settings-col2.ps-2.apps-col2[scope='col']= t('description')
+        th.text-end.pe-3[scope='col' style='width: 120px']= t('status', default: 'Status')
+
+    - @docker_apps.each do |app|
+      = render partial: 'docker_app', locals: { app: app }
+- else
+  div.align-center.default-message.mt-4
+    h4= t('no_docker_apps', default: 'No Docker apps available')
+    p= t('docker_not_configured', default: 'Check that Docker is installed and the app catalog is configured.')
+
+= javascript_include_tag 'apps'

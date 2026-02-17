@@ -1,0 +1,88 @@
+require 'spec_helper'
+
+describe "Docker Apps", type: :request do
+  include RequestHelpers
+
+  before(:each) do
+    create(:admin)
+    create(:setting, name: "net", value: "192.168.1")
+    create(:setting, name: "self-address", value: "10")
+    create(:setting, name: "domain", value: "amahi.net")
+    create(:setting, name: "advanced", value: "1")
+    create(:setting, name: "theme", value: "default")
+    create(:setting, name: "guest-dashboard", value: "0")
+    login_as_admin
+  end
+
+  describe "GET docker_apps" do
+    it "shows the Docker apps page" do
+      get "/tab/apps/docker_apps"
+      expect(response).to have_http_status(:success)
+      expect(response.body).to include("Docker Apps")
+    end
+
+    it "filters by category" do
+      get "/tab/apps/docker_apps", params: { category: "media" }
+      expect(response).to have_http_status(:success)
+    end
+  end
+
+  describe "POST docker/install/:id" do
+    it "installs a Docker app from catalog" do
+      post "/tab/apps/docker/install/jellyfin"
+      expect(response).to redirect_to("/tab/apps/docker_apps")
+      expect(DockerApp.find_by(identifier: "jellyfin")).to be_present
+      expect(DockerApp.find_by(identifier: "jellyfin").status).to eq("running")
+    end
+
+    it "returns not found for unknown app" do
+      post "/tab/apps/docker/install/nonexistent"
+      expect(response).to have_http_status(:not_found)
+    end
+  end
+
+  describe "POST docker/stop/:id" do
+    it "stops a running Docker app" do
+      DockerApp.create!(identifier: "testapp", name: "Test", image: "test:latest", status: "running", container_name: "amahi-testapp")
+      post "/tab/apps/docker/stop/testapp"
+      expect(response).to redirect_to("/tab/apps/docker_apps")
+      expect(DockerApp.find_by(identifier: "testapp").status).to eq("stopped")
+    end
+  end
+
+  describe "POST docker/start/:id" do
+    it "starts a stopped Docker app" do
+      DockerApp.create!(identifier: "testapp", name: "Test", image: "test:latest", status: "stopped", container_name: "amahi-testapp")
+      post "/tab/apps/docker/start/testapp"
+      expect(response).to redirect_to("/tab/apps/docker_apps")
+      expect(DockerApp.find_by(identifier: "testapp").status).to eq("running")
+    end
+  end
+
+  describe "POST docker/uninstall/:id" do
+    it "uninstalls a Docker app" do
+      DockerApp.create!(identifier: "testapp", name: "Test", image: "test:latest", status: "stopped", container_name: "amahi-testapp")
+      post "/tab/apps/docker/uninstall/testapp"
+      expect(response).to redirect_to("/tab/apps/docker_apps")
+      expect(DockerApp.find_by(identifier: "testapp").status).to eq("available")
+    end
+  end
+
+  describe "GET docker/status/:id" do
+    it "returns JSON status for installed app" do
+      DockerApp.create!(identifier: "testapp", name: "Test", image: "test:latest", status: "running", container_name: "amahi-testapp", host_port: 8080)
+      get "/tab/apps/docker/status/testapp"
+      expect(response).to have_http_status(:success)
+      json = JSON.parse(response.body)
+      expect(json["status"]).to eq("running")
+      expect(json["host_port"]).to eq(8080)
+    end
+
+    it "returns available for unknown app" do
+      get "/tab/apps/docker/status/unknown"
+      expect(response).to have_http_status(:success)
+      json = JSON.parse(response.body)
+      expect(json["status"]).to eq("available")
+    end
+  end
+end

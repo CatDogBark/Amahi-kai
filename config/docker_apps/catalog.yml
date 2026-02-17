@@ -1,0 +1,224 @@
+---
+apps:
+  nextcloud:
+    name: Nextcloud
+    description: Self-hosted file sync and share platform with collaboration features
+    logo_url: https://upload.wikimedia.org/wikipedia/commons/6/60/Nextcloud_Logo.svg
+    image: linuxserver/nextcloud
+    category: productivity
+    url_path: /nextcloud
+    ports:
+      443: 8443
+    volumes:
+      - /opt/amahi/apps/nextcloud/config:/config
+      - /opt/amahi/apps/nextcloud/data:/data
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: Etc/UTC
+
+  jellyfin:
+    name: Jellyfin
+    description: Free software media system for streaming movies, TV, music and more
+    logo_url: https://raw.githubusercontent.com/jellyfin/jellyfin-ux/master/branding/SVG/icon-transparent.svg
+    image: jellyfin/jellyfin
+    category: media
+    url_path: /jellyfin
+    ports:
+      8096: 8096
+    volumes:
+      - /opt/amahi/apps/jellyfin/config:/config
+      - /opt/amahi/apps/jellyfin/cache:/cache
+      - /opt/amahi/media:/media
+    environment:
+      JELLYFIN_PublishedServerUrl: http://localhost:8096
+
+  pihole:
+    name: Pi-hole
+    description: Network-wide DNS ad blocker and local DNS server
+    logo_url: https://pi-hole.github.io/graphics/Vortex/Vortex_Vertical.svg
+    image: pihole/pihole
+    category: networking
+    url_path: /admin
+    ports:
+      80: 8080
+      53: 53
+    volumes:
+      - /opt/amahi/apps/pihole/etc-pihole:/etc/pihole
+      - /opt/amahi/apps/pihole/etc-dnsmasq.d:/etc/dnsmasq.d
+    environment:
+      TZ: Etc/UTC
+      WEBPASSWORD: changeme
+
+  gitea:
+    name: Gitea
+    description: Lightweight self-hosted Git service for code hosting and collaboration
+    logo_url: https://about.gitea.com/gitea.png
+    image: gitea/gitea
+    category: development
+    url_path: /gitea
+    ports:
+      3000: 3000
+      22: 2222
+    volumes:
+      - /opt/amahi/apps/gitea/data:/data
+    environment:
+      USER_UID: "1000"
+      USER_GID: "1000"
+
+  portainer:
+    name: Portainer
+    description: Universal container management UI for Docker and Kubernetes
+    logo_url: https://www.portainer.io/hubfs/portainer-logo-black.svg
+    image: portainer/portainer-ce
+    category: development
+    url_path: /portainer
+    ports:
+      9443: 9443
+    volumes:
+      - /opt/amahi/apps/portainer/data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment: {}
+
+  homeassistant:
+    name: Home Assistant
+    description: Open-source home automation platform for smart home control
+    logo_url: https://brands.home-assistant.io/homeassistant/logo.png
+    image: homeassistant/home-assistant
+    category: networking
+    url_path: /homeassistant
+    ports:
+      8123: 8123
+    volumes:
+      - /opt/amahi/apps/homeassistant/config:/config
+    environment:
+      TZ: Etc/UTC
+
+  vaultwarden:
+    name: Vaultwarden
+    description: Lightweight Bitwarden-compatible password manager server
+    logo_url: https://raw.githubusercontent.com/dani-garcia/vaultwarden/main/resources/vaultwarden-icon.svg
+    image: vaultwarden/server
+    category: productivity
+    url_path: /vaultwarden
+    ports:
+      80: 8880
+    volumes:
+      - /opt/amahi/apps/vaultwarden/data:/data
+    environment:
+      DOMAIN: http://localhost:8880
+
+  syncthing:
+    name: Syncthing
+    description: Continuous peer-to-peer file synchronization between devices
+    logo_url: https://syncthing.net/img/logo-horizontal.svg
+    image: syncthing/syncthing
+    category: storage
+    url_path: /syncthing
+    ports:
+      8384: 8384
+      22000: 22000
+    volumes:
+      - /opt/amahi/apps/syncthing/config:/var/syncthing/config
+      - /opt/amahi/apps/syncthing/data:/var/syncthing
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+
+  uptimekuma:
+    name: Uptime Kuma
+    description: Self-hosted monitoring tool for tracking service uptime and status
+    logo_url: https://uptime.kuma.pet/img/icon.svg
+    image: louislam/uptime-kuma
+    category: monitoring
+    url_path: /uptimekuma
+    ports:
+      3001: 3001
+    volumes:
+      - /opt/amahi/apps/uptimekuma/data:/app/data
+    environment: {}
+
+  transmission:
+    name: Transmission
+    description: Fast and lightweight BitTorrent client with web interface
+    logo_url: https://transmissionbt.com/assets/images/Transmission_icon.png
+    image: linuxserver/transmission
+    category: media
+    url_path: /transmission
+    ports:
+      9091: 9091
+      51413: 51413
+    volumes:
+      - /opt/amahi/apps/transmission/config:/config
+      - /opt/amahi/apps/transmission/downloads:/downloads
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: Etc/UTC
+
+  paperlessngx:
+    name: Paperless-ngx
+    description: Document management system that transforms physical documents into searchable archive
+    logo_url: https://docs.paperless-ngx.com/assets/logo.svg
+    image: paperlessngx/paperless-ngx
+    category: productivity
+    url_path: /paperless
+    ports:
+      8000: 8000
+    volumes:
+      - /opt/amahi/apps/paperlessngx/data:/usr/src/paperless/data
+      - /opt/amahi/apps/paperlessngx/media:/usr/src/paperless/media
+      - /opt/amahi/apps/paperlessngx/consume:/usr/src/paperless/consume
+    environment:
+      PAPERLESS_URL: http://localhost:8000
+      PAPERLESS_SECRET_KEY: changeme
+      PAPERLESS_TIME_ZONE: Etc/UTC
+
+  immich:
+    name: Immich
+    description: High-performance self-hosted photo and video management solution
+    logo_url: https://immich.app/img/immich-logo.svg
+    image: ghcr.io/immich-app/immich-server
+    category: storage
+    url_path: /immich
+    ports:
+      3001: 2283
+    volumes:
+      - /opt/amahi/apps/immich/upload:/usr/src/app/upload
+    environment:
+      DB_HOSTNAME: immich_postgres
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_DATABASE_NAME: immich
+      REDIS_HOSTNAME: immich_redis
+
+  grafana:
+    name: Grafana
+    description: Analytics and interactive visualization platform for monitoring dashboards
+    logo_url: https://grafana.com/static/img/menu/grafana2.svg
+    image: grafana/grafana
+    category: monitoring
+    url_path: /grafana
+    ports:
+      3000: 3100
+    volumes:
+      - /opt/amahi/apps/grafana/data:/var/lib/grafana
+    environment:
+      GF_SERVER_ROOT_URL: http://localhost:3100/grafana
+      GF_SECURITY_ADMIN_PASSWORD: admin
+
+  audiobookshelf:
+    name: Audiobookshelf
+    description: Self-hosted audiobook and podcast server with progress tracking
+    logo_url: https://www.audiobookshelf.org/Logo.png
+    image: ghcr.io/advplyr/audiobookshelf
+    category: media
+    url_path: /audiobookshelf
+    ports:
+      80: 13378
+    volumes:
+      - /opt/amahi/apps/audiobookshelf/config:/config
+      - /opt/amahi/apps/audiobookshelf/metadata:/metadata
+      - /opt/amahi/audiobooks:/audiobooks
+      - /opt/amahi/podcasts:/podcasts
+    environment: {}

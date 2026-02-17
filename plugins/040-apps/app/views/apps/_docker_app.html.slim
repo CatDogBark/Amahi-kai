@@ -1,0 +1,40 @@
+- installed = app.is_a?(DockerApp)
+- identifier = installed ? app.identifier : app[:identifier]
+- name = installed ? app.name : app[:name]
+- description = installed ? app.description : app[:description]
+- category = installed ? app.category : app[:category]
+- logo = installed ? app.logo_url : app[:logo_url]
+- status = installed ? app.status : 'available'
+
+.app.docker-app id="docker_app_#{identifier}"
+  table.settings.stretchtoggle
+    tr.hover-style
+      td.settings-col1.settings-col1-pad1.apps-col1
+        .d-flex.align-items-center
+          - if logo.present?
+            img.me-2 src=logo style="width:32px;height:32px;border-radius:4px" alt=name onerror="this.style.display='none'"
+          span.fw-bold= name
+          - if category.present?
+            span.badge.bg-secondary.ms-2.small= category
+      td.settings-col2.ps-2.apps-col2.text-secondary
+        = description.present? ? truncate(description, length: 120) : t('no_description_supplied')
+      td.text-end.pe-3 style='width: 120px'
+        - case status
+        - when 'available'
+          = link_to t('install', default: 'Install'), "/tab/apps/docker/install/#{identifier}", method: :post, class: 'btn btn-sm btn-primary', data: { turbo: false }
+        - when 'pulling', 'installing'
+          span.badge.bg-warning.text-dark
+            span.spinner-border.spinner-border-sm.me-1
+            = status.capitalize
+        - when 'running'
+          .btn-group.btn-group-sm
+            - if installed && app.host_port.present?
+              = link_to t('open', default: 'Open'), "http://#{request.host}:#{app.host_port}", target: '_blank', class: 'btn btn-sm btn-success'
+            = link_to t('stop', default: 'Stop'), "/tab/apps/docker/stop/#{identifier}", method: :post, class: 'btn btn-sm btn-outline-danger', data: { turbo: false }
+        - when 'stopped'
+          .btn-group.btn-group-sm
+            = link_to t('start', default: 'Start'), "/tab/apps/docker/start/#{identifier}", method: :post, class: 'btn btn-sm btn-outline-success', data: { turbo: false }
+            = link_to t('uninstall', default: 'Uninstall'), "/tab/apps/docker/uninstall/#{identifier}", method: :post, class: 'btn btn-sm btn-outline-danger', data: { turbo: false }
+        - when 'error'
+          span.badge.bg-danger= t('error', default: 'Error')
+          = link_to '↻', "/tab/apps/docker/install/#{identifier}", method: :post, class: 'btn btn-sm btn-outline-primary ms-1', title: 'Retry', data: { turbo: false }

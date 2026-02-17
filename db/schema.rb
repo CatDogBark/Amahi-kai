@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2018_06_06_185129) do
+ActiveRecord::Schema[8.0].define(version: 2026_02_17_000000) do
   create_table "app_dependencies", force: :cascade do |t|
     t.integer "app_id"
     t.integer "dependency_id"
@@ -66,6 +66,27 @@ ActiveRecord::Schema[7.2].define(version: 2018_06_06_185129) do
   create_table "dns_aliases", force: :cascade do |t|
     t.string "name", default: "", null: false
     t.string "address", default: "", null: false
+  end
+
+  create_table "docker_apps", force: :cascade do |t|
+    t.string "identifier", null: false
+    t.string "name", null: false
+    t.text "description"
+    t.string "image", null: false
+    t.string "container_name"
+    t.string "status", default: "available"
+    t.string "category"
+    t.string "logo_url"
+    t.string "version"
+    t.integer "host_port"
+    t.text "port_mappings"
+    t.text "volume_mappings"
+    t.text "environment"
+    t.boolean "show_in_dashboard", default: true
+    t.text "error_message"
+    t.datetime "created_at", precision: nil, null: false
+    t.datetime "updated_at", precision: nil, null: false
+    t.index ["identifier"], name: "index_docker_apps_on_identifier", unique: true
   end
 
   create_table "firewalls", force: :cascade do |t|
