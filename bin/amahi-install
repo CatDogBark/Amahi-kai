@@ -121,7 +121,7 @@ chown -R "$APP_USER:$APP_GROUP" "$APP_DIR"
 # 5. Bundle install
 # ---------------------------------------------------------------------------
 echo "==> Installing Ruby gems..."
-sudo -u "$APP_USER" bash -lc "cd $APP_DIR && bundle config set --local deployment true && bundle config set --local without 'development test' && bundle install --jobs 4"
+sudo -u "$APP_USER" bash -lc "cd $APP_DIR && bundle config set --local without 'development test' && bundle install --jobs 4"
 
 # ---------------------------------------------------------------------------
 # 6. Create directories
