@@ -1,178 +1,49 @@
-# Amahi-kai Modernization TODO
+# TODO — Amahi-kai Production Features
 
-*Prioritized by impact and risk. Updated 2026-02-16.*
-
----
-
-## ✅ Completed
-
-### Phase 1: Stabilize & Clean Up
-- [x] Gemfile cleaned, modern dependencies
-- [x] All specs passing (model + feature, JS + non-JS)
-- [x] poltergeist → selenium-webdriver + headless Chromium
-
-### Phase 2: Modernize the Codebase
-- [x] Dockerfile & Infrastructure (Ubuntu 24.04, docker-compose)
-- [x] Deprecation fixes (update_attributes, File.exists?, URI.escape, render :text)
-- [x] CoffeeScript → JavaScript (12 files)
-- [x] Security: SCrypt crypto with Sha512 transition
-- [x] Bootstrap JS/CSS version mismatch fixed (P1.1)
-- [x] Dead Prototype.js code removed — 62 files (P1.2)
-- [x] Dead routes cleaned — ~60 routes (P1.3)
-- [x] yettings gem replaced with custom loader (P1.4)
-- [x] File.exists? monkey-patch removed (P3.2)
-- [x] uglifier replaced with terser (P2.4)
-- [x] Bootstrap 4 → 5 migration (P2.1)
-- [x] Pin validation fix (errors[:base] << → errors.add)
-- [x] Unsafe redirect fix (Google search, allow_other_host)
-
-### Phase 3: Rails Upgrade Ladder
-- [x] Rails 5.2 → 6.0 → 6.1 → 7.0 → 7.1 → 7.2 → 8.0.4
-- [x] Ruby 2.7.8 → 3.2.10
-
-### Security Hardening
-- [x] Shellwords.escape in user.rb, share.rb, platform.rb, app.rb
-- [x] Rack::Attack rate limiting
-- [x] Content Security Policy (CSP) in report-only mode
-- [x] ROT13 → real encryption (AES-256-GCM via MessageEncryptor)
-- [x] AmahiApi stubbed (raises instead of hanging on dead server)
-- [x] hda-ctl replaced with direct Command execution (3 modes: dummy/direct/hdactl)
-- [x] Platform detection cleanup (only Ubuntu/Debian remain)
-- [x] Session cookies hardened (httponly, same_site: :lax)
-- [x] CSRF tokens in all Stimulus fetch requests via shared csrfHeaders()
-- [x] jquery_ujs fully removed from asset pipeline
-
-### Frontend: jQuery UJS → Stimulus Migration ✅ COMPLETE
-- [x] Turbo + Stimulus wired up with Sprockets (Phase 0)
-- [x] 8 Stimulus controllers: toggle, delete, inline_edit, progress, server_action, locale, user, create_form
-- [x] All 6 plugins converted: Disks, Settings, Users, Network, Shares, Apps
-- [x] Removed all simple_remote_* helpers from application_helper.rb
-- [x] Removed: SmartLinks, RemoteCheckbox, FormHelpers, Templates, jQuery templates
-- [x] Removed: spinner.js, ajax-setup.js, core-ext.js, debug.js
-- [x] Removed: remote-checkboxes.js, remote-radios.js, remote-selects.js, form-helper.js
-- [x] Removed: jquery.ui.templates.js, smart-links.js, templates.js
-- [x] ~1,200+ lines of dead jQuery/UJS infrastructure deleted total
-- [x] JS codebase: ~742 lines total (from thousands)
-
-### Test Coverage
-- [x] 334 specs total (119 model, 88 request, 35 feature, 92 lib)
-- [x] All models covered: User, Share, Host, DnsAlias, Setting, Server, Plugin, App, Webapp, Db, CapAccess, CapWriter, WebappAlias
-- [x] All controllers covered: network, settings, apps, disks, shares, users, debug, front, search
-- [x] Lib covered: Command, Platform, Yetting, TempCache, Leases, Tab, Ping, SampleData, SetTheme, AmahiApi, AmahiNews, Downloader, SystemUtils, CredentialEncryption, Container, PartitionUtils
-- [x] Coverage: ~52%
-- [x] Flaky test ordering bug FIXED (was caused by jQuery template references)
-
-### Code Quality
-- [x] CI config (GitHub Actions)
-- [x] NOTICE.md updated with current stack info
-- [x] Duplicate locale keys cleaned (6 intra-file dupes, hello_world boilerplate)
-- [x] Shared csrfHeaders() helper (DRY across 8 Stimulus controllers)
-- [x] Deprecated Kernel#open calls fixed (File.open, URI.open, IO.popen)
-- [x] SampleData YAML crash fixed (servers.yml.gz safe_load compatibility)
-- [x] Dead ServerController removed (unrouted, all actions in SettingsController)
-- [x] Container.rb typo fixed (alse → false)
-- [x] database.yml uses ENV vars for DB name
-- [x] docker-compose.yml fixed (correct DB name, health check start_period)
-- [x] jQuery gems removed from Gemfile (were already commented out)
-- [x] README.md updated (jQuery-free stack, security features)
-- [x] Share controller: proper error handling on update actions (422 on failure)
-- [x] Admin password minimum raised from 5 to 8 characters
-- [x] FIXME comments cleaned up (PAM, uid, translate)
-- [x] Dead firewall helpers removed from application_helper.rb
-- [x] .dockerignore added, Dockerfile improved
-- [x] CI config fixed (SQLite, lib specs step)
-- [x] XSS hardening: sanitize() for app descriptions in views
-- [x] CONTRIBUTING.md added (dev setup, testing, conventions)
-- [x] Expanded filter_parameter_logging (pin, password_confirmation)
-- [x] CSS cleanup: vendor prefixes removed, duplicate properties fixed
-- [x] All bare rescue blocks scoped to rescue => e (17 files)
-- [x] Production config: terser JS compression enabled, asset debug fixed
-- [x] Dead code removed: ServerController, firewall helpers, is_firefox?
+*Updated: 2025-07-09. Infrastructure/upgrade work is done. Focus is on making features work on a real Ubuntu 24.04 host.*
 
 ---
 
-## 🔴 Priority 1: Native Production Deployment
+## P0 — Core Functionality
 
-### 1.0 `bin/amahi-install` — Native Ubuntu Installer
-- **Strategy:** Docker for dev/CI, native install (`bin/amahi-install`) for production
-- **Spec:** `docs/security/PRIVILEGE-ESCALATION-MITIGATION.md` (sudoers allowlist)
-- **Dev docs:** `docs/docker-development.md`
-- [ ] Test `bin/amahi-install` on fresh Ubuntu 24.04 VM
-- [ ] Fix `dns_alias.rb` to use `Command` class (currently calls `system "hda-ctl-hup"` directly)
-- [ ] Add `AMAHI_DUMMY_MODE` env var override to `config/hda.yml` loader
-- [ ] Validate: user CRUD, share CRUD, Samba config, systemctl on native install
-- [ ] Production hardening: secret key docs, log rotation, backup strategy
-- [ ] (Future) Phase 2 wrapper scripts for useradd/usermod argument validation
+### UI Modernization
+Bootstrap 4→5, Propshaft migration (blocked by Bootstrap gem's Sprockets dep — research alternatives), Hotwire/Turbo integration. Gems already in sandbox.
 
-### 1.1 Remaining Security Items
-- [ ] Enable `config.force_ssl` in production (needs HTTPS setup guidance)
-- [x] Audit remaining shell interpolation — fixed in app.rb (install/uninstall), system_utils.rb (unpack, run_script), db.rb (mysqldump)
-- [x] Fix SQL injection in Db model (parameterized with quote/quote_column_name)
+### Samba Integration Smoke Test
+Create a share via UI → verify smb.conf is written → verify smbd restarts. End-to-end on a real host.
+
+### User Management Smoke Test
+Create a user via UI → verify useradd runs → verify pdbedit adds Samba credentials. Test edge cases (duplicate user, bad input).
+
+### dnsmasq Integration
+DNS alias creation via UI writes to `/etc/dnsmasq.d/`, service reloads. Verify resolution works.
 
 ---
 
-## 🟡 Priority 2: Platform — Make It Actually Run
+## P1 — Install & Access
 
-### 2.1 Docker Compose for Development
-- **Status:** Basic `docker-compose.yml` exists (MariaDB + Rails)
-- **Remaining:** Test it end-to-end, add health checks, volume mounts for hot reload
-- **Risk:** Low
+### Cloudflare Tunnel Installer Integration
+Optional step in `bin/amahi-install`: prompt for tunnel token, install cloudflared, open UFW 7844/tcp+udp. Skip if declined.
 
----
-
-## 🟢 Priority 3: Frontend — Remaining Cleanup
-
-### 3.1 Remove jQuery Entirely ✅ COMPLETE
-- All remaining jQuery converted to vanilla JS
-- jquery3 + jquery-ui removed from asset manifest
-- jquery-rails + jquery-ui-rails commented out in Gemfile
-- Zero jQuery in the entire codebase
-
-### 3.2 Sprockets → Propshaft
-- **Blocked:** Bootstrap gem hard-depends on Sprockets
-- **Requires:** Drop bootstrap gem, vendor CSS/JS, use dartsass-rails
-- **Risk:** High — architectural change
-- **Status:** Parked until Bootstrap gem dependency is resolved
+### First-Run Setup Wizard
+Guide new installs through: change admin password, set hostname, configure first share. Should be the landing page on first boot.
 
 ---
 
-## 🔵 Priority 4: Features & Future
+## P2 — Quality & Security
 
-### 4.1 Increase Test Coverage to 70%+
-- **Current:** ~54% (375 specs: 137 model, 97 request, 35 feature, 106 lib)
-- **All models covered** (13/13 with specs)
-- **All lib files covered** (16/17 — only plugin_generator uncovered)
-- **Remaining:** Edge cases, error paths, more integration scenarios, controller specs
+### Test Coverage (34% → 70%+)
+Focus on models and controllers that touch system commands (shares, users, DNS). Add integration tests for the sudo-based workflows.
 
-### 4.2 Firewall Plugin
-- **Need:** New plugin from scratch with nftables integration
-- **Scope:** Large — new feature
-
-### 4.3 App Marketplace ✅ DOCKER-BASED SYSTEM BUILT
-- [x] Docker-based app system implemented (replaces dead AmahiApi)
-- [x] 14-app curated catalog (Nextcloud, Jellyfin, Pi-hole, Gitea, etc.)
-- [x] ContainerService with full lifecycle (pull/create/start/stop/remove/logs/stats)
-- [x] DockerApp model with migrations, validations, JSON columns
-- [x] Docker Apps tab with category filtering and status management
-- [x] 41 new specs covering model, lib, and request layers
-- **Remaining:** Test with real Docker, add more apps to catalog, add logs/stats UI
-
-### 4.4 Storage/Disk Management
-- **Need:** ZFS/Btrfs support, SMART monitoring, pool management
-- **Scope:** Large — new features
+### Auth Modernization
+Evaluate replacing Authlogic with Devise or Rails 8 native authentication. Authlogic works but is maintenance baggage.
 
 ---
 
-## Decision Points (Deferred)
+## P3 — Future
 
-1. **Amahi cloud integration** — Keep or remove? Affects AmahiApi, app marketplace
-2. **Branding** — Keep "Amahi" name/logos or rebrand?
-3. **Target audience** — Power users (CLI-friendly) or appliance-style (zero-config)?
-4. **App system** — Docker-based apps? Snap? Native packages?
-5. **Authentication** — Keep authlogic or migrate to Devise/Rodauth?
+### Apps/Plugins System
+Evaluate which legacy plugins still make sense (disks, app store). Docker app catalog exists but needs UI polish and more apps.
 
-*Decisions deferred — not blocking current work.*
-
----
-
-*Last updated: 2026-02-16*
+### Disk/Storage Management
+The disks plugin needs updating for modern Linux. Detect drives, format, mount, present in UI.
