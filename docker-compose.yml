@@ -45,8 +45,8 @@ services:
     volumes:
       # Persist shares data (mount your actual shares dir in production)
       - share_data:/var/hda/files
-    stdin_open: true
-    tty: true
+    # stdin_open and tty removed — debug-only, not for production
+    # See docs/security/PRIVILEGE-ESCALATION-MITIGATION.md
 
 volumes:
   db_data:
