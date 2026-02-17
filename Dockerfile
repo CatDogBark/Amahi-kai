@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   git curl unzip \
   smbclient \
   plocate \
+  tzdata \
   && rm -rf /var/lib/apt/lists/*
 
 # Copy Gemfile first for layer caching

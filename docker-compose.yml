@@ -41,6 +41,7 @@ services:
       DATABASE_NAME: amahi_dev
       RAILS_ENV: development
       SECRET_KEY_BASE: change-me-in-production-use-rails-secret
+      RAILS_ALLOWED_HOST: nas.enlightenedsolutionsllc.com
     volumes:
       # Persist shares data (mount your actual shares dir in production)
       - share_data:/var/hda/files

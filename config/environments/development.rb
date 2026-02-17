@@ -59,6 +59,9 @@ Rails.application.configure do
   # routes, locales, etc. This feature depends on the listen gem.
   config.file_watcher = ActiveSupport::EventedFileUpdateChecker
 
+  # Allow access via reverse proxy / tunnel (e.g. Cloudflare Tunnel)
+  config.hosts << ENV["RAILS_ALLOWED_HOST"] if ENV["RAILS_ALLOWED_HOST"].present?
+
   if defined? BetterErrors
     BetterErrors.editor = proc { |f, l| "atom://core/open/file?filename=#{CGI.escape(f)}&line=#{l}" }
   end
