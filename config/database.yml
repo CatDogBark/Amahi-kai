@@ -15,7 +15,9 @@ test:
 production:
   adapter: mysql2
   encoding: utf8
-  pool: 5
+  pool: <%= ENV.fetch('RAILS_MAX_THREADS', 5) %>
   database: <%= ENV.fetch('DATABASE_NAME', 'amahi_production') %>
   host: <%= ENV.fetch('DATABASE_HOST', 'localhost') %>
+  username: <%= ENV.fetch('DATABASE_USER', 'root') %>
+  password: <%= ENV.fetch('DATABASE_PASSWORD', '') %>
   socket: <%= ENV['DATABASE_HOST'] ? nil : '/tmp/mysqld.sock' %>

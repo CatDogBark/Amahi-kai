@@ -1,14 +1,25 @@
+# Amahi-kai — Docker Compose
+#
+# Usage:
+#   docker compose up -d        # Start in background
+#   docker compose logs -f web  # Watch logs
+#   docker compose down         # Stop
+#
+# First run creates the database and seeds it with:
+#   Login: admin / secretpassword
+#
+# Visit: http://localhost:3000
+
 services:
   db:
     image: mariadb:10.11
     container_name: amahi_db
+    restart: unless-stopped
     volumes:
       - db_data:/var/lib/mysql
     environment:
       MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: "yes"
       MARIADB_DATABASE: amahi_dev
-    ports:
-      - "3306:3306"
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
@@ -18,10 +29,8 @@ services:
 
   web:
     build: .
-    command: bundle exec puma -b tcp://0.0.0.0 -p 3000
-    volumes:
-      - .:/amahi
-      - bundle_cache:/usr/local/bundle
+    container_name: amahi_web
+    restart: unless-stopped
     ports:
       - "3000:3000"
     depends_on:
@@ -29,11 +38,15 @@ services:
         condition: service_healthy
     environment:
       DATABASE_HOST: db
+      DATABASE_NAME: amahi_dev
       RAILS_ENV: development
-      SECRET_KEY_BASE: dev-secret-key-do-not-use-in-production
+      SECRET_KEY_BASE: change-me-in-production-use-rails-secret
+    volumes:
+      # Persist shares data (mount your actual shares dir in production)
+      - share_data:/var/hda/files
     stdin_open: true
     tty: true
 
 volumes:
   db_data:
-  bundle_cache:
+  share_data:

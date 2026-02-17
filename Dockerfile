@@ -1,9 +1,8 @@
-# Amahi-kai — Development Environment
+# Amahi-kai
 # Ubuntu 24.04, Ruby 3.2, Rails 8.0, MariaDB
 FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV RAILS_ENV=development
 ENV LANG=C.UTF-8
 
 WORKDIR /amahi
@@ -19,23 +18,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   git curl unzip \
   smbclient \
   plocate \
-  chromium-browser chromium-chromedriver \
   && rm -rf /var/lib/apt/lists/*
 
 # Copy Gemfile first for layer caching
-COPY Gemfile Gemfile.lock /amahi/
-RUN bundle config set --local without '' \
+COPY Gemfile Gemfile.lock ./
+RUN bundle config set --local without 'test' \
   && bundle install --jobs 4 --retry 3
 
 # Copy application
-COPY . /amahi
-
-# Precompile assets for faster first load
-RUN bundle exec rake assets:precompile 2>/dev/null || true
+COPY . .
 
 # Create required directories
-RUN mkdir -p tmp/cache/tmpfiles tmp/pids log
+RUN mkdir -p tmp/cache/tmpfiles tmp/pids log public/assets
+
+# Entrypoint handles DB setup on first run
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 3000
 
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["bundle", "exec", "puma", "-b", "tcp://0.0.0.0", "-p", "3000"]
