@@ -1,9 +1,9 @@
 # Privilege Escalation Mitigation Plan
 
-**Status:** Draft  
-**Author:** Kai (AI agent) with Troy's review  
-**Last updated:** 2026-02-17  
-**Applies to:** Amahi-kai Docker production deployment
+**Status:** Draft
+**Author:** Kai (AI agent) with Troy's review
+**Last updated:** 2026-02-17
+**Applies to:** Amahi-kai native production deployment (Ubuntu 24.04)
 
 ---
 
@@ -13,12 +13,8 @@ Amahi-kai's Rails application executes privileged system commands (user manageme
 service control, file permissions) via `lib/command.rb`. The `Command` class auto-prepends
 `sudo` for a hardcoded list of binaries when not running as root.
 
-In the current Docker setup, the container runs as a non-root `amahi` user (good), but
-the privilege boundary is effectively **wide open** — the app can `sudo` to any command
-matching its prefix list with no argument restrictions.
-
-This document defines the hardening plan to constrain privilege escalation to the
-minimum necessary for Amahi-kai to function.
+The app runs as a non-root `amahi` system user. The privilege boundary is enforced by
+a scoped sudoers allowlist that restricts exactly which commands can be escalated.
 
 ---
 
@@ -46,19 +42,9 @@ They should **not** be granted sudo access.
 
 ---
 
-## 3. Target Architecture
+## 3. Architecture
 
-### 3.1 Principle of Least Privilege
-
-Each privileged operation gets the narrowest possible scope:
-
-- **Path-scoped:** `chmod`/`chown` restricted to `/var/hda/*` and `/home/*/.ssh/*`
-- **Service-scoped:** `systemctl` restricted to specific service units via D-Bus + polkit
-- **Argument-scoped:** `useradd`/`usermod` via wrapper scripts that block dangerous flags
-- **No capabilities:** Container runs with zero `cap_add` entries
-- **No debug TTY:** `stdin_open` and `tty` removed from production compose
-
-### 3.2 Defense in Depth Layers
+### Native Install Security Model
 
 ```
 ┌─────────────────────────────────────────┐
@@ -68,18 +54,22 @@ Each privileged operation gets the narrowest possible scope:
 ├─────────────────────────────────────────┤
 │  Sudoers (path + command scoping)       │  ← Phase 1
 ├─────────────────────────────────────────┤
-│  Polkit Policy (service allowlist)      │  ← Phase 1
-├─────────────────────────────────────────┤
-│  Container (no caps, no TTY, no root)   │  ← Phase 1
+│  Linux permissions (systemd, file ACLs) │
 └─────────────────────────────────────────┘
 ```
+
+On a native install, the `amahi` user runs under systemd. Service management via
+`systemctl` works directly (no D-Bus socket gymnastics needed). SSH key management
+and file operations work naturally since the app owns the machine — just like
+original Amahi.
 
 ---
 
 ## 4. Sudoers Specification
 
-File: `/etc/sudoers.d/amahi-kai`  
+File: `/etc/sudoers.d/amahi-kai`
 Permissions: `0440`, owned by `root:root`
+Installed by: `bin/amahi-install`
 
 ### Phase 1 — Scoped Sudoers
 
@@ -111,9 +101,36 @@ amahi ALL=(root) NOPASSWD: /usr/bin/mkdir -p /var/hda/*
 amahi ALL=(root) NOPASSWD: /usr/bin/cp /tmp/amahi-staging/* /etc/samba/*
 amahi ALL=(root) NOPASSWD: /usr/bin/cp /tmp/amahi-staging/* /etc/dnsmasq.d/*
 
-# Explicit deny for everything else
-Defaults:amahi !authenticate
+# Service management — scoped to Amahi-managed services ONLY
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start smbd.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop smbd.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart smbd.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl reload smbd.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable smbd.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl disable smbd.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start nmbd.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop nmbd.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart nmbd.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl reload nmbd.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable nmbd.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl disable nmbd.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start dnsmasq.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop dnsmasq.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart dnsmasq.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl reload dnsmasq.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable dnsmasq.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl disable dnsmasq.service
+
+# Database backups
+amahi ALL=(root) NOPASSWD: /usr/bin/mysqldump
 ```
+
+### What's NOT Allowed
+
+- No `rm`, `mv`, `cp` (except scoped Samba/dnsmasq config copies)
+- No `apt-get`, `dpkg`, or package management
+- No `systemctl` for arbitrary services (no sshd, docker, etc.)
+- No shell access, no wildcards
 
 ### Phase 1 Residual Risk: `useradd` UID-0 Backdoor
 
@@ -124,14 +141,13 @@ with code execution as `amahi` could run:
 sudo useradd -o -u 0 -g root backdoor
 ```
 
-This creates a UID-0 user — effectively a root backdoor. Sudoers argument pattern matching
-is not expressive enough to block `-o -u 0` combinations reliably.
+This creates a UID-0 user — effectively a root backdoor.
 
 **Mitigation timeline:** Phase 2 wrapper scripts (see Section 5).
 
 **Phase 1 acceptability:** On a trusted LAN with no internet-facing attack surface beyond
 Cloudflare Tunnel (which terminates at the Rails app, not a shell), this is acceptable
-residual risk. Document and revisit.
+residual risk.
 
 ---
 
@@ -139,7 +155,7 @@ residual risk. Document and revisit.
 
 ### 5.1 Safe `useradd` Wrapper
 
-File: `/usr/local/sbin/amahi-useradd`  
+File: `/usr/local/sbin/amahi-useradd`
 Permissions: `0755`, owned by `root:root`
 
 ```bash
@@ -156,7 +172,7 @@ exec /usr/sbin/useradd "$@"
 
 ### 5.2 Safe `usermod` Wrapper
 
-File: `/usr/local/sbin/amahi-usermod`  
+File: `/usr/local/sbin/amahi-usermod`
 Permissions: `0755`, owned by `root:root`
 
 ```bash
@@ -186,135 +202,39 @@ And update `Command` / `needs_sudo?` to use the wrapper paths.
 
 ---
 
-## 6. D-Bus + Polkit for Service Management
+## 6. Security Considerations
 
-### 6.1 Why Not Sudoers for systemctl?
+### 6.1 Threat Model
 
-`systemctl` via sudoers requires either blanket access (`systemctl *`) or individual
-entries per verb per service. Polkit is the native, designed-for-this-purpose mechanism
-on systemd hosts.
+Home server, single trusted admin, local network. The threat model:
 
-### 6.2 Polkit Policy
+- **Primary risk:** Rails RCE via unpatched vulnerability → attacker gets `amahi` user access
+- **Mitigated by:** Non-root user, scoped sudoers (no rm/mv/cp/apt-get, systemctl limited to 3 services)
+- **Accepted risk:** Admin with Rails credentials can manage system (that's the feature)
 
-File: `/etc/polkit-1/rules.d/50-amahi-kai.rules`
+### 6.2 Existing Hardening (already implemented)
 
-```javascript
-// Amahi-kai: allow the amahi user to manage specific services only
-polkit.addRule(function(action, subject) {
-    var allowedServices = ["smbd.service", "nmbd.service", "dnsmasq.service"];
-    if (action.id.indexOf("org.freedesktop.systemd1.manage-units") === 0 &&
-        subject.user === "amahi") {
-        var unit = action.lookup("unit");
-        if (unit && allowedServices.indexOf(unit) >= 0) {
-            return polkit.Result.YES;
-        }
-        return polkit.Result.NO;  // explicit deny for other services
-    }
-});
-```
+- Rack::Attack rate limiting
+- CSRF protection
+- Shellwords.escape on all user input to shell commands
+- CSP headers (report-only)
+- Session cookie hardening (httponly, same_site: :lax)
+- SQL injection fixes (parameterized queries)
 
-### 6.3 Container Integration
+### 6.3 Code Cleanup Needed
 
-The container needs access to the host's D-Bus system bus:
-
-```yaml
-volumes:
-  - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket:ro
-```
-
-The `amahi` user inside the container must map to a consistent UID on the host for
-polkit to recognize it. Since `/etc/passwd` is bind-mounted from the host, the UID
-should be consistent — but **verify this during Phase 1 validation**:
-
-```bash
-# Inside container:
-id amahi
-# On host:
-id amahi
-# UIDs must match
-```
-
-With this in place, `systemctl` commands issued inside the container communicate over
-D-Bus to the host's systemd, and polkit enforces the service allowlist. No sudo needed
-for service management.
-
-### 6.4 Shadow File Access
-
-The Rails app reads `/etc/shadow` for password verification. In the container:
-
-- Bind-mount `/etc/shadow` read-only: `-v /etc/shadow:/etc/shadow:ro`
-- The `amahi` user must be in the `shadow` group to read it
-- **No write access.** Password changes go through `usermod`/`pdbedit` via sudo.
-
-This is standard practice for PAM-aware applications. The read-only mount prevents
-any shadow file modification even if the app is compromised.
+The `Command` class `needs_sudo?` method currently includes `rm`, `mv`, `cp`, `apt-get`
+in its prefix list. These should be removed to match the sudoers boundary. This is a
+defense-in-depth cleanup — sudoers is the real enforcement, but the code should reflect intent.
 
 ---
 
-## 7. Docker Compose Production Changes
-
-### 7.1 Remove Debug Settings
-
-Remove from `docker-compose.prod.yml`:
-
-```yaml
-# REMOVE these — development/debug only
-stdin_open: true   # no interactive stdin in production
-tty: true          # changes signal handling, not needed
-```
-
-`tty: true` causes PID 1 to receive signals differently (SIGHUP handling changes) and
-`stdin_open` keeps an unnecessary file descriptor open. Neither serves a purpose in
-production.
-
-### 7.2 Remove All Capabilities
-
-```yaml
-services:
-  web:
-    cap_drop:
-      - ALL
-    # NO cap_add entries — everything goes through sudo/polkit
-```
-
-### 7.3 Production Compose Additions
-
-```yaml
-services:
-  web:
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-    read_only: true  # optional, requires tmpfs for tmp/log/pid dirs
-    tmpfs:
-      - /tmp
-      - /amahi/tmp
-      - /amahi/log
-    volumes:
-      - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket:ro
-      - /etc/passwd:/etc/passwd:ro
-      - /etc/shadow:/etc/shadow:ro
-      - share_data:/var/hda/files
-```
-
----
-
-## 8. Implementation Checklist
+## 7. Implementation Checklist
 
 ### Phase 1 — Minimum Viable Hardening
 
-- [ ] Create `/etc/sudoers.d/amahi-kai` with path-scoped rules (Section 4)
+- [ ] `bin/amahi-install` installs `/etc/sudoers.d/amahi-kai` with path-scoped rules
 - [ ] Validate sudoers with `visudo -cf /etc/sudoers.d/amahi-kai`
-- [ ] Create `/etc/polkit-1/rules.d/50-amahi-kai.rules` (Section 6.2)
-- [ ] Verify `amahi` UID consistency between container and host
-- [ ] Test polkit: `systemctl restart smbd.service` works as `amahi`
-- [ ] Test polkit: `systemctl restart sshd.service` is **denied** as `amahi`
-- [ ] Remove `stdin_open: true` and `tty: true` from production compose
-- [ ] Remove all `cap_add` entries from production compose
-- [ ] Add `cap_drop: [ALL]` and `no-new-privileges:true`
-- [ ] Bind-mount D-Bus socket, `/etc/passwd`, `/etc/shadow` (read-only)
-- [ ] Add `amahi` user to `shadow` group for read access
 - [ ] Update `Command#needs_sudo?` to remove unused prefixes (`apt-get`, `rm`, etc.)
 - [ ] Document residual `useradd` UID-0 risk in operational notes
 - [ ] Smoke test: create user, create share, start/stop service, verify all work
@@ -327,25 +247,21 @@ services:
 - [ ] Update `Command` class to invoke wrappers
 - [ ] Test wrapper: `amahi-useradd -o -u 0 backdoor` is **rejected**
 - [ ] Test wrapper: `amahi-useradd -m -g users -c "Test" testuser` **works**
-- [ ] Consider `read_only: true` filesystem with tmpfs mounts
-- [ ] Audit `SystemUtils.run` and `SystemUtils.run_script` for privilege concerns
 - [ ] Add integration tests for privilege boundaries
 
 ### Phase 3 — Future Consideration
 
-- [ ] AppArmor/seccomp profiles for the container
-- [ ] Migrate from sudo to a dedicated privilege broker daemon
+- [ ] AppArmor/seccomp profiles
 - [ ] Rate-limiting on privileged command execution
-- [ ] Audit logging for all sudo/polkit operations
+- [ ] Audit logging for all sudo operations
 
 ---
 
-## 9. References
+## 8. References
 
-- [Polkit JavaScript rules (freedesktop.org)](https://www.freedesktop.org/software/polkit/docs/latest/polkit.8.html)
-- [Docker security best practices](https://docs.docker.com/engine/security/)
 - [sudoers manual](https://www.sudo.ws/docs/man/sudoers.man/)
 - `lib/command.rb` — privilege execution engine
 - `lib/platform.rb` — service management, SSH setup
 - `app/models/user.rb` — user CRUD (useradd/usermod/userdel/pdbedit)
 - `app/models/share.rb` — share permissions (chmod/chown)
+- `bin/amahi-install` — production installer (installs sudoers)

@@ -91,18 +91,18 @@
 
 ---
 
-## 🔴 Priority 1: Production Docker Deployment
+## 🔴 Priority 1: Native Production Deployment
 
-### 1.0 Docker Production Model — SPEC COMPLETE, AWAITING REVIEW
-- **Spec:** `docs/docker-production.md`
-- [ ] Troy reviews spec and answers open questions
-- [ ] `docker-compose.prod.yml` with bind mounts and capabilities
-- [ ] Dockerfile: add `samba-common-bin`, `dbus`, `sudo`, non-root user, sudoers allowlist
+### 1.0 `bin/amahi-install` — Native Ubuntu Installer
+- **Strategy:** Docker for dev/CI, native install (`bin/amahi-install`) for production
+- **Spec:** `docs/security/PRIVILEGE-ESCALATION-MITIGATION.md` (sudoers allowlist)
+- **Dev docs:** `docs/docker-development.md`
+- [ ] Test `bin/amahi-install` on fresh Ubuntu 24.04 VM
 - [ ] Fix `dns_alias.rb` to use `Command` class (currently calls `system "hda-ctl-hup"` directly)
 - [ ] Add `AMAHI_DUMMY_MODE` env var override to `config/hda.yml` loader
-- [ ] Validate: user CRUD, share CRUD, Samba config, systemctl, Docker apps
-- [ ] Production hardening: secret key docs, asset precompile in build, log rotation
-- [ ] (Future) Host agent proxy for better isolation
+- [ ] Validate: user CRUD, share CRUD, Samba config, systemctl on native install
+- [ ] Production hardening: secret key docs, log rotation, backup strategy
+- [ ] (Future) Phase 2 wrapper scripts for useradd/usermod argument validation
 
 ### 1.1 Remaining Security Items
 - [ ] Enable `config.force_ssl` in production (needs HTTPS setup guidance)
