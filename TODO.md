@@ -128,7 +128,7 @@
 ## 🔵 Priority 4: Features & Future
 
 ### 4.1 Increase Test Coverage to 70%+
-- **Current:** ~52% (334 specs: 119 model, 88 request, 35 feature, 92 lib)
+- **Current:** ~54% (375 specs: 137 model, 97 request, 35 feature, 106 lib)
 - **All models covered** (13/13 with specs)
 - **All lib files covered** (16/17 — only plugin_generator uncovered)
 - **Remaining:** Edge cases, error paths, more integration scenarios, controller specs
@@ -137,9 +137,14 @@
 - **Need:** New plugin from scratch with nftables integration
 - **Scope:** Large — new feature
 
-### 4.3 App Marketplace
-- **Need:** Decide on app distribution (Docker-based? Native packages?)
-- **Blocked:** Needs decision on Amahi cloud integration
+### 4.3 App Marketplace ✅ DOCKER-BASED SYSTEM BUILT
+- [x] Docker-based app system implemented (replaces dead AmahiApi)
+- [x] 14-app curated catalog (Nextcloud, Jellyfin, Pi-hole, Gitea, etc.)
+- [x] ContainerService with full lifecycle (pull/create/start/stop/remove/logs/stats)
+- [x] DockerApp model with migrations, validations, JSON columns
+- [x] Docker Apps tab with category filtering and status management
+- [x] 41 new specs covering model, lib, and request layers
+- **Remaining:** Test with real Docker, add more apps to catalog, add logs/stats UI
 
 ### 4.4 Storage/Disk Management
 - **Need:** ZFS/Btrfs support, SMART monitoring, pool management
