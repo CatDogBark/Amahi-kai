@@ -147,7 +147,7 @@ SECRET_KEY_BASE=$SECRET
 RAILS_ENV=production
 DATABASE_HOST=localhost
 DATABASE_NAME=amahi_production
-DATABASE_USERNAME=amahi
+DATABASE_USER=amahi
 DATABASE_PASSWORD=$DB_PASS
 AMAHI_DUMMY_MODE=false
 
@@ -178,8 +178,8 @@ systemctl enable --now mariadb
 # Create database and user (idempotent)
 mysql -u root <<EOSQL || true
 CREATE DATABASE IF NOT EXISTS \`${DATABASE_NAME:-amahi_production}\`;
-CREATE USER IF NOT EXISTS '${DATABASE_USERNAME:-amahi}'@'localhost' IDENTIFIED BY '${DATABASE_PASSWORD:-amahi}';
-GRANT ALL PRIVILEGES ON \`${DATABASE_NAME:-amahi_production}\`.* TO '${DATABASE_USERNAME:-amahi}'@'localhost';
+CREATE USER IF NOT EXISTS '${DATABASE_USER:-amahi}'@'localhost' IDENTIFIED BY '${DATABASE_PASSWORD:-amahi}';
+GRANT ALL PRIVILEGES ON \`${DATABASE_NAME:-amahi_production}\`.* TO '${DATABASE_USER:-amahi}'@'localhost';
 FLUSH PRIVILEGES;
 EOSQL
 
@@ -188,6 +188,21 @@ EOSQL
 # ---------------------------------------------------------------------------
 echo "==> Running database migrations..."
 sudo -u "$APP_USER" bash -lc "cd $APP_DIR && RAILS_ENV=production bin/rails db:migrate"
+
+echo "==> Seeding database..."
+sudo -u "$APP_USER" bash -lc "cd $APP_DIR && RAILS_ENV=production bin/rails db:seed"
+
+# Detect host IP and patch network settings to match this machine
+HOST_IP=$(hostname -I | awk '{print $1}')
+if [ -n "$HOST_IP" ]; then
+  NET_PREFIX=$(echo "$HOST_IP" | cut -d. -f1-3)
+  SELF_ADDR=$(echo "$HOST_IP" | cut -d. -f4)
+  echo "==> Configuring network settings for $HOST_IP..."
+  sudo -u "$APP_USER" bash -lc "cd $APP_DIR && RAILS_ENV=production bin/rails runner \"
+    Setting.set('net', '$NET_PREFIX')
+    Setting.set('self-address', '$SELF_ADDR')
+  \""
+fi
 
 # ---------------------------------------------------------------------------
 # 10. Asset precompilation
@@ -257,7 +272,7 @@ visudo -cf /etc/sudoers.d/amahi-kai
 echo "    Sudoers validated OK"
 
 # ---------------------------------------------------------------------------
-# 12. Systemd service
+# 12. Systemd service (with RAILS_LOG_TO_STDOUT)
 # ---------------------------------------------------------------------------
 echo "==> Installing systemd service..."
 cat > /etc/systemd/system/amahi-kai.service <<UNIT
@@ -274,6 +289,7 @@ WorkingDirectory=$APP_DIR
 EnvironmentFile=$ENV_FILE
 Environment=RBENV_ROOT=/usr/local/rbenv
 Environment=PATH=/usr/local/rbenv/shims:/usr/local/rbenv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
+Environment=RAILS_LOG_TO_STDOUT=true
 ExecStart=/usr/local/rbenv/shims/bundle exec puma -C config/puma.rb
 Restart=on-failure
 RestartSec=5
@@ -339,7 +355,15 @@ nginx -t
 systemctl enable --now nginx
 
 # ---------------------------------------------------------------------------
-# 14. Enable services
+# 14. Firewall — open port 80
+# ---------------------------------------------------------------------------
+if command -v ufw &>/dev/null && ufw status | grep -q "Status: active"; then
+  echo "==> Opening port 80 (HTTP) in UFW..."
+  ufw allow 80/tcp comment "Amahi-kai web UI" || true
+fi
+
+# ---------------------------------------------------------------------------
+# 15. Enable services (Samba)
 # ---------------------------------------------------------------------------
 echo "==> Enabling services..."
 systemctl enable --now smbd nmbd
@@ -347,7 +371,7 @@ systemctl enable --now smbd nmbd
 # systemctl enable --now dnsmasq
 
 # ---------------------------------------------------------------------------
-# 15. Start Amahi-kai
+# 16. Start Amahi-kai
 # ---------------------------------------------------------------------------
 echo "==> Starting Amahi-kai..."
 systemctl start amahi-kai
