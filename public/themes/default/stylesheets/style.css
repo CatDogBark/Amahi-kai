@@ -1326,20 +1326,17 @@ td.align-top {
 
 #search-menu {
   list-style: none;
-  *zoom: 1; }
-  #search-menu:before, #search-menu:after {
-    display: table;
-    content: "";
-    line-height: 0; }
-  #search-menu:after {
-    clear: both; }
+  padding-left: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center; }
   #search-menu li {
-    float: left;
     padding: 0 10px;
     border-right: 1px solid #000;
     line-height: 12px; }
     #search-menu li.results {
-      float: right;
+      margin-left: auto;
       border: 0; }
 
 #search-results {

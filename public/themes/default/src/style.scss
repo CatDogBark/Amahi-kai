@@ -1223,16 +1223,19 @@ td {
 
 #search-menu {
   list-style: none;
-  @include clearfix;
+  padding-left: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
 
   li {
-    float: left;
     padding: 0 10px;
     border-right: 1px solid #000;
     line-height: 12px;
 
     &.results {
-      float: right;
+      margin-left: auto;
       border: 0;
     }
   }
