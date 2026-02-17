@@ -146,6 +146,10 @@ if [ ! -f "$ENV_FILE" ]; then
 
 SECRET_KEY_BASE=$SECRET
 RAILS_ENV=production
+
+# Serve static assets from Puma (no nginx reverse proxy in front)
+RAILS_SERVE_STATIC_FILES=true
+
 DATABASE_HOST=localhost
 DATABASE_NAME=amahi_production
 DATABASE_USER=amahi
