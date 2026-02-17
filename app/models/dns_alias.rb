@@ -16,9 +16,8 @@
 
 class DnsAlias < ApplicationRecord
 
-	after_create :restart
-	after_destroy :restart
 	after_save :restart
+	after_destroy :restart
 
 	scope :user_visible,->{where(["address != ?", ''])}
 
@@ -53,13 +52,14 @@ class DnsAlias < ApplicationRecord
 		tmp = TempCache.unique_filename("dnsmasq-aliases")
 		File.write(tmp, lines.join("\n") + "\n")
 
-		c = Command.new("cp #{Shellwords.escape(tmp)} /etc/dnsmasq.d/amahi-aliases.conf")
-		c.submit("chmod 644 /etc/dnsmasq.d/amahi-aliases.conf")
+		c = Command.new("install -m 644 #{Shellwords.escape(tmp)} /etc/dnsmasq.d/amahi-aliases.conf")
 		c.execute
 	end
 
 	def reload_dnsmasq
-		c = Command.new("systemctl reload dnsmasq.service")
+		# dnsmasq reload (SIGHUP) does not re-read new files added to conf-dir,
+		# so we must restart to pick up newly created config files.
+		c = Command.new("systemctl restart dnsmasq.service")
 		c.execute
 	end
 
