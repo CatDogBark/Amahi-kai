@@ -96,6 +96,7 @@ class Command
       chmod chown
       mkdir rmdir cp mv rm
       pdbedit
+      sh bash
       apt-get dpkg rpm yum pacman
     ]
 

@@ -39,3 +39,6 @@ config/master.key
 config/credentials.yml.enc
 db/test.sqlite3-shm
 db/test.sqlite3-wal
+
+# OpenClaw media staging
+media/inbound/

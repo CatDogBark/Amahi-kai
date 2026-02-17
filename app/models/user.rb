@@ -129,7 +129,7 @@ class User < ApplicationRecord
 		c.execute
 		unless self.password.nil? && self.password.blank?
 			esc_pwd = Shellwords.escape(self.password)
-			c = Command.new "(echo #{esc_pwd}; echo #{esc_pwd}) | pdbedit -d0 -t -a -u #{esc_login}"
+			c = Command.new "sh -c '(echo #{esc_pwd}; echo #{esc_pwd}) | pdbedit -d0 -t -a -u #{esc_login}'"
 			c.execute
 		end
 	end
@@ -155,7 +155,7 @@ class User < ApplicationRecord
 		c = Command.new "useradd -m -g users -c #{esc_name} #{pwd_option} #{esc_login}"
 		unless self.password.nil? && self.password.blank?
 			esc_pwd = Shellwords.escape(self.password)
-			c.submit("(echo #{esc_pwd}; echo #{esc_pwd}) | pdbedit -d0 -t -a -u #{esc_login}")
+			c.submit("sh -c '(echo #{esc_pwd}; echo #{esc_pwd}) | pdbedit -d0 -t -a -u #{esc_login}'")
 		end
 		c.execute
 	end
