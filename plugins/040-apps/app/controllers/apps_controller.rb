@@ -200,12 +200,6 @@ class AppsController < ApplicationController
 	private
 
 	def load_catalog
-		@_catalog ||= begin
-			if defined?(AppCatalog)
-				AppCatalog.all
-			else
-				[]
-			end
-		end
+		@_catalog ||= AppCatalog.all
 	end
 end
