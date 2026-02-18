@@ -47,12 +47,13 @@ class DnsAlias < ApplicationRecord
 			end
 		end
 
-		# Write to a temp file, then move into place via Command (needs sudo)
-		require 'tempfile'
-		tmp = TempCache.unique_filename("dnsmasq-aliases")
-		File.write(tmp, lines.join("\n") + "\n")
+		# Write to staging dir, then copy into place via sudo cp (matches sudoers allowlist)
+		staging_dir = "/tmp/amahi-staging"
+		FileUtils.mkdir_p(staging_dir)
+		staged_file = File.join(staging_dir, "amahi-aliases.conf")
+		File.write(staged_file, lines.join("\n") + "\n")
 
-		c = Command.new("install -m 644 #{Shellwords.escape(tmp)} /etc/dnsmasq.d/amahi-aliases.conf")
+		c = Command.new("cp #{Shellwords.escape(staged_file)} /etc/dnsmasq.d/amahi-aliases.conf")
 		c.execute
 	end
 

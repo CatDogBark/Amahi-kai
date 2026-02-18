@@ -26,7 +26,7 @@ class NetworkController < ApplicationController
       if @host.errors.any?
         format.html { render :hosts, status: :unprocessable_entity }
       else
-        format.html { redirect_to hosts_path }
+        format.html { redirect_to "/tab/network/hosts" }
       end
       format.json
     end
@@ -55,7 +55,7 @@ class NetworkController < ApplicationController
       if @dns_alias.errors.any?
         format.html { render :dns_aliases, status: :unprocessable_entity }
       else
-        format.html { redirect_to dns_aliases_path }
+        format.html { redirect_to "/tab/network/dns_aliases" }
       end
       format.json
     end
