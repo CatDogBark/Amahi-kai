@@ -118,7 +118,7 @@ private
 		Setting.set('advanced', '0')
 		Server.create_default_servers if Server.count < 4
 		Setting.set('guest-dashboard', '0')
-		Setting.set('theme', 'default')
+		Setting.set('theme', 'amahi-kai')
 		# network settings
 		network = Setting::NETWORK
 		Setting.find_or_create_by(network, 'dns', 'opennic')
