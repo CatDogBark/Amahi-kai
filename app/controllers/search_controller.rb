@@ -83,9 +83,12 @@ class SearchController < ApplicationController
     files = scope.offset(offset).limit(rpp).includes(:share)
 
     files.map do |sf|
+      # path format: "sharename/relative/path/to/file" — matches what path2uri and path2location expect
+      rel = sf.relative_path
+      full_share_path = rel == sf.name ? sf.share.name : File.join(sf.share.name, rel)
       {
         title: sf.name,
-        path: [sf.share.name, File.dirname(sf.relative_path)].reject { |p| p == '.' },
+        path: full_share_path,
         size: sf.size,
         owner: sf.share.name,
         type: sf.directory? ? 'directory' : 'file'
