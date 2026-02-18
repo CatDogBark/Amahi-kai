@@ -72,9 +72,8 @@ class SearchController < ApplicationController
   protected
 
   def search_share_files(query, content_type, page, rpp = RESULTS_PER_PAGE)
-    return [] if query.blank?
-
-    scope = ShareFile.files_only.search(query)
+    scope = ShareFile.files_only
+    scope = scope.search(query) if query.present?
     scope = scope.by_type(content_type) if content_type.present?
     scope = scope.recent
 
