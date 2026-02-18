@@ -47,10 +47,9 @@ class DnsAlias < ApplicationRecord
 			end
 		end
 
-		# Write to staging dir, then copy into place via sudo cp (matches sudoers allowlist)
-		staging_dir = "/tmp/amahi-staging"
-		FileUtils.mkdir_p(staging_dir)
-		staged_file = File.join(staging_dir, "amahi-aliases.conf")
+		# Write to HDA tmp dir, then copy into place via sudo cp (matches sudoers allowlist)
+		FileUtils.mkdir_p(HDA_TMP_DIR)
+		staged_file = File.join(HDA_TMP_DIR, "amahi-aliases.conf")
 		File.write(staged_file, lines.join("\n") + "\n")
 
 		c = Command.new("cp #{Shellwords.escape(staged_file)} /etc/dnsmasq.d/amahi-aliases.conf")

@@ -248,6 +248,8 @@ amahi ALL=(root) NOPASSWD: /usr/bin/mkdir -p /var/hda/*
 # Config file staging
 amahi ALL=(root) NOPASSWD: /usr/bin/cp /tmp/amahi-staging/* /etc/samba/*
 amahi ALL=(root) NOPASSWD: /usr/bin/cp /tmp/amahi-staging/* /etc/dnsmasq.d/*
+amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/hda/tmp/* /etc/samba/*
+amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/hda/tmp/* /etc/dnsmasq.d/*
 
 # Service management — scoped to Amahi-managed services ONLY
 amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start smbd.service
