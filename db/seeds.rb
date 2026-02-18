@@ -35,7 +35,7 @@ admin = User.new(
 admin.save!(validate: false)
 
 Setting.set('advanced', '1')
-Setting.set('theme', 'default')
+Setting.set('theme', 'amahi-kai')
 Setting.set('guest-dashboard', '0')
 Setting.set('dns', 'opennic')
 Setting.set('dns_ip_1', '173.230.156.28')

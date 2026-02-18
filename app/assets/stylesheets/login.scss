@@ -1,99 +1,119 @@
-// BORDER RADIUS
+// Amahi-kai Login Page
+// Ocean-inspired login with clean, modern styling
+
+// MIXINS
 @mixin border-radius($radius: 5px) {
   border-radius: $radius;
 }
-// BOX SHADOW
 @mixin box-shadow($shadow...) {
   box-shadow: $shadow;
 }
 
+// VARIABLES
+$kai-primary: #0a6e8a;
+$kai-secondary: #0d8aa8;
+$kai-accent: #f0a030;
+$kai-dark: #1a2332;
+$kai-darker: #131b27;
+$kai-text: #2c3e50;
+$kai-muted: #7f8c9b;
+
 body {
-	font: 12px "Lucida Grande", "Lucida Sans Unicode", Tahoma, Verdana, sans-serif;
-	&.login {border-top-color: #464646;}
+  font: 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  &.login { border-top-color: $kai-dark; }
 }
 
 html {
-	background: url(/assets/body_bg.jpg) center center / cover no-repeat;
-	min-height: 100%;
-	height: 100%;
+  background: $kai-darker;
+  background: linear-gradient(135deg, $kai-darker 0%, darken($kai-primary, 25%) 50%, $kai-darker 100%);
+  min-height: 100%;
+  height: 100%;
 }
 
 #nav {
   margin: 0 0 0 8px;
   padding: 16px;
-  a: {color: #777;}
+  a { color: #777; }
 }
 
-a {text-decoration: none;}
+a { text-decoration: none; color: $kai-secondary; }
 
 #logo {
-  margin-top: 100px;
+  margin-top: 80px;
+  text-align: center;
   h1 a {
-    background: url(/assets/amahi-logo.png) no-repeat top center;
-    width: 326px;
-    height: 67px;
-    text-indent: -9999px;
-    overflow: hidden;
-    padding-bottom: 20px;
+    font-size: 36px;
+    font-weight: 700;
+    color: white;
+    text-decoration: none;
     display: block;
+    padding-bottom: 8px;
+    letter-spacing: -0.5px;
+    background: none;
+    text-indent: 0;
+    width: auto;
+    height: auto;
+    overflow: visible;
   }
 }
 
 #login {
   width: 380px;
-  margin: 20px  auto 7em auto;
+  margin: 20px auto 7em auto;
 }
 
-.alert-danger{
+.alert-danger {
   margin: 0 0 16px 8px;
   padding: 12px;
-  border: 1px solid #C00000;
-  background-color: #FFEBE8;
+  border: 1px solid #c0392b;
+  background-color: #fdf0ef;
+  color: #c0392b;
+  border-radius: 4px;
 }
 
 .message-message {
   margin: 0 0 16px 8px;
   padding: 12px;
-  border: 1px solid #9ee894;
-  background-color: #e0ffda;
+  border: 1px solid #27ae60;
+  background-color: #e8f8f0;
+  border-radius: 4px;
 }
 
 .alert-info {
   margin: 0 0 16px 8px;
   padding: 12px;
-  border: 1px solid #FAB762;
-  background-color: #FFF8B0;
+  border: 1px solid $kai-accent;
+  background-color: #fef9e7;
+  border-radius: 4px;
 }
+
 .alert-warn {
   margin: 0 0 16px 8px;
   padding: 12px;
-  color: #FF0000;
-  background-color: #F7BE81;
-  border-color: #FF4000;
-  a {
-    color: #B40404;
-  }
+  color: #c0392b;
+  background-color: #fdebd0;
+  border: 1px solid #e67e22;
+  border-radius: 4px;
+  a { color: #c0392b; }
 }
 
 form {
   margin-left: 8px;
-  padding: 26px 46px 74px 46px;
-
+  padding: 30px 46px 74px 46px;
   font-weight: bold;
 
-  @include border-radius(5px);
-  @include box-shadow(rgba(200,200,200,1) 0 4px 18px);
+  @include border-radius(8px);
+  @include box-shadow(rgba(0, 0, 0, 0.3) 0 8px 32px);
 
-  background: #28374E;
-  background: -webkit-gradient(linear, center top, center bottom, from(#4a6495), to(#1C2838));
-  background: -moz-linear-gradient(center top, #4a6495, #1C2838) repeat scroll 0 0 transparent;
-  filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#4a6495', endColorstr='#1C2838');
-  border: 1px solid #444C5E;
+  background: $kai-dark;
+  background: linear-gradient(180deg, lighten($kai-dark, 8%) 0%, $kai-dark 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 
   .rememberme {
     font-weight: normal;
     float: left;
     margin-bottom: 0;
+    color: $kai-muted;
   }
 
   p {
@@ -105,12 +125,23 @@ form {
     display: block;
     text-align: left;
     vertical-align: top;
-    color: #eee;
+    color: #ccc;
+    font-weight: 500;
   }
 
   input {
-    color: #555;
-      background-color: #eee;
+    color: $kai-text;
+    background-color: #f4f7fa;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    transition: border-color 0.15s ease;
+
+    &:focus {
+      border-color: $kai-secondary;
+      outline: none;
+      box-shadow: 0 0 0 2px rgba($kai-secondary, 0.3);
+    }
+
     &[disabled='disabled'] {
       color: #999;
       background-color: #eee;
@@ -118,66 +149,62 @@ form {
   }
 
   .submit {
-
     float: right;
 
     input {
-
       margin-top: -6px;
-      padding: 5px 10px 5px 10px;
-
-      background-color: #CD6B08 !important;
-
-      font-family: "Lucida Grande", "Lucida Sans Unicode", Tahoma, Verdana, sans-serif;
-      font-size: 13px;
-      color: #eee;
-
-      border: 0px;
+      padding: 10px 24px;
+      background: $kai-primary;
+      background: linear-gradient(180deg, $kai-secondary 0%, $kai-primary 100%);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      color: white;
+      border: 1px solid darken($kai-primary, 5%);
       @include border-radius(6px);
-
-	cursor: default;
-	background: -webkit-gradient(linear, center top, center bottom, from(#FAA51A), to(#F47A20));
-	background: -moz-linear-gradient(center top , #FAA51A, #F47A20) repeat scroll 0 0 transparent;
-	border: 1px solid #DA7C0C;
-	color: #FEF4E9;
-
-	border-radius: 0.5em 0.5em 0.5em 0.5em;
-	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-	cursor: pointer;
-	display: inline-block;
-	font: 14px/100% Arial,Helvetica,sans-serif;
-	margin: 0 2px;
-	outline: medium none;
-	padding: 0.5em 2em 0.55em;
-	text-align: center;
-	text-decoration: none;
-	text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
-	vertical-align: baseline;
+      cursor: pointer;
+      display: inline-block;
+      text-align: center;
+      text-decoration: none;
+      text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+      transition: all 0.15s ease;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 
       &:hover {
-	background: -webkit-gradient(linear, center top, center bottom, from(#F88E11), to(#F06015));
-	background: -moz-linear-gradient(center top , #F88E11, #F06015) repeat scroll 0 0 transparent;
-        border-color: #8e6203;
-	text-decoration: none;
+        background: lighten($kai-primary, 5%);
+        background: linear-gradient(180deg, lighten($kai-secondary, 5%) 0%, lighten($kai-primary, 5%) 100%);
+        border-color: $kai-primary;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
       }
     }
   }
 
   #password, #username, #password_confirmation, #user_email {
-    font-size: 20px;
+    font-size: 16px;
     width: 97%;
-    padding: 3px;
+    padding: 8px;
     margin-right: 6px;
   }
-
 }
 
 .updated {
-	background-color: #ffffe0;
-	border-color: #e6db55;
+  background-color: #e8f8f0;
+  border-color: #27ae60;
 }
 
-input::-webkit-input-placeholder { color: #bbb; font-weight: normal; }
-input:-moz-placeholder { color: #bbb; font-weight: normal; }
-input::-moz-placeholder { color: #bbb; font-weight: normal; }
-input:-ms-input-placeholder { color: #bbb; font-weight: normal; }
+// Placeholder styling
+input::-webkit-input-placeholder { color: #aaa; font-weight: normal; }
+input:-moz-placeholder { color: #aaa; font-weight: normal; }
+input::-moz-placeholder { color: #aaa; font-weight: normal; }
+input:-ms-input-placeholder { color: #aaa; font-weight: normal; }
+
+// Kai branding accent
+form::before {
+  content: '';
+  display: block;
+  width: 60px;
+  height: 3px;
+  background: linear-gradient(90deg, $kai-primary, $kai-accent);
+  border-radius: 2px;
+  margin: 0 auto 20px auto;
+}

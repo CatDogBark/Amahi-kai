@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 60" width="280" height="60">
+  <defs>
+    <linearGradient id="wave" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a6e8a"/>
+      <stop offset="100%" style="stop-color:#0d8aa8"/>
+    </linearGradient>
+  </defs>
+  <!-- Wave icon -->
+  <g transform="translate(8, 8)">
+    <path d="M0 28 Q8 18, 16 24 Q24 30, 32 22 Q36 18, 40 22" 
+          stroke="url(#wave)" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <path d="M4 36 Q12 26, 20 32 Q28 38, 36 30" 
+          stroke="url(#wave)" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.6"/>
+    <path d="M8 16 Q14 10, 20 16 Q26 22, 32 14" 
+          stroke="url(#wave)" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.4"/>
+  </g>
+  <!-- Text -->
+  <text x="62" y="38" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" 
+        font-size="30" font-weight="700" fill="#1a2332">
+    Amahi<tspan fill="#0a6e8a">-kai</tspan>
+  </text>
+  <!-- Tagline -->
+  <text x="63" y="52" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" 
+        font-size="9" fill="#7f8c9b" letter-spacing="1.5">
+    HOME SERVER
+  </text>
+</svg>

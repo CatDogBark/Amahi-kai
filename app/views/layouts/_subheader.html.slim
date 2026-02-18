@@ -1,7 +1,10 @@
 .container
 	.row.p-4
 		.col-2.ms-3
-			= theme_image_tag("logo.png")
+			- if File.exist?(Rails.public_path.join('themes', @theme.path, 'images', 'logo.svg'))
+				img src="/themes/#{@theme.path}/images/logo.svg" alt="Amahi-kai" style="max-height: 55px"
+			- else
+				= theme_image_tag("logo.png")
 		.col-
 			h2.display-4.page-title
 	    		= page_title

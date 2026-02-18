@@ -1,0 +1,554 @@
+/* Amahi-kai Theme
+ * A modern ocean-inspired theme for the Amahi-kai home server platform.
+ * Forked from the Amahi default theme with respect to the original.
+ *
+ * Color palette:
+ *   Primary:    #0a6e8a (deep ocean teal)
+ *   Secondary:  #0d8aa8 (lighter teal)
+ *   Accent:     #f0a030 (warm amber — contrast)
+ *   Dark:       #1a2332 (deep navy)
+ *   Light:      #f4f7fa (cool white)
+ *   Text:       #2c3e50 (readable dark)
+ *   Muted:      #7f8c9b (soft gray-blue)
+ */
+
+:root {
+  --kai-primary: #0a6e8a;
+  --kai-secondary: #0d8aa8;
+  --kai-accent: #f0a030;
+  --kai-dark: #1a2332;
+  --kai-darker: #131b27;
+  --kai-light: #f4f7fa;
+  --kai-text: #2c3e50;
+  --kai-muted: #7f8c9b;
+  --kai-success: #27ae60;
+  --kai-danger: #c0392b;
+  --kai-warning: #f39c12;
+  --kai-border: #dce3eb;
+  --kai-card-bg: #ffffff;
+  --kai-shadow: rgba(26, 35, 50, 0.08);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  outline: none;
+  border: 0;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  background: var(--kai-light);
+  font-size: 13px;
+  line-height: 1.6;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color: var(--kai-text);
+}
+
+h2 {
+  line-height: initial;
+  font-size: initial;
+}
+
+a {
+  color: var(--kai-primary);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+a:hover {
+  color: var(--kai-secondary);
+  text-decoration: underline;
+}
+
+.align-center {
+  text-align: center;
+}
+
+.default-message {
+  padding: 10px;
+}
+
+#locale, #setting_dns select {
+  border: 1px solid var(--kai-border);
+}
+
+.hover-style {
+  cursor: pointer;
+}
+.hover-style:hover {
+  background: var(--kai-light);
+}
+
+.inside {
+  width: 960px;
+  margin: 0 auto;
+  position: relative;
+  *zoom: 1;
+}
+.inside:before, .inside:after {
+  display: table;
+  content: "";
+  line-height: 0;
+}
+.inside:after {
+  clear: both;
+}
+
+.workgroup_click_change, .name_click_change, .lease_click_change,
+.gateway_click_change, .dyn_lo_click_change, .dyn_hi_click_change {
+  color: var(--kai-text) !important;
+  text-decoration: none;
+  border-bottom: 1px dashed var(--kai-muted);
+  font-weight: bold;
+}
+.workgroup_click_change:hover, .name_click_change:hover,
+.lease_click_change:hover, .gateway_click_change:hover,
+.dyn_lo_click_change:hover, .dyn_hi_click_change:hover {
+  border-bottom: 1px dashed var(--kai-primary);
+  text-decoration: none;
+}
+
+form {
+  color: var(--kai-text);
+}
+
+fieldset {
+  margin: 15px;
+  border: 1px solid var(--kai-border);
+  padding: 5px 10px;
+  color: var(--kai-text);
+  border-radius: 6px;
+}
+
+.access fieldset {
+  margin-top: 7px;
+  margin-bottom: 7px;
+  padding-top: 0;
+}
+
+legend {
+  color: var(--kai-muted);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+/* ─── Header ─── */
+#header {
+  width: 100%;
+  margin: 0 auto;
+  border-top: 3px solid var(--kai-accent);
+  background: var(--kai-dark);
+  overflow: hidden;
+  height: 59px;
+}
+#header a {
+  color: #fff;
+  font-weight: bold;
+  font-size: 12px;
+  text-decoration: none;
+}
+#header a:hover {
+  text-decoration: underline;
+}
+#header #logo-two, #header #pagetitle, #header #search-form {
+  display: none;
+}
+
+/* Navbar override */
+.navbar.bg-dark, .navbar-inverse {
+  background-color: var(--kai-dark) !important;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.nav_hover {
+  transition: background-color 0.15s ease;
+  border-radius: 4px;
+  padding: 6px 12px !important;
+}
+.nav_hover:hover {
+  background-color: rgba(255,255,255,0.1) !important;
+  text-decoration: none !important;
+}
+
+#head-left {
+  float: left;
+  margin-top: 17px;
+  margin-left: 0;
+  display: inline;
+}
+#head-left ul {
+  list-style: none;
+  *zoom: 1;
+}
+#head-left ul:before, #head-left ul:after {
+  display: table;
+  content: "";
+  line-height: 0;
+}
+#head-left ul:after {
+  clear: both;
+}
+#head-left li {
+  list-style-type: none;
+  float: left;
+  margin-left: 15px;
+}
+
+#head-right {
+  float: right;
+  padding-top: 5px;
+  margin-top: 8px;
+  display: inline;
+}
+#head-right ul {
+  list-style: none;
+  padding-bottom: 4px;
+  *zoom: 1;
+}
+#head-right ul:before, #head-right ul:after {
+  display: table;
+  content: "";
+  line-height: 0;
+}
+#head-right ul:after {
+  clear: both;
+}
+#head-right li {
+  list-style-type: none;
+  float: left;
+  padding: 0px 12px;
+  border-right: 1px solid #666;
+}
+
+/* ─── Search ─── */
+.searchbutton {
+  border: 1px solid var(--kai-primary) !important;
+  border-radius: 4px;
+  cursor: pointer;
+  background: var(--kai-primary);
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 10px;
+  transition: background 0.15s ease;
+}
+.searchbutton:hover {
+  background: var(--kai-secondary);
+}
+
+/* ─── Subheader / Logo area ─── */
+#subheader {
+  background: var(--kai-card-bg);
+  border-bottom: 1px solid var(--kai-border);
+  box-shadow: 0 1px 3px var(--kai-shadow);
+}
+#subheader ul {
+  list-style: none;
+}
+#subheader li {
+  display: inline-block;
+}
+
+.page-title {
+  color: var(--kai-muted) !important;
+  font-weight: 300 !important;
+  font-size: 1.8rem !important;
+}
+
+/* ─── Tabs ─── */
+.setup-tab-container {
+  background: var(--kai-dark);
+  padding: 0;
+}
+
+.setup-tab {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.setup-tab .active-tab-link {
+  display: block;
+  padding: 10px 18px;
+  background: var(--kai-primary);
+  color: white;
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 4px 4px 0 0;
+}
+
+.setup-tab .tab-link {
+  display: block;
+  padding: 10px 18px;
+  color: rgba(255,255,255,0.7);
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+.setup-tab .tab-link:hover {
+  color: white;
+  background: rgba(255,255,255,0.1);
+  text-decoration: none;
+}
+
+/* ─── Subtabs ─── */
+.setup-subtab-container {
+  background: var(--kai-card-bg);
+  border-bottom: 1px solid var(--kai-border);
+}
+
+.setup-subtab {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.setup-subtab .active-subtab-link {
+  display: inline-block;
+  padding: 8px 16px;
+  color: var(--kai-primary);
+  font-weight: 600;
+  border-bottom: 2px solid var(--kai-primary);
+  text-decoration: none;
+}
+
+.setup-subtab .subtab-link {
+  display: inline-block;
+  padding: 8px 16px;
+  color: var(--kai-muted);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+.setup-subtab .subtab-link:hover {
+  color: var(--kai-primary);
+  text-decoration: none;
+}
+
+/* ─── Content area ─── */
+.tab_data {
+  background: #eaeef2;
+  padding: 15px;
+  min-height: 400px;
+}
+
+/* ─── Settings Tables ─── */
+.settings-table {
+  background: var(--kai-card-bg);
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px var(--kai-shadow);
+}
+
+table.settings {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+table.settings thead tr {
+  background: var(--kai-dark);
+  color: white;
+}
+table.settings thead th {
+  padding: 10px 15px;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.3px;
+}
+
+table.settings tbody tr {
+  border-bottom: 1px solid var(--kai-border);
+  transition: background 0.1s ease;
+}
+table.settings tbody tr:hover {
+  background: var(--kai-light);
+}
+
+table.settings td {
+  padding: 10px 15px;
+  vertical-align: middle;
+}
+
+/* ─── Buttons ─── */
+.btn-create, .btnn.btn-create {
+  background: var(--kai-primary) !important;
+  border-color: var(--kai-primary) !important;
+  color: white !important;
+  font-weight: 600;
+  border-radius: 4px;
+  transition: background 0.15s ease;
+}
+.btn-create:hover, .btnn.btn-create:hover {
+  background: var(--kai-secondary) !important;
+  border-color: var(--kai-secondary) !important;
+}
+
+.btn-info {
+  background-color: var(--kai-primary) !important;
+  border-color: var(--kai-primary) !important;
+}
+.btn-info:hover {
+  background-color: var(--kai-secondary) !important;
+}
+
+.cancel-link, .cancel-btn-style {
+  color: var(--kai-muted);
+  text-decoration: none;
+}
+.cancel-link:hover {
+  color: var(--kai-danger);
+}
+
+/* ─── Badges ─── */
+.badge.bg-success { background-color: var(--kai-success) !important; }
+.badge.bg-danger { background-color: var(--kai-danger) !important; }
+.badge.bg-warning { background-color: var(--kai-warning) !important; }
+.badge.bg-info { background-color: var(--kai-primary) !important; }
+
+/* ─── Cards (System Status) ─── */
+.card {
+  border: 1px solid var(--kai-border);
+  border-radius: 6px;
+  box-shadow: 0 1px 3px var(--kai-shadow);
+}
+.card-header.bg-dark {
+  background-color: var(--kai-dark) !important;
+}
+
+/* ─── Progress bars ─── */
+.progress {
+  background-color: #e9ecef;
+  border-radius: 4px;
+}
+.progress-bar.bg-success { background-color: var(--kai-success) !important; }
+.progress-bar.bg-warning { background-color: var(--kai-warning) !important; }
+.progress-bar.bg-danger { background-color: var(--kai-danger) !important; }
+
+/* ─── Alerts ─── */
+.alert-danger {
+  background-color: #fdf0ef;
+  border-color: #f5c6cb;
+  color: var(--kai-danger);
+  border-radius: 4px;
+}
+
+/* ─── Forms ─── */
+.form-control {
+  border: 1px solid var(--kai-border);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 13px;
+  transition: border-color 0.15s ease;
+}
+.form-control:focus {
+  border-color: var(--kai-primary);
+  box-shadow: 0 0 0 2px rgba(10, 110, 138, 0.15);
+  outline: none;
+}
+
+.form-check-input:checked {
+  background-color: var(--kai-primary);
+  border-color: var(--kai-primary);
+}
+
+/* ─── Footer ─── */
+#footer, .footer-area {
+  background: var(--kai-dark);
+  color: rgba(255,255,255,0.5);
+  font-size: 11px;
+}
+#footer a {
+  color: rgba(255,255,255,0.7);
+}
+#footer a:hover {
+  color: white;
+}
+
+/* ─── Login page ─── */
+#login {
+  background: var(--kai-dark);
+}
+
+/* ─── Misc ─── */
+.settings-wrap {
+  background: var(--kai-card-bg);
+  border-radius: 6px;
+  box-shadow: 0 1px 3px var(--kai-shadow);
+}
+
+.settings-fields {
+  margin-bottom: 15px;
+}
+
+.top-margin-10 { margin-top: 10px; }
+.left-margin-10 { margin-left: 10px; }
+.left-margin-40 { margin-left: 40px; }
+.right-margin-10 { margin-right: 10px; }
+
+.spinner, .theme-image[data-toggle-target="spinner"] {
+  display: none;
+}
+
+.create-inside {
+  padding: 5px 0;
+}
+
+.area {
+  margin-top: 10px;
+}
+
+.more-info {
+  margin-left: 5px;
+  color: var(--kai-muted);
+}
+
+.no-users h2, .no-shares h2 {
+  color: var(--kai-muted);
+  font-size: 16px;
+  padding: 20px;
+  text-align: center;
+}
+
+/* ─── Search Results ─── */
+.result-heading {
+  margin: 10px 0;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--kai-border);
+}
+
+.search-results {
+  padding: 10px 0;
+}
+
+.search-results .result-item {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--kai-border);
+  transition: background 0.1s ease;
+}
+.search-results .result-item:hover {
+  background: var(--kai-light);
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 768px) {
+  .inside {
+    width: 100%;
+    padding: 0 10px;
+  }
+  .tab_data {
+    padding: 10px;
+  }
+}
+
+/* ─── Amahi-kai branding footer note ─── */
+.kai-lineage {
+  text-align: center;
+  padding: 8px;
+  font-size: 11px;
+  color: var(--kai-muted);
+}
+.kai-lineage a {
+  color: rgba(255,255,255,0.6);
+}
