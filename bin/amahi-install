@@ -156,8 +156,8 @@ DATABASE_USER=amahi
 DATABASE_PASSWORD=$DB_PASS
 AMAHI_DUMMY_MODE=false
 
-# Allow access via Cloudflare Tunnel
-RAILS_ALLOWED_HOST=nas.enlightenedsolutionsllc.com
+# Allow access via Cloudflare Tunnel (set to your domain, or remove if not using one)
+# RAILS_ALLOWED_HOST=your-domain.example.com
 
 # Share root (default: /var/hda/files)
 # AMAHI_SHARE_ROOT=/var/hda/files
