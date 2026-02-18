@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_02_17_000000) do
+ActiveRecord::Schema[8.0].define(version: 2026_02_18_200000) do
   create_table "app_dependencies", force: :cascade do |t|
     t.integer "app_id"
     t.integer "dependency_id"
@@ -133,6 +133,26 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_17_000000) do
     t.string "kind", default: "general"
   end
 
+  create_table "share_files", force: :cascade do |t|
+    t.integer "share_id", null: false
+    t.string "name", null: false
+    t.string "path", null: false
+    t.string "relative_path", null: false
+    t.string "content_type"
+    t.string "extension"
+    t.bigint "size", default: 0
+    t.boolean "directory", default: false
+    t.datetime "file_modified_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["content_type"], name: "index_share_files_on_content_type"
+    t.index ["directory"], name: "index_share_files_on_directory"
+    t.index ["extension"], name: "index_share_files_on_extension"
+    t.index ["name"], name: "index_share_files_on_name"
+    t.index ["share_id", "relative_path"], name: "index_share_files_on_share_id_and_relative_path", unique: true
+    t.index ["share_id"], name: "index_share_files_on_share_id"
+  end
+
   create_table "shares", force: :cascade do |t|
     t.string "name"
     t.string "path"
@@ -192,4 +212,6 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_17_000000) do
     t.datetime "created_at", precision: nil
     t.datetime "updated_at", precision: nil
   end
+
+  add_foreign_key "share_files", "shares"
 end

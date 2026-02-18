@@ -43,7 +43,6 @@ apt-get install -y --no-install-recommends \
   samba \
   samba-common-bin \
   dnsmasq \
-  plocate \
   sudo \
   zlib1g-dev \
   autoconf \
@@ -331,14 +330,45 @@ systemctl enable --now smbd nmbd
 # systemctl enable --now dnsmasq
 
 # ---------------------------------------------------------------------------
-# 15. File search index (plocate)
+# 15. File search index
 # ---------------------------------------------------------------------------
 echo "==> Building file search index..."
-updatedb 2>/dev/null || true
+sudo -u "$APP_USER" bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && RAILS_ENV=production bin/rails shares:reindex" || true
 
-# Ensure updatedb runs regularly for HDA search (every 15 min)
-CRON_LINE="*/15 * * * * /usr/bin/updatedb --require-visibility 0 --prunepaths='/proc /sys /tmp /run /snap' 2>/dev/null"
-(crontab -l 2>/dev/null | grep -v updatedb; echo "$CRON_LINE") | crontab -
+# Systemd timer for periodic index updates (every 10 minutes)
+cat > /etc/systemd/system/amahi-kai-indexer.service <<UNIT
+[Unit]
+Description=Amahi-kai Share File Indexer
+After=amahi-kai.service mariadb.service
+
+[Service]
+Type=oneshot
+User=$APP_USER
+Group=$APP_GROUP
+WorkingDirectory=$APP_DIR
+EnvironmentFile=$ENV_FILE
+Environment=RBENV_ROOT=/usr/local/rbenv
+Environment=PATH=/usr/local/rbenv/shims:/usr/local/rbenv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
+ExecStart=/usr/local/rbenv/shims/bundle exec rails shares:update_index
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=amahi-kai-indexer
+UNIT
+
+cat > /etc/systemd/system/amahi-kai-indexer.timer <<TIMER
+[Unit]
+Description=Amahi-kai Share File Index Update (every 10 min)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=10min
+
+[Install]
+WantedBy=timers.target
+TIMER
+
+systemctl daemon-reload
+systemctl enable --now amahi-kai-indexer.timer
 
 # ---------------------------------------------------------------------------
 # 16. Start Amahi-kai

@@ -36,8 +36,12 @@ class Share < ApplicationRecord
 	has_many :cap_writers, :dependent => :destroy
 	has_many :users_with_write_access, :through => :cap_writers, :source => :user
 
+	has_many :share_files, dependent: :destroy
+
 	before_save :before_save_hook
 	before_destroy :before_destroy_hook
+	after_create :index_share_files
+	after_destroy :cleanup_share_index
 	after_save :after_save_hook
 	after_destroy :after_destroy_hook
 
@@ -472,5 +476,21 @@ class Share < ApplicationRecord
 		d = domain if d.size == 0
 		d = d[-15..-1] if d.size > 15
 		d
+	end
+
+	# Index files in this share after creation
+	def index_share_files
+		Thread.new do
+			begin
+				require 'share_indexer'
+				ShareIndexer.index_share(self)
+			rescue => e
+				Rails.logger.error("Share#index_share_files failed: #{e.message}")
+			end
+		end
+	end
+
+	def cleanup_share_index
+		# share_files destroyed via dependent: :destroy
 	end
 end

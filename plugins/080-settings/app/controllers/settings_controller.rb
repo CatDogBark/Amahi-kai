@@ -34,6 +34,7 @@ class SettingsController < ApplicationController
 		@managed_users = User.all_users rescue []
 		@managed_shares = Share.all rescue []
 		@managed_aliases = DnsAlias.all rescue []
+		@indexed_files_count = ShareFile.count rescue 0
 	end
 
 	def servers
