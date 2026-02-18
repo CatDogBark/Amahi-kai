@@ -32,6 +32,14 @@ class SharesController < ApplicationController
 		@share = Share.new(params_create_share)
 		@share.save
 		get_shares unless @share.errors.any?
+		respond_to do |format|
+			if @share.errors.any?
+				format.html { render :index, status: :unprocessable_entity }
+			else
+				format.html { redirect_to shares_engine_path }
+			end
+			format.json
+		end
 	end
 
 	def destroy

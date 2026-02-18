@@ -32,7 +32,11 @@ class UsersController < ApplicationController
 		@user.save
 		@users = User.all_users	unless @user.errors.any?
 		respond_to do |format|
-			format.html
+			if @user.errors.any?
+				format.html { render :index, status: :unprocessable_entity }
+			else
+				format.html { redirect_to users_engine_path }
+			end
 			format.json
 		end
 	end

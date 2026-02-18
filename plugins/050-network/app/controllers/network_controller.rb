@@ -22,6 +22,14 @@ class NetworkController < ApplicationController
     sleep 2 if development?
     @host = Host.create(params_host)
     get_hosts
+    respond_to do |format|
+      if @host.errors.any?
+        format.html { render :hosts, status: :unprocessable_entity }
+      else
+        format.html { redirect_to hosts_path }
+      end
+      format.json
+    end
   end
 
   def destroy_host
@@ -43,6 +51,14 @@ class NetworkController < ApplicationController
     sleep 2 if development?
     @dns_alias = DnsAlias.create(params_create_alias)
     get_dns_aliases
+    respond_to do |format|
+      if @dns_alias.errors.any?
+        format.html { render :dns_aliases, status: :unprocessable_entity }
+      else
+        format.html { redirect_to dns_aliases_path }
+      end
+      format.json
+    end
   end
 
   def destroy_dns_alias
