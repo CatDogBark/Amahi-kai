@@ -1,5 +1,5 @@
-//= require turbo
-//= require stimulus.min
+//= require turbo-iife
+//= require stimulus-iife
 
 //= require controllers/application_controller
 //= require controllers/toggle_controller
