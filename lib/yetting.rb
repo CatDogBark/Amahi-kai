@@ -15,8 +15,21 @@ class Yetting
       end
     end
 
+    # Environment variable overrides for specific settings.
+    # AMAHI_DUMMY_MODE=1 forces dummy mode on (useful for dev/staging).
+    # AMAHI_DUMMY_MODE=0 forces dummy mode off (useful for production override).
+    ENV_OVERRIDES = {
+      'dummy_mode' => 'AMAHI_DUMMY_MODE'
+    }.freeze
+
     def method_missing(name, *args)
       key = name.to_s
+
+      # Check for env var override first
+      if ENV_OVERRIDES.key?(key) && ENV.key?(ENV_OVERRIDES[key])
+        return %w[1 true yes].include?(ENV[ENV_OVERRIDES[key]].to_s.downcase)
+      end
+
       if settings.key?(key)
         settings[key]
       else
@@ -25,7 +38,7 @@ class Yetting
     end
 
     def respond_to_missing?(name, include_private = false)
-      settings.key?(name.to_s) || super
+      ENV_OVERRIDES.key?(name.to_s) || settings.key?(name.to_s) || super
     end
 
     def reload!

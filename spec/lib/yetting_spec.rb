@@ -29,6 +29,35 @@ RSpec.describe Yetting do
     end
   end
 
+  describe "env var overrides" do
+    around do |example|
+      Yetting.reload!
+      example.run
+      ENV.delete('AMAHI_DUMMY_MODE')
+      Yetting.reload!
+    end
+
+    it "returns true when AMAHI_DUMMY_MODE=1" do
+      ENV['AMAHI_DUMMY_MODE'] = '1'
+      expect(Yetting.dummy_mode).to be true
+    end
+
+    it "returns false when AMAHI_DUMMY_MODE=0" do
+      ENV['AMAHI_DUMMY_MODE'] = '0'
+      expect(Yetting.dummy_mode).to be false
+    end
+
+    it "falls back to yml when env var is not set" do
+      ENV.delete('AMAHI_DUMMY_MODE')
+      # test environment has dummy_mode: true in yetting.yml
+      expect(Yetting.dummy_mode).to be true
+    end
+
+    it "responds_to? dummy_mode even without env var" do
+      expect(Yetting.respond_to?(:dummy_mode)).to be true
+    end
+  end
+
   describe ".reload!" do
     it "clears and reloads settings" do
       original = Yetting.settings
