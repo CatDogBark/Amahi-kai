@@ -1,0 +1,174 @@
+- @page_title = t('settings')
+
+.system-status
+
+  /! ── System Overview ──
+  .card.mb-4
+    .card-header.bg-dark.text-white
+      h5.mb-0
+        i.bi.bi-pc-display-horizontal.me-2
+        | System Overview
+    .card-body
+      .row
+        .col-md-6
+          table.table.table-sm.mb-0
+            tbody
+              tr
+                td.fw-bold Hostname
+                td = @system_info[:hostname]
+              tr
+                td.fw-bold IP Address
+                td = @system_info[:ip_address]
+              tr
+                td.fw-bold Operating System
+                td = @system_info[:os]
+              tr
+                td.fw-bold Kernel
+                td = @system_info[:kernel]
+              tr
+                td.fw-bold Uptime
+                td = @system_info[:uptime]
+        .col-md-6
+          table.table.table-sm.mb-0
+            tbody
+              tr
+                td.fw-bold Ruby
+                td = @system_info[:ruby_version]
+              tr
+                td.fw-bold Rails
+                td = @system_info[:rails_version]
+              tr
+                td.fw-bold Amahi-kai
+                td = @system_info[:app_version]
+              tr
+                td.fw-bold Environment
+                td = Rails.env
+              tr
+                td.fw-bold Dummy Mode
+                td
+                  - if @system_info[:dummy_mode]
+                    span.badge.bg-warning.text-dark Enabled
+                  - else
+                    span.badge.bg-success Disabled
+
+  /! ── Resource Usage ──
+  .card.mb-4
+    .card-header.bg-dark.text-white
+      h5.mb-0
+        i.bi.bi-speedometer2.me-2
+        | Resource Usage
+    .card-body
+      .row
+        .col-md-4
+          h6 CPU Load
+          .progress.mb-2 style="height: 24px"
+            .progress-bar[
+              role="progressbar"
+              style="width: #{[@resources[:cpu_percent], 100].min}%"
+              class=(@resources[:cpu_percent] > 80 ? 'bg-danger' : @resources[:cpu_percent] > 50 ? 'bg-warning' : 'bg-success')]
+              = "#{@resources[:cpu_percent]}%"
+          small.text-muted = @resources[:cpu_detail]
+        .col-md-4
+          h6 Memory
+          .progress.mb-2 style="height: 24px"
+            .progress-bar[
+              role="progressbar"
+              style="width: #{[@resources[:memory_percent], 100].min}%"
+              class=(@resources[:memory_percent] > 80 ? 'bg-danger' : @resources[:memory_percent] > 50 ? 'bg-warning' : 'bg-success')]
+              = "#{@resources[:memory_percent]}%"
+          small.text-muted = @resources[:memory_detail]
+        .col-md-4
+          h6 Disk (/)
+          .progress.mb-2 style="height: 24px"
+            .progress-bar[
+              role="progressbar"
+              style="width: #{[@resources[:disk_percent], 100].min}%"
+              class=(@resources[:disk_percent] > 80 ? 'bg-danger' : @resources[:disk_percent] > 50 ? 'bg-warning' : 'bg-success')]
+              = "#{@resources[:disk_percent]}%"
+          small.text-muted = @resources[:disk_detail]
+
+  /! ── Services ──
+  .card.mb-4
+    .card-header.bg-dark.text-white
+      h5.mb-0
+        i.bi.bi-gear-wide-connected.me-2
+        | Services
+    .card-body
+      table.table.table-sm.mb-0
+        thead
+          tr
+            th Service
+            th Status
+            th Details
+        tbody
+          - @services.each do |svc|
+            tr
+              td.fw-bold = svc[:name]
+              td
+                - if svc[:running]
+                  span.badge.bg-success Running
+                - else
+                  span.badge.bg-danger Stopped
+              td.text-muted = svc[:detail]
+
+  .row
+    /! ── Managed Users ──
+    .col-md-4
+      .card.mb-4
+        .card-header.bg-dark.text-white
+          h5.mb-0
+            i.bi.bi-people.me-2
+            | Users
+            span.badge.bg-secondary.ms-2 = @managed_users.count
+        .card-body
+          - if @managed_users.any?
+            table.table.table-sm.mb-0
+              tbody
+                - @managed_users.each do |u|
+                  tr
+                    td
+                      = u.login
+                      - if u.admin?
+                        span.badge.bg-info.ms-1 admin
+                    td.text-muted = u.name
+          - else
+            p.text-muted No users
+
+    /! ── Managed Shares ──
+    .col-md-4
+      .card.mb-4
+        .card-header.bg-dark.text-white
+          h5.mb-0
+            i.bi.bi-folder.me-2
+            | Shares
+            span.badge.bg-secondary.ms-2 = @managed_shares.count
+        .card-body
+          - if @managed_shares.any?
+            table.table.table-sm.mb-0
+              tbody
+                - @managed_shares.each do |s|
+                  tr
+                    td.fw-bold = s.name
+                    td.text-muted
+                      code.small = s.path
+          - else
+            p.text-muted No shares
+
+    /! ── DNS Aliases ──
+    .col-md-4
+      .card.mb-4
+        .card-header.bg-dark.text-white
+          h5.mb-0
+            i.bi.bi-signpost-2.me-2
+            | DNS Aliases
+            span.badge.bg-secondary.ms-2 = @managed_aliases.count
+        .card-body
+          - if @managed_aliases.any?
+            table.table.table-sm.mb-0
+              tbody
+                - @managed_aliases.each do |a|
+                  tr
+                    td.fw-bold = a.name
+                    td.text-muted = a.address.present? ? a.address : '(self)'
+          - else
+            p.text-muted No aliases

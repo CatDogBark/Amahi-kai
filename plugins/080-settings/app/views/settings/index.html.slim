@@ -71,4 +71,11 @@ div.settings-fields.settings-wrap.bg-white.p-2
             label = t 'uptime'
           td = `uptime`
 
+div.settings-fields.settings-wrap.bg-white.p-2.mt-3
+  fieldset
+    legend System Status
+    p
+      a.btn.btn-info href="/tab/settings/system_status"
+        | View System Status Dashboard →
+
 = javascript_include_tag 'settings'

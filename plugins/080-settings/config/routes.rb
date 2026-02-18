@@ -17,4 +17,5 @@ Settings::Engine.routes.draw do
 	match 'activate_theme' => 'settings#activate_theme', via: [:get,:post]
 
 	put 'revoke_app' => 'settings#revoke_app', as: 'revoke_app'
+	get 'system_status' => 'settings#system_status', as: 'system_status'
 end
