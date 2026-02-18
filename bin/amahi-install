@@ -43,6 +43,7 @@ apt-get install -y --no-install-recommends \
   samba \
   samba-common-bin \
   dnsmasq \
+  plocate \
   sudo \
   zlib1g-dev \
   autoconf \
@@ -330,7 +331,17 @@ systemctl enable --now smbd nmbd
 # systemctl enable --now dnsmasq
 
 # ---------------------------------------------------------------------------
-# 15. Start Amahi-kai
+# 15. File search index (plocate)
+# ---------------------------------------------------------------------------
+echo "==> Building file search index..."
+updatedb 2>/dev/null || true
+
+# Ensure updatedb runs regularly for HDA search (every 15 min)
+CRON_LINE="*/15 * * * * /usr/bin/updatedb --require-visibility 0 --prunepaths='/proc /sys /tmp /run /snap' 2>/dev/null"
+(crontab -l 2>/dev/null | grep -v updatedb; echo "$CRON_LINE") | crontab -
+
+# ---------------------------------------------------------------------------
+# 16. Start Amahi-kai
 # ---------------------------------------------------------------------------
 echo "==> Starting Amahi-kai..."
 systemctl start amahi-kai
@@ -341,7 +352,7 @@ echo "  Amahi-kai installation complete!"
 echo "============================================"
 echo ""
 echo "  Web UI:  http://$(hostname -I | awk '{print $1}'):3000"
-echo "  Tunnel:  https://nas.enlightenedsolutionsllc.com"
+echo "  Tunnel:  (configure Cloudflare Tunnel if needed)"
 echo "  Login:   admin / secretpassword (CHANGE THIS)"
 echo ""
 echo "  Config:  $ENV_FILE"
