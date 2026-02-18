@@ -10,7 +10,11 @@ form.share.create-form.form-horizontal.p-1.mt-2.bg-white[
   input type="hidden" name="authenticity_token" value=form_authenticity_token
   fieldset
     legend &nbsp; #{t('create_a_new_share')} &nbsp;
-
+    - if @share&.errors&.any?
+      .alert.alert-danger.m-2
+        ul.mb-0
+          - @share.errors.full_messages.each do |msg|
+            li = msg
     .create-inside
       .control-group.form-group
         .controls

@@ -10,7 +10,11 @@ form.dns_alias.create-form.form-horizontal.col-md-6.bg-white.p-2[
   input type="hidden" name="authenticity_token" value=form_authenticity_token
   fieldset
     legend &nbsp; #{t('create_a_new_dns_alias')} &nbsp;
-
+    - if @dns_alias&.errors&.any?
+      .alert.alert-danger.m-2
+        ul.mb-0
+          - @dns_alias.errors.full_messages.each do |msg|
+            li = msg
     .create-inside
       .control-group.form-group
         .controls

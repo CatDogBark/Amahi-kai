@@ -10,6 +10,11 @@ form.user.create-form.form-horizontal.p-1[
   input type="hidden" name="authenticity_token" value=form_authenticity_token
   fieldset.bg-white
     legend &nbsp; #{t('create_a_new_user')} &nbsp;
+    - if @user&.errors&.any?
+      .alert.alert-danger.m-2
+        ul.mb-0
+          - @user.errors.full_messages.each do |msg|
+            li = msg
     .create-inside
       .control-group.form-group
         .controls
