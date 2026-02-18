@@ -31,7 +31,11 @@
             if (data.content) {
               var temp = document.createElement('div');
               temp.innerHTML = data.content;
-              _this.element.replaceWith(temp.firstElementChild || temp);
+              var newEl = temp.firstElementChild || temp;
+              _this.element.replaceWith(newEl);
+              // Ensure the form's parent containers are visible (open/close areas)
+              var parent = newEl.closest('.area');
+              if (parent) parent.style.display = '';
             }
           } else if (data.content) {
             // Success — replace target container and clear form
