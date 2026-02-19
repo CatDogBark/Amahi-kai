@@ -38,6 +38,18 @@ class DisksController < ApplicationController
     redirect_to disks_engine.storage_pool_path
   end
 
+  def install_greyhole
+    begin
+      Greyhole.install!
+      flash[:notice] = "Greyhole installed successfully!"
+    rescue Greyhole::GreyholeError => e
+      flash[:error] = "Failed to install Greyhole: #{e.message}"
+    rescue => e
+      flash[:error] = "Installation error: #{e.message}"
+    end
+    redirect_to disks_engine.storage_pool_path
+  end
+
   private
 
   def partition_list

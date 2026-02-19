@@ -31,24 +31,41 @@ class Greyhole
 
     def install!
       return true unless production?
-      result = system('apt-get install -y greyhole')
-      raise GreyholeError, 'Failed to install greyhole' unless result
+
+      # Install packages
+      result = system('sudo apt-get install -y greyhole php')
+      raise GreyholeError, 'Failed to install greyhole packages' unless result
+
+      # Set up greyhole database (idempotent)
+      system('sudo mysql -u root -e "CREATE DATABASE IF NOT EXISTS greyhole"')
+      system("sudo mysql -u root -e \"GRANT ALL PRIVILEGES ON greyhole.* TO 'amahi'@'localhost'; FLUSH PRIVILEGES;\"")
+
+      # Load greyhole schema if available
+      if File.exist?('/usr/share/greyhole/schema-mysql.sql')
+        system('sudo mysql -u root greyhole < /usr/share/greyhole/schema-mysql.sql 2>/dev/null')
+      end
+
+      # Generate initial config and enable service
+      configure! if DiskPoolPartition.any?
+      system('sudo systemctl enable greyhole.service')
+      system('sudo systemctl start greyhole.service')
+
       true
     end
 
     def start!
       return true unless production?
-      system('systemctl start greyhole')
+      system('sudo systemctl start greyhole')
     end
 
     def stop!
       return true unless production?
-      system('systemctl stop greyhole')
+      system('sudo systemctl stop greyhole')
     end
 
     def restart!
       return true unless production?
-      system('systemctl restart greyhole')
+      system('sudo systemctl restart greyhole')
     end
 
     def pool_drives

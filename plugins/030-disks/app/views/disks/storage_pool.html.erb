@@ -36,7 +36,12 @@
           </span>
         <% end %>
       <% else %>
-        <p class="text-muted mb-0"><%= t('greyhole_not_installed_msg', default: 'Greyhole is not installed. Install it to enable storage pooling and drive replication.') %></p>
+        <p class="text-muted mb-2"><%= t('greyhole_not_installed_msg', default: 'Greyhole is not installed. Install it to enable storage pooling and drive replication.') %></p>
+        <%= button_to('Install Greyhole',
+              disks_engine.install_greyhole_path,
+              method: :post,
+              class: 'btn btn-primary',
+              data: { confirm: 'This will install Greyhole and PHP packages. Continue?' }) %>
       <% end %>
     </div>
   </div>
