@@ -1,5 +1,5 @@
 <%# Reusable streaming install terminal modal
-    Usage: <%= render 'shared/install_terminal', id: 'greyhole', title: 'Installing Greyhole', stream_url: disks_engine.install_greyhole_stream_path %>
+    Usage: render 'shared/install_terminal', id: 'greyhole', title: 'Installing Greyhole', stream_url: path
     Then call: openInstallTerminal('greyhole') from a button onclick
 %>
 <% id ||= 'install' %>

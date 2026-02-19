@@ -107,7 +107,7 @@ class CloudflareService
 
     def token_configured?
       return true unless production?
-      File.exist?(TOKEN_FILE) || ENV['CLOUDFLARE_TUNNEL_TOKEN'].present?
+      File.exist?(TOKEN_FILE) || ENV['CLOUDFLARE_TUNNEL_TOKEN'].present? || system('systemctl is-enabled --quiet cloudflared 2>/dev/null')
     end
 
     private
