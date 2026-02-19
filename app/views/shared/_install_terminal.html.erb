@@ -1,0 +1,99 @@
+<%# Reusable streaming install terminal modal
+    Usage: <%= render 'shared/install_terminal', id: 'greyhole', title: 'Installing Greyhole', stream_url: disks_engine.install_greyhole_stream_path %>
+    Then call: openInstallTerminal('greyhole') from a button onclick
+%>
+<% id ||= 'install' %>
+<% title ||= 'Installing...' %>
+<% stream_url ||= '' %>
+
+<div id="<%= id %>-install-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; z-index:9999; background:rgba(0,0,0,0.7); align-items:center; justify-content:center;">
+  <div style="width:700px; max-width:90vw; max-height:85vh; background:#1a1a2e; border-radius:12px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+    <div style="padding:16px 20px; background:#16213e; display:flex; align-items:center; justify-content:space-between;">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="width:12px; height:12px; border-radius:50%; background:#ff5f57;"></span>
+        <span style="width:12px; height:12px; border-radius:50%; background:#febc2e;"></span>
+        <span style="width:12px; height:12px; border-radius:50%; background:#28c840;"></span>
+      </div>
+      <span style="color:#7f8c9b; font-size:13px; font-family:monospace;"><%= title %></span>
+      <div style="width:52px;"></div>
+    </div>
+    <div id="<%= id %>-terminal" style="padding:20px; height:400px; overflow-y:auto; font-family:'SF Mono',Consolas,'Liberation Mono',Menlo,monospace; font-size:13px; line-height:1.6; color:#a0e8af;">
+      <div id="<%= id %>-output"></div>
+      <span id="<%= id %>-cursor" style="animation:termBlink 1s step-end infinite;">▌</span>
+    </div>
+    <div id="<%= id %>-install-footer" style="padding:12px 20px; background:#16213e; text-align:right; display:none;">
+      <button type="button" class="btn btn-sm btn-outline-light" onclick="closeInstallTerminal('<%= id %>')">Close & Refresh</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  @keyframes termBlink { 50% { opacity: 0; } }
+  [id$="-terminal"]::-webkit-scrollbar { width: 6px; }
+  [id$="-terminal"]::-webkit-scrollbar-track { background: transparent; }
+  [id$="-terminal"]::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+  .term-line { margin: 0; white-space: pre-wrap; word-break: break-all; }
+  .term-line.step { color: #64b5f6; font-weight: bold; margin-top: 4px; }
+  .term-line.success { color: #a0e8af; font-weight: bold; }
+  .term-line.error { color: #ff6b6b; font-weight: bold; }
+  .term-line.warn { color: #febc2e; }
+</style>
+
+<script>
+function openInstallTerminal(id, url) {
+  if (typeof url === 'undefined') url = '<%= stream_url %>';
+  var modal = document.getElementById(id + '-install-modal');
+  var output = document.getElementById(id + '-output');
+  var cursor = document.getElementById(id + '-cursor');
+  var footer = document.getElementById(id + '-install-footer');
+  var terminal = document.getElementById(id + '-terminal');
+
+  modal.style.display = 'flex';
+  output.innerHTML = '';
+  cursor.style.display = '';
+  footer.style.display = 'none';
+
+  var source = new EventSource(url);
+
+  source.onmessage = function(e) {
+    var line = document.createElement('div');
+    line.className = 'term-line';
+    var text = e.data;
+
+    if (text.match(/^(Adding|Updating|Installing|Setting up|Enabling|Starting|Generating|Configuring|Pre-configuring|Creating|Loading|Downloading)/)) {
+      line.classList.add('step');
+    } else if (text.match(/^✓/)) {
+      line.classList.add('success');
+    } else if (text.match(/^✗/)) {
+      line.classList.add('error');
+    } else if (text.match(/^⚠/)) {
+      line.classList.add('warn');
+    }
+
+    line.textContent = text;
+    output.appendChild(line);
+    terminal.scrollTop = terminal.scrollHeight;
+  };
+
+  source.addEventListener('done', function(e) {
+    source.close();
+    cursor.style.display = 'none';
+    footer.style.display = 'block';
+  });
+
+  source.onerror = function() {
+    source.close();
+    cursor.style.display = 'none';
+    footer.style.display = 'block';
+    var line = document.createElement('div');
+    line.className = 'term-line error';
+    line.textContent = '✗ Connection lost';
+    output.appendChild(line);
+  };
+}
+
+function closeInstallTerminal(id) {
+  document.getElementById(id + '-install-modal').style.display = 'none';
+  window.location.reload();
+}
+</script>
