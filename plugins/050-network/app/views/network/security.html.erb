@@ -31,7 +31,7 @@
         <tbody>
           <% @checks.each do |check| %>
             <tr>
-              <td class="text-center">
+              <td class="text-center" style="vertical-align:middle;">
                 <% case check.status %>
                 <% when :pass %>
                   <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#d4edda;color:#155724;font-size:16px;font-weight:bold;" title="Pass">✓</span>
@@ -41,7 +41,7 @@
                   <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#f8d7da;color:#721c24;font-size:16px;font-weight:bold;" title="Failed">✗</span>
                 <% end %>
               </td>
-              <td><%= check.description %></td>
+              <td style="vertical-align:middle;"><%= check.description %></td>
               <td>
                 <% case check.severity %>
                 <% when :blocker %>
