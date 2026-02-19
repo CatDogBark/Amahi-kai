@@ -369,6 +369,7 @@ amahi ALL=(root) NOPASSWD: /usr/bin/tee /etc/apt/sources.list.d/greyhole.list
 amahi ALL=(root) NOPASSWD: /usr/bin/tee /etc/greyhole.conf
 amahi ALL=(root) NOPASSWD: /usr/bin/mysql -u root *
 amahi ALL=(root) NOPASSWD: /usr/bin/dpkg --configure -a
+amahi ALL=(root) NOPASSWD: /usr/sbin/phpenmod *
 SUDOERS
 chmod 440 /etc/sudoers.d/amahi-kai
 
