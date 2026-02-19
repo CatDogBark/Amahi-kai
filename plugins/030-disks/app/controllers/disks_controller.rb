@@ -113,10 +113,17 @@ class DisksController < ApplicationController
           { label: "Updating package lists...", commands: [
             { cmd: "sudo apt-get update 2>&1", run: true }
           ]},
+          { label: "Pre-configuring Greyhole database...", commands: [
+            { cmd: 'sudo mysql -u root -e "CREATE DATABASE IF NOT EXISTS greyhole" 2>&1', run: true },
+            { cmd: "sudo mysql -u root -e \"GRANT ALL PRIVILEGES ON greyhole.* TO 'amahi'@'localhost'; FLUSH PRIVILEGES;\" 2>&1", run: true },
+          ]},
+          { label: "Creating minimal Greyhole config...", commands: [
+            { cmd: "echo 'db_host = localhost\ndb_user = amahi\ndb_name = greyhole' | sudo tee /etc/greyhole.conf 2>&1", run: !File.exist?('/etc/greyhole.conf') },
+          ]},
           { label: "Installing Greyhole package...", commands: [
             { cmd: "sudo apt-get install -y greyhole 2>&1", run: true }
           ]},
-          { label: "Setting up Greyhole database...", commands: [
+          { label: "Loading Greyhole database schema...", commands: [
             { cmd: 'sudo mysql -u root -e "CREATE DATABASE IF NOT EXISTS greyhole" 2>&1', run: true },
             { cmd: "sudo mysql -u root -e \"GRANT ALL PRIVILEGES ON greyhole.* TO 'amahi'@'localhost'; FLUSH PRIVILEGES;\" 2>&1", run: true },
             { cmd: "sudo mysql -u root greyhole < /usr/share/greyhole/schema-mysql.sql 2>&1", run: File.exist?('/usr/share/greyhole/schema-mysql.sql') }
