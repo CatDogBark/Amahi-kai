@@ -2,6 +2,10 @@ class Greyhole
   class GreyholeError < StandardError; end
 
   CONFIG_PATH = '/etc/greyhole.conf'
+  GREYHOLE_REPO_KEY = 'https://www.greyhole.net/releases/deb/greyhole-debsig.asc'
+  GREYHOLE_REPO_URL = 'https://www.greyhole.net/releases/deb'
+  KEYRING_PATH = '/usr/share/keyrings/greyhole-archive-keyring.gpg'
+  SOURCES_PATH = '/etc/apt/sources.list.d/greyhole.list'
 
   class << self
     def enabled?
@@ -32,9 +36,22 @@ class Greyhole
     def install!
       return true unless production?
 
-      # Install packages
-      result = system('sudo apt-get install -y greyhole php')
-      raise GreyholeError, 'Failed to install greyhole packages' unless result
+      # Add Greyhole apt repository
+      unless File.exist?(KEYRING_PATH)
+        result = system("curl -s #{GREYHOLE_REPO_KEY} | sudo gpg --dearmor -o #{KEYRING_PATH}")
+        raise GreyholeError, 'Failed to add Greyhole signing key' unless result
+      end
+
+      unless File.exist?(SOURCES_PATH)
+        result = system("echo 'deb [signed-by=#{KEYRING_PATH}] #{GREYHOLE_REPO_URL} stable main' | sudo tee #{SOURCES_PATH} > /dev/null")
+        raise GreyholeError, 'Failed to add Greyhole apt source' unless result
+      end
+
+      system('sudo apt-get update')
+
+      # Install greyhole
+      result = system('sudo apt-get install -y greyhole')
+      raise GreyholeError, 'Failed to install greyhole package' unless result
 
       # Set up greyhole database (idempotent)
       system('sudo mysql -u root -e "CREATE DATABASE IF NOT EXISTS greyhole"')
