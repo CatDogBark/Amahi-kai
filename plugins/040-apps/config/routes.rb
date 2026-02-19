@@ -11,6 +11,10 @@ Apps::Engine.routes.draw do
 	match 'uninstall_progress/:id' => 'apps#uninstall_progress', as: 'uninstall_progress', via: [:get,:post]
 	put 'toggle_in_dashboard/:id' => 'apps#toggle_in_dashboard', as: 'toggle_in_dashboard'
 
+	# Docker engine installation
+	get 'install_docker_stream' => 'apps#install_docker_stream', as: 'install_docker_stream'
+	post 'start_docker' => 'apps#start_docker', as: 'start_docker'
+
 	# Docker apps
 	get 'docker_apps' => 'apps#docker_apps', as: 'docker_apps'
 	post 'docker/install/:id' => 'apps#docker_install', as: 'docker_install'

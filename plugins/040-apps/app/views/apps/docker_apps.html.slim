@@ -1,24 +1,49 @@
-- if @categories.any?
-  .app-store-header.row
-    .col-12
-      span.me-2= link_to t('all', default: 'All'), '/tab/apps/docker_apps', class: "#{@current_category.blank? ? 'fw-bold' : ''}"
-      - @categories.each do |cat|
-        span.me-2= link_to cat.capitalize, "/tab/apps/docker_apps?category=#{cat}", class: "#{@current_category == cat ? 'fw-bold' : ''}"
+- unless @docker_installed
+  .card.mb-4.border-warning
+    .card-body.text-center.py-5
+      h4.mb-3
+        i.bi.bi-box-seam.me-2
+        | Docker is not installed
+      p.text-muted.mb-4 Docker is required to run containerized apps. Click below to install Docker Engine on this server.
+      button.btn.btn-primary.btn-lg onclick="openInstallTerminal('docker', '#{apps_engine.install_docker_stream_path}')"
+        i.bi.bi-download.me-2
+        | Install Docker
+  == render 'shared/install_terminal', id: 'docker', title: 'Installing Docker', stream_url: apps_engine.install_docker_stream_path
 
-#apps-table
-  .settings-table
-    - if @docker_apps.any?
-      table.settings
-        tr
-          th.settings-col1.settings-col1-pad1.apps-col1[scope='col']= t('application')
-          th.settings-col2.ps-2.apps-col2[scope='col']= t('description')
-          th.text-end.pe-3[scope='col' style='width: 120px']= t('status', default: 'Status')
+- elsif !@docker_running
+  .card.mb-4.border-warning
+    .card-body.text-center.py-4
+      h5.mb-3
+        i.bi.bi-exclamation-triangle.me-2.text-warning
+        | Docker is installed but not running
+      p.text-muted.mb-3 The Docker service needs to be started before you can manage apps.
+      = form_tag apps_engine.start_docker_path, method: :post do
+        button.btn.btn-warning type="submit"
+          i.bi.bi-play-fill.me-2
+          | Start Docker
 
-      - @docker_apps.each do |app|
-        = render partial: 'docker_app', locals: { app: app }
-    - else
-      div.align-center.default-message
-        h4= t('no_docker_apps', default: 'No Docker apps available')
-        p= t('docker_not_configured', default: 'Check that Docker is installed and the app catalog is configured.')
+- else
+  - if @categories.any?
+    .app-store-header.row
+      .col-12
+        span.me-2= link_to t('all', default: 'All'), '/tab/apps/docker_apps', class: "#{@current_category.blank? ? 'fw-bold' : ''}"
+        - @categories.each do |cat|
+          span.me-2= link_to cat.capitalize, "/tab/apps/docker_apps?category=#{cat}", class: "#{@current_category == cat ? 'fw-bold' : ''}"
+
+  #apps-table
+    .settings-table
+      - if @docker_apps.any?
+        table.settings
+          tr
+            th.settings-col1.settings-col1-pad1.apps-col1[scope='col']= t('application')
+            th.settings-col2.ps-2.apps-col2[scope='col']= t('description')
+            th.text-end.pe-3[scope='col' style='width: 120px']= t('status', default: 'Status')
+
+        - @docker_apps.each do |app|
+          = render partial: 'docker_app', locals: { app: app }
+      - else
+        div.align-center.default-message
+          h4= t('no_docker_apps', default: 'No Docker apps available')
+          p= t('docker_not_configured', default: 'Check that Docker is installed and the app catalog is configured.')
 
 = javascript_include_tag 'apps'

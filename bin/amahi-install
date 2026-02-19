@@ -371,6 +371,15 @@ amahi ALL=(root) NOPASSWD: /usr/bin/mysql -u root *
 amahi ALL=(root) NOPASSWD: /usr/bin/dpkg --configure -a
 amahi ALL=(root) NOPASSWD: /usr/sbin/phpenmod *
 
+# Docker installation (web UI triggered)
+amahi ALL=(root) NOPASSWD: /usr/bin/gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+amahi ALL=(root) NOPASSWD: /usr/bin/tee /etc/apt/sources.list.d/docker.list
+amahi ALL=(root) NOPASSWD: /usr/sbin/usermod -aG docker amahi
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable docker
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start docker
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop docker
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart docker
+
 # Cloudflare Tunnel
 amahi ALL=(root) NOPASSWD: /usr/bin/cloudflared service install *
 amahi ALL=(root) NOPASSWD: /usr/bin/cloudflared service uninstall

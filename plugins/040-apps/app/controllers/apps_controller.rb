@@ -88,10 +88,137 @@ class AppsController < ApplicationController
 		render :json => { :status => @saved ? :ok : :not_acceptable }
 	end
 
+	# ─── Docker Engine Installation ───────────────────────────
+
+	def install_docker_stream
+		response.headers['Content-Type'] = 'text/event-stream'
+		response.headers['Cache-Control'] = 'no-cache, no-store'
+		response.headers['X-Accel-Buffering'] = 'no'
+		response.headers['Connection'] = 'keep-alive'
+		response.headers['Last-Modified'] = Time.now.httpdate
+
+		self.response_body = Enumerator.new do |yielder|
+			sse_send = ->(data, event = nil) {
+				msg = ""
+				msg += "event: #{event}\n" if event
+				msg += "data: #{data}\n\n"
+				yielder << msg
+			}
+
+			sse_send.call("Starting Docker installation...")
+
+			unless Rails.env.production?
+				# Dev/test mode — simulate install
+				lines = [
+					"Adding Docker's official GPG key...",
+					"  Downloading signing key...",
+					"  Adding apt repository...",
+					"Updating package lists...",
+					"  Hit:1 http://archive.ubuntu.com/ubuntu noble InRelease",
+					"  Get:2 https://download.docker.com/linux/ubuntu noble stable InRelease",
+					"  Fetched 18.2 kB in 1s (12,100 B/s)",
+					"Installing Docker Engine...",
+					"  Reading package lists...",
+					"  Building dependency tree...",
+					"  The following NEW packages will be installed:",
+					"    containerd.io docker-ce docker-ce-cli",
+					"  0 upgraded, 3 newly installed, 0 to remove.",
+					"  Need to get 98.4 MB of archives.",
+					"  Get:1 https://download.docker.com/linux/ubuntu noble/stable amd64 containerd.io amd64 1.7.24-1 [29.5 MB]",
+					"  Get:2 https://download.docker.com/linux/ubuntu noble/stable amd64 docker-ce-cli amd64 5:27.4.1-1 [14.9 MB]",
+					"  Get:3 https://download.docker.com/linux/ubuntu noble/stable amd64 docker-ce amd64 5:27.4.1-1 [25.6 MB]",
+					"  Unpacking containerd.io (1.7.24-1) ...",
+					"  Unpacking docker-ce-cli (5:27.4.1-1) ...",
+					"  Unpacking docker-ce (5:27.4.1-1) ...",
+					"  Setting up containerd.io (1.7.24-1) ...",
+					"  Setting up docker-ce-cli (5:27.4.1-1) ...",
+					"  Setting up docker-ce (5:27.4.1-1) ...",
+					"Setting up user permissions...",
+					"  Adding amahi to docker group...",
+					"Enabling Docker service...",
+					"  Created symlink /etc/systemd/system/multi-user.target.wants/docker.service",
+					"Starting Docker service...",
+					"",
+					"✓ Docker installed successfully!"
+				]
+				lines.each do |line|
+					sleep(0.3)
+					sse_send.call(line)
+				end
+				sse_send.call("success", "done")
+			else
+				# Production — real install with streamed output
+				success = true
+				steps = [
+					{ label: "Adding Docker's official GPG key...", commands: [
+						{ cmd: "curl -fsSL #{DockerService::GPG_URL} | sudo gpg --dearmor -o #{DockerService::KEYRING_PATH} 2>&1", run: !File.exist?(DockerService::KEYRING_PATH) },
+					]},
+					{ label: "Adding Docker apt repository...", commands: [
+						{ cmd: "echo 'deb [arch=#{`dpkg --print-architecture`.strip} signed-by=#{DockerService::KEYRING_PATH}] https://download.docker.com/linux/ubuntu #{`lsb_release -cs`.strip} stable' | sudo tee #{DockerService::SOURCES_PATH} 2>&1", run: !File.exist?(DockerService::SOURCES_PATH) },
+					]},
+					{ label: "Updating package lists...", commands: [
+						{ cmd: "sudo apt-get update 2>&1", run: true }
+					]},
+					{ label: "Installing Docker Engine...", commands: [
+						{ cmd: "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y docker-ce docker-ce-cli containerd.io 2>&1", run: true }
+					]},
+					{ label: "Setting up user permissions...", commands: [
+						{ cmd: "sudo usermod -aG docker amahi 2>&1", run: true }
+					]},
+					{ label: "Enabling Docker service...", commands: [
+						{ cmd: "sudo systemctl enable docker 2>&1", run: true }
+					]},
+					{ label: "Starting Docker service...", commands: [
+						{ cmd: "sudo systemctl start docker 2>&1", run: true }
+					]},
+				]
+
+				steps.each do |step|
+					sse_send.call(step[:label])
+					step[:commands].each do |c|
+						next unless c[:run]
+						IO.popen(c[:cmd]) do |io|
+							io.each_line do |line|
+								sse_send.call("  #{line.chomp}")
+							end
+						end
+						unless $?.success?
+							sse_send.call("✗ Command failed: #{c[:cmd]}")
+							success = false
+							break
+						end
+					end
+					break unless success
+				end
+
+				if success
+					sse_send.call("")
+					sse_send.call("✓ Docker installed successfully!")
+					sse_send.call("success", "done")
+				else
+					sse_send.call("")
+					sse_send.call("✗ Docker installation failed. Check logs above.")
+					sse_send.call("error", "done")
+				end
+			end
+		end
+	end
+
+	def start_docker
+		if Rails.env.production?
+			DockerService.start!
+		end
+		redirect_to apps_engine.docker_apps_path, notice: "Docker service started."
+	rescue => e
+		redirect_to apps_engine.docker_apps_path, alert: "Failed to start Docker: #{e.message}"
+	end
+
 	# ─── Docker Apps ──────────────────────────────────────────
 
 	def docker_apps
 		set_title t('docker_apps', default: 'Docker Apps')
+		@docker_installed = DockerService.installed?
+		@docker_running = DockerService.running?
 		@current_category = params[:category]
 
 		# Merge catalog with installed docker apps
