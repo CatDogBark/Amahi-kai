@@ -1,9 +1,7 @@
 #login
   #logo
     a[href="/" title="Amahi-kai Home Server"]
-      img[src="/favicon.svg" alt="Amahi-kai" style="width: 56px; height: 56px; margin-bottom: 12px;"]
-    h1
-      a[href="/" title="Amahi-kai Home Server"] Amahi-kai
+      img[src="/themes/amahi-kai/images/logo.svg" alt="Amahi-kai" style="max-height: 55px;"]
 
   - flash.each do |name, msg|
     div[class="alert alert-#{name}"]= msg.html_safe
