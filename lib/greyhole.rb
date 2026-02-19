@@ -15,7 +15,9 @@ class Greyhole
 
     def installed?
       return true unless production?
-      system('which greyhole > /dev/null 2>&1')
+      # Check that the package is fully installed and configured, not just the binary
+      output = `dpkg-query -W -f='${Status}' greyhole 2>/dev/null`.strip
+      output == 'install ok installed'
     end
 
     def running?
