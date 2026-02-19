@@ -1,0 +1,126 @@
+<div class="settings-table" id="disks-table">
+  <ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+      <a class="nav-link" href="<%= disks_engine.root_path %>"><%= t('disks') %></a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" href="<%= disks_engine.mounts_path %>"><%= t('mounts') %></a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link active" href="<%= disks_engine.storage_pool_path %>"><%= t('storage_pool') %></a>
+    </li>
+  </ul>
+
+  <!-- Greyhole Status -->
+  <div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h5 class="mb-0"><%= t('greyhole_status', default: 'Greyhole Status') %></h5>
+      <% if @greyhole_status[:installed] %>
+        <span class="badge <%= @greyhole_status[:running] ? 'bg-success' : 'bg-secondary' %>">
+          <%= @greyhole_status[:running] ? t('running', default: 'Running') : t('stopped', default: 'Stopped') %>
+        </span>
+      <% else %>
+        <span class="badge bg-warning text-dark"><%= t('not_installed', default: 'Not Installed') %></span>
+      <% end %>
+    </div>
+    <div class="card-body">
+      <% if @greyhole_status[:installed] %>
+        <%= button_to(@greyhole_status[:running] ? t('stop', default: 'Stop') : t('start', default: 'Start'),
+              disks_engine.toggle_greyhole_path,
+              method: :post,
+              class: "btn btn-sm #{@greyhole_status[:running] ? 'btn-outline-danger' : 'btn-outline-success'}") %>
+
+        <% if @greyhole_status[:queue] %>
+          <span class="ms-3 text-muted">
+            <%= t('pending_operations', default: 'Pending operations') %>: <%= @greyhole_status[:queue][:pending] %>
+          </span>
+        <% end %>
+      <% else %>
+        <p class="text-muted mb-0"><%= t('greyhole_not_installed_msg', default: 'Greyhole is not installed. Install it to enable storage pooling and drive replication.') %></p>
+      <% end %>
+    </div>
+  </div>
+
+  <!-- Pool Drives -->
+  <div class="card mb-3">
+    <div class="card-header">
+      <h5 class="mb-0"><%= t('storage_pool_drives', default: 'Storage Pool Drives') %></h5>
+    </div>
+    <div class="card-body">
+      <% if @pool_drives.any? %>
+        <table class="table table-striped mb-0">
+          <thead>
+            <tr>
+              <th><%= t('path', default: 'Path') %></th>
+              <th><%= t('total_space') %></th>
+              <th><%= t('free_space') %></th>
+              <th><%= t('used_space') %></th>
+              <th><%= t('min_free', default: 'Min Free (GB)') %></th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <% @pool_drives.each do |drive| %>
+              <tr>
+                <td><%= drive[:path] %></td>
+                <td><%= number_to_human_size(drive[:total]) %></td>
+                <td><%= number_to_human_size(drive[:free]) %></td>
+                <td><%= number_to_human_size(drive[:used]) %></td>
+                <td><%= drive[:minimum_free] %> GB</td>
+                <td>
+                  <%= button_to(t('remove', default: 'Remove'),
+                        toggle_disk_pool_partition_shares_path(path: drive[:path]),
+                        method: :put,
+                        class: 'btn btn-sm btn-outline-danger',
+                        data: { confirm: t('are_you_sure', default: 'Are you sure?') }) %>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      <% else %>
+        <p class="text-muted mb-0"><%= t('no_pool_drives', default: 'No drives in the storage pool yet. Add partitions below.') %></p>
+      <% end %>
+    </div>
+  </div>
+
+  <!-- Available Partitions -->
+  <div class="card">
+    <div class="card-header">
+      <h5 class="mb-0"><%= t('available_partitions', default: 'Available Partitions') %></h5>
+    </div>
+    <div class="card-body">
+      <% pool_paths = @pool_partitions.pluck(:path) %>
+      <% if @partitions.any? %>
+        <table class="table table-striped mb-0">
+          <thead>
+            <tr>
+              <th><%= t('partition', default: 'Partition') %></th>
+              <th><%= t('path', default: 'Path') %></th>
+              <th><%= t('total_space') %></th>
+              <th><%= t('free_space') %></th>
+              <th><%= t('in_pool', default: 'In Pool') %></th>
+            </tr>
+          </thead>
+          <tbody>
+            <% @partitions.each do |part| %>
+              <tr>
+                <td><%= part[:device] %></td>
+                <td><%= part[:path] %></td>
+                <td><%= number_to_human_size(part[:bytes_total]) %></td>
+                <td><%= number_to_human_size(part[:bytes_free]) %></td>
+                <td>
+                  <% checked = pool_paths.include?(part[:path]) %>
+                  <%= render partial: 'share/disk_pooling_partition_checkbox',
+                             locals: { checked: checked, path: part[:path] } %>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      <% else %>
+        <p class="text-muted mb-0"><%= t('no_partitions', default: 'No partitions detected.') %></p>
+      <% end %>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,13 @@
+<div class="disk-pool-partition" id="disk-pool-partition-<%= path.parameterize %>">
+  <%= button_to toggle_disk_pool_partition_shares_path(path: path),
+        method: :put,
+        class: 'btn btn-link p-0 text-decoration-none',
+        data: { turbo_frame: "disk-pool-partition-#{path.parameterize}" } do %>
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox"
+             <%= 'checked' if checked %>
+             style="pointer-events: none;">
+      <label class="form-check-label"><%= checked ? t('in_pool', default: 'In pool') : t('add_to_pool', default: 'Add to pool') %></label>
+    </div>
+  <% end %>
+</div>

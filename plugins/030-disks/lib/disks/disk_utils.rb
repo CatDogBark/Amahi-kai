@@ -14,77 +14,71 @@
 # License along with this program; if not, write to the Amahi
 # team at http://www.amahi.org/ under "Contact Us."
 
-require 'socket'      # Sockets are in standard library
-
 class DiskUtils
+  class << self
+    def stats
+      disks = lsblk_disks
+      disks.each do |disk|
+        temp = smartctl_temp(disk[:device])
+        disk[:temp_c] = temp > 0 ? temp.to_s : '-'
+        disk[:temp_f] = temp > 0 ? (temp * 1.8 + 32).to_i.to_s : '-'
+        disk[:tempcolor] = temp_color(temp)
+      end
+      disks
+    rescue => e
+      Rails.logger.error("DiskUtils.stats error: #{e.message}") if defined?(Rails)
+      []
+    end
 
-	# return information on hdd temperature - requires hddtemp service running!
-	class << self
-		def stats
-			host = 'localhost'
-			port = 7634
+    def mounts
+      output = `df -BK 2>/dev/null`.split(/\r?\n/)[1..-1] || []
+      result = []
+      output.each do |line|
+        fields = line.split(/\s+/)
+        next if ['tmpfs', 'devtmpfs', 'none', 'overlay'].include?(fields[0])
+        result << {
+          filesystem: fields[0],
+          bytes: fields[1].to_i * 1024,
+          used: fields[2].to_i * 1024,
+          available: fields[3].to_i * 1024,
+          use_percent: fields[4],
+          mount: fields[5]
+        }
+      end
+      result.sort_by { |d| d[:filesystem] }
+    end
 
-			begin
-				s = TCPSocket.open(host, port)
-			rescue => e
-				return []
-			end
+    private
 
-			res = ''
-			while line = s.gets   # Read lines from the socket
-				res += line.chop      # And print with platform line terminator
-			end
-			s.close               # Close the socket when done
+    def lsblk_disks
+      output = `lsblk -dno NAME,MODEL,TYPE 2>/dev/null`.strip
+      return [] if output.empty?
+      output.split("\n").filter_map do |line|
+        fields = line.split(/\s+/, 3)
+        next unless fields[2]&.strip == 'disk'
+        {
+          device: "/dev/#{fields[0]}",
+          model: fields[1]&.gsub(/[^A-Za-z0-9\-_\s\.]/, '') || 'Unknown'
+        }
+      end
+    end
 
-			disks = res.split '||'
+    def smartctl_temp(device)
+      output = `smartctl -A #{Shellwords.escape(device)} 2>/dev/null`
+      # Look for temperature in smartctl output
+      match = output.match(/Temperature_Celsius.*?(\d+)\s*$/) ||
+              output.match(/Current Drive Temperature:\s*(\d+)/) ||
+              output.match(/Temperature:\s*(\d+)/)
+      match ? match[1].to_i : 0
+    rescue
+      0
+    end
 
-			res = []
-			disks.each do |disk|
-				# split the info and do cleanup
-				i = disk.gsub(/^\||\|$/, '').split('|')
-				model = i[1].gsub(/[^A-Za-z0-9\-_\s\.]/, '') rescue "Unkown"
-				next if model == '???'
-				t = i[2].to_i rescue 0
-				tempcolor = "cool"
-				celsius = "-"
-				farenheight = "-"
-				if t > 0
-					celsius = t.to_s
-					tempcolor = "warm" if t > 39
-					tempcolor = "hot" if t > 49
-					farenheight = (t * 1.8 + 32).to_i.to_s
-				end
-				d = Hash.new
-				d[:device] = i[0]
-				d[:model] = model
-				d[:temp_c] = celsius
-				d[:temp_f] = farenheight
-				d[:tempcolor] = tempcolor
-				res.push(d)
-			end
-			res
-		end
-
-		def mounts
-			s = `df -BK`.split( /\r?\n/ )[1..-1] || ["","Incorrect data returned"]
-
-			mount = []
-			res = []
-			s.each do |line|
-				word = line.split(/\s+/)
-				mount.push(word)
-			end
-			mount.each do |key|
-				d = Hash.new
-				d[:filesystem] = key[0]
-				d[:bytes] = key[1].to_i * 1024
-				d[:used] = key[2].to_i * 1024
-				d[:available] = key[3].to_i * 1024
-				d[:use_percent] = key[4]
-				d[:mount] = key[5]
-				res.push(d) unless ['tmpfs', 'devtmpfs', 'none'].include? d[:filesystem]
-			end
-			res.sort { |x,y| x[:filesystem] <=> y[:filesystem] }
-		end
-	end
+    def temp_color(temp)
+      return 'cool' if temp <= 0
+      return 'hot' if temp > 49
+      return 'warm' if temp > 39
+      'cool'
+    end
+  end
 end

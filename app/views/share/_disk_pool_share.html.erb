@@ -1,0 +1,39 @@
+<div id="disk-pool-share-<%= share.id %>" class="disk-pool-settings">
+  <div class="d-flex align-items-center gap-3 mb-2">
+    <div class="form-check form-switch">
+      <%= button_to toggle_disk_pool_share_path(share),
+            method: :put,
+            class: 'btn btn-link p-0 text-decoration-none',
+            data: { turbo_frame: "disk-pool-share-#{share.id}" } do %>
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox"
+                 <%= 'checked' if share.disk_pool_copies > 0 %>
+                 style="pointer-events: none;">
+          <label class="form-check-label">
+            <%= t('disk_pooling', default: 'Disk Pooling') %>
+          </label>
+        </div>
+      <% end %>
+    </div>
+  </div>
+
+  <% if share.disk_pool_copies > 0 %>
+    <div class="ms-4">
+      <label class="form-label"><%= t('number_of_copies', default: 'Number of copies') %>:</label>
+      <div class="d-flex align-items-center gap-2">
+        <% (1..4).each do |n| %>
+          <%= button_to n.to_s,
+                update_disk_pool_copies_share_path(share, value: n),
+                method: :put,
+                class: "btn btn-sm #{share.disk_pool_copies == n ? 'btn-primary' : 'btn-outline-secondary'}",
+                data: { turbo_frame: "disk-pool-share-#{share.id}" } %>
+        <% end %>
+        <%= button_to t('max', default: 'Max'),
+              update_disk_pool_copies_share_path(share, value: 99),
+              method: :put,
+              class: "btn btn-sm #{share.disk_pool_copies >= 99 ? 'btn-primary' : 'btn-outline-secondary'}",
+              data: { turbo_frame: "disk-pool-share-#{share.id}" } %>
+      </div>
+    </div>
+  <% end %>
+</div>

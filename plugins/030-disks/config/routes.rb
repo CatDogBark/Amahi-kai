@@ -1,6 +1,6 @@
 Disks::Engine.routes.draw do
-	# root of the plugin
-        root :to => 'disks#index'
-	# examples of controllers built in this generator. delete at will
-	match 'mounts' => 'disks#mounts', via: [:get,:post]
+  root to: 'disks#index'
+  get 'mounts' => 'disks#mounts'
+  get 'storage_pool' => 'disks#storage_pool'
+  post 'toggle_greyhole' => 'disks#toggle_greyhole'
 end

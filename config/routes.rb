@@ -30,7 +30,8 @@ Rails.application.routes.draw do
       put 'update_tags'
       put 'update_path'
       put 'update_workgroup'
-      put 'toggle_disk_pool'
+      put 'toggle_disk_pool_enabled'
+      put 'update_disk_pool_copies'
       put 'update_extras'
       put 'clear_permissions'
     end

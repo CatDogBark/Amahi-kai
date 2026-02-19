@@ -1,0 +1,40 @@
+<div class="settings-table" id="disks-table">
+  <ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+      <a class="nav-link active" href="<%= disks_engine.root_path %>"><%= t('disks') %></a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" href="<%= disks_engine.mounts_path %>"><%= t('mounts') %></a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" href="<%= disks_engine.storage_pool_path %>"><%= t('storage_pool') %></a>
+    </li>
+  </ul>
+
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th><%= t('model') %></th>
+        <th><%= t('device') %></th>
+        <th><%= t('temperature') %></th>
+      </tr>
+    </thead>
+    <tbody>
+      <% @disks.each do |disk| %>
+        <tr>
+          <td><%= disk[:model] %></td>
+          <td><%= disk[:device] %></td>
+          <td class="<%= disk[:tempcolor] %>">
+            <span class="temp-celsius"><%= disk[:temp_c] %>&deg;C</span>
+            <span class="temp-fahrenheit d-none"><%= disk[:temp_f] %>&deg;F</span>
+          </td>
+        </tr>
+      <% end %>
+      <% if @disks.empty? %>
+        <tr>
+          <td colspan="3"><strong><%= t('no_disks_found', default: 'No disks found') %></strong></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</div>

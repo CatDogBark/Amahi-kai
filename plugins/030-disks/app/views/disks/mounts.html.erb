@@ -1,0 +1,42 @@
+<div class="settings-table" id="disks-table">
+  <ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+      <a class="nav-link" href="<%= disks_engine.root_path %>"><%= t('disks') %></a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link active" href="<%= disks_engine.mounts_path %>"><%= t('mounts') %></a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" href="<%= disks_engine.storage_pool_path %>"><%= t('storage_pool') %></a>
+    </li>
+  </ul>
+
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th><%= t('partition') %></th>
+        <th><%= t('total_space') %></th>
+        <th><%= t('free_space') %></th>
+        <th><%= t('used_space') %></th>
+        <th><%= t('mount point', default: 'Mount Point') %></th>
+      </tr>
+    </thead>
+    <tbody>
+      <% if @mounts.any? %>
+        <% @mounts.each do |mount| %>
+          <tr>
+            <td><%= mount[:filesystem] %></td>
+            <td><%= number_to_human_size(mount[:bytes]) %></td>
+            <td><%= number_to_human_size(mount[:available]) %></td>
+            <td><%= number_to_human_size(mount[:used]) %> (<%= mount[:use_percent] %>)</td>
+            <td><%= mount[:mount] %></td>
+          </tr>
+        <% end %>
+      <% else %>
+        <tr>
+          <td colspan="5"><strong>No data returned</strong></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</div>
