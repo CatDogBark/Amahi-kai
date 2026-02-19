@@ -24,6 +24,6 @@ class FrontController < ApplicationController
 	def index
 		@page_title = t('dashboard')
 		@apps = App.in_dashboard
-		@news = AmahiNews.top()
+		@stats = DashboardStats.summary
 	end
 end
