@@ -834,6 +834,79 @@ table.settings td {
     background: transparent;
   }
 
+  /* ── Tab buttons (inherited from default theme with !important) ── */
+  .tab-link-style {
+    background: #1c2128 !important;
+    color: #8b949e !important;
+    border-color: #30363d !important;
+  }
+  .tab-link-style:hover {
+    background: #262c36 !important;
+    color: #c9d1d9 !important;
+  }
+  .active-tab-link-style {
+    background: var(--kai-primary) !important;
+    color: white !important;
+  }
+
+  /* ── Preftab (sub-subtabs from default theme) ── */
+  nav.preftab {
+    background: #161b22 !important;
+    border-color: #30363d !important;
+  }
+  nav.preftab li {
+    border-right-color: #30363d !important;
+  }
+  nav.preftab li a {
+    color: #8b949e !important;
+    background: transparent !important;
+  }
+  nav.preftab li a:hover {
+    background: #1c2128 !important;
+    color: #c9d1d9 !important;
+  }
+  nav.preftab li.active > a {
+    background: #0d1117 !important;
+    color: #c9d1d9 !important;
+  }
+  nav.preftab li ul {
+    background: #0d1117 !important;
+    border-color: #30363d !important;
+  }
+
+  /* ── Fieldsets (override default theme hardcoded whites) ── */
+  fieldset {
+    background: var(--kai-card-bg) !important;
+    border-color: #30363d !important;
+    color: var(--kai-text) !important;
+  }
+  legend {
+    color: #8b949e !important;
+    background: transparent;
+  }
+
+  /* ── Settings tables thead (default theme may hardcode) ── */
+  table.settings thead tr {
+    background: #0d1117 !important;
+    color: #c9d1d9 !important;
+  }
+  table.settings thead th {
+    color: #c9d1d9 !important;
+  }
+
+  /* ── .nav-tabs border (Bootstrap default) ── */
+  .nav-tabs {
+    border-bottom-color: #30363d !important;
+  }
+  .nav-tabs .nav-link {
+    color: #8b949e;
+  }
+  .nav-tabs .nav-link.active {
+    background-color: var(--kai-card-bg);
+    border-color: #30363d #30363d var(--kai-card-bg);
+    color: var(--kai-text);
+  }
+
   /* ── Misc text that may be hard-coded ── */
   .fw-bold, strong, b {
     color: inherit;
