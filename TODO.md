@@ -64,8 +64,14 @@ DNS alias creation via UI writes to `/etc/dnsmasq.d/`, service reloads, resoluti
 ### SSL / Production HTTPS
 Cloudflare handles edge TLS, but enforce HTTPS-only in app config.
 
-### Docker App System Polish
-More apps, logs/stats UI, user docs, streaming install via terminal modal.
+### Docker App System — Production Ready
+The model/catalog/UI exist but need deployment work to be usable:
+1. **Docker installation** — optional step (like Greyhole), with streaming terminal install
+2. **Reverse proxy** — route app traffic through port 3000 so Docker apps work through Cloudflare Tunnel (e.g., `/nextcloud` → container:8443). Likely nginx or Caddy as a lightweight proxy in front of Puma.
+3. **Share integration** — app volumes should auto-map to Amahi share paths (`/var/hda/files/...`)
+4. **Streaming install terminal** — reuse shared partial for pulling/creating containers
+5. **Container logs/stats** — view logs, resource usage per app
+6. **More apps** — expand catalog, user docs
 
 ---
 
