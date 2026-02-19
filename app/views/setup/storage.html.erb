@@ -27,11 +27,9 @@
             <span class="drive-path"><%= part[:path] %></span>
           </label>
           <span class="drive-size">
-            <% if part[:size] %>
-              <%= number_to_human_size(part[:size].to_i * 1024) rescue part[:size] %>
-            <% end %>
-            <% if part[:fstype] %>
-              &middot; <%= part[:fstype] %>
+            <% if part[:bytes_total] && part[:bytes_total] > 0 %>
+              <%= number_to_human_size(part[:bytes_total]) %>
+              (<%= number_to_human_size(part[:bytes_free]) %> free)
             <% end %>
           </span>
         </div>
