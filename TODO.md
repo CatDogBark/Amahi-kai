@@ -18,8 +18,28 @@
 - ~~Database-backed file indexer~~ ✅ (replaced locate hack)
 - ~~System Status dashboard~~ ✅
 - ~~Security hardening (SQL injection, shell injection, crypto, CSRF, CSP)~~ ✅
-- ~~Ocean theme / branding~~ ✅
+- ~~Ocean theme / branding~~ ✅ (wave mark favicon, login, dashboard)
 - ~~Search results fix (blank search shows recent files)~~ ✅
+- ~~Greyhole integration~~ ✅ (service, storage pool UI, live terminal install)
+- ~~First-Run Setup Wizard~~ ✅ (6-step wizard + `--headless` mode)
+- ~~Reusable install terminal modal~~ ✅ (shared partial for SSE streaming installs)
+
+---
+
+## In Progress 🔨
+
+### Cloudflare Tunnel Integration
+- CloudflareService (install, configure, start/stop, status)
+- Remote Access subtab in Network plugin
+- Token input UI with setup instructions
+- Streaming install via shared terminal modal
+
+### Security Hardening / Audit System
+- SecurityAudit class — 8 checks (admin password, UFW, SSH, fail2ban, unattended upgrades, Samba binding, open ports)
+- Security subtab in Network plugin
+- Auto-run audit when tunnel first enabled + manual "Run Audit" button
+- Auto-fix with "Fix All" button (streaming terminal)
+- Blockers gate tunnel activation (must fix before enabling remote access)
 
 ---
 
@@ -41,17 +61,11 @@ DNS alias creation via UI writes to `/etc/dnsmasq.d/`, service reloads, resoluti
 
 ## P1 — Polish
 
-### Propshaft Migration
-Blocked by Bootstrap gem's Sprockets dependency. Research alternatives.
-
-### First-Run Setup Wizard
-Guide new installs: change admin password, set hostname, configure first share. Landing page on first boot.
-
 ### SSL / Production HTTPS
-Needs guidance from Troy on cert strategy (Let's Encrypt, Cloudflare, etc.).
+Cloudflare handles edge TLS, but enforce HTTPS-only in app config.
 
-### Cloudflare Tunnel Installer Integration
-Optional step in `bin/amahi-install`: prompt for tunnel token, install cloudflared, open UFW ports.
+### Docker App System Polish
+More apps, logs/stats UI, user docs, streaming install via terminal modal.
 
 ---
 
@@ -60,11 +74,11 @@ Optional step in `bin/amahi-install`: prompt for tunnel token, install cloudflar
 ### Auth Modernization
 Evaluate replacing Authlogic with Devise or Rails 8 native auth.
 
-### Docker App System Polish
-More apps, logs/stats UI, user docs.
-
 ### Disk/Storage Management
-Update disks plugin for modern Linux. Detect drives, format, mount, present in UI.
+Detect drives, format, mount, present in UI. mdadm RAID as advanced option.
 
 ### Firewall Plugin
-New feature, large scope.
+UFW management through the web UI.
+
+### Propshaft Migration
+Blocked by Bootstrap gem's Sprockets dependency. Low priority — Sprockets works fine.
