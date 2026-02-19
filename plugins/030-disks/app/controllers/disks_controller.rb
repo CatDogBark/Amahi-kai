@@ -134,8 +134,8 @@ class DisksController < ApplicationController
           ]},
           { label: "Enabling Greyhole service...", commands: [
             { cmd: "sudo systemctl enable greyhole.service 2>&1", run: true },
-            { cmd: "sudo systemctl start greyhole.service 2>&1", run: true }
-          ]}
+          ]},
+          { label: "Starting Greyhole service...", commands: [], nonfatal: true }
         ]
 
         steps.each do |step|
@@ -148,12 +148,25 @@ class DisksController < ApplicationController
               end
             end
             unless $?.success?
-              sse_send.call("  ✗ Command failed")
-              success = false
-              break
+              if step[:nonfatal]
+                sse_send.call("  ⚠ Non-critical step failed (continuing)")
+              else
+                sse_send.call("  ✗ Command failed")
+                success = false
+                break
+              end
             end
           end
           break unless success
+        end
+
+        # Try starting greyhole — non-fatal if it fails (needs config first)
+        sse_send.call("Starting Greyhole service...")
+        system("sudo systemctl start greyhole.service 2>/dev/null")
+        if system("systemctl is-active --quiet greyhole")
+          sse_send.call("  ✓ Greyhole is running")
+        else
+          sse_send.call("  ⚠ Service not started — configure storage pool drives first")
         end
 
         if success && DiskPoolPartition.any?
