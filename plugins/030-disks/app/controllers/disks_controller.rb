@@ -1,4 +1,4 @@
-require 'greyhole_service'
+require 'greyhole'
 
 class DisksController < ApplicationController
   before_action :admin_required

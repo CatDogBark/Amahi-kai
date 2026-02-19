@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_02_18_200000) do
+ActiveRecord::Schema[8.0].define(version: 2026_02_19_000000) do
   create_table "app_dependencies", force: :cascade do |t|
     t.integer "app_id"
     t.integer "dependency_id"
@@ -61,6 +61,14 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_18_200000) do
     t.string "name", null: false
     t.datetime "created_at", precision: nil
     t.datetime "updated_at", precision: nil
+  end
+
+  create_table "disk_pool_partitions", force: :cascade do |t|
+    t.string "path", null: false
+    t.integer "minimum_free", default: 10
+    t.datetime "created_at", precision: nil, null: false
+    t.datetime "updated_at", precision: nil, null: false
+    t.index ["path"], name: "index_disk_pool_partitions_on_path", unique: true
   end
 
   create_table "dns_aliases", force: :cascade do |t|

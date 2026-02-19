@@ -34,5 +34,12 @@ describe "Disks Controller", type: :request do
         expect(response).to have_http_status(:ok)
       end
     end
+
+    describe "GET /tab/disks/storage_pool" do
+      it "shows the storage pool page" do
+        get "/tab/disks/storage_pool"
+        expect(response).to have_http_status(:ok)
+      end
+    end
   end
 end
