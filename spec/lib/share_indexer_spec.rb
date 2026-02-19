@@ -97,6 +97,7 @@ RSpec.describe ShareIndexer do
 
   describe '.full_reindex' do
     it 'indexes all shares' do
+      share # ensure share record exists
       create_file(tmpdir, 'file1.txt')
 
       total = ShareIndexer.full_reindex
@@ -111,16 +112,19 @@ RSpec.describe ShareIndexer do
       create_file(tmpdir, 'file1.txt')
       ShareIndexer.index_share(share)
 
-      # Create an orphan entry
+      # Create an orphan entry with a fake share_id
+      orphan_share = Share.new(name: "GhostShare", path: "/tmp/nonexistent_share", rdonly: false, visible: true, everyone: true, tags: "").tap { |s| s.save(validate: false) }
       ShareFile.create!(
-        share_id: 999999,
+        share_id: orphan_share.id,
         name: 'orphan.txt',
         path: '/tmp/orphan.txt',
         relative_path: 'orphan.txt'
       )
+      orphan_id = orphan_share.id
+      orphan_share.delete
 
       ShareIndexer.full_reindex
-      expect(ShareFile.where(share_id: 999999).count).to eq(0)
+      expect(ShareFile.where(share_id: orphan_id).count).to eq(0)
     end
   end
 

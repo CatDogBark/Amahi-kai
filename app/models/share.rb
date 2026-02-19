@@ -147,7 +147,7 @@ class Share < ApplicationRecord
 	end
 
 	def tag_list
-		parse_tags tags
+		(tags || '').split(',').map(&:strip).reject(&:blank?)
 	end
 
 	def self.basenames

@@ -47,6 +47,11 @@ describe Command do
   describe "#needs_sudo?" do
     let(:cmd) { Command.new }
 
+    before do
+      # Ensure we're not detected as root, so needs_sudo? actually checks commands
+      allow(Process).to receive(:uid).and_return(1000)
+    end
+
     it "detects privileged commands" do
       %w[useradd usermod systemctl chmod chown apt-get].each do |prog|
         expect(cmd.send(:needs_sudo?, "#{prog} something")).to be true

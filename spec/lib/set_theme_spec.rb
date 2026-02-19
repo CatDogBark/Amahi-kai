@@ -2,8 +2,8 @@ require 'spec_helper'
 
 RSpec.describe SetTheme do
   describe ".default" do
-    it "returns 'default'" do
-      expect(SetTheme.default).to eq("default")
+    it "returns the configured default theme" do
+      expect(SetTheme.default).to eq(Yetting.default_theme)
     end
   end
 

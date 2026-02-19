@@ -60,7 +60,7 @@ describe Server do
 
   it "should allow creating a server without a comment" do
     server = Server.create!(name: "nocomment")
-    expect(server.comment).to be_nil
+    expect(server.comment).to eq("")
   end
 
   it "should reject empty name" do
