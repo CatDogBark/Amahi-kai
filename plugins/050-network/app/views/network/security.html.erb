@@ -34,11 +34,11 @@
               <td class="text-center">
                 <% case check.status %>
                 <% when :pass %>
-                  <span class="text-success" title="Pass">✓</span>
+                  <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#d4edda;color:#155724;font-size:16px;font-weight:bold;" title="Pass">✓</span>
                 <% when :warn %>
-                  <span class="text-warning" title="Warning">⚠</span>
+                  <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fff3cd;color:#856404;font-size:16px;font-weight:bold;" title="Warning">⚠</span>
                 <% when :fail %>
-                  <span class="text-danger" title="Failed">✗</span>
+                  <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#f8d7da;color:#721c24;font-size:16px;font-weight:bold;" title="Failed">✗</span>
                 <% end %>
               </td>
               <td><%= check.description %></td>
