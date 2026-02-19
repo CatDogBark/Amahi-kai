@@ -117,6 +117,10 @@ class DisksController < ApplicationController
             { cmd: 'sudo mysql -u root -e "CREATE DATABASE IF NOT EXISTS greyhole" 2>&1', run: true },
             { cmd: "sudo mysql -u root -e \"GRANT ALL PRIVILEGES ON greyhole.* TO 'amahi'@'localhost'; FLUSH PRIVILEGES;\" 2>&1", run: true },
           ]},
+          { label: "Configuring PHP dependencies...", commands: [
+            { cmd: "sudo apt-get install -y php-mbstring php-mysql 2>&1", run: true },
+            { cmd: "sudo phpenmod mbstring 2>&1", run: true },
+          ]},
           { label: "Creating minimal Greyhole config...", commands: [
             { cmd: "echo 'db_host = localhost\ndb_user = amahi\ndb_name = greyhole' | sudo tee /etc/greyhole.conf 2>&1", run: !File.exist?('/etc/greyhole.conf') },
           ]},

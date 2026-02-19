@@ -54,6 +54,10 @@ class Greyhole
       system('sudo mysql -u root -e "CREATE DATABASE IF NOT EXISTS greyhole"')
       system("sudo mysql -u root -e \"GRANT ALL PRIVILEGES ON greyhole.* TO 'amahi'@'localhost'; FLUSH PRIVILEGES;\"")
 
+      # Ensure PHP mbstring is available for greyhole
+      system('sudo apt-get install -y php-mbstring php-mysql 2>/dev/null')
+      system('sudo phpenmod mbstring 2>/dev/null')
+
       unless File.exist?(CONFIG_PATH)
         system("echo 'db_host = localhost\ndb_user = amahi\ndb_name = greyhole' | sudo tee #{CONFIG_PATH} > /dev/null")
       end
