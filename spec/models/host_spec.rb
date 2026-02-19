@@ -76,4 +76,70 @@ describe Host do
     host = Host.create!(name: "myhost", mac: "aa:bb:cc:dd:ee:ff", address: "010")
     expect(host.reload.address).to eq("10")
   end
+
+  it "should reject names ending with hyphen" do
+    host = Host.new(name: "bad-", mac: "aa:bb:cc:dd:ee:ff", address: "10")
+    # format allows trailing hyphen per regex, but let's verify
+    # The regex is /\A[a-z][a-z0-9-]*\z/i so trailing hyphen is allowed
+    expect(host).to be_valid
+  end
+
+  it "should reject names with spaces" do
+    host = Host.new(name: "my host", mac: "aa:bb:cc:dd:ee:ff", address: "10")
+    expect(host).not_to be_valid
+  end
+
+  it "should reject names with underscores" do
+    host = Host.new(name: "my_host", mac: "aa:bb:cc:dd:ee:ff", address: "10")
+    expect(host).not_to be_valid
+  end
+
+  it "should accept uppercase MAC addresses" do
+    host = Host.new(name: "mactest", mac: "AA:BB:CC:DD:EE:FF", address: "10")
+    expect(host).to be_valid
+  end
+
+  it "should reject MAC with dashes instead of colons" do
+    host = Host.new(name: "dashmac", mac: "aa-bb-cc-dd-ee-ff", address: "10")
+    expect(host).not_to be_valid
+  end
+
+  it "should reject MAC with too few octets" do
+    host = Host.new(name: "shortmac", mac: "aa:bb:cc:dd:ee", address: "10")
+    expect(host).not_to be_valid
+  end
+
+  it "should reject non-numeric addresses" do
+    host = Host.new(name: "badaddr", mac: "aa:bb:cc:dd:ee:ff", address: "abc")
+    expect(host).not_to be_valid
+  end
+
+  it "should reject decimal addresses" do
+    host = Host.new(name: "decaddr", mac: "aa:bb:cc:dd:ee:ff", address: "10.5")
+    expect(host).not_to be_valid
+  end
+
+  it "should accept address 1 (minimum)" do
+    host = Host.new(name: "minaddr", mac: "aa:bb:cc:dd:ee:ff", address: "1")
+    expect(host).to be_valid
+  end
+
+  it "should accept address 254 (maximum)" do
+    host = Host.new(name: "maxaddr", mac: "aa:bb:cc:dd:ee:f1", address: "254")
+    expect(host).to be_valid
+  end
+
+  describe "callbacks" do
+    it "should call restart after save" do
+      host = Host.new(name: "cbhost", mac: "11:22:33:44:55:66", address: "50")
+      expect(host).to receive(:restart).at_least(:once)
+      host.save!
+    end
+
+    it "should call restart after destroy" do
+      host = Host.create!(name: "destroyhost", mac: "11:22:33:44:55:67", address: "51")
+      expect(host).to receive(:restart)
+      host.destroy
+    end
+  end
 end

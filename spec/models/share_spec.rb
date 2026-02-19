@@ -77,4 +77,115 @@ describe Share do
 
 	end
 
+	describe "associations" do
+		it "should have many cap_accesses" do
+			share = create(:share)
+			expect(share).to respond_to(:cap_accesses)
+		end
+
+		it "should have many cap_writers" do
+			share = create(:share)
+			expect(share).to respond_to(:cap_writers)
+		end
+
+		it "should have many share_files" do
+			share = create(:share)
+			expect(share).to respond_to(:share_files)
+		end
+	end
+
+	describe "name validation edge cases" do
+		it "should reject names with only spaces" do
+			expect { create(:share, name: "   ") }.to raise_error(ActiveRecord::RecordInvalid)
+		end
+
+		it "should reject names starting with a space" do
+			expect { create(:share, name: " leading") }.to raise_error(ActiveRecord::RecordInvalid)
+		end
+
+		it "should allow names with internal spaces" do
+			expect(create(:share, name: "My Share")).to be_valid
+		end
+
+		it "should enforce case-insensitive uniqueness" do
+			create(:share, name: "TestShare")
+			expect { create(:share, name: "testshare") }.to raise_error(ActiveRecord::RecordInvalid)
+		end
+
+		it "should allow exactly 32 character names" do
+			expect(create(:share, name: "a" * 32)).to be_valid
+		end
+	end
+
+	describe ".default_full_path" do
+		it "should return path under DEFAULT_SHARES_ROOT" do
+			expect(Share.default_full_path("Books")).to eq("/var/hda/files/books")
+		end
+
+		it "should downcase the name" do
+			expect(Share.default_full_path("MOVIES")).to eq("/var/hda/files/movies")
+		end
+	end
+
+	describe "#toggle_visible!" do
+		it "should toggle visible from true to false" do
+			share = create(:share, visible: true)
+			share.toggle_visible!
+			expect(share.reload.visible).to eq(false)
+		end
+
+		it "should toggle visible from false to true" do
+			share = create(:share, visible: false)
+			share.toggle_visible!
+			expect(share.reload.visible).to eq(true)
+		end
+	end
+
+	describe "#toggle_readonly!" do
+		it "should toggle rdonly" do
+			share = create(:share, rdonly: false)
+			share.toggle_readonly!
+			expect(share.reload.rdonly).to eq(true)
+		end
+	end
+
+	describe "#toggle_disk_pool!" do
+		it "should toggle disk_pool_copies from 0 to 1" do
+			share = create(:share, disk_pool_copies: 0)
+			share.toggle_disk_pool!
+			expect(share.reload.disk_pool_copies).to eq(1)
+		end
+
+		it "should toggle disk_pool_copies from positive to 0" do
+			share = create(:share, disk_pool_copies: 2)
+			share.toggle_disk_pool!
+			expect(share.reload.disk_pool_copies).to eq(0)
+		end
+	end
+
+	describe "#tag_list" do
+		it "should parse tags" do
+			share = create(:share, tags: "music, video")
+			expect(share.tag_list).to be_an(Array)
+		end
+	end
+
+	describe ".basenames" do
+		it "should return array of [path, name] pairs" do
+			create(:share, name: "TestBase", path: "/test/path")
+			result = Share.basenames
+			expect(result).to be_an(Array)
+			expect(result.last).to eq(["/test/path", "TestBase"])
+		end
+	end
+
+	describe "default ordering" do
+		it "should order by name" do
+			create(:share, name: "Zebra")
+			create(:share, name: "Alpha")
+			names = Share.all.map(&:name)
+			expect(names).to eq(names.sort)
+		end
+	end
+
 end

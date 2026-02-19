@@ -57,4 +57,67 @@ describe Server do
       expect(server.running?).to be true
     end
   end
+
+  it "should allow creating a server without a comment" do
+    server = Server.create!(name: "nocomment")
+    expect(server.comment).to be_nil
+  end
+
+  it "should reject empty name" do
+    server = Server.new(name: "")
+    expect(server).not_to be_valid
+  end
+
+  it "should reject nil name" do
+    server = Server.new(name: nil)
+    expect(server).not_to be_valid
+  end
+
+  describe "#clean_name" do
+    it "should handle multiple @ symbols" do
+      server = Server.new(name: "a@b@c")
+      expect(server.clean_name).to eq("a-b-c")
+    end
+
+    it "should handle name with no special characters" do
+      server = Server.new(name: "simple")
+      expect(server.clean_name).to eq("simple")
+    end
+  end
+
+  describe "#pids" do
+    it "should delegate to estimate_pids" do
+      server = Server.create!(name: "pidtest")
+      allow(server).to receive(:estimate_pids).and_return(["999"])
+      expect(server.pids).to eq(["999"])
+    end
+  end
+
+  describe "#do_start, #do_stop, #do_restart" do
+    it "should execute start command" do
+      server = Server.create!(name: "starttest")
+      command_double = instance_double(Command)
+      allow(Command).to receive(:new).and_return(command_double)
+      allow(command_double).to receive(:execute)
+      allow(command_double).to receive(:submit)
+      expect { server.do_start }.not_to raise_error
+    end
+
+    it "should execute stop command" do
+      server = Server.create!(name: "stoptest")
+      command_double = instance_double(Command)
+      allow(Command).to receive(:new).and_return(command_double)
+      allow(command_double).to receive(:execute)
+      expect { server.do_stop }.not_to raise_error
+    end
+
+    it "should execute restart (stop then start)" do
+      server = Server.create!(name: "restarttest")
+      command_double = instance_double(Command)
+      allow(Command).to receive(:new).and_return(command_double)
+      allow(command_double).to receive(:submit)
+      allow(command_double).to receive(:execute)
+      expect { server.do_restart }.not_to raise_error
+    end
+  end
 end
