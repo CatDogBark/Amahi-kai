@@ -2,25 +2,21 @@
   .card.mb-4.border-warning
     .card-body.text-center.py-5
       h4.mb-3
-        i.bi.bi-box-seam.me-2
-        | Docker is not installed
+        | 📦 Docker is not installed
       p.text-muted.mb-4 Docker is required to run containerized apps. Click below to install Docker Engine on this server.
       button.btn.btn-primary.btn-lg onclick="openInstallTerminal('docker', '#{apps_engine.install_docker_stream_path}')"
-        i.bi.bi-download.me-2
-        | Install Docker
+        | ⬇️ Install Docker
   == render 'shared/install_terminal', id: 'docker', title: 'Installing Docker', stream_url: apps_engine.install_docker_stream_path
 
 - elsif !@docker_running
   .card.mb-4.border-warning
     .card-body.text-center.py-4
       h5.mb-3
-        i.bi.bi-exclamation-triangle.me-2.text-warning
-        | Docker is installed but not running
+        | ⚠️ Docker is installed but not running
       p.text-muted.mb-3 The Docker service needs to be started before you can manage apps.
       = form_tag apps_engine.start_docker_path, method: :post do
         button.btn.btn-warning type="submit"
-          i.bi.bi-play-fill.me-2
-          | Start Docker
+          | ▶️ Start Docker
 
 - else
   - if @categories.any?
