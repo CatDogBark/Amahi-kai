@@ -567,6 +567,92 @@ table.settings td {
   }
 }
 
+/* ─── Search Page ─── */
+#search-types {
+  border-top: 1px solid var(--kai-border);
+  background-color: var(--kai-card-bg);
+  padding: 10px;
+  margin: 10px 0 20px;
+  border-radius: 6px;
+}
+
+#search-menu {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+#search-menu li {
+  padding: 0 12px;
+  border-right: 1px solid var(--kai-border);
+  line-height: 12px;
+}
+#search-menu li:last-child {
+  border-right: none;
+}
+#search-menu li.results {
+  margin-left: auto;
+  border: 0;
+  color: var(--kai-muted);
+  font-size: 12px;
+}
+#search-menu li a {
+  color: var(--kai-primary);
+  text-decoration: none;
+  font-weight: 600;
+}
+#search-menu li a:hover {
+  color: var(--kai-secondary);
+}
+
+#search-results {
+  padding: 0 15px 15px;
+}
+#search-results ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+#search-results ul > li {
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--kai-border);
+}
+#search-results .search-filename a {
+  color: var(--kai-primary);
+  font-weight: 600;
+}
+#search-results .search-location {
+  color: var(--kai-muted);
+  font-size: 12px;
+}
+#search-results .search-location em {
+  font-style: italic;
+  color: var(--kai-muted);
+}
+
+#search-pagination {
+  padding: 10px 15px;
+}
+#search-pagination .pagination {
+  color: var(--kai-muted);
+}
+#search-pagination .pagination a {
+  color: var(--kai-primary);
+  padding: 2px 6px;
+  text-decoration: none;
+}
+#search-pagination .pagination a:hover {
+  color: var(--kai-secondary);
+}
+#search-pagination .pagination em.current {
+  color: var(--kai-text);
+  font-weight: bold;
+  font-style: normal;
+}
+
 /* ─── Amahi-kai branding footer note ─── */
 .kai-lineage {
   text-align: center;
