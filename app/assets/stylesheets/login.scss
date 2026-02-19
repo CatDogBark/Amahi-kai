@@ -64,37 +64,47 @@ a { text-decoration: none; color: $kai-secondary; }
 
 .alert-danger {
   margin: 0 0 16px 8px;
-  padding: 12px;
-  border: 1px solid #c0392b;
-  background-color: #fdf0ef;
-  color: #c0392b;
-  border-radius: 4px;
+  padding: 12px 16px;
+  border: 1px solid rgba(192, 57, 43, 0.4);
+  background-color: rgba(192, 57, 43, 0.15);
+  color: #e74c3c;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 13px;
 }
 
 .message-message {
   margin: 0 0 16px 8px;
-  padding: 12px;
-  border: 1px solid #27ae60;
-  background-color: #e8f8f0;
-  border-radius: 4px;
+  padding: 12px 16px;
+  border: 1px solid rgba(39, 174, 96, 0.4);
+  background-color: rgba(39, 174, 96, 0.15);
+  color: #2ecc71;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 13px;
 }
 
 .alert-info {
   margin: 0 0 16px 8px;
-  padding: 12px;
-  border: 1px solid $kai-accent;
-  background-color: #fef9e7;
-  border-radius: 4px;
+  padding: 12px 16px;
+  border: 1px solid rgba($kai-secondary, 0.4);
+  background-color: rgba($kai-secondary, 0.15);
+  color: lighten($kai-secondary, 25%);
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 13px;
 }
 
 .alert-warn {
   margin: 0 0 16px 8px;
-  padding: 12px;
-  color: #c0392b;
-  background-color: #fdebd0;
-  border: 1px solid #e67e22;
-  border-radius: 4px;
-  a { color: #c0392b; }
+  padding: 12px 16px;
+  color: $kai-accent;
+  background-color: rgba($kai-accent, 0.15);
+  border: 1px solid rgba($kai-accent, 0.4);
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 13px;
+  a { color: lighten($kai-accent, 10%); }
 }
 
 form {
@@ -198,13 +208,14 @@ input:-moz-placeholder { color: #aaa; font-weight: normal; }
 input::-moz-placeholder { color: #aaa; font-weight: normal; }
 input:-ms-input-placeholder { color: #aaa; font-weight: normal; }
 
-// Kai branding accent
+// Kai wave accent
 form::before {
   content: '';
   display: block;
-  width: 60px;
-  height: 3px;
-  background: linear-gradient(90deg, $kai-primary, $kai-accent);
-  border-radius: 2px;
-  margin: 0 auto 20px auto;
+  width: 80px;
+  height: 12px;
+  margin: 0 auto 24px auto;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 12'%3E%3Cpath d='M0 8 C10 2, 20 2, 30 8 S50 14, 60 8 S70 2, 80 8' stroke='%230d8aa8' stroke-width='2' fill='none' opacity='0.8'/%3E%3Cpath d='M0 4 C10 -2, 20 -2, 30 4 S50 10, 60 4 S70 -2, 80 4' stroke='%230a6e8a' stroke-width='1.5' fill='none' opacity='0.4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-size: contain;
 }
