@@ -1,20 +1,20 @@
 <div class="container-fluid">
   <% if @has_blockers %>
     <div class="alert alert-danger mb-4">
-      <i class="bi bi-exclamation-triangle me-2"></i>
+      
       <strong>Security blockers found!</strong> Fix these issues before enabling remote access.
     </div>
   <% end %>
 
   <div class="card mb-4">
     <div class="card-header d-flex align-items-center justify-content-between">
-      <h5 class="mb-0"><i class="bi bi-shield-check me-2"></i>Security Audit</h5>
+      <h5 class="mb-0">Security Audit</h5>
       <div class="d-flex gap-2">
         <button type="button" class="btn btn-sm btn-primary" onclick="runSecurityAudit()">
-          <i class="bi bi-clipboard-check me-1"></i>Run Audit
+          Run Audit
         </button>
         <button type="button" class="btn btn-sm btn-warning" onclick="openInstallTerminal('security-fix', '<%= network_engine.security_fix_stream_path %>')">
-          <i class="bi bi-wrench me-1"></i>Fix All
+          Fix All
         </button>
       </div>
     </div>
@@ -34,11 +34,11 @@
               <td class="text-center">
                 <% case check.status %>
                 <% when :pass %>
-                  <span class="text-success" title="Pass"><i class="bi bi-check-circle-fill"></i></span>
+                  <span class="text-success" title="Pass">✓</span>
                 <% when :warn %>
-                  <span class="text-warning" title="Warning"><i class="bi bi-exclamation-triangle-fill"></i></span>
+                  <span class="text-warning" title="Warning">⚠</span>
                 <% when :fail %>
-                  <span class="text-danger" title="Failed"><i class="bi bi-x-circle-fill"></i></span>
+                  <span class="text-danger" title="Failed">✗</span>
                 <% end %>
               </td>
               <td><%= check.description %></td>
@@ -55,7 +55,7 @@
               <td>
                 <% if check.status != :pass && check.fix_command && check.name != 'admin_password' && check.name != 'open_ports' %>
                   <button type="button" class="btn btn-sm btn-outline-primary" onclick="fixCheck('<%= check.name %>', this)">
-                    <i class="bi bi-wrench"></i> Fix
+                     Fix
                   </button>
                 <% elsif check.name == 'admin_password' && check.status != :pass %>
                   <a href="/tab/settings" class="btn btn-sm btn-outline-warning">Change Password</a>
@@ -122,7 +122,7 @@ function runSecurityAudit() {
       var fixBtn = document.createElement('button');
       fixBtn.type = 'button';
       fixBtn.className = 'btn btn-sm btn-warning me-2';
-      fixBtn.innerHTML = '<i class="bi bi-wrench me-1"></i>Fix All Issues';
+      fixBtn.innerHTML = 'Fix All Issues';
       fixBtn.onclick = function() {
         closeInstallTerminal('security-audit');
         setTimeout(function() {
@@ -152,7 +152,7 @@ function runSecurityAudit() {
 
 function fixCheck(name, btn) {
   btn.disabled = true;
-  btn.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+  btn.innerHTML = '';
   fetch('<%= network_engine.security_fix_path %>', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content },
@@ -163,11 +163,11 @@ function fixCheck(name, btn) {
     } else {
       alert('Fix failed for: ' + name);
       btn.disabled = false;
-      btn.innerHTML = '<i class="bi bi-wrench"></i> Fix';
+      btn.innerHTML = ' Fix';
     }
   }).catch(function() {
     btn.disabled = false;
-    btn.innerHTML = '<i class="bi bi-wrench"></i> Fix';
+    btn.innerHTML = ' Fix';
   });
 }
 </script>
