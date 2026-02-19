@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html dir="<%= @locale_direction %>" lang="<%= I18n.locale %>">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amahi-kai Setup</title>
+  <%= stylesheet_link_tag "login" %>
+  <%= csrf_meta_tags %>
+  <style>
+    body.setup {
+      border-top-color: #1a2332;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+    .setup-container {
+      width: 100%;
+      max-width: 640px;
+      background: rgba(255,255,255,0.97);
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      overflow: hidden;
+    }
+    .setup-header {
+      background: linear-gradient(135deg, #0a6e8a 0%, #0d8aa8 100%);
+      padding: 28px 32px 20px;
+      color: white;
+    }
+    .setup-header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      margin: 0 0 4px;
+    }
+    .setup-header p {
+      margin: 0;
+      opacity: 0.85;
+      font-size: 14px;
+    }
+    .setup-progress {
+      display: flex;
+      gap: 4px;
+      padding: 0 32px;
+      margin-top: -6px;
+    }
+    .setup-progress .step {
+      flex: 1;
+      height: 4px;
+      border-radius: 2px;
+      background: rgba(255,255,255,0.3);
+    }
+    .setup-progress .step.done {
+      background: #f0a030;
+    }
+    .setup-progress .step.current {
+      background: #f0a030;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+    .setup-body {
+      padding: 28px 32px 32px;
+    }
+    .setup-body h2 {
+      font-size: 18px;
+      font-weight: 600;
+      color: #1a2332;
+      margin: 0 0 16px;
+    }
+    .setup-body p {
+      color: #4a5568;
+      font-size: 14px;
+      line-height: 1.6;
+      margin: 0 0 16px;
+    }
+    .setup-body label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #2c3e50;
+      margin-bottom: 6px;
+    }
+    .setup-body input[type="text"],
+    .setup-body input[type="password"] {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-bottom: 16px;
+      box-sizing: border-box;
+      transition: border-color 0.2s;
+    }
+    .setup-body input:focus {
+      outline: none;
+      border-color: #0d8aa8;
+      box-shadow: 0 0 0 3px rgba(13,138,168,0.15);
+    }
+    .btn-kai {
+      display: inline-block;
+      padding: 10px 28px;
+      background: linear-gradient(135deg, #0a6e8a, #0d8aa8);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn-kai:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(10,110,138,0.3);
+      color: white;
+    }
+    .btn-skip {
+      display: inline-block;
+      padding: 10px 20px;
+      color: #7f8c9b;
+      background: none;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      text-decoration: none;
+      margin-left: 8px;
+    }
+    .btn-skip:hover {
+      border-color: #9ca3af;
+      color: #4a5568;
+    }
+    .setup-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 24px;
+    }
+    .flash-error {
+      background: #fee2e2;
+      color: #991b1b;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+    .flash-notice {
+      background: #d1fae5;
+      color: #065f46;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+    .drive-list {
+      margin: 12px 0;
+    }
+    .drive-item {
+      display: flex;
+      align-items: center;
+      padding: 10px 14px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+    .drive-item input[type="checkbox"] {
+      margin-right: 12px;
+      width: 18px;
+      height: 18px;
+    }
+    .drive-item .drive-path { font-weight: 600; color: #1a2332; }
+    .drive-item .drive-size { color: #7f8c9b; margin-left: auto; }
+    .summary-item {
+      display: flex;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #f1f5f9;
+      font-size: 14px;
+    }
+    .summary-item .check { color: #10b981; margin-right: 10px; font-size: 18px; }
+    .summary-item .skip { color: #9ca3af; margin-right: 10px; font-size: 18px; }
+  </style>
+</head>
+<body class="login setup" data-turbo="false">
+  <div class="setup-container">
+    <div class="setup-header">
+      <h1>🐙 Amahi-kai</h1>
+      <p>First-run setup</p>
+    </div>
+    <% if content_for?(:progress) %>
+      <div class="setup-progress" style="margin-top: -12px; padding-bottom: 0;">
+        <%= yield :progress %>
+      </div>
+    <% end %>
+    <div class="setup-body">
+      <% if flash[:error] %>
+        <div class="flash-error"><%= flash[:error] %></div>
+      <% end %>
+      <% if flash[:notice] %>
+        <div class="flash-notice"><%= flash[:notice] %></div>
+      <% end %>
+      <%= yield %>
+    </div>
+  </div>
+</body>
+</html>

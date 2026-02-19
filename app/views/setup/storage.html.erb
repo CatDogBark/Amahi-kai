@@ -1,0 +1,54 @@
+<% content_for :progress do %>
+  <div class="step done"></div>
+  <div class="step done"></div>
+  <div class="step done"></div>
+  <div class="step current"></div>
+  <div class="step"></div>
+  <div class="step"></div>
+<% end %>
+
+<h2>💾 Storage &amp; Drive Pooling</h2>
+<p>
+  <strong>Greyhole</strong> lets you combine multiple drives into a single storage pool.
+  Your files are spread across drives automatically, and you can keep extra copies for safety.
+  Think of it as simple, software-based RAID that works with regular drives.
+</p>
+
+<% if @partitions.any? %>
+  <%= form_tag(setup_update_storage_path, method: :post) do %>
+    <p style="font-size: 13px; color: #7f8c9b;">Select drives to add to the storage pool:</p>
+    <div class="drive-list">
+      <% @partitions.each do |part| %>
+        <div class="drive-item">
+          <input type="checkbox" name="partitions[]" value="<%= part[:path] %>"
+                 id="part_<%= part[:path].gsub('/', '_') %>"
+                 <%= 'checked' if @pool_partitions.include?(part[:path]) %>>
+          <label for="part_<%= part[:path].gsub('/', '_') %>" style="display: inline; margin: 0; cursor: pointer;">
+            <span class="drive-path"><%= part[:path] %></span>
+          </label>
+          <span class="drive-size">
+            <% if part[:size] %>
+              <%= number_to_human_size(part[:size].to_i * 1024) rescue part[:size] %>
+            <% end %>
+            <% if part[:fstype] %>
+              &middot; <%= part[:fstype] %>
+            <% end %>
+          </span>
+        </div>
+      <% end %>
+    </div>
+
+    <div class="setup-actions">
+      <a href="<%= setup_share_path %>" class="btn-skip">Skip for now</a>
+      <button type="submit" class="btn-kai">Save &amp; Continue →</button>
+    </div>
+  <% end %>
+<% else %>
+  <div style="text-align: center; padding: 20px; color: #7f8c9b;">
+    <p>No additional drives detected. You can configure storage pooling later from the Shares settings.</p>
+  </div>
+  <div class="setup-actions">
+    <div></div>
+    <a href="<%= setup_share_path %>" class="btn-kai">Continue →</a>
+  </div>
+<% end %>

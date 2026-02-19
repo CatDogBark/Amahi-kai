@@ -1,0 +1,32 @@
+<% content_for :progress do %>
+  <div class="step done"></div>
+  <div class="step done"></div>
+  <div class="step current"></div>
+  <div class="step"></div>
+  <div class="step"></div>
+  <div class="step"></div>
+<% end %>
+
+<h2>🌐 Network settings</h2>
+<p>Here's what we detected about your server. You can set a friendly name for it.</p>
+
+<div style="background: #f8fafc; border-radius: 8px; padding: 14px 16px; margin-bottom: 16px;">
+  <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 6px;">
+    <span style="color: #7f8c9b;">Hostname</span>
+    <span style="font-weight: 600; color: #1a2332;"><%= @hostname %></span>
+  </div>
+  <div style="display: flex; justify-content: space-between; font-size: 14px;">
+    <span style="color: #7f8c9b;">IP Address</span>
+    <span style="font-weight: 600; color: #1a2332;"><%= @ip %></span>
+  </div>
+</div>
+
+<%= form_tag(setup_update_network_path, method: :post) do %>
+  <label for="server_name">Server Name</label>
+  <input type="text" name="server_name" id="server_name" value="<%= @server_name %>" placeholder="e.g. Home Server">
+
+  <div class="setup-actions">
+    <a href="<%= setup_storage_path %>" class="btn-skip">Skip</a>
+    <button type="submit" class="btn-kai">Save &amp; Continue →</button>
+  </div>
+<% end %>

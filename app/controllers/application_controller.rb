@@ -25,6 +25,7 @@ class ApplicationController < ActionController::Base
 	protect_from_forgery with: :exception
 
 	before_action :before_action_hook
+	before_action :check_setup_completed
 	before_action :initialize_validators
 	before_action :prepare_plugins
 	before_action :accessed_from_ip
@@ -114,6 +115,23 @@ class ApplicationController < ActionController::Base
 	end
 
 	private
+
+	def check_setup_completed
+		return if setup_completed?
+		return if self.is_a?(SetupController)
+		# Allow session/login routes so user can authenticate first
+		return if controller_name == 'user_sessions'
+		# Allow API and health check routes
+		return if request.path.start_with?('/api/', '/health')
+		return unless current_user # Must be logged in first
+		redirect_to setup_welcome_path
+	end
+
+	def setup_completed?
+		val = Setting.get('setup_completed')
+		val == 'true' || val == '1'
+	end
+	helper_method :setup_completed?
 
 	def set_locale
 

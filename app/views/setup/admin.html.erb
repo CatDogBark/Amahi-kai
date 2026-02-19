@@ -1,0 +1,27 @@
+<% content_for :progress do %>
+  <div class="step done"></div>
+  <div class="step current"></div>
+  <div class="step"></div>
+  <div class="step"></div>
+  <div class="step"></div>
+  <div class="step"></div>
+<% end %>
+
+<h2>🔐 Secure your admin account</h2>
+<p>
+  Your server currently uses a default password. Let's change it to something secure.
+  This is <strong>required</strong> before continuing.
+</p>
+
+<%= form_tag(setup_update_admin_path, method: :post) do %>
+  <label for="password">New Password</label>
+  <input type="password" name="password" id="password" placeholder="At least 8 characters" required minlength="8" autocomplete="new-password">
+
+  <label for="password_confirmation">Confirm Password</label>
+  <input type="password" name="password_confirmation" id="password_confirmation" placeholder="Type it again" required minlength="8" autocomplete="new-password">
+
+  <div class="setup-actions">
+    <div></div>
+    <button type="submit" class="btn-kai">Save &amp; Continue →</button>
+  </div>
+<% end %>

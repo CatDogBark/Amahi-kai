@@ -44,6 +44,19 @@ Rails.application.routes.draw do
   match 'search/audio' => 'search#audio', :as => :search_audio, via: [:get,:post]
   match 'search/video' => 'search#video', :as => :search_video, via: [:get,:post]
 
+  # Setup wizard
+  get  'setup/welcome'  => 'setup#welcome',       as: :setup_welcome
+  get  'setup/admin'    => 'setup#admin',          as: :setup_admin
+  post 'setup/admin'    => 'setup#update_admin',   as: :setup_update_admin
+  get  'setup/network'  => 'setup#network',        as: :setup_network
+  post 'setup/network'  => 'setup#update_network', as: :setup_update_network
+  get  'setup/storage'  => 'setup#storage',        as: :setup_storage
+  post 'setup/storage'  => 'setup#update_storage', as: :setup_update_storage
+  get  'setup/share'    => 'setup#share',          as: :setup_share
+  post 'setup/share'    => 'setup#create_share',   as: :setup_create_share
+  get  'setup/complete' => 'setup#complete',        as: :setup_complete
+  post 'setup/finish'   => 'setup#finish',          as: :setup_finish
+
   root :to => 'front#index'
 
 end

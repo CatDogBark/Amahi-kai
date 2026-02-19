@@ -11,9 +11,38 @@ RUBY_VERSION="3.2.10"
 APP_USER="amahi"
 APP_GROUP="amahi"
 
+# Parse flags
+HEADLESS=false
+WITH_GREYHOLE=false
+for arg in "$@"; do
+  case "$arg" in
+    --headless)     HEADLESS=true ;;
+    --with-greyhole) WITH_GREYHOLE=true ;;
+    --help|-h)
+      echo "Usage: sudo bin/amahi-install [OPTIONS]"
+      echo ""
+      echo "Options:"
+      echo "  --headless        Non-interactive install, generates random admin password"
+      echo "  --with-greyhole   Install Greyhole storage pooling"
+      echo "  --help            Show this help"
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $arg" >&2
+      exit 1
+      ;;
+  esac
+done
+
 echo "============================================"
 echo "  Amahi-kai Production Installer"
 echo "  Target: Ubuntu 24.04 / Debian 12+"
+if $HEADLESS; then
+  echo "  Mode: HEADLESS"
+fi
+if $WITH_GREYHOLE; then
+  echo "  Greyhole: YES"
+fi
 echo "============================================"
 echo ""
 
@@ -48,6 +77,16 @@ apt-get install -y --no-install-recommends \
   autoconf \
   bison \
   rustc  # needed for some gem native extensions on newer Ruby
+
+# Greyhole (optional)
+if $WITH_GREYHOLE; then
+  echo "==> Installing Greyhole and PHP dependencies..."
+  apt-get install -y --no-install-recommends \
+    greyhole \
+    php \
+    php-mysqlnd \
+    php-mbstring || echo "    WARNING: Some Greyhole packages may not be available in default repos"
+fi
 
 # ---------------------------------------------------------------------------
 # 2. Ruby (via rbenv, system-wide)
@@ -190,6 +229,20 @@ GRANT ALL PRIVILEGES ON \`${DATABASE_NAME:-amahi_production}\`.* TO '${DATABASE_
 FLUSH PRIVILEGES;
 EOSQL
 
+# Greyhole database (if installed)
+if $WITH_GREYHOLE; then
+  echo "==> Creating Greyhole database..."
+  mysql -u root <<EOSQL || true
+CREATE DATABASE IF NOT EXISTS greyhole;
+GRANT ALL PRIVILEGES ON greyhole.* TO '${DATABASE_USER:-amahi}'@'localhost';
+FLUSH PRIVILEGES;
+EOSQL
+  # Initialize Greyhole schema if available
+  if [ -f /usr/share/greyhole/schema-mysql.sql ]; then
+    mysql -u root greyhole < /usr/share/greyhole/schema-mysql.sql 2>/dev/null || true
+  fi
+fi
+
 # ---------------------------------------------------------------------------
 # 9. Database migrations
 # ---------------------------------------------------------------------------
@@ -208,6 +261,19 @@ if [ -n "$HOST_IP" ]; then
   sudo -u "$APP_USER" bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && RAILS_ENV=production bin/rails runner \"
     Setting.set('net', '$NET_PREFIX')
     Setting.set('self-address', '$SELF_ADDR')
+  \""
+fi
+
+# Headless mode: generate random password and mark setup complete
+if $HEADLESS; then
+  ADMIN_PASS=$(openssl rand -base64 16 | tr -d '/+=' | head -c 20)
+  echo "==> Headless mode: configuring admin account..."
+  sudo -u "$APP_USER" bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && RAILS_ENV=production bin/rails runner \"
+    user = User.find_by(login: 'admin')
+    user.password = '$ADMIN_PASS'
+    user.password_confirmation = '$ADMIN_PASS'
+    user.save!
+    Setting.set('setup_completed', 'true')
   \""
 fi
 
@@ -273,6 +339,18 @@ amahi ALL=(root) NOPASSWD: /usr/bin/systemctl disable dnsmasq.service
 
 # Database backups
 amahi ALL=(root) NOPASSWD: /usr/bin/mysqldump
+
+# Greyhole service management
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start greyhole.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop greyhole.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart greyhole.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl reload greyhole.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable greyhole.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl disable greyhole.service
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl status greyhole.service
+
+# Greyhole config management
+amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/hda/tmp/* /etc/greyhole.conf
 SUDOERS
 chmod 440 /etc/sudoers.d/amahi-kai
 
@@ -329,6 +407,12 @@ systemctl enable --now smbd nmbd
 # dnsmasq disabled by default — enable when DNS aliases are configured
 # systemctl enable --now dnsmasq
 
+# Greyhole (enable but don't start — wizard or user configures drives first)
+if $WITH_GREYHOLE && command -v greyhole &>/dev/null; then
+  echo "==> Enabling Greyhole service..."
+  systemctl enable greyhole || true
+fi
+
 # ---------------------------------------------------------------------------
 # 15. File search index
 # ---------------------------------------------------------------------------
@@ -383,8 +467,23 @@ echo "============================================"
 echo ""
 echo "  Web UI:  http://$(hostname -I | awk '{print $1}'):3000"
 echo "  Tunnel:  (configure Cloudflare Tunnel if needed)"
-echo "  Login:   admin / secretpassword (CHANGE THIS)"
-echo ""
+if $HEADLESS; then
+  echo ""
+  echo "  ┌─────────────────────────────────────┐"
+  echo "  │  ADMIN CREDENTIALS (save these!)    │"
+  echo "  │                                     │"
+  echo "  │  Username: admin                    │"
+  echo "  │  Password: $ADMIN_PASS"
+  echo "  │                                     │"
+  echo "  │  Setup wizard: SKIPPED (headless)   │"
+  echo "  └─────────────────────────────────────┘"
+  echo ""
+else
+  echo "  Login:   admin / secretpassword"
+  echo "  NOTE:    The setup wizard will guide you through"
+  echo "           initial configuration on first login."
+  echo ""
+fi
 echo "  Config:  $ENV_FILE"
 echo "  App:     $APP_DIR"
 echo "  Shares:  $SHARE_ROOT"
@@ -394,4 +493,7 @@ echo "  Services:"
 echo "    systemctl status amahi-kai   # Rails app (Puma on :3000)"
 echo "    systemctl status mariadb     # Database"
 echo "    systemctl status smbd        # Samba file sharing"
+if $WITH_GREYHOLE; then
+  echo "    systemctl status greyhole    # Storage pooling"
+fi
 echo ""

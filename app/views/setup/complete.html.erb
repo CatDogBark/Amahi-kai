@@ -1,0 +1,64 @@
+<% content_for :progress do %>
+  <div class="step done"></div>
+  <div class="step done"></div>
+  <div class="step done"></div>
+  <div class="step done"></div>
+  <div class="step done"></div>
+  <div class="step done"></div>
+<% end %>
+
+<div style="text-align: center; padding: 10px 0 0;">
+  <div style="font-size: 48px; margin-bottom: 12px;">🎉</div>
+  <h2 style="font-size: 22px;">You're all set!</h2>
+  <p>Here's a summary of what was configured:</p>
+</div>
+
+<div style="margin: 20px 0;">
+  <div class="summary-item">
+    <% if @admin_password_changed %>
+      <span class="check">✓</span>
+      <span>Admin password changed</span>
+    <% else %>
+      <span class="skip">–</span>
+      <span style="color: #9ca3af;">Admin password (unchanged)</span>
+    <% end %>
+  </div>
+
+  <div class="summary-item">
+    <% if @server_name.present? %>
+      <span class="check">✓</span>
+      <span>Server name: <strong><%= @server_name %></strong></span>
+    <% else %>
+      <span class="skip">–</span>
+      <span style="color: #9ca3af;">Server name (default)</span>
+    <% end %>
+  </div>
+
+  <div class="summary-item">
+    <% if @pool_partitions.any? %>
+      <span class="check">✓</span>
+      <span>Storage pool: <strong><%= @pool_partitions.count %></strong> drive<%= @pool_partitions.count == 1 ? '' : 's' %></span>
+    <% else %>
+      <span class="skip">–</span>
+      <span style="color: #9ca3af;">Storage pooling (not configured)</span>
+    <% end %>
+  </div>
+
+  <div class="summary-item">
+    <% if @first_share.present? %>
+      <span class="check">✓</span>
+      <span>First share: <strong><%= @first_share %></strong></span>
+    <% else %>
+      <span class="skip">–</span>
+      <span style="color: #9ca3af;">No shares created yet</span>
+    <% end %>
+  </div>
+</div>
+
+<%= form_tag(setup_finish_path, method: :post) do %>
+  <div style="text-align: center; margin-top: 28px;">
+    <button type="submit" class="btn-kai" style="padding: 12px 40px; font-size: 16px;">
+      Go to Dashboard →
+    </button>
+  </div>
+<% end %>

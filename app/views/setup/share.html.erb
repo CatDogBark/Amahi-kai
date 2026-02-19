@@ -1,0 +1,27 @@
+<% content_for :progress do %>
+  <div class="step done"></div>
+  <div class="step done"></div>
+  <div class="step done"></div>
+  <div class="step done"></div>
+  <div class="step current"></div>
+  <div class="step"></div>
+<% end %>
+
+<h2>📁 Create your first share</h2>
+<p>
+  Shares are folders on your server that you can access from any device on your network.
+  Give it a name and we'll set up the rest.
+</p>
+
+<%= form_tag(setup_create_share_path, method: :post) do %>
+  <label for="share_name">Share Name</label>
+  <input type="text" name="share_name" id="share_name" placeholder="e.g. Documents, Media, Photos" maxlength="32">
+  <p style="font-size: 12px; color: #9ca3af; margin-top: -12px;">
+    Will be accessible at <code>\\hda\<em>name</em></code> on your network.
+  </p>
+
+  <div class="setup-actions">
+    <a href="<%= setup_complete_path %>" class="btn-skip">Skip</a>
+    <button type="submit" class="btn-kai">Create &amp; Continue →</button>
+  </div>
+<% end %>
