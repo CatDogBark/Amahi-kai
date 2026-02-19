@@ -24,7 +24,7 @@
       <% end %>
     </div>
     <div class="card-body">
-      <% unless @tunnel_status[:installed] %>
+      <% if !@tunnel_status[:installed] %>
         <!-- Not installed -->
         <p class="text-muted">Cloudflare Tunnel lets you securely access your Amahi server from anywhere — no port forwarding needed.</p>
         <button type="button" class="btn btn-primary" onclick="openInstallTerminal('cloudflared', '<%= network_engine.install_cloudflared_stream_path %>')">
