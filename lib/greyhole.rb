@@ -85,7 +85,10 @@ class Greyhole
     def configure!
       return true unless production?
       config = generate_config
-      File.write(CONFIG_PATH, config)
+      tmp = "/var/hda/tmp/greyhole.conf"
+      FileUtils.mkdir_p(File.dirname(tmp))
+      File.write(tmp, config)
+      system("sudo cp #{Shellwords.escape(tmp)} #{CONFIG_PATH}")
       restart!
     end
 

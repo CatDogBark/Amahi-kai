@@ -26,6 +26,7 @@ gem 'authlogic'
 gem 'bcrypt'
 
 gem 'docker-api'
+gem 'sys-filesystem'
 
 gem 'rack', '~> 3.2.5'
 gem 'rack-attack'

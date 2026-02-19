@@ -58,28 +58,14 @@ class PartitionUtils
 	end
 
 	def disk_stats(path)
-		size = 128
-		unpack_fmt = 'l_l_l_l_l_l_l_l_l_l_l_l_l_l_l_l_'
-		buffer = ' ' * size
-		# FIXME!: this is 137 in x86_64!!
-		# asm/unistd.h __NR_statfs 99
-		begin
-			IO.popen('uname -i') do |uname|
-				arch = uname.gets
-				if (arch =~ /64/)
-					syscall(137, path, buffer)
-				else
-					syscall(99, path, buffer)
-				end
-			end
-			type, bsize, blocks, bfree, bavail, files, ffree, namelen =
-			buffer.unpack(unpack_fmt).values_at(0, 1, 2, 3, 4, 5, 6, 9)
-			# return total bytes, free bytes
-			[blocks * bsize, bfree * bsize]
-		rescue => e
-			Rails.logger.error("******** disk stats error for #{path}: #{e.inspect}")
-			[0, 0]
-		end
+		require 'sys/filesystem'
+		stat = Sys::Filesystem.stat(path)
+		total = stat.block_size * stat.blocks
+		free  = stat.block_size * stat.blocks_available
+		[total, free]
+	rescue => e
+		Rails.logger.error("disk stats error for #{path}: #{e.inspect}")
+		[0, 0]
 	end
 
 end

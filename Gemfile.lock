@@ -329,6 +329,8 @@ GEM
     stimulus-rails (1.3.4)
       railties (>= 6.0.0)
     stringio (3.2.0)
+    sys-filesystem (1.5.5)
+      ffi (~> 1.1)
     temple (0.10.4)
     terser (1.2.6)
       execjs (>= 0.3.0, < 3)
@@ -388,6 +390,7 @@ DEPENDENCIES
   slim
   sqlite3 (~> 2.0)
   stimulus-rails
+  sys-filesystem
   terser
   turbo-rails
 
