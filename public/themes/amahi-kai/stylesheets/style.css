@@ -295,6 +295,12 @@ legend {
 }
 
 /* ─── Subtabs ─── */
+.all-subtab-container {
+  display: none;
+}
+.single-subtab-container {
+  display: block;
+}
 .setup-subtab-container {
   background: var(--kai-card-bg);
   border-bottom: 1px solid var(--kai-border);
