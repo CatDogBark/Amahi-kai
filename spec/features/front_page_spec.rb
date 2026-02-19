@@ -3,7 +3,7 @@ require 'spec_helper'
 feature "Front page" do
 	scenario "should be the login page by default" do
 		visit root_path
-		expect(page).to have_content("Amahi Server Login")
+		expect(page).to have_content("Log In")
 	end
 
 	scenario "should be the dashboard if \"guest dashboard\" is enabled" do
@@ -17,13 +17,14 @@ feature "Front page" do
 	scenario "should be the login page if \"guest dashboard\" is disabled" do
 		setting = create(:setting, name: "guest-dashboard", value: "0")
 		visit root_path
-		expect(page).to have_content("Amahi Server Login")
+		expect(page).to have_content("Log In")
 	end
 
 	scenario "should allow a user with proper username/password to login" do
+		Setting.set('setup_completed', 'true')
 		user = create(:user)
 		visit root_path
-		expect(page).to have_content("Amahi Server Login")
+		expect(page).to have_content("Log In")
 		fill_in "username", :with => user.login
 		fill_in "password", :with => "secretpassword"
 		click_button "Log In"
@@ -34,35 +35,36 @@ feature "Front page" do
 	scenario "should not allow a user with bad username to login" do
 		user = create(:user)
 		visit root_path
-		expect(page).to have_content("Amahi Server Login")
+		expect(page).to have_content("Log In")
 		fill_in "username", :with => "bogus"
 		fill_in "password", :with => "secretpassword"
 		click_button "Log In"
 		expect(page).to have_content("Error: Incorrect username or password")
-		expect(page).to have_content("Amahi Server Login")
+		expect(page).to have_content("Log In")
 	end
 
 	scenario "should not allow a user with bad password to login" do
 		user = create(:user)
 		visit root_path
-		expect(page).to have_content("Amahi Server Login")
+		expect(page).to have_content("Log In")
 		fill_in "username", :with => user.login
 		fill_in "password", :with => "bogus"
 		click_button "Log In"
 		expect(page).to have_content("Error: Incorrect username or password")
-		expect(page).to have_content("Amahi Server Login")
+		expect(page).to have_content("Log In")
 	end
 
 	scenario "should allow a user with proper username/password to login and also logout" do
+		Setting.set('setup_completed', 'true')
 		user = create(:user)
 		visit root_path
-		expect(page).to have_content("Amahi Server Login")
+		expect(page).to have_content("Log In")
 		fill_in "username", :with => user.login
 		fill_in "password", :with => "secretpassword"
 		click_button "Log In"
 		expect(page).to have_content("Dashboard")
 		expect(page).to have_content("Logout")
 		first(:link, "Logout").click
-		expect(page).to have_content("Amahi Server Login")
+		expect(page).to have_content("Log In")
 	end
 end

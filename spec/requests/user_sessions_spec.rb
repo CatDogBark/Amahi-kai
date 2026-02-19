@@ -12,6 +12,7 @@ describe "User Sessions", type: :request do
 
   describe "POST /user_sessions (login)" do
     it "logs in with valid credentials" do
+      ensure_setup_completed!
       user = create(:user)
       post user_sessions_path, params: { username: user.login, password: "secretpassword" }
       expect(response).to redirect_to(root_url)

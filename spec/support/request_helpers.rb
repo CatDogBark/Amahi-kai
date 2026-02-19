@@ -17,10 +17,7 @@ module RequestHelpers
   end
 
   def ensure_setup_completed!
-    Setting.find_or_create_by(name: 'setup_completed') do |s|
-      s.value = 'true'
-      s.kind = 'general'
-    end
+    Setting.set('setup_completed', 'true')
   rescue => e
     # If Setting table doesn't exist yet, silently continue
     Rails.logger.debug "ensure_setup_completed! skipped: #{e.message}"

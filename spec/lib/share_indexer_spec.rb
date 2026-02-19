@@ -112,16 +112,19 @@ RSpec.describe ShareIndexer do
       create_file(tmpdir, 'file1.txt')
       ShareIndexer.index_share(share)
 
-      # Create an orphan entry with a fake share_id
+      # Create a temporary share, record its ID, destroy it, then insert an orphan ShareFile
       orphan_share = Share.new(name: "GhostShare", path: "/tmp/nonexistent_share", rdonly: false, visible: true, everyone: true, tags: "").tap { |s| s.save(validate: false) }
-      ShareFile.create!(
-        share_id: orphan_share.id,
+      orphan_id = orphan_share.id
+      orphan_share.destroy
+      # insert_all bypasses validations/FK checks
+      ShareFile.insert_all([{
+        share_id: orphan_id,
         name: 'orphan.txt',
         path: '/tmp/orphan.txt',
-        relative_path: 'orphan.txt'
-      )
-      orphan_id = orphan_share.id
-      orphan_share.delete
+        relative_path: 'orphan.txt',
+        created_at: Time.current,
+        updated_at: Time.current
+      }])
 
       ShareIndexer.full_reindex
       expect(ShareFile.where(share_id: orphan_id).count).to eq(0)

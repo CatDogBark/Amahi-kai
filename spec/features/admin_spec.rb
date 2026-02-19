@@ -3,9 +3,10 @@ require 'spec_helper'
 feature "Admin" do
 
 	scenario "user should see the setup pages after login" do
+		Setting.set('setup_completed', 'true')
 		user = create(:admin)
 		visit root_path
-		expect(page).to have_content("Amahi Server Login")
+		expect(page).to have_content("Log In")
 		fill_in "username", :with => user.login
 		fill_in "password", :with => "secretpassword"
 		click_button "Log In"
@@ -16,9 +17,10 @@ feature "Admin" do
 	end
 
 	scenario "non-admin users should not see the setup pages after login" do
+		Setting.set('setup_completed', 'true')
 		user = create(:user)
 		visit root_path
-		expect(page).to have_content("Amahi Server Login")
+		expect(page).to have_content("Log In")
 		fill_in "username", :with => user.login
 		fill_in "password", :with => "secretpassword"
 		click_button "Log In"

@@ -7,20 +7,18 @@ describe "Setup Controller", type: :request do
     create(:setting, name: "domain", value: "home.lan")
   end
 
-  # Helper: mark setup as completed so the guard doesn't interfere with other specs
   def mark_setup_completed
     Setting.set('setup_completed', 'true')
   end
 
   def mark_setup_incomplete
-    s = Setting.find_by(name: 'setup_completed')
-    s&.destroy
+    Setting.set('setup_completed', 'false')
   end
 
   describe "redirect guard (check_setup_completed)" do
     it "redirects authenticated admin to wizard when setup not completed" do
-      mark_setup_incomplete
       login_as_admin
+      mark_setup_incomplete
       get root_path
       expect(response).to redirect_to(setup_welcome_path)
     end
@@ -188,6 +186,7 @@ describe "Setup Controller", type: :request do
     it "requires admin" do
       user = create(:user)
       login_as(user)
+      mark_setup_incomplete
       get setup_welcome_path
       expect(response).to redirect_to(new_user_session_url)
     end
