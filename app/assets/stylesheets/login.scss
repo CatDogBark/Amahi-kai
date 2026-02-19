@@ -209,3 +209,88 @@ input::-moz-placeholder { color: #aaa; font-weight: normal; }
 input:-ms-input-placeholder { color: #aaa; font-weight: normal; }
 
 // Wave accent removed — using logo SVG in the view instead
+
+// ─── Dark Mode ───
+@media (prefers-color-scheme: dark) {
+  html {
+    background: #080c10;
+    background: linear-gradient(135deg, #080c10 0%, #0a2a3a 50%, #080c10 100%);
+  }
+
+  form {
+    background: #0d1117;
+    background: linear-gradient(180deg, #161b22 0%, #0d1117 100%);
+    border-color: #30363d;
+
+    input {
+      color: #c9d1d9;
+      background-color: #161b22;
+      border-color: #30363d;
+
+      &:focus {
+        border-color: #1a9fc2;
+        box-shadow: 0 0 0 2px rgba(26, 159, 194, 0.3);
+      }
+
+      &[disabled='disabled'] {
+        color: #8b949e;
+        background-color: #21262d;
+      }
+    }
+
+    label {
+      color: #c9d1d9;
+    }
+
+    .rememberme {
+      color: #8b949e;
+    }
+
+    .submit input {
+      background: #1a9fc2;
+      background: linear-gradient(180deg, #22b8d6 0%, #1a9fc2 100%);
+      border-color: #1a9fc2;
+      color: white;
+
+      &:hover {
+        background: lighten(#1a9fc2, 5%);
+        background: linear-gradient(180deg, lighten(#22b8d6, 5%) 0%, lighten(#1a9fc2, 5%) 100%);
+      }
+    }
+  }
+
+  .alert-danger {
+    background-color: rgba(218, 54, 51, 0.15);
+    border-color: rgba(218, 54, 51, 0.4);
+    color: #f85149;
+  }
+
+  .message-message {
+    background-color: rgba(46, 160, 67, 0.15);
+    border-color: rgba(46, 160, 67, 0.4);
+    color: #3fb950;
+  }
+
+  .alert-info {
+    background-color: rgba(26, 159, 194, 0.15);
+    border-color: rgba(26, 159, 194, 0.4);
+    color: #58a6ff;
+  }
+
+  .alert-warn {
+    background-color: rgba(240, 160, 48, 0.15);
+    border-color: rgba(240, 160, 48, 0.4);
+    color: #e3b341;
+    a { color: #f0a030; }
+  }
+
+  .updated {
+    background-color: #122117;
+    border-color: #2ea043;
+  }
+
+  input::-webkit-input-placeholder { color: #6e7681; }
+  input:-moz-placeholder { color: #6e7681; }
+  input::-moz-placeholder { color: #6e7681; }
+  input:-ms-input-placeholder { color: #6e7681; }
+}
