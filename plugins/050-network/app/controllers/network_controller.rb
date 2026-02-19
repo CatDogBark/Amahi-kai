@@ -255,6 +255,74 @@ class NetworkController < ApplicationController
     @has_blockers = SecurityAudit.has_blockers?
   end
 
+  def security_audit_stream
+    response.headers['Content-Type'] = 'text/event-stream'
+    response.headers['Cache-Control'] = 'no-cache, no-store'
+    response.headers['X-Accel-Buffering'] = 'no'
+    response.headers['Connection'] = 'keep-alive'
+    response.headers['Last-Modified'] = Time.now.httpdate
+
+    self.response_body = Enumerator.new do |yielder|
+      sse_send = ->(data, event = nil) {
+        msg = ""
+        msg += "event: #{event}\n" if event
+        msg += "data: #{data}\n\n"
+        yielder << msg
+      }
+
+      sse_send.call("Running security audit...")
+      sse_send.call("")
+
+      checks = SecurityAudit.run_all
+      passed = 0
+      warnings = 0
+      blockers = 0
+      has_fixable = false
+
+      checks.each do |check|
+        sleep 0.4 unless Rails.env.production?
+        sleep 0.15 if Rails.env.production?
+
+        sse_send.call("Checking #{check.description.downcase}...")
+
+        case check.status
+        when :pass
+          passed += 1
+          sse_send.call("  ✓ #{check.description}")
+        when :warn
+          warnings += 1
+          sse_send.call("  ⚠ #{check.description} (recommended to fix)")
+          has_fixable = true if check.fix_command && check.name != 'admin_password'
+        when :fail
+          if check.severity == :blocker
+            blockers += 1
+            sse_send.call("  ✗ #{check.description} (BLOCKER)")
+          else
+            warnings += 1
+            sse_send.call("  ✗ #{check.description}")
+          end
+          has_fixable = true if check.fix_command && check.name != 'admin_password' && check.name != 'open_ports'
+        end
+
+        sse_send.call("")
+      end
+
+      sse_send.call("─── Audit Complete ───")
+      sse_send.call("✓ #{passed} passed")
+      sse_send.call("⚠ #{warnings} warnings") if warnings > 0
+      sse_send.call("✗ #{blockers} blocker#{'s' if blockers != 1}") if blockers > 0
+
+      if blockers > 0
+        sse_send.call("")
+        sse_send.call("✗ Blockers must be fixed before enabling remote access.")
+      end
+
+      # Send metadata so the JS can decide whether to show Fix All button
+      sse_send.call(has_fixable.to_s, "has_fixable")
+      sse_send.call("", "done")
+    end
+  end
+
   def security_fix
     sleep 1 if development?
     check_name = params[:check_name].to_s

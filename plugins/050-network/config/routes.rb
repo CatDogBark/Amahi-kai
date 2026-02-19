@@ -29,5 +29,6 @@ Network::Engine.routes.draw do
 	# Security
 	get 'security' => 'network#security'
 	post 'security_fix' => 'network#security_fix'
+	get 'security_audit_stream' => 'network#security_audit_stream'
 	get 'security_fix_stream' => 'network#security_fix_stream'
 end
