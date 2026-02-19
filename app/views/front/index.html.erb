@@ -6,7 +6,7 @@
       <div class="d-flex align-items-center justify-content-between">
         <div>
           <h3 class="mb-1" style="font-weight: 600;">
-            🌊 Welcome to <strong><%= @stats[:system][:hostname].split('-').map(&:capitalize).join('-') %></strong>
+            🌊 Welcome to <strong><%= @stats[:system][:hostname] %></strong>
           </h3>
           <span class="text-muted">
             Up <%= @stats[:system][:uptime] %> · <%= @stats[:system][:os] %>
