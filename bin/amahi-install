@@ -361,12 +361,14 @@ amahi ALL=(root) NOPASSWD: /usr/bin/systemctl status greyhole.service
 amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/hda/tmp/* /etc/greyhole.conf
 
 # Greyhole installation (web UI triggered)
-amahi ALL=(root) NOPASSWD: /usr/bin/apt-get update
-amahi ALL=(root) NOPASSWD: /usr/bin/apt-get install -y greyhole
+amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get update
+amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get install *
 amahi ALL=(root) NOPASSWD: /usr/bin/gpg --dearmor -o /usr/share/keyrings/greyhole-archive-keyring.gpg
+amahi ALL=(root) NOPASSWD: /usr/bin/curl -s https\://www.greyhole.net/*
 amahi ALL=(root) NOPASSWD: /usr/bin/tee /etc/apt/sources.list.d/greyhole.list
 amahi ALL=(root) NOPASSWD: /usr/bin/tee /etc/greyhole.conf
 amahi ALL=(root) NOPASSWD: /usr/bin/mysql -u root *
+amahi ALL=(root) NOPASSWD: /usr/bin/dpkg --configure -a
 SUDOERS
 chmod 440 /etc/sudoers.d/amahi-kai
 
