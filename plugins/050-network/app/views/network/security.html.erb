@@ -1,0 +1,90 @@
+<div class="container-fluid">
+  <% if @has_blockers %>
+    <div class="alert alert-danger mb-4">
+      <i class="bi bi-exclamation-triangle me-2"></i>
+      <strong>Security blockers found!</strong> Fix these issues before enabling remote access.
+    </div>
+  <% end %>
+
+  <div class="card mb-4">
+    <div class="card-header d-flex align-items-center justify-content-between">
+      <h5 class="mb-0"><i class="bi bi-shield-check me-2"></i>Security Audit</h5>
+      <button type="button" class="btn btn-sm btn-warning" onclick="openInstallTerminal('security-fix', '<%= network_engine.security_fix_stream_path %>')">
+        <i class="bi bi-wrench me-1"></i>Fix All
+      </button>
+    </div>
+    <div class="card-body p-0">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th style="width:40px;"></th>
+            <th>Check</th>
+            <th>Severity</th>
+            <th style="width:100px;"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% @checks.each do |check| %>
+            <tr>
+              <td class="text-center">
+                <% case check.status %>
+                <% when :pass %>
+                  <span class="text-success" title="Pass"><i class="bi bi-check-circle-fill"></i></span>
+                <% when :warn %>
+                  <span class="text-warning" title="Warning"><i class="bi bi-exclamation-triangle-fill"></i></span>
+                <% when :fail %>
+                  <span class="text-danger" title="Failed"><i class="bi bi-x-circle-fill"></i></span>
+                <% end %>
+              </td>
+              <td><%= check.description %></td>
+              <td>
+                <% case check.severity %>
+                <% when :blocker %>
+                  <span class="badge bg-danger">Blocker</span>
+                <% when :warning %>
+                  <span class="badge bg-warning text-dark">Warning</span>
+                <% when :info %>
+                  <span class="badge bg-info text-dark">Info</span>
+                <% end %>
+              </td>
+              <td>
+                <% if check.status != :pass && check.fix_command && check.name != 'admin_password' && check.name != 'open_ports' %>
+                  <button type="button" class="btn btn-sm btn-outline-primary" onclick="fixCheck('<%= check.name %>', this)">
+                    <i class="bi bi-wrench"></i> Fix
+                  </button>
+                <% elsif check.name == 'admin_password' && check.status != :pass %>
+                  <a href="/tab/settings" class="btn btn-sm btn-outline-warning">Change Password</a>
+                <% end %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<%= render 'shared/install_terminal', id: 'security-fix', title: 'Applying Security Fixes', stream_url: network_engine.security_fix_stream_path %>
+
+<script>
+function fixCheck(name, btn) {
+  btn.disabled = true;
+  btn.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+  fetch('<%= network_engine.security_fix_path %>', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content },
+    body: JSON.stringify({ check_name: name })
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    if (data.status === 'ok') {
+      window.location.reload();
+    } else {
+      alert('Fix failed for: ' + name);
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-wrench"></i> Fix';
+    }
+  }).catch(function() {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-wrench"></i> Fix';
+  });
+}
+</script>

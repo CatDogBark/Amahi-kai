@@ -30,3 +30,5 @@
   dnsmasq_dns: Dnsmasq DNS
   lease_time: Lease Time
   gateway: Gateway
+  remote_access: Remote Access
+  security: Security

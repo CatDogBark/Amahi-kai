@@ -1,0 +1,145 @@
+<div class="container-fluid">
+  <% if @security_blockers.any? %>
+    <div class="alert alert-danger d-flex align-items-center mb-4" role="alert">
+      <i class="bi bi-shield-exclamation me-2" style="font-size:1.5rem;"></i>
+      <div>
+        <strong>Security issues must be fixed before enabling remote access.</strong><br>
+        <a href="<%= network_engine.security_path %>" class="alert-link">
+          <%= @security_blockers.size %> blocker<%= @security_blockers.size == 1 ? '' : 's' %> found — fix them in the Security tab
+        </a>
+      </div>
+    </div>
+  <% end %>
+
+  <!-- Cloudflare Tunnel Status -->
+  <div class="card mb-4">
+    <div class="card-header d-flex align-items-center justify-content-between">
+      <h5 class="mb-0"><i class="bi bi-cloud-arrow-up me-2"></i>Cloudflare Tunnel</h5>
+      <% if @tunnel_status[:installed] && @tunnel_status[:running] %>
+        <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Connected</span>
+      <% elsif @tunnel_status[:installed] %>
+        <span class="badge bg-warning text-dark"><i class="bi bi-pause-circle me-1"></i>Stopped</span>
+      <% else %>
+        <span class="badge bg-secondary">Not Installed</span>
+      <% end %>
+    </div>
+    <div class="card-body">
+      <% unless @tunnel_status[:installed] %>
+        <!-- Not installed -->
+        <p class="text-muted">Cloudflare Tunnel lets you securely access your Amahi server from anywhere — no port forwarding needed.</p>
+        <button type="button" class="btn btn-primary" onclick="openInstallTerminal('cloudflared', '<%= network_engine.install_cloudflared_stream_path %>')">
+          <i class="bi bi-download me-1"></i>Install cloudflared
+        </button>
+
+      <% elsif !@tunnel_status[:token_configured] %>
+        <!-- Installed but no token -->
+        <p class="mb-3">cloudflared is installed. Configure your tunnel token to connect.</p>
+
+        <div class="card bg-light mb-3">
+          <div class="card-body">
+            <h6 class="card-title">Setup Instructions</h6>
+            <ol class="mb-0">
+              <li>Sign up at <a href="https://dash.cloudflare.com" target="_blank" rel="noopener">cloudflare.com</a> (free plan works)</li>
+              <li>Go to <strong>Zero Trust</strong> → <strong>Networks</strong> → <strong>Tunnels</strong></li>
+              <li>Click <strong>Create a tunnel</strong>, name it (e.g., "amahi-kai")</li>
+              <li>Copy the tunnel token</li>
+              <li>Paste it below</li>
+            </ol>
+          </div>
+        </div>
+
+        <form id="tunnel-token-form" class="d-flex gap-2">
+          <input type="text" name="tunnel_token" class="form-control" placeholder="Paste your Cloudflare Tunnel token here" required style="font-family:monospace; font-size:0.85rem;">
+          <button type="submit" class="btn btn-primary text-nowrap">
+            <i class="bi bi-save me-1"></i>Save & Connect
+          </button>
+        </form>
+
+      <% else %>
+        <!-- Configured -->
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <div class="p-3 border rounded">
+              <small class="text-muted d-block">Status</small>
+              <strong><%= @tunnel_status[:running] ? '🟢 Connected' : '🔴 Disconnected' %></strong>
+            </div>
+          </div>
+          <% if @tunnel_status[:tunnel_url] %>
+            <div class="col-md-6">
+              <div class="p-3 border rounded">
+                <small class="text-muted d-block">Tunnel URL</small>
+                <a href="<%= @tunnel_status[:tunnel_url] %>" target="_blank" rel="noopener"><%= @tunnel_status[:tunnel_url] %></a>
+              </div>
+            </div>
+          <% end %>
+          <% if @tunnel_status[:connected_since] %>
+            <div class="col-md-6">
+              <div class="p-3 border rounded">
+                <small class="text-muted d-block">Connected Since</small>
+                <strong><%= @tunnel_status[:connected_since] %></strong>
+              </div>
+            </div>
+          <% end %>
+        </div>
+
+        <div class="d-flex gap-2">
+          <% if @tunnel_status[:running] %>
+            <button type="button" class="btn btn-outline-danger btn-sm" onclick="tunnelAction('stop')">
+              <i class="bi bi-stop-circle me-1"></i>Stop
+            </button>
+            <button type="button" class="btn btn-outline-primary btn-sm" onclick="tunnelAction('restart')">
+              <i class="bi bi-arrow-repeat me-1"></i>Restart
+            </button>
+          <% else %>
+            <button type="button" class="btn btn-success btn-sm" onclick="tunnelAction('start')">
+              <i class="bi bi-play-circle me-1"></i>Start
+            </button>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+  </div>
+</div>
+
+<%= render 'shared/install_terminal', id: 'cloudflared', title: 'Installing cloudflared', stream_url: network_engine.install_cloudflared_stream_path %>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var form = document.getElementById('tunnel-token-form');
+  if (form) {
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      var token = form.querySelector('[name=tunnel_token]').value;
+      var btn = form.querySelector('button[type=submit]');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Configuring...';
+
+      fetch('<%= network_engine.configure_tunnel_path %>', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content },
+        body: JSON.stringify({ tunnel_token: token })
+      }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.status === 'ok') {
+          window.location.reload();
+        } else {
+          alert('Error: ' + (data.error || 'Failed to configure tunnel'));
+          btn.disabled = false;
+          btn.innerHTML = '<i class="bi bi-save me-1"></i>Save & Connect';
+        }
+      }).catch(function() {
+        alert('Request failed');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-save me-1"></i>Save & Connect';
+      });
+    });
+  }
+});
+
+function tunnelAction(action) {
+  var url = action === 'stop' ? '<%= network_engine.stop_tunnel_path %>' : '<%= network_engine.start_tunnel_path %>';
+  fetch(url, {
+    method: 'POST',
+    headers: { 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content }
+  }).then(function() { window.location.reload(); });
+}
+</script>

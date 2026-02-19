@@ -161,6 +161,180 @@ class NetworkController < ApplicationController
     end
   end
 
+  # --- Remote Access (Cloudflare Tunnel) ---
+
+  def remote_access
+    @tunnel_status = CloudflareService.status
+    @security_blockers = SecurityAudit.blockers
+  end
+
+  def configure_tunnel
+    sleep 2 if development?
+    token = params[:tunnel_token].to_s.strip
+    if token.blank?
+      render json: { status: :not_acceptable, error: 'Token is required' }
+      return
+    end
+    begin
+      CloudflareService.configure!(token)
+      CloudflareService.start!
+      render json: { status: :ok }
+    rescue => e
+      render json: { status: :error, error: e.message }
+    end
+  end
+
+  def start_tunnel
+    sleep 1 if development?
+    CloudflareService.start!
+    render json: { status: :ok }
+  end
+
+  def stop_tunnel
+    sleep 1 if development?
+    CloudflareService.stop!
+    render json: { status: :ok }
+  end
+
+  def install_cloudflared_stream
+    response.headers['Content-Type'] = 'text/event-stream'
+    response.headers['Cache-Control'] = 'no-cache, no-store'
+    response.headers['X-Accel-Buffering'] = 'no'
+    response.headers['Connection'] = 'keep-alive'
+    response.headers['Last-Modified'] = Time.now.httpdate
+
+    self.response_body = Enumerator.new do |yielder|
+      sse_send = ->(data, event = nil) {
+        msg = ""
+        msg += "event: #{event}\n" if event
+        msg += "data: #{data}\n\n"
+        yielder << msg
+      }
+
+      sse_send.call("Starting cloudflared installation...")
+
+      unless Rails.env.production?
+        lines = [
+          "Adding Cloudflare apt repository...",
+          "  Downloading signing key...",
+          "  Adding source list...",
+          "Updating package lists...",
+          "  Hit:1 http://archive.ubuntu.com/ubuntu noble InRelease",
+          "  Get:2 https://pkg.cloudflare.com/cloudflared any InRelease",
+          "  Fetched 8.2 kB in 1s (6,100 B/s)",
+          "Installing cloudflared...",
+          "  Reading package lists...",
+          "  Building dependency tree...",
+          "  The following NEW packages will be installed:",
+          "    cloudflared",
+          "  Setting up cloudflared (2024.12.1) ...",
+          "✓ cloudflared installed successfully!"
+        ]
+        lines.each do |line|
+          sleep 0.3
+          sse_send.call(line)
+        end
+        sse_send.call("", "done")
+        next
+      end
+
+      begin
+        CloudflareService.install!
+        sse_send.call("✓ cloudflared installed successfully!")
+      rescue => e
+        sse_send.call("✗ Installation failed: #{e.message}")
+      end
+      sse_send.call("", "done")
+    end
+  end
+
+  # --- Security ---
+
+  def security
+    @checks = SecurityAudit.run_all
+    @has_blockers = SecurityAudit.has_blockers?
+  end
+
+  def security_fix
+    sleep 1 if development?
+    check_name = params[:check_name].to_s
+    result = SecurityAudit.fix!(check_name)
+    render json: { status: result ? :ok : :error, check: check_name }
+  end
+
+  def security_fix_stream
+    response.headers['Content-Type'] = 'text/event-stream'
+    response.headers['Cache-Control'] = 'no-cache, no-store'
+    response.headers['X-Accel-Buffering'] = 'no'
+    response.headers['Connection'] = 'keep-alive'
+    response.headers['Last-Modified'] = Time.now.httpdate
+
+    self.response_body = Enumerator.new do |yielder|
+      sse_send = ->(data, event = nil) {
+        msg = ""
+        msg += "event: #{event}\n" if event
+        msg += "data: #{data}\n\n"
+        yielder << msg
+      }
+
+      sse_send.call("Starting security fixes...")
+
+      unless Rails.env.production?
+        lines = [
+          "Enabling UFW firewall...",
+          "  Default incoming policy changed to 'deny'",
+          "  Rule added: allow 22/tcp",
+          "  Rule added: allow 3000/tcp",
+          "  Firewall is active and enabled on system startup",
+          "✓ UFW firewall enabled",
+          "",
+          "Hardening SSH configuration...",
+          "  Setting PermitRootLogin no",
+          "  Setting PasswordAuthentication no",
+          "  Restarting sshd...",
+          "✓ SSH hardened",
+          "",
+          "Installing fail2ban...",
+          "  Reading package lists...",
+          "  Setting up fail2ban...",
+          "✓ Fail2ban installed",
+          "",
+          "Installing unattended-upgrades...",
+          "  Setting up unattended-upgrades...",
+          "✓ Automatic security updates enabled",
+          "",
+          "Configuring Samba LAN binding...",
+          "  Adding interface binding to smb.conf",
+          "  Restarting smbd...",
+          "✓ Samba bound to LAN only",
+          "",
+          "✓ All security fixes applied!"
+        ]
+        lines.each do |line|
+          sleep 0.2
+          sse_send.call(line)
+        end
+        sse_send.call("", "done")
+        next
+      end
+
+      begin
+        results = SecurityAudit.fix_all!
+        results.each do |r|
+          if r[:fixed]
+            sse_send.call("✓ Fixed: #{r[:name]}")
+          else
+            sse_send.call("✗ Failed to fix: #{r[:name]}")
+          end
+        end
+        sse_send.call("✓ Security fix-all complete!")
+      rescue => e
+        sse_send.call("✗ Error: #{e.message}")
+      end
+      sse_send.call("", "done")
+    end
+  end
+
 private
   def set_page_title
     @page_title = t('network')

@@ -370,6 +370,23 @@ amahi ALL=(root) NOPASSWD: /usr/bin/tee /etc/greyhole.conf
 amahi ALL=(root) NOPASSWD: /usr/bin/mysql -u root *
 amahi ALL=(root) NOPASSWD: /usr/bin/dpkg --configure -a
 amahi ALL=(root) NOPASSWD: /usr/sbin/phpenmod *
+
+# Cloudflare Tunnel
+amahi ALL=(root) NOPASSWD: /usr/bin/cloudflared service install *
+amahi ALL=(root) NOPASSWD: /usr/bin/cloudflared service uninstall
+amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get install -y cloudflared
+amahi ALL=(root) NOPASSWD: /usr/bin/tee /etc/apt/sources.list.d/cloudflared.list
+amahi ALL=(root) NOPASSWD: /usr/bin/gpg --dearmor -o /usr/share/keyrings/cloudflare-archive-keyring.gpg
+
+# Security hardening
+amahi ALL=(root) NOPASSWD: /usr/sbin/ufw *
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart sshd
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart ssh
+amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get install -y fail2ban
+amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get install -y unattended-upgrades
+amahi ALL=(root) NOPASSWD: /usr/bin/dpkg-reconfigure -plow unattended-upgrades
+amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/hda/tmp/sshd_config /etc/ssh/sshd_config
+amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/hda/tmp/smb.conf /etc/samba/smb.conf
 SUDOERS
 chmod 440 /etc/sudoers.d/amahi-kai
 

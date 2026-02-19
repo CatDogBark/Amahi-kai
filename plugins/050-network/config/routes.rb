@@ -18,4 +18,16 @@ Network::Engine.routes.draw do
 	put 'update_dns_ips' => 'network#update_dns_ips'
 	put 'toggle_setting/:id' => 'network#toggle_setting', as: 'toggle_setting'
 	put 'update_dhcp_range/:id' => 'network#update_dhcp_range', as: 'update_dhcp_range'
+
+	# Remote Access (Cloudflare Tunnel)
+	get 'remote_access' => 'network#remote_access'
+	post 'configure_tunnel' => 'network#configure_tunnel'
+	post 'start_tunnel' => 'network#start_tunnel'
+	post 'stop_tunnel' => 'network#stop_tunnel'
+	get 'install_cloudflared_stream' => 'network#install_cloudflared_stream'
+
+	# Security
+	get 'security' => 'network#security'
+	post 'security_fix' => 'network#security_fix'
+	get 'security_fix_stream' => 'network#security_fix_stream'
 end

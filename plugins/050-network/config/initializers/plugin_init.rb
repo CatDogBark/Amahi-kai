@@ -6,3 +6,5 @@ t.add("hosts", "hosts")
 # advanced settings
 t.add("dns_aliases", "dns_aliases", true)
 t.add("settings", "settings", true)
+t.add("remote_access", "remote_access")
+t.add("security", "security")
