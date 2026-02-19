@@ -583,32 +583,151 @@ table.settings td {
   body {
     color-scheme: dark;
   }
-  
-  /* Tab data area */
+
+  /* ── Main content areas ── */
+  #content {
+    background: var(--kai-light);
+  }
+  .container, .inner {
+    color: var(--kai-text);
+  }
   .tab_data {
     background: #1c2128;
   }
-  
-  /* Tables */
+
+  /* ── Tabs ── */
+  .setup-tab-container {
+    background: #0d1117;
+  }
+  .setup-tab .tab-link {
+    color: rgba(255,255,255,0.6);
+  }
+  .setup-tab .active-tab-link {
+    background: var(--kai-primary);
+    color: white;
+  }
+
+  /* ── Subtabs ── */
+  .setup-subtab-container {
+    background: #161b22;
+    border-bottom-color: #30363d;
+  }
+  .setup-subtab .subtab-link {
+    color: #8b949e;
+  }
+  .setup-subtab .active-subtab-link {
+    color: var(--kai-primary);
+    border-bottom-color: var(--kai-primary);
+  }
+
+  /* ── Subheader / Logo area ── */
+  #subheader {
+    background: #0d1117;
+    border-bottom-color: #30363d;
+  }
+
+  /* ── Tables ── */
+  table.settings {
+    color: var(--kai-text);
+  }
+  table.settings tbody tr {
+    border-bottom-color: #30363d;
+  }
   table.settings tbody tr:hover {
     background: #1c2128;
   }
-  
-  /* Forms */
+  .table {
+    color: var(--kai-text);
+    --bs-table-bg: transparent;
+    --bs-table-striped-bg: #1c2128;
+    --bs-table-hover-bg: #1c2128;
+  }
+  .table > :not(caption) > * > * {
+    background-color: transparent;
+    border-bottom-color: #30363d;
+    color: var(--kai-text);
+  }
+  .table-sm td, .table-sm th {
+    color: var(--kai-text);
+  }
+
+  /* ── Settings tables/wraps ── */
+  .settings-wrap {
+    background: var(--kai-card-bg);
+  }
+  .settings-table {
+    background: var(--kai-card-bg);
+  }
+
+  /* ── Fieldsets ── */
+  fieldset {
+    border-color: #30363d;
+    color: var(--kai-text);
+    background: transparent;
+  }
+  legend {
+    color: #8b949e;
+  }
+
+  /* ── Cards ── */
+  .card {
+    background-color: var(--kai-card-bg);
+    border-color: var(--kai-border);
+    color: var(--kai-text);
+  }
+  .card-body {
+    background-color: var(--kai-card-bg);
+    color: var(--kai-text);
+  }
+  .card-header {
+    border-bottom-color: #30363d;
+  }
+  .card-header.bg-dark {
+    background-color: #0d1117 !important;
+  }
+
+  /* ── Forms ── */
   .form-control {
-    background-color: #0d1117;
+    background-color: #161b22;
     color: #c9d1d9;
+    border-color: #30363d;
   }
   .form-control:focus {
-    background-color: #0d1117;
+    background-color: #161b22;
+    color: #c9d1d9;
+    border-color: var(--kai-primary);
   }
-  
-  /* Hover styles */
+  select, input[type="text"], input[type="password"], input[type="email"], textarea {
+    background-color: #161b22;
+    color: #c9d1d9;
+    border-color: #30363d;
+  }
+  select:focus, input[type="text"]:focus, input[type="password"]:focus {
+    background-color: #161b22;
+    color: #c9d1d9;
+  }
+  .form-select {
+    background-color: #161b22;
+    color: #c9d1d9;
+    border-color: #30363d;
+  }
+  .form-check-label {
+    color: var(--kai-text);
+  }
+
+  /* ── Hover styles ── */
   .hover-style:hover {
     background: #1c2128;
   }
-  
-  /* Alerts */
+
+  /* ── Click-to-change elements ── */
+  .workgroup_click_change, .name_click_change, .lease_click_change,
+  .gateway_click_change, .dyn_lo_click_change, .dyn_hi_click_change {
+    color: #c9d1d9 !important;
+    border-bottom-color: #8b949e;
+  }
+
+  /* ── Alerts ── */
   .alert-danger {
     background-color: #2d1214;
     border-color: #da3633;
@@ -629,60 +748,39 @@ table.settings td {
     border-color: #1a9fc2;
     color: #58a6ff;
   }
-  
-  /* Progress bars */
+
+  /* ── Progress bars ── */
   .progress {
     background-color: #30363d;
   }
-  
-  /* Cards */
-  .card {
-    background-color: var(--kai-card-bg);
-    border-color: var(--kai-border);
-  }
-  
-  /* Subheader */
-  #subheader {
-    background: #0d1117;
-    border-bottom-color: #30363d;
-  }
-  
-  /* Settings wrap */
-  .settings-wrap {
-    background: var(--kai-card-bg);
-  }
-  .settings-table {
-    background: var(--kai-card-bg);
-  }
-  
-  /* Click-to-change elements */
-  .workgroup_click_change, .name_click_change, .lease_click_change,
-  .gateway_click_change, .dyn_lo_click_change, .dyn_hi_click_change {
+
+  /* ── Badges ── */
+  .badge.bg-secondary {
+    background-color: #30363d !important;
     color: #c9d1d9 !important;
-    border-bottom-color: #8b949e;
   }
-  
-  /* Fieldsets */
-  fieldset {
+
+  /* ── Buttons ── */
+  .btn-outline-secondary {
+    color: #8b949e;
     border-color: #30363d;
+  }
+  .btn-outline-secondary:hover {
+    background-color: #30363d;
     color: #c9d1d9;
   }
-  
-  /* Search results */
+
+  /* ── Search results ── */
   .search-results .result-item:hover {
     background: #1c2128;
   }
-  
-  /* Select elements and inputs */
-  select, input[type="text"], input[type="password"], input[type="email"], textarea {
-    background-color: #0d1117;
-    color: #c9d1d9;
-    border-color: #30363d;
-  }
-  
-  /* Bootstrap overrides for dark mode */
+
+  /* ── Bootstrap overrides ── */
   .bg-light {
     background-color: #161b22 !important;
+  }
+  .bg-white {
+    background-color: #0d1117 !important;
   }
   .text-muted {
     color: #8b949e !important;
@@ -693,8 +791,23 @@ table.settings td {
   .border {
     border-color: #30363d !important;
   }
-  
-  /* Modal backgrounds */
+  .border-bottom {
+    border-bottom-color: #30363d !important;
+  }
+  code {
+    color: #e06c75;
+    background-color: #1c2128;
+  }
+  pre {
+    color: #c9d1d9;
+    background-color: #161b22;
+  }
+  hr {
+    border-color: #30363d;
+    opacity: 0.3;
+  }
+
+  /* ── Modals ── */
   .modal-content {
     background-color: #0d1117;
     border-color: #30363d;
@@ -703,25 +816,32 @@ table.settings td {
   .modal-header, .modal-footer {
     border-color: #30363d;
   }
-  
-  /* List groups */
+
+  /* ── List groups ── */
   .list-group-item {
     background-color: #0d1117;
     border-color: #30363d;
     color: #c9d1d9;
   }
-  
-  /* Page title */
+
+  /* ── Page title ── */
   .page-title {
     color: #8b949e !important;
   }
 
-  /* Latest news card on dashboard (legacy) */
-  #latest_news .card-header {
-    background: #1c2128 !important;
-    color: #c9d1d9 !important;
+  /* ── Access/permissions areas ── */
+  .access fieldset {
+    background: transparent;
   }
-  #more_news {
-    background: #1c2128 !important;
+
+  /* ── Misc text that may be hard-coded ── */
+  .fw-bold, strong, b {
+    color: inherit;
+  }
+  small.text-muted {
+    color: #8b949e !important;
+  }
+  .no-users h2, .no-shares h2 {
+    color: #8b949e;
   }
 }
