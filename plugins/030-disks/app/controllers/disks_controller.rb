@@ -83,7 +83,7 @@ class DisksController < ApplicationController
           "  Reading package lists...",
           "  Building dependency tree...",
           "  The following NEW packages will be installed:",
-          "    greyhole php php-mysqlnd php-mbstring",
+          "    greyhole php php-mysqlnd php8.3-mbstring",
           "  0 upgraded, 4 newly installed, 0 to remove.",
           "  Need to get 2,847 kB of archives.",
           "  Get:1 https://www.greyhole.net/releases/deb stable/main amd64 greyhole amd64 0.16.4-1 [847 kB]",
@@ -118,7 +118,7 @@ class DisksController < ApplicationController
             { cmd: "sudo mysql -u root -e \"GRANT ALL PRIVILEGES ON greyhole.* TO 'amahi'@'localhost'; FLUSH PRIVILEGES;\" 2>&1", run: true },
           ]},
           { label: "Configuring PHP dependencies...", commands: [
-            { cmd: "sudo apt-get install -y php-mbstring php-mysql 2>&1", run: true },
+            { cmd: "sudo apt-get install -y php8.3-mbstring php8.3-mysql 2>&1", run: true },
             { cmd: "sudo phpenmod mbstring 2>&1", run: true },
           ]},
           { label: "Creating minimal Greyhole config...", commands: [

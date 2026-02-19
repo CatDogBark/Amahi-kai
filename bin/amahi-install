@@ -92,8 +92,8 @@ if $WITH_GREYHOLE; then
   apt-get install -y --no-install-recommends \
     greyhole \
     php \
-    php-mysqlnd \
-    php-mbstring
+    php8.3-mysql \
+    php8.3-mbstring
 fi
 
 # ---------------------------------------------------------------------------
