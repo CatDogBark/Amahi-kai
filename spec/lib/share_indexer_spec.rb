@@ -112,22 +112,17 @@ RSpec.describe ShareIndexer do
       create_file(tmpdir, 'file1.txt')
       ShareIndexer.index_share(share)
 
-      # Create a temporary share, record its ID, destroy it, then insert an orphan ShareFile
-      orphan_share = Share.new(name: "GhostShare", path: "/tmp/nonexistent_share", rdonly: false, visible: true, everyone: true, tags: "").tap { |s| s.save(validate: false) }
-      orphan_id = orphan_share.id
-      orphan_share.destroy
-      # insert_all bypasses validations/FK checks
-      ShareFile.insert_all([{
-        share_id: orphan_id,
-        name: 'orphan.txt',
-        path: '/tmp/orphan.txt',
-        relative_path: 'orphan.txt',
-        created_at: Time.current,
-        updated_at: Time.current
-      }])
+      # Create an orphan ShareFile pointing to a non-existent share
+      # Must disable FK checks temporarily (SQLite enforces them)
+      ActiveRecord::Base.connection.execute("PRAGMA foreign_keys = OFF")
+      orphan_id = 999999
+      ActiveRecord::Base.connection.execute(
+        "INSERT INTO share_files (share_id, name, path, relative_path, created_at, updated_at) VALUES (#{orphan_id}, 'orphan.txt', '/tmp/orphan.txt', 'orphan.txt', datetime('now'), datetime('now'))"
+      )
+      ActiveRecord::Base.connection.execute("PRAGMA foreign_keys = ON")
 
       ShareIndexer.full_reindex
-      expect(ShareFile.where(share_id: orphan_id).count).to eq(0)
+      expect(ShareFile.where(share_id: 999999).count).to eq(0)
     end
   end
 

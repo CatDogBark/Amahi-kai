@@ -13,26 +13,42 @@ if SCREENSHOTS_ON_FAILURES
   require 'capybara-screenshot/rspec'
 end
 
-# Configure headless Chrome for JS specs
-begin
-  require 'selenium-webdriver'
+# Configure headless Chrome for JS specs — only if a browser binary is available
+CHROMEDRIVER_AVAILABLE = begin
+  # Check for chromium/chrome binary
+  browser_found = ['/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome'].any? { |b| File.exist?(b) }
+  if browser_found
+    require 'selenium-webdriver'
 
-  Capybara.register_driver :headless_chrome do |app|
-    options = Selenium::WebDriver::Chrome::Options.new
-    options.add_argument('--headless')
-    options.add_argument('--no-sandbox')
-    options.add_argument('--disable-dev-shm-usage')
-    options.add_argument('--disable-gpu')
-    options.add_argument('--single-process')
-    options.add_argument('--window-size=1400,900')
-    options.binary = '/usr/bin/chromium'
-    Capybara::Selenium::Driver.new(app, browser: :chrome, options: options)
+    browser_binary = ['/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome'].find { |b| File.exist?(b) }
+
+    Capybara.register_driver :headless_chrome do |app|
+      options = Selenium::WebDriver::Chrome::Options.new
+      options.add_argument('--headless')
+      options.add_argument('--no-sandbox')
+      options.add_argument('--disable-dev-shm-usage')
+      options.add_argument('--disable-gpu')
+      options.add_argument('--single-process')
+      options.add_argument('--window-size=1400,900')
+      options.binary = browser_binary
+      Capybara::Selenium::Driver.new(app, browser: :chrome, options: options)
+    end
+
+    Capybara.javascript_driver = :headless_chrome
+    Capybara.default_max_wait_time = 5
+    true
+  else
+    false
   end
-
-  Capybara.javascript_driver = :headless_chrome
-  Capybara.default_max_wait_time = 5
 rescue LoadError
-  # selenium-webdriver not available; JS specs will be skipped
+  false
+end
+
+# Skip JS-tagged specs when chromedriver/chromium isn't available
+RSpec.configure do |config|
+  config.before(:each, js: true) do |example|
+    skip "Chromium/Chrome not available on this host" unless CHROMEDRIVER_AVAILABLE
+  end
 end
 
 # Required for using transactional fixtures with javascript driver

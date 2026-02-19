@@ -51,5 +51,14 @@ FactoryBot.define do
   factory :share do
     sequence(:path) { |n| "/path#{n}" }
     sequence(:name) { |n| "name#{n}" }
+
+    before(:create) do |share|
+      def share.before_save_hook; end
+      def share.after_save_hook; end
+      def share.before_destroy_hook; end
+      def share.after_destroy_hook; end
+      def share.index_share_files; end
+      def share.cleanup_share_index; end
+    end
   end
 end
