@@ -59,7 +59,7 @@ class Greyhole
       end
 
       # Now install — postinst script will find DB and config
-      result = system('sudo apt-get install -y greyhole')
+      result = system('sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -o Dpkg::Options::=--force-confold greyhole')
       raise GreyholeError, 'Failed to install greyhole package' unless result
 
       # Load schema after install (schema file comes with the package)
