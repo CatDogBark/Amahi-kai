@@ -99,7 +99,7 @@ class SecurityAudit
 
     def ufw_enabled?
       return false unless production?
-      output = `sudo ufw status 2>/dev/null`.strip
+      output = `sudo /usr/sbin/ufw status 2>/dev/null`.strip
       output.include?('Status: active')
     end
 
@@ -209,6 +209,8 @@ class SecurityAudit
       ports = []
       output.each_line do |line|
         next if line.start_with?('State')
+        # Skip loopback-only listeners (127.0.0.1 / ::1)
+        next if line =~ /\b127\.0\.0\.1:/ || line =~ /\[::1\]:/
         if line =~ /:(\d+)\s/
           ports << $1
         end
