@@ -197,11 +197,9 @@ fi
 echo "==> Deploying application to $APP_DIR..."
 mkdir -p "$APP_DIR"
 
-if [ -d "$APP_DIR/.git" ]; then
+if [ -d "$APP_DIR/.git" ] || [ -f "$APP_DIR/Gemfile" ]; then
   echo "    Existing installation found, using current code..."
   cd "$APP_DIR"
-  # Try a quiet pull if possible, but don't block on it
-  git pull --ff-only 2>/dev/null || true
 else
   # If we're running from a git checkout, copy it; otherwise clone
   SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
