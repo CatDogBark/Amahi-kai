@@ -305,47 +305,7 @@ echo "==> Installing Ruby gems..."
 sudo -u "$APP_USER" bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && bundle config set --local path 'vendor/bundle' && bundle config set --local without 'development test' && bundle install --jobs 4"
 
 # ---------------------------------------------------------------------------
-# 10. Database migrations
-# ---------------------------------------------------------------------------
-echo "==> Running database migrations..."
-sudo -u "$APP_USER" bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && RAILS_ENV=production bin/rails db:migrate"
-
-echo "==> Seeding database..."
-sudo -u "$APP_USER" bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && RAILS_ENV=production bin/rails db:seed"
-
-# Detect host IP and patch network settings to match this machine
-HOST_IP=$(hostname -I | awk '{print $1}')
-if [ -n "$HOST_IP" ]; then
-  NET_PREFIX=$(echo "$HOST_IP" | cut -d. -f1-3)
-  SELF_ADDR=$(echo "$HOST_IP" | cut -d. -f4)
-  echo "==> Configuring network settings for $HOST_IP..."
-  sudo -u "$APP_USER" bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && RAILS_ENV=production bin/rails runner \"
-    Setting.set('net', '$NET_PREFIX')
-    Setting.set('self-address', '$SELF_ADDR')
-  \""
-fi
-
-# Headless mode: generate random password and mark setup complete
-if $HEADLESS; then
-  ADMIN_PASS=$(openssl rand -base64 16 | tr -d '/+=' | head -c 20)
-  echo "==> Headless mode: configuring admin account..."
-  sudo -u "$APP_USER" bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && RAILS_ENV=production bin/rails runner \"
-    user = User.find_by(login: 'admin')
-    user.password = '$ADMIN_PASS'
-    user.password_confirmation = '$ADMIN_PASS'
-    user.save!
-    Setting.set('setup_completed', 'true')
-  \""
-fi
-
-# ---------------------------------------------------------------------------
-# 10. Asset precompilation
-# ---------------------------------------------------------------------------
-echo "==> Precompiling assets..."
-sudo -u "$APP_USER" bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && RAILS_ENV=production bin/rails assets:precompile"
-
-# ---------------------------------------------------------------------------
-# 11. Sudoers allowlist
+# 10. Sudoers allowlist (must be before db:seed — User creation runs system commands)
 # ---------------------------------------------------------------------------
 echo "==> Installing sudoers allowlist..."
 cat > /etc/sudoers.d/amahi-kai <<'SUDOERS'
@@ -461,10 +421,51 @@ amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/hda/tmp/sshd_config /etc/ssh/sshd_co
 amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/hda/tmp/smb.conf /etc/samba/smb.conf
 SUDOERS
 chmod 440 /etc/sudoers.d/amahi-kai
-
-# Validate
 visudo -cf /etc/sudoers.d/amahi-kai
 echo "    Sudoers validated OK"
+
+# ---------------------------------------------------------------------------
+# 11. Database migrations
+# ---------------------------------------------------------------------------
+echo "==> Running database migrations..."
+sudo -u "$APP_USER" bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && RAILS_ENV=production bin/rails db:migrate"
+
+echo "==> Seeding database..."
+sudo -u "$APP_USER" bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && RAILS_ENV=production bin/rails db:seed"
+
+# Detect host IP and patch network settings to match this machine
+HOST_IP=$(hostname -I | awk '{print $1}')
+if [ -n "$HOST_IP" ]; then
+  NET_PREFIX=$(echo "$HOST_IP" | cut -d. -f1-3)
+  SELF_ADDR=$(echo "$HOST_IP" | cut -d. -f4)
+  echo "==> Configuring network settings for $HOST_IP..."
+  sudo -u "$APP_USER" bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && RAILS_ENV=production bin/rails runner \"
+    Setting.set('net', '$NET_PREFIX')
+    Setting.set('self-address', '$SELF_ADDR')
+  \""
+fi
+
+# Headless mode: generate random password and mark setup complete
+if $HEADLESS; then
+  ADMIN_PASS=$(openssl rand -base64 16 | tr -d '/+=' | head -c 20)
+  echo "==> Headless mode: configuring admin account..."
+  sudo -u "$APP_USER" bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && RAILS_ENV=production bin/rails runner \"
+    user = User.find_by(login: 'admin')
+    user.password = '$ADMIN_PASS'
+    user.password_confirmation = '$ADMIN_PASS'
+    user.save!
+    Setting.set('setup_completed', 'true')
+  \""
+fi
+
+# ---------------------------------------------------------------------------
+# 10. Asset precompilation
+# ---------------------------------------------------------------------------
+echo "==> Precompiling assets..."
+sudo -u "$APP_USER" bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && RAILS_ENV=production bin/rails assets:precompile"
+
+
+# (Sudoers already installed in step 10)
 
 # ---------------------------------------------------------------------------
 # 12. Systemd service (with RAILS_LOG_TO_STDOUT)
