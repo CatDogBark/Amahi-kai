@@ -8,7 +8,7 @@ gem 'rails', '~> 8.0.0'
 
 gem 'sass-rails'
 # gem 'propshaft'  # TODO: Replace sprockets with propshaft (requires full asset pipeline migration)
-gem 'terser'
+# gem 'terser' # JS minification — requires Node.js runtime, not worth the dependency
 
 gem 'bootstrap', '~> 5.3'
 gem 'slim'

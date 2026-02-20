@@ -23,7 +23,8 @@ Rails.application.configure do
   config.public_file_server.enabled = ENV['RAILS_SERVE_STATIC_FILES'].present?
 
   # Compress JavaScripts and CSS.
-  config.assets.js_compressor = :terser
+  # JS minification disabled — avoids requiring Node.js runtime on the server
+  # config.assets.js_compressor = :terser
   config.assets.css_compressor = :sass
 
   # Fallback to assets pipeline if a precompiled asset is missed
