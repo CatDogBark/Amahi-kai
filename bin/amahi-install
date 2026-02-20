@@ -174,8 +174,9 @@ eval "$(rbenv init - bash)"
 RBENV
 fi
 
-# Ensure bundler is installed
-gem install bundler --no-document 2>/dev/null || true
+# Ensure bundler is up to date (system apt bundler is often too old)
+echo "==> Updating bundler..."
+gem install bundler --no-document
 if command -v rbenv &>/dev/null; then
   rbenv rehash
 fi
