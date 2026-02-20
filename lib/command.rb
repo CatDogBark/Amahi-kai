@@ -75,7 +75,16 @@ class Command
   # Uses sudo for privileged commands when not running as root
   def execute_direct
     @cmd.each do |cmd|
-      actual_cmd = needs_sudo?(cmd) ? "sudo #{cmd}" : cmd
+      actual_cmd = if needs_sudo?(cmd)
+        # Resolve command to full path so sudoers NOPASSWD rules match
+        parts = cmd.strip.split(/\s+/)
+        cmd_idx = parts.index { |p| !p.include?('=') } || 0
+        full_path = `which #{parts[cmd_idx]} 2>/dev/null`.strip
+        parts[cmd_idx] = full_path unless full_path.empty?
+        "sudo #{parts.join(' ')}"
+      else
+        cmd
+      end
       Rails.logger.info("Command.execute_direct: #{actual_cmd}") if defined?(Rails)
 
       stdout, stderr, status = Open3.capture3(actual_cmd)
