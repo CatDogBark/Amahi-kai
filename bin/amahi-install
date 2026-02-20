@@ -71,6 +71,7 @@ apt-get install -y --no-install-recommends \
   samba \
   samba-common-bin \
   dnsmasq \
+  nodejs \
   sudo
 
 # VM guest agent (auto-detect)
