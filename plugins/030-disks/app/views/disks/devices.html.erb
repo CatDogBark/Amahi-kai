@@ -1,0 +1,112 @@
+<div class="settings-table" id="disks-table">
+  <ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+      <a class="nav-link" href="<%= disks_engine.root_path %>"><%= t('disks') %></a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link active" href="<%= disks_engine.devices_path %>"><%= t('devices', default: 'Devices') %></a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" href="<%= disks_engine.mounts_path %>"><%= t('mounts') %></a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" href="<%= disks_engine.storage_pool_path %>"><%= t('storage_pool') %></a>
+    </li>
+  </ul>
+
+  <% if flash[:notice] %>
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+      <%= flash[:notice] %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% end %>
+  <% if flash[:error] %>
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+      <%= flash[:error] %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% end %>
+
+  <% if @devices.empty? %>
+    <div class="alert alert-info">No block devices detected.</div>
+  <% end %>
+
+  <% @devices.each do |device| %>
+    <div class="card mb-3">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+          <strong><%= device[:path] %></strong>
+          <span class="text-muted ms-2"><%= device[:model] %></span>
+          <span class="text-muted ms-2"><%= device[:size] %></span>
+        </div>
+        <% if device[:os_disk] %>
+          <span class="badge bg-warning text-dark">
+            <i class="bi bi-shield-lock"></i> OS Disk
+          </span>
+        <% end %>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-striped mb-0">
+          <thead>
+            <tr>
+              <th>Partition</th>
+              <th>Size</th>
+              <th>Filesystem</th>
+              <th>Status</th>
+              <th>Mount Point</th>
+              <th class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% device[:partitions].each do |part| %>
+              <tr>
+                <td><code><%= part[:path] %></code></td>
+                <td><%= part[:size] %></td>
+                <td><%= part[:fstype] || '—' %></td>
+                <td>
+                  <% case part[:status] %>
+                  <% when :mounted %>
+                    <span class="badge bg-success">Mounted</span>
+                  <% when :unmounted %>
+                    <span class="badge bg-info text-dark">Formatted</span>
+                  <% when :unformatted %>
+                    <span class="badge bg-secondary">Unformatted</span>
+                  <% end %>
+                </td>
+                <td><%= part[:mountpoint] || '—' %></td>
+                <td class="text-end">
+                  <% unless device[:os_disk] %>
+                    <% case part[:status] %>
+                    <% when :unformatted %>
+                      <%= button_to "Initialize",
+                            disks_engine.format_disk_path,
+                            params: { device: part[:path] },
+                            method: :post,
+                            class: "btn btn-sm btn-outline-danger",
+                            data: { confirm: "⚠️ This will ERASE ALL DATA on #{part[:path]}. Are you sure?" } %>
+                    <% when :unmounted %>
+                      <%= button_to "Mount",
+                            disks_engine.mount_disk_path,
+                            params: { device: part[:path] },
+                            method: :post,
+                            class: "btn btn-sm btn-outline-primary" %>
+                    <% when :mounted %>
+                      <% unless ['/', '/boot', '/boot/efi'].include?(part[:mountpoint]) %>
+                        <%= button_to "Unmount",
+                              disks_engine.unmount_disk_path,
+                              params: { device: part[:path] },
+                              method: :post,
+                              class: "btn btn-sm btn-outline-warning",
+                              data: { confirm: "Unmount #{part[:path]} from #{part[:mountpoint]}?" } %>
+                      <% end %>
+                    <% end %>
+                  <% end %>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  <% end %>
+</div>

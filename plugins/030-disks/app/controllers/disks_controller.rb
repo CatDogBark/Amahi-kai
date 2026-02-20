@@ -1,4 +1,5 @@
 require 'greyhole'
+require 'disk_manager'
 
 class DisksController < ApplicationController
   before_action :admin_required
@@ -19,6 +20,51 @@ class DisksController < ApplicationController
     else
       @mounts = SampleData.load('mounts')
     end
+  end
+
+  def devices
+    @page_title = t('disks')
+    @devices = DiskManager.devices
+  end
+
+  def format_disk
+    device = params[:device]
+    begin
+      DiskManager.format_disk!(device)
+      flash[:notice] = "Successfully formatted #{device} as ext4"
+    rescue DiskManager::DiskError => e
+      flash[:error] = "Format failed: #{e.message}"
+    rescue => e
+      flash[:error] = "Unexpected error: #{e.message}"
+    end
+    redirect_to disks_engine.devices_path
+  end
+
+  def mount_disk
+    device = params[:device]
+    mount_point = params[:mount_point].presence
+    begin
+      mp = DiskManager.mount!(device, mount_point)
+      flash[:notice] = "Mounted #{device} at #{mp}"
+    rescue DiskManager::DiskError => e
+      flash[:error] = "Mount failed: #{e.message}"
+    rescue => e
+      flash[:error] = "Unexpected error: #{e.message}"
+    end
+    redirect_to disks_engine.devices_path
+  end
+
+  def unmount_disk
+    device = params[:device]
+    begin
+      DiskManager.unmount!(device)
+      flash[:notice] = "Unmounted #{device}"
+    rescue DiskManager::DiskError => e
+      flash[:error] = "Unmount failed: #{e.message}"
+    rescue => e
+      flash[:error] = "Unexpected error: #{e.message}"
+    end
+    redirect_to disks_engine.devices_path
   end
 
   def storage_pool
