@@ -18,6 +18,21 @@
   --classic-border: #e2e8f0;
   --classic-card-bg: #ffffff;
   --classic-shadow: rgba(45, 55, 72, 0.08);
+  /* Aliases for shared templates that reference --kai-* */
+  --kai-primary: var(--classic-primary);
+  --kai-secondary: var(--classic-secondary);
+  --kai-accent: var(--classic-accent);
+  --kai-dark: var(--classic-dark);
+  --kai-darker: var(--classic-darker);
+  --kai-light: var(--classic-light);
+  --kai-text: var(--classic-text);
+  --kai-muted: var(--classic-muted);
+  --kai-success: var(--classic-success);
+  --kai-danger: var(--classic-danger);
+  --kai-warning: var(--classic-warning);
+  --kai-border: var(--classic-border);
+  --kai-card-bg: var(--classic-card-bg);
+  --kai-shadow: var(--classic-shadow);
   --classic-body-bg: #2d3748;
   --classic-content-bg: #ffffff;
   --classic-header-bg: #2d3748;
