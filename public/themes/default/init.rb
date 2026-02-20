@@ -1,39 +1,29 @@
-
 def theme_init
-	# Colors
-	green = '#339933'
-	purple = '#cc99cc'
-	blue = '#336699'
-	yellow = '#FFF804'
-	red = '#ff0000'
-	orange = '#cf5910'
-	black = 'black'
-	# for disk usage pie charts - the first one is the used disk, the second
-	# is the free disk
-	colors = ['#CA2841', '#333333', green, red, purple, orange, black]
+	# Colors — Classic neutral palette (steel blue + warm grays)
+	primary = '#4a6fa5'
+	secondary = '#5d8ac4'
+	accent = '#d4a03c'
+	success = '#38a169'
+	danger = '#e53e3e'
+	warning = '#dd6b20'
+	dark = '#2d3748'
+	muted = '#718096'
+	# for disk usage pie charts
+	colors = [danger, dark, success, warning, accent, primary, muted]
 
 	ret = {}
 
-	ret[:name] = "Air Jordan"
-	ret[:version] = "3.0"
-	ret[:theme_uri] = "https://www.amahi.org"
-	ret[:author] = "Carlos Puchol, for Amahi."
+	ret[:name] = "Classic"
+	ret[:version] = "2.0"
+	ret[:theme_uri] = "https://github.com/CatDogBark/Amahi-kai"
+	ret[:author] = "Originally by Carlos Puchol for Amahi, updated for Amahi-kai"
 	ret[:author_uri] = ""
 	ret[:disable_inheritance] = true
 	ret[:gruff_theme] = {
-	  # basic colors for other graphs
 	  :colors => colors,
-	  :marker_color => 'black',
-	  # basic colors for other graphs
-	  :font_color => 'black',
-	  # if :background_colors is a string, it will be interpreted
-	  # as a solid color, if an array, the two first colors define
-	  # a gradient (top first, bottom second), which is rendered as
-	  # the background
-	  # note: you can also specify an image for bg colors in
-	  # :background_image, *as long as* :background_colors is
-	  # not defined or nil
-	  :background_colors => ['#e1e2e1', '#ffffff']
+	  :marker_color => dark,
+	  :font_color => dark,
+	  :background_colors => ['#f7fafc', '#ffffff']
 	}
 
 	ret

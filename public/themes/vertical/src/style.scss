@@ -1,62 +1,164 @@
-// --------------------------------------------------
-// Amahi - Import Default Theme mixins and variables
-// --------------------------------------------------
+// ==========================================================================
+// Sidebar Theme for Amahi-kai
+// Version 2.0 — SCSS Source
+// Inherits from Classic theme, overrides sidebar-specific layout
+// ==========================================================================
+
 @import "../../default/src/_mixins.scss";
 
-// --------------------------------------------------
-// Amahi - Custom theme css/sass
-// --------------------------------------------------
-// --------------------------------------------------
-// Dashboard
-// --------------------------------------------------
+// ==========================================================================
+// Sidebar-specific layout: tabs on the left
+// ==========================================================================
 
 #tabs {
   width: 145px;
   float: left;
-  border: 1px solid #e8e8e8;
-  border-bottom-color: #dfdfdf;
-  @include border-radius(5px 0 0 5px);
-  @include background-gradient(#fcfcfc, #f7f7f7);
+  border: 1px solid var(--classic-tab-border, #e2e8f0);
+  border-bottom-color: var(--classic-border, #e2e8f0);
+  border-radius: 5px 0 0 5px;
+  background: linear-gradient(to bottom, var(--classic-card-bg, #ffffff), var(--classic-tab-bg, #f7fafc));
 }
-
 
 #preferences {
-  width: 770px;
+  width: 760px;
   float: left;
-  border: 1px solid #e8e8e8;
-  @include border-radius(0 5px 5px 5px);
+  border: 1px solid var(--classic-tab-border, #e2e8f0);
+  border-radius: 0 5px 5px 0px;
 }
-
-
-// App Navigation
-// --------------------------------------------------
 
 nav.preftab {
   position: static;
+
   li {
     width: 145px;
-    &.active {
-      > ul { display: inline; }
-    }
-    &:hover {
-      ul { display: inline; }
-    }
-    a {
-      width: 145px;
-    }
-    // secondary navigation
+
+    &.active > ul { display: inline; }
+    &:hover ul { display: inline; }
+
+    a { width: 145px; }
+
     ul {
       position: static;
-      width: 145;
+      width: 145px;
       display: inline;
-      li > a {
-        padding: 0 40px;
-      }
+
+      li > a { padding: 0 40px; }
     }
-  }// end li
-}// end preftab
+  }
+}
 
-.settings-actions {float: right;}
-.settings-fields {float: left;}
+@media (max-width: 992px) {
+  #preferences { width: 525px; }
+}
 
-#systems-result {padding: 5px 0 5px 0;}
+@media (max-width: 768px) {
+  #preferences { width: 375px; padding: 8px; }
+  .settings-table tbody tr td:first-child { padding-left: 15px; }
+  .form-horizontal textarea { width: 170px; font-size: 13px; }
+  .input-field-style { width: 170px !important; }
+  .nav-tabs { width: 120px !important; }
+  #update-path-form input#share_path { width: 170px; }
+  #new-share-box { max-width: 100%; }
+  #disks-table { margin-left: -10px; }
+  #btn-get-apps { line-height: 25px; }
+  #btn-install-apps { line-height: 25px; }
+  .settings-fields { width: 100%; margin-top: 5px; margin-left: 0px !important; }
+}
+
+.settings-actions { float: right; }
+.settings-fields { margin: 5px; width: 100%; float: left; }
+#systems-result { padding: 5px 0 5px 0; }
+
+.nav-tabs {
+  display: inline-block;
+  width: 150px;
+  text-align: center;
+  float: left;
+}
+
+.setup-main-tab {
+  border-bottom: 1px solid var(--classic-subtab-border, #e2e8f0) !important;
+}
+
+.setup-subtab-container {
+  background: var(--classic-tab-bg, #f7fafc);
+}
+
+.all-subtab-container {
+  display: inline-block;
+  padding: 0px;
+  margin-bottom: -8px;
+}
+
+.single-subtab-container { display: none; }
+
+.subtab-link {
+  font-size: 11px;
+  padding: 6px 15px;
+  width: 100%;
+  margin-left: -2px;
+  margin-bottom: -1px;
+  border: 1px solid var(--classic-tab-bg, #f7fafc);
+  display: inline-block;
+  border-radius: 0px;
+
+  &:hover {
+    border-radius: 0px;
+    margin-left: -2px;
+    margin-top: 0px;
+    border: 1px solid var(--classic-border, #e2e8f0);
+  }
+}
+
+.active-subtab-link {
+  width: 100%;
+  padding: 6px 15px;
+  font-size: 11px;
+  margin-left: -2px;
+  margin-bottom: -1px;
+  border: 1px solid var(--classic-border, #e2e8f0);
+  border-radius: 0px;
+  display: inline-block;
+  background: var(--classic-card-bg, #ffffff);
+
+  &:hover {
+    border-radius: 0px;
+    border: 1px solid var(--classic-border, #e2e8f0);
+  }
+}
+
+.setup-main-tab .nav-item { margin-bottom: 0px; }
+.setup-subtab { margin-top: -1px; margin-bottom: auto; }
+.setup-subtab .nav-item { height: auto; }
+.tab-link-style, .active-tab-link-style { height: auto; }
+.tab-link-style { border-bottom: 0px !important; }
+
+// App description responsive overrides for sidebar layout
+@media screen and (min-width: 992px) {
+  .app-description-single { text-overflow: ellipsis; white-space: nowrap; overflow: hidden; display: inline-block; width: 486px !important; }
+}
+
+@media (min-width: 768px) and (max-width: 991px) {
+  .app-description-single { text-overflow: ellipsis; white-space: nowrap; overflow: hidden; display: inline-block; width: 325px !important; }
+}
+
+@media (min-width: 576px) and (max-width: 768px) {
+  .app-description-single { text-overflow: ellipsis; white-space: nowrap; overflow: hidden; display: inline-block; width: 220px !important; }
+}
+
+// ==========================================================================
+// Dark Mode overrides for Sidebar-specific elements
+// ==========================================================================
+
+@media (prefers-color-scheme: dark) {
+  #tabs {
+    background: linear-gradient(to bottom, var(--classic-card-bg), var(--classic-tab-bg));
+    border-color: var(--classic-tab-border);
+  }
+
+  #preferences { border-color: var(--classic-tab-border); }
+  .setup-subtab-container { background: var(--classic-tab-bg); }
+  .subtab-link { border-color: var(--classic-tab-bg); &:hover { border-color: var(--classic-border); } }
+  .active-subtab-link { border-color: var(--classic-border); background: var(--classic-card-bg); &:hover { border-color: var(--classic-border); } }
+  .setup-main-tab { border-bottom-color: var(--classic-subtab-border) !important; }
+}
