@@ -116,35 +116,69 @@ if $WITH_GREYHOLE; then
 fi
 
 # ---------------------------------------------------------------------------
-# 2. Ruby (via rbenv, system-wide)
+# 2. Ruby — prefer system package, fall back to rbenv
 # ---------------------------------------------------------------------------
-if [ ! -d "/usr/local/rbenv" ]; then
-  echo "==> Installing rbenv + ruby-build system-wide..."
-  git clone https://github.com/rbenv/rbenv.git /usr/local/rbenv
-  git clone https://github.com/rbenv/ruby-build.git /usr/local/rbenv/plugins/ruby-build
+SYSTEM_RUBY_VERSION=$(ruby -e 'puts RUBY_VERSION' 2>/dev/null || true)
+NEED_RBENV=true
+
+if [ -n "$SYSTEM_RUBY_VERSION" ]; then
+  # Check if system Ruby major.minor matches what we need (3.2.x)
+  REQUIRED_MINOR=$(echo "$RUBY_VERSION" | cut -d. -f1,2)
+  SYSTEM_MINOR=$(echo "$SYSTEM_RUBY_VERSION" | cut -d. -f1,2)
+  if [ "$SYSTEM_MINOR" = "$REQUIRED_MINOR" ]; then
+    echo "==> System Ruby $SYSTEM_RUBY_VERSION detected (matches $REQUIRED_MINOR.x) — using it"
+    NEED_RBENV=false
+  else
+    echo "==> System Ruby $SYSTEM_RUBY_VERSION does not match required $REQUIRED_MINOR.x"
+  fi
 fi
 
-export RBENV_ROOT="/usr/local/rbenv"
-export PATH="$RBENV_ROOT/bin:$RBENV_ROOT/shims:$PATH"
+if [ "$NEED_RBENV" = true ]; then
+  # Try installing Ruby from apt first (Ubuntu 24.04 ships 3.2)
+  echo "==> Attempting to install Ruby from system packages..."
+  apt-get install -y --no-install-recommends ruby ruby-dev ruby-bundler 2>/dev/null || true
 
-# Install Ruby if not present
-if ! rbenv versions --bare | grep -q "^${RUBY_VERSION}$"; then
-  echo "==> Installing Ruby ${RUBY_VERSION} (this takes a few minutes)..."
-  rbenv install "$RUBY_VERSION"
+  SYSTEM_RUBY_VERSION=$(ruby -e 'puts RUBY_VERSION' 2>/dev/null || true)
+  REQUIRED_MINOR=$(echo "$RUBY_VERSION" | cut -d. -f1,2)
+  SYSTEM_MINOR=$(echo "$SYSTEM_RUBY_VERSION" | cut -d. -f1,2)
+
+  if [ -n "$SYSTEM_RUBY_VERSION" ] && [ "$SYSTEM_MINOR" = "$REQUIRED_MINOR" ]; then
+    echo "==> System Ruby $SYSTEM_RUBY_VERSION installed from packages"
+    NEED_RBENV=false
+  fi
 fi
-rbenv global "$RUBY_VERSION"
-rbenv rehash
 
-# Make rbenv available to all users
-cat > /etc/profile.d/rbenv.sh <<'RBENV'
+if [ "$NEED_RBENV" = true ]; then
+  echo "==> System Ruby not available or wrong version — building via rbenv..."
+  if [ ! -d "/usr/local/rbenv" ]; then
+    echo "==> Installing rbenv + ruby-build system-wide..."
+    git clone https://github.com/rbenv/rbenv.git /usr/local/rbenv
+    git clone https://github.com/rbenv/ruby-build.git /usr/local/rbenv/plugins/ruby-build
+  fi
+
+  export RBENV_ROOT="/usr/local/rbenv"
+  export PATH="$RBENV_ROOT/bin:$RBENV_ROOT/shims:$PATH"
+
+  if ! rbenv versions --bare | grep -q "^${RUBY_VERSION}$"; then
+    echo "==> Installing Ruby ${RUBY_VERSION} from source (this takes a few minutes)..."
+    rbenv install "$RUBY_VERSION"
+  fi
+  rbenv global "$RUBY_VERSION"
+  rbenv rehash
+
+  # Make rbenv available to all users
+  cat > /etc/profile.d/rbenv.sh <<'RBENV'
 export RBENV_ROOT="/usr/local/rbenv"
 export PATH="$RBENV_ROOT/bin:$RBENV_ROOT/shims:$PATH"
 eval "$(rbenv init - bash)"
 RBENV
+fi
 
 # Ensure bundler is installed
 gem install bundler --no-document 2>/dev/null || true
-rbenv rehash
+if command -v rbenv &>/dev/null; then
+  rbenv rehash
+fi
 
 # ---------------------------------------------------------------------------
 # 3. Create system user
@@ -436,6 +470,17 @@ echo "    Sudoers validated OK"
 # 12. Systemd service (with RAILS_LOG_TO_STDOUT)
 # ---------------------------------------------------------------------------
 echo "==> Installing systemd service..."
+
+# Detect Ruby path — system or rbenv
+if [ "$NEED_RBENV" = true ]; then
+  RUBY_ENV_LINES="Environment=RBENV_ROOT=/usr/local/rbenv
+Environment=PATH=/usr/local/rbenv/shims:/usr/local/rbenv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
+  BUNDLE_PATH="/usr/local/rbenv/shims/bundle"
+else
+  RUBY_ENV_LINES="Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
+  BUNDLE_PATH="$(which bundle)"
+fi
+
 cat > /etc/systemd/system/amahi-kai.service <<UNIT
 [Unit]
 Description=Amahi-kai Home Server (Puma)
@@ -448,10 +493,9 @@ User=$APP_USER
 Group=$APP_GROUP
 WorkingDirectory=$APP_DIR
 EnvironmentFile=$ENV_FILE
-Environment=RBENV_ROOT=/usr/local/rbenv
-Environment=PATH=/usr/local/rbenv/shims:/usr/local/rbenv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
+$RUBY_ENV_LINES
 Environment=RAILS_LOG_TO_STDOUT=true
-ExecStart=/usr/local/rbenv/shims/bundle exec puma -C config/puma.rb
+ExecStart=$BUNDLE_PATH exec puma -C config/puma.rb
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
@@ -505,9 +549,8 @@ User=$APP_USER
 Group=$APP_GROUP
 WorkingDirectory=$APP_DIR
 EnvironmentFile=$ENV_FILE
-Environment=RBENV_ROOT=/usr/local/rbenv
-Environment=PATH=/usr/local/rbenv/shims:/usr/local/rbenv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
-ExecStart=/usr/local/rbenv/shims/bundle exec rails shares:update_index
+$RUBY_ENV_LINES
+ExecStart=$BUNDLE_PATH exec rails shares:update_index
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=amahi-kai-indexer
