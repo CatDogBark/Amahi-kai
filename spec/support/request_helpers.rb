@@ -22,6 +22,54 @@ module RequestHelpers
     # If Setting table doesn't exist yet, silently continue
     Rails.logger.debug "ensure_setup_completed! skipped: #{e.message}"
   end
+
+  # Engine path helpers — work around a Rails 8.0 RoutesProxy bug where
+  # merge_script_names blows up when script_name is "" (empty string) in
+  # integration test sessions (slice(0, negative) returns nil, then .join fails).
+  def users_engine
+    @_users_engine_proxy ||= UsersEngineProxy.new
+  end
+
+  def network_engine
+    @_network_engine_proxy ||= NetworkEngineProxy.new
+  end
+
+  class UsersEngineProxy
+    PREFIX = "/tab/users"
+
+    def users_path
+      "#{PREFIX}/users"
+    end
+
+    def user_path(user_or_id)
+      id = user_or_id.respond_to?(:id) ? user_or_id.id : user_or_id
+      "#{PREFIX}/users/#{id}"
+    end
+
+    def update_name_user_path(user_or_id)
+      "#{user_path(user_or_id)}/update_name"
+    end
+
+    def update_password_user_path(user_or_id)
+      "#{user_path(user_or_id)}/update_password"
+    end
+
+    def toggle_admin_user_path(user_or_id)
+      "#{user_path(user_or_id)}/toggle_admin"
+    end
+  end
+
+  class NetworkEngineProxy
+    PREFIX = "/tab/network"
+
+    def hosts_path
+      "#{PREFIX}/hosts"
+    end
+
+    def dns_aliases_path
+      "#{PREFIX}/dns_aliases"
+    end
+  end
 end
 
 RSpec.configure do |config|

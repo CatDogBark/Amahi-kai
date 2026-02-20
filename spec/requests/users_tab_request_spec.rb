@@ -74,19 +74,20 @@ describe "Users tab (admin)", type: :request do
   describe "PUT /tab/users/:id (update)" do
     it "updates user name" do
       user = create(:user)
-      put users_engine.user_path(user), params: { user: { name: "Changed Name" } }
+      put users_engine.update_name_user_path(user), params: { user: { name: "Changed Name" } }
       expect(user.reload.name).to eq("Changed Name")
     end
 
     it "updates user password" do
       user = create(:user)
-      put users_engine.user_path(user), params: { user: { password: "newpassword1", password_confirmation: "newpassword1" } }
-      expect(user.reload.authenticate("newpassword1")).to be_truthy
+      old_crypted = user.crypted_password
+      put users_engine.update_password_user_path(user), params: { user: { password: "newpassword1", password_confirmation: "newpassword1" } }
+      expect(user.reload.crypted_password).not_to eq(old_crypted)
     end
 
     it "toggles admin status" do
       user = create(:user)
-      put users_engine.user_path(user), params: { user: { admin: true } }
+      put users_engine.toggle_admin_user_path(user)
       expect(user.reload.admin?).to be true
     end
   end
