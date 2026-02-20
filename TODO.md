@@ -59,6 +59,9 @@ DNS alias creation via UI writes to `/etc/dnsmasq.d/`, service reloads, resoluti
 
 ---
 
+### Update Command
+`bin/amahi-update` — pull latest code, bundle, migrate, restart. One command to update a running install.
+
 ## P1 — Polish
 
 ### SSL / Production HTTPS
