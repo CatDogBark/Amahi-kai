@@ -62,21 +62,16 @@ apt-get install -y --no-install-recommends \
   curl \
   git \
   libffi-dev \
-  libgdbm-dev \
   libmariadb-dev \
-  libncurses5-dev \
-  libreadline-dev \
   libssl-dev \
   libyaml-dev \
+  libffi-dev \
+  zlib1g-dev \
   mariadb-server \
   samba \
   samba-common-bin \
   dnsmasq \
-  sudo \
-  zlib1g-dev \
-  autoconf \
-  bison \
-  rustc  # needed for some gem native extensions on newer Ruby
+  sudo
 
 # VM guest agent (auto-detect)
 if systemd-detect-virt -q 2>/dev/null; then

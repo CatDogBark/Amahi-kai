@@ -3,8 +3,8 @@ source 'https://rubygems.org'
 gem 'rake'
 gem 'rails', '~> 8.0.0'
 
-gem 'dalli'
-gem 'actionpack-action_caching'
+# gem 'dalli' # removed — no memcached
+# gem 'actionpack-action_caching' # removed — unused
 
 gem 'sass-rails'
 # gem 'propshaft'  # TODO: Replace sprockets with propshaft (requires full asset pipeline migration)
@@ -19,7 +19,7 @@ gem 'turbo-rails'
 gem 'stimulus-rails'
 
 gem 'activeresource'
-gem 'rails-observers'
+# gem 'rails-observers' # removed — unused
 
 gem 'scrypt'
 gem 'authlogic'
@@ -45,9 +45,9 @@ gem 'rspec-rails', group: [:test, :development]
 group :test do
   gem 'factory_bot_rails'
   gem 'capybara'
-  gem 'capybara-screenshot'
+  # gem 'capybara-screenshot' # removed — no Selenium
   gem 'database_cleaner'
-  gem 'selenium-webdriver', '~> 4.9.0'
+  # gem 'selenium-webdriver' # removed — no browser tests
   gem 'simplecov', require: false
 end
 
