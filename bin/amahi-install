@@ -78,6 +78,25 @@ apt-get install -y --no-install-recommends \
   bison \
   rustc  # needed for some gem native extensions on newer Ruby
 
+# VM guest agent (auto-detect)
+if systemd-detect-virt -q 2>/dev/null; then
+  VIRT_TYPE=$(systemd-detect-virt 2>/dev/null || true)
+  echo "==> Virtual machine detected ($VIRT_TYPE), installing guest agent..."
+  case "$VIRT_TYPE" in
+    kvm|qemu)
+      apt-get install -y --no-install-recommends qemu-guest-agent
+      systemctl enable --now qemu-guest-agent 2>/dev/null || true
+      ;;
+    vmware)
+      apt-get install -y --no-install-recommends open-vm-tools
+      systemctl enable --now vmtoolsd 2>/dev/null || true
+      ;;
+    *)
+      echo "  (no specific guest agent for $VIRT_TYPE)"
+      ;;
+  esac
+fi
+
 # Greyhole (optional)
 if $WITH_GREYHOLE; then
   echo "==> Adding Greyhole apt repository..."
