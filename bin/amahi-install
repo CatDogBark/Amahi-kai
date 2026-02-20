@@ -218,13 +218,7 @@ mkdir -p tmp/pids tmp/cache tmp/sockets log
 chown -R "$APP_USER:$APP_GROUP" "$APP_DIR"
 
 # ---------------------------------------------------------------------------
-# 5. Bundle install
-# ---------------------------------------------------------------------------
-echo "==> Installing Ruby gems..."
-sudo -u "$APP_USER" bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && bundle config set --local without 'development test' && bundle install --jobs 4"
-
-# ---------------------------------------------------------------------------
-# 6. Create directories
+# 5. Create directories + config (must happen before bundle/DB steps)
 # ---------------------------------------------------------------------------
 echo "==> Creating data directories..."
 mkdir -p "$SHARE_ROOT"
@@ -234,7 +228,7 @@ mkdir -p /var/hda/tmp
 chown "$APP_USER:$APP_GROUP" /var/hda/tmp
 
 # ---------------------------------------------------------------------------
-# 7. Generate config (if not exists)
+# 6. Generate config (if not exists)
 # ---------------------------------------------------------------------------
 if [ ! -f "$ENV_FILE" ]; then
   echo "==> Generating configuration..."
@@ -305,7 +299,13 @@ EOSQL
 fi
 
 # ---------------------------------------------------------------------------
-# 9. Database migrations
+# 9. Bundle install
+# ---------------------------------------------------------------------------
+echo "==> Installing Ruby gems..."
+sudo -u "$APP_USER" bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && bundle config set --local without 'development test' && bundle install --jobs 4"
+
+# ---------------------------------------------------------------------------
+# 10. Database migrations
 # ---------------------------------------------------------------------------
 echo "==> Running database migrations..."
 sudo -u "$APP_USER" bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && RAILS_ENV=production bin/rails db:migrate"
