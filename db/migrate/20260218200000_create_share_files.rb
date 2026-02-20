@@ -1,7 +1,7 @@
-class CreateShareFiles < ActiveRecord::Migration[5.1]
+class CreateShareFiles < ActiveRecord::Migration[8.0]
   def change
     create_table :share_files do |t|
-      t.integer :share_id, null: false
+      t.references :share, null: false, foreign_key: true
       t.string :name, null: false          # filename
       t.string :path, null: false           # full path on disk
       t.string :relative_path, null: false  # path relative to share root
@@ -18,6 +18,5 @@ class CreateShareFiles < ActiveRecord::Migration[5.1]
     add_index :share_files, :content_type
     add_index :share_files, [:share_id, :relative_path], unique: true
     add_index :share_files, :directory
-    add_foreign_key :share_files, :shares
   end
 end

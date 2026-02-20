@@ -142,7 +142,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_19_000000) do
   end
 
   create_table "share_files", force: :cascade do |t|
-    t.integer "share_id", null: false
+    t.bigint "share_id", null: false
     t.string "name", null: false
     t.string "path", null: false
     t.string "relative_path", null: false
