@@ -1004,3 +1004,25 @@ table.settings td {
     color: #8b949e;
   }
 }
+
+/* ── Delete button ── */
+.btn-delete {
+  display: inline-block;
+  color: #dc3545;
+  cursor: pointer;
+  font-size: 13px;
+  text-decoration: none;
+  padding: 4px 12px;
+  border: 1px solid #dc3545;
+  border-radius: 4px;
+  background: transparent;
+  transition: all 0.2s;
+}
+.btn-delete:hover {
+  background: #dc3545;
+  color: #fff;
+  text-decoration: none;
+}
+.settings-actions {
+  margin-bottom: 12px;
+}
