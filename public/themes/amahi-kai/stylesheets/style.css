@@ -1003,6 +1003,14 @@ table.settings td {
   .no-users h2, .no-shares h2 {
     color: #8b949e;
   }
+  .btn-delete {
+    color: #f85149;
+    border-color: #f85149;
+  }
+  .btn-delete:hover {
+    background: #f85149;
+    color: #fff;
+  }
 }
 
 /* ── Delete button ── */
