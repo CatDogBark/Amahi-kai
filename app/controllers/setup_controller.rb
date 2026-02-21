@@ -52,7 +52,8 @@ class SetupController < ApplicationController
   def storage
     @partitions = begin
       require 'partition_utils'
-      PartitionUtils.new.info
+      # Filter out OS/system partitions — users should never pool these
+      PartitionUtils.new.info.reject { |p| ['/', '/boot', '/boot/efi'].include?(p[:path]) }
     rescue => e
       Rails.logger.error("SetupController#storage: #{e.message}")
       []
