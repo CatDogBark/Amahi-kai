@@ -86,6 +86,9 @@ Evaluate replacing Authlogic with Devise or Rails 8 native auth.
 ### Disk/Storage Management
 Detect drives, format, mount, present in UI. mdadm RAID as advanced option.
 
+### Web Terminal
+Browser-based shell access (xterm.js + WebSocket). Same ocean-styled terminal used for install streaming. Admin-only, no SSH needed.
+
 ### Firewall Plugin
 UFW management through the web UI.
 
