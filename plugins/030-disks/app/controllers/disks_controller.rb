@@ -80,16 +80,21 @@ class DisksController < ApplicationController
     part = DiskPoolPartition.where(path: path).first
     if part
       part.destroy
-      render partial: 'share/disk_pooling_partition_checkbox', locals: { checked: false, path: path }
+      checked = false
     else
       require 'partition_utils'
       if PartitionUtils.new.info.select { |p| p[:path] == path }.empty? || !Pathname.new(path).mountpoint?
-        render partial: 'share/disk_pooling_partition_checkbox', locals: { checked: false, path: path }
+        checked = false
       else
         min_free = path == '/' ? 20 : 10
         DiskPoolPartition.create(path: path, minimum_free: min_free)
-        render partial: 'share/disk_pooling_partition_checkbox', locals: { checked: true, path: path }
+        checked = true
       end
+    end
+
+    respond_to do |format|
+      format.html { redirect_to disks_engine.storage_pool_path }
+      format.any { render partial: 'share/disk_pooling_partition_checkbox', locals: { checked: checked, path: path }, layout: false }
     end
   end
 
