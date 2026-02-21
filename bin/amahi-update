@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Amahi-kai Update Script
+# Pulls latest code, installs dependencies, runs migrations, and restarts.
+# Usage: sudo /opt/amahi-kai/bin/amahi-update [--stream]
+#
+# --stream: Output progress messages for SSE streaming (used by web UI)
+
+APP_DIR="${APP_DIR:-/opt/amahi-kai}"
+ENV_FILE="${ENV_FILE:-/etc/amahi-kai/amahi.env}"
+APP_USER="${APP_USER:-amahi}"
+APP_GROUP="${APP_GROUP:-amahi}"
+STREAM=false
+
+if [[ "${1:-}" == "--stream" ]]; then
+  STREAM=true
+fi
+
+log() {
+  if $STREAM; then
+    echo "$1"
+  else
+    echo "==> $1"
+  fi
+}
+
+error() {
+  if $STREAM; then
+    echo "✗ $1" >&2
+  else
+    echo "ERROR: $1" >&2
+  fi
+  exit 1
+}
+
+# Must be root
+if [[ $EUID -ne 0 ]]; then
+  error "This script must be run as root (or with sudo)."
+fi
+
+# Check app directory exists
+[[ -d "$APP_DIR" ]] || error "App directory not found: $APP_DIR"
+
+cd "$APP_DIR"
+
+# Source env if available
+if [[ -f "$ENV_FILE" ]]; then
+  set -a
+  source "$ENV_FILE"
+  set +a
+fi
+
+# 1. Pull latest code
+log "Pulling latest code..."
+if [[ -d ".git" ]]; then
+  # Try git pull (works if SSH key is available for the user)
+  git config --global --add safe.directory "$APP_DIR" 2>/dev/null || true
+  git pull origin main 2>&1 || log "⚠ Git pull failed — using files on disk"
+else
+  log "No git repo — using files on disk"
+fi
+
+# 2. Install dependencies
+log "Installing dependencies..."
+sudo -u "$APP_USER" bash -lc "cd $APP_DIR && bundle config set --local path 'vendor/bundle' && bundle config set --local without 'development test' && bundle install --jobs 4" 2>&1
+
+# 3. Run migrations
+log "Running database migrations..."
+RAILS_ENV=production bin/rails db:migrate 2>&1
+
+# 4. Precompile assets
+log "Precompiling assets..."
+RAILS_ENV=production bin/rails assets:precompile 2>&1
+
+# 5. Fix ownership
+log "Fixing file ownership..."
+chown -R "$APP_USER:$APP_GROUP" "$APP_DIR"
+
+# 6. Restart service
+log "Restarting Amahi-kai..."
+systemctl restart amahi-kai 2>&1 || error "Failed to restart service"
+
+# Verify it's running
+sleep 2
+if systemctl is-active --quiet amahi-kai; then
+  log "✓ Amahi-kai updated and running!"
+else
+  error "Service failed to start after update. Check: journalctl -u amahi-kai -f"
+fi

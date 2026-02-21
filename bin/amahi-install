@@ -405,6 +405,12 @@ amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get install -y cloudflared
 amahi ALL=(root) NOPASSWD: /usr/bin/tee /etc/apt/sources.list.d/cloudflared.list
 amahi ALL=(root) NOPASSWD: /usr/bin/gpg --dearmor -o /usr/share/keyrings/cloudflare-archive-keyring.gpg
 
+# Self-update
+amahi ALL=(root) NOPASSWD: /opt/amahi-kai/bin/amahi-update
+amahi ALL=(root) NOPASSWD: /opt/amahi-kai/bin/amahi-update --stream
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart amahi-kai
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl status amahi-kai
+
 # Security hardening
 amahi ALL=(root) NOPASSWD: /usr/sbin/ufw *
 amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart sshd

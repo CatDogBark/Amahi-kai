@@ -18,4 +18,6 @@ Settings::Engine.routes.draw do
 
 	put 'revoke_app' => 'settings#revoke_app', as: 'revoke_app'
 	get 'system_status' => 'settings#system_status', as: 'system_status'
+	post 'update_system' => 'settings#update_system', as: 'update_system'
+	get 'update_system_stream' => 'settings#update_system_stream', as: 'update_system_stream'
 end
