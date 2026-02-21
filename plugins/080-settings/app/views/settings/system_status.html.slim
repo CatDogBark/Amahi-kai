@@ -8,50 +8,9 @@
       h5.mb-0
         i.bi.bi-arrow-repeat.me-2
         | System Update
-      button.btn.btn-sm.btn-outline-info#update-btn onclick="startUpdate()" Check for Updates
-    .card-body#update-body style="display:none"
-      .terminal-output#update-terminal style="background: #0d1117; color: #c9d1d9; font-family: monospace; font-size: 13px; padding: 16px; border-radius: 8px; max-height: 400px; overflow-y: auto; white-space: pre-wrap;"
+      button.btn.btn-sm.btn-outline-info onclick="openInstallTerminal('update', '#{settings_engine.update_system_stream_path}')" Check for Updates
 
-  javascript:
-    function startUpdate() {
-      var btn = document.getElementById('update-btn');
-      var body = document.getElementById('update-body');
-      var terminal = document.getElementById('update-terminal');
-
-      btn.disabled = true;
-      btn.textContent = 'Updating...';
-      body.style.display = '';
-      terminal.innerHTML = '';
-
-      var source = new EventSource('#{settings_engine.update_system_stream_path}');
-
-      source.onmessage = function(e) {
-        terminal.innerHTML += e.data + '\\n';
-        terminal.scrollTop = terminal.scrollHeight;
-      };
-
-      source.addEventListener('done', function(e) {
-        source.close();
-        if (e.data === 'success') {
-          btn.textContent = '✓ Updated!';
-          btn.className = 'btn btn-sm btn-success';
-          setTimeout(function() { window.location.reload(); }, 2000);
-        } else {
-          btn.textContent = 'Update Failed';
-          btn.className = 'btn btn-sm btn-danger';
-          btn.disabled = false;
-          btn.onclick = function() { startUpdate(); };
-        }
-      });
-
-      source.onerror = function() {
-        source.close();
-        btn.textContent = 'Connection Lost';
-        btn.className = 'btn btn-sm btn-warning';
-        btn.disabled = false;
-        btn.onclick = function() { startUpdate(); };
-      };
-    }
+  == render 'shared/install_terminal', id: 'update', title: 'Updating Amahi-kai', stream_url: settings_engine.update_system_stream_path
 
   /! ── System Overview ──
   .card.mb-4
