@@ -54,23 +54,24 @@
                           a.text-capitalize.active-subtab-link href="#{subtab.url}"
                             = t(subtab.label)
 
-.container.setup-subtab-container.single-subtab-container
-  ul.nav.nav-tabs.setup-subtab
-    - if @advanced
-      - active_tab.advanced_subtabs.each do |subtab|
-        li.nav-item
-          - if subtab_class(subtab.id,active_tab.id).blank?
-            a.text-capitalize.subtab-link href="#{subtab.url}"
-              = t(subtab.label)
-          - else
-            a.text-capitalize.active-subtab-link href="#{subtab.url}"
-              = t(subtab.label)
-    - else
-      - active_tab.basic_subtabs.each do |subtab|
-        li.nav-item
-          - if subtab_class(subtab.id,active_tab.id).blank?
-            a.text-capitalize.subtab-link href="#{subtab.url}"
-              = t(subtab.label)
-          - else
-            a.text-capitalize.active-subtab-link href="#{subtab.url}"
-              = t(subtab.label)
+- if active_tab&.subtabs?
+  .container.setup-subtab-container.single-subtab-container
+    ul.nav.nav-tabs.setup-subtab
+      - if @advanced
+        - active_tab.advanced_subtabs.each do |subtab|
+          li.nav-item
+            - if subtab_class(subtab.id,active_tab.id).blank?
+              a.text-capitalize.subtab-link href="#{subtab.url}"
+                = t(subtab.label)
+            - else
+              a.text-capitalize.active-subtab-link href="#{subtab.url}"
+                = t(subtab.label)
+      - else
+        - active_tab.basic_subtabs.each do |subtab|
+          li.nav-item
+            - if subtab_class(subtab.id,active_tab.id).blank?
+              a.text-capitalize.subtab-link href="#{subtab.url}"
+                = t(subtab.label)
+            - else
+              a.text-capitalize.active-subtab-link href="#{subtab.url}"
+                = t(subtab.label)

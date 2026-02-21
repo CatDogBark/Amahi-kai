@@ -17,9 +17,10 @@
 module TabsHelper
 
 	def tab_class(tab)
+		klass = nil
 		klass = 'active' if params[:controller] == tab.id
 		klass = 'active' if !Tab.find(params[:controller]) && Tab.ischild(params[:controller],tab)
-		klass += " empty" unless tab.subtabs?
+		klass = "#{klass} empty".strip unless tab.subtabs?
 		klass
 	end
 
