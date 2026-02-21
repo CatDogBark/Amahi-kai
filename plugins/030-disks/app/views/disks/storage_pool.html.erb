@@ -79,7 +79,7 @@
                 <td><%= drive[:minimum_free] %> GB</td>
                 <td>
                   <%= button_to(t('remove', default: 'Remove'),
-                        toggle_disk_pool_partition_shares_path(path: drive[:path]),
+                        disks_engine.toggle_disk_pool_partition_path(path: drive[:path]),
                         method: :put,
                         class: 'btn btn-sm btn-outline-danger',
                         data: { confirm: t('are_you_sure', default: 'Are you sure?') }) %>

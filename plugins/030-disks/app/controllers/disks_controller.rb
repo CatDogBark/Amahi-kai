@@ -75,6 +75,24 @@ class DisksController < ApplicationController
     @pool_partitions = DiskPoolPartition.all
   end
 
+  def toggle_disk_pool_partition
+    path = params[:path]
+    part = DiskPoolPartition.where(path: path).first
+    if part
+      part.destroy
+      render partial: 'share/disk_pooling_partition_checkbox', locals: { checked: false, path: path }
+    else
+      require 'partition_utils'
+      if PartitionUtils.new.info.select { |p| p[:path] == path }.empty? || !Pathname.new(path).mountpoint?
+        render partial: 'share/disk_pooling_partition_checkbox', locals: { checked: false, path: path }
+      else
+        min_free = path == '/' ? 20 : 10
+        DiskPoolPartition.create(path: path, minimum_free: min_free)
+        render partial: 'share/disk_pooling_partition_checkbox', locals: { checked: true, path: path }
+      end
+    end
+  end
+
   def toggle_greyhole
     if Greyhole.running?
       Greyhole.stop!

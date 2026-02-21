@@ -1,5 +1,5 @@
 <div class="disk-pool-partition" id="disk-pool-partition-<%= path.parameterize %>">
-  <%= button_to toggle_disk_pool_partition_shares_path(path: path),
+  <%= button_to disks_engine.toggle_disk_pool_partition_path(path: path),
         method: :put,
         class: 'btn btn-link p-0 text-decoration-none',
         data: { turbo_frame: "disk-pool-partition-#{path.parameterize}" } do %>
