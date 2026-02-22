@@ -34,7 +34,7 @@ class PartitionUtils
 				data = Hash.new
 				device = part2device(p[0])
 				path = cleanup_path(p[1])
-				next if path == "/boot" # C. Ayuso
+				next if ['/', '/boot', '/boot/efi'].include?(path)
 				data[:device] = device
 				(total, free) = disk_stats(path)
 				data[:bytes_total] = total
