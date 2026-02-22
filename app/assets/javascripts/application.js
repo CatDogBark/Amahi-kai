@@ -10,6 +10,7 @@
 //= require controllers/locale_controller
 //= require controllers/user_controller
 //= require controllers/create_form_controller
+//= require controllers/pool_toggle_controller
 
 //= require lib/application
 
