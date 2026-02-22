@@ -36,7 +36,7 @@ class SharesController < ApplicationController
 			if @share.errors.any?
 				format.html { render :index, status: :unprocessable_entity }
 			else
-				format.html { redirect_to shares_engine_path }
+				format.html { redirect_to shares_engine_path, notice: "Share '#{@share.name}' created successfully" }
 			end
 			format.json
 		end
