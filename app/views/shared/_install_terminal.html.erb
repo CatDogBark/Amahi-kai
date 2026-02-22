@@ -93,7 +93,49 @@ function openInstallTerminal(id, url) {
 }
 
 function closeInstallTerminal(id) {
-  document.getElementById(id + '-install-modal').style.display = 'none';
+  var modal = document.getElementById(id + '-install-modal');
+
+  // If this was a system update, the server is restarting — wait for it
+  if (id === 'update') {
+    var output = document.getElementById(id + '-output');
+    var line = document.createElement('div');
+    line.className = 'term-line step';
+    line.textContent = 'Waiting for server to restart...';
+    output.appendChild(line);
+    document.getElementById(id + '-install-footer').style.display = 'none';
+    document.getElementById(id + '-cursor').style.display = '';
+
+    var attempts = 0;
+    var maxAttempts = 30;
+    var check = setInterval(function() {
+      attempts++;
+      fetch(window.location.origin + '/login', { method: 'HEAD', cache: 'no-store' })
+        .then(function(resp) {
+          if (resp.ok || resp.status === 302 || resp.status === 200) {
+            clearInterval(check);
+            var done = document.createElement('div');
+            done.className = 'term-line success';
+            done.textContent = '✓ Server is back! Reloading...';
+            output.appendChild(done);
+            setTimeout(function() { window.location.reload(); }, 1000);
+          }
+        })
+        .catch(function() {
+          if (attempts >= maxAttempts) {
+            clearInterval(check);
+            var fail = document.createElement('div');
+            fail.className = 'term-line warn';
+            fail.textContent = '⚠ Server is taking a while. Try refreshing manually.';
+            output.appendChild(fail);
+            document.getElementById(id + '-cursor').style.display = 'none';
+            document.getElementById(id + '-install-footer').style.display = 'block';
+          }
+        });
+    }, 2000);
+    return;
+  }
+
+  modal.style.display = 'none';
   window.location.reload();
 }
 </script>

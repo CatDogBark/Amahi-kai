@@ -57,7 +57,7 @@ Rails.application.routes.draw do
   get  'setup/complete' => 'setup#complete',        as: :setup_complete
   post 'setup/finish'   => 'setup#finish',          as: :setup_finish
 
-  post 'toggle_advanced' => 'application#toggle_advanced', as: :toggle_advanced
+  post 'toggle_advanced' => 'front#toggle_advanced', as: :toggle_advanced
 
   root :to => 'front#index'
 

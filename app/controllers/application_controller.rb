@@ -214,16 +214,6 @@ class ApplicationController < ActionController::Base
 		end
 	end
 
-	def toggle_advanced
-		return head(:forbidden) unless current_user&.admin?
-		s = Setting.where(name: 'advanced').first
-		if s
-			s.value = (1 - s.value.to_i).to_s
-			s.save
-		end
-		render json: { status: 'ok', advanced: s&.value == '1' }
-	end
-
 	def admin_required
 		return false if login_required == false
 		unless current_user.admin?
