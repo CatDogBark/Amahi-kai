@@ -1,10 +1,10 @@
-.settings-fields.settings-wrap.bg-white.p-2
+.settings-fields.settings-wrap.bg-white.p-2.mb-2
   fieldset
     legend
       = t 'settings'
     table
       tr
-        td
+        td.pe-3
           label = t 'dhcp_server'
         td
           span data-controller="toggle" data-toggle-url-value=network_engine.toggle_setting_path(@dnsmasq_dhcp)
@@ -13,7 +13,7 @@
             span.spinner.theme-image data-toggle-target="spinner" style="display:none"
 
       tr
-        td
+        td.pe-3
           label= t 'lease_time'
         td data-controller="inline-edit" data-inline-edit-url-value=network_engine.update_lease_time_path data-inline-edit-method-value="PUT"
           a.lease_click_change href="#" data-inline-edit-target="display" data-action="click->inline-edit#edit"
@@ -31,7 +31,7 @@
           span.messages data-inline-edit-target="message"
 
       tr
-        td
+        td.pe-3
           label = t 'dns_provider'
         td
           .dns-area
@@ -59,7 +59,7 @@
               span.messages data-inline-edit-target="message"
 
       tr
-        td
+        td.pe-3
           label= t 'gateway'
         td data-controller="inline-edit" data-inline-edit-url-value=network_engine.update_gateway_path data-inline-edit-method-value="PUT"
           a.gateway_click_change href="#" data-inline-edit-target="display" data-action="click->inline-edit#edit"
@@ -86,7 +86,7 @@
       = t 'dynamic_ip_range'
     table
       tr
-        td
+        td.pe-3
           label= t 'minimum'
         td data-controller="inline-edit" data-inline-edit-url-value=network_engine.update_dhcp_range_path("min") data-inline-edit-method-value="PUT"
           a.dyn_lo_click_change href="#" data-inline-edit-target="display" data-action="click->inline-edit#edit"
@@ -104,7 +104,7 @@
           span.messages data-inline-edit-target="message"
 
       tr
-        td
+        td.pe-3
           label= t 'maximum'
         td data-controller="inline-edit" data-inline-edit-url-value=network_engine.update_dhcp_range_path("max") data-inline-edit-method-value="PUT"
           a.dyn_hi_click_change href="#" data-inline-edit-target="display" data-action="click->inline-edit#edit"
