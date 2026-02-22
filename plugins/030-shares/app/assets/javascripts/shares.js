@@ -8,6 +8,7 @@
 
 function updatePoolCopies(shareId, copies) {
   var spinner = document.getElementById('pool-spinner-' + shareId);
+  var container = document.getElementById('pool-controls-' + shareId);
   if (spinner) spinner.style.display = '';
 
   fetch('/shares/' + shareId + '/update_disk_pool_copies', {
@@ -17,9 +18,29 @@ function updatePoolCopies(shareId, copies) {
     body: 'copies=' + copies
   })
     .then(function(r) { return r.json(); })
-    .then(function() { window.location.reload(); })
+    .then(function(data) {
+      var c = data.disk_pool_copies;
+      // Update label
+      var label = document.getElementById('pool-copies-' + shareId);
+      if (label) label.textContent = c === 0 ? 'Off' : c + (c === 1 ? ' copy' : ' copies');
+      // Update buttons
+      if (container) {
+        var minusBtn = container.querySelector('[data-pool-action="minus"]');
+        var plusBtn = container.querySelector('[data-pool-action="plus"]');
+        if (minusBtn) {
+          minusBtn.disabled = (c <= 0);
+          minusBtn.onclick = function() { updatePoolCopies(shareId, c - 1); };
+        }
+        if (plusBtn) {
+          plusBtn.disabled = (c >= 2);
+          plusBtn.onclick = function() { updatePoolCopies(shareId, c + 1); };
+        }
+      }
+    })
     .catch(function(err) {
       console.error('Pool copies update failed:', err);
+    })
+    .finally(function() {
       if (spinner) spinner.style.display = 'none';
     });
 }
@@ -56,6 +77,29 @@ document.addEventListener("toggle:success", function(e) {
   var writeCb = row.querySelector('.share_guest_writeable_checkbox');
   if (writeCb) writeCb.disabled = !cb.checked;
 });
+
+function getShareSize(shareId) {
+  var area = document.getElementById('size-area-' + shareId);
+  var spinner = document.getElementById('size-spinner-' + shareId);
+  if (spinner) spinner.style.display = '';
+
+  fetch('/tab/shares/update_size/' + shareId, {
+    method: 'PUT',
+    headers: csrfHeaders(),
+    credentials: 'same-origin'
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (area) area.innerHTML = '<strong>' + data.size + '</strong>';
+    })
+    .catch(function(err) {
+      console.error('Get size failed:', err);
+      if (area) area.innerHTML = '<span class="text-danger">Error</span>';
+    })
+    .finally(function() {
+      if (spinner) spinner.style.display = 'none';
+    });
+}
 
 document.addEventListener("DOMContentLoaded", function() {
   // Auto-fill path when name is entered

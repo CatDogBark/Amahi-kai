@@ -35,19 +35,18 @@ div.share[id="whole_share_#{share.id}"]
                 span data-controller="toggle" data-toggle-url-value=toggle_visible_share_path(id: share.id)
                   input.share_visible_checkbox.form-check-input type="checkbox" id="share_visible_#{share.id}" checked=share.visible data-toggle-target="checkbox" data-action="click->toggle#toggle"
                   |  #{t('visible')}
-                  span.spinner.theme-image data-toggle-target="spinner" style="display:none"
 
             tr
               td
                 label Disk Pool
               td
-                .d-flex.align-items-center.gap-2
+                .d-flex.align-items-center.gap-2 id="pool-controls-#{share.id}"
                   - copies = share.disk_pool_copies
-                  button.btn.btn-sm.btn-outline-secondary onclick="updatePoolCopies(#{share.id}, #{[copies - 1, 0].max})" disabled=(copies <= 0)
+                  button.btn.btn-sm.btn-outline-secondary data-pool-action="minus" onclick="updatePoolCopies(#{share.id}, #{[copies - 1, 0].max})" disabled=(copies <= 0)
                     | −
                   span.fw-bold.mx-1 id="pool-copies-#{share.id}"
                     = copies == 0 ? 'Off' : "#{copies} #{copies == 1 ? 'copy' : 'copies'}"
-                  button.btn.btn-sm.btn-outline-secondary onclick="updatePoolCopies(#{share.id}, #{[copies + 1, 2].min})" disabled=(copies >= 2)
+                  button.btn.btn-sm.btn-outline-secondary data-pool-action="plus" onclick="updatePoolCopies(#{share.id}, #{[copies + 1, 2].min})" disabled=(copies >= 2)
                     | +
                   span.spinner-border.spinner-border-sm.ms-1 id="pool-spinner-#{share.id}" style="display:none"
 
@@ -83,10 +82,10 @@ div.share[id="whole_share_#{share.id}"]
               td
                 label #{t('size')}
               td
-                span.update-size-area data-controller="toggle" data-toggle-url-value=shares_engine.update_size_path(share) data-toggle-method-value="PUT"
-                  a.focus.remote-bt href="#" class="size#{share.id}" data-action="click->toggle#toggle"
+                span.update-size-area id="size-area-#{share.id}"
+                  a.focus.remote-bt href="#" onclick="getShareSize(#{share.id}); return false;"
                     span= t('get_the_size')
-                  span.spinner.theme-image data-toggle-target="spinner" style="display:none"
+                  span.spinner-border.spinner-border-sm.ms-1 id="size-spinner-#{share.id}" style="display:none"
 
             - if advanced?
               tr
