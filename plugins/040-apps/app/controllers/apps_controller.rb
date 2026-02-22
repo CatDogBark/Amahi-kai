@@ -215,6 +215,13 @@ class AppsController < ApplicationController
 
 	# ─── Docker Apps ──────────────────────────────────────────
 
+	def installed_apps
+		set_title t('apps')
+		@docker_installed = DockerService.installed?
+		@docker_running = DockerService.running?
+		@docker_apps = DockerApp.where.not(status: 'available').order(:name)
+	end
+
 	def docker_apps
 		set_title t('apps')
 		@docker_installed = DockerService.installed?
@@ -417,31 +424,31 @@ class AppsController < ApplicationController
 	def docker_uninstall
 		docker_app = DockerApp.find_by!(identifier: params[:id])
 		docker_app.uninstall!
-		redirect_to '/tab/apps/docker_apps', notice: "#{docker_app.name} uninstalled."
+		render json: { status: 'ok', app_status: 'available', name: docker_app.name }
 	rescue => e
-		redirect_to '/tab/apps/docker_apps', alert: "Uninstall failed: #{e.message}"
+		render json: { status: 'error', message: e.message }, status: 500
 	end
 
 	def docker_start
 		docker_app = DockerApp.find_by!(identifier: params[:id])
 		docker_app.start!
-		redirect_to '/tab/apps/docker_apps', notice: "#{docker_app.name} started."
+		render json: { status: 'ok', app_status: 'running', host_port: docker_app.host_port, name: docker_app.name }
 	rescue => e
-		redirect_to '/tab/apps/docker_apps', alert: "Start failed: #{e.message}"
+		render json: { status: 'error', message: e.message }, status: 500
 	end
 
 	def docker_stop
 		docker_app = DockerApp.find_by!(identifier: params[:id])
 		docker_app.stop!
-		redirect_to '/tab/apps/docker_apps', notice: "#{docker_app.name} stopped."
+		render json: { status: 'ok', app_status: 'stopped', name: docker_app.name }
 	rescue => e
-		redirect_to '/tab/apps/docker_apps', alert: "Stop failed: #{e.message}"
+		render json: { status: 'error', message: e.message }, status: 500
 	end
 
 	def docker_restart
 		docker_app = DockerApp.find_by!(identifier: params[:id])
 		docker_app.restart!
-		redirect_to '/tab/apps/docker_apps', notice: "#{docker_app.name} restarted."
+		render json: { status: 'ok', app_status: 'running', host_port: docker_app.host_port, name: docker_app.name }
 	rescue => e
 		redirect_to '/tab/apps/docker_apps', alert: "Restart failed: #{e.message}"
 	end

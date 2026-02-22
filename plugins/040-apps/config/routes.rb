@@ -8,6 +8,7 @@ Apps::Engine.routes.draw do
 
 	# Docker apps
 	get 'docker_apps' => 'apps#docker_apps', as: 'docker_apps'
+	get 'installed_apps' => 'apps#installed_apps', as: 'installed_apps'
 	post 'docker/install/:id' => 'apps#docker_install', as: 'docker_install'
 	get 'docker/install_stream/:id' => 'apps#docker_install_stream', as: 'docker_install_stream'
 	post 'docker/uninstall/:id' => 'apps#docker_uninstall', as: 'docker_uninstall'

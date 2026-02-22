@@ -25,6 +25,8 @@ html[dir="#{@locale_direction}" lang="#{I18n.locale}" xml:lang="#{I18n.locale}"]
 
     link rel="search" type="application/opensearchdescription+xml" title="HDA Search" href="/search.xml"
     = csrf_meta_tags
+    - if (net = Setting.get('net'))
+      meta name="server-ip" content="#{net}.#{Setting.get('gateway') || '1'}"
 
   body data-turbo="false"
 
