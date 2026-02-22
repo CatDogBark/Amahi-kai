@@ -141,6 +141,31 @@ class SharesController < ApplicationController
 		end
 	end
 
+	def toggle_disk_pool_enabled
+		sleep 1 if development?
+		@share.toggle_disk_pool!
+		# Update Greyhole config if installed
+		begin
+			Greyhole.configure! if defined?(Greyhole) && Greyhole.installed?
+		rescue => e
+			Rails.logger.error("Greyhole configure failed: #{e.message}")
+		end
+		render json: { status: :ok, disk_pool_copies: @share.disk_pool_copies }
+	end
+
+	def update_disk_pool_copies
+		sleep 1 if development?
+		copies = params[:copies].to_i
+		copies = [copies, 0].max
+		@share.update(disk_pool_copies: copies)
+		begin
+			Greyhole.configure! if defined?(Greyhole) && Greyhole.installed?
+		rescue => e
+			Rails.logger.error("Greyhole configure failed: #{e.message}")
+		end
+		render json: { status: :ok, disk_pool_copies: @share.disk_pool_copies }
+	end
+
 	def update_size
 		sleep 1 if development?
 		begin

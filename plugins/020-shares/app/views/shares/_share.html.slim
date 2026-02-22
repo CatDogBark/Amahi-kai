@@ -39,6 +39,20 @@ div.share[id="whole_share_#{share.id}"]
 
             tr
               td
+                label Disk Pool
+              td
+                span data-controller="toggle" data-toggle-url-value=toggle_disk_pool_enabled_share_path(id: share.id) data-toggle-reload-value="true"
+                  input.form-check-input type="checkbox" checked=(share.disk_pool_copies > 0) data-toggle-target="checkbox" data-action="click->toggle#toggle"
+                  |  
+                  - if share.disk_pool_copies > 0
+                    span.text-muted.ms-2
+                      = "#{share.disk_pool_copies} #{share.disk_pool_copies == 1 ? 'copy' : 'copies'}"
+                  - else
+                    span.text-muted Disabled
+                  span.spinner-border.spinner-border-sm.ms-1 data-toggle-target="spinner" style="display:none"
+
+            tr
+              td
                 label #{t('permissions')}
               td= render :partial => 'shares/permissions', :object => share
 
