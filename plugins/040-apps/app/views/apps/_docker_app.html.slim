@@ -28,14 +28,16 @@
             span.spinner-border.spinner-border-sm.me-1
             = status.capitalize
         - when 'running'
-          .btn-group.btn-group-sm
+          .d-flex.gap-1.justify-content-end
             - if installed && app.host_port.present?
-              = link_to t('open', default: 'Open'), "http://#{request.host}:#{app.host_port}", target: '_blank', class: 'btn btn-sm btn-success'
-            = link_to t('stop', default: 'Stop'), "/tab/apps/docker/stop/#{identifier}", method: :post, class: 'btn btn-sm btn-outline-danger', data: { turbo: false }
+              a.btn.btn-sm.btn-success href="http://#{request.host}:#{app.host_port}" target="_blank" Open
+            = button_to 'Stop', "/tab/apps/docker/stop/#{identifier}", method: :post, class: 'btn btn-sm btn-outline-danger'
         - when 'stopped'
-          .btn-group.btn-group-sm
-            = link_to t('start', default: 'Start'), "/tab/apps/docker/start/#{identifier}", method: :post, class: 'btn btn-sm btn-outline-success', data: { turbo: false }
-            = link_to t('uninstall', default: 'Uninstall'), "/tab/apps/docker/uninstall/#{identifier}", method: :post, class: 'btn btn-sm btn-outline-danger', data: { turbo: false }
+          .d-flex.gap-1.justify-content-end
+            = button_to 'Start', "/tab/apps/docker/start/#{identifier}", method: :post, class: 'btn btn-sm btn-outline-success'
+            = button_to 'Uninstall', "/tab/apps/docker/uninstall/#{identifier}", method: :post, class: 'btn btn-sm btn-outline-danger', data: { confirm: "Uninstall #{name}? This will remove the container and its data." }
         - when 'error'
-          span.badge.bg-danger= t('error', default: 'Error')
-          = link_to '↻', "/tab/apps/docker/install/#{identifier}", method: :post, class: 'btn btn-sm btn-outline-primary ms-1', title: 'Retry', data: { turbo: false }
+          .d-flex.gap-1.align-items-center.justify-content-end
+            span.badge.bg-danger Error
+            button.btn.btn-sm.btn-outline-primary onclick="openAppInstall('#{identifier}', '#{apps_engine.docker_install_stream_path(identifier)}', '#{name}')" title="Retry" ↻
+            = button_to 'Uninstall', "/tab/apps/docker/uninstall/#{identifier}", method: :post, class: 'btn btn-sm btn-outline-danger'
