@@ -6,7 +6,7 @@
   = spinner
   p.shares-fixed-tags
     - [t('music'), t('pictures'), t('videos'), t('docs'), t('tv'), t('movies')].each_with_index do |tag, i|
-      span data-controller="toggle" data-toggle-url-value=update_tags_share_path(id: share.id, name: tag) data-toggle-reload-value="true"
+      span data-controller="toggle" data-toggle-url-value=update_tags_share_path(id: share.id, name: tag)
         input.share_tags_checkbox.form-check-input type="checkbox" id="share_tags_#{share.id}_#{i}" checked=share.tags.include?(tag.downcase) data-toggle-target="checkbox" data-action="click->toggle#toggle"
         |  #{tag}
       | &nbsp;&nbsp;&nbsp;

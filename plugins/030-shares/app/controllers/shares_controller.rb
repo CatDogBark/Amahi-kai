@@ -99,9 +99,14 @@ class SharesController < ApplicationController
 		render :json => { :status => @saved ? :ok : :not_acceptable }
 	end
 
-	def update_tags		
+	def update_tags
 		sleep 2 if development?
-		@saved = @share.update_tags!(params_update_tags_path)
+		tag_params = if params[:name].present?
+			{ tags: params[:name] }
+		else
+			params_update_tags_path
+		end
+		@saved = @share.update_tags!(tag_params.respond_to?(:to_unsafe_h) ? tag_params : tag_params.with_indifferent_access)
 		render :json => { :status => @saved ? :ok : :not_acceptable }
 	end
 
