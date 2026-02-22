@@ -91,23 +91,22 @@ div.share[id="whole_share_#{share.id}"]
               td.top
                 label Features
               td.top
-                .share-presets.d-flex.flex-wrap.gap-2.mb-2 id="share-presets-#{share.id}"
-                  - presets = { 'recycle_bin' => { label: 'Recycle Bin', params: "vfs objects = recycle\nrecycle:repository = .recycle\nrecycle:keeptree = yes\nrecycle:versions = yes" }, 'macos' => { label: 'macOS Friendly', params: "vfs objects = fruit streams_xattr\nfruit:metadata = stream\nfruit:model = MacSamba\nfruit:posix_rename = yes\nfruit:veto_appledouble = no\nfruit:nfs_aces = no\nfruit:wipe_intentionally_left_blank_rfork = yes\nfruit:delete_empty_adfiles = yes" }, 'hide_dotfiles' => { label: 'Hide Dotfiles', params: "hide dot files = yes\nveto files = /._*/.DS_Store/" }, 'time_machine' => { label: 'Time Machine', params: "vfs objects = fruit streams_xattr\nfruit:time machine = yes\nfruit:metadata = stream\nfruit:model = TimeCapsule" } }
+                .share-presets.d-flex.flex-wrap.align-items-center.gap-1 id="share-presets-#{share.id}"
+                  - presets = { 'recycle_bin' => { icon: "\u{1F5D1}", label: 'Recycle Bin', params: "vfs objects = recycle\nrecycle:repository = .recycle\nrecycle:keeptree = yes\nrecycle:versions = yes" }, 'macos' => { icon: "\u{1F34E}", label: 'macOS', params: "vfs objects = fruit streams_xattr\nfruit:metadata = stream\nfruit:model = MacSamba\nfruit:posix_rename = yes\nfruit:veto_appledouble = no\nfruit:nfs_aces = no\nfruit:wipe_intentionally_left_blank_rfork = yes\nfruit:delete_empty_adfiles = yes" }, 'hide_dotfiles' => { icon: "\u{1F441}", label: 'Hide Dotfiles', params: "hide dot files = yes\nveto files = /._*/.DS_Store/" }, 'time_machine' => { icon: "\u{23F0}", label: 'Time Machine', params: "vfs objects = fruit streams_xattr\nfruit:time machine = yes\nfruit:metadata = stream\nfruit:model = TimeCapsule" } }
                   - presets.each do |key, preset|
                     - active = share.extras.present? && preset[:params].split("\n").all? { |line| share.extras.include?(line) }
-                    button.btn.btn-sm class=("#{active ? 'btn-info' : 'btn-outline-secondary'}") onclick="toggleSharePreset(#{share.id}, '#{key}')" data-preset=key
-                      = preset[:label]
-
+                    button.btn.btn-sm.rounded-pill class=("#{active ? 'btn-info' : 'btn-outline-secondary'}") onclick="toggleSharePreset(#{share.id}, '#{key}')" data-preset=key style="font-size: 0.8rem; padding: 0.2rem 0.6rem;"
+                      | #{preset[:icon]} #{preset[:label]}
+                  - if advanced?
+                    a.text-muted.ms-2 href="#" onclick="document.getElementById('extras-editor-#{share.id}').style.display = document.getElementById('extras-editor-#{share.id}').style.display === 'none' ? '' : 'none'; return false;" title="Edit raw parameters" style="font-size: 0.9rem;"
+                      | ⚙️
                 - if advanced?
-                  .share-extras-custom
-                    a.text-muted.small href="#" onclick="document.getElementById('extras-editor-#{share.id}').style.display = document.getElementById('extras-editor-#{share.id}').style.display === 'none' ? '' : 'none'; return false;"
-                      | Edit raw parameters...
-                    .extras-editor id="extras-editor-#{share.id}" style="display:none"
-                      form action=update_extras_share_path(id: share.id) method="post" onsubmit="submitExtras(#{share.id}, this); return false;"
-                        input type="hidden" name="_method" value="put"
-                        input type="hidden" name="authenticity_token" value=form_authenticity_token
-                        textarea.form-control.form-control-sm.font-monospace name="share[extras]" rows="4" placeholder="key = value (one per line)" id="extras-textarea-#{share.id}"
-                          = share.extras
-                        .mt-1
-                          button.btn.btn-info.btn-sm type="submit" Save
-                          span.ms-2.text-success.small id="extras-msg-#{share.id}" style="display:none" Saved!
+                  .extras-editor.mt-2 id="extras-editor-#{share.id}" style="display:none"
+                    form action=update_extras_share_path(id: share.id) method="post" onsubmit="submitExtras(#{share.id}, this); return false;"
+                      input type="hidden" name="_method" value="put"
+                      input type="hidden" name="authenticity_token" value=form_authenticity_token
+                      textarea.form-control.form-control-sm.font-monospace name="share[extras]" rows="3" placeholder="key = value (one per line)" id="extras-textarea-#{share.id}" style="font-size: 0.8rem;"
+                        = share.extras
+                      .mt-1
+                        button.btn.btn-info.btn-sm type="submit" style="font-size: 0.8rem;" Save
+                        span.ms-2.text-success.small id="extras-msg-#{share.id}" style="display:none" Saved!
