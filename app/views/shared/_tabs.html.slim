@@ -3,7 +3,7 @@
   ul.nav.nav-tabs.setup-main-tab
     - @tabs.each do |tab|
       li.nav-item
-          - if tab_class(tab).blank?
+          - if !tab_class(tab)&.include?('active')
               a.nav-link.active.text-capitalize.tab-link-style href="#{tab.url}"
                 = t(tab.label)
               
