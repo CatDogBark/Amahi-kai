@@ -31,13 +31,13 @@
           .d-flex.gap-1.justify-content-end
             - if installed && app.host_port.present?
               a.btn.btn-sm.btn-success href="http://#{request.host}:#{app.host_port}" target="_blank" Open
-            = button_to 'Stop', "/tab/apps/docker/stop/#{identifier}", method: :post, class: 'btn btn-sm btn-outline-danger'
+            button.btn.btn-sm.btn-outline-danger onclick="dockerAppAction('/tab/apps/docker/stop/#{identifier}')" Stop
         - when 'stopped'
           .d-flex.gap-1.justify-content-end
-            = button_to 'Start', "/tab/apps/docker/start/#{identifier}", method: :post, class: 'btn btn-sm btn-outline-success'
-            = button_to 'Uninstall', "/tab/apps/docker/uninstall/#{identifier}", method: :post, class: 'btn btn-sm btn-outline-danger', data: { confirm: "Uninstall #{name}? This will remove the container and its data." }
+            button.btn.btn-sm.btn-outline-success onclick="dockerAppAction('/tab/apps/docker/start/#{identifier}')" Start
+            button.btn.btn-sm.btn-outline-danger onclick="if(confirm('Uninstall #{name}? This removes the container and its data.')){dockerAppAction('/tab/apps/docker/uninstall/#{identifier}')}" Uninstall
         - when 'error'
           .d-flex.gap-1.align-items-center.justify-content-end
             span.badge.bg-danger Error
             button.btn.btn-sm.btn-outline-primary onclick="openAppInstall('#{identifier}', '#{apps_engine.docker_install_stream_path(identifier)}', '#{name}')" title="Retry" ↻
-            = button_to 'Uninstall', "/tab/apps/docker/uninstall/#{identifier}", method: :post, class: 'btn btn-sm btn-outline-danger'
+            button.btn.btn-sm.btn-outline-danger onclick="if(confirm('Uninstall #{name}?')){dockerAppAction('/tab/apps/docker/uninstall/#{identifier}')}" Uninstall
