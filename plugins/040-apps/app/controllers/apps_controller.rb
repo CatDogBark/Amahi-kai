@@ -19,7 +19,7 @@ class AppsController < ApplicationController
 	before_action :admin_required
 
 	# make the JSON calls much more efficient by not invoking these filters
-	skip_before_action :before_action_hook, except: [:index, :installed, :docker_apps]
+	skip_before_action :before_action_hook, except: [:index, :installed, :docker_apps, :installed_apps]
 
 	def index
 		set_title t('apps')
