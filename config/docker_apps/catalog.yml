@@ -58,7 +58,7 @@ apps:
     category: development
     url_path: /gitea
     ports:
-      3000: 3000
+      3000: 3300
       22: 2222
     volumes:
       - /opt/amahi/apps/gitea/data:/data
@@ -206,6 +206,21 @@ apps:
     environment:
       GF_SERVER_ROOT_URL: http://localhost:3100/grafana
       GF_SECURITY_ADMIN_PASSWORD: admin
+
+  filebrowser:
+    name: FileBrowser
+    description: Web-based file manager with upload, download, and sharing capabilities
+    logo_url: https://raw.githubusercontent.com/filebrowser/logo/master/icon_raw.svg
+    image: filebrowser/filebrowser
+    category: storage
+    url_path: /filebrowser
+    ports:
+      80: 8085
+    volumes:
+      - /var/hda/files:/srv
+      - /opt/amahi/apps/filebrowser/database.db:/database.db
+      - /opt/amahi/apps/filebrowser/.filebrowser.json:/.filebrowser.json
+    environment: {}
 
   audiobookshelf:
     name: Audiobookshelf

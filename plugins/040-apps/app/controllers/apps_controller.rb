@@ -216,7 +216,7 @@ class AppsController < ApplicationController
 	# ─── Docker Apps ──────────────────────────────────────────
 
 	def docker_apps
-		set_title t('docker_apps', default: 'Docker Apps')
+		set_title t('apps')
 		@docker_installed = DockerService.installed?
 		@docker_running = DockerService.running?
 		@current_category = params[:category]
