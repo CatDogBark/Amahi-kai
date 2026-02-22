@@ -10,7 +10,7 @@
         .settings-fields
           table
             tr
-              td
+              td.pe-3
                 label #{t("workgroup_name")}
               td data-controller="inline-edit" data-inline-edit-url-value="/shares/#{@workgroup.try(:id)}/update_workgroup" data-inline-edit-method-value="PUT"
                 a.workgroup_click_change href="#" data-inline-edit-target="display" data-action="click->inline-edit#edit"
