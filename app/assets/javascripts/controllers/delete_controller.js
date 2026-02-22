@@ -43,6 +43,15 @@
               target.style.opacity = "0";
               setTimeout(function() { target.remove(); }, 500);
             }
+            // Show success notification
+            var flash = document.querySelector('.flash-messages') || document.querySelector('.container');
+            if (flash) {
+              var alert = document.createElement('div');
+              alert.className = 'alert alert-success alert-dismissible fade show mt-2';
+              alert.innerHTML = 'Deleted successfully <button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+              flash.prepend(alert);
+              setTimeout(function() { alert.remove(); }, 3000);
+            }
             _this.dispatch("success", { detail: data });
           } else {
             if (_this.hasSpinnerTarget) _this.spinnerTarget.style.display = "none";
