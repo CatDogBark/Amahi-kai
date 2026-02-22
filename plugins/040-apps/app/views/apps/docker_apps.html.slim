@@ -1,18 +1,23 @@
-- unless @docker_installed
+- if !@docker_installed
   .card.mb-4.border-warning
     .card-body.text-center.py-5
       h4.mb-3 Docker is not installed
       p.text-muted.mb-4 Docker is required to run containerized apps. Click below to install Docker Engine on this server.
       - install_url = apps_engine.install_docker_stream_path
       button.btn.btn-primary.btn-lg onclick="openInstallTerminal('docker', '#{install_url}')" Install Docker
-- elsif !@docker_running
+
+- if !@docker_installed
+  == render 'shared/install_terminal', id: 'docker', title: 'Installing Docker', stream_url: apps_engine.install_docker_stream_path
+
+- if @docker_installed && !@docker_running
   .card.mb-4.border-warning
     .card-body.text-center.py-4
       h5.mb-3 Docker is installed but not running
       p.text-muted.mb-3 The Docker service needs to be started before you can manage apps.
       = form_tag apps_engine.start_docker_path, method: :post do
         button.btn.btn-warning type="submit" Start Docker
-- else
+
+- if @docker_installed && @docker_running
   - if @categories.any?
     .app-store-header.row
       .col-12
@@ -35,9 +40,5 @@
         div.align-center.default-message
           h4= t('no_docker_apps', default: 'No Docker apps available')
           p= t('docker_not_configured', default: 'Check that Docker is installed and the app catalog is configured.')
-
-/ Install terminal rendered outside conditional to avoid Slim block issues with ERB partials
-- unless @docker_installed
-  == render 'shared/install_terminal', id: 'docker', title: 'Installing Docker', stream_url: apps_engine.install_docker_stream_path
 
 = javascript_include_tag 'apps'
