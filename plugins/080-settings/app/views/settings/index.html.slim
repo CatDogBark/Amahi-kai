@@ -16,12 +16,7 @@ div.settings-fields.settings-wrap.bg-white.p-2.mb-2
         td.pe-3
           label = t 'advanced_settings'
         td
-          span data-controller="toggle" data-toggle-url-value=settings_engine.toggle_setting_path(id: @advanced_settings) data-toggle-reload-value="true" data-toggle-confirm-value=(@advanced_settings.set? ? nil : [t('avanced_settings_is_for_developers'), '', '', t('are_you_sure_advanced_features')].join("\n"))
-            input.form-check-input type="checkbox" id="advanced" checked=@advanced_settings.set? data-toggle-target="checkbox" data-action="click->toggle#toggle"
-            |  
-            span.spinner.theme-image data-toggle-target="spinner" style="display:none"
-          a href="http://wiki.amahi.org/index.php/Advanced_Settings" target="_blank" class="more-info"
-            i.icon-more
+          input.form-check-input type="checkbox" id="advanced" checked=@advanced_settings.set? onclick="fetch('#{toggle_advanced_path}', {method:'POST', headers:{'X-CSRF-Token':document.querySelector('meta[name=csrf-token]').content}}).then(function(){location.reload()});return false;"
 
 div.settings-fields.settings-wrap.bg-white.p-2
   fieldset
