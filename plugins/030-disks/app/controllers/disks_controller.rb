@@ -82,23 +82,25 @@ class DisksController < ApplicationController
       part.destroy
       checked = false
     else
-      require 'partition_utils'
-      if PartitionUtils.new.info.select { |p| p[:path] == path }.empty? || !Pathname.new(path).mountpoint?
-        checked = false
-      else
-        min_free = path == '/' ? 20 : 10
-        DiskPoolPartition.create(path: path, minimum_free: min_free)
-        checked = true
-      end
+      min_free = 10
+      DiskPoolPartition.create!(path: path, minimum_free: min_free)
+      checked = true
     end
 
     # Regenerate Greyhole config whenever pool membership changes
-    Greyhole.configure! if Greyhole.installed?
+    begin
+      Greyhole.configure! if Greyhole.installed?
+    rescue => e
+      Rails.logger.error("Greyhole configure failed: #{e.message}")
+    end
 
     respond_to do |format|
       format.html { redirect_to disks_engine.storage_pool_path }
-      format.any { render partial: 'share/disk_pooling_partition_checkbox', locals: { checked: checked, path: path }, layout: false }
+      format.any { render json: { status: 'ok', checked: checked, path: path } }
     end
+  rescue => e
+    Rails.logger.error("Toggle disk pool error: #{e.message}\n#{e.backtrace.first(5).join("\n")}")
+    render json: { status: 'error', message: e.message }, status: :internal_server_error
   end
 
   def toggle_greyhole

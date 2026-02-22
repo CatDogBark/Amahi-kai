@@ -21,22 +21,20 @@
         headers: csrfHeaders(),
         credentials: 'same-origin'
       })
-        .then(function(response) { return response.text(); })
-        .then(function(html) {
-          // Parse the response to get the new checked state
-          var temp = document.createElement('div');
-          temp.innerHTML = html;
-          var newCheckbox = temp.querySelector('input[type="checkbox"]');
-          var isChecked = newCheckbox && newCheckbox.hasAttribute('checked');
-
-          checkbox.checked = isChecked;
-          label.textContent = isChecked ? 'In pool' : 'Add to pool';
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+          if (data.status === 'ok') {
+            checkbox.checked = data.checked;
+            label.textContent = data.checked ? 'In pool' : 'Add to pool';
+          } else {
+            console.error("Pool toggle error:", data.message);
+            checkbox.checked = !checkbox.checked;
+          }
           checkbox.disabled = false;
           spinner.style.display = 'none';
         })
         .catch(function(err) {
           console.error("Pool toggle failed:", err);
-          // Revert checkbox
           checkbox.checked = !checkbox.checked;
           checkbox.disabled = false;
           spinner.style.display = 'none';
