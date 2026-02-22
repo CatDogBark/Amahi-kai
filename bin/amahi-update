@@ -84,7 +84,9 @@ sudo -u "$APP_USER" bash -lc "cd $APP_DIR && bundle config set --local path 'ven
 log "Running database migrations..."
 RAILS_ENV=production bin/rails db:migrate 2>&1
 
-# 4. Precompile assets
+# 4. Clear cache and precompile assets
+log "Clearing caches..."
+rm -rf "$APP_DIR/tmp/cache" "$APP_DIR/public/assets"
 log "Precompiling assets..."
 RAILS_ENV=production bin/rails assets:precompile 2>&1
 
