@@ -252,33 +252,166 @@ class AppsController < ApplicationController
 	def docker_install
 		identifier = params[:id]
 		entry = load_catalog.find { |e| e[:identifier] == identifier }
-
 		unless entry
-			render json: { status: :not_found, message: "App not found in catalog" }, status: :not_found
+			redirect_to '/tab/apps', alert: "App not found"
 			return
 		end
+		# Just redirect — actual install happens via streaming terminal
+		redirect_to '/tab/apps'
+	end
 
-		# Create or find the DockerApp record
-		docker_app = DockerApp.find_or_initialize_by(identifier: identifier)
-		docker_app.assign_attributes(
-			name: entry[:name],
-			description: entry[:description],
-			image: entry[:image],
-			category: entry[:category],
-			logo_url: entry[:logo_url],
-			port_mappings: entry[:ports],
-			volume_mappings: entry[:volumes],
-			environment: entry[:environment],
-			status: 'installing'
-		)
-		docker_app.save!
+	def docker_install_stream
+		identifier = params[:id]
+		entry = load_catalog.find { |e| e[:identifier] == identifier }
 
-		# Install in background
-		docker_app.install_async!
+		response.headers['Content-Type'] = 'text/event-stream'
+		response.headers['Cache-Control'] = 'no-cache, no-store'
+		response.headers['X-Accel-Buffering'] = 'no'
+		response.headers['Connection'] = 'keep-alive'
+		response.headers['Last-Modified'] = Time.now.httpdate
 
-		redirect_to '/tab/apps/docker_apps', notice: "Installing #{entry[:name]}..."
-	rescue => e
-		redirect_to '/tab/apps/docker_apps', alert: "Install failed: #{e.message}"
+		self.response_body = Enumerator.new do |yielder|
+			sse_send = ->(data, event = nil) {
+				msg = ""
+				msg += "event: #{event}\n" if event
+				msg += "data: #{data}\n\n"
+				yielder << msg
+			}
+
+			unless entry
+				sse_send.call("App not found in catalog")
+				sse_send.call("error", "done")
+				next
+			end
+
+			app_name = entry[:name]
+			image = entry[:image]
+
+			sse_send.call("Installing #{app_name}...")
+			sse_send.call("")
+
+			unless Rails.env.production?
+				# Dev/test simulation
+				lines = [
+					"Creating app record...",
+					"Pulling image #{image}...",
+					"  Pulling from library/#{image}",
+					"  Downloading layer 1/5...",
+					"  Downloading layer 2/5...",
+					"  Downloading layer 3/5...",
+					"  Downloading layer 4/5...",
+					"  Downloading layer 5/5...",
+					"  Pull complete",
+					"Creating container amahi-#{identifier}...",
+					"  Port mapping: #{entry[:ports].map { |c,h| "#{h} -> #{c}" }.join(', ')}",
+					"Starting container...",
+					"",
+					"✓ #{app_name} installed and running!",
+					"  Access at port #{entry[:ports].values.first}"
+				]
+				lines.each { |l| sleep(0.4); sse_send.call(l) }
+
+				# Create the DB record
+				docker_app = DockerApp.find_or_initialize_by(identifier: identifier)
+				docker_app.assign_attributes(
+					name: entry[:name], description: entry[:description],
+					image: image, category: entry[:category],
+					logo_url: entry[:logo_url], port_mappings: entry[:ports],
+					volume_mappings: entry[:volumes], environment: entry[:environment],
+					status: 'running', container_name: "amahi-#{identifier}",
+					host_port: entry[:ports].values.first
+				)
+				docker_app.save!
+				sse_send.call("success", "done")
+			else
+				begin
+					# Create DB record
+					docker_app = DockerApp.find_or_initialize_by(identifier: identifier)
+					docker_app.assign_attributes(
+						name: entry[:name], description: entry[:description],
+						image: image, category: entry[:category],
+						logo_url: entry[:logo_url], port_mappings: entry[:ports],
+						volume_mappings: entry[:volumes], environment: entry[:environment],
+						status: 'pulling'
+					)
+					docker_app.save!
+
+					# Create volume directories
+					(entry[:volumes] || []).each do |mapping|
+						host_path = mapping.is_a?(String) ? mapping.split(':').first : mapping.values.first
+						sse_send.call("Creating directory #{host_path}...")
+						FileUtils.mkdir_p(host_path) rescue nil
+					end
+
+					# Pull image with progress
+					sse_send.call("Pulling image #{image}...")
+					IO.popen("docker pull #{image} 2>&1") do |io|
+						io.each_line { |line| sse_send.call("  #{line.chomp}") }
+					end
+					unless $?.success?
+						raise "Failed to pull image #{image}"
+					end
+					sse_send.call("  ✓ Pull complete")
+
+					# Build docker run command
+					docker_app.update!(status: 'installing')
+					container_name = "amahi-#{identifier}"
+					cmd_parts = ["docker", "create", "--name", container_name, "--restart", "unless-stopped"]
+
+					# Port mappings
+					(entry[:ports] || {}).each do |container_port, host_port|
+						cmd_parts += ["-p", "#{host_port}:#{container_port}"]
+					end
+
+					# Volume mappings
+					(entry[:volumes] || []).each do |mapping|
+						if mapping.is_a?(String)
+							cmd_parts += ["-v", mapping]
+						else
+							mapping.each { |cp, hp| cmd_parts += ["-v", "#{hp}:#{cp}"] }
+						end
+					end
+
+					# Environment
+					(entry[:environment] || {}).each do |key, val|
+						cmd_parts += ["-e", "#{key}=#{val}"]
+					end
+
+					# Labels
+					cmd_parts += ["-l", "amahi.managed=true", "-l", "amahi.app=#{identifier}"]
+					cmd_parts << image
+
+					sse_send.call("Creating container #{container_name}...")
+					create_cmd = cmd_parts.map { |p| Shellwords.escape(p) }.join(' ')
+					result = `#{create_cmd} 2>&1`
+					sse_send.call("  #{result.strip}") if result.present?
+
+					unless $?.success?
+						raise "Failed to create container"
+					end
+
+					sse_send.call("Starting container...")
+					system("docker start #{container_name} 2>/dev/null")
+
+					first_port = (entry[:ports] || {}).values.first
+					docker_app.update!(
+						status: 'running',
+						container_name: container_name,
+						host_port: first_port
+					)
+
+					sse_send.call("")
+					sse_send.call("✓ #{app_name} installed and running!")
+					sse_send.call("  Access at http://#{request.host}:#{first_port}") if first_port
+					sse_send.call("success", "done")
+
+				rescue => e
+					docker_app&.update(status: 'error', error_message: e.message)
+					sse_send.call("✗ #{e.message}")
+					sse_send.call("error", "done")
+				end
+			end
+		end
 	end
 
 	def docker_uninstall

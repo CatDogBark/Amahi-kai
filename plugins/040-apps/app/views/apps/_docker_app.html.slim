@@ -12,7 +12,7 @@
       td.settings-col1.settings-col1-pad1.apps-col1
         .d-flex.align-items-center
           - if logo.present?
-            img.me-2 src=logo style="width:32px;height:32px;border-radius:4px" alt=name onerror="this.style.display='none'"
+            img.me-2 src=logo style="width:32px;height:32px;border-radius:4px;object-fit:contain" alt=name onerror="this.outerHTML='<span class=\'me-2 d-inline-flex align-items-center justify-content-center bg-secondary text-white rounded\' style=\'width:32px;height:32px;font-size:14px;\'>📦</span>'"
           span.fw-bold= name
           - if category.present?
             span.badge.bg-secondary.ms-2.small= category
@@ -21,7 +21,8 @@
       td.text-end.pe-3 style='width: 120px'
         - case status
         - when 'available'
-          = link_to t('install', default: 'Install'), "/tab/apps/docker/install/#{identifier}", method: :post, class: 'btn btn-sm btn-primary', data: { turbo: false }
+          button.btn.btn-sm.btn-primary onclick="openAppInstall('#{identifier}', '#{apps_engine.docker_install_stream_path(identifier)}', '#{name}')"
+            = t('install', default: 'Install')
         - when 'pulling', 'installing'
           span.badge.bg-warning.text-dark
             span.spinner-border.spinner-border-sm.me-1

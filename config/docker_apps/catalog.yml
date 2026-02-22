@@ -3,7 +3,7 @@ apps:
   nextcloud:
     name: Nextcloud
     description: Self-hosted file sync and share platform with collaboration features
-    logo_url: https://upload.wikimedia.org/wikipedia/commons/6/60/Nextcloud_Logo.svg
+    logo_url: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/nextcloud.png
     image: linuxserver/nextcloud
     category: productivity
     url_path: /nextcloud
@@ -20,7 +20,7 @@ apps:
   jellyfin:
     name: Jellyfin
     description: Free software media system for streaming movies, TV, music and more
-    logo_url: https://raw.githubusercontent.com/jellyfin/jellyfin-ux/master/branding/SVG/icon-transparent.svg
+    logo_url: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/jellyfin.png
     image: jellyfin/jellyfin
     category: media
     url_path: /jellyfin
@@ -36,7 +36,7 @@ apps:
   pihole:
     name: Pi-hole
     description: Network-wide DNS ad blocker and local DNS server
-    logo_url: https://pi-hole.github.io/graphics/Vortex/Vortex_Vertical.svg
+    logo_url: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/pi-hole.png
     image: pihole/pihole
     category: networking
     url_path: /admin
@@ -53,7 +53,7 @@ apps:
   gitea:
     name: Gitea
     description: Lightweight self-hosted Git service for code hosting and collaboration
-    logo_url: https://about.gitea.com/gitea.png
+    logo_url: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/gitea.png
     image: gitea/gitea
     category: development
     url_path: /gitea
@@ -69,7 +69,7 @@ apps:
   portainer:
     name: Portainer
     description: Universal container management UI for Docker and Kubernetes
-    logo_url: https://www.portainer.io/hubfs/portainer-logo-black.svg
+    logo_url: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/portainer.png
     image: portainer/portainer-ce
     category: development
     url_path: /portainer
@@ -83,7 +83,7 @@ apps:
   homeassistant:
     name: Home Assistant
     description: Open-source home automation platform for smart home control
-    logo_url: https://brands.home-assistant.io/homeassistant/logo.png
+    logo_url: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/home-assistant.png
     image: homeassistant/home-assistant
     category: networking
     url_path: /homeassistant
@@ -97,7 +97,7 @@ apps:
   vaultwarden:
     name: Vaultwarden
     description: Lightweight Bitwarden-compatible password manager server
-    logo_url: https://raw.githubusercontent.com/dani-garcia/vaultwarden/main/resources/vaultwarden-icon.svg
+    logo_url: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/vaultwarden.png
     image: vaultwarden/server
     category: productivity
     url_path: /vaultwarden
@@ -111,7 +111,7 @@ apps:
   syncthing:
     name: Syncthing
     description: Continuous peer-to-peer file synchronization between devices
-    logo_url: https://syncthing.net/img/logo-horizontal.svg
+    logo_url: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/syncthing.png
     image: syncthing/syncthing
     category: storage
     url_path: /syncthing
@@ -128,7 +128,7 @@ apps:
   uptimekuma:
     name: Uptime Kuma
     description: Self-hosted monitoring tool for tracking service uptime and status
-    logo_url: https://uptime.kuma.pet/img/icon.svg
+    logo_url: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/uptime-kuma.png
     image: louislam/uptime-kuma
     category: monitoring
     url_path: /uptimekuma
@@ -141,7 +141,7 @@ apps:
   transmission:
     name: Transmission
     description: Fast and lightweight BitTorrent client with web interface
-    logo_url: https://transmissionbt.com/assets/images/Transmission_icon.png
+    logo_url: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/transmission.png
     image: linuxserver/transmission
     category: media
     url_path: /transmission
@@ -159,7 +159,7 @@ apps:
   paperlessngx:
     name: Paperless-ngx
     description: Document management system that transforms physical documents into searchable archive
-    logo_url: https://docs.paperless-ngx.com/assets/logo.svg
+    logo_url: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/paperless-ngx.png
     image: paperlessngx/paperless-ngx
     category: productivity
     url_path: /paperless
@@ -177,7 +177,7 @@ apps:
   immich:
     name: Immich
     description: High-performance self-hosted photo and video management solution
-    logo_url: https://immich.app/img/immich-logo.svg
+    logo_url: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/immich.png
     image: ghcr.io/immich-app/immich-server
     category: storage
     url_path: /immich
@@ -195,7 +195,7 @@ apps:
   grafana:
     name: Grafana
     description: Analytics and interactive visualization platform for monitoring dashboards
-    logo_url: https://grafana.com/static/img/menu/grafana2.svg
+    logo_url: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/grafana.png
     image: grafana/grafana
     category: monitoring
     url_path: /grafana
@@ -210,7 +210,7 @@ apps:
   filebrowser:
     name: FileBrowser
     description: Web-based file manager with upload, download, and sharing capabilities
-    logo_url: https://raw.githubusercontent.com/filebrowser/logo/master/icon_raw.svg
+    logo_url: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/filebrowser.png
     image: filebrowser/filebrowser
     category: storage
     url_path: /filebrowser
@@ -225,7 +225,7 @@ apps:
   audiobookshelf:
     name: Audiobookshelf
     description: Self-hosted audiobook and podcast server with progress tracking
-    logo_url: https://www.audiobookshelf.org/Logo.png
+    logo_url: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/audiobookshelf.png
     image: ghcr.io/advplyr/audiobookshelf
     category: media
     url_path: /audiobookshelf
