@@ -21,7 +21,7 @@ class Greyhole
 
     def running?
       return false unless production?
-      system('systemctl is-active --quiet greyhole')
+      system('systemctl is-active --quiet greyhole.service')
     end
 
     def status
@@ -81,17 +81,17 @@ class Greyhole
 
     def start!
       return true unless production?
-      system('sudo systemctl start greyhole')
+      system('sudo systemctl start greyhole.service')
     end
 
     def stop!
       return true unless production?
-      system('sudo systemctl stop greyhole')
+      system('sudo systemctl stop greyhole.service')
     end
 
     def restart!
       return true unless production?
-      system('sudo systemctl restart greyhole')
+      system('sudo systemctl restart greyhole.service')
     end
 
     def pool_drives
