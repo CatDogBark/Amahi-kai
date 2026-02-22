@@ -1,17 +1,16 @@
 - share = access
 
-.access
-  span data-controller="toggle" data-toggle-url-value=toggle_everyone_share_path(id: share.id) data-toggle-reload-value="true"
+.access id="share-access-#{share.id}"
+  span data-controller="toggle" data-toggle-url-value=toggle_everyone_share_path(id: share.id)
     input.share_everyone_checkbox.form-check-input type="checkbox" id="share_everyone_#{share.id}" checked=share.everyone data-toggle-target="checkbox" data-action="click->toggle#toggle"
     |  #{t('all_users')}
   | &nbsp;&nbsp;&nbsp;
-  - if share.everyone
+  span style=("display:none" unless share.everyone) data-access-show="everyone"
     span data-controller="toggle" data-toggle-url-value=toggle_readonly_share_path(id: share.id)
       input.share_readonly_checkbox.form-check-input type="checkbox" id="share_readonly_#{share.id}" checked=(!share.rdonly) data-toggle-target="checkbox" data-action="click->toggle#toggle"
       |  #{t('writeable')}
-  = spinner
 
-  - unless share.everyone or User.count < 1
+  .per-user-access style=("display:none" if share.everyone or User.count < 1) data-access-show="per-user"
     fieldset
       legend
         | &nbsp; #{t('users')} &nbsp;
@@ -31,7 +30,7 @@
               td= user.name
               td &nbsp;
               td.align-center
-                span data-controller="toggle" data-toggle-url-value=toggle_access_share_path(id: share.id, user_id: user.id) data-toggle-reload-value="true"
+                span data-controller="toggle" data-toggle-url-value=toggle_access_share_path(id: share.id, user_id: user.id)
                   input.share_access_checkbox.form-check-input type="checkbox" id="share_access_for_user#{user.id}" checked=share.users_with_share_access.include?(user) data-toggle-target="checkbox" data-action="click->toggle#toggle"
               td &nbsp;
               td &nbsp;
@@ -44,7 +43,7 @@
             td= t('anonymous_guests')
             td &nbsp;
             td.align-center
-              span data-controller="toggle" data-toggle-url-value=toggle_guest_access_share_path(id: share.id) data-toggle-reload-value="true"
+              span data-controller="toggle" data-toggle-url-value=toggle_guest_access_share_path(id: share.id)
                 input.share_guest_access_checkbox.form-check-input type="checkbox" id="share_guest_access_#{share.id}" checked=share.guest_access data-toggle-target="checkbox" data-action="click->toggle#toggle"
             td &nbsp;
             td &nbsp;

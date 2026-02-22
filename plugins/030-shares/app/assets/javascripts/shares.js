@@ -24,6 +24,39 @@ function updatePoolCopies(shareId, copies) {
     });
 }
 
+// When "All Users" is toggled, show/hide per-user section and writeable option
+document.addEventListener("toggle:success", function(e) {
+  var cb = e.target.querySelector('.share_everyone_checkbox');
+  if (!cb) return;
+  var container = cb.closest('.access');
+  if (!container) return;
+  var isEveryone = cb.checked;
+  var everyoneOpts = container.querySelector('[data-access-show="everyone"]');
+  var perUser = container.querySelector('[data-access-show="per-user"]');
+  if (everyoneOpts) everyoneOpts.style.display = isEveryone ? '' : 'none';
+  if (perUser) perUser.style.display = isEveryone ? 'none' : '';
+});
+
+// When per-user access is toggled, enable/disable the write checkbox
+document.addEventListener("toggle:success", function(e) {
+  var cb = e.target.querySelector('.share_access_checkbox');
+  if (!cb) return;
+  var row = cb.closest('tr');
+  if (!row) return;
+  var writeCb = row.querySelector('.share_write_checkbox');
+  if (writeCb) writeCb.disabled = !cb.checked;
+});
+
+// When guest access is toggled, enable/disable guest writeable
+document.addEventListener("toggle:success", function(e) {
+  var cb = e.target.querySelector('.share_guest_access_checkbox');
+  if (!cb) return;
+  var row = cb.closest('tr');
+  if (!row) return;
+  var writeCb = row.querySelector('.share_guest_writeable_checkbox');
+  if (writeCb) writeCb.disabled = !cb.checked;
+});
+
 document.addEventListener("DOMContentLoaded", function() {
   // Auto-fill path when name is entered
   document.addEventListener("blur", function(event) {

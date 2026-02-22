@@ -8,12 +8,12 @@
 //     input[type="checkbox"][data-toggle-target="checkbox"]
 //       [data-action="click->toggle#toggle"]
 //       [data-toggle-url-value="/some/path"]
-//     span.spinner[data-toggle-target="spinner" style="display:none"]
 //
 // Optional:
 //   data-toggle-confirm-value="Are you sure?" — shows confirm dialog
 //   data-toggle-method-value="put" — HTTP method (default: PUT)
 //   data-toggle-reload-value="true" — reload page after success
+//   data-toggle-target="spinner" — custom spinner element (auto-created if missing)
 
 (function() {
   var ToggleController = class extends Stimulus.Controller {
@@ -31,7 +31,20 @@
       var url = this.hasUrlValue ? this.urlValue : this.checkboxTarget.dataset.url;
       var method = this.hasMethodValue ? this.methodValue : "PUT";
 
-      if (this.hasSpinnerTarget) this.spinnerTarget.style.display = "";
+      // Disable checkbox during request
+      if (this.hasCheckboxTarget) this.checkboxTarget.disabled = true;
+
+      // Show spinner (auto-create inline spinner if no target defined)
+      var spinner = null;
+      if (this.hasSpinnerTarget) {
+        spinner = this.spinnerTarget;
+        spinner.style.display = "";
+      } else if (this.hasCheckboxTarget) {
+        spinner = document.createElement("span");
+        spinner.className = "spinner-border spinner-border-sm ms-1 text-muted";
+        spinner.setAttribute("role", "status");
+        this.checkboxTarget.parentNode.insertBefore(spinner, this.checkboxTarget.nextSibling);
+      }
 
       var headers = csrfHeaders();
       headers["Content-Type"] = "application/x-www-form-urlencoded; charset=utf-8";
@@ -51,7 +64,14 @@
         })
         .catch(function(err) { console.error("Toggle failed:", err); })
         .finally(function() {
-          if (_this.hasSpinnerTarget) _this.spinnerTarget.style.display = "none";
+          // Re-enable checkbox
+          if (_this.hasCheckboxTarget) _this.checkboxTarget.disabled = false;
+          // Remove/hide spinner
+          if (_this.hasSpinnerTarget) {
+            spinner.style.display = "none";
+          } else if (spinner) {
+            spinner.remove();
+          }
           if (_this.hasReloadValue && _this.reloadValue) window.location.reload();
         });
     }
