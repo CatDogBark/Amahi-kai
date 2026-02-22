@@ -36,12 +36,8 @@
 
 ## In Progress 🔨
 
-### Advanced Settings Rework
-- Remove Guest Dashboard (dead feature)
-- Rework simple/advanced mode split: simple = safe daily ops, advanced = system config
-- Hide Network tab entirely in simple mode
-- Mark Docker Apps, Servers, Themes, System Status, Share Settings as advanced
-- Add 🔧 toggle to header bar for quick switching
+### ~~Advanced Settings Rework~~ ✅
+### ~~Docker Apps 500 fix~~ ✅ (Slim/ERB partial conflict)
 
 ---
 
@@ -50,6 +46,9 @@
 ### Test Coverage (57% → 70%+)
 Edge cases, error paths, integration tests for sudo-based workflows.
 ~603 specs, ~6 real failures remaining (docker_apps 500s in test).
+
+### Greyhole Testing
+Real drives, real files. Verify storage pooling, file duplication, and share integration end-to-end.
 
 ### Cloudflare Tunnel on .111 box
 Tunnel not routing to Puma — needs config fix on host. Troy will handle.
