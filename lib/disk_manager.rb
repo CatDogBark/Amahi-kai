@@ -125,6 +125,10 @@ class DiskManager
         File.write("/tmp/fstab.new", new_fstab)
         execute_command("sudo /usr/bin/cp /tmp/fstab.new /etc/fstab")
       end
+      # Clean up empty mount point directory
+      if mount_point.start_with?("/mnt/storage-")
+        execute_command("sudo /usr/bin/rmdir #{Shellwords.escape(mount_point)} 2>/dev/null")
+      end
     else
       Rails.logger.info("[DiskManager] SIMULATED: umount #{mount_point}") if defined?(Rails)
     end
@@ -174,13 +178,23 @@ class DiskManager
   end
 
   def self.auto_mount_point
-    existing = Dir.glob("/mnt/storage-*").sort
-    next_num = 1
-    if existing.any?
-      nums = existing.map { |p| p.match(/storage-(\d+)/)&.captures&.first&.to_i }.compact
-      next_num = (nums.max || 0) + 1
+    # Find the lowest available storage number (reuse gaps from unmounted drives)
+    num = 1
+    loop do
+      candidate = "/mnt/storage-#{num}"
+      # Available if the directory doesn't exist, or exists but is empty and not a mount point
+      if !Dir.exist?(candidate)
+        return candidate
+      elsif Dir.empty?(candidate) && !mount_point_active?(candidate)
+        return candidate
+      end
+      num += 1
     end
-    "/mnt/storage-#{next_num}"
+  end
+
+  def self.mount_point_active?(path)
+    output = execute_command("mountpoint -q #{Shellwords.escape(path)} 2>/dev/null; echo $?")
+    output.to_s.strip == "0"
   end
 
   def self.production?
