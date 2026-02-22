@@ -1,0 +1,146 @@
+<div class="settings-table" id="gateway-settings">
+  <% if flash[:notice] %>
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+      <%= flash[:notice] %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% end %>
+  <% if flash[:alert] %>
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+      <%= flash[:alert] %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% end %>
+
+  <% unless @dnsmasq_installed %>
+    <!-- Not installed -->
+    <div class="card mb-3">
+      <div class="card-header bg-dark text-white">
+        <h5 class="mb-0">Gateway Mode (DHCP/DNS Server)</h5>
+      </div>
+      <div class="card-body">
+        <p class="text-muted">
+          Use your NAS as the network gateway — it will act as the DHCP and DNS server for your local network.
+          This replaces your router's DHCP/DNS. <strong>Only enable this if you know what you're doing.</strong>
+        </p>
+        <p class="text-muted small">
+          <strong>When to use this:</strong> You want your NAS to assign IP addresses, manage local DNS names,
+          and have full control over your network. Most users don't need this — your router handles it fine.
+        </p>
+        <button type="button" class="btn btn-primary" onclick="openInstallTerminal('dnsmasq')">
+          Install dnsmasq
+        </button>
+      </div>
+    </div>
+
+  <% else %>
+    <!-- Installed — Status + Config -->
+    <div class="card mb-3">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Gateway Mode (DHCP/DNS Server)</h5>
+        <% if @dnsmasq_running %>
+          <span class="badge bg-success">Running</span>
+        <% else %>
+          <span class="badge bg-secondary">Stopped</span>
+        <% end %>
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          dnsmasq provides DHCP (automatic IP assignment) and DNS (local name resolution) for your network.
+          Configure the settings below, then start the service.
+        </p>
+
+        <form action="<%= network_engine.update_dnsmasq_config_path %>" method="post">
+          <input type="hidden" name="_method" value="put">
+          <input type="hidden" name="authenticity_token" value="<%= form_authenticity_token %>">
+
+          <div class="row g-3">
+            <!-- DHCP Settings -->
+            <div class="col-md-6">
+              <div class="card">
+                <div class="card-header"><strong>DHCP (IP Assignment)</strong></div>
+                <div class="card-body">
+                  <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" name="dhcp_enabled" value="1"
+                           id="dhcp-enabled" <%= @dnsmasq_dhcp.value == '1' ? 'checked' : '' %>>
+                    <label class="form-check-label" for="dhcp-enabled">Enable DHCP Server</label>
+                  </div>
+
+                  <div class="mb-2">
+                    <label class="form-label small">IP Range</label>
+                    <div class="input-group input-group-sm">
+                      <span class="input-group-text"><%= @net %>.</span>
+                      <input type="number" class="form-control" name="dyn_lo" value="<%= @dyn_lo %>"
+                             min="2" max="253" placeholder="100">
+                      <span class="input-group-text">to</span>
+                      <span class="input-group-text"><%= @net %>.</span>
+                      <input type="number" class="form-control" name="dyn_hi" value="<%= @dyn_hi %>"
+                             min="3" max="254" placeholder="254">
+                    </div>
+                  </div>
+
+                  <div class="mb-2">
+                    <label class="form-label small">Gateway IP</label>
+                    <div class="input-group input-group-sm">
+                      <span class="input-group-text"><%= @net %>.</span>
+                      <input type="number" class="form-control" name="gateway" value="<%= @gateway_ip %>"
+                             min="1" max="254" placeholder="1">
+                    </div>
+                    <div class="form-text">Usually your router's IP</div>
+                  </div>
+
+                  <div class="mb-0">
+                    <label class="form-label small">Lease Time (seconds)</label>
+                    <input type="number" class="form-control form-control-sm" name="lease_time"
+                           value="<%= @lease_time %>" min="300" placeholder="14400">
+                    <div class="form-text">14400 = 4 hours (default)</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- DNS Settings -->
+            <div class="col-md-6">
+              <div class="card">
+                <div class="card-header"><strong>DNS (Name Resolution)</strong></div>
+                <div class="card-body">
+                  <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" name="dns_enabled" value="1"
+                           id="dns-enabled" <%= @dnsmasq_dns.value == '1' ? 'checked' : '' %>>
+                    <label class="form-check-label" for="dns-enabled">Enable Local DNS</label>
+                  </div>
+
+                  <p class="text-muted small">
+                    When enabled, your NAS resolves local hostnames (e.g. <code>mynas.local</code>)
+                    and forwards everything else to your upstream DNS.
+                  </p>
+                  <p class="text-muted small mb-0">
+                    DNS aliases configured in the <strong>DNS Aliases</strong> tab will be served by dnsmasq automatically.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-3 d-flex gap-2">
+            <button type="submit" class="btn btn-info">Save Configuration</button>
+
+            <% if @dnsmasq_running %>
+              <%= button_to "Stop dnsmasq", network_engine.stop_dnsmasq_path,
+                    method: :post, class: "btn btn-outline-danger",
+                    data: { confirm: "This will stop DHCP/DNS — devices on your network may lose connectivity. Continue?" } %>
+            <% else %>
+              <%= button_to "Start dnsmasq", network_engine.start_dnsmasq_path,
+                    method: :post, class: "btn btn-outline-success" %>
+            <% end %>
+          </div>
+        </form>
+      </div>
+    </div>
+  <% end %>
+</div>
+
+<%= render 'shared/install_terminal',
+     id: 'dnsmasq',
+     title: 'Installing dnsmasq',
+     stream_url: network_engine.install_dnsmasq_stream_path %>

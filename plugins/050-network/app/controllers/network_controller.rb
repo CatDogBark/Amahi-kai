@@ -161,6 +161,176 @@ class NetworkController < ApplicationController
     end
   end
 
+  # --- Gateway (dnsmasq DHCP/DNS) ---
+
+  def gateway
+    unless @advanced
+      redirect_to network_engine_path
+      return
+    end
+    @dnsmasq_installed = File.exist?('/usr/sbin/dnsmasq')
+    @dnsmasq_running = @dnsmasq_installed && `systemctl is-active dnsmasq 2>/dev/null`.strip == 'active'
+    @net = Setting.get('net') || '192.168.1'
+    @gateway_ip = Setting.find_or_create_by(KIND, 'gateway', '1').value
+    @dnsmasq_dhcp = Setting.find_or_create_by(KIND, 'dnsmasq_dhcp', '1')
+    @dnsmasq_dns = Setting.find_or_create_by(KIND, 'dnsmasq_dns', '1')
+    @dyn_lo = Setting.find_or_create_by(KIND, 'dyn_lo', '100').value
+    @dyn_hi = Setting.find_or_create_by(KIND, 'dyn_hi', '254').value
+    @lease_time = Setting.get("lease_time") || "14400"
+    @dns = Setting.find_or_create_by(KIND, 'dns', 'opendns')
+  end
+
+  def install_dnsmasq
+    redirect_to network_engine.gateway_path
+  end
+
+  def install_dnsmasq_stream
+    response.headers['Content-Type'] = 'text/event-stream'
+    response.headers['Cache-Control'] = 'no-cache, no-store'
+    response.headers['X-Accel-Buffering'] = 'no'
+    response.headers['Connection'] = 'keep-alive'
+    response.headers['Last-Modified'] = Time.now.httpdate
+
+    self.response_body = Enumerator.new do |yielder|
+      sse_send = ->(data, event = nil) {
+        msg = ""
+        msg += "event: #{event}\n" if event
+        msg += "data: #{data}\n\n"
+        yielder << msg
+      }
+
+      sse_send.call("Installing dnsmasq...")
+
+      unless Rails.env.production?
+        lines = [
+          "Updating package lists...",
+          "  Hit:1 http://archive.ubuntu.com/ubuntu noble InRelease",
+          "Installing dnsmasq...",
+          "  Reading package lists...",
+          "  Building dependency tree...",
+          "  The following NEW packages will be installed:",
+          "    dnsmasq dnsmasq-base",
+          "  Setting up dnsmasq (2.90-4) ...",
+          "Stopping dnsmasq (will not start until configured)...",
+          "  Stopped.",
+          "",
+          "✓ dnsmasq installed successfully!",
+          "  Configure DHCP/DNS settings below, then start the service."
+        ]
+        lines.each do |line|
+          sleep 0.3
+          sse_send.call(line)
+        end
+        sse_send.call("success", "done")
+      else
+        success = true
+
+        steps = [
+          { label: "Updating package lists...", cmd: "sudo apt-get update 2>&1" },
+          { label: "Installing dnsmasq...", cmd: "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y dnsmasq 2>&1" },
+        ]
+
+        steps.each do |step|
+          sse_send.call(step[:label])
+          IO.popen(step[:cmd]) do |io|
+            io.each_line { |line| sse_send.call("  #{line.chomp}") }
+          end
+          unless $?.success?
+            sse_send.call("  ✗ Command failed")
+            success = false
+            break
+          end
+        end
+
+        if success
+          # Stop dnsmasq immediately — don't interfere with network until configured
+          sse_send.call("Stopping dnsmasq (safe until configured)...")
+          system("sudo systemctl stop dnsmasq.service 2>/dev/null")
+          system("sudo systemctl disable dnsmasq.service 2>/dev/null")
+          sse_send.call("  ✓ Stopped and disabled (configure settings, then start)")
+
+          sse_send.call("")
+          sse_send.call("✓ dnsmasq installed successfully!")
+          sse_send.call("success", "done")
+        else
+          sse_send.call("✗ Installation failed.")
+          sse_send.call("error", "done")
+        end
+      end
+    end
+  end
+
+  def start_dnsmasq
+    sleep 1 if development?
+    system("sudo systemctl enable dnsmasq.service 2>/dev/null")
+    system("sudo systemctl start dnsmasq.service 2>/dev/null")
+    redirect_to network_engine.gateway_path
+  end
+
+  def stop_dnsmasq
+    sleep 1 if development?
+    system("sudo systemctl stop dnsmasq.service 2>/dev/null")
+    system("sudo systemctl disable dnsmasq.service 2>/dev/null")
+    redirect_to network_engine.gateway_path
+  end
+
+  def update_dnsmasq_config
+    sleep 1 if development?
+    net = Setting.get('net') || '192.168.1'
+
+    # Save settings
+    Setting.set("dyn_lo", params[:dyn_lo], KIND) if params[:dyn_lo].present?
+    Setting.set("dyn_hi", params[:dyn_hi], KIND) if params[:dyn_hi].present?
+    Setting.set("lease_time", params[:lease_time], KIND) if params[:lease_time].present?
+    Setting.set("gateway", params[:gateway], KIND) if params[:gateway].present?
+
+    dhcp_enabled = params[:dhcp_enabled] == '1'
+    dns_enabled = params[:dns_enabled] == '1'
+
+    dyn_lo = (params[:dyn_lo] || Setting.get("dyn_lo") || "100").to_i
+    dyn_hi = (params[:dyn_hi] || Setting.get("dyn_hi") || "254").to_i
+    gateway = params[:gateway] || Setting.get("gateway") || "1"
+    lease_time = (params[:lease_time] || Setting.get("lease_time") || "14400").to_i
+
+    # Generate dnsmasq config
+    config_lines = []
+    config_lines << "# Amahi-kai dnsmasq configuration"
+    config_lines << "# Auto-generated — do not edit manually"
+    config_lines << ""
+
+    if dhcp_enabled
+      config_lines << "dhcp-range=#{net}.#{dyn_lo},#{net}.#{dyn_hi},#{lease_time}s"
+      config_lines << "dhcp-option=option:router,#{net}.#{gateway}"
+      config_lines << "dhcp-authoritative"
+    end
+
+    if dns_enabled
+      config_lines << "local=/#{Setting.get('domain') || 'local'}/"
+      config_lines << "expand-hosts"
+      config_lines << "domain=#{Setting.get('domain') || 'local'}"
+    end
+
+    config_lines << "bind-interfaces"
+    config_lines << "except-interface=lo"
+
+    # Write config
+    begin
+      staged = "/tmp/amahi-staging/dnsmasq-amahi.conf"
+      FileUtils.mkdir_p('/tmp/amahi-staging')
+      File.write(staged, config_lines.join("\n") + "\n")
+      system("sudo cp #{staged} /etc/dnsmasq.d/amahi.conf")
+
+      # Restart if running
+      if `systemctl is-active dnsmasq 2>/dev/null`.strip == 'active'
+        system("sudo systemctl restart dnsmasq.service")
+      end
+
+      redirect_to network_engine.gateway_path, notice: "Configuration saved"
+    rescue => e
+      redirect_to network_engine.gateway_path, alert: "Failed to save: #{e.message}"
+    end
+  end
+
   # --- Remote Access (Cloudflare Tunnel) ---
 
   def remote_access

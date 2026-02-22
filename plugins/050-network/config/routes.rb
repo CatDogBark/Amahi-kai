@@ -19,6 +19,14 @@ Network::Engine.routes.draw do
 	put 'toggle_setting/:id' => 'network#toggle_setting', as: 'toggle_setting'
 	put 'update_dhcp_range/:id' => 'network#update_dhcp_range', as: 'update_dhcp_range'
 
+	# Gateway (dnsmasq DHCP/DNS)
+	get 'gateway' => 'network#gateway'
+	post 'install_dnsmasq' => 'network#install_dnsmasq'
+	get 'install_dnsmasq_stream' => 'network#install_dnsmasq_stream'
+	post 'start_dnsmasq' => 'network#start_dnsmasq'
+	post 'stop_dnsmasq' => 'network#stop_dnsmasq'
+	put 'update_dnsmasq_config' => 'network#update_dnsmasq_config'
+
 	# Remote Access (Cloudflare Tunnel)
 	get 'remote_access' => 'network#remote_access'
 	post 'configure_tunnel' => 'network#configure_tunnel'
