@@ -264,14 +264,14 @@ class NetworkController < ApplicationController
     sleep 1 if development?
     system("sudo systemctl enable dnsmasq.service 2>/dev/null")
     system("sudo systemctl start dnsmasq.service 2>/dev/null")
-    redirect_to network_engine.gateway_path
+    redirect_to "/tab/network/gateway"
   end
 
   def stop_dnsmasq
     sleep 1 if development?
     system("sudo systemctl stop dnsmasq.service 2>/dev/null")
     system("sudo systemctl disable dnsmasq.service 2>/dev/null")
-    redirect_to network_engine.gateway_path
+    redirect_to "/tab/network/gateway"
   end
 
   def update_dnsmasq_config
@@ -325,9 +325,11 @@ class NetworkController < ApplicationController
         system("sudo systemctl restart dnsmasq.service")
       end
 
-      redirect_to network_engine.gateway_path, notice: "Configuration saved"
+      flash[:notice] = "Configuration saved"
+      redirect_to "/tab/network/gateway"
     rescue => e
-      redirect_to network_engine.gateway_path, alert: "Failed to save: #{e.message}"
+      flash[:alert] = "Failed to save: #{e.message}"
+      redirect_to "/tab/network/gateway"
     end
   end
 
