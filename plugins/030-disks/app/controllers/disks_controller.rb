@@ -92,6 +92,9 @@ class DisksController < ApplicationController
       end
     end
 
+    # Regenerate Greyhole config whenever pool membership changes
+    Greyhole.configure! if Greyhole.installed?
+
     respond_to do |format|
       format.html { redirect_to disks_engine.storage_pool_path }
       format.any { render partial: 'share/disk_pooling_partition_checkbox', locals: { checked: checked, path: path }, layout: false }
