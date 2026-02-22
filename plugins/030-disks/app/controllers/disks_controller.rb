@@ -189,21 +189,21 @@ class DisksController < ApplicationController
           ]},
           { label: "Pre-configuring Greyhole database...", commands: [
             { cmd: 'sudo mysql -u root -e "CREATE DATABASE IF NOT EXISTS greyhole" 2>&1', run: true },
-            { cmd: %Q(sudo mysql -u root -e "CREATE USER IF NOT EXISTS 'amahi'@'localhost' IDENTIFIED BY ''; GRANT ALL PRIVILEGES ON greyhole.* TO 'amahi'@'localhost'; ALTER USER 'amahi'@'localhost' IDENTIFIED BY ''; FLUSH PRIVILEGES;" 2>&1), run: true },
+            { cmd: %Q(sudo mysql -u root -e "CREATE USER IF NOT EXISTS 'amahi'@'localhost' IDENTIFIED BY '#{ENV.fetch("DATABASE_PASSWORD", "")}'; GRANT ALL PRIVILEGES ON greyhole.* TO 'amahi'@'localhost'; FLUSH PRIVILEGES;" 2>&1), run: true },
           ]},
           { label: "Configuring PHP dependencies...", commands: [
             { cmd: "sudo apt-get install -y php8.3-mbstring php8.3-mysql 2>&1", run: true },
             { cmd: "sudo phpenmod mbstring 2>&1", run: true },
           ]},
           { label: "Creating minimal Greyhole config...", commands: [
-            { cmd: "echo 'db_host = localhost\ndb_user = amahi\ndb_name = greyhole' | sudo tee /etc/greyhole.conf 2>&1", run: !File.exist?('/etc/greyhole.conf') },
+            { cmd: "echo 'db_host = localhost\ndb_user = amahi\ndb_pass = #{ENV.fetch('DATABASE_PASSWORD', '')}\ndb_name = greyhole' | sudo tee /etc/greyhole.conf 2>&1", run: !File.exist?('/etc/greyhole.conf') },
           ]},
           { label: "Installing Greyhole package...", commands: [
             { cmd: "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -o Dpkg::Options::=--force-confold greyhole 2>&1", run: true }
           ]},
           { label: "Loading Greyhole database schema...", commands: [
             { cmd: 'sudo mysql -u root -e "CREATE DATABASE IF NOT EXISTS greyhole" 2>&1', run: true },
-            { cmd: %Q(sudo mysql -u root -e "CREATE USER IF NOT EXISTS 'amahi'@'localhost' IDENTIFIED BY ''; GRANT ALL PRIVILEGES ON greyhole.* TO 'amahi'@'localhost'; ALTER USER 'amahi'@'localhost' IDENTIFIED BY ''; FLUSH PRIVILEGES;" 2>&1), run: true },
+            { cmd: %Q(sudo mysql -u root -e "CREATE USER IF NOT EXISTS 'amahi'@'localhost' IDENTIFIED BY '#{ENV.fetch("DATABASE_PASSWORD", "")}'; GRANT ALL PRIVILEGES ON greyhole.* TO 'amahi'@'localhost'; FLUSH PRIVILEGES;" 2>&1), run: true },
             { cmd: "sudo mysql -u root greyhole < /usr/share/greyhole/schema-mysql.sql 2>&1", run: File.exist?('/usr/share/greyhole/schema-mysql.sql') }
           ]},
           { label: "Enabling Greyhole service...", commands: [
