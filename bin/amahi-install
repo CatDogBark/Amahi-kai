@@ -70,7 +70,6 @@ apt-get install -y --no-install-recommends \
   mariadb-server \
   samba \
   samba-common-bin \
-  dnsmasq \
   sudo
 
 # VM guest agent (auto-detect)

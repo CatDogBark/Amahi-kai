@@ -29,21 +29,40 @@ class DashboardStats
     end
 
     def service_status
-      units = {
-        'Samba' => 'smbd',
-        'MariaDB' => 'mariadb',
-        'dnsmasq' => 'dnsmasq',
-        'Greyhole' => 'greyhole',
-        'Docker' => 'docker',
-        'Cloudflare Tunnel' => 'cloudflared'
-      }
-      units.map do |name, unit|
-        running = begin
-          `systemctl is-active #{unit} 2>/dev/null`.strip == 'active'
+      # Core services (always shown)
+      services = [
+        { name: 'Samba', unit: 'smbd' },
+        { name: 'Samba (nmbd)', unit: 'nmbd' },
+        { name: 'MariaDB', unit: 'mariadb' },
+      ]
+
+      # Optional services (only shown if installed)
+      optional = [
+        { name: 'dnsmasq', unit: 'dnsmasq', check: '/usr/sbin/dnsmasq' },
+        { name: 'Greyhole', unit: 'greyhole', check: '/usr/bin/greyhole' },
+        { name: 'Docker', unit: 'docker', check: '/usr/bin/docker' },
+        { name: 'Cloudflare Tunnel', unit: 'cloudflared', check: '/usr/bin/cloudflared' },
+      ]
+
+      optional.each do |svc|
+        services << svc if File.exist?(svc[:check])
+      end
+
+      services.map do |svc|
+        status = begin
+          `systemctl is-active #{svc[:unit]} 2>/dev/null`.strip
         rescue
-          false
+          'unknown'
         end
-        { name: name, unit: unit, running: running }
+        since = if status == 'active'
+          begin
+            `systemctl show #{svc[:unit]} --property=ActiveEnterTimestamp 2>/dev/null`
+              .strip.sub('ActiveEnterTimestamp=', '')
+          rescue
+            nil
+          end
+        end
+        { name: svc[:name], unit: svc[:unit], running: status == 'active', status: status, since: since }
       end
     end
 

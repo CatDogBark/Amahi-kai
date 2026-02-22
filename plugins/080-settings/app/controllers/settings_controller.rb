@@ -273,8 +273,16 @@ class SettingsController < ApplicationController
 			{ name: 'MariaDB', unit: 'mariadb' },
 			{ name: 'Samba (smbd)', unit: 'smbd' },
 			{ name: 'Samba (nmbd)', unit: 'nmbd' },
-			{ name: 'dnsmasq', unit: 'dnsmasq' },
 		]
+
+		# Optional services — only show if installed
+		optional = [
+			{ name: 'dnsmasq', unit: 'dnsmasq', check: '/usr/sbin/dnsmasq' },
+			{ name: 'Greyhole', unit: 'greyhole', check: '/usr/bin/greyhole' },
+			{ name: 'Docker', unit: 'docker', check: '/usr/bin/docker' },
+			{ name: 'Cloudflare Tunnel', unit: 'cloudflared', check: '/usr/bin/cloudflared' },
+		]
+		optional.each { |svc| services << svc if File.exist?(svc[:check]) }
 
 		services.map do |svc|
 			running = false
