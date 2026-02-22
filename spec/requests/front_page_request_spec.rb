@@ -7,15 +7,7 @@ describe "Front page", type: :request do
       expect(response).to redirect_to(new_user_session_url)
     end
 
-    it "shows dashboard if guest dashboard is enabled" do
-      Setting.set('guest-dashboard', '1')
-      get root_path
-      expect(response).to have_http_status(:ok)
-      expect(response.body).to include("Dashboard")
-    end
-
-    it "redirects to login if guest dashboard is disabled" do
-      Setting.set('guest-dashboard', '0')
+    it "always redirects to login when not authenticated" do
       get root_path
       expect(response).to redirect_to(new_user_session_url)
     end

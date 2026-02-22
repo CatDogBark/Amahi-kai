@@ -44,14 +44,14 @@ describe "Settings Controller", type: :request do
 
     describe "toggle_setting" do
       it "toggles a setting value" do
-        setting = Setting.create!(name: "guest-dashboard", value: "0", kind: 0)
+        setting = Setting.create!(name: "advanced", value: "0", kind: 0)
         post "/tab/settings/toggle_setting", params: { id: setting.id }, as: :json
         expect(response).to have_http_status(:ok)
         expect(setting.reload.value).to eq("1")
       end
 
       it "toggles back" do
-        setting = Setting.create!(name: "guest-dashboard", value: "1", kind: 0)
+        setting = Setting.create!(name: "advanced", value: "1", kind: 0)
         post "/tab/settings/toggle_setting", params: { id: setting.id }, as: :json
         expect(setting.reload.value).to eq("0")
       end

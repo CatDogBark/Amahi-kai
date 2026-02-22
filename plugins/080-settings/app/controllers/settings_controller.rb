@@ -22,7 +22,6 @@ class SettingsController < ApplicationController
 		@page_title = t 'settings'
 		@available_locales = locales_implemented
 		@advanced_settings = Setting.where(:name=>'advanced').first
-		@guest = Setting.where(:name=>"guest-dashboard").first
 		@version = Platform.platform_versions
 	end
 

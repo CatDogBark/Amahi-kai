@@ -1,7 +1,8 @@
 - active_tab = nil
+- visible_tabs = @advanced ? @tabs : @tabs.reject { |t| t.advanced }
 .container
   ul.nav.nav-tabs.setup-main-tab
-    - @tabs.each do |tab|
+    - visible_tabs.each do |tab|
       li.nav-item
           - if !tab_class(tab)&.include?('active')
               a.nav-link.active.text-capitalize.tab-link-style href="#{tab.url}"

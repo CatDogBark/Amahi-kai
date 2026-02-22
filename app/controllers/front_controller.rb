@@ -18,7 +18,7 @@ require 'amahi_news'
 
 class FrontController < ApplicationController
 
-	before_action :login_required_unless_guest_dashboard
+	before_action :login_required
 	layout 'basic'
 
 	def index

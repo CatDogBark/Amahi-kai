@@ -1,5 +1,5 @@
 # plugin initialization
-t = Tab.new("network", "network", "/tab/network")
+t = Tab.new("network", "network", "/tab/network", nil, true)
 # add any subtabs with what you need. params are controller and the label, for example
 t.add("index", "leases")
 t.add("hosts", "hosts")

@@ -8,13 +8,9 @@ describe "Front page", type: :request do
       expect(response).to redirect_to(new_user_session_path)
     end
 
-    it "shows dashboard when guest-dashboard is enabled" do
-      # Seeds may create this setting first, so find-or-update
-      s = Setting.where(name: "guest-dashboard").first_or_create
-      s.update!(value: "1")
+    it "always requires login" do
       get root_path
-      expect(response).to have_http_status(:ok)
-      expect(response.body).to include("Dashboard")
+      expect(response).to redirect_to(new_user_session_path)
     end
   end
 

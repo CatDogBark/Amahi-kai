@@ -22,14 +22,6 @@ div.settings-fields.settings-wrap.bg-white.p-2.mb-2
             span.spinner.theme-image data-toggle-target="spinner" style="display:none"
           a href="http://wiki.amahi.org/index.php/Advanced_Settings" target="_blank" class="more-info"
             i.icon-more
-      tr
-        td.pe-3
-          label = t 'guest_dashboard'
-        td
-          span data-controller="toggle" data-toggle-url-value=settings_engine.toggle_setting_path(id: @guest)
-            input.form-check-input type="checkbox" id="guest" checked=@guest.set? data-toggle-target="checkbox" data-action="click->toggle#toggle"
-            |  
-            span.spinner.theme-image data-toggle-target="spinner" style="display:none"
 
 div.settings-fields.settings-wrap.bg-white.p-2
   fieldset

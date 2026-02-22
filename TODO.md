@@ -1,10 +1,10 @@
 # TODO — Amahi-kai
 
-*Updated: 2026-02-19*
+*Updated: 2026-02-22*
 
 ---
 
-## Done ✅ (removed from active list)
+## Done ✅
 
 - ~~Bootstrap 4→5~~ ✅
 - ~~Hotwire/Turbo/Stimulus integration~~ ✅ (jQuery fully removed)
@@ -19,62 +19,67 @@
 - ~~System Status dashboard~~ ✅
 - ~~Security hardening (SQL injection, shell injection, crypto, CSRF, CSP)~~ ✅
 - ~~Ocean theme / branding~~ ✅ (wave mark favicon, login, dashboard)
-- ~~Search results fix (blank search shows recent files)~~ ✅
+- ~~Search results fix~~ ✅
 - ~~Greyhole integration~~ ✅ (service, storage pool UI, live terminal install)
 - ~~First-Run Setup Wizard~~ ✅ (6-step wizard + `--headless` mode)
-- ~~Reusable install terminal modal~~ ✅ (shared partial for SSE streaming installs)
+- ~~Reusable install terminal modal~~ ✅ (shared partial for SSE streaming)
+- ~~Cloudflare Tunnel integration~~ ✅ (Remote Access subtab, token setup, streaming install)
+- ~~Security Audit system~~ ✅ (8 checks, auto-fix, streaming terminal, gates tunnel)
+- ~~Dashboard homepage~~ ✅ (system overview, resources, services, stats, storage, apps)
+- ~~Dark mode~~ ✅ (`prefers-color-scheme: dark`, CSS variable overrides)
+- ~~Themes page redesign~~ ✅ (card gallery with previews, active badge)
+- ~~UI polish pass~~ ✅ (settings spacing, network spacing, shares spacing, tabs fix)
+- ~~`bin/amahi-update`~~ ✅ (pull, bundle, migrate, restart, cache clear)
+- ~~Carlos Puchol blessed the fork~~ 🎉
 
 ---
 
 ## In Progress 🔨
 
-### Cloudflare Tunnel Integration
-- CloudflareService (install, configure, start/stop, status)
-- Remote Access subtab in Network plugin
-- Token input UI with setup instructions
-- Streaming install via shared terminal modal
-
-### Security Hardening / Audit System
-- SecurityAudit class — 8 checks (admin password, UFW, SSH, fail2ban, unattended upgrades, Samba binding, open ports)
-- Security subtab in Network plugin
-- Auto-run audit when tunnel first enabled + manual "Run Audit" button
-- Auto-fix with "Fix All" button (streaming terminal)
-- Blockers gate tunnel activation (must fix before enabling remote access)
+### Advanced Settings Rework
+- Remove Guest Dashboard (dead feature)
+- Rework simple/advanced mode split: simple = safe daily ops, advanced = system config
+- Hide Network tab entirely in simple mode
+- Mark Docker Apps, Servers, Themes, System Status, Share Settings as advanced
+- Add 🔧 toggle to header bar for quick switching
 
 ---
 
 ## P0 — Next Up
 
-### Test Coverage (54% → 70%+)
-Edge cases, error paths, integration tests for sudo-based workflows (shares, users, DNS).
+### Test Coverage (57% → 70%+)
+Edge cases, error paths, integration tests for sudo-based workflows.
+~603 specs, ~6 real failures remaining (docker_apps 500s in test).
+
+### Cloudflare Tunnel on .111 box
+Tunnel not routing to Puma — needs config fix on host. Troy will handle.
 
 ### Samba Integration Smoke Test
-Create share via UI → verify smb.conf written → verify smbd restarts. End-to-end on real host.
+Create share via UI → verify smb.conf → verify smbd restarts.
 
 ### User Management Smoke Test
-Create user via UI → verify useradd → verify pdbedit. Test edge cases (duplicate user, bad input).
+Create user via UI → verify useradd → verify pdbedit.
 
 ### dnsmasq Integration Verification
-DNS alias creation via UI writes to `/etc/dnsmasq.d/`, service reloads, resolution works.
+DNS alias → `/etc/dnsmasq.d/` → service reload → resolution works.
 
 ---
-
-### Update Command
-`bin/amahi-update` — pull latest code, bundle, migrate, restart. One command to update a running install.
 
 ## P1 — Polish
 
 ### SSL / Production HTTPS
-Cloudflare handles edge TLS, but enforce HTTPS-only in app config.
+Cloudflare handles edge TLS. Enforce HTTPS-only in app config (`force_ssl`).
+
+### Login Rate Limiting
+Add `rack-attack` to throttle login attempts. Quick security win.
 
 ### Docker App System — Production Ready
-The model/catalog/UI exist but need deployment work to be usable:
-1. **Docker installation** — optional step (like Greyhole), with streaming terminal install
-2. **Reverse proxy** — route app traffic through port 3000 so Docker apps work through Cloudflare Tunnel (e.g., `/nextcloud` → container:8443). Likely nginx or Caddy as a lightweight proxy in front of Puma.
-3. **Share integration** — app volumes should auto-map to Amahi share paths (`/var/hda/files/...`)
-4. **Streaming install terminal** — reuse shared partial for pulling/creating containers
-5. **Container logs/stats** — view logs, resource usage per app
-6. **More apps** — expand catalog, user docs
+Model/catalog/UI exist but need:
+1. Reverse proxy for app traffic through Cloudflare Tunnel (per-app ingress rules instead)
+2. Share integration — app volumes auto-map to Amahi share paths
+3. Streaming install terminal for pulling/creating containers
+4. Container logs/stats UI
+5. More apps in catalog
 
 ---
 
@@ -87,10 +92,10 @@ Evaluate replacing Authlogic with Devise or Rails 8 native auth.
 Detect drives, format, mount, present in UI. mdadm RAID as advanced option.
 
 ### Web Terminal
-Browser-based shell access (xterm.js + WebSocket). Same ocean-styled terminal used for install streaming. Admin-only, no SSH needed.
+Browser-based shell (xterm.js + WebSocket). Admin-only.
 
 ### Firewall Plugin
 UFW management through the web UI.
 
 ### Propshaft Migration
-Blocked by Bootstrap gem's Sprockets dependency. Low priority — Sprockets works fine.
+Blocked by Bootstrap gem's Sprockets dependency. Low priority.

@@ -10,7 +10,6 @@ describe "Docker Apps", type: :request do
     create(:setting, name: "domain", value: "amahi.net")
     create(:setting, name: "advanced", value: "1")
     create(:setting, name: "theme", value: "default")
-    create(:setting, name: "guest-dashboard", value: "0")
     login_as_admin
   end
 
