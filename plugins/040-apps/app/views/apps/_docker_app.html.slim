@@ -18,7 +18,7 @@
             span.badge.bg-secondary.ms-2.small= category
       td.settings-col2.ps-2.apps-col2.text-secondary
         = description.present? ? truncate(description, length: 120) : t('no_description_supplied')
-      - server_ip = (Socket.ip_address_list.find { |a| a.ipv4? && !a.ipv4_loopback? }&.ip_address rescue nil) || request.host
+      - server_ip = (UDPSocket.open {|s| s.connect("8.8.8.8", 1); s.addr.last} rescue nil) || request.host
       td.text-end.pe-3 style='width: 120px'
         - case status
         - when 'available'
