@@ -6,6 +6,24 @@
 //   - toggle_controller.js — visibility, access, permissions checkboxes
 //   - inline_edit_controller.js — path, extras, workgroup editing
 
+function updatePoolCopies(shareId, copies) {
+  var spinner = document.getElementById('pool-spinner-' + shareId);
+  if (spinner) spinner.style.display = '';
+
+  fetch('/shares/' + shareId + '/update_disk_pool_copies', {
+    method: 'PUT',
+    headers: Object.assign(csrfHeaders(), {'Content-Type': 'application/x-www-form-urlencoded'}),
+    credentials: 'same-origin',
+    body: 'copies=' + copies
+  })
+    .then(function(r) { return r.json(); })
+    .then(function() { window.location.reload(); })
+    .catch(function(err) {
+      console.error('Pool copies update failed:', err);
+      if (spinner) spinner.style.display = 'none';
+    });
+}
+
 document.addEventListener("DOMContentLoaded", function() {
   // Auto-fill path when name is entered
   document.addEventListener("blur", function(event) {
