@@ -66,7 +66,7 @@ class SharesController < ApplicationController
 	def toggle_everyone
 		sleep 2 if development?
 		@saved = @share.toggle_everyone! if @share
-		render_share_access
+		render :json => { :status => @saved ? :ok : :not_acceptable }
 	end
 
 	def toggle_readonly
@@ -78,7 +78,7 @@ class SharesController < ApplicationController
 	def toggle_access
 		sleep 2 if development?
 		@saved = @share.toggle_access!(params[:user_id]) if @share
-		render_share_access
+		render :json => { :status => @saved ? :ok : :not_acceptable }
 	end
 
 	def toggle_write
@@ -90,7 +90,7 @@ class SharesController < ApplicationController
 	def toggle_guest_access
 		sleep 2 if development?
 		@saved = @share.toggle_guest_access! if @share
-		render_share_access
+		render :json => { :status => @saved ? :ok : :not_acceptable }
 	end
 
 	def toggle_guest_writeable
@@ -102,11 +102,13 @@ class SharesController < ApplicationController
 	def update_tags		
 		sleep 2 if development?
 		@saved = @share.update_tags!(params_update_tags_path)
+		render :json => { :status => @saved ? :ok : :not_acceptable }
 	end
 
 	def update_path
 		sleep 2 if development?
-		@saved = @share.update_tags!(params_update_tags_path)           
+		@saved = @share.update(params_update_tags_path)
+		Share.push_shares if @saved
 		render :json => { :status => @saved ? :ok : :not_acceptable }
 	end
 
