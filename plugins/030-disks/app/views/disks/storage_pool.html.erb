@@ -44,7 +44,7 @@
         <% end %>
       <% else %>
         <p class="text-muted mb-2"><%= t('greyhole_not_installed_msg', default: 'Greyhole is not installed. Install it to enable storage pooling and drive replication.') %></p>
-        <button type="button" class="btn btn-primary" onclick="if(confirm('This will install Greyhole and its dependencies. Continue?')) openInstallTerminal('greyhole')">
+        <button type="button" class="btn btn-primary" onclick="openInstallTerminal('greyhole')">
           Install Greyhole
         </button>
       <% end %>
