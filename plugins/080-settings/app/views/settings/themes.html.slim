@@ -1,9 +1,64 @@
-.theme-thumbs.bg-white
-  - @themes.each do |theme|
-    = link_to image_tag(theme_image_path('theme-thumb.png', theme.css), :class => "theme-thumb thumbnail right-margin-10", title: theme.name),
-      settings_engine.activate_theme_path(id: theme.css),
-      { onmouseover: "$('#theme-sshot').attr('src', '#{theme_image_path('theme-sshot.png', theme.css)}')" }
+css:
+  .themes-gallery { padding: 1rem 0; }
+  .theme-card {
+    border: 2px solid transparent;
+    border-radius: 12px;
+    overflow: hidden;
+    transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+    background: var(--kai-card-bg, #fff);
+  }
+  .theme-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  }
+  .theme-card-active {
+    border-color: var(--kai-accent, #0d8aa8);
+    box-shadow: 0 4px 16px rgba(13,138,168,0.3);
+  }
+  .theme-preview-wrapper {
+    position: relative;
+    overflow: hidden;
+    height: 200px;
+    background: #1a2332;
+  }
+  .theme-preview-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top;
+    transition: transform 0.3s;
+  }
+  .theme-card:hover .theme-preview-img {
+    transform: scale(1.05);
+  }
+  .theme-card .card-body {
+    padding: 1rem;
+  }
+  .theme-card .card-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--kai-text, inherit);
+  }
+  @media (prefers-color-scheme: dark) {
+    .theme-card { background: #1e293b; }
+    .theme-preview-wrapper { background: #0f172a; }
+    .btn-outline-primary { color: #5eead4; border-color: #5eead4; }
+    .btn-outline-primary:hover { background: #5eead4; color: #0f172a; }
+  }
 
-div style="text-align:center"
-  #theme_sshot_image
-    = theme_image_tag('theme-sshot.png', id: "theme-sshot", alt: theme.name, title: theme.name)
+.themes-gallery
+  .row.g-4
+    - current_theme = Setting.where(name: 'theme').first&.value || 'default'
+    - @themes.each do |theme|
+      .col-md-4.col-sm-6
+        .card.theme-card class=("theme-card-active" if theme.css == current_theme)
+          .theme-preview-wrapper
+            = image_tag theme_image_path('theme-sshot.png', theme.css), class: 'theme-preview-img', alt: theme.name
+          .card-body.text-center
+            h5.card-title.mb-2 = theme.name
+            - if theme.css == current_theme
+              span.badge.bg-success
+                | ✓ Active
+            - else
+              = link_to settings_engine.activate_theme_path(id: theme.css), class: 'btn btn-sm btn-outline-primary' do
+                | Activate
