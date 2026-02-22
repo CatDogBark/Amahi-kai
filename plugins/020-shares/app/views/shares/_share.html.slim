@@ -18,7 +18,6 @@ div.share[id="whole_share_#{share.id}"]
 
         .settings-actions
           span.delete data-controller="delete" data-delete-url-value=share_path(share) data-delete-confirm-value=confirm_share_destroy_message(share.name) data-delete-remove-selector-value="#whole_share_#{share.id}"
-            span.spinner-border.spinner-border-sm.me-1 data-delete-target="spinner" style="display:none"
             a.btn-delete.remote-btn.navbar-right.btn.btn-sm href="#" data-action="click->delete#destroy"
               = t('delete') + ' ' + share.name
 
