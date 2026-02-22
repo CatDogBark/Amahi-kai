@@ -78,6 +78,107 @@ document.addEventListener("toggle:success", function(e) {
   if (writeCb) writeCb.disabled = !cb.checked;
 });
 
+var SHARE_PRESETS = {
+  recycle_bin: "vfs objects = recycle\nrecycle:repository = .recycle\nrecycle:keeptree = yes\nrecycle:versions = yes",
+  macos: "vfs objects = fruit streams_xattr\nfruit:metadata = stream\nfruit:model = MacSamba\nfruit:posix_rename = yes\nfruit:veto_appledouble = no\nfruit:nfs_aces = no\nfruit:wipe_intentionally_left_blank_rfork = yes\nfruit:delete_empty_adfiles = yes",
+  hide_dotfiles: "hide dot files = yes\nveto files = /._*/.DS_Store/",
+  time_machine: "vfs objects = fruit streams_xattr\nfruit:time machine = yes\nfruit:metadata = stream\nfruit:model = TimeCapsule"
+};
+
+function toggleSharePreset(shareId, presetKey) {
+  var preset = SHARE_PRESETS[presetKey];
+  if (!preset) return;
+
+  var btn = document.querySelector('#share-presets-' + shareId + ' [data-preset="' + presetKey + '"]');
+  var isActive = btn && btn.classList.contains('btn-info');
+
+  // Get current extras via textarea if visible, otherwise fetch
+  var textarea = document.getElementById('extras-textarea-' + shareId);
+  var current = textarea ? textarea.value : '';
+
+  var newExtras;
+  if (isActive) {
+    // Remove preset lines
+    var lines = current.split('\n');
+    var presetLines = preset.split('\n');
+    newExtras = lines.filter(function(line) {
+      return presetLines.indexOf(line.trim()) === -1;
+    }).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  } else {
+    // Add preset lines (avoid duplicates)
+    var existing = current.trim();
+    // Check for vfs objects conflict — merge if both use vfs objects
+    var presetLines = preset.split('\n');
+    var existingLines = existing.split('\n');
+    var mergedLines = existingLines.slice();
+    presetLines.forEach(function(pl) {
+      var found = false;
+      for (var i = 0; i < mergedLines.length; i++) {
+        if (mergedLines[i].trim() === pl.trim()) { found = true; break; }
+      }
+      if (!found) mergedLines.push(pl);
+    });
+    newExtras = mergedLines.join('\n').trim();
+  }
+
+  // Save via API
+  if (btn) btn.disabled = true;
+  fetch('/shares/' + shareId + '/update_extras', {
+    method: 'PUT',
+    headers: Object.assign(csrfHeaders(), {'Content-Type': 'application/x-www-form-urlencoded'}),
+    credentials: 'same-origin',
+    body: 'share[extras]=' + encodeURIComponent(newExtras)
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.status === 'ok' || data.status === 'not_acceptable') {
+        // Update button state
+        if (btn) {
+          btn.classList.toggle('btn-info');
+          btn.classList.toggle('btn-outline-secondary');
+        }
+        // Update textarea if visible
+        if (textarea) textarea.value = newExtras;
+      }
+    })
+    .catch(function(err) { console.error('Preset toggle failed:', err); })
+    .finally(function() { if (btn) btn.disabled = false; });
+}
+
+function submitExtras(shareId, form) {
+  var textarea = document.getElementById('extras-textarea-' + shareId);
+  var msg = document.getElementById('extras-msg-' + shareId);
+  var extras = textarea ? textarea.value : '';
+
+  fetch('/shares/' + shareId + '/update_extras', {
+    method: 'PUT',
+    headers: Object.assign(csrfHeaders(), {'Content-Type': 'application/x-www-form-urlencoded'}),
+    credentials: 'same-origin',
+    body: 'share[extras]=' + encodeURIComponent(extras)
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (msg) {
+        msg.style.display = '';
+        setTimeout(function() { msg.style.display = 'none'; }, 2000);
+      }
+      // Update preset button states
+      var container = document.getElementById('share-presets-' + shareId);
+      if (container) {
+        container.querySelectorAll('[data-preset]').forEach(function(btn) {
+          var preset = SHARE_PRESETS[btn.dataset.preset];
+          if (!preset) return;
+          var allPresent = preset.split('\n').every(function(line) {
+            return extras.indexOf(line.trim()) !== -1;
+          });
+          btn.classList.toggle('btn-info', allPresent);
+          btn.classList.toggle('btn-outline-secondary', !allPresent);
+        });
+      }
+    })
+    .catch(function(err) { console.error('Save extras failed:', err); });
+}
+
 function getShareSize(shareId) {
   var area = document.getElementById('size-area-' + shareId);
   var spinner = document.getElementById('size-spinner-' + shareId);

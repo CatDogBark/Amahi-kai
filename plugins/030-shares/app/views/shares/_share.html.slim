@@ -87,22 +87,27 @@ div.share[id="whole_share_#{share.id}"]
                     span= t('get_the_size')
                   span.spinner-border.spinner-border-sm.ms-1 id="size-spinner-#{share.id}" style="display:none"
 
-            - if advanced?
-              tr
-                td.top
-                  label #{t('extra_parameters')}
-                td.top data-controller="inline-edit" data-inline-edit-url-value=update_extras_share_path(id: share.id) data-inline-edit-method-value="PUT"
-                  a.open-update-extras-area.focus href="#" data-inline-edit-target="display" data-action="click->inline-edit#edit"
-                    = share.extras.blank? ? t('add_extra_parameters') : share.extras
-                  form.update-extras-form style="display:none" action=update_extras_share_path(id: share.id) method="post" data-inline-edit-target="form" data-action="submit->inline-edit#submit"
-                    input type="hidden" name="_method" value="put"
-                    input type="hidden" name="authenticity_token" value=form_authenticity_token
-                    textarea.form-control.input-sm name="share[extras]" data-inline-edit-target="input" placeholder=t('add_extra_parameters')
-                      = share.extras
-                    button.btnn.btn.btn-info.btn-sm type="submit"
-                      = t('change')
-                    a.cancel-btn-style.left-margin-10 href="#" data-action="click->inline-edit#cancel"
-                      | Cancel
-                  span.messages data-inline-edit-target="message"
-                  |  
-                  a.app-more href="http://wiki.amahi.org/index.php/Share_Extra_Parameters" target="_blank"
+            tr
+              td.top
+                label Features
+              td.top
+                .share-presets.d-flex.flex-wrap.gap-2.mb-2 id="share-presets-#{share.id}"
+                  - presets = { 'recycle_bin' => { label: 'Recycle Bin', params: "vfs objects = recycle\nrecycle:repository = .recycle\nrecycle:keeptree = yes\nrecycle:versions = yes" }, 'macos' => { label: 'macOS Friendly', params: "vfs objects = fruit streams_xattr\nfruit:metadata = stream\nfruit:model = MacSamba\nfruit:posix_rename = yes\nfruit:veto_appledouble = no\nfruit:nfs_aces = no\nfruit:wipe_intentionally_left_blank_rfork = yes\nfruit:delete_empty_adfiles = yes" }, 'hide_dotfiles' => { label: 'Hide Dotfiles', params: "hide dot files = yes\nveto files = /._*/.DS_Store/" }, 'time_machine' => { label: 'Time Machine', params: "vfs objects = fruit streams_xattr\nfruit:time machine = yes\nfruit:metadata = stream\nfruit:model = TimeCapsule" } }
+                  - presets.each do |key, preset|
+                    - active = share.extras.present? && preset[:params].split("\n").all? { |line| share.extras.include?(line) }
+                    button.btn.btn-sm class=("#{active ? 'btn-info' : 'btn-outline-secondary'}") onclick="toggleSharePreset(#{share.id}, '#{key}')" data-preset=key
+                      = preset[:label]
+
+                - if advanced?
+                  .share-extras-custom
+                    a.text-muted.small href="#" onclick="document.getElementById('extras-editor-#{share.id}').style.display = document.getElementById('extras-editor-#{share.id}').style.display === 'none' ? '' : 'none'; return false;"
+                      | Edit raw parameters...
+                    .extras-editor id="extras-editor-#{share.id}" style="display:none"
+                      form action=update_extras_share_path(id: share.id) method="post" onsubmit="submitExtras(#{share.id}, this); return false;"
+                        input type="hidden" name="_method" value="put"
+                        input type="hidden" name="authenticity_token" value=form_authenticity_token
+                        textarea.form-control.form-control-sm.font-monospace name="share[extras]" rows="4" placeholder="key = value (one per line)" id="extras-textarea-#{share.id}"
+                          = share.extras
+                        .mt-1
+                          button.btn.btn-info.btn-sm type="submit" Save
+                          span.ms-2.text-success.small id="extras-msg-#{share.id}" style="display:none" Saved!
