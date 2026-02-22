@@ -41,13 +41,14 @@
               target.style.opacity = "0";
               setTimeout(function() { target.remove(); }, 500);
             }
-            // Show success banner (same style as create)
-            var container = document.querySelector('.flash-messages') || document.querySelector('.container');
-            if (container) {
+            // Show success banner in same location as flash messages
+            var content = document.getElementById('content');
+            var appDiv = document.getElementById('app');
+            if (content && appDiv) {
               var alert = document.createElement('div');
-              alert.className = 'alert alert-success alert-dismissible fade show mt-2';
-              alert.innerHTML = 'Deleted successfully <button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
-              container.prepend(alert);
+              alert.className = 'alert alert-success alert-dismissible fade show';
+              alert.innerHTML = '<button class="btn-close" aria-label="Close" data-bs-dismiss="alert" type="button"></button><div class="container ps-5"><strong>Deleted successfully</strong></div>';
+              content.insertBefore(alert, appDiv);
               setTimeout(function() { if (alert.parentNode) alert.remove(); }, 3000);
             }
             _this.dispatch("success", { detail: data });
