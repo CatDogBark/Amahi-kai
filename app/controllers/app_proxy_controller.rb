@@ -56,8 +56,9 @@ class AppProxyController < ApplicationController
 
       outgoing = klass.new(target_uri)
 
-      # Forward request headers
-      skip_headers = %w[host connection transfer-encoding keep-alive upgrade proxy-authorization te trailer]
+      # Forward request headers — skip accept-encoding so upstream sends uncompressed
+      # (we need to read/rewrite HTML responses)
+      skip_headers = %w[host connection transfer-encoding keep-alive upgrade proxy-authorization te trailer accept-encoding]
       request.headers.each do |key, value|
         next unless key.start_with?('HTTP_')
         header_name = key.sub('HTTP_', '').tr('_', '-').downcase
