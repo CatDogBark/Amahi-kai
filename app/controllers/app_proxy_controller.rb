@@ -103,9 +103,10 @@ class AppProxyController < ApplicationController
         body = rewrite_html(body, @docker_app)
       end
 
-      # Use send_data for full control over Content-Type (prevents Rails MIME override)
-      send_data body, type: content_type.presence || 'application/octet-stream',
-                       disposition: 'inline', status: status_code
+      # Force content type through Rack — Rails overrides headers['Content-Type']
+      self.status = status_code
+      self.content_type = content_type.presence || 'application/octet-stream'
+      self.response_body = body
 
     rescue Errno::ECONNREFUSED
       render plain: "Cannot connect to #{@docker_app.name} — is it running?", status: :bad_gateway
