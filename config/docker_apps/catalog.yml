@@ -225,7 +225,7 @@ apps:
     init_files:
       - host: /opt/amahi/apps/filebrowser/.filebrowser.json
         container: /.filebrowser.json
-        content: '{"port":80,"baseURL":"/app/filebrowser","address":"0.0.0.0","log":"stdout","database":"/database/filebrowser.db","root":"/srv"}'
+        content: '{"port":80,"baseURL":"","address":"0.0.0.0","log":"stdout","database":"/database/filebrowser.db","root":"/srv"}'
 
   audiobookshelf:
     name: Audiobookshelf

@@ -19,15 +19,13 @@ class AppProxyController < ApplicationController
 
     target_port = @docker_app.host_port
     prefix = "/app/#{@docker_app.identifier}"
+
+    # Strip the /app/{identifier} prefix — upstream app sees root-relative paths
     sub_path = params[:path].to_s
     sub_path = "/#{sub_path}" unless sub_path.start_with?('/')
-
-    # Forward with the full prefix path — apps are configured with baseURL
-    # matching /app/{identifier}, so they expect the full path
-    upstream_path = "#{prefix}#{sub_path == '/' ? '' : sub_path}"
     query = request.query_string.present? ? "?#{request.query_string}" : ""
 
-    target_uri = URI("http://127.0.0.1:#{target_port}#{upstream_path}#{query}")
+    target_uri = URI("http://127.0.0.1:#{target_port}#{sub_path}#{query}")
 
     begin
       http = Net::HTTP.new(target_uri.host, target_uri.port)
@@ -59,7 +57,7 @@ class AppProxyController < ApplicationController
         outgoing[header_name] = value
       end
 
-      # Forward Content-Type header (not prefixed with HTTP_)
+      # Forward Content-Type header
       if request.content_type.present?
         outgoing['Content-Type'] = request.content_type
       end
@@ -82,7 +80,7 @@ class AppProxyController < ApplicationController
       status_code = upstream.code.to_i
 
       # Build response headers
-      skip_response = %w[transfer-encoding connection keep-alive]
+      skip_response = %w[transfer-encoding connection keep-alive content-length]
       upstream.each_header do |name, value|
         next if skip_response.include?(name.downcase)
 
@@ -100,7 +98,11 @@ class AppProxyController < ApplicationController
       content_type = upstream['content-type'].to_s
       body = upstream.body || ''
 
-      # Send raw response — apps with baseURL set generate correct paths natively
+      # Rewrite HTML responses to fix asset paths
+      if content_type.include?('text/html')
+        body = rewrite_html(body, @docker_app)
+      end
+
       self.response_body = body
       self.status = status_code
       response.headers['Content-Type'] = content_type if content_type.present?
@@ -124,13 +126,32 @@ class AppProxyController < ApplicationController
     end
   end
 
+  def rewrite_html(body, app)
+    prefix = "/app/#{app.identifier}"
+
+    # Inject <base> tag so relative URLs resolve under the proxy prefix
+    # This handles SPA assets that use relative paths (e.g., "index-Ce8cFD10.css")
+    base_tag = "<base href=\"#{prefix}/\">"
+    body = if body =~ /<head([^>]*)>/i
+      body.sub(/<head([^>]*)>/i, "<head\\1>#{base_tag}")
+    else
+      base_tag + body
+    end
+
+    # Rewrite root-absolute paths in src/href/action attributes
+    # /static/foo → /app/filebrowser/static/foo
+    # Skip already-prefixed, external, data URIs, and protocol-relative
+    body.gsub(%r{((?:src|href|action)\s*=\s*["'])/(?!app/|https?:|data:|//)([^"']*["'])}, "\\1#{prefix}/\\2")
+  end
+
   def rewrite_location(location, app)
     prefix = "/app/#{app.identifier}"
     port = app.host_port
 
-    # Rewrite absolute localhost URLs to proxy path
     if location =~ %r{^https?://(?:localhost|127\.0\.0\.1|0\.0\.0\.0):#{port}(.*)}
-      "#{$1}"
+      "#{prefix}#{$1}"
+    elsif location.start_with?('/') && !location.start_with?(prefix)
+      "#{prefix}#{location}"
     else
       location
     end
@@ -138,7 +159,6 @@ class AppProxyController < ApplicationController
 
   def rewrite_cookie_path(cookie, app)
     prefix = "/app/#{app.identifier}"
-    # Ensure cookie path covers the app prefix
     cookie.gsub(%r{[Pp]ath=/(?=\s|;|$)}, "Path=#{prefix}/")
   end
 end
