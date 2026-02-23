@@ -349,15 +349,20 @@ class AppsController < ApplicationController
 						host_path = init[:host] || init['host']
 						content = init[:content] || init['content']
 						sse_send.call("Creating config #{host_path}...")
-						FileUtils.mkdir_p(File.dirname(host_path)) rescue nil
-						File.write(host_path, content) unless File.exist?(host_path)
+						system("sudo mkdir -p #{Shellwords.escape(File.dirname(host_path))}")
+						unless File.exist?(host_path)
+							staged = "/tmp/amahi-staging/#{File.basename(host_path)}"
+							FileUtils.mkdir_p('/tmp/amahi-staging')
+							File.write(staged, content)
+							system("sudo cp #{Shellwords.escape(staged)} #{Shellwords.escape(host_path)}")
+						end
 					end
 
 					# Create volume directories
 					(entry[:volumes] || []).each do |mapping|
 						host_path = mapping.is_a?(String) ? mapping.split(':').first : mapping.values.first
 						sse_send.call("Creating directory #{host_path}...")
-						FileUtils.mkdir_p(host_path) rescue nil
+						system("sudo mkdir -p #{Shellwords.escape(host_path)}")
 					end
 
 					# Pull image with progress
