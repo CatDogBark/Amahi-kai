@@ -20,12 +20,14 @@ class AppProxyController < ApplicationController
     target_port = @docker_app.host_port
     prefix = "/app/#{@docker_app.identifier}"
 
-    # Strip the /app/{identifier} prefix — upstream app sees root-relative paths
+    # Forward full path including prefix — apps are configured with baseURL
+    # matching /app/{identifier}, so they handle routing internally
     sub_path = params[:path].to_s
     sub_path = "/#{sub_path}" unless sub_path.start_with?('/')
+    upstream_path = "#{prefix}#{sub_path == '/' ? '' : sub_path}"
     query = request.query_string.present? ? "?#{request.query_string}" : ""
 
-    target_uri = URI("http://127.0.0.1:#{target_port}#{sub_path}#{query}")
+    target_uri = URI("http://127.0.0.1:#{target_port}#{upstream_path}#{query}")
 
     begin
       http = Net::HTTP.new(target_uri.host, target_uri.port)
@@ -103,10 +105,8 @@ class AppProxyController < ApplicationController
 
       Rails.logger.info("PROXY <<< #{status_code} #{content_type} (#{body.bytesize} bytes) for #{target_uri}")
 
-      # Rewrite HTML responses to fix asset paths
-      if content_type.include?('text/html')
-        body = rewrite_html(body, @docker_app)
-      end
+      # No HTML rewriting needed — apps are configured with baseURL
+      # so they generate correct paths natively
 
       # render body: with explicit content_type — most reliable way in Rails
       render body: body, content_type: content_type.presence || 'application/octet-stream', status: status_code
@@ -128,24 +128,6 @@ class AppProxyController < ApplicationController
     unless @docker_app
       render plain: "App not found", status: :not_found
     end
-  end
-
-  def rewrite_html(body, app)
-    prefix = "/app/#{app.identifier}"
-
-    # Inject <base> tag so relative URLs resolve under the proxy prefix
-    # This handles SPA assets that use relative paths (e.g., "index-Ce8cFD10.css")
-    base_tag = "<base href=\"#{prefix}/\">"
-    body = if body =~ /<head([^>]*)>/i
-      body.sub(/<head([^>]*)>/i, "<head\\1>#{base_tag}")
-    else
-      base_tag + body
-    end
-
-    # Rewrite root-absolute paths in src/href/action attributes
-    # /static/foo → /app/filebrowser/static/foo
-    # Skip already-prefixed, external, data URIs, and protocol-relative
-    body.gsub(%r{((?:src|href|action)\s*=\s*["'])/(?!app/|https?:|data:|//)([^"']*["'])}, "\\1#{prefix}/\\2")
   end
 
   def rewrite_location(location, app)
