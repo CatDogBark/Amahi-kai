@@ -42,7 +42,6 @@ apps:
     url_path: /admin
     ports:
       80: 8080
-      53: 53
     volumes:
       - /opt/amahi/apps/pihole/etc-pihole:/etc/pihole
       - /opt/amahi/apps/pihole/etc-dnsmasq.d:/etc/dnsmasq.d
