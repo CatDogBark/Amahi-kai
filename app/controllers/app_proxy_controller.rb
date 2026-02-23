@@ -26,10 +26,17 @@ class AppProxyController < ApplicationController
     sub_path = "/#{sub_path}" unless sub_path.start_with?('/')
     query = request.query_string.present? ? "?#{request.query_string}" : ""
 
-    target_uri = URI("http://127.0.0.1:#{target_port}#{sub_path}#{query}")
+    # Detect HTTPS upstream — some apps (Nextcloud, Portainer) use SSL internally
+    upstream_ssl = ssl_port?(@docker_app)
+    scheme = upstream_ssl ? 'https' : 'http'
+    target_uri = URI("#{scheme}://127.0.0.1:#{target_port}#{sub_path}#{query}")
 
     begin
       http = Net::HTTP.new(target_uri.host, target_uri.port)
+      if upstream_ssl
+        http.use_ssl = true
+        http.verify_mode = OpenSSL::SSL::VERIFY_NONE # local container, self-signed cert
+      end
       http.open_timeout = 5
       http.read_timeout = 30
 
@@ -149,6 +156,17 @@ class AppProxyController < ApplicationController
     body = body.gsub('"baseURL":""', "\"baseURL\":\"#{prefix}\"")
 
     body
+  end
+
+  # Apps that use HTTPS internally (container port is 443 or 9443)
+  def ssl_port?(app)
+    return false unless app.port_mappings.present?
+    ports = app.port_mappings
+    ports = JSON.parse(ports) if ports.is_a?(String)
+    ssl_ports = %w[443 9443 8443]
+    ports.keys.any? { |k| ssl_ports.include?(k.to_s) }
+  rescue
+    false
   end
 
   def rewrite_location(location, app)
