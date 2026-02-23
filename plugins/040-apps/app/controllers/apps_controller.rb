@@ -270,7 +270,7 @@ class AppsController < ApplicationController
 	def docker_install_stream
 		identifier = params[:id]
 		entry = load_catalog.find { |e| e[:identifier] == identifier }
-		lan_ip = (UDPSocket.open {|s| s.connect("8.8.8.8", 1); s.addr.last} rescue nil) || request.host
+		proxy_base = "#{request.scheme}://#{request.host_with_port}"
 
 		response.headers['Content-Type'] = 'text/event-stream'
 		response.headers['Cache-Control'] = 'no-cache, no-store'
@@ -315,7 +315,7 @@ class AppsController < ApplicationController
 					"Starting container...",
 					"",
 					"✓ #{app_name} installed and running!",
-					"  Access at http://#{lan_ip}:#{entry[:ports].values.first}"
+					"  Access at #{proxy_base}/app/#{identifier}"
 				]
 				lines.each { |l| sleep(0.4); sse_send.call(l) }
 
@@ -410,7 +410,7 @@ class AppsController < ApplicationController
 
 					sse_send.call("")
 					sse_send.call("✓ #{app_name} installed and running!")
-					sse_send.call("  Access at http://#{lan_ip}:#{first_port}") if first_port
+					sse_send.call("  Access at #{proxy_base}/app/#{identifier}") if first_port
 					sse_send.call("success", "done")
 
 				rescue => e

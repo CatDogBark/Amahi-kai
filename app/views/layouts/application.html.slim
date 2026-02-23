@@ -25,9 +25,6 @@ html[dir="#{@locale_direction}" lang="#{I18n.locale}" xml:lang="#{I18n.locale}"]
 
     link rel="search" type="application/opensearchdescription+xml" title="HDA Search" href="/search.xml"
     = csrf_meta_tags
-    - lan_ip = (UDPSocket.open {|s| s.connect("8.8.8.8", 1); s.addr.last} rescue nil)
-    - if lan_ip
-      meta name="server-ip" content="#{lan_ip}"
 
   body data-turbo="false"
 

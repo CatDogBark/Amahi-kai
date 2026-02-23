@@ -40,13 +40,10 @@ function dockerAppAction(url, identifier, btn) {
 }
 
 function buildAppButtons(identifier, status, hostPort, name) {
-  var serverIp = document.querySelector('meta[name="server-ip"]');
-  var ip = serverIp ? serverIp.content : window.location.hostname;
-
   if (status === 'running') {
     var html = '<div class="d-flex gap-1 justify-content-end">';
     if (hostPort) {
-      html += '<a class="btn btn-sm btn-success" href="http://' + ip + ':' + hostPort + '" target="_blank">Open</a>';
+      html += '<a class="btn btn-sm btn-success" href="/app/' + identifier + '" target="_blank">Open</a>';
     }
     html += '<button class="btn btn-sm btn-outline-danger" onclick="dockerAppAction(\'/tab/apps/docker/stop/' + identifier + '\', \'' + identifier + '\', this)">Stop</button>';
     html += '</div>';

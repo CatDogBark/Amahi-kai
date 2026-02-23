@@ -18,7 +18,6 @@
             span.badge.bg-secondary.ms-2.small= category
       td.settings-col2.ps-2.apps-col2.text-secondary
         = description.present? ? truncate(description, length: 120) : t('no_description_supplied')
-      - server_ip = (UDPSocket.open {|s| s.connect("8.8.8.8", 1); s.addr.last} rescue nil) || request.host
       td.text-end.pe-3 style='width: 120px'
         - case status
         - when 'available'
@@ -31,7 +30,7 @@
         - when 'running'
           .d-flex.gap-1.justify-content-end
             - if installed && app.host_port.present?
-              a.btn.btn-sm.btn-success href="http://#{server_ip}:#{app.host_port}" target="_blank" Open
+              a.btn.btn-sm.btn-success href="/app/#{identifier}" target="_blank" Open
             button.btn.btn-sm.btn-outline-danger onclick="dockerAppAction('/tab/apps/docker/stop/#{identifier}', '#{identifier}', this)" Stop
         - when 'stopped'
           .d-flex.gap-1.justify-content-end
