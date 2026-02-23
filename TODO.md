@@ -43,21 +43,11 @@
 
 ## P0 — Next Up
 
-### 🔥 Fix Apps "Open" Button (not working)
-The Open button (`/app/{identifier}`, `target="_blank"`) does nothing when clicked.
+### ~~Fix Apps "Open" Button~~ ✅
+Reverse proxy working — FileBrowser, Nextcloud, Jellyfin confirmed.
 
-**Investigation notes:**
-- Button renders as `<a href="/app/filebrowser" target="_blank">Open</a>` — plain link, should work
-- Route exists: `match '/app/:app_id'` → `AppProxyController#proxy`
-- Proxy controller forwards to `127.0.0.1:{host_port}`
-- **Possible causes to check:**
-  1. `AppProxyController` inherits `before_action_hook` which runs `check_for_amahi_app` — may redirect if hostname matches a DNS alias
-  2. `prepare_theme` runs on every proxy request (unnecessary, could error if theme missing)
-  3. `admin_required` may fail in the new tab (cookie/session issue through Cloudflare Tunnel?)
-  4. `host_port` might be nil or wrong in the DockerApp record
-  5. Button might be inside a `<form>` or something swallowing the click event
-- **Fix approach:** Add `skip_before_action :before_action_hook` to AppProxyController. Check DockerApp record has correct `host_port`. Test with browser dev tools Network tab to see what request goes out and what comes back.
-- **Key files:** `app/controllers/app_proxy_controller.rb`, `plugins/040-apps/app/views/apps/_docker_app.html.slim`, `plugins/040-apps/app/assets/javascripts/apps.js`
+### 🔥 Test All Catalog Apps Through Proxy
+Verify each app in the catalog installs, opens, and functions through the reverse proxy.
 
 ### Test Coverage (57% → 70%+)
 Edge cases, error paths, integration tests for sudo-based workflows.
@@ -114,3 +104,21 @@ UFW management through the web UI.
 
 ### Propshaft Migration
 Blocked by Bootstrap gem's Sprockets dependency. Low priority.
+
+---
+
+## Phase 2 — Long-Term Vision
+
+### 🔮 Reticulum Out-of-Band Management Layer
+Optional low-bandwidth management and notification channel for the NAS using [Reticulum](https://reticulum.network/). **Control plane only** — not for file serving or media (bandwidth too low).
+
+**Use cases:**
+- Encrypted push alerts (backup failures, disk health warnings, service status) delivered over LoRa or other Reticulum transports when user has no internet or cell service
+- Remote command/control for basic service management (restart a container, trigger a backup, check system status) over Reticulum from a mobile device running Sideband
+- Resilient local communication independent of Wi-Fi/internet infrastructure
+
+**Hardware:** USB LoRa radio (RNode) attached to the NAS. Reticulum is Python — N100 handles it fine. Constraint is purely transport bandwidth, which is why this stays management-only.
+
+**Why it matters:** No other consumer NAS platform has a decentralized mesh fallback channel. Aligns with self-sovereign infrastructure philosophy. Especially relevant for rural/off-grid deployments (Big Island, remote sites, disaster scenarios).
+
+**Priority:** After public release stabilization. Document and revisit.
