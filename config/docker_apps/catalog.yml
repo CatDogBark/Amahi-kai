@@ -213,7 +213,7 @@ apps:
     name: FileBrowser
     description: Web-based file manager with upload, download, and sharing capabilities
     logo_url: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/filebrowser.png
-    image: filebrowser/filebrowser
+    image: filebrowser/filebrowser:v2.28.0-amd64-s6
     category: storage
     url_path: /filebrowser
     ports:
