@@ -398,10 +398,11 @@ class AppsController < ApplicationController
 						end
 					end
 
-					# Init file bind mounts (config files mounted read-only)
+					# Init file bind mounts (only if container path is specified)
 					(entry[:init_files] || []).each do |init|
 						host_path = init[:host] || init['host']
 						container_path = init[:container] || init['container']
+						next unless container_path.present?
 						cmd_parts += ["-v", "#{host_path}:#{container_path}"]
 					end
 
