@@ -136,7 +136,7 @@ apps:
     name: Syncthing
     description: Continuous peer-to-peer file synchronization between devices
     logo_url: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/syncthing.png
-    image: syncthing/syncthing
+    image: linuxserver/syncthing
     category: storage
     url_path: /syncthing
     proxy_mode: proxy
@@ -144,11 +144,12 @@ apps:
       8384: 8384
       22000: 22000
     volumes:
-      - /opt/amahi/apps/syncthing/config:/var/syncthing/config
-      - /opt/amahi/apps/syncthing/data:/var/syncthing
+      - /opt/amahi/apps/syncthing/config:/config
+      - /opt/amahi/apps/syncthing/data:/data
     environment:
       PUID: "1000"
       PGID: "1000"
+      TZ: Etc/UTC
 
   uptimekuma:
     name: Uptime Kuma
