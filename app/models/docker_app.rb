@@ -98,6 +98,8 @@ class DockerApp < ApplicationRecord
       system("sudo docker stop -t 30 #{cname} 2>/dev/null")
       system("sudo docker rm -f -v #{cname} 2>/dev/null")
     end
+    # Prune unused images to reclaim disk space
+    system("sudo docker image prune -f 2>/dev/null")
     # Clean up host app directory (configs, databases, etc.)
     app_dir = "/opt/amahi/apps/#{identifier}"
     system("sudo rm -rf #{Shellwords.escape(app_dir)}") if identifier.present? && File.directory?(app_dir)
