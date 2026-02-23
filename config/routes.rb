@@ -2,7 +2,7 @@ Rails.application.routes.draw do
 
   # Docker app reverse proxy — must be before plugin routes
   match '/app/:app_id', to: 'app_proxy#proxy', via: :all, defaults: { path: '/' }
-  match '/app/:app_id/*path', to: 'app_proxy#proxy', via: :all
+  match '/app/:app_id/*path', to: 'app_proxy#proxy', via: :all, format: false
 
   amahi_plugin_routes
 
