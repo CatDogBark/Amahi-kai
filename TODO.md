@@ -49,6 +49,9 @@ Reverse proxy working — FileBrowser, Nextcloud, Jellyfin confirmed.
 ### 🔥 Test All Catalog Apps Through Proxy
 Verify each app in the catalog installs, opens, and functions through the reverse proxy.
 
+**Known issues:**
+- **Pi-hole** — needs DNS configuration UX. Port 53 removed from catalog to prevent hijacking host DNS. Need a setup flow that lets users opt-in to DNS takeover with proper warnings.
+
 ### Test Coverage (57% → 70%+)
 Edge cases, error paths, integration tests for sudo-based workflows.
 ~603 specs, ~6 real failures remaining (docker_apps 500s in test).
