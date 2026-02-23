@@ -344,6 +344,15 @@ class AppsController < ApplicationController
 					)
 					docker_app.save!
 
+					# Create init files (config files that must exist before container starts)
+					(entry[:init_files] || []).each do |init|
+						host_path = init[:host] || init['host']
+						content = init[:content] || init['content']
+						sse_send.call("Creating config #{host_path}...")
+						FileUtils.mkdir_p(File.dirname(host_path)) rescue nil
+						File.write(host_path, content) unless File.exist?(host_path)
+					end
+
 					# Create volume directories
 					(entry[:volumes] || []).each do |mapping|
 						host_path = mapping.is_a?(String) ? mapping.split(':').first : mapping.values.first
@@ -378,6 +387,13 @@ class AppsController < ApplicationController
 						else
 							mapping.each { |cp, hp| cmd_parts += ["-v", "#{hp}:#{cp}"] }
 						end
+					end
+
+					# Init file bind mounts (config files mounted read-only)
+					(entry[:init_files] || []).each do |init|
+						host_path = init[:host] || init['host']
+						container_path = init[:container] || init['container']
+						cmd_parts += ["-v", "#{host_path}:#{container_path}:ro"]
 					end
 
 					# Environment

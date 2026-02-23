@@ -218,9 +218,12 @@ apps:
       80: 8085
     volumes:
       - /var/hda/files:/srv
-      - /opt/amahi/apps/filebrowser/database.db:/database.db
-      - /opt/amahi/apps/filebrowser/.filebrowser.json:/.filebrowser.json
+      - /opt/amahi/apps/filebrowser/database:/database
     environment: {}
+    init_files:
+      - host: /opt/amahi/apps/filebrowser/.filebrowser.json
+        container: /.filebrowser.json
+        content: '{"port":80,"baseURL":"","address":"0.0.0.0","log":"stdout","database":"/database/filebrowser.db","root":"/srv"}'
 
   audiobookshelf:
     name: Audiobookshelf
