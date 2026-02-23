@@ -80,7 +80,7 @@ class AppProxyController < ApplicationController
       status_code = upstream.code.to_i
 
       # Build response headers
-      skip_response = %w[transfer-encoding connection keep-alive content-length]
+      skip_response = %w[transfer-encoding connection keep-alive content-length content-type]
       upstream.each_header do |name, value|
         next if skip_response.include?(name.downcase)
 
@@ -103,9 +103,9 @@ class AppProxyController < ApplicationController
         body = rewrite_html(body, @docker_app)
       end
 
-      self.response_body = body
-      self.status = status_code
-      response.headers['Content-Type'] = content_type if content_type.present?
+      # Use send_data for full control over Content-Type (prevents Rails MIME override)
+      send_data body, type: content_type.presence || 'application/octet-stream',
+                       disposition: 'inline', status: status_code
 
     rescue Errno::ECONNREFUSED
       render plain: "Cannot connect to #{@docker_app.name} — is it running?", status: :bad_gateway
