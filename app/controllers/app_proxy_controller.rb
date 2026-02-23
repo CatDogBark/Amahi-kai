@@ -24,6 +24,8 @@ class AppProxyController < ApplicationController
     # (baseURL is NOT set on the server; we rewrite the JS config instead)
     sub_path = params[:path].to_s
     sub_path = "/#{sub_path}" unless sub_path.start_with?('/')
+    # Preserve trailing slash — Rails *path glob strips it, causing redirect loops
+    sub_path += '/' if request.path.end_with?('/') && !sub_path.end_with?('/')
     query = request.query_string.present? ? "?#{request.query_string}" : ""
 
     # Detect HTTPS upstream — some apps (Nextcloud, Portainer) use SSL internally
