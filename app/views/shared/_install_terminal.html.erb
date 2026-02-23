@@ -96,7 +96,7 @@ function closeInstallTerminal(id) {
   var modal = document.getElementById(id + '-install-modal');
 
   // If this was a system update, the server is restarting — wait for it
-  if (id === 'update') {
+  if (id === 'update' || id === 'system-update') {
     var output = document.getElementById(id + '-output');
     var line = document.createElement('div');
     line.className = 'term-line step';
