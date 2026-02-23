@@ -120,6 +120,14 @@ Browser-based shell (xterm.js + WebSocket). Admin-only.
 ### Firewall Plugin
 UFW management through the web UI.
 
+### Multi-Container App Support (Docker Compose)
+Apps like Immich, Paperless-ngx (with Redis), and others need 2-3 containers. Build support for:
+- Per-app `docker-compose.yml` (generated from catalog or stored in config)
+- `docker compose -p amahi-{id} up/down` for lifecycle instead of individual container commands
+- Proxy only needs main service port — companion containers are internal
+- Single-container apps still work (compose with one service = same thing)
+- Re-enable Immich once this lands
+
 ### Propshaft Migration
 Blocked by Bootstrap gem's Sprockets dependency. Low priority.
 
