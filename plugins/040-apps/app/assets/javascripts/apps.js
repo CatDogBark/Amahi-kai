@@ -42,7 +42,11 @@ function dockerAppAction(url, identifier, btn) {
 function buildAppButtons(identifier, status, hostPort, name) {
   if (status === 'running') {
     var html = '<div class="d-flex gap-1 justify-content-end">';
-    if (hostPort) {
+    var row = document.getElementById('docker_app_' + identifier);
+    var proxyMode = row ? row.getAttribute('data-proxy-mode') : 'proxy';
+    if (hostPort && proxyMode === 'subdomain') {
+      html += '<button class="btn btn-sm btn-secondary disabled" type="button" title="Requires Cloudflare subdomain — configure in Remote Access settings">🔗 Subdomain</button>';
+    } else if (hostPort) {
       html += '<a class="btn btn-sm btn-success" href="/app/' + identifier + '" target="_blank">Open</a>';
     }
     html += '<button class="btn btn-sm btn-outline-danger" onclick="dockerAppAction(\'/tab/apps/docker/stop/' + identifier + '\', \'' + identifier + '\', this)">Stop</button>';

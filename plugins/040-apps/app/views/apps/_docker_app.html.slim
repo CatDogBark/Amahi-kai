@@ -5,8 +5,10 @@
 - category = installed ? app.category : app[:category]
 - logo = installed ? app.logo_url : app[:logo_url]
 - status = installed ? app.status : 'available'
+- catalog_entry = AppCatalog.find(identifier) || {}
+- proxy_mode = catalog_entry[:proxy_mode] || 'proxy'
 
-.app.docker-app id="docker_app_#{identifier}"
+.app.docker-app id="docker_app_#{identifier}" data-proxy-mode=proxy_mode
   table.settings.stretchtoggle
     tr.hover-style
       td.settings-col1.settings-col1-pad1.apps-col1
@@ -30,7 +32,10 @@
         - when 'running'
           .d-flex.gap-1.justify-content-end
             - if installed && app.host_port.present?
-              a.btn.btn-sm.btn-success href="/app/#{identifier}" target="_blank" Open
+              - if proxy_mode == 'subdomain'
+                button.btn.btn-sm.btn-secondary.disabled type="button" title="Requires Cloudflare subdomain — configure in Remote Access settings" data-bs-toggle="tooltip" 🔗 Subdomain
+              - else
+                a.btn.btn-sm.btn-success href="/app/#{identifier}" target="_blank" Open
             button.btn.btn-sm.btn-outline-danger onclick="dockerAppAction('/tab/apps/docker/stop/#{identifier}', '#{identifier}', this)" Stop
         - when 'stopped'
           .d-flex.gap-1.justify-content-end
