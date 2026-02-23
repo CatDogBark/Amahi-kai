@@ -65,6 +65,7 @@ apps:
     environment:
       USER_UID: "1000"
       USER_GID: "1000"
+      GITEA__server__ROOT_URL: http://localhost:3300/app/gitea/
 
   portainer:
     name: Portainer
@@ -204,7 +205,8 @@ apps:
     volumes:
       - /opt/amahi/apps/grafana/data:/var/lib/grafana
     environment:
-      GF_SERVER_ROOT_URL: http://localhost:3100/grafana
+      GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s/app/grafana/"
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
       GF_SECURITY_ADMIN_PASSWORD: admin
 
   filebrowser:
@@ -223,7 +225,7 @@ apps:
     init_files:
       - host: /opt/amahi/apps/filebrowser/.filebrowser.json
         container: /.filebrowser.json
-        content: '{"port":80,"baseURL":"","address":"0.0.0.0","log":"stdout","database":"/database/filebrowser.db","root":"/srv"}'
+        content: '{"port":80,"baseURL":"/app/filebrowser","address":"0.0.0.0","log":"stdout","database":"/database/filebrowser.db","root":"/srv"}'
 
   audiobookshelf:
     name: Audiobookshelf

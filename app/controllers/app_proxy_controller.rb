@@ -18,11 +18,16 @@ class AppProxyController < ApplicationController
     end
 
     target_port = @docker_app.host_port
-    proxy_path = params[:path].to_s
-    proxy_path = "/#{proxy_path}" unless proxy_path.start_with?('/')
+    prefix = "/app/#{@docker_app.identifier}"
+    sub_path = params[:path].to_s
+    sub_path = "/#{sub_path}" unless sub_path.start_with?('/')
+
+    # Forward with the full prefix path — apps are configured with baseURL
+    # matching /app/{identifier}, so they expect the full path
+    upstream_path = "#{prefix}#{sub_path == '/' ? '' : sub_path}"
     query = request.query_string.present? ? "?#{request.query_string}" : ""
 
-    target_uri = URI("http://127.0.0.1:#{target_port}#{proxy_path}#{query}")
+    target_uri = URI("http://127.0.0.1:#{target_port}#{upstream_path}#{query}")
 
     begin
       http = Net::HTTP.new(target_uri.host, target_uri.port)
@@ -54,16 +59,21 @@ class AppProxyController < ApplicationController
         outgoing[header_name] = value
       end
 
+      # Forward Content-Type header (not prefixed with HTTP_)
+      if request.content_type.present?
+        outgoing['Content-Type'] = request.content_type
+      end
+
       # Forward body for POST/PUT/PATCH
       if %w[POST PUT PATCH].include?(request.method)
         outgoing.body = request.body.read
-        outgoing.content_type = request.content_type if request.content_type
       end
 
-      # Forwarded headers
+      # Forwarded headers for the upstream app
       outgoing['X-Forwarded-For'] = request.remote_ip
       outgoing['X-Forwarded-Proto'] = request.scheme
       outgoing['X-Forwarded-Host'] = request.host
+      outgoing['X-Real-IP'] = request.remote_ip
 
       # Execute
       upstream = http.request(outgoing)
@@ -90,12 +100,7 @@ class AppProxyController < ApplicationController
       content_type = upstream['content-type'].to_s
       body = upstream.body || ''
 
-      # Rewrite HTML to fix root-relative paths
-      if content_type.include?('text/html')
-        body = rewrite_html(body, @docker_app)
-      end
-
-      # Send raw response — let the upstream Content-Type pass through exactly
+      # Send raw response — apps with baseURL set generate correct paths natively
       self.response_body = body
       self.status = status_code
       response.headers['Content-Type'] = content_type if content_type.present?
@@ -119,23 +124,13 @@ class AppProxyController < ApplicationController
     end
   end
 
-  def rewrite_html(body, app)
-    prefix = "/app/#{app.identifier}"
-
-    # Rewrite root-relative src/href/action attributes
-    # /static/... → /app/filebrowser/static/...
-    # But don't rewrite if already prefixed or external
-    body.gsub(%r{((?:src|href|action)\s*=\s*["'])/(?!app/|https?:|data:|//)}, "\\1#{prefix}/")
-  end
-
   def rewrite_location(location, app)
     prefix = "/app/#{app.identifier}"
     port = app.host_port
 
+    # Rewrite absolute localhost URLs to proxy path
     if location =~ %r{^https?://(?:localhost|127\.0\.0\.1|0\.0\.0\.0):#{port}(.*)}
-      "#{prefix}#{$1}"
-    elsif location.start_with?('/') && !location.start_with?(prefix)
-      "#{prefix}#{location}"
+      "#{$1}"
     else
       location
     end
@@ -143,6 +138,7 @@ class AppProxyController < ApplicationController
 
   def rewrite_cookie_path(cookie, app)
     prefix = "/app/#{app.identifier}"
-    cookie.gsub(/[Pp]ath=\/(?!\S)/, "Path=#{prefix}/")
+    # Ensure cookie path covers the app prefix
+    cookie.gsub(%r{[Pp]ath=/(?=\s|;|$)}, "Path=#{prefix}/")
   end
 end
