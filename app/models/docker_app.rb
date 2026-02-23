@@ -54,6 +54,13 @@ class DockerApp < ApplicationRecord
     update!(status: 'pulling')
     ContainerService.pull_image(image)
     update!(status: 'installing')
+
+    # Create host directories for volumes and set permissions so containers can write
+    prepare_host_directories!
+
+    # Write init_files from catalog (e.g., config files the app needs at first boot)
+    write_init_files!
+
     result = ContainerService.create(
       image: image,
       name: effective_container_name,
@@ -128,5 +135,43 @@ class DockerApp < ApplicationRecord
     return unless container_name.present?
     docker_status = ContainerService.status(effective_container_name)
     update!(status: docker_status == 'not_found' ? 'error' : docker_status)
+  end
+
+  private
+
+  # Create host directories for all volume mounts and set open permissions
+  # so non-root containers can write to them
+  def prepare_host_directories!
+    return unless volume_mappings.present?
+    volume_mappings.each do |_container_path, host_path|
+      next if host_path.blank?
+      # Skip shared/system paths like /var/run/docker.sock
+      next if host_path.start_with?('/var/run/')
+      system("sudo mkdir -p #{Shellwords.escape(host_path)}")
+      system("sudo chmod 777 #{Shellwords.escape(host_path)}")
+    end
+  end
+
+  # Write init_files from the catalog (config files needed before first boot)
+  def write_init_files!
+    catalog_entry = AppCatalog.find(identifier) rescue nil
+    return unless catalog_entry && catalog_entry[:init_files].present?
+
+    catalog_entry[:init_files].each do |file_spec|
+      host_path = file_spec[:host] || file_spec['host']
+      content = file_spec[:content] || file_spec['content']
+      next unless host_path && content
+
+      dir = File.dirname(host_path)
+      system("sudo mkdir -p #{Shellwords.escape(dir)}")
+      # Write via temp file + sudo mv to handle root-owned directories
+      require 'tempfile'
+      tmp = Tempfile.new('init_file')
+      tmp.write(content)
+      tmp.close
+      system("sudo cp #{Shellwords.escape(tmp.path)} #{Shellwords.escape(host_path)}")
+      system("sudo chmod 644 #{Shellwords.escape(host_path)}")
+      tmp.unlink
+    end
   end
 end
