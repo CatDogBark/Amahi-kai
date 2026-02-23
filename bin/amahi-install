@@ -400,6 +400,9 @@ amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start docker
 amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop docker
 amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart docker
 
+# Docker container management (app install/uninstall/start/stop)
+amahi ALL=(root) NOPASSWD: /usr/bin/docker
+
 # Cloudflare Tunnel
 amahi ALL=(root) NOPASSWD: /usr/bin/cloudflared service install *
 amahi ALL=(root) NOPASSWD: /usr/bin/cloudflared service uninstall
