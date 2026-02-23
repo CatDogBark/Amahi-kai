@@ -178,6 +178,9 @@ class AppProxyController < ApplicationController
       "#{prefix}#{$1}"
     elsif location.start_with?('/') && !location.start_with?(prefix)
       "#{prefix}#{location}"
+    elsif !location.start_with?('/') && !location.start_with?('http')
+      # Relative redirect (e.g., "web/") — make it absolute under the proxy prefix
+      "#{prefix}/#{location}"
     else
       location
     end
