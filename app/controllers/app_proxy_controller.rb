@@ -5,6 +5,8 @@ class AppProxyController < ApplicationController
   before_action :admin_required
   before_action :find_app
 
+  # Skip hooks that interfere with proxying (theme, DNS alias redirect, etc.)
+  skip_before_action :before_action_hook
   # Skip CSRF for proxied POST/PUT requests from the app
   skip_before_action :verify_authenticity_token, only: [:proxy]
 
