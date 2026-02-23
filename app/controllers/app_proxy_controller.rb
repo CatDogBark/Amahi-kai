@@ -118,7 +118,13 @@ class AppProxyController < ApplicationController
         body = rewrite_html(body, @docker_app)
       end
 
-      render body: body, content_type: content_type.presence || 'application/octet-stream', status: status_code
+      # Fix MIME type — some apps return application/octet-stream for CSS/JS
+      effective_type = content_type.presence || 'application/octet-stream'
+      if effective_type.include?('application/octet-stream')
+        effective_type = mime_from_path(sub_path) || effective_type
+      end
+
+      render body: body, content_type: effective_type, status: status_code
 
     rescue Errno::ECONNREFUSED
       render plain: "Cannot connect to #{@docker_app.name} — is it running?", status: :bad_gateway
@@ -142,8 +148,11 @@ class AppProxyController < ApplicationController
   def rewrite_html(body, app)
     prefix = "/app/#{app.identifier}"
 
-    # 1. Inject <base> tag so relative asset URLs resolve under the proxy prefix
-    base_tag = "<base href=\"#{prefix}/\">"
+    # 1. Inject <base> tag using the current request path (not just the prefix)
+    #    e.g., Jellyfin serves from /web/, so base must be /app/jellyfin/web/
+    base_path = request.path
+    base_path += '/' unless base_path.end_with?('/')
+    base_tag = "<base href=\"#{base_path}\">"
     body = if body =~ /<head([^>]*)>/i
       body.sub(/<head([^>]*)>/i, "<head\\1>#{base_tag}")
     else
@@ -160,6 +169,27 @@ class AppProxyController < ApplicationController
     body = body.gsub('"baseURL":""', "\"baseURL\":\"#{prefix}\"")
 
     body
+  end
+
+  # Infer MIME type from file extension when upstream doesn't provide one
+  def mime_from_path(path)
+    ext = File.extname(path.to_s.split('?').first).downcase
+    {
+      '.css'  => 'text/css; charset=utf-8',
+      '.js'   => 'application/javascript; charset=utf-8',
+      '.json' => 'application/json; charset=utf-8',
+      '.svg'  => 'image/svg+xml',
+      '.png'  => 'image/png',
+      '.jpg'  => 'image/jpeg',
+      '.jpeg' => 'image/jpeg',
+      '.gif'  => 'image/gif',
+      '.webp' => 'image/webp',
+      '.woff' => 'font/woff',
+      '.woff2'=> 'font/woff2',
+      '.ttf'  => 'font/ttf',
+      '.ico'  => 'image/x-icon',
+      '.map'  => 'application/json',
+    }[ext]
   end
 
   # Apps that use HTTPS internally (container port is 443 or 9443)
