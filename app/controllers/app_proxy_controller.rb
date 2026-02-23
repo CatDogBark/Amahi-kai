@@ -20,14 +20,13 @@ class AppProxyController < ApplicationController
     target_port = @docker_app.host_port
     prefix = "/app/#{@docker_app.identifier}"
 
-    # Forward full path including prefix — apps are configured with baseURL
-    # matching /app/{identifier}, so they handle routing internally
+    # Strip the /app/{identifier} prefix — upstream sees root-relative paths
+    # (baseURL is NOT set on the server; we rewrite the JS config instead)
     sub_path = params[:path].to_s
     sub_path = "/#{sub_path}" unless sub_path.start_with?('/')
-    upstream_path = "#{prefix}#{sub_path == '/' ? '' : sub_path}"
     query = request.query_string.present? ? "?#{request.query_string}" : ""
 
-    target_uri = URI("http://127.0.0.1:#{target_port}#{upstream_path}#{query}")
+    target_uri = URI("http://127.0.0.1:#{target_port}#{sub_path}#{query}")
 
     begin
       http = Net::HTTP.new(target_uri.host, target_uri.port)
@@ -75,13 +74,11 @@ class AppProxyController < ApplicationController
       outgoing['X-Forwarded-Host'] = request.host
       outgoing['X-Real-IP'] = request.remote_ip
 
-      # Log what we're sending upstream
       Rails.logger.info("PROXY >>> #{request.method} #{target_uri} (from #{request.path})")
 
       # Execute
       upstream = http.request(outgoing)
 
-      # Send response with correct status
       status_code = upstream.code.to_i
 
       # Build response headers
@@ -105,10 +102,11 @@ class AppProxyController < ApplicationController
 
       Rails.logger.info("PROXY <<< #{status_code} #{content_type} (#{body.bytesize} bytes) for #{target_uri}")
 
-      # No HTML rewriting needed — apps are configured with baseURL
-      # so they generate correct paths natively
+      # Rewrite HTML responses for proxied apps
+      if content_type.include?('text/html')
+        body = rewrite_html(body, @docker_app)
+      end
 
-      # render body: with explicit content_type — most reliable way in Rails
       render body: body, content_type: content_type.presence || 'application/octet-stream', status: status_code
 
     rescue Errno::ECONNREFUSED
@@ -128,6 +126,29 @@ class AppProxyController < ApplicationController
     unless @docker_app
       render plain: "App not found", status: :not_found
     end
+  end
+
+  def rewrite_html(body, app)
+    prefix = "/app/#{app.identifier}"
+
+    # 1. Inject <base> tag so relative asset URLs resolve under the proxy prefix
+    base_tag = "<base href=\"#{prefix}/\">"
+    body = if body =~ /<head([^>]*)>/i
+      body.sub(/<head([^>]*)>/i, "<head\\1>#{base_tag}")
+    else
+      base_tag + body
+    end
+
+    # 2. Rewrite root-absolute paths in HTML attributes
+    #    /static/foo → /app/filebrowser/static/foo
+    body = body.gsub(%r{((?:src|href|action)\s*=\s*["'])/(?!app/|https?:|data:|//)([^"']*["'])}, "\\1#{prefix}/\\2")
+
+    # 3. Rewrite the app's JS config to use the proxy prefix for API calls
+    #    "BaseURL":"" → "BaseURL":"/app/filebrowser"
+    body = body.gsub('"BaseURL":""', "\"BaseURL\":\"#{prefix}\"")
+    body = body.gsub('"baseURL":""', "\"baseURL\":\"#{prefix}\"")
+
+    body
   end
 
   def rewrite_location(location, app)
