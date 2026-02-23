@@ -402,7 +402,7 @@ class AppsController < ApplicationController
 					(entry[:init_files] || []).each do |init|
 						host_path = init[:host] || init['host']
 						container_path = init[:container] || init['container']
-						cmd_parts += ["-v", "#{host_path}:#{container_path}:ro"]
+						cmd_parts += ["-v", "#{host_path}:#{container_path}"]
 					end
 
 					# Environment

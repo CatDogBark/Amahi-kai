@@ -94,8 +94,9 @@ class DockerApp < ApplicationRecord
   def uninstall!
     if container_name.present?
       cname = Shellwords.escape(effective_container_name)
-      system("sudo docker stop #{cname} 2>/dev/null")
-      system("sudo docker rm -v #{cname} 2>/dev/null")
+      # Force stop (30s timeout) then force remove — don't fail if container is already gone
+      system("sudo docker stop -t 30 #{cname} 2>/dev/null")
+      system("sudo docker rm -f -v #{cname} 2>/dev/null")
     end
     # Clean up host app directory (configs, databases, etc.)
     app_dir = "/opt/amahi/apps/#{identifier}"
@@ -121,12 +122,17 @@ class DockerApp < ApplicationRecord
   # Stop the container
   def stop!
     cname = Shellwords.escape(effective_container_name)
-    result = system("sudo docker stop #{cname} 2>/dev/null")
-    if result
+    output = `sudo docker stop -t 30 #{cname} 2>&1`
+    if $?.success?
       update!(status: 'stopped')
     else
-      update!(status: 'error', error_message: 'Container not found — reinstall the app')
-      raise "Failed to stop container #{effective_container_name}"
+      # If container doesn't exist, force cleanup the DB record
+      if output.include?('No such container') || output.include?('not found')
+        update!(status: 'stopped')
+      else
+        update!(status: 'error', error_message: "Stop failed: #{output.strip}")
+        raise "Failed to stop container #{effective_container_name}: #{output.strip}"
+      end
     end
   end
 
