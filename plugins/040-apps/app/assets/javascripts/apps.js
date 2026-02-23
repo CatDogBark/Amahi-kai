@@ -2,12 +2,11 @@
 
 // POST action for docker app controls (start/stop/uninstall)
 function dockerAppAction(url, identifier, btn) {
-  if (btn) btn.disabled = true;
-
-  // Show spinner next to button
-  var spinner = document.createElement('span');
-  spinner.className = 'spinner-border spinner-border-sm ms-1';
-  if (btn) btn.parentNode.appendChild(spinner);
+  if (btn) {
+    btn.disabled = true;
+    btn._origHTML = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+  }
 
   fetch(url, {
     method: 'POST',
@@ -34,8 +33,10 @@ function dockerAppAction(url, identifier, btn) {
       alert('Action failed — check your connection');
     })
     .finally(function() {
-      if (spinner.parentNode) spinner.remove();
-      if (btn) btn.disabled = false;
+      if (btn) {
+        btn.innerHTML = btn._origHTML || btn.innerHTML;
+        btn.disabled = false;
+      }
     });
 }
 
@@ -45,7 +46,7 @@ function buildAppButtons(identifier, status, hostPort, name) {
     var row = document.getElementById('docker_app_' + identifier);
     var proxyMode = row ? row.getAttribute('data-proxy-mode') : 'proxy';
     if (hostPort && proxyMode === 'subdomain') {
-      html += '<button class="btn btn-sm btn-secondary disabled" type="button" title="Requires Cloudflare subdomain — configure in Remote Access settings">🔗 Subdomain</button>';
+      html += '<button class="btn btn-sm btn-outline-secondary disabled" type="button" title="Requires Cloudflare subdomain — configure in Remote Access settings">🔗</button>';
     } else if (hostPort) {
       html += '<a class="btn btn-sm btn-success" href="/app/' + identifier + '" target="_blank">Open</a>';
     }
