@@ -385,6 +385,7 @@ amahi ALL=(root) NOPASSWD: /bin/umount *
 amahi ALL=(root) NOPASSWD: /usr/bin/mkdir -p /mnt/*
 amahi ALL=(root) NOPASSWD: /usr/bin/mkdir -p /opt/amahi/*
 amahi ALL=(root) NOPASSWD: /usr/bin/cp /tmp/amahi-staging/* /opt/amahi/*
+amahi ALL=(root) NOPASSWD: /usr/bin/rm -rf /opt/amahi/apps/*
 amahi ALL=(root) NOPASSWD: /usr/bin/tee -a /etc/fstab
 amahi ALL=(root) NOPASSWD: /usr/bin/lsblk *
 amahi ALL=(root) NOPASSWD: /sbin/blkid *

@@ -88,7 +88,7 @@ class DockerApp < ApplicationRecord
     ContainerService.remove(effective_container_name, remove_volumes: true) if container_name.present?
     # Clean up host app directory
     app_dir = "/opt/amahi/apps/#{identifier}"
-    FileUtils.rm_rf(app_dir) if identifier.present? && File.directory?(app_dir)
+    system("sudo rm -rf #{Shellwords.escape(app_dir)}") if identifier.present? && File.directory?(app_dir)
     update!(status: 'available', container_name: nil, host_port: nil, error_message: nil)
   rescue => e
     update!(status: 'error', error_message: e.message)
