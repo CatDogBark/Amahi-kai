@@ -73,6 +73,9 @@ class AppProxyController < ApplicationController
       outgoing['X-Forwarded-Host'] = request.host
       outgoing['X-Real-IP'] = request.remote_ip
 
+      # Log what we're sending upstream
+      Rails.logger.info("PROXY >>> #{request.method} #{target_uri} (from #{request.path})")
+
       # Execute
       upstream = http.request(outgoing)
 
@@ -97,6 +100,8 @@ class AppProxyController < ApplicationController
 
       content_type = upstream['content-type'].to_s
       body = upstream.body || ''
+
+      Rails.logger.info("PROXY <<< #{status_code} #{content_type} (#{body.bytesize} bytes) for #{target_uri}")
 
       # Rewrite HTML responses to fix asset paths
       if content_type.include?('text/html')
