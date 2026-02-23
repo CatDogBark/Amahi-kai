@@ -345,30 +345,31 @@ class AppsController < ApplicationController
 					docker_app.save!
 
 					# Create init files (config files that must exist before container starts)
+					# Always overwrite on reinstall to ensure correct config
 					(entry[:init_files] || []).each do |init|
 						host_path = init[:host] || init['host']
 						content = init[:content] || init['content']
 						sse_send.call("Creating config #{host_path}...")
 						system("sudo mkdir -p #{Shellwords.escape(File.dirname(host_path))}")
-						unless File.exist?(host_path)
-							staged = "/tmp/amahi-staging/#{File.basename(host_path)}"
-							FileUtils.mkdir_p('/tmp/amahi-staging')
-							File.write(staged, content)
-							system("sudo cp #{Shellwords.escape(staged)} #{Shellwords.escape(host_path)}")
-						end
+						staged = "/tmp/amahi-staging/#{File.basename(host_path)}"
+						FileUtils.mkdir_p('/tmp/amahi-staging')
+						File.write(staged, content)
+						system("sudo cp #{Shellwords.escape(staged)} #{Shellwords.escape(host_path)}")
 					end
 
 					# Create volume directories (world-writable so containers with non-root users can write)
+					# Also fix permissions on existing dirs from previous installs
 					(entry[:volumes] || []).each do |mapping|
 						host_path = mapping.is_a?(String) ? mapping.split(':').first : mapping.values.first
+						next if host_path.start_with?('/var/run/') # skip system paths
 						sse_send.call("Creating directory #{host_path}...")
 						system("sudo mkdir -p #{Shellwords.escape(host_path)}")
-						system("sudo chmod 777 #{Shellwords.escape(host_path)}")
+						system("sudo chmod -R 777 #{Shellwords.escape(host_path)}")
 					end
 
 					# Pull image with progress
 					sse_send.call("Pulling image #{image}...")
-					IO.popen("docker pull #{image} 2>&1") do |io|
+					IO.popen("sudo docker pull #{image} 2>&1") do |io|
 						io.each_line { |line| sse_send.call("  #{line.chomp}") }
 					end
 					unless $?.success?
@@ -376,10 +377,12 @@ class AppsController < ApplicationController
 					end
 					sse_send.call("  ✓ Pull complete")
 
-					# Build docker run command
+					# Remove old container if it exists (from a previous failed install)
 					docker_app.update!(status: 'installing')
 					container_name = "amahi-#{identifier}"
-					cmd_parts = ["docker", "create", "--name", container_name, "--restart", "unless-stopped"]
+					system("sudo docker rm -f #{Shellwords.escape(container_name)} 2>/dev/null")
+
+					cmd_parts = ["sudo", "docker", "create", "--name", container_name, "--restart", "unless-stopped"]
 
 					# Port mappings
 					(entry[:ports] || {}).each do |container_port, host_port|
@@ -421,7 +424,7 @@ class AppsController < ApplicationController
 					end
 
 					sse_send.call("Starting container...")
-					system("docker start #{container_name} 2>/dev/null")
+					system("sudo docker start #{container_name} 2>/dev/null")
 
 					first_port = (entry[:ports] || {}).values.first
 					docker_app.update!(

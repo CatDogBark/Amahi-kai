@@ -92,8 +92,12 @@ class DockerApp < ApplicationRecord
 
   # Uninstall the app
   def uninstall!
-    ContainerService.remove(effective_container_name, remove_volumes: true) if container_name.present?
-    # Clean up host app directory
+    if container_name.present?
+      cname = Shellwords.escape(effective_container_name)
+      system("sudo docker stop #{cname} 2>/dev/null")
+      system("sudo docker rm -v #{cname} 2>/dev/null")
+    end
+    # Clean up host app directory (configs, databases, etc.)
     app_dir = "/opt/amahi/apps/#{identifier}"
     system("sudo rm -rf #{Shellwords.escape(app_dir)}") if identifier.present? && File.directory?(app_dir)
     update!(status: 'available', container_name: nil, host_port: nil, error_message: nil)
@@ -104,37 +108,46 @@ class DockerApp < ApplicationRecord
 
   # Start the container
   def start!
-    ContainerService.start(effective_container_name)
-    update!(status: 'running')
-  rescue ContainerService::ContainerError => e
-    if e.message.include?('not found')
+    cname = Shellwords.escape(effective_container_name)
+    result = system("sudo docker start #{cname} 2>/dev/null")
+    if result
+      update!(status: 'running')
+    else
       update!(status: 'error', error_message: 'Container not found — reinstall the app')
+      raise "Failed to start container #{effective_container_name}"
     end
-    raise
   end
 
   # Stop the container
   def stop!
-    ContainerService.stop(effective_container_name)
-    update!(status: 'stopped')
-  rescue ContainerService::ContainerError => e
-    if e.message.include?('not found')
+    cname = Shellwords.escape(effective_container_name)
+    result = system("sudo docker stop #{cname} 2>/dev/null")
+    if result
+      update!(status: 'stopped')
+    else
       update!(status: 'error', error_message: 'Container not found — reinstall the app')
+      raise "Failed to stop container #{effective_container_name}"
     end
-    raise
   end
 
   # Restart the container
   def restart!
-    ContainerService.restart(effective_container_name)
+    cname = Shellwords.escape(effective_container_name)
+    system("sudo docker restart #{cname} 2>/dev/null")
     update!(status: 'running')
   end
 
   # Refresh status from Docker
   def refresh_status!
     return unless container_name.present?
-    docker_status = ContainerService.status(effective_container_name)
-    update!(status: docker_status == 'not_found' ? 'error' : docker_status)
+    cname = Shellwords.escape(effective_container_name)
+    output = `sudo docker inspect --format '{{.State.Status}}' #{cname} 2>/dev/null`.strip
+    case output
+    when 'running' then update!(status: 'running')
+    when 'exited', 'stopped' then update!(status: 'stopped')
+    when 'restarting' then update!(status: 'running')
+    else update!(status: 'error', error_message: 'Container not found')
+    end
   end
 
   private
