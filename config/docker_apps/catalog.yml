@@ -162,7 +162,7 @@ apps:
     image: louislam/uptime-kuma
     category: monitoring
     url_path: /uptimekuma
-    proxy_mode: proxy
+    proxy_mode: subdomain
     ports:
       3001: 3001
     volumes:
