@@ -99,12 +99,22 @@ class DockerApp < ApplicationRecord
   def start!
     ContainerService.start(effective_container_name)
     update!(status: 'running')
+  rescue ContainerService::ContainerError => e
+    if e.message.include?('not found')
+      update!(status: 'error', error_message: 'Container not found — reinstall the app')
+    end
+    raise
   end
 
   # Stop the container
   def stop!
     ContainerService.stop(effective_container_name)
     update!(status: 'stopped')
+  rescue ContainerService::ContainerError => e
+    if e.message.include?('not found')
+      update!(status: 'error', error_message: 'Container not found — reinstall the app')
+    end
+    raise
   end
 
   # Restart the container
