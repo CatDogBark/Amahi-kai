@@ -43,6 +43,22 @@
 
 ## P0 — Next Up
 
+### 🔥 Fix Apps "Open" Button (not working)
+The Open button (`/app/{identifier}`, `target="_blank"`) does nothing when clicked.
+
+**Investigation notes:**
+- Button renders as `<a href="/app/filebrowser" target="_blank">Open</a>` — plain link, should work
+- Route exists: `match '/app/:app_id'` → `AppProxyController#proxy`
+- Proxy controller forwards to `127.0.0.1:{host_port}`
+- **Possible causes to check:**
+  1. `AppProxyController` inherits `before_action_hook` which runs `check_for_amahi_app` — may redirect if hostname matches a DNS alias
+  2. `prepare_theme` runs on every proxy request (unnecessary, could error if theme missing)
+  3. `admin_required` may fail in the new tab (cookie/session issue through Cloudflare Tunnel?)
+  4. `host_port` might be nil or wrong in the DockerApp record
+  5. Button might be inside a `<form>` or something swallowing the click event
+- **Fix approach:** Add `skip_before_action :before_action_hook` to AppProxyController. Check DockerApp record has correct `host_port`. Test with browser dev tools Network tab to see what request goes out and what comes back.
+- **Key files:** `app/controllers/app_proxy_controller.rb`, `plugins/040-apps/app/views/apps/_docker_app.html.slim`, `plugins/040-apps/app/assets/javascripts/apps.js`
+
 ### Test Coverage (57% → 70%+)
 Edge cases, error paths, integration tests for sudo-based workflows.
 ~603 specs, ~6 real failures remaining (docker_apps 500s in test).
