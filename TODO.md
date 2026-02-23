@@ -49,8 +49,23 @@ Reverse proxy working — FileBrowser, Nextcloud, Jellyfin confirmed.
 ### 🔥 Test All Catalog Apps Through Proxy
 Verify each app in the catalog installs, opens, and functions through the reverse proxy.
 
+**Proxy-compatible (proxy_mode: proxy):** FileBrowser ✅, Jellyfin ✅, Pi-hole, Gitea, Syncthing, Uptime Kuma, Transmission, Grafana, Audiobookshelf
+**Needs Cloudflare subdomain (proxy_mode: subdomain):** Nextcloud, Portainer, Home Assistant, Vaultwarden, Paperless-ngx, Immich
+
 **Known issues:**
 - **Pi-hole** — needs DNS configuration UX. Port 53 removed from catalog to prevent hijacking host DNS. Need a setup flow that lets users opt-in to DNS takeover with proper warnings.
+- **Home Assistant** — trusted_proxies config added but SPA uses absolute JS paths. Requires subdomain.
+
+### 🔥 Cloudflare Tunnel App Integration
+Build the UI flow for connecting apps that need their own subdomain:
+1. User installs app → catalog shows it needs a Cloudflare subdomain
+2. User clicks "Configure Remote Access" → enters subdomain (e.g., `ha.mydomain.com`)
+3. System adds ingress rule to Cloudflare Tunnel config → restarts tunnel
+4. Open button uses the subdomain URL instead of `/app/{identifier}`
+
+**Dependencies:** Cloudflare Tunnel must be configured first (existing Remote Access setup flow).
+**Catalog field:** `proxy_mode: subdomain` flags apps that need this.
+**Also needed:** UI indicator on app cards showing proxy vs subdomain status.
 
 ### Test Coverage (57% → 70%+)
 Edge cases, error paths, integration tests for sudo-based workflows.

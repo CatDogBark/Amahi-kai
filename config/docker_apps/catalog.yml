@@ -7,6 +7,7 @@ apps:
     image: linuxserver/nextcloud
     category: productivity
     url_path: /nextcloud
+    proxy_mode: subdomain
     ports:
       443: 8443
     volumes:
@@ -24,6 +25,7 @@ apps:
     image: jellyfin/jellyfin
     category: media
     url_path: /jellyfin
+    proxy_mode: proxy
     ports:
       8096: 8096
     volumes:
@@ -40,6 +42,7 @@ apps:
     image: pihole/pihole
     category: networking
     url_path: /admin
+    proxy_mode: proxy
     ports:
       80: 8080
     volumes:
@@ -56,6 +59,7 @@ apps:
     image: gitea/gitea
     category: development
     url_path: /gitea
+    proxy_mode: proxy
     ports:
       3000: 3300
       22: 2222
@@ -73,6 +77,7 @@ apps:
     image: portainer/portainer-ce
     category: development
     url_path: /portainer
+    proxy_mode: subdomain
     ports:
       9443: 9443
     volumes:
@@ -87,6 +92,7 @@ apps:
     image: homeassistant/home-assistant
     category: networking
     url_path: /homeassistant
+    proxy_mode: subdomain
     ports:
       8123: 8123
     volumes:
@@ -118,6 +124,7 @@ apps:
     image: vaultwarden/server
     category: productivity
     url_path: /vaultwarden
+    proxy_mode: subdomain
     ports:
       80: 8880
     volumes:
@@ -132,6 +139,7 @@ apps:
     image: syncthing/syncthing
     category: storage
     url_path: /syncthing
+    proxy_mode: proxy
     ports:
       8384: 8384
       22000: 22000
@@ -149,6 +157,7 @@ apps:
     image: louislam/uptime-kuma
     category: monitoring
     url_path: /uptimekuma
+    proxy_mode: proxy
     ports:
       3001: 3001
     volumes:
@@ -162,6 +171,7 @@ apps:
     image: linuxserver/transmission
     category: media
     url_path: /transmission
+    proxy_mode: proxy
     ports:
       9091: 9091
       51413: 51413
@@ -180,6 +190,7 @@ apps:
     image: paperlessngx/paperless-ngx
     category: productivity
     url_path: /paperless
+    proxy_mode: subdomain
     ports:
       8000: 8000
     volumes:
@@ -198,6 +209,7 @@ apps:
     image: ghcr.io/immich-app/immich-server
     category: storage
     url_path: /immich
+    proxy_mode: subdomain
     ports:
       3001: 2283
     volumes:
@@ -216,6 +228,7 @@ apps:
     image: grafana/grafana
     category: monitoring
     url_path: /grafana
+    proxy_mode: proxy
     ports:
       3000: 3100
     volumes:
@@ -232,6 +245,7 @@ apps:
     image: filebrowser/filebrowser:v2.28.0-amd64-s6
     category: storage
     url_path: /filebrowser
+    proxy_mode: proxy
     ports:
       80: 8085
     volumes:
@@ -250,6 +264,7 @@ apps:
     image: ghcr.io/advplyr/audiobookshelf
     category: media
     url_path: /audiobookshelf
+    proxy_mode: proxy
     ports:
       80: 13378
     volumes:
