@@ -1,5 +1,12 @@
 // Apps plugin JS
 
+// Initialize Bootstrap tooltips
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
+    new bootstrap.Tooltip(el);
+  });
+});
+
 // POST action for docker app controls (start/stop/uninstall)
 function dockerAppAction(url, identifier, btn) {
   if (btn) {
