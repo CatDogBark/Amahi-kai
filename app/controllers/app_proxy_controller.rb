@@ -5,6 +5,9 @@ class AppProxyController < ApplicationController
   before_action :admin_required
   before_action :find_app
 
+  # Skip CSRF for proxied POST/PUT requests from the app
+  skip_before_action :verify_authenticity_token, only: [:proxy]
+
   # Proxy all requests to the Docker app's local port
   def proxy
     unless @docker_app.status == 'running' && @docker_app.host_port.present?
@@ -13,7 +16,6 @@ class AppProxyController < ApplicationController
     end
 
     target_port = @docker_app.host_port
-    # Build the proxied path (strip our prefix)
     proxy_path = params[:path].to_s
     proxy_path = "/#{proxy_path}" unless proxy_path.start_with?('/')
     query = request.query_string.present? ? "?#{request.query_string}" : ""
@@ -21,26 +23,27 @@ class AppProxyController < ApplicationController
     target_uri = URI("http://127.0.0.1:#{target_port}#{proxy_path}#{query}")
 
     begin
-      # Build the outgoing request
       http = Net::HTTP.new(target_uri.host, target_uri.port)
       http.open_timeout = 5
       http.read_timeout = 30
 
-      # Map the incoming request method
-      outgoing = case request.method
-      when 'GET'    then Net::HTTP::Get.new(target_uri)
-      when 'POST'   then Net::HTTP::Post.new(target_uri)
-      when 'PUT'    then Net::HTTP::Put.new(target_uri)
-      when 'PATCH'  then Net::HTTP::Patch.new(target_uri)
-      when 'DELETE' then Net::HTTP::Delete.new(target_uri)
-      when 'HEAD'   then Net::HTTP::Head.new(target_uri)
-      when 'OPTIONS' then Net::HTTP::Options.new(target_uri)
+      # Map request method
+      klass = case request.method
+      when 'GET'     then Net::HTTP::Get
+      when 'POST'    then Net::HTTP::Post
+      when 'PUT'     then Net::HTTP::Put
+      when 'PATCH'   then Net::HTTP::Patch
+      when 'DELETE'  then Net::HTTP::Delete
+      when 'HEAD'    then Net::HTTP::Head
+      when 'OPTIONS' then Net::HTTP::Options
       else
         render plain: "Method not supported", status: :method_not_allowed
         return
       end
 
-      # Forward headers (skip hop-by-hop headers)
+      outgoing = klass.new(target_uri)
+
+      # Forward request headers
       skip_headers = %w[host connection transfer-encoding keep-alive upgrade proxy-authorization te trailer]
       request.headers.each do |key, value|
         next unless key.start_with?('HTTP_')
@@ -49,34 +52,32 @@ class AppProxyController < ApplicationController
         outgoing[header_name] = value
       end
 
-      # Forward content type and body for POST/PUT/PATCH
+      # Forward body for POST/PUT/PATCH
       if %w[POST PUT PATCH].include?(request.method)
         outgoing.body = request.body.read
         outgoing.content_type = request.content_type if request.content_type
       end
 
-      # Set forwarded headers
+      # Forwarded headers
       outgoing['X-Forwarded-For'] = request.remote_ip
       outgoing['X-Forwarded-Proto'] = request.scheme
       outgoing['X-Forwarded-Host'] = request.host
 
-      # Execute the request
+      # Execute
       upstream = http.request(outgoing)
 
-      # Map response status
-      response.status = upstream.code.to_i
+      # Send response with correct status
+      status_code = upstream.code.to_i
 
-      # Forward response headers (skip hop-by-hop)
+      # Build response headers
       skip_response = %w[transfer-encoding connection keep-alive]
       upstream.each_header do |name, value|
         next if skip_response.include?(name.downcase)
 
-        # Rewrite Location headers to go through our proxy
         if name.downcase == 'location'
           value = rewrite_location(value, @docker_app)
         end
 
-        # Rewrite Set-Cookie paths
         if name.downcase == 'set-cookie'
           value = rewrite_cookie_path(value, @docker_app)
         end
@@ -84,16 +85,18 @@ class AppProxyController < ApplicationController
         response.headers[name] = value
       end
 
-      # Send body
       content_type = upstream['content-type'].to_s
+      body = upstream.body || ''
 
-      # Rewrite HTML content to fix absolute URLs
+      # Rewrite HTML to fix root-relative paths
       if content_type.include?('text/html')
-        body = rewrite_html(upstream.body.to_s, @docker_app)
-        render html: body.html_safe, status: response.status, layout: false
-      else
-        send_data upstream.body, type: content_type, disposition: 'inline', status: response.status
+        body = rewrite_html(body, @docker_app)
       end
+
+      # Send raw response — let the upstream Content-Type pass through exactly
+      self.response_body = body
+      self.status = status_code
+      response.headers['Content-Type'] = content_type if content_type.present?
 
     rescue Errno::ECONNREFUSED
       render plain: "Cannot connect to #{@docker_app.name} — is it running?", status: :bad_gateway
@@ -114,38 +117,30 @@ class AppProxyController < ApplicationController
     end
   end
 
-  # Rewrite absolute URLs in HTML to go through our proxy
   def rewrite_html(body, app)
     prefix = "/app/#{app.identifier}"
-    port = app.host_port
 
-    # Rewrite absolute URLs pointing to the app's port
-    body = body.gsub(%r{(["'])(https?://)(localhost|127\.0\.0\.1|0\.0\.0\.0):#{port}(/[^"']*)?}, "\\1#{prefix}\\4")
-
-    # Rewrite root-relative URLs (src="/...", href="/...")
-    # Be careful not to rewrite data URIs, protocol-relative URLs, or already-proxied paths
-    body = body.gsub(%r{((?:src|href|action)\s*=\s*["'])/(?!(?:app/|https?:|data:|//))}, "\\1#{prefix}/")
-
-    body
+    # Rewrite root-relative src/href/action attributes
+    # /static/... → /app/filebrowser/static/...
+    # But don't rewrite if already prefixed or external
+    body.gsub(%r{((?:src|href|action)\s*=\s*["'])/(?!app/|https?:|data:|//)}, "\\1#{prefix}/")
   end
 
-  # Rewrite Location redirect headers
   def rewrite_location(location, app)
     prefix = "/app/#{app.identifier}"
     port = app.host_port
 
     if location =~ %r{^https?://(?:localhost|127\.0\.0\.1|0\.0\.0\.0):#{port}(.*)}
       "#{prefix}#{$1}"
-    elsif location.start_with?('/')
+    elsif location.start_with?('/') && !location.start_with?(prefix)
       "#{prefix}#{location}"
     else
       location
     end
   end
 
-  # Rewrite cookie paths
   def rewrite_cookie_path(cookie, app)
     prefix = "/app/#{app.identifier}"
-    cookie.gsub(/[Pp]ath=\//, "Path=#{prefix}/")
+    cookie.gsub(/[Pp]ath=\/(?!\S)/, "Path=#{prefix}/")
   end
 end
