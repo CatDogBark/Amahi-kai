@@ -43,6 +43,15 @@
 
 ## P0 — Next Up
 
+### 🔥 Public Repo Cleanup & Website Branding
+- [ ] Remove MEMORY.md from git tracking (contains IPs, infra details, personal info)
+- [ ] Add MEMORY.md and USER.md to .gitignore
+- [ ] Consider `git filter-branch` or BFG to scrub MEMORY.md from history
+- [ ] Keep AGENTS.md, SOUL.md, IDENTITY.md, HEARTBEAT.md public (good AI dev story)
+- [ ] Add "Built by AI" section to amahi-kai.com website
+- [ ] Fix CI workflow (bundle exit code 16 — dependency resolution failure)
+- [ ] Add screenshots/branding from NAS UI to the static site
+
 ### ~~Fix Apps "Open" Button~~ ✅
 Reverse proxy working — FileBrowser, Nextcloud, Jellyfin confirmed.
 
