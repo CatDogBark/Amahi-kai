@@ -160,9 +160,7 @@ class Greyhole
       Share.where('disk_pool_copies > 0').each do |share|
         copies = share.disk_pool_copies
         copies_str = copies >= 99 ? 'max' : copies.to_s
-        lines << "[#{share.name}]"
-        lines << "\tnum_copies = #{copies_str}"
-        lines << ""
+        lines << "num_copies[#{share.name}] = #{copies_str}"
       end
 
       lines.join("\n")
