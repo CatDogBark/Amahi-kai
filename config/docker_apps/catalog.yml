@@ -232,10 +232,7 @@ apps:
     volumes:
       - /opt/amahi/apps/grafana/data:/var/lib/grafana
     environment:
-      GF_SERVER_ROOT_URL: "/app/grafana/"
-      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
       GF_SECURITY_ADMIN_PASSWORD: admin
-      GF_PATHS_PLUGINS: /var/lib/grafana/plugins
     docker_args: ["--user", "root"]
 
   filebrowser:
