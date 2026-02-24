@@ -297,6 +297,20 @@ fi
 # 9. Bundle install
 # ---------------------------------------------------------------------------
 echo "==> Installing Ruby gems..."
+
+# If using system Ruby, disable rbenv to prevent shim conflicts
+# (rbenv may exist from a previous install with a different Ruby platform)
+# If using system Ruby, disable rbenv to prevent shim conflicts
+# (rbenv may exist from a previous install with a different Ruby platform)
+if [ "$NEED_RBENV" = false ] && [ -f /etc/profile.d/rbenv.sh ]; then
+  echo "    Disabling rbenv (using system Ruby instead)..."
+  mv /etc/profile.d/rbenv.sh /etc/profile.d/rbenv.sh.disabled 2>/dev/null || true
+  # Also clear rbenv from current shell
+  export PATH=$(echo "$PATH" | tr ':' '\n' | grep -v rbenv | tr '\n' ':' | sed 's/:$//')
+  unset RBENV_ROOT 2>/dev/null || true
+  hash -r
+fi
+
 sudo -u "$APP_USER" bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && bundle config set --local path 'vendor/bundle' && bundle config set --local without 'development test' && bundle install --jobs 4"
 
 # ---------------------------------------------------------------------------
