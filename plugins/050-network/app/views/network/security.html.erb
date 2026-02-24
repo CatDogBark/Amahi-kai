@@ -53,7 +53,7 @@
                 <% end %>
               </td>
               <td>
-                <% if check.status != :pass && check.fix_command && check.name != 'admin_password' && check.name != 'open_ports' %>
+                <% if check.status != :pass && check.fix_command && check.name != 'admin_password' && check.name != 'open_ports' && check.name != 'ssh_password_auth' %>
                   <button type="button" class="btn btn-sm btn-outline-primary" onclick="fixCheck('<%= check.name %>', this)">
                      Fix
                   </button>
