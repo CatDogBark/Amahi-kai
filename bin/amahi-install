@@ -477,11 +477,9 @@ fi
 # 10. Asset precompilation
 # ---------------------------------------------------------------------------
 echo "==> Precompiling assets..."
-bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && RAILS_ENV=production bin/rails assets:precompile"
-
-
-# Fix ownership after running Rails tasks as root
+rm -rf "$APP_DIR/tmp/cache/assets"
 chown -R "$APP_USER:$APP_GROUP" "$APP_DIR"
+sudo -u "$APP_USER" bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && RAILS_ENV=production bin/rails assets:precompile"
 
 # ---------------------------------------------------------------------------
 # 12. Systemd service (with RAILS_LOG_TO_STDOUT)
