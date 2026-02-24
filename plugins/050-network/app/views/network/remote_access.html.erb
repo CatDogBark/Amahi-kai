@@ -24,16 +24,9 @@
       <% end %>
     </div>
     <div class="card-body">
-      <% if !@tunnel_status[:installed] %>
-        <!-- Not installed -->
-        <p class="text-muted">Cloudflare Tunnel lets you securely access your Amahi server from anywhere — no port forwarding needed.</p>
-        <button type="button" class="btn btn-primary" onclick="openInstallTerminal('cloudflared', '<%= network_engine.install_cloudflared_stream_path %>')">
-          Install cloudflared
-        </button>
-
-      <% elsif !@tunnel_status[:token_configured] %>
-        <!-- Installed but no token -->
-        <p class="mb-3">cloudflared is installed. Configure your tunnel token to connect.</p>
+      <% if !@tunnel_status[:token_configured] %>
+        <!-- Not configured — show setup instructions + token input -->
+        <p class="text-muted mb-3">Cloudflare Tunnel lets you securely access your Amahi server from anywhere — no port forwarding needed.</p>
 
         <div class="card bg-light mb-3">
           <div class="card-body">
@@ -55,7 +48,7 @@
               <li>Select tunnel type: <strong>Cloudflared</strong></li>
               <li>Name your tunnel (e.g., "amahi-kai" or "home-server")</li>
               <li>On the <strong>Install and run connectors</strong> page, find the tunnel token — it's the long string after <code>--token</code> in the install command</li>
-              <li><strong>Don't run their install command</strong> — just copy the token. We'll handle the install.</li>
+              <li><strong>Don't run their install command</strong> — just copy the token</li>
             </ol>
 
             <h6>Step 3: Route traffic (Published applications)</h6>
@@ -68,17 +61,17 @@
               <li>Cloudflare will automatically create the DNS record for you</li>
             </ol>
 
-            <h6>Step 4: Paste your token below</h6>
-            <p class="text-muted small">Your server will connect to Cloudflare and be accessible at the hostname you configured (e.g., <code>nas.yourdomain.com</code>).</p>
+            <h6>Step 4: Paste your token and connect</h6>
+            <p class="text-muted small">We'll install cloudflared (if needed), configure the tunnel, and start the connection — all in one step.</p>
           </div>
         </div>
 
-        <form id="tunnel-token-form" class="d-flex gap-2">
-          <input type="text" name="tunnel_token" class="form-control" placeholder="Paste your Cloudflare Tunnel token here" required style="font-family:monospace; font-size:0.85rem;">
-          <button type="submit" class="btn btn-primary text-nowrap">
-            Save & Connect
+        <div class="d-flex gap-2" id="tunnel-token-input">
+          <input type="text" id="tunnel-token-field" class="form-control" placeholder="Paste your Cloudflare Tunnel token here" style="font-family:monospace; font-size:0.85rem;">
+          <button type="button" class="btn btn-primary text-nowrap" onclick="setupTunnel()">
+            Connect
           </button>
-        </form>
+        </div>
 
       <% else %>
         <!-- Configured -->
@@ -126,11 +119,18 @@
   </div>
 </div>
 
-<%= render 'shared/install_terminal', id: 'cloudflared', title: 'Installing cloudflared', stream_url: network_engine.install_cloudflared_stream_path %>
+<%= render 'shared/install_terminal', id: 'tunnel-setup', title: 'Setting up Cloudflare Tunnel', stream_url: '' %>
 <%= render 'shared/install_terminal', id: 'security-audit', title: 'Security Audit', stream_url: network_engine.security_audit_stream_path %>
 <%= render 'shared/install_terminal', id: 'security-fix', title: 'Applying Security Fixes', stream_url: network_engine.security_fix_stream_path %>
 
 <script>
+function setupTunnel() {
+  var token = document.getElementById('tunnel-token-field').value.trim();
+  if (!token) { alert('Please paste your tunnel token first.'); return; }
+  var url = '<%= network_engine.setup_tunnel_stream_path %>' + '?token=' + encodeURIComponent(token);
+  openInstallTerminal('tunnel-setup', url);
+}
+
 function runSecurityAudit() {
   var id = 'security-audit';
   var url = '<%= network_engine.security_audit_stream_path %>';
@@ -169,8 +169,8 @@ function runSecurityAudit() {
       fixBtn.className = 'btn btn-sm btn-warning me-2';
       fixBtn.innerHTML = 'Fix All Issues';
       fixBtn.onclick = function() {
-        closeInstallTerminal('security-audit');
-        setTimeout(function() { openInstallTerminal('security-fix', '<%= network_engine.security_fix_stream_path %>'); }, 300);
+        document.getElementById('security-audit-install-modal').style.display = 'none';
+        openInstallTerminal('security-fix', '<%= network_engine.security_fix_stream_path %>');
       };
       footer.insertBefore(fixBtn, footer.firstChild);
     }
@@ -192,39 +192,6 @@ function runSecurityAudit() {
     output.appendChild(line);
   };
 }
-</script>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-  var form = document.getElementById('tunnel-token-form');
-  if (form) {
-    form.addEventListener('submit', function(e) {
-      e.preventDefault();
-      var token = form.querySelector('[name=tunnel_token]').value;
-      var btn = form.querySelector('button[type=submit]');
-      btn.disabled = true;
-      btn.innerHTML = 'Configuring...';
-
-      fetch('<%= network_engine.configure_tunnel_path %>', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content },
-        body: JSON.stringify({ tunnel_token: token })
-      }).then(function(r) { return r.json(); }).then(function(data) {
-        if (data.status === 'ok') {
-          window.location.reload();
-        } else {
-          alert('Error: ' + (data.error || 'Failed to configure tunnel'));
-          btn.disabled = false;
-          btn.innerHTML = 'Save & Connect';
-        }
-      }).catch(function() {
-        alert('Request failed');
-        btn.disabled = false;
-        btn.innerHTML = 'Save & Connect';
-      });
-    });
-  }
-});
 
 function tunnelAction(action) {
   var url = action === 'stop' ? '<%= network_engine.stop_tunnel_path %>' : '<%= network_engine.start_tunnel_path %>';

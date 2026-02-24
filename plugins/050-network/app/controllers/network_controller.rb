@@ -420,6 +420,88 @@ class NetworkController < ApplicationController
     end
   end
 
+  def setup_tunnel_stream
+    response.headers['Content-Type'] = 'text/event-stream'
+    response.headers['Cache-Control'] = 'no-cache, no-store'
+    response.headers['X-Accel-Buffering'] = 'no'
+    response.headers['Connection'] = 'keep-alive'
+    response.headers['Last-Modified'] = Time.now.httpdate
+
+    token = params[:token].to_s.strip
+
+    self.response_body = Enumerator.new do |yielder|
+      sse_send = ->(data, event = nil) {
+        msg = ""
+        msg += "event: #{event}\n" if event
+        msg += "data: #{data}\n\n"
+        yielder << msg
+      }
+
+      if token.blank?
+        sse_send.call("✗ No tunnel token provided")
+        sse_send.call("error", "done")
+        next
+      end
+
+      unless Rails.env.production?
+        lines = [
+          "Installing cloudflared...",
+          "  Adding Cloudflare apt repository...",
+          "  Downloading signing key...",
+          "  Updating package lists...",
+          "  Setting up cloudflared (2024.12.1) ...",
+          "✓ cloudflared installed",
+          "",
+          "Configuring tunnel service...",
+          "  Saving tunnel token...",
+          "  Removing old service (if any)...",
+          "  Registering cloudflared service...",
+          "✓ Tunnel service configured",
+          "",
+          "Starting tunnel...",
+          "✓ Cloudflare Tunnel is connected!"
+        ]
+        lines.each do |line|
+          sleep 0.3
+          sse_send.call(line)
+        end
+        sse_send.call("success", "done")
+        next
+      end
+
+      begin
+        # Step 1: Install cloudflared if needed
+        unless CloudflareService.installed?
+          sse_send.call("Installing cloudflared...")
+          CloudflareService.install!
+          sse_send.call("✓ cloudflared installed")
+        else
+          sse_send.call("✓ cloudflared already installed")
+        end
+
+        # Step 2: Configure with token
+        sse_send.call("Configuring tunnel service...")
+        CloudflareService.configure!(token)
+        sse_send.call("✓ Tunnel service configured")
+
+        # Step 3: Start
+        sse_send.call("Starting tunnel...")
+        CloudflareService.start!
+        sleep 2
+        if CloudflareService.running?
+          sse_send.call("✓ Cloudflare Tunnel is connected!")
+        else
+          sse_send.call("⚠ Service started but may take a moment to connect")
+        end
+
+        sse_send.call("success", "done")
+      rescue => e
+        sse_send.call("✗ Error: #{e.message}")
+        sse_send.call("error", "done")
+      end
+    end
+  end
+
   # --- Security ---
 
   def security

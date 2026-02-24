@@ -33,6 +33,7 @@ Network::Engine.routes.draw do
 	post 'start_tunnel' => 'network#start_tunnel'
 	post 'stop_tunnel' => 'network#stop_tunnel'
 	get 'install_cloudflared_stream' => 'network#install_cloudflared_stream'
+	get 'setup_tunnel_stream' => 'network#setup_tunnel_stream'
 
 	# Security
 	get 'security' => 'network#security'
