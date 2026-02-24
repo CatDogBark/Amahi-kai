@@ -1,7 +1,7 @@
 require 'spec_helper'
 require 'partition_utils'
 
-RSpec.describe PartitionUtils do
+RSpec.describe PartitionUtils, integration: true do
   describe '#initialize' do
     it 'initializes with empty info when /etc/mtab does not exist' do
       allow(File).to receive(:open).with('/etc/mtab').and_raise(Errno::ENOENT)

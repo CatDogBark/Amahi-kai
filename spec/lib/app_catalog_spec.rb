@@ -21,7 +21,7 @@ RSpec.describe AppCatalog do
     it "finds an app by identifier" do
       app = AppCatalog.find("jellyfin")
       expect(app[:name]).to eq("Jellyfin")
-      expect(app[:image]).to eq("jellyfin/jellyfin")
+      expect(app[:image]).to eq("linuxserver/jellyfin")
     end
 
     it "returns nil for unknown id" do

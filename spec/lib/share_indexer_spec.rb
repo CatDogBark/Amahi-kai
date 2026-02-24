@@ -1,7 +1,7 @@
 require 'rails_helper'
 require 'share_indexer'
 
-RSpec.describe ShareIndexer do
+RSpec.describe ShareIndexer, integration: true do
   let(:tmpdir) { Dir.mktmpdir('share_indexer_test') }
 
   # Create share without triggering callbacks that need system commands
