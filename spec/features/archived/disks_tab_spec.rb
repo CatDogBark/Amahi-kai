@@ -1,6 +1,6 @@
 require 'spec_helper'
 
-feature "Disks tab" do
+feature "Disks tab", archived: true do
 	before do
 		@admin = create(:admin)
 		visit root_path

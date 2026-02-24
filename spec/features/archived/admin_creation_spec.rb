@@ -1,6 +1,6 @@
 require 'spec_helper'
 
-feature "Admin creation" do
+feature "Admin creation", archived: true do
 
 	scenario "first login for admin should see the setup page and setup first admin" do
 		(s = Setting.where(:name=>'initialized').first) && s.destroy

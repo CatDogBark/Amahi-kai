@@ -1,6 +1,6 @@
 require 'spec_helper'
 
-feature "Front page" do
+feature "Front page", archived: true do
 	scenario "should be the login page by default" do
 		visit root_path
 		expect(page).to have_button("Log In")

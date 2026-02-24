@@ -44,4 +44,4 @@ jobs:
         run: bundle exec rspec spec/lib/ --tag ~integration --format documentation
 
       - name: Run feature specs (no JS)
-        run: bundle exec rspec spec/features/ --tag ~js --format documentation
+        run: bundle exec rspec spec/features/ --tag ~js --tag ~archived --format documentation

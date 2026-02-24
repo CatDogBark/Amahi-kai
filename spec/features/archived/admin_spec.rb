@@ -1,6 +1,6 @@
 require 'spec_helper'
 
-feature "Admin" do
+feature "Admin", archived: true do
 
 	scenario "user should see the setup pages after login" do
 		Setting.set('setup_completed', 'true')

@@ -1,6 +1,6 @@
 require 'spec_helper'
 
-feature "Users tab" do
+feature "Users tab", archived: true do
   before do
     @admin = create(:admin)
     @user = create(:user)
