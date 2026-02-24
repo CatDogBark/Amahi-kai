@@ -51,7 +51,7 @@ class SecurityAudit
     def fix_all!
       results = []
       run_all.each do |check|
-        next if check.status == :pass || check.name == 'admin_password' || check.name == 'open_ports'
+        next if check.status == :pass || check.name == 'admin_password' || check.name == 'open_ports' || check.name == 'ssh_password_auth'
         results << { name: check.name, fixed: fix!(check.name) }
       end
       results
@@ -228,29 +228,21 @@ class SecurityAudit
     end
 
     def fix_ssh_root_login!
-      fix_ssh_config!
+      fix_sshd_setting!('PermitRootLogin', 'no')
     end
 
     def fix_ssh_password_auth!
-      fix_ssh_config!
+      fix_sshd_setting!('PasswordAuthentication', 'no')
     end
 
-    def fix_ssh_config!
+    def fix_sshd_setting!(key, value)
       tmp_path = '/var/hda/tmp/sshd_config'
       content = File.exist?('/etc/ssh/sshd_config') ? File.read('/etc/ssh/sshd_config') : ''
 
-      # Update or add PermitRootLogin
-      if content.match?(/^\s*#?\s*PermitRootLogin/)
-        content.gsub!(/^\s*#?\s*PermitRootLogin\s+.*/, 'PermitRootLogin no')
+      if content.match?(/^\s*#?\s*#{key}/)
+        content.gsub!(/^\s*#?\s*#{key}\s+.*/, "#{key} #{value}")
       else
-        content += "\nPermitRootLogin no\n"
-      end
-
-      # Update or add PasswordAuthentication
-      if content.match?(/^\s*#?\s*PasswordAuthentication/)
-        content.gsub!(/^\s*#?\s*PasswordAuthentication\s+.*/, 'PasswordAuthentication no')
-      else
-        content += "\nPasswordAuthentication no\n"
+        content += "\n#{key} #{value}\n"
       end
 
       File.write(tmp_path, content)
