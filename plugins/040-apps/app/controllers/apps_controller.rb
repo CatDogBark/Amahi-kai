@@ -365,6 +365,10 @@ class AppsController < ApplicationController
 						sse_send.call("Creating directory #{host_path}...")
 						system("sudo mkdir -p #{Shellwords.escape(host_path)}")
 						system("sudo chmod -R 777 #{Shellwords.escape(host_path)}")
+						# chown to match container user if specified
+						if entry[:user].present?
+							system("sudo chown -R #{Shellwords.escape(entry[:user].to_s)}:#{Shellwords.escape(entry[:user].to_s)} #{Shellwords.escape(host_path)}")
+						end
 					end
 
 					# Pull image with progress

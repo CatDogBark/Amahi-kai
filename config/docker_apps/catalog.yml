@@ -235,6 +235,7 @@ apps:
       GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s/app/grafana/"
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
       GF_SECURITY_ADMIN_PASSWORD: admin
+    user: "472"
 
   filebrowser:
     name: FileBrowser
