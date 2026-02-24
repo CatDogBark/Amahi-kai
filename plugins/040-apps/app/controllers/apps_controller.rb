@@ -367,6 +367,7 @@ class AppsController < ApplicationController
 						system("sudo chmod -R 777 #{Shellwords.escape(host_path)}")
 						# chown to match container user if specified
 						if entry[:user].present?
+							sse_send.call("  Setting ownership to UID #{entry[:user]}...")
 							system("sudo chown -R #{Shellwords.escape(entry[:user].to_s)}:#{Shellwords.escape(entry[:user].to_s)} #{Shellwords.escape(host_path)}")
 						end
 					end
