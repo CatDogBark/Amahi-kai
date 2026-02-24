@@ -59,7 +59,7 @@ function buildAppButtons(identifier, status, hostPort, name) {
     var row = document.getElementById('docker_app_' + identifier);
     var proxyMode = row ? row.getAttribute('data-proxy-mode') : 'proxy';
     if (hostPort && proxyMode === 'subdomain') {
-      html += '<span data-bs-toggle="tooltip" title="Requires Cloudflare subdomain — configure in Remote Access settings"><button class="btn btn-sm btn-outline-secondary disabled" type="button">🔗</button></span>';
+      html += '<span class="text-secondary small me-1">Needs subdomain</span><button class="btn btn-sm btn-outline-secondary disabled" type="button">🔗</button>';
     } else if (hostPort) {
       html += '<a class="btn btn-sm btn-success" href="/app/' + identifier + '" target="_blank">Open</a>';
     }
