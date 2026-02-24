@@ -46,3 +46,6 @@ db/test.sqlite3-wal
 media/inbound/
 Amahi-kai
 .claude/
+.config/
+.npm/
+.gemrc
