@@ -2,17 +2,17 @@
 
 ## Development Setup
 
-### Docker (recommended)
+### Native (recommended)
 
 ```bash
 git clone https://github.com/CatDogBark/Amahi-kai.git
 cd Amahi-kai
-docker compose up
+sudo bin/amahi-install
 ```
 
-Visit `http://localhost:3000` — login: `admin` / `secretpassword`
+The installer sets up everything. The setup wizard runs on first visit.
 
-### Local
+### Local (without installer)
 
 ```bash
 # Install Ruby 3.2, MariaDB, SQLite3, smbclient
@@ -20,6 +20,14 @@ bundle install
 bin/rails db:create db:migrate db:seed
 bin/rails s
 ```
+
+### Docker (testing only)
+
+```bash
+docker compose up
+```
+
+Visit `http://localhost:3000` — Docker is for quick evaluation, not full development.
 
 ## Running Tests
 
@@ -66,6 +74,9 @@ Stimulus controllers live in `app/assets/javascripts/controllers/`.
 - `Platform` (lib/platform.rb) — OS detection, Ubuntu/Debian only
 - `SetTheme` (lib/set_theme.rb) — Theme loading and switching
 - `Tab` (lib/tab.rb) — Navigation tab system from plugins
+- `ContainerService` (lib/container_service.rb) — Docker app lifecycle management
+- `AppCatalog` (lib/app_catalog.rb) — YAML-based Docker app catalog
+- `AppProxyController` — Reverse proxy for Docker apps at `/app/{identifier}`
 
 ## Conventions
 
