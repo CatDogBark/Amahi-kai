@@ -51,7 +51,7 @@ class SecurityAudit
     def fix_all!
       results = []
       run_all.each do |check|
-        next if check.status == :pass || check.name == 'admin_password' || check.name == 'open_ports' || check.name == 'ssh_password_auth'
+        next if check.status == :pass || check.name == 'admin_password' || check.name == 'open_ports'
         results << { name: check.name, fixed: fix!(check.name) }
       end
       results
