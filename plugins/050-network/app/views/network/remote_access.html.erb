@@ -52,19 +52,19 @@
             <ol class="mb-3">
               <li>Go to <strong>Zero Trust</strong> (left sidebar) → <strong>Networks</strong> → <strong>Tunnels</strong></li>
               <li>Click <strong>Create a tunnel</strong></li>
-              <li>Select <strong>Cloudflared</strong> as the connector type</li>
+              <li>Select tunnel type: <strong>Cloudflared</strong></li>
               <li>Name your tunnel (e.g., "amahi-kai" or "home-server")</li>
-              <li>On the <strong>Install connector</strong> page, find the tunnel token — it's the long string after <code>--token</code> in the install command</li>
+              <li>On the <strong>Install and run connectors</strong> page, find the tunnel token — it's the long string after <code>--token</code> in the install command</li>
               <li><strong>Don't run their install command</strong> — just copy the token. We'll handle the install.</li>
             </ol>
 
-            <h6>Step 3: Add a public hostname</h6>
+            <h6>Step 3: Route traffic (Published applications)</h6>
             <ol class="mb-3">
-              <li>In the tunnel config, go to the <strong>Public Hostname</strong> tab</li>
-              <li>Click <strong>Add a public hostname</strong></li>
+              <li>On the <strong>Route tunnel</strong> step, go to the <strong>Published applications</strong> tab</li>
               <li>Set the <strong>Subdomain</strong> (e.g., <code>nas</code>) and select your <strong>Domain</strong></li>
-              <li>Under <strong>Service</strong>, set Type to <strong>HTTP</strong> and URL to <strong>localhost:80</strong></li>
-              <li>Click <strong>Save hostname</strong></li>
+              <li>Leave <strong>Path</strong> empty (matches all paths)</li>
+              <li>Under <strong>Service</strong>, set Type to <strong>HTTP</strong> and URL to <strong>localhost:3000</strong></li>
+              <li>Click <strong>Save</strong></li>
               <li>Cloudflare will automatically create the DNS record for you</li>
             </ol>
 
