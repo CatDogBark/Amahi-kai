@@ -275,6 +275,7 @@ systemctl enable --now mariadb
 mysql -u root <<EOSQL || true
 CREATE DATABASE IF NOT EXISTS \`${DATABASE_NAME:-amahi_production}\`;
 CREATE USER IF NOT EXISTS '${DATABASE_USER:-amahi}'@'localhost' IDENTIFIED BY '${DATABASE_PASSWORD:-amahi}';
+ALTER USER '${DATABASE_USER:-amahi}'@'localhost' IDENTIFIED BY '${DATABASE_PASSWORD:-amahi}';
 GRANT ALL PRIVILEGES ON \`${DATABASE_NAME:-amahi_production}\`.* TO '${DATABASE_USER:-amahi}'@'localhost';
 FLUSH PRIVILEGES;
 EOSQL
