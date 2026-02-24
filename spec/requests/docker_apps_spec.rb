@@ -11,6 +11,9 @@ describe "Docker Apps", type: :request do
     create(:setting, name: "advanced", value: "1")
     create(:setting, name: "theme", value: "default")
     login_as_admin
+    # Stub Docker commands — no Docker in CI/test
+    allow_any_instance_of(DockerApp).to receive(:system).and_return(true)
+    allow_any_instance_of(DockerApp).to receive(:`).and_return("")
   end
 
   describe "GET docker_apps" do
