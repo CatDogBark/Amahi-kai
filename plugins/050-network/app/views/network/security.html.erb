@@ -151,7 +151,7 @@ function runSecurityAudit() {
 
 function fixCheck(name, btn) {
   btn.disabled = true;
-  btn.innerHTML = '';
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
   fetch('<%= network_engine.security_fix_path %>', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content },
@@ -162,11 +162,11 @@ function fixCheck(name, btn) {
     } else {
       alert('Fix failed for: ' + name);
       btn.disabled = false;
-      btn.innerHTML = ' Fix';
+      btn.innerHTML = 'Fix';
     }
   }).catch(function() {
     btn.disabled = false;
-    btn.innerHTML = ' Fix';
+    btn.innerHTML = 'Fix';
   });
 }
 </script>
