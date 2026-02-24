@@ -86,10 +86,17 @@ class CloudflareService
 
       # Uninstall existing service first (ignore failure if not installed)
       system('sudo cloudflared service uninstall 2>/dev/null')
+      # Also clean up any leftover systemd unit files
+      system('sudo rm -f /etc/systemd/system/cloudflared.service 2>/dev/null')
+      system('sudo rm -f /etc/systemd/system/cloudflared-update.service 2>/dev/null')
+      system('sudo rm -f /etc/systemd/system/cloudflared-update.timer 2>/dev/null')
+      system('sudo systemctl daemon-reload 2>/dev/null')
 
       # Install as systemd service with token
-      result = system("sudo cloudflared service install #{Shellwords.escape(token.strip)}")
-      raise CloudflareError, 'Failed to configure cloudflared service' unless result
+      output = `sudo cloudflared service install #{Shellwords.escape(token.strip)} 2>&1`
+      unless $?.success?
+        raise CloudflareError, "cloudflared service install failed: #{output.strip}"
+      end
 
       true
     end

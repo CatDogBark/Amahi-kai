@@ -407,6 +407,8 @@ amahi ALL=(root) NOPASSWD: /usr/bin/docker
 # Cloudflare Tunnel
 amahi ALL=(root) NOPASSWD: /usr/bin/cloudflared service install *
 amahi ALL=(root) NOPASSWD: /usr/bin/cloudflared service uninstall
+amahi ALL=(root) NOPASSWD: /usr/bin/rm -f /etc/systemd/system/cloudflared*
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl daemon-reload
 amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start cloudflared
 amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop cloudflared
 amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart cloudflared
