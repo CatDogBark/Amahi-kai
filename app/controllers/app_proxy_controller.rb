@@ -20,13 +20,20 @@ class AppProxyController < ApplicationController
     target_port = @docker_app.host_port
     prefix = "/app/#{@docker_app.identifier}"
 
-    # Strip the /app/{identifier} prefix — upstream sees root-relative paths
-    # (baseURL is NOT set on the server; we rewrite the JS config instead)
+    # Check if this app handles its own sub-path (e.g., Grafana with SERVE_FROM_SUB_PATH)
+    catalog_entry = AppCatalog.find(@docker_app.identifier) || {}
+    preserve = catalog_entry[:preserve_prefix]
+
+    # Build the path to forward to upstream
     sub_path = params[:path].to_s
     sub_path = "/#{sub_path}" unless sub_path.start_with?('/')
     # Preserve trailing slash — Rails *path glob AND request.path both strip it
     raw_path = request.env['REQUEST_URI'] || request.original_fullpath || request.path
     sub_path += '/' if raw_path.end_with?('/') && !sub_path.end_with?('/')
+
+    # If app handles its own sub-path, keep the prefix in the forwarded request
+    sub_path = "#{prefix}#{sub_path}" if preserve
+
     query = request.query_string.present? ? "?#{request.query_string}" : ""
 
     # Detect HTTPS upstream — some apps (Nextcloud, Portainer) use SSL internally
@@ -113,8 +120,8 @@ class AppProxyController < ApplicationController
 
       Rails.logger.info("PROXY <<< #{status_code} #{content_type} (#{body.bytesize} bytes) for #{target_uri}")
 
-      # Rewrite HTML responses for proxied apps
-      if content_type.include?('text/html')
+      # Rewrite HTML responses for proxied apps (skip if app handles its own sub-path)
+      if content_type.include?('text/html') && !preserve
         body = rewrite_html(body, @docker_app)
       end
 
