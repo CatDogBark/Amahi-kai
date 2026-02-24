@@ -416,6 +416,11 @@ class AppsController < ApplicationController
 						cmd_parts += ["-e", "#{key}=#{val}"]
 					end
 
+					# Extra docker args (e.g., --user, --network)
+					(entry[:docker_args] || []).each do |arg|
+						cmd_parts << arg.to_s
+					end
+
 					# Labels
 					cmd_parts += ["-l", "amahi.managed=true", "-l", "amahi.app=#{identifier}"]
 					cmd_parts << image

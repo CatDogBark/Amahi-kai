@@ -235,7 +235,8 @@ apps:
       GF_SERVER_ROOT_URL: "/app/grafana/"
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
       GF_SECURITY_ADMIN_PASSWORD: admin
-    user: "472"
+      GF_PATHS_PLUGINS: /var/lib/grafana/plugins
+    docker_args: ["--user", "root"]
 
   filebrowser:
     name: FileBrowser
