@@ -1,5 +1,7 @@
 # Amahi-kai
 
+[![CI](https://github.com/CatDogBark/Amahi-kai/actions/workflows/ci.yml/badge.svg)](https://github.com/CatDogBark/Amahi-kai/actions/workflows/ci.yml)
+
 A web-based home server management platform for Ubuntu/Debian. Manage users, file shares, apps, networking, and system settings from your browser.
 
 Modernized fork of the [original Amahi Platform](https://github.com/amahi/platform), revived for modern Linux.
