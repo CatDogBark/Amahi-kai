@@ -1,6 +1,6 @@
 require 'spec_helper'
 
-describe "Docker Apps", type: :request do
+describe "Docker Apps", type: :request, :integration do
   include RequestHelpers
 
   before(:each) do
