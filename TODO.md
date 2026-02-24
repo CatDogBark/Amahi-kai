@@ -128,6 +128,15 @@ Apps like Immich, Paperless-ngx (with Redis), and others need 2-3 containers. Bu
 - Single-container apps still work (compose with one service = same thing)
 - Re-enable Immich once this lands
 
+### Network Management Plugin (OpenWrt Container)
+Run OpenWrt in a Docker container for full router/firewall/DHCP/DNS management.
+Troy's NAS has 4 NICs — could add a wireless antenna and run as a full router.
+- Container with `--network=host` or bridged interfaces
+- Web UI proxied through Amahi (OpenWrt's LuCI)
+- Replaces Pi-hole (DNS) + adds firewall, DHCP, QoS, VLAN support
+- Needs multi-container support landed first for companion services
+- Research: macvlan networking, USB WiFi adapter passthrough to container
+
 ### Propshaft Migration
 Blocked by Bootstrap gem's Sprockets dependency. Low priority.
 
