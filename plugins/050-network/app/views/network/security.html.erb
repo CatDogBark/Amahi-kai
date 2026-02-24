@@ -124,10 +124,9 @@ function runSecurityAudit() {
       fixBtn.className = 'btn btn-sm btn-warning me-2';
       fixBtn.innerHTML = 'Fix All Issues';
       fixBtn.onclick = function() {
-        closeInstallTerminal('security-audit');
-        setTimeout(function() {
-          openInstallTerminal('security-fix', '<%= network_engine.security_fix_stream_path %>');
-        }, 300);
+        // Hide audit modal without reloading (closeInstallTerminal reloads the page)
+        document.getElementById('security-audit-install-modal').style.display = 'none';
+        openInstallTerminal('security-fix', '<%= network_engine.security_fix_stream_path %>');
       };
       footer.insertBefore(fixBtn, footer.firstChild);
     }
