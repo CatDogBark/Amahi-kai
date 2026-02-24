@@ -406,6 +406,7 @@ amahi ALL=(root) NOPASSWD: /usr/bin/docker
 
 # Cloudflare Tunnel
 amahi ALL=(root) NOPASSWD: /usr/bin/cloudflared
+amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/hda/tmp/cloudflared.service /etc/systemd/system/cloudflared.service
 amahi ALL=(root) NOPASSWD: /usr/bin/rm -f /etc/systemd/system/cloudflared*
 amahi ALL=(root) NOPASSWD: /usr/bin/systemctl daemon-reload
 amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start cloudflared

@@ -84,19 +84,33 @@ class CloudflareService
       system("sudo cp #{tmp_path} #{TOKEN_FILE}")
       FileUtils.rm_f(tmp_path)
 
-      # Uninstall existing service first (ignore failure if not installed)
-      system('sudo cloudflared service uninstall 2>/dev/null')
-      # Also clean up any leftover systemd unit files
-      system('sudo rm -f /etc/systemd/system/cloudflared.service 2>/dev/null')
-      system('sudo rm -f /etc/systemd/system/cloudflared-update.service 2>/dev/null')
-      system('sudo rm -f /etc/systemd/system/cloudflared-update.timer 2>/dev/null')
-      system('sudo systemctl daemon-reload 2>/dev/null')
+      # Write systemd unit file directly (avoids cloudflared service install TTY issues)
+      unit = <<~UNIT
+        [Unit]
+        Description=Cloudflare Tunnel
+        After=network-online.target
+        Wants=network-online.target
 
-      # Install as systemd service with token
-      output = `sudo cloudflared service install #{Shellwords.escape(token.strip)} 2>&1`
-      unless $?.success?
-        raise CloudflareError, "cloudflared service install failed: #{output.strip}"
-      end
+        [Service]
+        Type=notify
+        ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate run --token #{token.strip}
+        Restart=on-failure
+        RestartSec=5s
+        TimeoutStartSec=0
+        LimitNOFILE=65536
+
+        [Install]
+        WantedBy=multi-user.target
+      UNIT
+
+      tmp_path = '/var/hda/tmp/cloudflared.service'
+      File.write(tmp_path, unit)
+      result = system("sudo cp #{tmp_path} /etc/systemd/system/cloudflared.service")
+      FileUtils.rm_f(tmp_path)
+      raise CloudflareError, 'Failed to write cloudflared service file' unless result
+
+      system('sudo systemctl daemon-reload')
+      system('sudo systemctl enable cloudflared')
 
       true
     end
