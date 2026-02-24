@@ -171,7 +171,7 @@ fi
 
 # Ensure bundler is up to date (system apt bundler is often too old)
 echo "==> Updating bundler..."
-gem install bundler --no-document
+gem install bundler -v '~> 2.4' --no-document
 if command -v rbenv &>/dev/null; then
   rbenv rehash
 fi
