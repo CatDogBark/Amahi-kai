@@ -14,7 +14,6 @@
 # License along with this program; if not, write to the Amahi
 # team at http://www.amahi.org/ under "Contact Us."
 
-require 'downloader'
 require 'shellwords'
 
 class Platform

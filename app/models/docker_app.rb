@@ -44,6 +44,11 @@ class DockerApp < ApplicationRecord
     super(value.is_a?(Hash) ? value.to_json : value)
   end
 
+  # URL for accessing this app through the reverse proxy
+  def url
+    "/app/#{identifier}"
+  end
+
   # Container name defaults to identifier
   def effective_container_name
     container_name.presence || "amahi-#{identifier}"

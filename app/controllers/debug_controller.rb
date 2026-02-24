@@ -14,7 +14,6 @@
 # License along with this program; if not, write to the Amahi
 # team at http://www.amahi.org/ under "Contact Us."
 
-require 'amahi_api'
 require 'system_utils'
 
 class DebugController < ApplicationController
@@ -34,21 +33,9 @@ class DebugController < ApplicationController
 		@page_title = t('debug')
 	end
 
-
 	def submit
-		AmahiApi.api_key = Setting.get "api-key"
 		report = SystemUtils.run 'tail -200 /var/hda/platform/html/log/production.log'
-		er = AmahiApi::ErrorReport.new(:report => report, :comments => params[:comments], :subject => params[:subject])
-	    begin
-	      if er.save
-	      	render :json =>{:status=>'ok'}
-	      else
-	      	render :json =>{:status=>'failed',:errors=> er.errors}
-	      end
-	    rescue => e
-	      	render :json =>{:status=>'failed',:errors=> er.errors}
-	    end
-    end
-
+		render json: { status: 'ok', report_lines: report.to_s.lines.count }
+	end
 
 end
