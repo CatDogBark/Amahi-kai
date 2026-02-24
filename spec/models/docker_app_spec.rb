@@ -128,7 +128,7 @@ describe DockerApp do
   end
 
   describe "#start!" do
-    it "starts and sets status to running" do
+    it "starts and sets status to running", :docker do
       app = build_app(status: "stopped", container_name: "amahi-test-app")
       app.save!
       app.start!
