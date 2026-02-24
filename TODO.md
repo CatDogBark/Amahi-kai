@@ -137,6 +137,16 @@ Troy's NAS has 4 NICs — could add a wireless antenna and run as a full router.
 - Needs multi-container support landed first for companion services
 - Research: macvlan networking, USB WiFi adapter passthrough to container
 
+**Value proposition brainstorm:**
+- Good router ($300) + NAS ($400+) = $700+ and two devices
+- N100 mini PC with 4 NICs + 16GB RAM = $200-250 (AliExpress) — does both jobs plus media, home automation, ad blocking
+- One box, one power draw, one thing to maintain
+- No other NAS platform offers "also be your router" — killer differentiator
+- Target audience: home server tinkerers who are already self-hosting
+- **Reliability concern:** if the box goes down, internet goes down too. Mitigate with `--restart always`, watchdog, and making it an optional plugin
+- Make it light up only if hardware supports it (detect multiple NICs, WiFi adapters)
+- Not for everyone, but neither is self-hosting — let users decide
+
 ### Propshaft Migration
 Blocked by Bootstrap gem's Sprockets dependency. Low priority.
 
