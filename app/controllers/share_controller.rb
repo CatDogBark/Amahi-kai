@@ -298,6 +298,7 @@ class ShareController < ApplicationController
 			share.disk_pool_copies = 1
 		end
 		share.save
+		Greyhole.configure! if Greyhole.enabled?
 		share.reload
 		render :partial => 'share/disk_pool_share', :locals => { :share => share }
 	end
@@ -306,6 +307,7 @@ class ShareController < ApplicationController
 		share = Share.find params[:id]
 		share.disk_pool_copies = params[:value].to_i
 		share.save
+		Greyhole.configure! if Greyhole.enabled?
 		share.reload
 		render :partial => 'share/disk_pool_share', :locals => { :share => share }
 	end
