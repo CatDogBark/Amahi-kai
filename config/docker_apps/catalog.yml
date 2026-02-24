@@ -264,7 +264,7 @@ apps:
     image: ghcr.io/advplyr/audiobookshelf
     category: media
     url_path: /audiobookshelf
-    proxy_mode: proxy
+    proxy_mode: subdomain
     ports:
       80: 13378
     volumes:
