@@ -80,8 +80,12 @@ class CloudflareService
       tmp_path = '/var/hda/tmp/tunnel.token'
       FileUtils.mkdir_p(File.dirname(tmp_path))
       File.write(tmp_path, token.strip)
+      system("sudo mkdir -p #{File.dirname(TOKEN_FILE)}")
       system("sudo cp #{tmp_path} #{TOKEN_FILE}")
       FileUtils.rm_f(tmp_path)
+
+      # Uninstall existing service first (ignore failure if not installed)
+      system('sudo cloudflared service uninstall 2>/dev/null')
 
       # Install as systemd service with token
       result = system("sudo cloudflared service install #{Shellwords.escape(token.strip)}")

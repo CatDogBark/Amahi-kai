@@ -407,6 +407,12 @@ amahi ALL=(root) NOPASSWD: /usr/bin/docker
 # Cloudflare Tunnel
 amahi ALL=(root) NOPASSWD: /usr/bin/cloudflared service install *
 amahi ALL=(root) NOPASSWD: /usr/bin/cloudflared service uninstall
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start cloudflared
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop cloudflared
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart cloudflared
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable cloudflared
+amahi ALL=(root) NOPASSWD: /usr/bin/mkdir -p /etc/amahi-kai
+amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/hda/tmp/tunnel.token /etc/amahi-kai/tunnel.token
 amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get install -y cloudflared
 amahi ALL=(root) NOPASSWD: /usr/bin/tee /etc/apt/sources.list.d/cloudflared.list
 amahi ALL=(root) NOPASSWD: /usr/bin/gpg --dearmor -o /usr/share/keyrings/cloudflare-archive-keyring.gpg
