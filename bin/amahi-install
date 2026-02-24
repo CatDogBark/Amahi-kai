@@ -169,9 +169,8 @@ eval "$(rbenv init - bash)"
 RBENV
 fi
 
-# Ensure bundler is up to date (system apt bundler is often too old)
-echo "==> Updating bundler..."
-gem install bundler -v '~> 2.4' --no-document
+# System Ruby 3.2 ships with bundler 2.4.19 which matches Gemfile.lock
+# Do NOT install a newer bundler — version mismatches break native extensions
 if command -v rbenv &>/dev/null; then
   rbenv rehash
 fi
