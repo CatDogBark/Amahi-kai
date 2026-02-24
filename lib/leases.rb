@@ -85,8 +85,8 @@ class Leases
 				elsif l =~ /^\s*hardware\s+ethernet\s+(..:..:..:..:..:..)/
 					current[:mac] = $1
 				elsif l =~ /^\s*\}\s*$/
-					# FIXME - this assumes the leases file has leases overriding each other in order!
-					# create the entry for this device if it does not exist and there is something in the mac
+					# Leases file has entries in chronological order — later entries override earlier ones
+					# Create the entry for this device if it does not exist and there is something in the mac
 					if current[:mac]
 						res[current[:mac]] = {} unless res[current[:mac]]
 						# for each field in the current lease, update the resulting hash

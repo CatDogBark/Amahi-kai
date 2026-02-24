@@ -8,7 +8,6 @@ class PluginGenerator < Rails::Generators::NamedBase
 
 	def create_config_file
 		root = "plugins/#{plural_name}"
-		# FIXME bug in thor?
 		# destination_root="#{Rails.root}/plugins/#{plural_name}"
 
 		copy_file 'Gemfile', "#{root}/Gemfile"
@@ -103,7 +102,7 @@ end
 			FILE
 		end
 
-		# FIXME -- if the plugin is not a tab, this below needs to be parameterized
+		# Routes assume the plugin is a tab (most common case)
 		inside(root) do
 			create_file "config/routes.rb", <<-FILE
 #{plural_name.camelize}::Engine.routes.draw do

@@ -21,7 +21,7 @@
 #   @servers = SampleData.load('servers')
 #
 # In this case, servers is a Rails model, so we need to require 'server' at the top of this file,
-# even though it creates extra load/dependencies/bloat to the app. FIXME: load only in development?
+# even though it creates extra load/dependencies/bloat to the app.
 #
 
 # require the server model here because we have some Server class data being loaded

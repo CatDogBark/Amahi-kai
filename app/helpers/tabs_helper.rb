@@ -50,7 +50,6 @@ module TabsHelper
 	end
 
 	def debug?
-		#TODO
 		false
 	end
 end

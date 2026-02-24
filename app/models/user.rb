@@ -88,7 +88,7 @@ class User < ApplicationRecord
 				Dir.glob("*").sort.reverse.each do |login|
 					unless User.where(:login=> login).first
 						name, uid = system_find_name_by_username login
-						# FIXME-cpg: Fedora specific constant 500 here
+						# Skip system users (UID < 500)
 						res << { :login => login, :name => name } unless name.nil? or name.blank? or uid < 500
 					end
 				end

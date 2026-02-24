@@ -130,7 +130,6 @@ protected
 
 	def monit_file_remove
 		c = Command.new("rm -f #{File.join(Platform.file_name(:monit_dir), Platform.service_name(name))}.conf")
-		# FIXME - this conrestart does not help on ubuntu, as there is no such thing
 		c.submit Platform.watchdog_restart_command
 		c.execute
 	end

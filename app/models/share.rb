@@ -390,7 +390,6 @@ class Share < ApplicationRecord
 			"\tmap to guest = Bad User",
 			"\twins support = yes",
 			"\tlogon script = %%U.bat",
-			"\t# FIXME - is 99 (nobody) the right group?",
 			"\tadd machine script = /usr/sbin/useradd -d /dev/null -g 99 -s /bin/false -M %%u",
 			"",
 			"[netlogon]",

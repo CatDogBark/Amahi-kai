@@ -317,7 +317,6 @@ class ShareController < ApplicationController
 		part = DiskPoolPartition.where(:path=>path).first
 		if part
 			# was enabled - disable it by deleting it
-			# FIXME - see http://bugs.amahi.org/issues/show/510
 			part.destroy
 			render :partial => 'share/disk_pooling_partition_checkbox', :locals => { :checked => false, :path => path }
 		else
@@ -348,7 +347,6 @@ class ShareController < ApplicationController
 	# translate windows location \\hda\path\to\folder to file /var/hda/files/path/to/folder
 	def location2file(loc)
 		rest = loc.gsub(/^\\([A-Z0-9a-z_]*)/, '')
-		# FIXME - no way to replace backslashes in ruby?!?!
 		rest.gsub!(/\\/, '/')
 		Share.full_path(rest)
 	end

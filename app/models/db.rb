@@ -51,7 +51,7 @@ private
 		quoted_pass = c.quote(password)
 		c.execute "DROP DATABASE IF EXISTS #{quoted_db};" rescue nil
 		c.execute "CREATE DATABASE IF NOT EXISTS #{quoted_db} DEFAULT CHARACTER SET utf8;"
-		# FIXME - why do we have to drop the user first in some cases?!?!!??
+		# Drop user first to ensure clean state (CREATE USER fails if user exists)
 		c.execute("DROP USER #{quoted_user}@#{quoted_host};") rescue nil
 		c.execute "CREATE USER #{quoted_user}@#{quoted_host} IDENTIFIED BY #{quoted_pass};"
 		c.execute "GRANT ALL PRIVILEGES ON #{quoted_db}.* TO #{quoted_user}@#{quoted_host};"

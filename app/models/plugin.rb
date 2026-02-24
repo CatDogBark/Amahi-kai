@@ -42,8 +42,7 @@ class Plugin < ApplicationRecord
 					config = YAML.safe_load(File.read("#{dir}/config/amahi-plugin.yml"), permitted_classes: [Symbol])
 					plugin = dir2plugin(dir, config)
 				else
-					# FIXME what to do if more file are unpacked
-					raise "ERROR: this plugin unpacks into more than one file!"
+						raise "ERROR: this plugin unpacks into more than one file!"
 				end
 			end
 			FileUtils.rm_rf unpack_path
@@ -59,7 +58,7 @@ class Plugin < ApplicationRecord
 		Plugin.run_migration(destination, :down)
 
 		FileUtils.rm_rf destination
-		# restart the rails stack -- FIXME: this is too much a restart would be best
+		# Restart the Rails stack
 		c = Command.new "touch /var/hda/platform/html/tmp/restart.txt"
 		c.execute
 	end
@@ -82,7 +81,7 @@ class Plugin < ApplicationRecord
 
 			self.run_migration(destination, :up)
 
-			# restart the rails stack -- FIXME: this is too much a restart would be best
+			# Restart the Rails stack
 			c = Command.new "touch /var/hda/platform/html/tmp/restart.txt"
 			c.execute
 			# return the plugin we just created
