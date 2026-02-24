@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amahi-kai — Your Home Server, Modernized</title>
+  <meta name="description" content="Open-source home server platform. NAS, media, apps, networking — all from your browser.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <style>
+    :root {
+      --ocean-dark: #0a6e8a;
+      --ocean: #0d8aa8;
+      --ocean-light: #1a9fc2;
+      --bg: #0f1419;
+      --bg-card: #1a2332;
+      --text: #e8edf3;
+      --text-muted: #8899aa;
+      --accent: #1a9fc2;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    /* Nav */
+    nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1.5rem 2rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .logo {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--ocean-light);
+      text-decoration: none;
+    }
+    .logo span { opacity: 0.6; font-weight: 400; }
+    nav a {
+      color: var(--text-muted);
+      text-decoration: none;
+      margin-left: 2rem;
+      transition: color 0.2s;
+    }
+    nav a:hover { color: var(--text); }
+
+    /* Hero */
+    .hero {
+      text-align: center;
+      padding: 6rem 2rem 4rem;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .hero h1 {
+      font-size: 3.5rem;
+      font-weight: 800;
+      margin-bottom: 1.5rem;
+      background: linear-gradient(135deg, var(--ocean-light), #4dd0e1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero p {
+      font-size: 1.25rem;
+      color: var(--text-muted);
+      margin-bottom: 2.5rem;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    /* Install box */
+    .install-box {
+      background: var(--bg-card);
+      border: 1px solid #2a3a4a;
+      border-radius: 12px;
+      padding: 1.5rem 2rem;
+      max-width: 620px;
+      margin: 0 auto 1rem;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 1rem;
+      color: var(--ocean-light);
+      position: relative;
+      text-align: left;
+      overflow-x: auto;
+    }
+    .install-box .comment { color: var(--text-muted); }
+    .install-box .copy-btn {
+      position: absolute;
+      right: 1rem;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: 1px solid #2a3a4a;
+      color: var(--text-muted);
+      padding: 0.3rem 0.6rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+    .install-box .copy-btn:hover { color: var(--text); border-color: var(--text-muted); }
+    .install-alt {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin-bottom: 4rem;
+    }
+    .install-alt a { color: var(--ocean-light); text-decoration: none; }
+    .install-alt a:hover { text-decoration: underline; }
+
+    /* Features */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 2rem;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+    .feature {
+      background: var(--bg-card);
+      border: 1px solid #2a3a4a;
+      border-radius: 12px;
+      padding: 2rem;
+    }
+    .feature .icon { font-size: 2rem; margin-bottom: 1rem; }
+    .feature h3 { margin-bottom: 0.5rem; font-size: 1.1rem; }
+    .feature p { color: var(--text-muted); font-size: 0.95rem; }
+
+    /* Section headers */
+    .section-header {
+      text-align: center;
+      padding: 4rem 2rem 2rem;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .section-header h2 {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+    }
+    .section-header p { color: var(--text-muted); }
+
+    /* App grid */
+    .apps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 1rem;
+      max-width: 800px;
+      margin: 0 auto 4rem;
+      padding: 0 2rem;
+    }
+    .app-badge {
+      background: var(--bg-card);
+      border: 1px solid #2a3a4a;
+      border-radius: 10px;
+      padding: 1rem;
+      text-align: center;
+      font-size: 0.85rem;
+    }
+    .app-badge .app-icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
+
+    /* CTA */
+    .cta {
+      text-align: center;
+      padding: 4rem 2rem;
+      border-top: 1px solid #2a3a4a;
+      margin-top: 4rem;
+    }
+    .cta h2 { font-size: 2rem; margin-bottom: 1rem; }
+    .cta p { color: var(--text-muted); margin-bottom: 2rem; }
+    .btn {
+      display: inline-block;
+      background: var(--ocean);
+      color: white;
+      padding: 0.8rem 2rem;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+    .btn:hover { background: var(--ocean-light); }
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--ocean);
+      color: var(--ocean-light);
+      margin-left: 1rem;
+    }
+    .btn-outline:hover { background: var(--ocean); color: white; }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      padding: 2rem;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+    footer a { color: var(--ocean-light); text-decoration: none; }
+
+    /* Stack badges */
+    .stack {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+      padding: 0 2rem 4rem;
+    }
+    .stack-badge {
+      background: var(--bg-card);
+      border: 1px solid #2a3a4a;
+      border-radius: 20px;
+      padding: 0.4rem 1rem;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    @media (max-width: 600px) {
+      .hero h1 { font-size: 2.2rem; }
+      nav { flex-direction: column; gap: 1rem; }
+      nav a { margin-left: 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="logo">🌊 amahi-kai</a>
+  <div>
+    <a href="#features">Features</a>
+    <a href="#apps">Apps</a>
+    <a href="https://github.com/CatDogBark/Amahi-kai">GitHub</a>
+    <a href="https://github.com/CatDogBark/Amahi-kai/wiki">Docs</a>
+  </div>
+</nav>
+
+<section class="hero">
+  <h1>Your Home Server, Modernized</h1>
+  <p>Open-source NAS, media server, app platform, and network manager. One install. One interface. Your hardware.</p>
+</section>
+
+<div class="install-box">
+  <span class="comment"># Install on Ubuntu 24.04 / Debian 12+</span><br>
+  curl -fsSL https://amahi-kai.com/install.sh | sudo bash
+  <button class="copy-btn" onclick="navigator.clipboard.writeText('curl -fsSL https://amahi-kai.com/install.sh | sudo bash')">Copy</button>
+</div>
+<div class="install-alt">
+  or <a href="https://github.com/CatDogBark/Amahi-kai#quick-start-native-install">install manually</a> from source
+</div>
+
+<div class="stack">
+  <span class="stack-badge">Ruby 3.2</span>
+  <span class="stack-badge">Rails 8</span>
+  <span class="stack-badge">Bootstrap 5</span>
+  <span class="stack-badge">Stimulus</span>
+  <span class="stack-badge">MariaDB</span>
+  <span class="stack-badge">Docker Apps</span>
+  <span class="stack-badge">Ubuntu 24.04</span>
+</div>
+
+<section id="features">
+  <div class="section-header">
+    <h2>Everything a home server should be</h2>
+    <p>Built for real hardware, not cloud subscriptions</p>
+  </div>
+  <div class="features">
+    <div class="feature">
+      <div class="icon">📁</div>
+      <h3>File Sharing</h3>
+      <p>Samba shares with Greyhole storage pooling. Combine multiple drives into one seamless pool with optional file duplication.</p>
+    </div>
+    <div class="feature">
+      <div class="icon">🐳</div>
+      <h3>Docker Apps</h3>
+      <p>One-click install for Jellyfin, Nextcloud, Grafana, Gitea, and more. Built-in reverse proxy — no manual config needed.</p>
+    </div>
+    <div class="feature">
+      <div class="icon">🌐</div>
+      <h3>Remote Access</h3>
+      <p>Cloudflare Tunnel integration for secure remote access. No port forwarding, no dynamic DNS, no exposed ports.</p>
+    </div>
+    <div class="feature">
+      <div class="icon">👥</div>
+      <h3>User Management</h3>
+      <p>Create users, manage permissions, control share access. Integrated with Samba for seamless file share authentication.</p>
+    </div>
+    <div class="feature">
+      <div class="icon">🔒</div>
+      <h3>Security Audit</h3>
+      <p>Built-in security scanner checks SSH config, firewall rules, updates, and more. Auto-fix with one click.</p>
+    </div>
+    <div class="feature">
+      <div class="icon">🌙</div>
+      <h3>Dark Mode</h3>
+      <p>Automatic dark/light theme based on your system preferences. Looks great on any device.</p>
+    </div>
+    <div class="feature">
+      <div class="icon">📊</div>
+      <h3>System Dashboard</h3>
+      <p>Real-time CPU, memory, disk, and network stats. Service status at a glance. Know what your server is doing.</p>
+    </div>
+    <div class="feature">
+      <div class="icon">🔧</div>
+      <h3>Setup Wizard</h3>
+      <p>6-step guided setup gets you running in minutes. Headless mode for automated deployments.</p>
+    </div>
+    <div class="feature">
+      <div class="icon">🔄</div>
+      <h3>One-Click Updates</h3>
+      <p>Update button in the header. Pull latest code, install dependencies, restart — all from the browser.</p>
+    </div>
+  </div>
+</section>
+
+<section id="apps">
+  <div class="section-header">
+    <h2>App Catalog</h2>
+    <p>Install and manage Docker apps from the web UI</p>
+  </div>
+  <div class="apps">
+    <div class="app-badge"><div class="app-icon">📺</div>Jellyfin</div>
+    <div class="app-badge"><div class="app-icon">☁️</div>Nextcloud</div>
+    <div class="app-badge"><div class="app-icon">📂</div>FileBrowser</div>
+    <div class="app-badge"><div class="app-icon">🔄</div>Syncthing</div>
+    <div class="app-badge"><div class="app-icon">📊</div>Grafana</div>
+    <div class="app-badge"><div class="app-icon">🔑</div>Vaultwarden</div>
+    <div class="app-badge"><div class="app-icon">⬇️</div>Transmission</div>
+    <div class="app-badge"><div class="app-icon">🏠</div>Home Assistant</div>
+    <div class="app-badge"><div class="app-icon">📝</div>Gitea</div>
+    <div class="app-badge"><div class="app-icon">📈</div>Uptime Kuma</div>
+    <div class="app-badge"><div class="app-icon">🐋</div>Portainer</div>
+    <div class="app-badge"><div class="app-icon">🎧</div>Audiobookshelf</div>
+  </div>
+</section>
+
+<section class="cta">
+  <h2>Ready to take your server back?</h2>
+  <p>No subscriptions. No cloud lock-in. Your hardware, your data, your rules.</p>
+  <a href="https://github.com/CatDogBark/Amahi-kai" class="btn">View on GitHub</a>
+  <a href="https://github.com/CatDogBark/Amahi-kai/wiki" class="btn btn-outline">Documentation</a>
+</section>
+
+<footer>
+  <p>🌊 Amahi-kai — A modern fork of <a href="https://amahi.org">Amahi</a>, built with aloha.</p>
+  <p style="margin-top: 0.5rem;">© 2026 <a href="https://enlightenedsolutionsllc.com">Enlightened Solutions LLC</a></p>
+</footer>
+
+</body>
+</html>
