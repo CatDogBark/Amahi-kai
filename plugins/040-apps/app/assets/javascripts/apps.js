@@ -1,11 +1,17 @@
 // Apps plugin JS
 
-// Initialize Bootstrap tooltips
-document.addEventListener('DOMContentLoaded', function() {
+// Initialize Bootstrap tooltips (works with both initial load and Turbo navigations)
+function initTooltips() {
   document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
-    new bootstrap.Tooltip(el);
+    if (!el._tooltipInit) {
+      new bootstrap.Tooltip(el);
+      el._tooltipInit = true;
+    }
   });
-});
+}
+document.addEventListener('DOMContentLoaded', initTooltips);
+document.addEventListener('turbo:load', initTooltips);
+document.addEventListener('turbo:frame-load', initTooltips);
 
 // POST action for docker app controls (start/stop/uninstall)
 function dockerAppAction(url, identifier, btn) {
