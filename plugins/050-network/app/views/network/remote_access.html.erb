@@ -24,8 +24,8 @@
       <% end %>
     </div>
     <div class="card-body">
-      <% if !@tunnel_status[:token_configured] %>
-        <!-- Not configured — show setup instructions + token input -->
+      <% if !@tunnel_status[:installed] || !@tunnel_status[:token_configured] %>
+        <!-- Not installed or not configured — show setup instructions + token input -->
         <p class="text-muted mb-3">Cloudflare Tunnel lets you securely access your Amahi server from anywhere — no port forwarding needed.</p>
 
         <div class="card bg-light mb-3">
