@@ -12,9 +12,17 @@ Modernized fork of the [original Amahi Platform](https://github.com/amahi/platfo
 - **Ubuntu** 24.04 / Debian 12
 - **systemd** service management
 
-## Quick Start (Native Install)
+## Install
 
-Designed for a dedicated Ubuntu 24.04 or Debian 12+ server:
+One command on a dedicated Ubuntu 24.04 or Debian 12+ server:
+
+```bash
+curl -fsSL https://amahi-kai.com/install.sh | sudo bash
+```
+
+That's it. The installer handles Ruby, MariaDB, Samba, dnsmasq, systemd, asset compilation, and firewall rules.
+
+### Manual Install
 
 ```bash
 git clone https://github.com/CatDogBark/Amahi-kai.git
@@ -22,18 +30,15 @@ cd Amahi-kai
 sudo bin/amahi-install
 ```
 
-The installer handles everything: Ruby, MariaDB, Samba, dnsmasq, systemd service, asset compilation, and firewall rules. It's idempotent — safe to run again.
+### After Install
 
-Once complete:
-
-- **Web UI:** `http://<your-server-ip>:3000`
-- **Login:** `admin` / `secretpassword` (change this immediately)
+- **Web UI:** `http://<your-server-ip>` (port 80)
+- **Setup Wizard** runs on first visit — creates your admin account
 - **Logs:** `journalctl -u amahi-kai -f`
 - **Config:** `/etc/amahi-kai/amahi.env`
+- **Update:** Click the update button in the header, or run `sudo bin/amahi-update`
 
-### Alternative: Docker
-
-For development or quick evaluation:
+### Alternative: Docker (Development Only)
 
 ```bash
 git clone https://github.com/CatDogBark/Amahi-kai.git
@@ -43,7 +48,18 @@ docker compose up
 
 Visit `http://localhost:3000` — login: `admin` / `secretpassword`
 
-> **Note:** The Docker setup is for development/testing. Native install is recommended for production use — it needs direct access to Samba, dnsmasq, and systemd to manage your server.
+> **Note:** Docker is for development/testing only. Native install is required for production — it needs direct access to Samba, dnsmasq, and systemd.
+
+## Features
+
+- **📁 File Sharing** — Samba shares with Greyhole storage pooling across multiple drives
+- **🐳 Docker Apps** — One-click install for Jellyfin, Nextcloud, FileBrowser, Syncthing, Grafana, Gitea, and more
+- **🌐 Remote Access** — Cloudflare Tunnel integration (no port forwarding needed)
+- **📊 System Dashboard** — Real-time CPU, memory, disk, network, and service monitoring
+- **🔒 Security Audit** — Built-in scanner with auto-fix for SSH, firewall, updates
+- **🔧 Setup Wizard** — 6-step guided setup for fresh installs (+ headless mode)
+- **🌙 Dark Mode** — Automatic, based on system preference
+- **🔄 One-Click Updates** — Update from the browser
 
 ## Development
 
