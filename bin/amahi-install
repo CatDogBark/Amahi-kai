@@ -70,6 +70,7 @@ apt-get install -y --no-install-recommends \
   mariadb-server \
   samba \
   samba-common-bin \
+  samba-vfs-modules \
   sudo
 
 # VM guest agent (auto-detect)
