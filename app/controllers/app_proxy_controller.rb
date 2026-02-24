@@ -207,7 +207,7 @@ class AppProxyController < ApplicationController
     prefix = "/app/#{app.identifier}"
     port = app.host_port
 
-    if location =~ %r{^https?://(?:localhost|127\.0\.0\.1|0\.0\.0\.0):#{port}(.*)}
+    if location =~ %r{^https?://(?:localhost|127\.0\.0\.1|0\.0\.0\.0)(?::#{port})?(.*)}
       "#{prefix}#{$1}"
     elsif location.start_with?('/') && !location.start_with?(prefix)
       "#{prefix}#{location}"
