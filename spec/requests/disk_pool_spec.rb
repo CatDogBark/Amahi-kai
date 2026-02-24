@@ -1,7 +1,7 @@
 require 'spec_helper'
 
 # TODO: Fix partial rendering in test environment
-describe "Disk Pool Actions", type: :request, :integration do
+describe "Disk Pool Actions", type: :request, integration: true do
   describe "admin" do
     before { login_as_admin }
 
