@@ -3,9 +3,7 @@
 
 # reset the whole app and initialize basic settings
 
-[AppDependency,
-App,
-CapAccess,
+[CapAccess,
 CapWriter,
 Db,
 DnsAlias,
@@ -15,9 +13,7 @@ Server,
 Share,
 Theme,
 User,
-Setting,
-WebappAlias,
-Webapp].map {|c| c.destroy_all}
+Setting].map {|c| c.destroy_all}
 
 Setting.set('net', '192.168.1')
 Setting.set('self-address', '10')
