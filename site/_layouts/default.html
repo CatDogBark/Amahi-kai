@@ -91,19 +91,22 @@
     }
     blockquote p { margin-bottom: 0; }
     hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
-    .sidebar { margin-bottom: 2rem; }
+    .sidebar {
+      margin-bottom: 2rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 1rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem 1.5rem;
+    }
     .sidebar a {
-      display: inline-block;
-      padding: 0.25rem 0.75rem;
-      margin: 0.15rem;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 4px;
       color: var(--text-muted);
       text-decoration: none;
-      font-size: 0.9rem;
+      font-size: 0.85rem;
+      white-space: nowrap;
+      padding: 0.25rem 0;
     }
-    .sidebar a:hover { border-color: var(--accent); color: var(--accent); }
+    .sidebar a:hover { color: var(--accent); }
     @media (max-width: 600px) {
       header { padding: 0.75rem 1rem; gap: 1rem; font-size: 0.9rem; }
       .container { padding: 0 1rem; }
