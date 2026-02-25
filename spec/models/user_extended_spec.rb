@@ -9,9 +9,8 @@ RSpec.describe User, type: :model do
     end
 
     it "requires unique login" do
-      login = "unique_user_#{SecureRandom.hex(4)}"
-      create(:user, login: login)
-      user2 = build(:user, login: login)
+      existing = create(:user)
+      user2 = build(:user, login: existing.login)
       expect(user2).not_to be_valid
     end
 
@@ -42,10 +41,11 @@ RSpec.describe User, type: :model do
   end
 
   describe "#make_admin" do
-    it "calls Platform.make_admin without error" do
-      user = create(:user, admin: true)
+    it "calls Platform.make_admin" do
       allow(Platform).to receive(:make_admin)
-      expect { user.make_admin }.not_to raise_error
+      user = create(:user, admin: true)
+      user.make_admin
+      expect(Platform).to have_received(:make_admin).with(user.login, true)
     end
   end
 
