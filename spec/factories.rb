@@ -48,6 +48,13 @@ FactoryBot.define do
     end
   end
 
+  factory :docker_app do
+    sequence(:identifier) { |n| "app#{n}" }
+    sequence(:name) { |n| "App #{n}" }
+    image { 'nginx:latest' }
+    status { 'available' }
+  end
+
   factory :disk_pool_partition do
     sequence(:path) { |n| "/mnt/data#{n}" }
     minimum_free { 10 }
