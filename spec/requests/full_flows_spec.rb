@@ -10,7 +10,8 @@ RSpec.describe "Full integration flows", type: :request do
       share = Share.find_by(name: "IntegrationTest")
       expect(share).to be_present
 
-      # Toggle visibility
+      # Ensure visible is set, then toggle it off
+      share.update!(visible: true)
       put toggle_visible_share_path(share), as: :json
       expect(share.reload.visible).to eq(false)
 
