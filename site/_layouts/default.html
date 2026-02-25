@@ -95,19 +95,14 @@
       margin-bottom: 2rem;
       border-bottom: 1px solid var(--border);
       padding-bottom: 0.75rem;
+      font-size: 0.85rem;
+      color: var(--border);
     }
     .sidebar a {
       color: var(--text-muted);
       text-decoration: none;
-      font-size: 0.85rem;
-      margin-right: 1.25rem;
     }
     .sidebar a:hover { color: var(--accent); }
-    .sidebar a + a::before {
-      content: "·";
-      margin-right: 1.25rem;
-      color: var(--border);
-    }
     @media (max-width: 600px) {
       header { padding: 0.75rem 1rem; gap: 1rem; font-size: 0.9rem; }
       .container { padding: 0 1rem; }
@@ -126,17 +121,17 @@
     </div>
   </nav>
   <div class="container">
-    <nav class="sidebar">
-      <a href="/wiki/">Index</a>
-      <a href="/wiki/getting-started">Getting Started</a>
-      <a href="/wiki/file-sharing">File Sharing</a>
-      <a href="/wiki/storage-pooling">Storage Pooling</a>
-      <a href="/wiki/docker-apps">Docker Apps</a>
-      <a href="/wiki/remote-access">Remote Access</a>
-      <a href="/wiki/security">Security</a>
-      <a href="/wiki/networking">Networking</a>
+    <p class="sidebar">
+      <a href="/wiki/">Index</a> &nbsp;|&nbsp;
+      <a href="/wiki/getting-started">Getting Started</a> &nbsp;|&nbsp;
+      <a href="/wiki/file-sharing">File Sharing</a> &nbsp;|&nbsp;
+      <a href="/wiki/storage-pooling">Storage Pooling</a> &nbsp;|&nbsp;
+      <a href="/wiki/docker-apps">Docker Apps</a> &nbsp;|&nbsp;
+      <a href="/wiki/remote-access">Remote Access</a> &nbsp;|&nbsp;
+      <a href="/wiki/security">Security</a> &nbsp;|&nbsp;
+      <a href="/wiki/networking">Networking</a> &nbsp;|&nbsp;
       <a href="/wiki/updating">Updating</a>
-    </nav>
+    </p>
     {{ content }}
   </div>
 </body>
