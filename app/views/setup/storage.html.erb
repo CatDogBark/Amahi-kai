@@ -38,9 +38,9 @@
                 <span style="color: #10b981;">✓ Mounted at <%= part[:mountpoint] %></span>
                 <span style="color: #7f8c9b; margin-left: 8px;"><%= part[:fstype] %></span>
               <% when :unmounted %>
-                <span style="color: #f59e0b;">⚠ Formatted (<%= part[:fstype] %>) but not mounted — will be mounted automatically</span>
+                <span style="color: #f59e0b;">⚠ Has existing <%= part[:fstype] %> filesystem (may contain data) — will be mounted as-is</span>
               <% when :unformatted %>
-                <span style="color: #ef4444;">⊘ Unformatted — will be formatted (ext4) and mounted automatically</span>
+                <span style="color: #ef4444;">⊘ No filesystem — will be formatted (ext4) and mounted</span>
               <% end %>
             </div>
           </div>
