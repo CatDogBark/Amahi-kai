@@ -367,6 +367,9 @@ amahi ALL=(root) NOPASSWD: /usr/bin/systemctl reload dnsmasq.service
 amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable dnsmasq.service
 amahi ALL=(root) NOPASSWD: /usr/bin/systemctl disable dnsmasq.service
 
+# Hostname management
+amahi ALL=(root) NOPASSWD: /usr/bin/hostnamectl set-hostname *
+
 # Database backups
 amahi ALL=(root) NOPASSWD: /usr/bin/mysqldump
 

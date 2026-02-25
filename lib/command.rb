@@ -101,7 +101,7 @@ class Command
 
     privileged_prefixes = %w[
       useradd usermod userdel
-      systemctl
+      systemctl hostnamectl
       chmod chown
       mkdir rmdir cp mv rm
       pdbedit
