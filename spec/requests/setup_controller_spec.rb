@@ -112,30 +112,47 @@ describe "Setup Controller", type: :request do
 
     describe "GET /setup/storage" do
       it "renders storage step" do
-        allow_any_instance_of(PartitionUtils).to receive(:info).and_return([])
+        allow(DiskManager).to receive(:devices).and_return([])
         get setup_storage_path
         expect(response).to have_http_status(:ok)
       end
     end
 
     describe "POST /setup/storage" do
-      it "creates pool partitions from selected paths and redirects to share step" do
-        post setup_update_storage_path, params: { partitions: ["/mnt/data"] }
-        expect(response).to redirect_to(setup_share_path)
+      before do
+        # Stub DiskManager so it doesn't try real disk operations
+        allow(DiskManager).to receive(:devices).and_return([
+          { name: "sdb", path: "/dev/sdb", model: "Test", size: "100G", os_disk: false,
+            partitions: [{ path: "/dev/sdb1", status: :mounted, mountpoint: "/mnt/data", fstype: "ext4", size: "100G" }] }
+        ])
+        allow(DiskManager).to receive(:format_disk!)
+        allow(DiskManager).to receive(:mount!).and_return("/mnt/data")
+      end
+
+      it "creates pool partitions from selected drives and redirects to greyhole step" do
+        post setup_update_storage_path, params: { drives: ["/dev/sdb1"] }
+        expect(response).to redirect_to(setup_greyhole_path)
         expect(DiskPoolPartition.pluck(:path)).to include("/mnt/data")
       end
 
       it "replaces existing pool partitions on resubmit" do
         DiskPoolPartition.create!(path: "/mnt/old", minimum_free: 10)
-        post setup_update_storage_path, params: { partitions: ["/mnt/new"] }
-        expect(DiskPoolPartition.pluck(:path)).to eq(["/mnt/new"])
+        post setup_update_storage_path, params: { drives: ["/dev/sdb1"] }
+        expect(DiskPoolPartition.pluck(:path)).to eq(["/mnt/data"])
       end
 
       it "clears all pool partitions when none selected" do
         DiskPoolPartition.create!(path: "/mnt/data", minimum_free: 10)
         post setup_update_storage_path, params: {}
         expect(DiskPoolPartition.count).to eq(0)
-        expect(response).to redirect_to(setup_share_path)
+        expect(response).to redirect_to(setup_greyhole_path)
+      end
+    end
+
+    describe "GET /setup/greyhole" do
+      it "renders greyhole step" do
+        get setup_greyhole_path
+        expect(response).to have_http_status(:ok)
       end
     end
 
