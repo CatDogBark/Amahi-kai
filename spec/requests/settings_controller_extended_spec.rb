@@ -15,7 +15,7 @@ RSpec.describe "SettingsController extended", type: :request do
     it "updates theme setting and redirects to themes page" do
       Setting.find_or_create_by!(name: "theme") { |s| s.value = "amahi-kai"; s.kind = Setting::GENERAL }
       post "/tab/settings/activate_theme", params: { id: "amahi-kai" }
-      expect(response).to redirect_to(settings_engine.themes_path)
+      expect(response).to redirect_to("/tab/settings/themes")
       expect(Setting.find_by(name: "theme").value).to eq("amahi-kai")
     end
   end
@@ -23,7 +23,7 @@ RSpec.describe "SettingsController extended", type: :request do
   describe "POST update_system" do
     it "redirects to system_status" do
       post "/tab/settings/update_system"
-      expect(response).to redirect_to(settings_engine.system_status_path)
+      expect(response).to redirect_to("/tab/settings/system_status")
     end
   end
 end
