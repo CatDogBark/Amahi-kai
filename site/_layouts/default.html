@@ -27,16 +27,20 @@
       line-height: 1.7;
     }
     header {
-      background: var(--bg-card);
+      background: var(--bg);
       border-bottom: 1px solid var(--border);
-      padding: 1rem 2rem;
+      padding: 1.25rem 2rem;
       display: flex;
       align-items: center;
-      gap: 2rem;
+      justify-content: space-between;
+      max-width: 1200px;
+      margin: 0 auto;
     }
     header a { color: var(--text-muted); text-decoration: none; }
     header a:hover { color: var(--accent); }
-    header .logo { font-size: 1.2rem; font-weight: 700; color: var(--accent); }
+    header .logo { display: flex; align-items: center; }
+    .nav-links { display: flex; gap: 1.5rem; }
+    .nav-links a { font-size: 0.95rem; }
     .container {
       max-width: 860px;
       margin: 2rem auto;
@@ -107,10 +111,13 @@
 </head>
 <body>
   <header>
-    <a href="/" class="logo">🌊 Amahi-kai</a>
-    <a href="/wiki/">Docs</a>
-    <a href="https://github.com/CatDogBark/Amahi-kai">GitHub</a>
-    <a href="/">Home</a>
+    <a href="/" class="logo"><img src="/logo.svg" alt="Amahi-kai" height="40" style="vertical-align: middle;"></a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#apps">Apps</a>
+      <a href="https://github.com/CatDogBark/Amahi-kai">GitHub</a>
+      <a href="/wiki/">Docs</a>
+    </div>
   </header>
   <div class="container">
     <nav class="sidebar">
