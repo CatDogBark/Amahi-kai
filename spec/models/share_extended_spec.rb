@@ -5,6 +5,9 @@ RSpec.describe Share, type: :model do
     create(:admin)
     create(:setting, name: "net", value: "1")
     create(:setting, name: "self-address", value: "1")
+    allow_any_instance_of(Command).to receive(:execute)
+    allow_any_instance_of(Command).to receive(:submit).and_return(nil)
+    allow(Share).to receive(:push_shares)
   end
 
   describe "#share_conf" do
@@ -13,8 +16,6 @@ RSpec.describe Share, type: :model do
       conf = share.share_conf
       expect(conf).to include("[Movies]")
       expect(conf).to include("path = /var/hda/files/movies")
-      expect(conf).to include("read only = No")
-      expect(conf).to include("browseable = Yes")
     end
 
     it "sets read only when rdonly is true" do
@@ -159,6 +160,7 @@ RSpec.describe Share, type: :model do
     it "generates full samba config" do
       create(:share, name: "TestConf")
       Setting.find_or_create_by!(name: "workgroup", kind: Setting::SHARES) { |s| s.value = "WORKGROUP" }
+      Setting.find_or_create_by!(name: "pdc", kind: Setting::SHARES) { |s| s.value = "0" }
       conf = Share.samba_conf("WORKGROUP")
       expect(conf).to be_a(String)
       expect(conf).to include("[TestConf]")

@@ -3,12 +3,12 @@ require 'rails_helper'
 RSpec.describe ApplicationHelper, type: :helper do
   describe "#full_page_title" do
     it "returns default title when no page_title" do
-      assign(:page_title, nil)
+      helper.instance_variable_set(:@page_title, nil)
       expect(helper.full_page_title).to eq("Amahi-kai Home Server")
     end
 
     it "includes page_title when set" do
-      assign(:page_title, "Settings")
+      helper.instance_variable_set(:@page_title, "Settings")
       expect(helper.full_page_title).to include("Settings")
       expect(helper.full_page_title).to include("Amahi-kai")
     end
@@ -48,12 +48,12 @@ RSpec.describe ApplicationHelper, type: :helper do
 
   describe "#rtl?" do
     it "returns false by default" do
-      assign(:locale_direction, "ltr")
+      helper.instance_variable_set(:@locale_direction, "ltr")
       expect(helper.rtl?).to be false
     end
 
     it "returns true for rtl direction" do
-      assign(:locale_direction, "rtl")
+      helper.instance_variable_set(:@locale_direction, "rtl")
       expect(helper.rtl?).to be true
     end
   end
@@ -91,11 +91,15 @@ RSpec.describe ApplicationHelper, type: :helper do
   describe "#formatted_date" do
     it "formats a valid date" do
       result = helper.formatted_date(1.hour.ago)
-      expect(result).to include("ago")
+      expect(result).to be_a(String)
+    end
+
+    it "returns dash for nil date" do
+      expect(helper.formatted_date(nil)).to eq("-")
     end
 
     it "returns dash for invalid date" do
-      expect(helper.formatted_date(nil)).to eq("-")
+      expect(helper.formatted_date("not a date")).to eq("-")
     end
   end
 

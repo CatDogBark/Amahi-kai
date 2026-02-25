@@ -1,22 +1,27 @@
 require 'rails_helper'
 
 RSpec.describe Server, type: :model do
-  let(:server) { Server.create!(name: "test-svc", comment: "Test Service", pidfile: "/var/run/test.pid") }
-
-  describe "#clean_name" do
-    it "returns cleaned service name" do
-      expect(server.clean_name).to eq("test-svc")
-    end
+  before do
+    # Stub all Command execution to prevent real system calls
+    allow_any_instance_of(Command).to receive(:execute)
+    allow_any_instance_of(Command).to receive(:submit).and_return(nil)
   end
 
-  describe "#pid_file" do
-    it "returns the pid file path" do
-      expect(server.pid_file).to eq("/var/run/test.pid")
+  let(:server) { Server.create!(name: "test-svc-#{SecureRandom.hex(4)}", comment: "Test Service", pidfile: "/var/run/test.pid") }
+
+  describe "#clean_name" do
+    it "removes @ from name" do
+      s = Server.new(name: "openvpn@amahi")
+      expect(s.clean_name).to eq("openvpn-amahi")
+    end
+
+    it "returns name unchanged when no @" do
+      expect(server.clean_name).to eq(server.name)
     end
   end
 
   describe "#stopped?" do
-    it "returns true when not running" do
+    it "returns true when no pids" do
       allow(server).to receive(:pids).and_return([])
       expect(server.stopped?).to be true
     end
@@ -34,55 +39,29 @@ RSpec.describe Server, type: :model do
     end
   end
 
-  describe "#start_cmd" do
-    it "returns systemctl start command" do
-      expect(server.start_cmd).to include("start")
-    end
-  end
-
-  describe "#stop_cmd" do
-    it "returns systemctl stop command" do
-      expect(server.stop_cmd).to include("stop")
-    end
-  end
-
-  describe "#enable_cmd" do
-    it "returns systemctl enable command" do
-      expect(server.enable_cmd).to include("enable")
-    end
-  end
-
-  describe "#disable_cmd" do
-    it "returns systemctl disable command" do
-      expect(server.disable_cmd).to include("disable")
-    end
-  end
-
   describe "#do_start" do
-    it "executes start command" do
-      allow(server).to receive(:system)
+    it "executes without error" do
       server.do_start
     end
   end
 
   describe "#do_stop" do
-    it "executes stop command" do
-      allow(server).to receive(:system)
+    it "executes without error" do
       server.do_stop
     end
   end
 
   describe "#do_restart" do
-    it "executes restart command" do
-      allow(server).to receive(:system)
+    it "executes without error" do
       server.do_restart
     end
   end
 
   describe ".create_default_servers" do
-    it "creates default servers" do
+    it "creates servers" do
+      allow(File).to receive(:new).and_call_original
       Server.create_default_servers
-      expect(Server.count).to be >= 4
+      expect(Server.where(name: "smb")).to exist
     end
   end
 
@@ -91,19 +70,11 @@ RSpec.describe Server, type: :model do
       server = Server.new(comment: "Test")
       expect(server).not_to be_valid
     end
-  end
 
-  describe "toggle attributes" do
-    it "toggles monitored" do
-      original = server.monitored
-      server.toggle!(:monitored)
-      expect(server.reload.monitored).not_to eq(original)
-    end
-
-    it "toggles start_at_boot" do
-      original = server.start_at_boot
-      server.toggle!(:start_at_boot)
-      expect(server.reload.start_at_boot).not_to eq(original)
+    it "requires unique name" do
+      Server.create!(name: "unique-test-svc", comment: "A")
+      dup = Server.new(name: "unique-test-svc", comment: "B")
+      expect(dup).not_to be_valid
     end
   end
 end

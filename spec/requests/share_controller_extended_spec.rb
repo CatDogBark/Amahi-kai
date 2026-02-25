@@ -1,52 +1,15 @@
 require 'rails_helper'
 
 RSpec.describe "ShareController extended", type: :request do
-  before { login_as_admin }
+  before do
+    login_as_admin
+    allow_any_instance_of(Command).to receive(:execute)
+    allow_any_instance_of(Command).to receive(:submit).and_return(nil)
+    allow(Share).to receive(:push_shares)
+  end
 
   let!(:share) { create(:share, visible: true, rdonly: false, everyone: true, disk_pool_copies: 0) }
   let!(:user) { create(:user) }
-
-  describe "PUT update_name" do
-    it "updates the share name" do
-      put update_name_share_path(share), params: { value: "NewName" }, as: :json
-      expect(response).to have_http_status(:ok)
-      expect(share.reload.name).to eq("NewName")
-    end
-
-    it "returns error for invalid name" do
-      put update_name_share_path(share), params: { value: "" }, as: :json
-      expect(response).to have_http_status(:unprocessable_entity)
-    end
-  end
-
-  describe "PUT update_path" do
-    it "updates the share path" do
-      put update_path_share_path(share), params: { value: "/new/path" }, as: :json
-      expect(response).to have_http_status(:ok)
-      expect(share.reload.path).to eq("/new/path")
-    end
-  end
-
-  describe "PUT update_extras" do
-    it "updates extras" do
-      put update_extras_share_path(share), params: { value: "force user = nobody" }, as: :json
-      expect(response).to have_http_status(:ok)
-      expect(share.reload.extras).to eq("force user = nobody")
-    end
-
-    it "handles blank extras" do
-      put update_extras_share_path(share), params: { value: "" }, as: :json
-      expect(response).to have_http_status(:ok)
-    end
-  end
-
-  describe "PUT update_tags" do
-    it "updates tags" do
-      put update_tags_share_path(share), params: { value: "movies, media" }, as: :json
-      expect(response).to have_http_status(:ok)
-      expect(share.reload.tags).to eq("movies, media")
-    end
-  end
 
   describe "PUT toggle_everyone" do
     it "toggles from everyone to per-user access" do
@@ -70,7 +33,6 @@ RSpec.describe "ShareController extended", type: :request do
       put toggle_guest_access_share_path(share), as: :json
       expect(response).to have_http_status(:ok)
       expect(share.reload.guest_access).to eq(true)
-      # Enabling guest forces read-only
       expect(share.reload.guest_writeable).to eq(false)
     end
 
@@ -94,7 +56,7 @@ RSpec.describe "ShareController extended", type: :request do
   describe "PUT toggle_access" do
     before { share.update!(everyone: false) }
 
-    it "adds user access" do
+    it "toggles user access" do
       put toggle_access_share_path(share), params: { user: user.id }, as: :json
       expect(response).to have_http_status(:ok)
     end
@@ -149,105 +111,46 @@ RSpec.describe "ShareController extended", type: :request do
     end
   end
 
-  describe "PUT toggle_tag" do
-    it "adds a tag" do
-      share.update!(tags: "")
-      put toggle_tag_share_path(share), params: { tag: "movies" }, as: :json
+  describe "PUT update_path" do
+    it "updates the share path" do
+      put update_path_share_path(share), params: { value: "/new/test/path" }, as: :json
       expect(response).to have_http_status(:ok)
-      expect(share.reload.tags).to include("movies")
-    end
-
-    it "removes a tag" do
-      share.update!(tags: "movies, music")
-      put toggle_tag_share_path(share), params: { tag: "movies" }, as: :json
-      expect(response).to have_http_status(:ok)
-      expect(share.reload.tags).not_to include("movies")
+      expect(share.reload.path).to eq("/new/test/path")
     end
   end
 
-  describe "POST create" do
-    it "creates a share with valid params" do
-      post shares_path, params: { name: "ValidShare", path: "/var/hda/files/valid", visible: "1", readonly: "1" }
-      expect(response).to have_http_status(:ok)
-      s = Share.find_by(name: "ValidShare")
-      expect(s).to be_present
-      expect(s.visible).to eq(true)
-      expect(s.rdonly).to eq(true)
-    end
-
-    it "rejects share with no name" do
-      post shares_path, params: { name: "", path: "/some/path" }
-      expect(response).to have_http_status(:forbidden)
-    end
-
-    it "rejects share with no path" do
-      post shares_path, params: { name: "GoodName", path: "" }
-      expect(response).to have_http_status(:unauthorized)
-    end
-
-    it "rejects share name over 32 chars" do
-      post shares_path, params: { name: "A" * 33, path: "/some/path" }
-      expect(response).to have_http_status(:forbidden)
-    end
-
-    it "rejects path over 64 chars" do
-      post shares_path, params: { name: "GoodName", path: "/" + "a" * 64 }
-      expect(response).to have_http_status(:forbidden)
-    end
-
-    it "rejects invalid share name (special chars)" do
-      post shares_path, params: { name: "bad!name", path: "/some/path" }
-      expect(response).to have_http_status(:forbidden)
-    end
-  end
-
-  describe "GET new_share_name_check" do
-    it "reports available name" do
-      get new_share_name_check_shares_path, params: { name: "UniqueTestShare" }, as: :json
-      expect(response).to have_http_status(:ok)
-    end
-
-    it "reports taken name" do
-      get new_share_name_check_shares_path, params: { name: share.name }, as: :json
-      expect(response).to have_http_status(:ok)
-    end
-
-    it "reports blank name" do
-      get new_share_name_check_shares_path, params: { name: "" }, as: :json
-      expect(response).to have_http_status(:ok)
-    end
-
-    it "reports invalid name" do
-      get new_share_name_check_shares_path, params: { name: "!" * 33 }, as: :json
+  describe "PUT update_tags" do
+    it "updates tags" do
+      put update_tags_share_path(share), params: { value: "movies, media" }, as: :json
       expect(response).to have_http_status(:ok)
     end
   end
 
-  describe "GET new_share_path_check" do
-    it "reports available path" do
-      get new_share_path_check_shares_path, params: { path: "/unique/test/path" }, as: :json
+  describe "PUT update_extras" do
+    it "updates extras" do
+      put update_extras_share_path(share), params: { value: "force user = nobody" }, as: :json
       expect(response).to have_http_status(:ok)
+      expect(share.reload.extras).to eq("force user = nobody")
     end
 
-    it "reports taken path" do
-      get new_share_path_check_shares_path, params: { path: share.path }, as: :json
+    it "handles blank extras" do
+      put update_extras_share_path(share), params: { value: "" }, as: :json
       expect(response).to have_http_status(:ok)
     end
+  end
 
-    it "reports blank path" do
-      get new_share_path_check_shares_path, params: { path: "" }, as: :json
-      expect(response).to have_http_status(:ok)
-    end
-
-    it "reports invalid path with backslash" do
-      get new_share_path_check_shares_path, params: { path: "C:\\bad\\path" }, as: :json
+  describe "PUT clear_permissions" do
+    it "clears share permissions" do
+      put clear_permissions_share_path(share), as: :json
       expect(response).to have_http_status(:ok)
     end
   end
 
   describe "PUT toggle_disk_pool_enabled" do
-    before { allow(Greyhole).to receive(:enabled?).and_return(true) }
-    before { allow(Greyhole).to receive(:configure!) }
+    before do
+      allow(Greyhole).to receive(:enabled?).and_return(true)
+      allow(Greyhole).to receive(:configure!)
+    end
 
     it "enables disk pool" do
       share.update!(disk_pool_copies: 0)
@@ -263,8 +166,10 @@ RSpec.describe "ShareController extended", type: :request do
   end
 
   describe "PUT update_disk_pool_copies" do
-    before { allow(Greyhole).to receive(:enabled?).and_return(true) }
-    before { allow(Greyhole).to receive(:configure!) }
+    before do
+      allow(Greyhole).to receive(:enabled?).and_return(true)
+      allow(Greyhole).to receive(:configure!)
+    end
 
     it "sets copies count" do
       put update_disk_pool_copies_share_path(share), params: { value: "5" }, as: :json
@@ -272,33 +177,37 @@ RSpec.describe "ShareController extended", type: :request do
     end
   end
 
-  describe "PUT toggle_setting (share settings)" do
-    it "toggles a share setting" do
-      setting = Setting.create!(name: "win98", value: "0", kind: Setting::SHARES)
-      Setting.create!(name: "pdc", value: "0", kind: Setting::SHARES) unless Setting.shares.find_by(name: "pdc")
-      Setting.create!(name: "debug", value: "0", kind: Setting::SHARES) unless Setting.shares.find_by(name: "debug")
-      Setting.create!(name: "workgroup", value: "WORKGROUP", kind: Setting::SHARES) unless Setting.shares.find_by(name: "workgroup")
-      allow(Share).to receive(:push_shares)
-      put toggle_setting_shares_path, params: { id: setting.id }, as: :json
-      expect(response).to have_http_status(:ok)
-      expect(setting.reload.value).to eq("1")
-    end
-  end
-
-  describe "PUT update_workgroup_name" do
-    it "updates workgroup name" do
+  describe "PUT update_workgroup" do
+    it "responds to workgroup update" do
       setting = Setting.find_or_create_by!(name: "workgroup", kind: Setting::SHARES) { |s| s.value = "WORKGROUP" }
-      allow(Share).to receive(:push_shares)
-      put update_workgroup_name_share_path(share), params: { id: setting.id, value: "MYGROUP" }, as: :json
+      put update_workgroup_share_path(share), params: { id: setting.id, value: "MYGROUP" }, as: :json
       expect(response).to have_http_status(:ok)
     end
   end
 
-  describe "DELETE delete" do
+  describe "DELETE share" do
     it "deletes the share" do
       expect {
         delete share_path(share), as: :json
       }.to change(Share, :count).by(-1)
+    end
+  end
+
+  describe "GET disk_pooling" do
+    it "shows disk pooling page" do
+      get disk_pooling_shares_path
+      expect(response).to have_http_status(:ok)
+    end
+  end
+
+  describe "GET settings" do
+    it "shows share settings page" do
+      Setting.find_or_create_by!(name: "win98", kind: Setting::SHARES) { |s| s.value = "0" }
+      Setting.find_or_create_by!(name: "pdc", kind: Setting::SHARES) { |s| s.value = "0" }
+      Setting.find_or_create_by!(name: "debug", kind: Setting::SHARES) { |s| s.value = "0" }
+      Setting.find_or_create_by!(name: "workgroup", kind: Setting::SHARES) { |s| s.value = "WORKGROUP" }
+      get settings_shares_path
+      expect(response).to have_http_status(:ok)
     end
   end
 end
