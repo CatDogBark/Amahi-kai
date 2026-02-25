@@ -7,47 +7,49 @@ RSpec.describe DockerApp, type: :model do
       name: "Test App",
       image: "testimage:latest",
       status: "stopped",
-      host_port: 8080,
-      container_port: 80
+      host_port: 8080
     )
   end
 
   describe "#port_mappings" do
-    it "returns hash of port mappings" do
-      result = app.port_mappings
-      expect(result).to be_a(Hash)
+    it "returns hash" do
+      expect(app.port_mappings).to eq({})
     end
-  end
 
-  describe "#port_mappings=" do
-    it "sets port mappings from hash" do
+    it "round-trips hash values" do
       app.port_mappings = { "80/tcp" => 9090 }
-      expect(app.port_mappings).to eq({ "80/tcp" => 9090 })
+      app.save!
+      expect(app.reload.port_mappings).to eq({ "80/tcp" => 9090 })
     end
   end
 
   describe "#volume_mappings" do
     it "returns hash" do
-      expect(app.volume_mappings).to be_a(Hash)
+      expect(app.volume_mappings).to eq({})
     end
-  end
 
-  describe "#volume_mappings=" do
-    it "accepts hash" do
-      app.volume_mappings = { "/data" => "/app/data" }
-      expect(app.volume_mappings).to be_a(Hash)
+    it "round-trips hash values" do
+      app.volume_mappings = { "/host" => "/container" }
+      app.save!
+      expect(app.reload.volume_mappings).to eq({ "/host" => "/container" })
     end
   end
 
   describe "#environment" do
     it "returns hash" do
-      expect(app.environment).to be_a(Hash)
+      expect(app.environment).to eq({})
+    end
+
+    it "round-trips hash values" do
+      app.environment = { "FOO" => "bar" }
+      app.save!
+      expect(app.reload.environment).to eq({ "FOO" => "bar" })
     end
   end
 
   describe "#url" do
     it "returns app proxy URL" do
-      expect(app.url).to include("/app/")
+      expect(app.url).to eq("/app/#{app.identifier}")
     end
   end
 
@@ -68,18 +70,12 @@ RSpec.describe DockerApp, type: :model do
       app.update!(container_name: nil)
       expect { app.refresh_status! }.not_to raise_error
     end
-
-    it "attempts to check docker status when container_name present" do
-      app.update!(container_name: "amahi-test")
-      # Will fail in CI (no docker) but shouldn't crash
-      app.refresh_status! rescue nil
-    end
   end
 
   describe "#uninstall!" do
     it "resets status to available" do
-      allow(app).to receive(:system).and_return(true)
       app.update!(status: "running", container_name: "amahi-test")
+      allow(app).to receive(:system).and_return(true)
       app.uninstall!
       expect(app.reload.status).to eq("available")
       expect(app.container_name).to be_nil
@@ -87,32 +83,18 @@ RSpec.describe DockerApp, type: :model do
   end
 
   describe "#start!" do
-    it "starts the container" do
-      allow(app).to receive(:system).and_return(true)
-      allow(app).to receive(:`).and_return("running\n")
+    it "raises when docker not available" do
       app.update!(container_name: "amahi-test")
-      app.start!
-      expect(app.reload.status).to eq("running")
-    end
-  end
-
-  describe "#stop!" do
-    it "updates status to stopped on success" do
-      app.update!(status: "running", container_name: "amahi-test")
-      # Directly test the status update path
-      allow(app).to receive(:`).and_return("amahi-test\n")
-      # Run a successful command first so $? is success
-      system("true")
-      app.stop! rescue nil
-      # If docker isn't available, stop! may raise — that's ok, we test what we can
+      allow(app).to receive(:system).and_return(false)
+      expect { app.start! }.to raise_error(RuntimeError)
+      expect(app.reload.status).to eq("error")
     end
   end
 
   describe "#restart!" do
-    it "restarts the container" do
-      allow(app).to receive(:system).and_return(true)
-      allow(app).to receive(:`).and_return("running\n")
+    it "updates status to running" do
       app.update!(container_name: "amahi-test")
+      allow(app).to receive(:system).and_return(true)
       app.restart!
       expect(app.reload.status).to eq("running")
     end
@@ -120,18 +102,18 @@ RSpec.describe DockerApp, type: :model do
 
   describe "validations" do
     it "requires identifier" do
-      app = DockerApp.new(name: "Test", image: "img", status: "stopped")
-      expect(app).not_to be_valid
+      a = DockerApp.new(name: "Test", image: "img", status: "stopped")
+      expect(a).not_to be_valid
     end
 
     it "requires name" do
-      app = DockerApp.new(identifier: "test", image: "img", status: "stopped")
-      expect(app).not_to be_valid
+      a = DockerApp.new(identifier: "test", image: "img", status: "stopped")
+      expect(a).not_to be_valid
     end
 
     it "requires image" do
-      app = DockerApp.new(identifier: "test", name: "Test", status: "stopped")
-      expect(app).not_to be_valid
+      a = DockerApp.new(identifier: "test", name: "Test", status: "stopped")
+      expect(a).not_to be_valid
     end
 
     it "enforces unique identifier" do
