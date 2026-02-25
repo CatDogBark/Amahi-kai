@@ -6,6 +6,7 @@ Disks::Engine.routes.draw do
   post 'format_disk' => 'disks#format_disk'
   post 'mount_disk' => 'disks#mount_disk'
   post 'unmount_disk' => 'disks#unmount_disk'
+  post 'preview_disk' => 'disks#preview_disk'
   put 'toggle_disk_pool_partition' => 'disks#toggle_disk_pool_partition'
   post 'toggle_greyhole' => 'disks#toggle_greyhole'
   post 'install_greyhole' => 'disks#install_greyhole'

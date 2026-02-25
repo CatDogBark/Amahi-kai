@@ -70,11 +70,18 @@
                             class: "btn btn-sm btn-outline-danger",
                             data: { confirm: "⚠️ This will ERASE ALL DATA on #{part[:path]}. Are you sure?" } %>
                     <% when :unmounted %>
-                      <%= button_to "Mount",
-                            disks_engine.mount_disk_path,
-                            params: { device: part[:path] },
-                            method: :post,
-                            class: "btn btn-sm btn-outline-primary" %>
+                      <div class="d-flex gap-1 justify-content-end">
+                        <%= button_to "Preview",
+                              disks_engine.preview_disk_path,
+                              params: { device: part[:path] },
+                              method: :post,
+                              class: "btn btn-sm btn-outline-info" %>
+                        <%= button_to "Mount",
+                              disks_engine.mount_disk_path,
+                              params: { device: part[:path] },
+                              method: :post,
+                              class: "btn btn-sm btn-outline-primary" %>
+                      </div>
                     <% when :mounted %>
                       <% unless ['/', '/boot', '/boot/efi'].include?(part[:mountpoint]) %>
                         <%= button_to "Unmount",

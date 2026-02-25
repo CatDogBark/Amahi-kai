@@ -1,0 +1,68 @@
+<div class="settings-table" id="disk-preview">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0">
+      📂 Drive Preview: <code><%= @device %></code>
+    </h5>
+    <a href="<%= disks_engine.devices_path %>" class="btn btn-sm btn-outline-secondary">← Back to Devices</a>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header">
+      <strong>Summary:</strong>
+      <%= number_to_human_size(@preview[:total_used]) %> used across
+      <%= number_with_delimiter(@preview[:file_count]) %> file<%= @preview[:file_count] == 1 ? '' : 's' %>
+    </div>
+    <div class="card-body p-0">
+      <% if @preview[:entries].empty? %>
+        <div class="p-3 text-muted">Drive is empty — no files or folders found.</div>
+      <% else %>
+        <table class="table table-striped mb-0">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Type</th>
+              <th class="text-end">Size</th>
+              <% if @preview[:entries].any? { |e| e[:type] == :directory } %>
+                <th class="text-end">Files</th>
+              <% end %>
+            </tr>
+          </thead>
+          <tbody>
+            <% @preview[:entries].each do |entry| %>
+              <tr>
+                <td>
+                  <% if entry[:type] == :directory %>
+                    📁 <strong><%= entry[:name] %></strong>
+                  <% else %>
+                    📄 <%= entry[:name] %>
+                  <% end %>
+                </td>
+                <td>
+                  <% if entry[:type] == :directory %>
+                    <span class="badge bg-primary">Folder</span>
+                  <% else %>
+                    <span class="badge bg-secondary">File</span>
+                  <% end %>
+                </td>
+                <td class="text-end"><%= number_to_human_size(entry[:size]) %></td>
+                <% if @preview[:entries].any? { |e| e[:type] == :directory } %>
+                  <td class="text-end">
+                    <% if entry[:type] == :directory %>
+                      <%= number_with_delimiter(entry[:file_count]) %>
+                    <% else %>
+                      —
+                    <% end %>
+                  </td>
+                <% end %>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      <% end %>
+    </div>
+  </div>
+
+  <div class="text-muted small">
+    This is a read-only preview. The drive was temporarily mounted to read its contents and has been unmounted.
+  </div>
+</div>

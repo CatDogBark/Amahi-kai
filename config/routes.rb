@@ -56,6 +56,7 @@ Rails.application.routes.draw do
   post 'setup/network'  => 'setup#update_network', as: :setup_update_network
   get  'setup/storage'  => 'setup#storage',            as: :setup_storage
   post 'setup/storage'  => 'setup#update_storage',   as: :setup_update_storage
+  post 'setup/preview_drive' => 'setup#preview_drive',  as: :setup_preview_drive
   get  'setup/greyhole' => 'setup#greyhole',          as: :setup_greyhole
   post 'setup/greyhole' => 'setup#install_greyhole',  as: :setup_install_greyhole
   get  'setup/share'    => 'setup#share',              as: :setup_share

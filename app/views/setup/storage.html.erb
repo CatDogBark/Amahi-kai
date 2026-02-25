@@ -39,6 +39,8 @@
                 <span style="color: #7f8c9b; margin-left: 8px;"><%= part[:fstype] %></span>
               <% when :unmounted %>
                 <span style="color: #f59e0b;">⚠ Has existing <%= part[:fstype] %> filesystem (may contain data) — will be mounted as-is</span>
+                <a href="#" style="color: #0d8aa8; margin-left: 8px; font-size: 12px;"
+                   onclick="previewDrive('<%= part[:path] %>'); return false;">Preview contents</a>
               <% when :unformatted %>
                 <span style="color: #ef4444;">⊘ No filesystem — will be formatted (ext4) and mounted</span>
               <% end %>
@@ -67,3 +69,87 @@
     <a href="<%= setup_greyhole_path %>" class="btn-kai">Continue →</a>
   </div>
 <% end %>
+
+<!-- Drive Preview Modal -->
+<div id="preview-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); z-index:1000; display:none; align-items:center; justify-content:center;">
+  <div style="background:#fff; border-radius:12px; max-width:500px; width:90%; max-height:80vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.4);">
+    <div style="padding:16px 20px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+      <strong id="preview-title">📂 Drive Preview</strong>
+      <a href="#" onclick="closePreview(); return false;" style="color:#9ca3af; text-decoration:none; font-size:20px;">✕</a>
+    </div>
+    <div id="preview-body" style="padding:16px 20px;">
+      <div style="text-align:center; padding:20px; color:#7f8c9b;">Loading...</div>
+    </div>
+  </div>
+</div>
+
+<style>
+  @media (prefers-color-scheme: dark) {
+    #preview-modal > div { background: #161b22 !important; }
+    #preview-modal > div > div:first-child { border-bottom-color: #30363d !important; }
+    #preview-modal strong { color: #e6edf3; }
+    #preview-modal .preview-entry { border-bottom-color: #21262d !important; color: #c9d1d9; }
+    #preview-modal .preview-size { color: #8b949e !important; }
+  }
+</style>
+
+<script>
+  function previewDrive(device) {
+    var modal = document.getElementById('preview-modal');
+    var body = document.getElementById('preview-body');
+    var title = document.getElementById('preview-title');
+    modal.style.display = 'flex';
+    body.innerHTML = '<div style="text-align:center;padding:20px;color:#7f8c9b;"><span class="spinner-border spinner-border-sm"></span> Mounting and reading drive...</div>';
+    title.textContent = '📂 Preview: ' + device;
+
+    var token = document.querySelector('meta[name="csrf-token"]');
+    fetch('<%= setup_preview_drive_path %>', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token ? token.content : '' },
+      body: JSON.stringify({ device: device })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.status === 'error') {
+        body.innerHTML = '<div style="color:#ef4444;padding:10px;">' + data.message + '</div>';
+        return;
+      }
+      var html = '<div style="margin-bottom:12px;font-size:13px;color:#7f8c9b;">' +
+        formatSize(data.total_used) + ' used · ' + data.file_count + ' file' + (data.file_count === 1 ? '' : 's') + '</div>';
+
+      if (data.entries.length === 0) {
+        html += '<div style="color:#7f8c9b;">Drive is empty.</div>';
+      } else {
+        data.entries.forEach(function(e) {
+          var icon = e.type === 'directory' ? '📁' : '📄';
+          var name = e.type === 'directory' ? '<strong>' + e.name + '</strong>' : e.name;
+          var info = formatSize(e.size);
+          if (e.type === 'directory' && e.file_count !== undefined) info += ' · ' + e.file_count + ' files';
+          html += '<div class="preview-entry" style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f1f5f9;font-size:14px;">' +
+            '<span>' + icon + ' ' + name + '</span>' +
+            '<span class="preview-size" style="color:#7f8c9b;font-size:13px;">' + info + '</span></div>';
+        });
+      }
+      body.innerHTML = html;
+    })
+    .catch(function(err) {
+      body.innerHTML = '<div style="color:#ef4444;padding:10px;">Failed to preview drive: ' + err.message + '</div>';
+    });
+  }
+
+  function closePreview() {
+    document.getElementById('preview-modal').style.display = 'none';
+  }
+
+  function formatSize(bytes) {
+    if (bytes === 0) return '0 B';
+    var units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    var i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + units[i];
+  }
+
+  // Close modal on backdrop click
+  document.getElementById('preview-modal').addEventListener('click', function(e) {
+    if (e.target === this) closePreview();
+  });
+</script>

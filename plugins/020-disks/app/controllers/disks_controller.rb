@@ -54,6 +54,21 @@ class DisksController < ApplicationController
     redirect_to disks_engine.devices_path
   end
 
+  def preview_disk
+    device = params[:device]
+    begin
+      @preview = DiskManager.preview(device)
+      @device = device
+      render :preview
+    rescue DiskManager::DiskError => e
+      flash[:error] = "Preview failed: #{e.message}"
+      redirect_to disks_engine.devices_path
+    rescue => e
+      flash[:error] = "Unexpected error: #{e.message}"
+      redirect_to disks_engine.devices_path
+    end
+  end
+
   def unmount_disk
     device = params[:device]
     begin

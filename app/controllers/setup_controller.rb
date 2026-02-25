@@ -69,6 +69,17 @@ class SetupController < ApplicationController
     @pool_paths = DiskPoolPartition.all.map(&:path) rescue []
   end
 
+  def preview_drive
+    require 'disk_manager'
+    device = params[:device]
+    begin
+      preview = DiskManager.preview(device)
+      render json: { status: 'ok', device: device, entries: preview[:entries], total_used: preview[:total_used], file_count: preview[:file_count] }
+    rescue => e
+      render json: { status: 'error', message: e.message }, status: :unprocessable_entity
+    end
+  end
+
   def update_storage
     require 'disk_manager'
 

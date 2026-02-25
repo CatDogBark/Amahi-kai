@@ -135,6 +135,44 @@ class DiskManager
     true
   end
 
+  # Preview contents of an unmounted partition.
+  # Temp-mounts, reads top-level directory listing with sizes, then unmounts.
+  # Returns hash with :entries (array), :total_used, :file_count
+  def self.preview(device)
+    validate_device!(device)
+    raise DiskError, "Cannot preview OS disk!" if os_disk?(device)
+
+    # Check it has a filesystem
+    devices_list = devices
+    part = devices_list.flat_map { |d| d[:partitions] }.find { |p| p[:path] == device }
+    raise DiskError, "Device not found: #{device}" unless part
+    raise DiskError, "No filesystem on #{device} — nothing to preview" if part[:status] == :unformatted
+
+    # If already mounted, just read it
+    if part[:status] == :mounted && part[:mountpoint].present?
+      return read_directory_summary(part[:mountpoint])
+    end
+
+    # Temp-mount for preview
+    preview_mount = "/tmp/amahi-preview-#{SecureRandom.hex(4)}"
+    begin
+      if production?
+        execute_command("sudo /usr/bin/mkdir -p #{Shellwords.escape(preview_mount)}")
+        result = execute_command("sudo /bin/mount -o ro #{Shellwords.escape(device)} #{Shellwords.escape(preview_mount)} 2>&1")
+      else
+        # Dev/test: return sample data
+        return sample_preview
+      end
+
+      read_directory_summary(preview_mount)
+    ensure
+      if production?
+        execute_command("sudo /bin/umount #{Shellwords.escape(preview_mount)} 2>/dev/null")
+        execute_command("sudo /usr/bin/rmdir #{Shellwords.escape(preview_mount)} 2>/dev/null")
+      end
+    end
+  end
+
   # Check if a device is the OS disk
   def self.os_disk?(device)
     # Strip partition number to get base device
@@ -207,6 +245,51 @@ class DiskManager
     else
       `#{cmd}`
     end
+  end
+
+  def self.read_directory_summary(path)
+    entries = []
+    total_size = 0
+    file_count = 0
+
+    begin
+      Dir.entries(path).sort.each do |name|
+        next if name.start_with?('.')
+        next if name == 'lost+found'
+        full = File.join(path, name)
+        stat = File.stat(full) rescue next
+
+        if stat.directory?
+          # Get directory size with du (faster than Ruby recursion)
+          size_str = `du -sb #{Shellwords.escape(full)} 2>/dev/null`.split("\t").first.to_i
+          count_str = `find #{Shellwords.escape(full)} -type f 2>/dev/null | wc -l`.strip.to_i
+          entries << { name: name, type: :directory, size: size_str, file_count: count_str }
+          total_size += size_str
+          file_count += count_str
+        else
+          entries << { name: name, type: :file, size: stat.size }
+          total_size += stat.size
+          file_count += 1
+        end
+      end
+    rescue => e
+      Rails.logger.error("DiskManager.read_directory_summary: #{e.message}") if defined?(Rails)
+    end
+
+    { entries: entries, total_used: total_size, file_count: file_count }
+  end
+
+  def self.sample_preview
+    {
+      entries: [
+        { name: "Movies", type: :directory, size: 45_000_000_000, file_count: 120 },
+        { name: "Music", type: :directory, size: 8_500_000_000, file_count: 2400 },
+        { name: "Photos", type: :directory, size: 12_000_000_000, file_count: 8500 },
+        { name: "readme.txt", type: :file, size: 1024 }
+      ],
+      total_used: 65_501_001_024,
+      file_count: 11021
+    }
   end
 
   def self.sample_devices
