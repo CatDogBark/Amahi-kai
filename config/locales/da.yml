@@ -59,10 +59,10 @@ da:
   apps: Apps
   get_involved: Involver dig!
   dyndns_info: "Amahi giver en GRATIS, nul-konfiguration dynamisk DNS-adresse til dig. Den er uden for dit hjemmenetværk. Du kan bruge den til <a target=\"_blank\"\r\n\
-    href=\"http://wiki.amahi.org/index.php/VPN\">Mac</a> eller <a target=\"_blank\"\r\n\
-    href=\"http://wiki.amahi.org/index.php/VPNLinux\">Linux</a> <a\r\n\
-    target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN-klienter</a> (tekniske brugere kan bruge den til at logge ind med <a target=\"_blank\"\r\n\
-    href=\"http://wiki.amahi.org/index.php/Ssh-ports\">SSH</a>). Tekniske brugere kan bruge den til at hoste websteder, spilservere eller andre ydelser fra dit hjemmenetværk (hvis du er ivrig efter at prøve, så bare spørg i IRC-kanalen eller søg på wiki)."
+    href=\"https://amahi-kai.com/wiki/\">Mac</a> eller <a target=\"_blank\"\r\n\
+    href=\"https://amahi-kai.com/wiki/\">Linux</a> <a\r\n\
+    target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">VPN-klienter</a> (tekniske brugere kan bruge den til at logge ind med <a target=\"_blank\"\r\n\
+    href=\"https://amahi-kai.com/wiki/-ports\">SSH</a>). Tekniske brugere kan bruge den til at hoste websteder, spilservere eller andre ydelser fra dit hjemmenetværk (hvis du er ivrig efter at prøve, så bare spørg i IRC-kanalen eller søg på wiki)."
   user_name_is_available: Brugernavnet er ledigt
   a_single_number_0_254_to_point_to_a_given_machine: "Et enkelt nummer (0-254) til at pege på en bestemt maskine på dit netværk"
   this_shares_files_deleted: "Dette share vil ikke længere være til rådighed (filerne i det vil IKKE blive slettet)."
@@ -244,12 +244,12 @@ da:
         precision: 2
   disks: Diske
   nickname_info: "\"Kaldenavnet\" er en entydig identifikator for din HDA.\r\n\
-    Du skal bruge det til at logge ind på din <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN</a> med <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPNWindows\">Windows-klienten</a> (og en autoriseret bruger og password på dit hjemmenetværk)."
+    Du skal bruge det til at logge ind på din <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">VPN</a> med <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">Windows-klienten</a> (og en autoriseret bruger og password på dit hjemmenetværk)."
   application_uninstalled: Applikation afinstalleret.
   warning: ADVARSEL
   start_building_a_new_hda: Begynde at bygge et nyt HDA!
   users: Brugere
-  your_domain_info: "Dette er dit hjemmenetværk domæne. Det er <b>kun</b> tilgængeligt i dit hjemmenetværk. For flere detaljer om dette henvises til <a target=\"_blank\" href=\"http://www.amahi.org/faq#what-home-domain-should-i-use\">FAQ'en</a>."
+  your_domain_info: "Dette er dit hjemmenetværk domæne. Det er <b>kun</b> tilgængeligt i dit hjemmenetværk. For flere detaljer om dette henvises til <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/">FAQ'en</a>."
   debug: Debug
   the_url_is_invalid: URL-adressen er ikke gyldig
   testimonials: Testimonials
@@ -402,10 +402,10 @@ da:
   more: mere
   control_panel_for_your_amahi_hdas: Kontrolpanel til dine Amahi HDAs
   total_space: Samlet plads
-  by_signing_up_you_agree_to_the_terms_of_service: "Ved at tilmelde dig, accepterer du, og har læst <a href=\"http://www.amahi.org/home/tos\" target=\"_blank\">vores Terms of Service</a>"
+  by_signing_up_you_agree_to_the_terms_of_service: "Ved at tilmelde dig, accepterer du, og har læst <a href=\"https://amahi-kai.com\" target=\"_blank\">vores Terms of Service</a>"
   there_are_no_applications_installed: "Der er ingen Apps installeret på dette tidspunkt."
   name_is_not_valid: Navn er ikke gyldigt
-  valid_email_required_for_service: "Gyldig e-mail er nødvendig for aktivering. Vi vil <a href=\"http://www.amahi.org/privacy\" target=\"_blank\">ikke spamme you</a>"
+  valid_email_required_for_service: "Gyldig e-mail er nødvendig for aktivering. Vi vil <a href=\"https://amahi-kai.com\" target=\"_blank\">ikke spamme you</a>"
   the_url_looks_good: URL ser ok ud
   mac_address: MAC-adresse
   port_range_field_cannot_be_empty: "Felterne kan ikke være tomme"
@@ -521,7 +521,7 @@ da:
   port_range_ports_must_be_numbers: "Portene skal være numeriske"
   confirm: "Bekræft"
   installation_instructions: Installationsvejledning
-  this_looks_like_a_database_corruption_please_report_it: Dette ligner en database korruption eller en bug (husk at <a href="http://bugs.amahi.org">rapportere den</a>).
+  this_looks_like_a_database_corruption_please_report_it: Dette ligner en database korruption eller en bug (husk at <a href="https://github.com/CatDogBark/Amahi-kai/issues">rapportere den</a>).
   created: Oprettet
   access: Adgang
   new_dns_alias: Ny DNS Alias

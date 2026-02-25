@@ -6,7 +6,7 @@ no-NN:
   user_name_is_not_available: Brukarnamn er ikkje tilgjengeleg
   platform: Plattform
   are_you_sure_share: "Er du sikker på at du vil dele '%{share}'?"
-  this_looks_like_a_database_corruption_please_report_it: "Dette ser ut som ein database-korrupsjon eller ein feil (ver vennleg å <a href=\"http://bugs.amahi.org\">varsle oss</a>)."
+  this_looks_like_a_database_corruption_please_report_it: "Dette ser ut som ein database-korrupsjon eller ein feil (ver vennleg å <a href=\"https://github.com/CatDogBark/Amahi-kai/issues\">varsle oss</a>)."
   mac_looks_good: MAC ok
   wiki: Wiki
   these_rules_are_used_to_restrict_ips: "Desse reglane nyttes til å grense datapakker frå ein IP i ditt lokale nettverk til Internett. Nytte av slike filtre kan være hjelpsamt i sikring eller grensing av det lokale nettverket."
@@ -62,9 +62,9 @@ no-NN:
   preparing_to_install: Forbereder installasjon ...
   model: Model
   are_you_sure_you_want_to_start_the_server: "Er du sikker på at du vil starte %{name}?"
-  nickname_info: "\"Kallenamnet\" er en unik identifikator for denne HDA. Du vil trenge den for å kunne logge deg inn på <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN</a> med <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPNWindows\"> klienten (og en autorisert brukernamn og passord på hjemmenettverket)."
+  nickname_info: "\"Kallenamnet\" er en unik identifikator for denne HDA. Du vil trenge den for å kunne logge deg inn på <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">VPN</a> med <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\"> klienten (og en autorisert brukernamn og passord på hjemmenettverket)."
   files: Filer
-  by_signing_up_you_agree_to_the_terms_of_service: "Ved å registrere deg samtykker du og bekrefter at du har lest <a href=\"http://www.amahi.org/home/tos\" target=\"_blank\">våre vilkår for tjenesten</a>"
+  by_signing_up_you_agree_to_the_terms_of_service: "Ved å registrere deg samtykker du og bekrefter at du har lest <a href=\"https://amahi-kai.com\" target=\"_blank\">våre vilkår for tjenesten</a>"
   the_url_looks_good: Nettadressen ser bra ut
   application_uninstalled: Applikasjon avinstallert.
   delete_web_app: Slett Web App
@@ -169,7 +169,7 @@ no-NN:
   the_boot_option_is_a_critical_setting: "Oppstartsalternativet er en kritisk innstilling. Å Ikke starte en server prosess frarådes på det sterkeste. Det er beregnet å starte tjenester i HDA din ved hver oppstart. Er du sikker på at du ikkje vil starte denne prosessen ved oppstart?"
   greyhole_not_installed: "ADVARSEL: Greyhole er ikkje installert på dette systemet!"
   must_be_admin: "Du må ha admin rettigheiter for å få tilgang til dette området"
-  valid_email_required_for_service: Gyldig e-postadresse trengast for aktivering. Vi vil <a href="http://www.amahi.org/privacy" target="_blank">ikkje spamme deg</a>
+  valid_email_required_for_service: Gyldig e-postadresse trengast for aktivering. Vi vil <a href="https://amahi-kai.com" target="_blank">ikkje spamme deg</a>
   are_you_sure_you_want_to_delete_alias: "Er du sikker på at du vil slette aliaset for '%{name}'?"
   is_not_being_monitored_24x7: "blir<b> ikkje</b> overvåka 24x7"
   activerecord: 
@@ -322,10 +322,10 @@ no-NN:
   confirmation_matches: Bekreftelse er vellykket
   mac_already_allocated: MAC allerede tildelt
   dyndns_info: "Amahi tilbyr en gratis, null-konfigurasjon dynamisk DNS-adresse for deg. Det er ekstern i forhold til hjemmenettverket. Du kan bruke det for <a target=\"_blank\"\r\n\
-    href=\"http://wiki.amahi.org/index.php/VPN\">Mac</a> or <a target=\"_blank\"\r\n\
-    href=\"http://wiki.amahi.org/index.php/VPNLinux\">Linux</a> <a\r\n\
-    target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN</a>-klienter (tekniske brukere kan bruke det for å logge på med <a target=\"_blank\"\r\n\
-    href=\"http://wiki.amahi.org/index.php/Ssh-ports\">SSH</a>).  Tekniske brukere kan bruke det for å hoste nettsider, spill servere eller andre tjenester fra hjemmenettverket ditt (hvis du har lyst til å prøve, bare spør på IRC-kanal eller søk på wiki)."
+    href=\"https://amahi-kai.com/wiki/\">Mac</a> or <a target=\"_blank\"\r\n\
+    href=\"https://amahi-kai.com/wiki/\">Linux</a> <a\r\n\
+    target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">VPN</a>-klienter (tekniske brukere kan bruke det for å logge på med <a target=\"_blank\"\r\n\
+    href=\"https://amahi-kai.com/wiki/-ports\">SSH</a>).  Tekniske brukere kan bruke det for å hoste nettsider, spill servere eller andre tjenester fra hjemmenettverket ditt (hvis du har lyst til å prøve, bare spør på IRC-kanal eller søk på wiki)."
   setting_dmz_failed: Innstilling av DMZ mislyktes. Vennligst sjekk innstillingene dine.
   logs: Logs
   this_name_is_not_available: Dette namnet er ikkje tilgjengeleg
@@ -364,7 +364,7 @@ no-NN:
   ip_filtering: IP-filtrering
   create: Opprett
   guest_dashboard: Instrumentbrett for gjester
-  your_domain_info: "Dette er heimenettverks-domenet ditt. Det er <b>kun</b> tilgjengeleg internt i heimenettverket. For meir informasjon om dette, jf. <a target=\"_blank\" href=\"http://www.amahi.org/faq#what-home-domain-should-i-use\">FAQ</a>. "
+  your_domain_info: "Dette er heimenettverks-domenet ditt. Det er <b>kun</b> tilgjengeleg internt i heimenettverket. For meir informasjon om dette, jf. <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/">FAQ</a>. "
   music: Musikk
   permissions: Tillatelser
   initial_password: Passord

@@ -57,7 +57,7 @@ class Setting < ApplicationRecord
 		def set_kind(kind, name, value)
 			setting = get_kind(kind, name)
 			if setting
-				s.update_attribute!(:value, value)
+				setting.update_attribute!(:value, value)
 			else
 				setting = create(:kind => kind, :name => name, :value => value)
 			end

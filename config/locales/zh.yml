@@ -35,7 +35,7 @@ zh:
   user_name_is_not_available: "用户名不可用"
   address_looks_good: "地址可以使用"
   confirmation_must_match: "确认必须匹配"
-  this_looks_like_a_database_corruption_please_report_it: "这看起来是数据库损坏或错误（请 <a href=\"http://bugs.amahi.org\">报告该错误</a>）。"
+  this_looks_like_a_database_corruption_please_report_it: "这看起来是数据库损坏或错误（请 <a href=\"https://github.com/CatDogBark/Amahi-kai/issues\">报告该错误</a>）。"
   this_ip_address_will_always_be_statically_associated_to_the_mac_address: "该IP地址(1-%{max}) 将一直被静态的绑定到下面的mac地址。"
   are_you_sure_you_would_like_to_uninstall: "您确定要卸载此程序？\r\n\
     任何与该应用程序相关的数据将被删除。"
@@ -57,11 +57,11 @@ zh:
   password_is_too_short: "密码太短"
   edit_static_ip: "修改静态IP"
   are_you_sure_you_want_to_start_the_server: "您确定要启动%{name}？"
-  nickname_info: "“昵称”是您HDA的唯一标识符。您需要使用<a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPNWindows\">Windows 客户端</a>登录到您的<a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN</a>（使用您家庭网络中一对授权了的用户名和密码）。"
+  nickname_info: "“昵称”是您HDA的唯一标识符。您需要使用<a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">Windows 客户端</a>登录到您的<a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">VPN</a>（使用您家庭网络中一对授权了的用户名和密码）。"
   stopped: "已停止"
   add_extra_parameters: ""
   this_path_exists_already: "路径已经存在"
-  by_signing_up_you_agree_to_the_terms_of_service: "通过签约，您同意并已阅读 <a href=\"http://www.amahi.org/home/tos\" target=\"_blank\">我们的服务条款</a>\r\n"
+  by_signing_up_you_agree_to_the_terms_of_service: "通过签约，您同意并已阅读 <a href=\"https://amahi-kai.com\" target=\"_blank\">我们的服务条款</a>\r\n"
   poweroff: ""
   application_uninstalled: "应用程序已卸载。"
   free_space: "空闲空间"
@@ -156,7 +156,7 @@ zh:
   static_ip_address_for_your_hda: "您HDA的静态IP地址"
   comment: "评论"
   root_path: "Root 路径"
-  valid_email_required_for_service: "需要激活有效的电子邮件。<a href=\"http://www.amahi.org/privacy\" target=\"_blank\">我们不会发垃圾邮件给您</a>"
+  valid_email_required_for_service: "需要激活有效的电子邮件。<a href=\"https://amahi-kai.com\" target=\"_blank\">我们不会发垃圾邮件给您</a>"
   number: 
     format: 
       separator: .
@@ -311,10 +311,10 @@ zh:
   mac_already_allocated: "MAC已经被占有"
   video: "视频"
   dyndns_info: "Amahi提供免费的，零配置的从外部到家庭网络的动态DNS地址。您可以使用的<a target=\"_blank\" \r\n\
-    href=\"http://wiki.amahi.org/index.php/VPN\">苹果</a>或<a target=\"_blank\" \r\n\
-    href=\"http://wiki.amahi.org/index.php/VPNLinux\">Linux</a>的 a \r\n\
-    target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN</a>的客户端（专业用户可以使用<a target=\"_blank\" \r\n\
-    href=\"http://wiki.amahi.org/index.php/Ssh-ports\">SSH</a>来登录）。专业用户可以在家庭网络的网站，游戏服务器或其他服务使用它（如果你想及早尝试，只要在IRC频道道求助或搜索维基）。"
+    href=\"https://amahi-kai.com/wiki/\">苹果</a>或<a target=\"_blank\" \r\n\
+    href=\"https://amahi-kai.com/wiki/\">Linux</a>的 a \r\n\
+    target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">VPN</a>的客户端（专业用户可以使用<a target=\"_blank\" \r\n\
+    href=\"https://amahi-kai.com/wiki/-ports\">SSH</a>来登录）。专业用户可以在家庭网络的网站，游戏服务器或其他服务使用它（如果你想及早尝试，只要在IRC频道道求助或搜索维基）。"
   setting_dmz_failed: "设置DMZ区失败。请检查您的设置。"
   logs: "日志"
   this_name_is_not_available: "此名称不可用"
@@ -354,7 +354,7 @@ zh:
   changelog: "更新日志"
   notifications_from_amahi: "Amahi通知"
   permissions: "许可"
-  your_domain_info: "这是您的家庭网络域。这是只适用在你的家庭网络。关于此的更多细节请参考<a target=\"_blank\" href=\"http://www.amahi.org/faq#what-home-domain-should-i-use\">the FAQ</a>."
+  your_domain_info: "这是您的家庭网络域。这是只适用在你的家庭网络。关于此的更多细节请参考<a target=\"_blank\" href=\"https://amahi-kai.com/wiki/">the FAQ</a>."
   there_are_no_firewall_rules_defined: "目前没有定义了的防火墙规则。"
   firewall_url_filter_message: "本表中的条目是用来限制通过网关的URL。"
   the_ip_must_be_1_to_254: "IP必须在1-254范围内"

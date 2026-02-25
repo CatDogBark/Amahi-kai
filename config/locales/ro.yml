@@ -7,7 +7,7 @@ ro:
   platform: "Platformă"
   are_you_sure_share: "Sunteţi sigur că doriţi să ştergeţi resursa partajată '%{share}' ?"
   these_rules_are_used_to_restrict_ips: "Aceste reguli sunt utilizate pentru a restricţiona pachete de date de la un IP din reţea locală la Internet. Utilizarea unor astfel de filtre pot fi de ajutor în asigurarea sau restricţionarea reţelei locale."
-  this_looks_like_a_database_corruption_please_report_it: "Se pare că baza de date este coruptă sau aţi descoperit un bug (vă rugăm să <a href=\"http://bugs.amahi.org\">îl raportaţi</a>)."
+  this_looks_like_a_database_corruption_please_report_it: "Se pare că baza de date este coruptă sau aţi descoperit un bug (vă rugăm să <a href=\"https://github.com/CatDogBark/Amahi-kai/issues\">îl raportaţi</a>)."
   mac_looks_good: "Adresa MAC arată bine"
   wiki: Wiki
   confirm_email: Confirmare email
@@ -60,9 +60,9 @@ ro:
   preparing_to_install: "Pregătirea pentru instalare ..."
   model: Model
   are_you_sure_you_want_to_start_the_server: "Sunteţi sigur că doriţi să porniţi %{name}?"
-  nickname_info: "\"Porecla\" este un identificator unic pentru HDA dumneavoastră. Ea este necesară pentru a vă conecta prin <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN</a> folosind <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPNWindows\">clientul pentru Windows</a> (un utilizator autorizat şi o parolă pe reţeaua de domiciliu)."
+  nickname_info: "\"Porecla\" este un identificator unic pentru HDA dumneavoastră. Ea este necesară pentru a vă conecta prin <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">VPN</a> folosind <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">clientul pentru Windows</a> (un utilizator autorizat şi o parolă pe reţeaua de domiciliu)."
   files: "Fişiere"
-  by_signing_up_you_agree_to_the_terms_of_service: "Prin semnătura dumneavoastră confirmaţi ca aţi citit si sunteţi de acord cu <a href=\"http://www.amahi.org/home/tos\" target=\"_blank\">condiţiile de utilizare ale acestui serviciu</a>"
+  by_signing_up_you_agree_to_the_terms_of_service: "Prin semnătura dumneavoastră confirmaţi ca aţi citit si sunteţi de acord cu <a href=\"https://amahi-kai.com\" target=\"_blank\">condiţiile de utilizare ale acestui serviciu</a>"
   the_url_looks_good: "URL-ul arată bine"
   application_uninstalled: "Aplicaţia a fost dezinstalată."
   delete_web_app: "Ştergeţi Applicaţia Web"
@@ -165,7 +165,7 @@ ro:
   the_boot_option_is_a_critical_setting: "Opţiune de boot este o setare CRITICA. Anularea porniri unui proces de server este PUTERNIC DESCURAJATA. Acesta este conceput pentru a porni serviciile în HDA-ul  dumneavoastră la fiecare boot. Sunteţi sigur că doriţi să anulaţi pornirea acestui proces în momentul boot-ului?"
   greyhole_not_installed: "ATENŢIE: Greyhole nu este instalat în acest sistem!"
   must_be_admin: "Trebuie să aveţi privilegii de administrator pentru a acesa această secţiune"
-  valid_email_required_for_service: "Un adresă de e-mail validă este necesară pentru activare. Nu iţi vom trimite <a href=\"http://www.amahi.org/privacy\" target=\"_blank\">mesaje nesolicitate (spam)</a>"
+  valid_email_required_for_service: "Un adresă de e-mail validă este necesară pentru activare. Nu iţi vom trimite <a href=\"https://amahi-kai.com\" target=\"_blank\">mesaje nesolicitate (spam)</a>"
   are_you_sure_you_want_to_delete_alias: "Sunteţi sigur că doriţi să ştergeţi aliasul pentru '%{name}' ?"
   is_not_being_monitored_24x7: <b>nu</b> este monitorizat 24x7
   activerecord: 
@@ -325,10 +325,10 @@ ro:
   movies: Filme
   mac_already_allocated: "Adresa MAC este deja alocată"
   dyndns_info: "Amahi oferă GRATUIT o adresă  DNS dinamică, ce nu necesită configurare . Este extern reţelei de domiciliu. Puteţi să-l utilizaţi pentru clienţi<a target=\"_blank\"\r\n\
-    href=\"http://wiki.amahi.org/index.php/VPN\">Mac</a> or <a target=\"_blank\"\r\n\
-    href=\"http://wiki.amahi.org/index.php/VPNLinux\">Linux</a> <a\r\n\
-    target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN</a> (utilizatorii avansaţi pot folosi conectarea cu <a target=\"_blank\"\r\n\
-    href=\"http://wiki.amahi.org/index.php/Ssh-ports\">SSH</a>) . Utilizatorii avansaţi pot folosi Amahi pentru a găzdui web site-uri web, servere de jocuri, sau alte servicii din reţeaua de domiciliu (dacă sunteţi nerăbdător să încercaţi, întrebaţi  în canalul IRC sau căutaţi în wiki)."
+    href=\"https://amahi-kai.com/wiki/\">Mac</a> or <a target=\"_blank\"\r\n\
+    href=\"https://amahi-kai.com/wiki/\">Linux</a> <a\r\n\
+    target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">VPN</a> (utilizatorii avansaţi pot folosi conectarea cu <a target=\"_blank\"\r\n\
+    href=\"https://amahi-kai.com/wiki/-ports\">SSH</a>) . Utilizatorii avansaţi pot folosi Amahi pentru a găzdui web site-uri web, servere de jocuri, sau alte servicii din reţeaua de domiciliu (dacă sunteţi nerăbdător să încercaţi, întrebaţi  în canalul IRC sau căutaţi în wiki)."
   confirmation_matches: "Confirmarea se potriveşte"
   setting_dmz_failed: "Setarea DMZ-ului a eşuat. Vă rugăm să verificaţi setările."
   logs: Jurnale

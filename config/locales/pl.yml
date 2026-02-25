@@ -64,7 +64,7 @@ pl:
   are_you_sure_you_want_to_start_the_server: "Czy na pewno chcesz uruchomić '%{name}'?"
   nickname_info: ""
   files: Pliki
-  by_signing_up_you_agree_to_the_terms_of_service: "Rejestrując się, zgadzasz się z <a href=\"http://www.amahi.org/home/tos\" target=\"_blank\">naszą polityką prywatności</a>"
+  by_signing_up_you_agree_to_the_terms_of_service: "Rejestrując się, zgadzasz się z <a href=\"https://amahi-kai.com\" target=\"_blank\">naszą polityką prywatności</a>"
   the_url_looks_good: URL jest poprawny
   application_uninstalled: Aplikacja odinstalowana
   delete_web_app: "Usuń Web App"
@@ -168,7 +168,7 @@ pl:
   the_boot_option_is_a_critical_setting: ""
   greyhole_not_installed: "UWAGA: Greyhole nie jest zainstalowany!"
   must_be_admin: "Musisz mieć uprawnienia administratora aby uzyskać dostęp do tego obszaru"
-  valid_email_required_for_service: "Prawidłowy e-mail wymagany w celu aktywacji.   <a href=\"http://www.amahi.org/privacy\" target=\"_blank\"> Nie będziemy Cię spamować</a>"
+  valid_email_required_for_service: "Prawidłowy e-mail wymagany w celu aktywacji.   <a href=\"https://amahi-kai.com\" target=\"_blank\"> Nie będziemy Cię spamować</a>"
   are_you_sure_you_want_to_delete_alias: "Czy na pewno chcesz usunąć alias dla '%{name}'?"
   is_not_being_monitored_24x7: <b>nie</b> jest monitorowane 24x7
   activerecord: 

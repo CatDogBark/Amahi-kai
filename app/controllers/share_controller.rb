@@ -73,8 +73,7 @@ class ShareController < ApplicationController
 	def delete
 		s = Share.find params[:id]
 		s.destroy
-		shares = Share.all.sort { |x,y| x.name.casecmp y.name }
-		render :partial => 'share/list', :locals => { :shares => shares }
+		render json: { status: 'ok', id: s.id }
 	end
 
 	def create
@@ -93,27 +92,26 @@ class ShareController < ApplicationController
 		r = params[:readonly] ? true : false
 		s = Share.new(:name => nm, :path => path, :visible => v, :rdonly => r)
 		s.save!
-		shares = Share.all.sort { |x,y| x.name.casecmp y.name }
-		render :partial => "share/body", :locals => { :shares => shares }
+		render json: { status: 'ok', id: s.id, name: s.name }
 	end
 
 	def new_share_name_check
 		sn = params[:name]
 		if sn.nil? or sn.blank?
-			render :partial => 'share/name_cannot_be_blank'
+			render plain: 'Name cannot be blank', status: :unprocessable_entity
 			return false
 		end
 		if (not (valid_name?(sn))) or (sn.size > 32)
-			render :partial => 'share/name_invalid'
+			render plain: 'Invalid name', status: :unprocessable_entity
 			return false
 		end
 		share = Share.where(:name=>sn).first
 		if share
-			render :partial => 'share/name_not_available'
+			render plain: 'Name not available', status: :unprocessable_entity
 			return false
 		else
 			@name = sn
-			render :partial => 'share/name_available'
+			render plain: 'Name available'
 			return true
 		end
 	end
@@ -121,19 +119,19 @@ class ShareController < ApplicationController
 	def new_share_path_check
 		sp = params[:path]
 		if sp.nil? or sp.blank?
-			render :partial => 'share/path_cannot_be_blank'
+			render plain: 'Path cannot be blank', status: :unprocessable_entity
 			return false
 		end
 		if (sp.size > 64) or (sp =~ /[\\]/)
-			render :partial => 'share/path_invalid'
+			render plain: 'Invalid path', status: :unprocessable_entity
 			return false
 		end
 		share = Share.where(:path=>sp).first
 		if share
-			render :partial => 'share/path_not_available'
+			render plain: 'Path not available', status: :unprocessable_entity
 			return false
 		else
-			render :partial => 'share/path_available'
+			render plain: 'Path available'
 			return true
 		end
 	end
@@ -158,7 +156,7 @@ class ShareController < ApplicationController
 		rescue => e
 			Rails.logger.error("Share action failed: #{e.message}")
 		end
-		render :partial => 'share/access', :locals => { :share => share }
+		render :partial => 'shares/access', :locals => { :share => share }
 	end
 
 	def toggle_guest_access
@@ -171,21 +169,21 @@ class ShareController < ApplicationController
 			share.guest_writeable = false
 		end
 		share.save
-		render :partial => 'share/access', :locals => { :share => share }
+		render :partial => 'shares/access', :locals => { :share => share }
 	end
 
 	def toggle_guest_writeable
 		share = Share.find params[:id]
 		share.guest_writeable = ! share.guest_writeable
 		share.save
-		render :partial => 'share/access', :locals => { :share => share }
+		render :partial => 'shares/access', :locals => { :share => share }
 	end
 
 	def toggle_access
 		begin
 			share = Share.find params[:id]
 			if share.everyone
-				render :partial => 'share/access', :locals => { :share => share }
+				render :partial => 'shares/access', :locals => { :share => share }
 				return
 			end
 			user = User.find params[:user]
@@ -198,14 +196,14 @@ class ShareController < ApplicationController
 		rescue => e
 			Rails.logger.error("Share action failed: #{e.message}")
 		end
-		render :partial => 'share/access', :locals => { :share => share }
+		render :partial => 'shares/access', :locals => { :share => share }
 	end
 
 	def toggle_write
 		begin
 			share = Share.find params[:id]
 			if share.everyone
-				render :partial => 'share/access', :locals => { :share => share }
+				render :partial => 'shares/access', :locals => { :share => share }
 				return
 			end
 			user = User.find params[:user]
@@ -218,7 +216,7 @@ class ShareController < ApplicationController
 		rescue => e
 			Rails.logger.error("Share action failed: #{e.message}")
 		end
-		render :partial => 'share/access', :locals => { :share => share }
+		render :partial => 'shares/access', :locals => { :share => share }
 	end
 
 	def toggle_readonly
@@ -229,7 +227,7 @@ class ShareController < ApplicationController
 		rescue => e
 			Rails.logger.error("Share action failed: #{e.message}")
 		end
-		render :partial => 'share/access', :locals => { :share => share }
+		render :partial => 'shares/access', :locals => { :share => share }
 	end
 
 	def toggle_visible
@@ -240,7 +238,7 @@ class ShareController < ApplicationController
 		rescue => e
 			Rails.logger.error("Share action failed: #{e.message}")
 		end
-		render :partial => 'share/visible', :locals => { :share => share }
+		render :partial => 'shares/share', :locals => { :share => share }
 	end
 
 	def toggle_tag
@@ -259,7 +257,7 @@ class ShareController < ApplicationController
 		rescue => e
 			Rails.logger.error("Share action failed: #{e.message}")
 		end
-		render :partial => 'share/tags', :locals => { :share => share }
+		render :partial => 'shares/tags', :locals => { :share => share }
 	end
 
 	def toggle_setting
@@ -270,11 +268,7 @@ class ShareController < ApplicationController
 		Share.push_shares
 		# artificial delay to avoid too fast restarts and double clicks
 		sleep 1
-		@win98 = Setting.shares.f "win98"
-		@pdc = Setting.shares.f "pdc"
-		@debug = Setting.shares.f "debug"
-		@workgroup = Setting.shares.f "workgroup"
-		render :partial => "share/settings_all"
+		render json: { status: 'ok' }
 	end
 
 	def update_workgroup_name

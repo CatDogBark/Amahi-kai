@@ -8,7 +8,7 @@ bg:
   are_you_sure_share: "Сигурни ли сте, че искате да изтриете споделения дял \"{{share}}\"?"
   these_rules_are_used_to_restrict_ips: "Тези правила се използват, за ограничаване на пакетите с данни от IP адрес от локалната ви мрежа към Интернет.\r\n\
     Употребата на такива филтри може да бъде полезна при защитата или поставянето на ограничения на вашата локална мрежа."
-  this_looks_like_a_database_corruption_please_report_it: "Изглежда има повреда в базата от данни или е някакъв бъг (моля, <a href=\"http://bugs.amahi.org\">докладвайте ни го</a>)."
+  this_looks_like_a_database_corruption_please_report_it: "Изглежда има повреда в базата от данни или е някакъв бъг (моля, <a href=\"https://github.com/CatDogBark/Amahi-kai/issues\">докладвайте ни го</a>)."
   mac_looks_good: "MAC изглежда добре"
   wiki: "Уики"
   confirm_email: "Потвърдете адреса на електронната поща"
@@ -63,9 +63,9 @@ bg:
   model: "Модел"
   are_you_sure_you_want_to_start_the_server: "Наистина ли искате да стартирате {{name}}?"
   nickname_info: "\"Псевдонимът\" е уникално име за идентификация на вашия HDA (Home Digital Assistant - Домашен Цифров Асистент).\r\n\
-    Той ще ви е нужен, когато се свързвате към вашия <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN</a> през <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPNWindows\">Windows клиент</a> (заедно с потребителско име и парола, оторизирани в домашната ви мрежа). "
+    Той ще ви е нужен, когато се свързвате към вашия <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">VPN</a> през <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">Windows клиент</a> (заедно с потребителско име и парола, оторизирани в домашната ви мрежа). "
   files: "Файлове"
-  by_signing_up_you_agree_to_the_terms_of_service: "С вписването си в системата, Вие декларирате, че сте прочели и се съгласявате с <a href=\"http://www.amahi.org/home/tos\" target=\"_blank\">нашите Условия за ползване</a>"
+  by_signing_up_you_agree_to_the_terms_of_service: "С вписването си в системата, Вие декларирате, че сте прочели и се съгласявате с <a href=\"https://amahi-kai.com\" target=\"_blank\">нашите Условия за ползване</a>"
   the_url_looks_good: "URL адресът, изглежда добре"
   application_uninstalled: "Приложението беше деинсталирано."
   delete_web_app: "Изтрий Уеб Приложението"
@@ -353,10 +353,10 @@ bg:
   movies: "Филми"
   mac_already_allocated: "MAC вече е разпределен"
   dyndns_info: "Amahi предоставя безплатен, нулева конфигурация динамичен DNS адрес за вас. Той е външен за вашата домашна мрежа. Можете да го използвате за <a target=\"_blank\"\r\n\
-    href=\"http://wiki.amahi.org/index.php/VPN\">Mac</a> или <a target=\"_blank\"\r\n\
-    href=\"http://wiki.amahi.org/index.php/VPNLinux\">Linux</a> <a\r\n\
-    target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN</a> клиенти (техническите потребители могат да го използват за влизане в системата с <a target=\"_blank\"\r\n\
-    href=\"http://wiki.amahi.org/index.php/Ssh-ports\">SSH</a>). Техническите потребители могат да го използват за хостинг на уеб сайтове, гейм сървъри или други услуги от домашната си мрежа (ако са в треска да опитате, просто попитайте в IRC канала или потърсете в Wiki-то)."
+    href=\"https://amahi-kai.com/wiki/\">Mac</a> или <a target=\"_blank\"\r\n\
+    href=\"https://amahi-kai.com/wiki/\">Linux</a> <a\r\n\
+    target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">VPN</a> клиенти (техническите потребители могат да го използват за влизане в системата с <a target=\"_blank\"\r\n\
+    href=\"https://amahi-kai.com/wiki/-ports\">SSH</a>). Техническите потребители могат да го използват за хостинг на уеб сайтове, гейм сървъри или други услуги от домашната си мрежа (ако са в треска да опитате, просто попитайте в IRC канала или потърсете в Wiki-то)."
   confirmation_matches: "Потвърждението съвпада"
   setting_dmz_failed: "Настройката на DMZ е неуспешна. Моля, проверете настройките си."
   logs: "Дневници"
@@ -400,7 +400,7 @@ bg:
   permissions: "Разрешения"
   initial_password: "Парола"
   your_domain_info: "Това е домейнът на домашната ви мрежа. Той е достъпен <b>единствено</b> в домашната ви мрежа. \r\n\
-    За повече информация относно това, прегледайте <a target=\"_blank\" href=\"http://www.amahi.org/faq#what-home-domain-should-i-use\"> Въпроси и отговори</a>. "
+    За повече информация относно това, прегледайте <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/"> Въпроси и отговори</a>. "
   there_are_no_firewall_rules_defined: "Все още няма зададени правила за Защитната стена."
   firewall_url_filter_message: "Вписванията в тази таблица се използват за забрана на URL адреси през Gateway."
   dhcp_leases: "DHCP Раздавания"

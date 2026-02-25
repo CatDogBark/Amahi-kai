@@ -60,7 +60,7 @@ es:
   are_you_sure_you_want_to_start_the_server: "¿Estás seguro de que quieres iniciar el %{name}?"
   nickname_info: "El \"nickname\" es un identificador único de tu HDA. Hace falta para el acceso remote via VPN con el cliente de cliente de Windows (junto con un usuario autorizado y su contraseña)."
   files: Archivos
-  by_signing_up_you_agree_to_the_terms_of_service: "Al registrarte, estás de acuerdo y has leído nuestros <a href=\"http://www.amahi.org/home/tos\" target=\"_blank\">términos de servicio</a>"
+  by_signing_up_you_agree_to_the_terms_of_service: "Al registrarte, estás de acuerdo y has leído nuestros <a href=\"https://amahi-kai.com\" target=\"_blank\">términos de servicio</a>"
   the_url_looks_good: "La URL es válida"
   application_uninstalled: "Aplicación no instalada"
   delete_web_app: Eliminar Web App
@@ -159,7 +159,7 @@ es:
   url_to_filter: "Direcciones URL que serán filtradas"
   the_boot_option_is_a_critical_setting: "La opción de arranque es un valor IMPORTANTE. No te aconsejamos que dejes de iniciar este proceso servidor. Esto está diseñado para empezar a prestar servicios en tu HDA en cada arranque. ¿Estás seguro de que quieres que este proceso no empiece cada vez que tu sistema arranca?"
   greyhole_not_installed: "ADVERTENCIA: Greyhole no está instalado en este sistema"
-  valid_email_required_for_service: "Es necesario una dirección email válida para la activación. No le enviaremos <a href=\"http://www.amahi.org/privacy\" target=\"_blank\">correo basura</a>\r\n\
+  valid_email_required_for_service: "Es necesario una dirección email válida para la activación. No le enviaremos <a href=\"https://amahi-kai.com\" target=\"_blank\">correo basura</a>\r\n\
     \r\n"
   are_you_sure_you_want_to_delete_alias: "¿Estás seguro de que quieres eliminar el alias de '%{name}'?"
   is_not_being_monitored_24x7: "<b>no</b> está siendo monitorizado 24x7"
@@ -318,7 +318,7 @@ es:
   movies: "Películas"
   mac_already_allocated: "La dirección MAC ya está reservada"
   dyndns_info: "Amahi ofrece un servicio gratuito de DNS dinámica, con cero configuración. Es texterno a tu red local. Este servicio se puede utilizar con los clientes de  <a target=\"_blank\"\r\n\
-    href=\"http://wiki.amahi.org/index.php/VPN\">Mac</a> para Mac o Linux clientes. Usuarios técnicos pueden utilizarlo para alojar sitios web, servidores de juegos u otros servicios de su red doméstica (como acceso con SSH)."
+    href=\"https://amahi-kai.com/wiki/\">Mac</a> para Mac o Linux clientes. Usuarios técnicos pueden utilizarlo para alojar sitios web, servidores de juegos u otros servicios de su red doméstica (como acceso con SSH)."
   confirmation_matches: "Confirmación correcta"
   setting_dmz_failed: "Configuración de la zona DMZ falló. Por favor, comprueba los valores de nuevo."
   logs: Registros
@@ -361,7 +361,7 @@ es:
   permissions: Permisos
   initial_password: "Contraseña"
   your_domain_info: "Este es el dominio de la red de su hogar. <b>Sólo</b> está disponible dentro de la red de su hogar.\r\n\
-    Para más detalles diríjase a <a target=\"_blank\" href=\"http://www.amahi.org/faq#what-home-domain-should-i-use\">las Preguntas Frecuentes</a>."
+    Para más detalles diríjase a <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/">las Preguntas Frecuentes</a>."
   there_are_no_firewall_rules_defined: No hay reglas de firewall definidas en este momento.
   firewall_url_filter_message: "Las entradas en esta tabla se usan para restringir las URLs que pasan através de la Pasarela"
   create_your_hda_profile: Crea tu perfil HDA

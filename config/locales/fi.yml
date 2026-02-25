@@ -10,7 +10,7 @@ fi:
     \t\t\tlähiverkkosi IP-osoitteesta internetiin.\n\
     \t\t\tTämän tyyppisten suodattimien käyttö parantaa lähiverkkosi tietoturvaa\n\
     \t\t\tja niillä voidaan myös rajoittaa liikennettä."
-  this_looks_like_a_database_corruption_please_report_it: "Tämä vaikuttaa tietokannan korruptoitumiselta tai ohjelmavirheeltä (<a href=\"http://bugs.amahi.org\">raportoi ongelmasta</a>)."
+  this_looks_like_a_database_corruption_please_report_it: "Tämä vaikuttaa tietokannan korruptoitumiselta tai ohjelmavirheeltä (<a href=\"https://github.com/CatDogBark/Amahi-kai/issues\">raportoi ongelmasta</a>)."
   mac_looks_good: "MAC näyttää hyvältä"
   wiki: Wiki
   confirm_email: "Vahvista sähköposti"
@@ -65,11 +65,11 @@ fi:
   model: Malli
   are_you_sure_you_want_to_start_the_server: "Haluatko varmasti käynnistää %{name}?"
   nickname_info: "\"Lempinimi\" on HDA-laitteesi uniikki tunnus.\n\
-    Tarvitset sitä kirjautuaksesi <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN-yhteyteen</a>\n\
-    <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPNWindows\">Windows-asiakasohjelmalla</a>\n\
+    Tarvitset sitä kirjautuaksesi <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">VPN-yhteyteen</a>\n\
+    <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">Windows-asiakasohjelmalla</a>\n\
     (ja valtuutetun käyttäjän ja salasanan kotiverkkoosi)."
   files: Tiedostot
-  by_signing_up_you_agree_to_the_terms_of_service: "Rekisteröitymällä vahvistat lukeneesi ja hyväksyväsi <a href=\"http://www.amahi.org/home/tos\" target=\"_blank\">palvelumme käyttöehdot</a>"
+  by_signing_up_you_agree_to_the_terms_of_service: "Rekisteröitymällä vahvistat lukeneesi ja hyväksyväsi <a href=\"https://amahi-kai.com\" target=\"_blank\">palvelumme käyttöehdot</a>"
   the_url_looks_good: "URL näyttää hyvältä"
   application_uninstalled: Sovelman asennus poistettu.
   delete_web_app: Poista websovelma
@@ -180,7 +180,7 @@ fi:
   the_boot_option_is_a_critical_setting: "Käynnistysvalinta on KRIITTINEN asetus. Palvelinprosessin käynnistämättä jättäminen EI OLE SUOSITELTAVAA. Palvelu on suunniteltu käynnistymään joka kerta HDA-laitteesi käynnistyessä. Haluatko varmasti jättää tämän palvelun käynnistämättä tietokoneen käynnistyksen yhteydessä?"
   greyhole_not_installed: "VAROITUS: Greyholea ei ole asennetty tähän järjestelmään!"
   must_be_admin: "Päästäksesi tähän osioon, sinulla pitää olla pääkäyttäjän oikeudet"
-  valid_email_required_for_service: "Aktivointiin vaaditaan voimassa oleva sähköpostiosoite. <a href=\"http://www.amahi.org/privacy\" target=\"_blank\">Emme lähetä sinulle roskapostia</a>"
+  valid_email_required_for_service: "Aktivointiin vaaditaan voimassa oleva sähköpostiosoite. <a href=\"https://amahi-kai.com\" target=\"_blank\">Emme lähetä sinulle roskapostia</a>"
   are_you_sure_you_want_to_delete_alias: Haluatko varmasti poistaa aliaksen '%{name}' ?
   is_not_being_monitored_24x7: <b>ei ole</b> valvonnassa 24x7
   activerecord: 
@@ -357,11 +357,11 @@ fi:
   mac_already_allocated: MAC on jo varattu
   dyndns_info: "Amahi tarjoaa sinulle ILMAISEN, heti käyttövalmiin DNS-osoitteen. Se on kotiverkkosi\n\
     ulkopuolella. Voit käyttää sitä <a target=\"_blank\"\n\
-    href=\"http://wiki.amahi.org/index.php/VPN\">Macin</a> tai <a target=\"_blank\"\n\
-    href=\"http://wiki.amahi.org/index.php/VPNLinux\">Linuxin</a> <a\n\
-    target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN</a>\n\
+    href=\"https://amahi-kai.com/wiki/\">Macin</a> tai <a target=\"_blank\"\n\
+    href=\"https://amahi-kai.com/wiki/\">Linuxin</a> <a\n\
+    target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">VPN</a>\n\
     -asiakasohjelmilla (tekniset käyttäjät voivat käyttää sitä<a target=\"_blank\"\n\
-    href=\"http://wiki.amahi.org/index.php/Ssh-ports\">SSH</a>-sisäänkirjautumiseen).\n\
+    href=\"https://amahi-kai.com/wiki/-ports\">SSH</a>-sisäänkirjautumiseen).\n\
     Tekniset käyttäjät voivat käyttää sitä isännöimään nettisivuja, pelipalvelimia\n\
     tai muita palveluita kotiverkostasi (jos haluat kokeilla,\n\
     kysy IRC-kanavalta tai etsi wikistä)."
@@ -411,7 +411,7 @@ fi:
   permissions: Oikeudet
   initial_password: Salasana
   your_domain_info: "Tämä on kotitoimialueesi. Se on saatavilla <b>ainoastaan</b> kotiverkossasi.\n\
-    Saadaksesi lisätietoa tästä, katso <a target=\"_blank\" href=\"http://www.amahi.org/faq#what-home-domain-should-i-use\">FAQ:sta</a>."
+    Saadaksesi lisätietoa tästä, katso <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/">FAQ:sta</a>."
   there_are_no_firewall_rules_defined: "Järjestelmässä ei tällä hetkellä ole palomuurisääntöjä."
   firewall_url_filter_message: "Tämän taulukon merkintöjä käytetään rajoittamaan URL-pyyntöjen pääsya reitittimen läpi."
   dhcp_leases: DHCP:n jakamat osoitteet

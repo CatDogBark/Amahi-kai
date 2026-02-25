@@ -11,7 +11,7 @@ ru:
     Использование таких фильтров может быть \n\
     полезным в защите или ограничении вашей \n\
     локальной сети."
-  this_looks_like_a_database_corruption_please_report_it: "Это похоже на повреждение базы или баг. (Пожалуйста <a href=\"http://bugs.amahi.org\">сообщите об ошибке</a>)."
+  this_looks_like_a_database_corruption_please_report_it: "Это похоже на повреждение базы или баг. (Пожалуйста <a href=\"https://github.com/CatDogBark/Amahi-kai/issues\">сообщите об ошибке</a>)."
   mac_looks_good: "MAC-адрес верен"
   wiki: Wiki
   confirm_email: "Подтвердить e-mail"
@@ -68,11 +68,11 @@ ru:
   model: "Модель"
   are_you_sure_you_want_to_start_the_server: "Вы действительно хотите запустить {{name}}?"
   nickname_info: "\"Имя\" - уникальный идентификатор вашего HDA.\r\n\
-    Оно необходимо вам для авторизации в вашей <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN</a>\r\n\
-    при помощи <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPNWindows\">Windows</a>-клиента\r\n\
+    Оно необходимо вам для авторизации в вашей <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">VPN</a>\r\n\
+    при помощи <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">Windows</a>-клиента\r\n\
     (и активного пользователя и его пароля вашей домашней сети)."
   files: "Файлы"
-  by_signing_up_you_agree_to_the_terms_of_service: "Регистрируясь, вы соглашаетесь с тем, что прочитали наши <a href=\"http://admin.amahi.org/home/tos\" target=\"_blank\">условия предоставления услуг</a>"
+  by_signing_up_you_agree_to_the_terms_of_service: "Регистрируясь, вы соглашаетесь с тем, что прочитали наши <a href=\"https://amahi-kai.com\" target=\"_blank\">условия предоставления услуг</a>"
   the_url_looks_good: "URL верен"
   application_uninstalled: "Приложение удалено."
   delete_web_app: "Удалить Web-приложение"
@@ -185,7 +185,7 @@ ru:
   url_to_filter: "URL в фильтр"
   the_boot_option_is_a_critical_setting: The boot option is a CRITICAL setting. Not starting a server process is STRONGLY DISCOURAGED. This is designed to start services in your HDA at every boot. Are you sure you want to not start this process at boot time?
   greyhole_not_installed: "ПРЕДУПРЕЖДЕНИЕ: Greyhole не установлен!"
-  valid_email_required_for_service: "Для активации необходим существующий e-mail адрес. Мы <a href=\"http://admin.amahi.org/privacy\" target=\"_blank\">не будем отправлять какую-либо рекламу</a>"
+  valid_email_required_for_service: "Для активации необходим существующий e-mail адрес. Мы <a href=\"https://amahi-kai.com\" target=\"_blank\">не будем отправлять какую-либо рекламу</a>"
   are_you_sure_you_want_to_delete_alias: "Вы действительно хотите удалить псевдоним для \"{{name}}\"?"
   is_not_being_monitored_24x7: "<b>не</b> наблюдается 24x7"
   activerecord: 
@@ -416,10 +416,10 @@ ru:
   mac_already_allocated: "MAC-адрес уже использован"
   dyndns_info: "Amahi предоставляет вам бесплатный, не требующий настройки, динамический адрес DNS. Он является внешним для вашей\r\n\
     домашней сети. Вы можете использовать его для доступа с помощью <a target=\"_blank\"\r\n\
-    href=\"http://wiki.amahi.org/index.php/VPN\">Mac</a> или <a target=\"_blank\"\r\n\
-    href=\"http://wiki.amahi.org/index.php/VPNLinux\">Linux</a> <a\r\n\
-    target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN</a>-клиентов (специалисты могут использовать его для подключения с помощью <a target=\"_blank\"\r\n\
-    href=\"http://wiki.amahi.org/index.php/Ssh-ports\">SSH</a>).\r\n\
+    href=\"https://amahi-kai.com/wiki/\">Mac</a> или <a target=\"_blank\"\r\n\
+    href=\"https://amahi-kai.com/wiki/\">Linux</a> <a\r\n\
+    target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">VPN</a>-клиентов (специалисты могут использовать его для подключения с помощью <a target=\"_blank\"\r\n\
+    href=\"https://amahi-kai.com/wiki/-ports\">SSH</a>).\r\n\
     Специалисты могут использовать его для размещения web-сайтов, игровых серверов \r\n\
     или других служб из вашей домашней сети (если вы хотите попробовать - \r\n\
     обратитесь в IRC-канал или к Wiki)."
@@ -470,7 +470,7 @@ ru:
   permissions: "Разрешения"
   initial_password: "Пароль"
   your_domain_info: "Это ваш домен домашней сети. Он доступен <b>только</b> внутри вашей домашней сети.\r\n\
-    За подробной информацией обращайтесь в <a target=\"_blank\" href=\"http://www.amahi.org/faq#what-home-domain-should-i-use\">FAQ</a>."
+    За подробной информацией обращайтесь в <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/">FAQ</a>."
   there_are_no_firewall_rules_defined: "На данный момент нет заданных правил сетевого экрана"
   firewall_url_filter_message: "Данные в этой таблице используются для ограничения URL через Шлюз."
   dhcp_leases: "Выданные адреса DHCP"

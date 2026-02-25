@@ -60,11 +60,11 @@ ja:
   user_name_is_available: ""
   get_involved: "仲間に入ろう！"
   dyndns_info: "Amahiはフリーかつコンフィグレーション不要のダイナミックＤＮＳアドレスを提供します。これはあなたのホームネットワークの外側に設定されます。<a target=\"_blank\" \r\n\
-    href=\"http://wiki.amahi.org/index.php/VPN\">Mac</a> or <a target=\"_blank\" \r\n\
-    href=\"http://wiki.amahi.org/index.php/VPNLinux\">Linux</a> <a \r\n\
-    target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN</a> \r\n\
+    href=\"https://amahi-kai.com/wiki/\">Mac</a> or <a target=\"_blank\" \r\n\
+    href=\"https://amahi-kai.com/wiki/\">Linux</a> <a \r\n\
+    target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">VPN</a> \r\n\
     clients (technical users can use it for logging in with <a target=\"_blank\" \r\n\
-    href=\"http://wiki.amahi.org/index.php/Ssh-ports\">SSH</a>)　に使用できます。技術系のユーザーはウェブサイトのホスティング、ゲームサーバー、あるいは他のサービスをあなたのホームネットワークから利用できます（もしお急ぎの場合は、ＩＲＣチャネルに聞くかwikiで検索してください）。"
+    href=\"https://amahi-kai.com/wiki/-ports\">SSH</a>)　に使用できます。技術系のユーザーはウェブサイトのホスティング、ゲームサーバー、あるいは他のサービスをあなたのホームネットワークから利用できます（もしお急ぎの場合は、ＩＲＣチャネルに聞くかwikiで検索してください）。"
   settings: "設定"
   a_single_number_0_254_to_point_to_a_given_machine: "あなたのネットワーク上にある一つのマシンを指す(0-254)の数字"
   new_static_ip: ""
@@ -381,7 +381,7 @@ ja:
   valid_email_required_for_service: ""
   there_are_no_applications_installed: ""
   name_is_not_valid: "名前が正しくありません"
-  by_signing_up_you_agree_to_the_terms_of_service: "<a href=\"http://www.amahi.org/home/tos\" target=\"_blank\">our terms of service</a>を読み同意します"
+  by_signing_up_you_agree_to_the_terms_of_service: "<a href=\"https://amahi-kai.com\" target=\"_blank\">our terms of service</a>を読み同意します"
   the_url_looks_good: ""
   mac_address: "ＭＡＣアドレス"
   initial_user: "ユーザー名"

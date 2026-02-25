@@ -60,10 +60,10 @@ it:
   global_settings_for_shares: Impostazioni globali per le Condivisioni
   description: Descrizione
   dyndns_info: "Amahi fornisce gratuitamente, senza necessità di configurazione, un indirizzo DNS dinamico per voi. E' esterno alla rete domestica. Lo si può utilizzare per i client <a\r\n\
-    target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN</a> <a target=\"_blank\"\r\n\
-    href=\"http://wiki.amahi.org/index.php/VPN\">Mac</a> o <a target=\"_blank\"\r\n\
-    href=\"http://wiki.amahi.org/index.php/VPNLinux\">Linux</a> (utenti tecnici lo possono utilizzare per il login con <a target=\"_blank\"\r\n\
-    href=\"http://wiki.amahi.org/index.php/Ssh-ports\">SSH<a>).\r\n\
+    target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">VPN</a> <a target=\"_blank\"\r\n\
+    href=\"https://amahi-kai.com/wiki/\">Mac</a> o <a target=\"_blank\"\r\n\
+    href=\"https://amahi-kai.com/wiki/\">Linux</a> (utenti tecnici lo possono utilizzare per il login con <a target=\"_blank\"\r\n\
+    href=\"https://amahi-kai.com/wiki/-ports\">SSH<a>).\r\n\
     Utenti tecnici possono utilizzarlo per ospitare siti web, server di gioco o altri servizi dalla rete domestica (se avete di fretta di provare, basta chiedere nel canale IRC o cercare nel wiki)."
   get_involved: Lasciati Coinvolgere!
   user_name_is_available: "Il nome utente è disponibile"
@@ -257,12 +257,12 @@ it:
   start_building_a_new_hda: Costruisti un nuovo HDA
   the_url_is_invalid: "L'URL non è valido"
   your_domain_info: "Questo è il dominio della rete domestica. È disponibile <b>solo</b> all'interno della vostra rete domestica.\r\n\
-    Per ulteriori informazioni su questo fate riferimento alla <a target=\"_blank\" href=\"http://www.amahi.org/faq#what-home-domain-should-i-use\">FAQ</a>."
+    Per ulteriori informazioni su questo fate riferimento alla <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/">FAQ</a>."
   users: Utenti
   application_uninstalled: Applicazione disinstallata.
   warning: ATTENZIONE
   nickname_info: "Il \"soprannome\" è un identificatore univoco per il tuo HDA.\r\n\
-    Ti servirà per accedere alla tua <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN</a> con il <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPNWindows\">client Windows</a> (e un utente autorizzato e password sulla rete domestica)."
+    Ti servirà per accedere alla tua <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">VPN</a> con il <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">client Windows</a> (e un utente autorizzato e password sulla rete domestica)."
   debug: Debug
   require_login: Login richiesta
   application: Applicazione
@@ -415,11 +415,11 @@ it:
   translate_amahi: Traduci Amahi
   the_url_looks_good: "L'URL è valido"
   total_space: Spazio totale
-  valid_email_required_for_service: Indirizzo email valido richiesto per l'attivazione. Noi <a href="http://www.amahi.org/privacy" target="_blank">non faremo spam</a>
+  valid_email_required_for_service: Indirizzo email valido richiesto per l'attivazione. Noi <a href="https://amahi-kai.com" target="_blank">non faremo spam</a>
   control_panel_for_your_amahi_hdas: Pannello di Controllo per il tuo HDA Amahi
   there_are_no_applications_installed: Non ci sono Applicazioni installate al momento
   name_is_not_valid: "Il nome non è valido"
-  by_signing_up_you_agree_to_the_terms_of_service: Con la conferma, l'utente accetta e dichiara di aver letto i <a href="http://www.amahi.org/home/tos" target="_blank">termini di servizio</a>
+  by_signing_up_you_agree_to_the_terms_of_service: Con la conferma, l'utente accetta e dichiara di aver letto i <a href="https://amahi-kai.com" target="_blank">termini di servizio</a>
   mac_address: Indirizzo MAC
   port_range_field_cannot_be_empty: I campi non possono essere vuoti
   confirmation_matches: La conferma coincide
@@ -535,7 +535,7 @@ it:
   port_range_ports_must_be_numbers: Le porte devono essere numeri
   installation_instructions: Istruzioni di installazione
   confirm: Conferma
-  this_looks_like_a_database_corruption_please_report_it: Questa sembra essere una corruzione del database o un bug (si prega di <a href="http://bugs.amahi.org">segnalarlo</a>).
+  this_looks_like_a_database_corruption_please_report_it: Questa sembra essere una corruzione del database o un bug (si prega di <a href="https://github.com/CatDogBark/Amahi-kai/issues">segnalarlo</a>).
   created: Creato
   access: Accesso
   create_a_new_webapp: Crea una Nuova Web App

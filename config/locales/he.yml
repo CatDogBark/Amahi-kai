@@ -6,7 +6,7 @@ he:
   user_name_is_not_available: "שם המשתמש/ת המבוקש אינו זמין לשימוש"
   platform: "בסיס"
   are_you_sure_share: "האם את/ה בטוח/ה כי ברצונך למחוק את המשאב שבשיתוף()?"
-  this_looks_like_a_database_corruption_please_report_it: "מצב זה נראה כמו קריסה במסד הנתונים או תקלה (please <a href=\"http://bugs.amahi.org\">report it</a>).\r\n"
+  this_looks_like_a_database_corruption_please_report_it: "מצב זה נראה כמו קריסה במסד הנתונים או תקלה (please <a href=\"https://github.com/CatDogBark/Amahi-kai/issues\">report it</a>).\r\n"
   mac_looks_good: "הכתובת הפיזית של ההתקן נראית תקינה"
   wiki: Wiki
   these_rules_are_used_to_restrict_ips: "חוקים והוראות אלו משמשים על מנת למנוע כניסת חבילות מידע לא רצויות ממרחב האינטרנט לרשת המקומית שלך. \r\n\
@@ -62,7 +62,7 @@ he:
   model: "דגם"
   are_you_sure_you_want_to_start_the_server: "האם את/ה בטוח/ה כי ברצונך להפעיל את ה() ?"
   nickname_info: "הכינוי הוא יחודי על מנת לזהותך ב HDA שלך.\r\n\
-    יהיה עליך להיכנס ל <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN</a>  עם ה <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPNWindows\">Windows client</a> לקוח.\r\n\
+    יהיה עליך להיכנס ל <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">VPN</a>  עם ה <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">Windows client</a> לקוח.\r\n\
     (\r\n"
   files: "קבצים"
   by_signing_up_you_agree_to_the_terms_of_service: "בחתימתך אתה מצהיר כי קראת והנך מסכים לתנאי השירות שלנו"
@@ -174,7 +174,7 @@ he:
   the_boot_option_is_a_critical_setting: "שרות זה נבנה בכדי שיופעל יחד עם ה HDA שלך,ולכן הגדרת שרות זה להפעלה יחד עם המערכת הינה חשובה ביותר.\r\n\
     האם הנך בטוח/ה כי ברצונך לבטל את ההפעלה של השרות בזמן עליית המערכת?"
   greyhole_not_installed: "אזהרה: Greyhole אינו מותקן במערכת זו!"
-  valid_email_required_for_service: "לצורך ההפעלה נדרשת כתובת דוא\"ל תקנית. אנו <a href=\"http://admin.amahi.org/privacy\" target=\"_blank\"> מתחייבים שלא לשלוח לכתובת זו דואר פרסומי</a>\r\n"
+  valid_email_required_for_service: "לצורך ההפעלה נדרשת כתובת דוא\"ל תקנית. אנו <a href=\"https://amahi-kai.com\" target=\"_blank\"> מתחייבים שלא לשלוח לכתובת זו דואר פרסומי</a>\r\n"
   are_you_sure_you_want_to_delete_alias: "האם את/ה בטוח/ה כי ברצונך למחוק את הכינוי עבור '{{name}}?"
   is_not_being_monitored_24x7: "היה <b>לא</b>מנותר 24x7"
   activerecord: 
@@ -354,11 +354,11 @@ he:
   mac_already_allocated: "הכתובת הפיזית של ההתקן כבר הוקצתה"
   dyndns_info: "Amahi נותן לך כתובת DNS דינמית חינמית, ללא כל צורך בהגדרות נוספות מצדך. הכתובת הינה חיצונת לרשת הבייתית שלך.\r\n\
     ביכולתך להשתמש בה <a target=\"_blank\" \r\n\
-    href=\"http://wiki.amahi.org/index.php/VPN\">Mac</a> or <a target=\"_blank\" \r\n\
-    href=\"http://wiki.amahi.org/index.php/VPNLinux\">Linux</a> <a \r\n\
-    target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN</a> \r\n\
+    href=\"https://amahi-kai.com/wiki/\">Mac</a> or <a target=\"_blank\" \r\n\
+    href=\"https://amahi-kai.com/wiki/\">Linux</a> <a \r\n\
+    target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">VPN</a> \r\n\
     clients (technical users can use it for logging in with <a target=\"_blank\" \r\n\
-    href=\"http://wiki.amahi.org/index.php/Ssh-ports\">SSH</a>). \r\n\
+    href=\"https://amahi-kai.com/wiki/-ports\">SSH</a>). \r\n\
     משתמשים מתקדמים או בעלי אורינטציה טכנית יכולים להשתמש בכתובת זו ע\"מ לארח אתרי אינטרנט, או לשימוש כשרת משחקים, או לכל שימוש אחר מהרשת הבייתית שלך (באם הנך להוט לנסות את התכונה הזו, בדוק בארוץ ה IRC או חפש את המידע הרלוונטי ב wiki)."
   confirmation_matches: "האישור שהוקלד תואם"
   setting_dmz_failed: "הגדרת ה DMZ נכשלה. אנא בדוק את הגדרותיך."
@@ -405,7 +405,7 @@ he:
   permissions: "הרשאות"
   initial_password: "סיסמה"
   your_domain_info: "זהו שם התחום של הרשת הבייתית שלך. שם זה <b>only</b>יהיה זמין בתוך הרשת הבייתית שלך.\r\n\
-    למידע נוסף אנא העזר ב <a target=\"_blank\" href=\"http://www.amahi.org/faq#what-home-domain-should-i-use\">the FAQ</a>.\r\n"
+    למידע נוסף אנא העזר ב <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/">the FAQ</a>.\r\n"
   there_are_no_firewall_rules_defined: "אין בנמצא הוראות לחומת האש "
   firewall_url_filter_message: "הרשומות בטבלה זו משמשות לסינון כתובות אינטרנט מגישה לרשת שלך."
   dhcp_leases: "זמן חכירת כתובות המחשבים משרת DHCP"

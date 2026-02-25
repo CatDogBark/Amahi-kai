@@ -411,7 +411,7 @@ el:
   the_url_looks_good: "Η διεύθυνση URL φαίνεται σωστή"
   there_are_no_applications_installed: "Δεν υπάρχουν διαθέσιμες εγκατεστημένες εφαρμογές αυτήν την στιγμή"
   total_space: "Συνολικό μέγεθος"
-  by_signing_up_you_agree_to_the_terms_of_service: "Με την εγγραφή σας αποδέχεστε τους <a href=\"http://www.amahi.org/home/tos\" target=\"_blank\">όρους χρήσης της υπηρεσίας μας</a>"
+  by_signing_up_you_agree_to_the_terms_of_service: "Με την εγγραφή σας αποδέχεστε τους <a href=\"https://amahi-kai.com\" target=\"_blank\">όρους χρήσης της υπηρεσίας μας</a>"
   valid_email_required_for_service: ""
   port_range_field_cannot_be_empty: "Αυτό το πεδίο δεν μπορεί να είναι κενό"
   mac_address: "Διεύθυνση MAC"

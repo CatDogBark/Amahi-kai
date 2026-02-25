@@ -60,10 +60,10 @@ ko:
   apps: "애플리케이션"
   get_involved: "참여하십시요!"
   dyndns_info: "Amahi는 무료로 구성이 필요없는 동적 DNS 주소를 제공합니다. 이것은 당신의 홈 네트워크 외부에 존재합니다. <a target=\"_blank\"\r\n\
-    href=\"http://wiki.amahi.org/index.php/VPN\">맥</a> 또는 <a target=\"_blank\"\r\n\
-    href=\"http://wiki.amahi.org/index.php/VPNLinux\">리눅스</a> <a\r\n\
-    target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN</a> 클라이언트로 이것을 사용 할 수 있읍니다 (기술 사용자는 <a target=\"_blank\"\r\n\
-    href=\"http://wiki.amahi.org/index.php/Ssh-ports\">SSH</a>로 로깅을 할수 있음). 기술 사용자들은 이것을 사용, 웹 사이트, 게임 서버 또는 기타 서비스를 홈 네트워크에서 호스트하는 데 사용할 수있습니다 (시간이 없으면,  IRC 채널에서 물어 보거나 위키에서 검색해 보십시요)."
+    href=\"https://amahi-kai.com/wiki/\">맥</a> 또는 <a target=\"_blank\"\r\n\
+    href=\"https://amahi-kai.com/wiki/\">리눅스</a> <a\r\n\
+    target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">VPN</a> 클라이언트로 이것을 사용 할 수 있읍니다 (기술 사용자는 <a target=\"_blank\"\r\n\
+    href=\"https://amahi-kai.com/wiki/-ports\">SSH</a>로 로깅을 할수 있음). 기술 사용자들은 이것을 사용, 웹 사이트, 게임 서버 또는 기타 서비스를 홈 네트워크에서 호스트하는 데 사용할 수있습니다 (시간이 없으면,  IRC 채널에서 물어 보거나 위키에서 검색해 보십시요)."
   user_name_is_available: "사용자 이름을 사용할 수있습니다"
   a_single_number_0_254_to_point_to_a_given_machine: "네트워크에있는 해당 컴퓨터를 찍는 단일 번호 (0-254)"
   this_shares_files_deleted: "이 share은 더이상 사용할 수없습니다 (파일은 삭제되지 않을 것입니다) ."
@@ -233,7 +233,7 @@ ko:
         separator: .
         delimiter: ","
   disks: "디스크"
-  nickname_info: "\"별명\"은 당신 HDA에 대한 고유 식별자입니다. 이것은 <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPNWindows\">Windows 클라이언트</a>로 <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN</a> 로그인해야합때 필요합니다. (승인된 사용자 및 비밀 번호와 함께)."
+  nickname_info: "\"별명\"은 당신 HDA에 대한 고유 식별자입니다. 이것은 <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">Windows 클라이언트</a>로 <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">VPN</a> 로그인해야합때 필요합니다. (승인된 사용자 및 비밀 번호와 함께)."
   application_uninstalled: "애플리케이션을 제거"
   warning: "경고"
   start_building_a_new_hda: "새 HDA  만들기 시작!"
@@ -391,8 +391,8 @@ ko:
   the_url_looks_good: "URL이 맞음"
   there_are_no_applications_installed: "어떤 애플 리케이션도 설치되어있지 않습니다."
   total_space: "총 공간"
-  by_signing_up_you_agree_to_the_terms_of_service: "가입함으로써, 당신은 <a href=\"http://www.amahi.org/home/tos\" target=\"_blank\">서비스 약관</a>을 읽었으며 동의합니다."
-  valid_email_required_for_service: "유효한 인증은 이메일이 필요합니다. 저희는<a href=\"http://www.amahi.org/privacy\" target=\"_blank\"> 스팸을 메일을 보내지 않습니다</a>"
+  by_signing_up_you_agree_to_the_terms_of_service: "가입함으로써, 당신은 <a href=\"https://amahi-kai.com\" target=\"_blank\">서비스 약관</a>을 읽었으며 동의합니다."
+  valid_email_required_for_service: "유효한 인증은 이메일이 필요합니다. 저희는<a href=\"https://amahi-kai.com\" target=\"_blank\"> 스팸을 메일을 보내지 않습니다</a>"
   port_range_field_cannot_be_empty: "필드는 비워둘 수없습니다"
   mac_address: "MAC 주소"
   confirmation_matches: "일치 확인"
@@ -509,7 +509,7 @@ ko:
   installation_instructions: "설치 안내"
   access: "액세스"
   created: "만든어짐"
-  this_looks_like_a_database_corruption_please_report_it: "이것은 데이터베이스가 손상이나 버그처럼 보임 (<a href=\"http://bugs.amahi.org\">보고 바람</a>)."
+  this_looks_like_a_database_corruption_please_report_it: "이것은 데이터베이스가 손상이나 버그처럼 보임 (<a href=\"https://github.com/CatDogBark/Amahi-kai/issues\">보고 바람</a>)."
   new_dns_alias: "새 DNS 별칭"
   password: "비밀 번호"
   setting_dmz_failed: "DMZ를 설정하지 실패했습니다. 설정을 확인하시기 바랍니다."

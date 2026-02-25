@@ -6,7 +6,7 @@ hr:
   user_name_is_not_available: "Korisničko ime nije dostupno"
   platform: Platforma
   are_you_sure_share: "Jesi li siguran da želiš obrisati djeljeno mjesto '%{share}' ?"
-  this_looks_like_a_database_corruption_please_report_it: "Ovo izgleda kao greška u bazi podataka ili bug ( molim te <a href=\"http://bugs.amahi.org\">prijavi grešku</a>)."
+  this_looks_like_a_database_corruption_please_report_it: "Ovo izgleda kao greška u bazi podataka ili bug ( molim te <a href=\"https://github.com/CatDogBark/Amahi-kai/issues\">prijavi grešku</a>)."
   mac_looks_good: MAC Adresa izgleda u redu
   wiki: Wiki
   these_rules_are_used_to_restrict_ips: "Ova pravila koriste se za ograničavanje podatkovnih paketa sa \r\n\
@@ -63,9 +63,9 @@ hr:
   preparing_to_install: Priprema za instalaciju ...
   model: Model
   are_you_sure_you_want_to_start_the_server: "Jesi li siguran da želiš pokrenuti %{name}?"
-  nickname_info: "\"Nadimak\" je jedinstveni identifikator za Vaš HDA. Trebat će vam da se prijavite na svoj <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN</a> s <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPNWindows\">Windows klijentom</a> (i ispravnim korisničkim imenom i lozinkom na vašu kućnu mrežu)."
+  nickname_info: "\"Nadimak\" je jedinstveni identifikator za Vaš HDA. Trebat će vam da se prijavite na svoj <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">VPN</a> s <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">Windows klijentom</a> (i ispravnim korisničkim imenom i lozinkom na vašu kućnu mrežu)."
   files: Podaci
-  by_signing_up_you_agree_to_the_terms_of_service: "Svojim potpisom (potvrdom), prihvaćaš i pročitao si <a href=\"http://www.amahi.org/home/tos\" target=\"_blank\">uvjete korištenja</a>"
+  by_signing_up_you_agree_to_the_terms_of_service: "Svojim potpisom (potvrdom), prihvaćaš i pročitao si <a href=\"https://amahi-kai.com\" target=\"_blank\">uvjete korištenja</a>"
   the_url_looks_good: URL izgleda u redu
   application_uninstalled: Aplikacija uklonjena
   delete_web_app: "Obriši web aplikaciju"
@@ -173,7 +173,7 @@ hr:
   the_boot_option_is_a_critical_setting: "Ova boot opcija je KRITIČNA postavka. Isključivanje serverskih procesa se IZRAZITO NE PREPORUČUJE. Ovo je namjenjeno da pokreće servise na tvom HDA pri svakom podizanju sustava. Jesi li siguran da ne želiš pokrenuti ovaj proces pri podizanju sustava?"
   greyhole_not_installed: "UPOZORENJE: Greyhole nije instaliran na ovom sustavu!"
   must_be_admin: "Moraš imati administratorske privilegije da bi pristupio ovdje"
-  valid_email_required_for_service: "Valjani e-mail je nužan za aktivaciju. Mi te  <a href=\"http://www.amahi.org/privacy\" target=\"_blank\">nećemo spamati</a>"
+  valid_email_required_for_service: "Valjani e-mail je nužan za aktivaciju. Mi te  <a href=\"https://amahi-kai.com\" target=\"_blank\">nećemo spamati</a>"
   are_you_sure_you_want_to_delete_alias: "Jesi li siguran da želiš obrisati poveznicu sa '%{name}' ?"
   is_not_being_monitored_24x7: <b>ne</b> nadzire se 24x7
   activerecord: 
@@ -335,7 +335,7 @@ hr:
   edit_web_app: Uredi web aplikaciju
   movies: Filmovi
   mac_already_allocated: "MAC Adresa već postoji"
-  dyndns_info: "Amahi omogućuje BESPLATNU, dinamičku DNS adresu za tebe. Ona je vanjska (public) adresa tvoje kućne mreže. Možeš ju koristiti za <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">Mac</a> ili <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPNLinux\">Linux</a> <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN</a> klijente (napredni korisnici mogu ga koristiti za prijavu preko <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/Ssh-ports\">SSH</a>). Napredni korisnici mogu je koristiti za smještaj web stranice, game servere ili druge servise iz  kućne mreže (ako želiš odmah saznati više postavi pitanje na IRC kanalu ili pretraži wiki)."
+  dyndns_info: "Amahi omogućuje BESPLATNU, dinamičku DNS adresu za tebe. Ona je vanjska (public) adresa tvoje kućne mreže. Možeš ju koristiti za <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">Mac</a> ili <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">Linux</a> <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">VPN</a> klijente (napredni korisnici mogu ga koristiti za prijavu preko <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/-ports\">SSH</a>). Napredni korisnici mogu je koristiti za smještaj web stranice, game servere ili druge servise iz  kućne mreže (ako želiš odmah saznati više postavi pitanje na IRC kanalu ili pretraži wiki)."
   confirmation_matches: "Potvrda uspješna"
   this_name_is_not_available: Ovo naziv nije dostupan
   setting_dmz_failed: Postavljanje DMZ nije uspjelo. Molimo provjeri postavke.
@@ -379,7 +379,7 @@ hr:
   permissions: Dozvole
   initial_password: Lozinka
   your_domain_info: "Ovo je tvoja kućna domenska mreža. Dostupna je <b>jedino</b> unutar tvoje kućne mreže.\r\n\
-    Za više informacija o tome pogledaj <a target=\"_blank\" href=\"http://www.amahi.org/faq#what-home-domain-should-i-use\">često postavljena pitanja (FAQ)</a>"
+    Za više informacija o tome pogledaj <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/">često postavljena pitanja (FAQ)</a>"
   there_are_no_firewall_rules_defined: Nema definiranih vatrozid pravila u ovom trenutku.
   firewall_url_filter_message: "Unosi u ovoj tablici koriste se za ograničavanje URL-a kroz Gateway."
   dynamic_dns: "Dinamički DNS"

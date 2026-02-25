@@ -6,7 +6,7 @@ ar:
   user_name_is_not_available: "اسم المستخدم غير متوفر"
   platform: "المنصة"
   are_you_sure_share: "هل أنت متأكد أنك تريد حذف مجلد المشاركة '{{share}}' ?"
-  this_looks_like_a_database_corruption_please_report_it: "هذا يبدو وكأنه تلف في قواعد البيانات. الرجاء اﻻبلاغ عن هذا المشكلة  <a href=\"http://bugs.amahi.org\">هنا</a>"
+  this_looks_like_a_database_corruption_please_report_it: "هذا يبدو وكأنه تلف في قواعد البيانات. الرجاء اﻻبلاغ عن هذا المشكلة  <a href=\"https://github.com/CatDogBark/Amahi-kai/issues\">هنا</a>"
   mac_looks_good: MAC looks good
   wiki: "الموسوعة"
   these_rules_are_used_to_restrict_ips: "هذه القواعد  تستعمل لمنع نقل نوع معين من البيانات من شبكتك المحلية الى اﻻنترنت .\r\n\
@@ -63,12 +63,12 @@ ar:
   are_you_sure_you_want_to_start_the_server: "هل أنت متأكد أنك تريد تشغيل {{name}}؟"
   nickname_info: |
     The "nickname" is a unique identifier for your HDA. 
-    You will need it to log in to your <a target="_blank" href="http://wiki.amahi.org/index.php/VPN">VPN</a> 
-    with the <a target="_blank" href="http://wiki.amahi.org/index.php/VPNWindows">Windows client</a> client 
+    You will need it to log in to your <a target="_blank" href="https://amahi-kai.com/wiki/">VPN</a> 
+    with the <a target="_blank" href="https://amahi-kai.com/wiki/">Windows client</a> client 
     (and an authorized user and password on your home network).
 
   files: "الملفات"
-  by_signing_up_you_agree_to_the_terms_of_service: " <a href=\"http://www.amahi.org/home/tos\" target=\"_blank\">ولقد قرأت شروط الخدمة</a>من خلال التسجيل ، فإنك وافقت ة"
+  by_signing_up_you_agree_to_the_terms_of_service: " <a href=\"https://amahi-kai.com\" target=\"_blank\">ولقد قرأت شروط الخدمة</a>من خلال التسجيل ، فإنك وافقت ة"
   the_url_looks_good: "الرابط يبدو جيد"
   application_uninstalled: "حذف التطبيق"
   delete_web_app: "حذف تطبيق الويب"
@@ -176,7 +176,7 @@ ar:
   the_boot_option_is_a_critical_setting: "خيار إقلاع الخادم يعتبر من الاعدادات الحساسة. عدم جعل الخدمة تعمل في بداية تشغيل الخادم ﻻينصح فيه ابداً. الخدمات مصممة على أن تعمل في كل مرة يتم اقلاع  الخادم. هل انت متأكد انك ﻻتريد تشغيل هذه الخدمة عند إقلاع الخادم ؟"
   greyhole_not_installed: "تحذير: Greyhole غير مثبت في هذا النظام!"
   must_be_admin: "يجب أن يكون لديك امتيازات المدير للوصول إلى هذا المنطقة"
-  valid_email_required_for_service: " بريد االكتروني فعّال مطلوب من أجل التنشيط.l <a href=\"http://www.amahi.org/privacy\" target=\"_blank\">نوعدكم بعد اﻻزعاج مطلقاً</a>"
+  valid_email_required_for_service: " بريد االكتروني فعّال مطلوب من أجل التنشيط.l <a href=\"https://amahi-kai.com\" target=\"_blank\">نوعدكم بعد اﻻزعاج مطلقاً</a>"
   are_you_sure_you_want_to_delete_alias: "هل أنت متأكد أنك تريد حذف الاسم المستعار لـ '{{name}}'؟"
   is_not_being_monitored_24x7: is <b>not</b> being monitored 24x7
   activerecord: 
@@ -353,10 +353,10 @@ ar:
   movies: "أفلام"
   mac_already_allocated: MAC already allocated
   dyndns_info: "Amahi يقدم  dynamic DNS مجاني وﻻيتحتاج ﻻي اعدادات. ومن خارج شبكة منزلك يمكنك استخدامه <a target=\"_blank\" \r\n\
-    href=\"http://wiki.amahi.org/index.php/VPN\">ماك</a> or <a target=\"_blank\" \r\n\
-    href=\"http://wiki.amahi.org/index.php/VPNLinux\">لينكس</a> <a \r\n\
-    target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN</a> \r\n (المستخدمين التقنيين يمكنهم أيضاً الدخول عن طريق بروتكول <a target=\"_blank\" \r\n\
-    href=\"http://wiki.amahi.org/index.php/Ssh-ports\">SSH</a>). "
+    href=\"https://amahi-kai.com/wiki/\">ماك</a> or <a target=\"_blank\" \r\n\
+    href=\"https://amahi-kai.com/wiki/\">لينكس</a> <a \r\n\
+    target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">VPN</a> \r\n (المستخدمين التقنيين يمكنهم أيضاً الدخول عن طريق بروتكول <a target=\"_blank\" \r\n\
+    href=\"https://amahi-kai.com/wiki/-ports\">SSH</a>). "
   confirmation_matches: "التأكيد متطابق"
   setting_dmz_failed: "فشل اعداد DMZ. الرجاء التحقق من اﻻعدادات مرة أخرى"
   logs: "سجلات"
@@ -399,7 +399,7 @@ ar:
   music: "الموسيقى"
   permissions: "التصاريح"
   initial_password: "كلمة السر"
-  your_domain_info: "هذا هو نطاق الشبكة المنزلية. وهي متوفرة فقط داخل الشبكة المنزلية. لمزيد من التفاصيل حول هذا الرجوع إلى <a target=\"_blank\" href=\"http://www.amahi.org/faq#what-home-domain-should-i-use\">اﻻسئلة واﻻجوبة</a>."
+  your_domain_info: "هذا هو نطاق الشبكة المنزلية. وهي متوفرة فقط داخل الشبكة المنزلية. لمزيد من التفاصيل حول هذا الرجوع إلى <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/">اﻻسئلة واﻻجوبة</a>."
   there_are_no_firewall_rules_defined: "لم يتم إنشاء قواعد في الجدار الناري بعد."
   firewall_url_filter_message: "المدخلات في هذا الجدول تستعمل لفرض قيود على الروابط المارة من الشبكة المحلية الى اﻻنترنت"
   dhcp_leases: DHCP Leases

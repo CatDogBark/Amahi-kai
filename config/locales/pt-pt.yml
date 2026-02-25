@@ -7,7 +7,7 @@ pt-pt:
   platform: Plataforma
   are_you_sure_share: Tem a certeza de que pretende apagar a partilha '%{share}' ?
   these_rules_are_used_to_restrict_ips: "Estas regras são utilizadas para restringir o envio de pacotes de dados a partir de um IP na sua rede local para a Internet. O uso destes filtros pode ser útil para tornar a sua rede segura ou restringi-la."
-  this_looks_like_a_database_corruption_please_report_it: Parece uma falha no banco de dados ou um bug (por favor <a href="http://bugs.amahi.org">reporte-o</a>).
+  this_looks_like_a_database_corruption_please_report_it: Parece uma falha no banco de dados ou um bug (por favor <a href="https://github.com/CatDogBark/Amahi-kai/issues">reporte-o</a>).
   mac_looks_good: MAC parece OK
   wiki: Wiki
   confirm_email: Confirme o Email
@@ -62,9 +62,9 @@ pt-pt:
   preparing_to_install: A preparar para instalar...
   model: Modelo
   are_you_sure_you_want_to_start_the_server: Tem a certeza de que pretende iniciar o %{name}?
-  nickname_info: "A \"alcunha\" é um identificador único para o HDA. Você vai precisar dele para fazer login no seu <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN</a> com o <a target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPNWindows\">cliente Windows</a> (e um utilizador e senha autorizados na sua rede doméstica)."
+  nickname_info: "A \"alcunha\" é um identificador único para o HDA. Você vai precisar dele para fazer login no seu <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">VPN</a> com o <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">cliente Windows</a> (e um utilizador e senha autorizados na sua rede doméstica)."
   files: Arquivos
-  by_signing_up_you_agree_to_the_terms_of_service: "Ao efectuar o registo, você declara ter lido e concordado com <a href=\"http://www.amahi.org/home/tos\" target=\"_blank\">os nossos termos de serviço</a>"
+  by_signing_up_you_agree_to_the_terms_of_service: "Ao efectuar o registo, você declara ter lido e concordado com <a href=\"https://amahi-kai.com\" target=\"_blank\">os nossos termos de serviço</a>"
   the_url_looks_good: O URL parece OK
   application_uninstalled: "Aplicação desinstalada."
   delete_web_app: "Apagar Aplicação Web"
@@ -171,7 +171,7 @@ pt-pt:
   the_boot_option_is_a_critical_setting: "A opção de inicialização é uma definição CRÍTICA. Não iniciar um processo de servidor é FORTEMENTE DESENCORAJADO. Isto é projectado para iniciar os serviços no seu HDA a cada arranque do sistema. Tem certeza de que não quer que este processo seja iniciado no arranque?"
   greyhole_not_installed: "AVISO: Greyhole não está instalado neste sistema!"
   must_be_admin: "Precisa  ter privilégios de administrador para aceder esta área"
-  valid_email_required_for_service: "Um email válido é requerido para ativação. Nós <a href=\"http://www.amahi.org/privacy\" target=\"_blank\">não vamos enviar spam a você</a>"
+  valid_email_required_for_service: "Um email válido é requerido para ativação. Nós <a href=\"https://amahi-kai.com\" target=\"_blank\">não vamos enviar spam a você</a>"
   are_you_sure_you_want_to_delete_alias: Tem a certeza de que pretende apagar o alias de '%{name}'?
   is_not_being_monitored_24x7: "<b>não</b> está a ser monitorizado 24x7"
   activerecord: 
@@ -328,10 +328,10 @@ pt-pt:
   movies: Filmes
   mac_already_allocated: "MAC já alocado"
   dyndns_info: "Amahi fornece-lhe um endereço DNS dinâmico GRATUITAMENTE, sem necessidade de configuração. Ele é externo à sua rede doméstica. Você pode usá-lo com clientes <a\r\n\
-    target=\"_blank\" href=\"http://wiki.amahi.org/index.php/VPN\">VPN</a> no <a target=\"_blank\"\r\n\
-    href=\"http://wiki.amahi.org/index.php/VPN\">Mac</a> ou <a target=\"_blank\"\r\n\
-    href=\"http://wiki.amahi.org/index.php/VPNLinux\">Linux</a> (utilizadores técnicos podem usá-lo para fazer login com <a target=\"_blank\"\r\n\
-    href=\"http://wiki.amahi.org/index.php/Ssh-ports\">SSH</a>). Utilizadores técnicos podem usá-lo para alojar sites da Web, servidores de jogos ou outros serviços a partir da sua rede doméstica (se você estiver ansioso para tentar, basta perguntar no canal de IRC ou pesquisar na wiki)."
+    target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">VPN</a> no <a target=\"_blank\"\r\n\
+    href=\"https://amahi-kai.com/wiki/\">Mac</a> ou <a target=\"_blank\"\r\n\
+    href=\"https://amahi-kai.com/wiki/\">Linux</a> (utilizadores técnicos podem usá-lo para fazer login com <a target=\"_blank\"\r\n\
+    href=\"https://amahi-kai.com/wiki/-ports\">SSH</a>). Utilizadores técnicos podem usá-lo para alojar sites da Web, servidores de jogos ou outros serviços a partir da sua rede doméstica (se você estiver ansioso para tentar, basta perguntar no canal de IRC ou pesquisar na wiki)."
   confirmation_matches: "Confirmações combinam"
   setting_dmz_failed: "Definição do DMZ falhou. Por favor verifique as definições."
   logs: Logs
@@ -373,7 +373,7 @@ pt-pt:
   music: "Música"
   permissions: "Permissões"
   initial_password: Senha
-  your_domain_info: "Este é o domínio inicial da sua rede. Ele está disponível <b>somente</b> dentro da sua rede doméstica. Para mais detalhes sobre isto, veja o <a target=\"_blank\" href=\"http://www.amahi.org/faq#what-home-domain-should-i-use\">FAQ</a>."
+  your_domain_info: "Este é o domínio inicial da sua rede. Ele está disponível <b>somente</b> dentro da sua rede doméstica. Para mais detalhes sobre isto, veja o <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/">FAQ</a>."
   there_are_no_firewall_rules_defined: "De momento não há regras de Firewall definidas."
   firewall_url_filter_message: "Entradas nesta tabela são usadas para restringir URLs através da Gateway."
   dhcp_leases: Aluguer de DHCP
