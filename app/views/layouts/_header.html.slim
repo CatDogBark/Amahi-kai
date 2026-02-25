@@ -8,6 +8,8 @@ nav.navbar.navbar-expand-md.bg-dark.navbar-inverse
     #amahi-nav.collapse.navbar-collapse.justify-content-end    
       - if current_user_is_admin?
         .navbar-nav
+          a.nav-item.nav-link.text-white.text-center.nav_hover href="/"
+            = t('dashboard')
           a.nav-item.nav-link.text-white.text-center.nav_hover href=users_engine.root_path
             = t('setup')
           a.nav-item.nav-link.text-white.text-center.nav_hover href="https://amahi-kai.com/wiki/" target='_blank'  

@@ -1,3 +1,6 @@
+require 'command'
+require 'shellwords'
+
 class SetupController < ApplicationController
   layout 'setup'
 
@@ -45,7 +48,13 @@ class SetupController < ApplicationController
 
   def update_network
     name = params[:server_name].to_s.strip
-    Setting.set('server-name', name) unless name.blank?
+    unless name.blank?
+      Setting.set('server-name', name)
+      # Actually change the system hostname
+      esc_name = Shellwords.escape(name)
+      c = Command.new("hostnamectl set-hostname #{esc_name}")
+      c.execute
+    end
     redirect_to setup_storage_path
   end
 
