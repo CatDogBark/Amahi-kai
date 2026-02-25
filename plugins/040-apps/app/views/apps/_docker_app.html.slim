@@ -11,16 +11,16 @@
 .app.docker-app id="docker_app_#{identifier}" data-proxy-mode=proxy_mode
   table.settings.stretchtoggle
     tr.hover-style
-      td.settings-col1.settings-col1-pad1.apps-col1
+      td.settings-col1.settings-col1-pad1.apps-col1 style="vertical-align:middle"
         .d-flex.align-items-center
           - if logo.present?
             img.me-2 src=logo style="width:32px;height:32px;border-radius:4px;object-fit:contain" alt=name onerror="this.outerHTML='<span class=\'me-2 d-inline-flex align-items-center justify-content-center bg-secondary text-white rounded\' style=\'width:32px;height:32px;font-size:14px;\'>📦</span>'"
           span.fw-bold= name
           - if category.present?
             span.badge.bg-secondary.ms-2.small= category
-      td.settings-col2.ps-2.apps-col2.text-secondary
+      td.settings-col2.ps-2.apps-col2.text-secondary style="vertical-align:middle"
         = description.present? ? truncate(description, length: 120) : t('no_description_supplied')
-      td.text-end.pe-3 style='width: 120px'
+      td.text-end.pe-3 style='width: 120px; vertical-align:middle'
         - case status
         - when 'available'
           button.btn.btn-sm.btn-primary onclick="openAppInstall('#{identifier}', '#{apps_engine.docker_install_stream_path(identifier)}', '#{name}')"
@@ -33,7 +33,7 @@
           .d-flex.gap-1.justify-content-end
             - if installed && app.host_port.present?
               - if proxy_mode == 'subdomain'
-                span.text-secondary.small.me-1 style="white-space:nowrap" Needs subdomain
+                span.text-secondary.small.me-1 style="white-space:nowrap" Local access only
                 a.btn.btn-sm.btn-success style="white-space:nowrap" href="http://#{request.host}:#{app.host_port}" target="_blank" Open Direct
               - else
                 a.btn.btn-sm.btn-success href="/app/#{identifier}" target="_blank" Open
