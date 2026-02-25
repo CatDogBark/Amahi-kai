@@ -44,7 +44,7 @@ RSpec.describe User, type: :model do
     it "calls Platform.make_admin" do
       allow(Platform).to receive(:make_admin)
       user = create(:user, admin: true)
-      user.make_admin
+      user.send(:make_admin)
       expect(Platform).to have_received(:make_admin).with(user.login, true)
     end
   end
