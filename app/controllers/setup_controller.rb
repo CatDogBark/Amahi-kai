@@ -59,27 +59,86 @@ class SetupController < ApplicationController
   end
 
   def storage
-    @partitions = begin
-      require 'partition_utils'
-      # Filter out OS/system partitions — users should never pool these
-      PartitionUtils.new.info.reject { |p| ['/', '/boot', '/boot/efi'].include?(p[:path]) }
+    require 'disk_manager'
+    @devices = begin
+      DiskManager.devices
     rescue => e
       Rails.logger.error("SetupController#storage: #{e.message}")
       []
     end
-    @pool_partitions = DiskPoolPartition.all.map(&:path) rescue []
+    @pool_paths = DiskPoolPartition.all.map(&:path) rescue []
   end
 
   def update_storage
+    require 'disk_manager'
+
     # Remove all existing pool partitions first
     DiskPoolPartition.destroy_all
 
-    if params[:partitions].present?
-      params[:partitions].each do |path|
-        min_free = path == '/' ? 20 : 10
-        DiskPoolPartition.create(path: path, minimum_free: min_free)
+    selected_drives = params[:drives] || []
+
+    selected_drives.each do |device_path|
+      begin
+        devices = DiskManager.devices
+        part = devices.flat_map { |d| d[:partitions] }.find { |p| p[:path] == device_path }
+        next unless part
+
+        mount_point = part[:mountpoint]
+
+        # Format if unformatted
+        if part[:status] == :unformatted
+          DiskManager.format_disk!(device_path)
+        end
+
+        # Mount if not mounted
+        if part[:status] == :unformatted || part[:status] == :unmounted
+          mount_point = DiskManager.mount!(device_path)
+        end
+
+        # Add to storage pool
+        if mount_point.present?
+          DiskPoolPartition.create!(path: mount_point, minimum_free: 10)
+        end
+      rescue => e
+        Rails.logger.error("SetupController#update_storage: #{e.message} for #{device_path}")
+        flash[:error] = "Error preparing #{device_path}: #{e.message}"
       end
     end
+
+    redirect_to setup_greyhole_path
+  end
+
+  def greyhole
+    @pool_drives = DiskPoolPartition.count
+    @greyhole_installed = begin
+      require 'greyhole'
+      Greyhole.installed?
+    rescue
+      false
+    end
+    @default_copies = Setting.get('default_pool_copies') || '2'
+  end
+
+  def install_greyhole
+    require 'greyhole'
+
+    default_copies = (params[:default_copies] || '2').to_i
+    default_copies = 2 if default_copies < 1
+
+    # Save the default copies setting
+    Setting.set('default_pool_copies', default_copies.to_s)
+
+    begin
+      Greyhole.install!
+      Greyhole.configure!
+      session[:greyhole_installed] = true
+      session[:default_copies] = default_copies
+      flash[:notice] = "Greyhole installed successfully!"
+    rescue => e
+      Rails.logger.error("SetupController#install_greyhole: #{e.message}")
+      flash[:error] = "Greyhole installation failed: #{e.message}"
+    end
+
     redirect_to setup_share_path
   end
 
@@ -93,6 +152,11 @@ class SetupController < ApplicationController
     end
 
     path = File.join(Share::DEFAULT_SHARES_ROOT, name.downcase.gsub(/\s+/, '-'))
+
+    # Use default pool copies if Greyhole was installed
+    default_copies = (Setting.get('default_pool_copies') || '0').to_i
+    pool_copies = DiskPoolPartition.any? && default_copies > 0 ? default_copies : 0
+
     share = Share.new(
       name: name,
       path: path,
@@ -101,11 +165,18 @@ class SetupController < ApplicationController
       everyone: true,
       tags: name.downcase,
       extras: "",
-      disk_pool_copies: 0
+      disk_pool_copies: pool_copies
     )
 
     if share.save
       session[:first_share_created] = name
+      # Update Greyhole config if it's running
+      begin
+        require 'greyhole'
+        Greyhole.configure! if Greyhole.installed? && pool_copies > 0
+      rescue => e
+        Rails.logger.error("SetupController#create_share greyhole: #{e.message}")
+      end
     else
       flash[:error] = share.errors.full_messages.join(", ")
       render :share and return
@@ -119,12 +190,21 @@ class SetupController < ApplicationController
     @server_name = Setting.get('server-name')
     @pool_partitions = DiskPoolPartition.all rescue []
     @first_share = session[:first_share_created]
+    @greyhole_installed = begin
+      require 'greyhole'
+      Greyhole.installed?
+    rescue
+      false
+    end
+    @default_copies = Setting.get('default_pool_copies') || '0'
   end
 
   def finish
     Setting.set('setup_completed', 'true')
     session.delete(:admin_password_changed)
     session.delete(:first_share_created)
+    session.delete(:greyhole_installed)
+    session.delete(:default_copies)
     redirect_to root_path, notice: "Setup complete! Welcome to Amahi-kai."
   end
 end

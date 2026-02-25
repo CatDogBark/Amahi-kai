@@ -54,9 +54,11 @@ Rails.application.routes.draw do
   post 'setup/admin'    => 'setup#update_admin',   as: :setup_update_admin
   get  'setup/network'  => 'setup#network',        as: :setup_network
   post 'setup/network'  => 'setup#update_network', as: :setup_update_network
-  get  'setup/storage'  => 'setup#storage',        as: :setup_storage
-  post 'setup/storage'  => 'setup#update_storage', as: :setup_update_storage
-  get  'setup/share'    => 'setup#share',          as: :setup_share
+  get  'setup/storage'  => 'setup#storage',            as: :setup_storage
+  post 'setup/storage'  => 'setup#update_storage',   as: :setup_update_storage
+  get  'setup/greyhole' => 'setup#greyhole',          as: :setup_greyhole
+  post 'setup/greyhole' => 'setup#install_greyhole',  as: :setup_install_greyhole
+  get  'setup/share'    => 'setup#share',              as: :setup_share
   post 'setup/share'    => 'setup#create_share',   as: :setup_create_share
   get  'setup/complete' => 'setup#complete',        as: :setup_complete
   post 'setup/finish'   => 'setup#finish',          as: :setup_finish

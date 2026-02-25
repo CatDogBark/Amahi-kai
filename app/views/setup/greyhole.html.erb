@@ -1,0 +1,89 @@
+<% content_for :progress do %>
+  <div class="step done"></div>
+  <div class="step done"></div>
+  <div class="step done"></div>
+  <div class="step done"></div>
+  <div class="step current"></div>
+  <div class="step"></div>
+  <div class="step"></div>
+<% end %>
+
+<h2>🔄 Storage Pooling (Greyhole)</h2>
+
+<% if @pool_drives.zero? %>
+  <p>
+    Greyhole combines multiple drives into a single storage pool with file duplication for safety.
+    Since you haven't added any drives to the pool yet, you can skip this step and install Greyhole later
+    from the Shares settings.
+  </p>
+  <div class="setup-actions">
+    <div></div>
+    <a href="<%= setup_share_path %>" class="btn-kai">Continue →</a>
+  </div>
+
+<% elsif @greyhole_installed %>
+  <p>
+    <span style="color: #10b981; font-weight: 600;">✓ Greyhole is already installed</span><br>
+    Your storage pool is configured with <strong><%= @pool_drives %></strong> drive<%= @pool_drives == 1 ? '' : 's' %>.
+    Files will be duplicated across drives for safety.
+  </p>
+
+  <div style="margin: 16px 0;">
+    <label style="font-size: 14px;">Default file copies per share:</label>
+    <div style="display: flex; align-items: center; gap: 8px; margin-top: 6px;">
+      <span style="font-size: 24px; font-weight: 700; color: #0d8aa8;"><%= @default_copies %></span>
+      <span style="color: #7f8c9b; font-size: 13px;">copies (adjustable per-share later)</span>
+    </div>
+  </div>
+
+  <div class="setup-actions">
+    <div></div>
+    <a href="<%= setup_share_path %>" class="btn-kai">Continue →</a>
+  </div>
+
+<% else %>
+  <p>
+    <strong>Greyhole</strong> combines your <strong><%= @pool_drives %></strong> pool drive<%= @pool_drives == 1 ? '' : 's' %>
+    into a single storage pool. Files are automatically spread across drives, and you can keep
+    multiple copies for safety — if a drive fails, your data is still on the other<%= @pool_drives == 1 ? '' : 's' %>.
+  </p>
+
+  <% if @pool_drives < 2 %>
+    <p style="font-size: 13px; color: #f59e0b;">
+      ⚠️ With only 1 pool drive, Greyhole can manage storage but can't duplicate files.
+      For data safety, add a second drive.
+    </p>
+  <% end %>
+
+  <%= form_tag(setup_install_greyhole_path, method: :post) do %>
+    <div style="margin: 16px 0;">
+      <label for="default_copies">Default file copies per share:</label>
+      <select name="default_copies" id="default_copies"
+              style="padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; margin-top: 4px;
+                     background: #f8fafc; color: #1a2332;">
+        <option value="1" <%= 'selected' if @pool_drives < 2 %>>1 copy (no duplication)</option>
+        <option value="2" <%= 'selected' if @pool_drives >= 2 %>>2 copies (recommended)</option>
+        <% if @pool_drives >= 3 %>
+          <option value="3">3 copies (maximum safety)</option>
+        <% end %>
+      </select>
+      <p style="font-size: 12px; color: #9ca3af; margin-top: 4px;">
+        Each copy uses one drive's worth of space. You can adjust this per-share later.
+      </p>
+    </div>
+
+    <div class="setup-actions">
+      <a href="<%= setup_share_path %>" class="btn-skip">Skip — I'll set this up later</a>
+      <button type="submit" class="btn-kai" id="install-greyhole-btn"
+              onclick="this.disabled=true; this.innerHTML='<span class=\'spinner-border spinner-border-sm me-1\'></span> Installing...'; this.form.submit();">
+        Install Greyhole →
+      </button>
+    </div>
+  <% end %>
+<% end %>
+
+<style>
+  @media (prefers-color-scheme: dark) {
+    select { background: #0d1117 !important; border-color: #30363d !important; color: #e6edf3 !important; }
+  }
+</style>

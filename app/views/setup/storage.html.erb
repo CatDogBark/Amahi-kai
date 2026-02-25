@@ -5,48 +5,65 @@
   <div class="step current"></div>
   <div class="step"></div>
   <div class="step"></div>
+  <div class="step"></div>
 <% end %>
 
-<h2>💾 Storage &amp; Drive Pooling</h2>
+<h2>💾 Storage Drives</h2>
 <p>
-  <strong>Greyhole</strong> lets you combine multiple drives into a single storage pool.
-  Your files are spread across drives automatically, and you can keep extra copies for safety.
-  Think of it as simple, software-based RAID that works with regular drives.
+  Amahi-kai can detect your drives and prepare them for use.
+  Select drives to add to your storage pool. <strong>OS drives cannot be selected.</strong>
 </p>
 
-<% if @partitions.any? %>
+<% if @devices.any? { |d| !d[:os_disk] } %>
   <%= form_tag(setup_update_storage_path, method: :post) do %>
-    <p style="font-size: 13px; color: #7f8c9b;">Select drives to add to the storage pool:</p>
     <div class="drive-list">
-      <% @partitions.each do |part| %>
-        <div class="drive-item">
-          <input type="checkbox" name="partitions[]" value="<%= part[:path] %>"
-                 id="part_<%= part[:path].gsub('/', '_') %>"
-                 <%= 'checked' if @pool_partitions.include?(part[:path]) %>>
-          <label for="part_<%= part[:path].gsub('/', '_') %>" style="display: inline; margin: 0; cursor: pointer;">
-            <span class="drive-path"><%= part[:path] %></span>
-          </label>
-          <span class="drive-size">
-            <% if part[:bytes_total] && part[:bytes_total] > 0 %>
-              <%= number_to_human_size(part[:bytes_total]) %>
-              (<%= number_to_human_size(part[:bytes_free]) %> free)
-            <% end %>
-          </span>
-        </div>
+      <% @devices.each do |device| %>
+        <% next if device[:os_disk] %>
+        <% device[:partitions].each do |part| %>
+          <div class="drive-item" style="flex-wrap: wrap;">
+            <input type="checkbox" name="drives[]" value="<%= part[:path] %>"
+                   id="drive_<%= part[:path].gsub('/', '_') %>"
+                   data-status="<%= part[:status] %>"
+                   <%= 'checked' if @pool_paths.include?(part[:path]) || @pool_paths.include?(part[:mountpoint]) %>>
+            <label for="drive_<%= part[:path].gsub('/', '_') %>" style="display: inline; margin: 0; cursor: pointer; flex: 1;">
+              <span class="drive-path"><%= device[:model] %></span>
+              <span style="color: #7f8c9b; font-size: 13px; margin-left: 6px;">
+                (<%= part[:path] %>)
+              </span>
+            </label>
+            <span class="drive-size"><%= part[:size] %></span>
+            <div style="width: 100%; margin-left: 30px; margin-top: 4px; font-size: 12px;">
+              <% case part[:status] %>
+              <% when :mounted %>
+                <span style="color: #10b981;">✓ Mounted at <%= part[:mountpoint] %></span>
+                <span style="color: #7f8c9b; margin-left: 8px;"><%= part[:fstype] %></span>
+              <% when :unmounted %>
+                <span style="color: #f59e0b;">⚠ Formatted (<%= part[:fstype] %>) but not mounted — will be mounted automatically</span>
+              <% when :unformatted %>
+                <span style="color: #ef4444;">⊘ Unformatted — will be formatted (ext4) and mounted automatically</span>
+              <% end %>
+            </div>
+          </div>
+        <% end %>
       <% end %>
     </div>
 
+    <p style="font-size: 12px; color: #9ca3af; margin-top: 4px;">
+      ⚠️ Formatting a drive erases all data on it. Only unformatted drives will be formatted.
+    </p>
+
     <div class="setup-actions">
-      <a href="<%= setup_share_path %>" class="btn-skip">Skip for now</a>
-      <button type="submit" class="btn-kai">Save &amp; Continue →</button>
+      <a href="<%= setup_greyhole_path %>" class="btn-skip">Skip</a>
+      <button type="submit" class="btn-kai">Prepare Drives & Continue →</button>
     </div>
   <% end %>
 <% else %>
   <div style="text-align: center; padding: 20px; color: #7f8c9b;">
-    <p>No additional drives detected. You can configure storage pooling later from the Shares settings.</p>
+    <p>No additional drives detected beyond your OS disk.</p>
+    <p style="font-size: 13px;">You can add drives later from the Shares settings.</p>
   </div>
   <div class="setup-actions">
     <div></div>
-    <a href="<%= setup_share_path %>" class="btn-kai">Continue →</a>
+    <a href="<%= setup_greyhole_path %>" class="btn-kai">Continue →</a>
   </div>
 <% end %>
