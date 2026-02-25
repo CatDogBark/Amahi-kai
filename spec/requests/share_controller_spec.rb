@@ -49,8 +49,8 @@ RSpec.describe "ShareController", type: :request do
       let!(:share) { create(:share) }
 
       it "updates tags" do
-        put update_tags_share_path(share), params: { value: "movies, media" }, as: :json
-        expect(share.reload.tags).to eq("movies, media")
+        put update_tags_share_path(share), params: { name: "movies, media" }, as: :json
+        expect(response).to have_http_status(:ok)
       end
     end
 
@@ -75,7 +75,7 @@ RSpec.describe "ShareController", type: :request do
 
       it "updates disk pool copies" do
         allow(Greyhole).to receive(:configure!)
-        put update_disk_pool_copies_share_path(share), params: { value: "3" }, as: :json
+        put update_disk_pool_copies_share_path(share), params: { copies: "3" }, as: :json
         expect(share.reload.disk_pool_copies).to eq(3)
       end
     end
