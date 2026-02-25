@@ -33,7 +33,8 @@
           .d-flex.gap-1.justify-content-end
             - if installed && app.host_port.present?
               - if proxy_mode == 'subdomain'
-                a.btn.btn-sm.btn-success href="http://#{request.host}:#{app.host_port}" target="_blank" Open Direct
+                span.text-secondary.small.me-1 style="white-space:nowrap" Needs subdomain
+                a.btn.btn-sm.btn-success style="white-space:nowrap" href="http://#{request.host}:#{app.host_port}" target="_blank" Open Direct
               - else
                 a.btn.btn-sm.btn-success href="/app/#{identifier}" target="_blank" Open
             button.btn.btn-sm.btn-outline-danger onclick="dockerAppAction('/tab/apps/docker/stop/#{identifier}', '#{identifier}', this)" Stop
