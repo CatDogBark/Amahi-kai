@@ -249,7 +249,7 @@ da:
   warning: ADVARSEL
   start_building_a_new_hda: Begynde at bygge et nyt HDA!
   users: Brugere
-  your_domain_info: "Dette er dit hjemmenetværk domæne. Det er <b>kun</b> tilgængeligt i dit hjemmenetværk. For flere detaljer om dette henvises til <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/">FAQ'en</a>."
+  your_domain_info: "Dette er dit hjemmenetværk domæne. Det er <b>kun</b> tilgængeligt i dit hjemmenetværk. For flere detaljer om dette henvises til <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">FAQ'en</a>."
   debug: Debug
   the_url_is_invalid: URL-adressen er ikke gyldig
   testimonials: Testimonials

@@ -367,7 +367,7 @@ no-NB:
   music: Musikk
   permissions: Tillatelser
   initial_password: Passord
-  your_domain_info: "Dette er hjemmenettverks-domenet ditt . Det er <b>kun</b> tilgjengelig internt i hjemmenettverket ditt. For mer informasjon om dette, jf. <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/">FAQ</a>. "
+  your_domain_info: "Dette er hjemmenettverks-domenet ditt . Det er <b>kun</b> tilgjengelig internt i hjemmenettverket ditt. For mer informasjon om dette, jf. <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">FAQ</a>. "
   there_are_no_firewall_rules_defined: "Det er ingen brannmur regler definert på denne tiden."
   firewall_url_filter_message: "Oppføringer i denne tabellen brukes til å begrense nettadresser (URL) gjennom Gateway."
   dhcp_leases: DHCP Leaser

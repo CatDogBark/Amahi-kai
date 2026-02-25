@@ -34,7 +34,7 @@ nl:
   disabling_pdc_will_enable_workgroup_mode: |-
     Uitschakelen van PDC modus schakeld de werkgroep modus in.
     Dit is een GROTE verandering in de manier waarop de gedeelde mappen werken.
-    Deze optie is bedoeld voor thuis netwerken (zie <a href="https://amahi-kai.com/wiki/">de wiki</a> voor meer informatie)
+    Deze optie is bedoeld voor thuis netwerken (zie <a href="https://amahi-kai.com/wiki/\">de wiki</a> voor meer informatie)
     Weet u zeker dat u DCP modus uit wil schakelen?
   address_looks_good: Adres ziet er goed uit
   finalize_settings: sla instellingen op
@@ -66,7 +66,7 @@ nl:
   are_you_sure_you_want_to_start_the_server: Weet u zeker dat u %{name} wil starten?
   nickname_info: |-
     De "gebruikersnaam" is uniek voor uw HDA.
-    U heeft het nodig om u aan te melden op <a target="_blank" href="https://amahi-kai.com/wiki/">VPN</a> met de <a target="_blank" href="https://amahi-kai.com/wiki/">Windows client</a> (en een geauthoriseerde gebruiker op uw thuis netwerk)
+    U heeft het nodig om u aan te melden op <a target="_blank" href="https://amahi-kai.com/wiki/\">VPN</a> met de <a target="_blank" href="https://amahi-kai.com/wiki/\">Windows client</a> (en een geauthoriseerde gebruiker op uw thuis netwerk)
   files: Bestanden
   by_signing_up_you_agree_to_the_terms_of_service: Door in te schrijven gaat u akkoord, en hebt u de <a href="https://amahi-kai.com" target="_blank">terms of service</a> gelezen
   the_url_looks_good: De URL ziet er goed uit
@@ -336,7 +336,7 @@ nl:
   movies: Films
   mac_already_allocated: MAC adres al in gebruik
   dyndns_info: |-
-    Amahi verzorgt een GRATIS, nul-configuratie dynamische DNS adres voor u. Het is extern naar uw thuis netwerk.  U kunt het gebruiken voor <a target="_blank" href="https://amahi-kai.com/wiki/">Mac</a> of <a target="_blank" href="https://amahi-kai.com/wiki/">Linux</a> <a target="_blank" href="https://amahi-kai.com/wiki/">VPN</a>  (Technische gebruikers kunnen het ook gebruiken voor <a target="_blank"
+    Amahi verzorgt een GRATIS, nul-configuratie dynamische DNS adres voor u. Het is extern naar uw thuis netwerk.  U kunt het gebruiken voor <a target="_blank" href="https://amahi-kai.com/wiki/\">Mac</a> of <a target="_blank" href="https://amahi-kai.com/wiki/\">Linux</a> <a target="_blank" href="https://amahi-kai.com/wiki/\">VPN</a>  (Technische gebruikers kunnen het ook gebruiken voor <a target="_blank"
     href="https://amahi-kai.com/wiki/-ports">SSH</a>).  U kunt er websites me hosten, spelletjes servers, of andere diensten voor uw thuis netwerk. (als u haast heeft, vraag het in het IRC kanaal of zoek het in de wiki)
   confirmation_matches: Bevestiging komt overeen
   setting_dmz_failed: het instellen van de DMZ is mislukt. check de instellingen op juistheid.
@@ -386,7 +386,7 @@ nl:
   initial_password: Wachtwoord
   your_domain_info: |-
     Dit is uw thuis netwerk domein, het is <b>alleen</b> beschikbaar binnen uw thuis netwerk.
-    Voor meer details over dit onderwerp kijk op <a target="_blank" href="https://amahi-kai.com/wiki/">de FAQ</a>.
+    Voor meer details over dit onderwerp kijk op <a target="_blank" href="https://amahi-kai.com/wiki/\">de FAQ</a>.
   there_are_no_firewall_rules_defined: Er zijn geen firewall regels gedefineerd op dit moment.
   firewall_url_filter_message: Regels in deze tabel worden gebruikt om URL's te beperken door middel van de Gateway.
   dhcp_leases: DHCP leases

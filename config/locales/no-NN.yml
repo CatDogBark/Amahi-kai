@@ -364,7 +364,7 @@ no-NN:
   ip_filtering: IP-filtrering
   create: Opprett
   guest_dashboard: Instrumentbrett for gjester
-  your_domain_info: "Dette er heimenettverks-domenet ditt. Det er <b>kun</b> tilgjengeleg internt i heimenettverket. For meir informasjon om dette, jf. <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/">FAQ</a>. "
+  your_domain_info: "Dette er heimenettverks-domenet ditt. Det er <b>kun</b> tilgjengeleg internt i heimenettverket. For meir informasjon om dette, jf. <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">FAQ</a>. "
   music: Musikk
   permissions: Tillatelser
   initial_password: Passord

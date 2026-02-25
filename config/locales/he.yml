@@ -405,7 +405,7 @@ he:
   permissions: "הרשאות"
   initial_password: "סיסמה"
   your_domain_info: "זהו שם התחום של הרשת הבייתית שלך. שם זה <b>only</b>יהיה זמין בתוך הרשת הבייתית שלך.\r\n\
-    למידע נוסף אנא העזר ב <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/">the FAQ</a>.\r\n"
+    למידע נוסף אנא העזר ב <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">the FAQ</a>.\r\n"
   there_are_no_firewall_rules_defined: "אין בנמצא הוראות לחומת האש "
   firewall_url_filter_message: "הרשומות בטבלה זו משמשות לסינון כתובות אינטרנט מגישה לרשת שלך."
   dhcp_leases: "זמן חכירת כתובות המחשבים משרת DHCP"

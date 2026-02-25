@@ -379,7 +379,7 @@ hr:
   permissions: Dozvole
   initial_password: Lozinka
   your_domain_info: "Ovo je tvoja kućna domenska mreža. Dostupna je <b>jedino</b> unutar tvoje kućne mreže.\r\n\
-    Za više informacija o tome pogledaj <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/">često postavljena pitanja (FAQ)</a>"
+    Za više informacija o tome pogledaj <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">često postavljena pitanja (FAQ)</a>"
   there_are_no_firewall_rules_defined: Nema definiranih vatrozid pravila u ovom trenutku.
   firewall_url_filter_message: "Unosi u ovoj tablici koriste se za ograničavanje URL-a kroz Gateway."
   dynamic_dns: "Dinamički DNS"

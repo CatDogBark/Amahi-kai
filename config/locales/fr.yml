@@ -384,7 +384,7 @@ fr:
   permissions: Permissions
   initial_password: Mot de passe
   your_domain_info: "Il s'agit de votre nom de domaine de réseau domestique. Il n'est disponible <b>que</b> dans votre réseau domestique.\r\n\
-    Pour plus de détails à ce sujet, se référer à <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/">la FAQ</a>."
+    Pour plus de détails à ce sujet, se référer à <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">la FAQ</a>."
   there_are_no_firewall_rules_defined: "Il n'y a pas de règle de pare-feu définie actuellement."
   firewall_url_filter_message: "Les données de ce tableau sont utilisées pour restreindre les URL traversant la passerelle."
   dhcp_leases: Baux DHCP

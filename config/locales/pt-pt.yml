@@ -373,7 +373,7 @@ pt-pt:
   music: "Música"
   permissions: "Permissões"
   initial_password: Senha
-  your_domain_info: "Este é o domínio inicial da sua rede. Ele está disponível <b>somente</b> dentro da sua rede doméstica. Para mais detalhes sobre isto, veja o <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/">FAQ</a>."
+  your_domain_info: "Este é o domínio inicial da sua rede. Ele está disponível <b>somente</b> dentro da sua rede doméstica. Para mais detalhes sobre isto, veja o <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">FAQ</a>."
   there_are_no_firewall_rules_defined: "De momento não há regras de Firewall definidas."
   firewall_url_filter_message: "Entradas nesta tabela são usadas para restringir URLs através da Gateway."
   dhcp_leases: Aluguer de DHCP

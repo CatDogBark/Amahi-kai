@@ -386,7 +386,7 @@ de:
   permissions: Berechtigungen
   initial_password: Kennwort
   your_domain_info: "Dies ist Ihre Home Domäne. Sie steht <b>nur</b> innerhalb des Heimnetzwerkes zur Verfügung.\r\n\
-    Für weitere Details schauen Sie sich bitte <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/">die FAQ</a> an."
+    Für weitere Details schauen Sie sich bitte <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">die FAQ</a> an."
   there_are_no_firewall_rules_defined: Zur Zeit wurden keine Firewallregeln festgelegt.
   firewall_url_filter_message: "Einträge in dieser Tabelle werden verwendet, um den Zugriff auf URLs durch das Gateway zu beschränken."
   dhcp_leases: DHCP Leases

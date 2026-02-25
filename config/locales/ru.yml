@@ -470,7 +470,7 @@ ru:
   permissions: "Разрешения"
   initial_password: "Пароль"
   your_domain_info: "Это ваш домен домашней сети. Он доступен <b>только</b> внутри вашей домашней сети.\r\n\
-    За подробной информацией обращайтесь в <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/">FAQ</a>."
+    За подробной информацией обращайтесь в <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">FAQ</a>."
   there_are_no_firewall_rules_defined: "На данный момент нет заданных правил сетевого экрана"
   firewall_url_filter_message: "Данные в этой таблице используются для ограничения URL через Шлюз."
   dhcp_leases: "Выданные адреса DHCP"

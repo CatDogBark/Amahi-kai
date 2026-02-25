@@ -368,7 +368,7 @@ sv:
   music: Musik
   permissions: "Rättigheter"
   initial_password: "Lösenord"
-  your_domain_info: "Detta är ditt hemnätverks domän. Den är <b>bara</b> tillgänglig i ditt hemmanätverk. För mer information om detta se <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/">Vanliga frågor</a>."
+  your_domain_info: "Detta är ditt hemnätverks domän. Den är <b>bara</b> tillgänglig i ditt hemmanätverk. För mer information om detta se <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">Vanliga frågor</a>."
   there_are_no_firewall_rules_defined: "Det finns inga brandväggsregler definierade vid denna tidpunkt."
   firewall_url_filter_message: "Poster i denna tabell används för att begränsa webbadresser genom Gatewayen."
   dhcp_leases: "DHCP Lån"

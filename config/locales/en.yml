@@ -509,15 +509,15 @@
 
   nickname_info: |-
         The "nickname" is a unique identifier for your HDA.
-        You will need it to log in to your <a target="_blank" href="https://amahi-kai.com/wiki/">VPN</a>
-        with the <a target="_blank" href="https://amahi-kai.com/wiki/">Windows client</a> client
+        You will need it to log in to your <a target="_blank" href="https://amahi-kai.com/wiki/\">VPN</a>
+        with the <a target="_blank" href="https://amahi-kai.com/wiki/\">Windows client</a> client
         (and an authorized user and password on your home network).
   dyndns_info: |-
         Amahi provides a FREE, zero-configuration dynamic DNS address for you. It is external to your
         home network. You can use it for the <a target="_blank"
-        href="https://amahi-kai.com/wiki/">Mac</a> or <a target="_blank"
-        href="https://amahi-kai.com/wiki/">Linux</a> <a
-        target="_blank" href="https://amahi-kai.com/wiki/">VPN</a>
+        href="https://amahi-kai.com/wiki/\">Mac</a> or <a target="_blank"
+        href="https://amahi-kai.com/wiki/\">Linux</a> <a
+        target="_blank" href="https://amahi-kai.com/wiki/\">VPN</a>
         clients (technical users can use it for logging in with <a target="_blank"
         href="https://amahi-kai.com/wiki/-ports">SSH</a>).
         Technical users can use it to host web sites, game
@@ -525,7 +525,7 @@
         rush to try, just ask in the IRC channel or search the wiki).
   your_domain_info: |-
         This is your home network domain. It is <b>only</b> available inside your home network.
-        For more details about this refer to <a target="_blank" href="https://amahi-kai.com/wiki/">the FAQ</a>.
+        For more details about this refer to <a target="_blank" href="https://amahi-kai.com/wiki/\">the FAQ</a>.
   install_code_info: |-
         This install code captures all the settings for your HDA and it's used once as
         the final step in installing your HDA. You should NOT reuse it for two or more running systems,

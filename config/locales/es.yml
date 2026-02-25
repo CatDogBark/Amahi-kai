@@ -361,7 +361,7 @@ es:
   permissions: Permisos
   initial_password: "Contraseña"
   your_domain_info: "Este es el dominio de la red de su hogar. <b>Sólo</b> está disponible dentro de la red de su hogar.\r\n\
-    Para más detalles diríjase a <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/">las Preguntas Frecuentes</a>."
+    Para más detalles diríjase a <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">las Preguntas Frecuentes</a>."
   there_are_no_firewall_rules_defined: No hay reglas de firewall definidas en este momento.
   firewall_url_filter_message: "Las entradas en esta tabla se usan para restringir las URLs que pasan através de la Pasarela"
   create_your_hda_profile: Crea tu perfil HDA

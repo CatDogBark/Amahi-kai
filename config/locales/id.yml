@@ -68,8 +68,8 @@ id:
   edit_static_ip: Sunting IP statis
   nickname_info: |-
     "Alias" adalah pengidentifikasi unik untuk HDA anda.
-    Anda akan perlu untuk log ke <a target="_blank" href="https://amahi-kai.com/wiki/">VPN</a>  anda
-    dengan <a target="_blank" href="https://amahi-kai.com/wiki/">klien Windows </a>
+    Anda akan perlu untuk log ke <a target="_blank" href="https://amahi-kai.com/wiki/\">VPN</a>  anda
+    dengan <a target="_blank" href="https://amahi-kai.com/wiki/\">klien Windows </a>
     (dan nama pengguna dan sandi yang telah terdaftar dalam jaringan rumah anda)
   stopped: Dihentikan
   add_extra_parameters: (tambahkan parameter ekstra)
@@ -344,9 +344,9 @@ id:
     Amahi memberikan alamat DNS dinamis GRATIS untuk anda. Ini di luar
     network rumah anda. Anda dapat menggunakannya untuk klien
     <a target="_blank"
-    href="https://amahi-kai.com/wiki/">Mac</a> or <a target="_blank"
-    href="https://amahi-kai.com/wiki/">Linux</a> <a
-    target="_blank" href="https://amahi-kai.com/wiki/">VPN</a>  
+    href="https://amahi-kai.com/wiki/\">Mac</a> or <a target="_blank"
+    href="https://amahi-kai.com/wiki/\">Linux</a> <a
+    target="_blank" href="https://amahi-kai.com/wiki/\">VPN</a>  
     (pengguna teknis dapat menggunakannya untuk login dengan <a target="_blank"
     href="https://amahi-kai.com/wiki/-ports">SSH</a>). 
     Pengguna teknis dapat menggunakannya untuk menginangkan situs web, server game
@@ -393,7 +393,7 @@ id:
   permissions: Perijinan
   your_domain_info: |-
     Inia adalah domain jaringan rumah anda. <b>Hanya</b> tersedia dalam jaringan rumah anda.
-    Untuk detil lebih lanjut silahkan lihat <a target="_blank" href="https://amahi-kai.com/wiki/">FAQ</a>.
+    Untuk detil lebih lanjut silahkan lihat <a target="_blank" href="https://amahi-kai.com/wiki/\">FAQ</a>.
   there_are_no_firewall_rules_defined: Tidak ada aturan Firewall pada saat ini
   firewall_url_filter_message: Masukan tabel ini digunakan untuk membatasi URL melalui Gateway
   the_ip_must_be_1_to_254: IP harus dalam rentang 1-254

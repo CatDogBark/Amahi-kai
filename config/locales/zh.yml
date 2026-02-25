@@ -354,7 +354,7 @@ zh:
   changelog: "更新日志"
   notifications_from_amahi: "Amahi通知"
   permissions: "许可"
-  your_domain_info: "这是您的家庭网络域。这是只适用在你的家庭网络。关于此的更多细节请参考<a target=\"_blank\" href=\"https://amahi-kai.com/wiki/">the FAQ</a>."
+  your_domain_info: "这是您的家庭网络域。这是只适用在你的家庭网络。关于此的更多细节请参考<a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">the FAQ</a>."
   there_are_no_firewall_rules_defined: "目前没有定义了的防火墙规则。"
   firewall_url_filter_message: "本表中的条目是用来限制通过网关的URL。"
   the_ip_must_be_1_to_254: "IP必须在1-254范围内"

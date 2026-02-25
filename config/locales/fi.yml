@@ -411,7 +411,7 @@ fi:
   permissions: Oikeudet
   initial_password: Salasana
   your_domain_info: "Tämä on kotitoimialueesi. Se on saatavilla <b>ainoastaan</b> kotiverkossasi.\n\
-    Saadaksesi lisätietoa tästä, katso <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/">FAQ:sta</a>."
+    Saadaksesi lisätietoa tästä, katso <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">FAQ:sta</a>."
   there_are_no_firewall_rules_defined: "Järjestelmässä ei tällä hetkellä ole palomuurisääntöjä."
   firewall_url_filter_message: "Tämän taulukon merkintöjä käytetään rajoittamaan URL-pyyntöjen pääsya reitittimen läpi."
   dhcp_leases: DHCP:n jakamat osoitteet

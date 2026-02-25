@@ -400,7 +400,7 @@ bg:
   permissions: "Разрешения"
   initial_password: "Парола"
   your_domain_info: "Това е домейнът на домашната ви мрежа. Той е достъпен <b>единствено</b> в домашната ви мрежа. \r\n\
-    За повече информация относно това, прегледайте <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/"> Въпроси и отговори</a>. "
+    За повече информация относно това, прегледайте <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\"> Въпроси и отговори</a>. "
   there_are_no_firewall_rules_defined: "Все още няма зададени правила за Защитната стена."
   firewall_url_filter_message: "Вписванията в тази таблица се използват за забрана на URL адреси през Gateway."
   dhcp_leases: "DHCP Раздавания"
