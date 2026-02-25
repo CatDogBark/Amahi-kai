@@ -26,21 +26,22 @@
       color: var(--text);
       line-height: 1.7;
     }
-    header {
-      background: var(--bg);
-      border-bottom: 1px solid var(--border);
-      padding: 1.25rem 2rem;
+    nav {
       display: flex;
-      align-items: center;
       justify-content: space-between;
+      align-items: center;
+      padding: 1.5rem 2rem;
       max-width: 1200px;
       margin: 0 auto;
     }
-    header a { color: var(--text-muted); text-decoration: none; }
-    header a:hover { color: var(--accent); }
-    header .logo { display: flex; align-items: center; }
-    .nav-links { display: flex; gap: 1.5rem; }
-    .nav-links a { font-size: 0.95rem; }
+    nav a {
+      color: var(--text-muted);
+      text-decoration: none;
+      margin-left: 2rem;
+      transition: color 0.2s;
+    }
+    nav a:hover { color: var(--accent); }
+    .logo { text-decoration: none; }
     .container {
       max-width: 860px;
       margin: 2rem auto;
@@ -110,15 +111,16 @@
   </style>
 </head>
 <body>
-  <header>
-    <a href="/" class="logo"><img src="/logo.svg" alt="Amahi-kai" height="40" style="vertical-align: middle;"></a>
-    <div class="nav-links">
-      <a href="#features">Features</a>
-      <a href="#apps">Apps</a>
+  <nav>
+    <a href="/" class="logo"><img src="/logo.svg" alt="Amahi-kai" height="48" style="vertical-align: middle;"></a>
+    <div>
+      <a href="/">Home</a>
+      <a href="/#features">Features</a>
+      <a href="/#apps">Apps</a>
       <a href="https://github.com/CatDogBark/Amahi-kai">GitHub</a>
       <a href="/wiki/">Docs</a>
     </div>
-  </header>
+  </nav>
   <div class="container">
     <nav class="sidebar">
       <a href="/wiki/">Index</a>
