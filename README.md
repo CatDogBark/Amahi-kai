@@ -40,18 +40,6 @@ sudo bin/amahi-install
 - **Config:** `/etc/amahi-kai/amahi.env`
 - **Update:** Click the update button in the header, or run `sudo bin/amahi-update`
 
-### Alternative: Docker (Development Only)
-
-```bash
-git clone https://github.com/CatDogBark/Amahi-kai.git
-cd Amahi-kai
-docker compose up
-```
-
-Visit `http://localhost:3000` — login: `admin` / `secretpassword`
-
-> **Note:** Docker is for development/testing only. Native install is required for production — it needs direct access to Samba, dnsmasq, and systemd.
-
 ## Features
 
 - **📁 File Sharing** — Samba shares with Greyhole storage pooling across multiple drives

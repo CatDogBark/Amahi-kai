@@ -29,7 +29,7 @@
 Verify all 14 catalog apps install and function through the reverse proxy.
 
 ### Test Coverage
-Currently ~57% — targeting 70%+. Focus on edge cases, error paths, and integration tests.
+Expanding toward 70%+. Focus on edge cases, error paths, and integration tests.
 
 ---
 
