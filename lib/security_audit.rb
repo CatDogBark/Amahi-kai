@@ -265,7 +265,9 @@ class SecurityAudit
       content = File.read('/etc/samba/smb.conf')
 
       unless content.match?(/^\s*interfaces\s*=/i)
-        content.sub!(/\[global\]/i, "[global]\n   interfaces = lo eth0\n   bind interfaces only = yes")
+        # Detect primary network interface (eth0 is legacy — Ubuntu 24.04 uses predictive names)
+        primary_iface = `ip -4 route show default 2>/dev/null`.match(/dev\s+(\S+)/)&.captures&.first || 'eth0'
+        content.sub!(/\[global\]/i, "[global]\n   interfaces = lo #{primary_iface}\n   bind interfaces only = yes")
       end
 
       unless content.match?(/^\s*bind interfaces only\s*=\s*yes/i)
