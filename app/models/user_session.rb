@@ -42,7 +42,7 @@ class UserSession
       )
       true
     else
-      @errors.add(:base, "Invalid username or password")
+      errors.add(:base, "Invalid username or password")
       false
     end
   end
