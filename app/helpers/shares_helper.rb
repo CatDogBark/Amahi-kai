@@ -14,7 +14,7 @@ module SharesHelper
     title, wiki_path = warning_greyhole_on_root(path)
     if title and wiki_path
       danger_image = theme_image_tag('danger.png', :class => 'theme-image')
-      link_to_wiki = link_to(theme_image_tag('more.png', :title => title, :class => 'theme-image'), "http://wiki.amahi.org/index.php#{wiki_path}")
+      link_to_wiki = link_to(theme_image_tag('more.png', :title => title, :class => 'theme-image'), "https://amahi-kai.com/wiki/storage-pooling")
       "<span style='float:right;'>#{danger_image} &raquo; #{link_to_wiki}</span>".html_safe
     else
       ''
