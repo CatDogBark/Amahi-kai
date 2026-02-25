@@ -34,7 +34,7 @@ sudo bin/amahi-install
 
 ### After Install
 
-- **Web UI:** `http://<your-server-ip>` (port 80)
+- **Web UI:** `http://<your-server-ip>:3000` (port 3000)
 - **Setup Wizard** runs on first visit — creates your admin account
 - **Logs:** `journalctl -u amahi-kai -f`
 - **Config:** `/etc/amahi-kai/amahi.env`

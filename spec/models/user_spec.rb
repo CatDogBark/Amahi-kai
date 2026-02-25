@@ -48,9 +48,9 @@ describe User do
     end
 
     it "should allow valid logins" do
-      expect(create(:user, login: "validuser")).to be_valid
-      expect(create(:user, login: "abc")).to be_valid
-      expect(create(:user, login: "User123")).to be_valid
+      expect(create(:user, login: "validlogin")).to be_valid
+      expect(create(:user, login: "vld")).to be_valid
+      expect(create(:user, login: "Login789")).to be_valid
     end
   end
 
