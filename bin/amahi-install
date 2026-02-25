@@ -549,6 +549,17 @@ fi
 # ---------------------------------------------------------------------------
 # 14. Enable services (Samba)
 # ---------------------------------------------------------------------------
+echo "==> Configuring Samba globals..."
+if [ -f /etc/samba/smb.conf ]; then
+  # Ensure required global settings for Amahi-kai
+  for setting in "wins support = yes" "wide links = yes" "follow symlinks = yes" "allow insecure wide links = yes" "unix extensions = no"; do
+    key=$(echo "$setting" | cut -d= -f1 | xargs)
+    if ! grep -qi "^[[:space:]]*$key" /etc/samba/smb.conf; then
+      sed -i "/^\[global\]/a\\\\t$setting" /etc/samba/smb.conf
+    fi
+  done
+fi
+
 echo "==> Enabling services..."
 systemctl enable --now smbd nmbd
 # dnsmasq disabled by default — enable when DNS aliases are configured
