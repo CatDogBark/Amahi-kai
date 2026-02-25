@@ -141,19 +141,19 @@ describe User do
   end
 
   describe "#needs_auth?" do
-    it "should return true when no crypted_password exists" do
+    it "should return true when no password_digest exists" do
       user = create(:user)
-      user.crypted_password = nil
+      user.password_digest = nil
       expect(user.needs_auth?).to be true
     end
 
-    it "should return true when crypted_password is blank" do
+    it "should return true when password_digest is blank" do
       user = create(:user)
-      user.crypted_password = ""
+      user.password_digest = ""
       expect(user.needs_auth?).to be true
     end
 
-    it "should return false when crypted_password exists" do
+    it "should return false when password_digest exists" do
       user = create(:user)
       expect(user.needs_auth?).to be false
     end

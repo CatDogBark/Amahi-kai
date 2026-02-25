@@ -24,6 +24,7 @@ class ApplicationController < ActionController::Base
 	require 'ipaddr'
 	protect_from_forgery with: :exception
 
+	before_action :set_user_session_controller
 	before_action :before_action_hook
 	before_action :check_setup_completed
 	before_action :initialize_validators
@@ -193,6 +194,10 @@ class ApplicationController < ActionController::Base
 	def credential_encryptor
 		key = Rails.application.secret_key_base[0..31]
 		ActiveSupport::MessageEncryptor.new(key)
+	end
+
+	def set_user_session_controller
+		UserSession.controller = self
 	end
 
 	def current_user_session

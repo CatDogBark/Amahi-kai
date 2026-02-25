@@ -56,7 +56,7 @@ class UserSessionsController < ApplicationController
 	# logout - destroy the user session
 	def destroy
 		@user_session = UserSession.find
-		@user_session.destroy
+		@user_session&.destroy
 		flash[:info] = t('you_have_been_logged_out')
 		redirect_to root_path
 	end
@@ -134,7 +134,7 @@ private
 
 	def allow_root_access?
 		User.all.each do |u|
-			return false if u.crypted_password and not u.crypted_password.blank?
+			return false if u.password_digest.present?
 		end
 		true
 	end

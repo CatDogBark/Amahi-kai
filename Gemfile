@@ -21,8 +21,6 @@ gem 'stimulus-rails'
 gem 'activeresource'
 # gem 'rails-observers' # removed — unused
 
-gem 'scrypt'
-gem 'authlogic'
 gem 'bcrypt'
 
 gem 'docker-api'

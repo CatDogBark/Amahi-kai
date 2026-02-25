@@ -80,9 +80,9 @@ describe "Users tab (admin)", type: :request do
 
     it "updates user password" do
       user = create(:user)
-      old_crypted = user.crypted_password
+      old_digest = user.password_digest
       put users_engine.update_password_user_path(user), params: { user: { password: "newpassword1", password_confirmation: "newpassword1" } }
-      expect(user.reload.crypted_password).not_to eq(old_crypted)
+      expect(user.reload.password_digest).not_to eq(old_digest)
     end
 
     it "toggles admin status" do
