@@ -4,7 +4,7 @@ RSpec.describe "AppProxy", type: :request do
   let!(:admin) { create(:user, login: 'proxyadmin', admin: true) }
 
   before do
-    post '/login', params: { user_session: { login: 'proxyadmin', password: 'secretpassword' } }
+    post user_sessions_path, params: { username: 'proxyadmin', password: 'secretpassword' }
   end
 
   describe "GET /app/:app_id" do
@@ -26,10 +26,9 @@ RSpec.describe "AppProxy", type: :request do
 
     context 'when not logged in' do
       it 'redirects to login' do
-        # Reset session
-        delete '/logout' rescue nil
+        delete user_session_path(0) rescue nil
         get '/app/testapp'
-        expect(response).to redirect_to(login_path).or have_http_status(:unauthorized)
+        expect(response).to redirect_to(new_user_session_url)
       end
     end
   end
