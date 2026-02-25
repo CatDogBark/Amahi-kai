@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_02_19_000000) do
+ActiveRecord::Schema[8.0].define(version: 2026_02_25_000000) do
   create_table "app_dependencies", force: :cascade do |t|
     t.integer "app_id"
     t.integer "dependency_id"
@@ -184,9 +184,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_19_000000) do
   create_table "users", force: :cascade do |t|
     t.string "login", null: false
     t.string "name"
-    t.string "crypted_password"
-    t.string "password_salt"
-    t.string "persistence_token"
+    t.string "password_digest"
     t.integer "login_count", default: 0, null: false
     t.datetime "last_request_at", precision: nil
     t.datetime "last_login_at", precision: nil
