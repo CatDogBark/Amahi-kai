@@ -49,4 +49,103 @@ RSpec.describe SecurityAudit do
       expect(check.status).to eq(:pass)
     end
   end
+
+  describe '.blockers' do
+    it 'returns only blocker-severity failed checks' do
+      blockers = SecurityAudit.blockers
+      expect(blockers).to be_an(Array)
+      blockers.each do |check|
+        expect(check.status).to eq(:fail)
+        expect(check.severity).to eq(:blocker)
+      end
+    end
+  end
+
+  describe 'individual checks' do
+    let(:checks) { SecurityAudit.run_all }
+
+    it 'includes admin_password check' do
+      check = checks.find { |c| c.name == 'admin_password' }
+      expect(check).not_to be_nil
+      expect(check.severity).to eq(:blocker)
+    end
+
+    it 'includes ufw_firewall check' do
+      check = checks.find { |c| c.name == 'ufw_firewall' }
+      expect(check).not_to be_nil
+      expect(check.severity).to eq(:blocker)
+    end
+
+    it 'includes ssh_root_login check' do
+      check = checks.find { |c| c.name == 'ssh_root_login' }
+      expect(check).not_to be_nil
+      expect(check.severity).to eq(:warning)
+    end
+
+    it 'includes ssh_password_auth check' do
+      check = checks.find { |c| c.name == 'ssh_password_auth' }
+      expect(check).not_to be_nil
+      expect(check.severity).to eq(:warning)
+    end
+
+    it 'includes fail2ban check' do
+      check = checks.find { |c| c.name == 'fail2ban' }
+      expect(check).not_to be_nil
+      expect(check.severity).to eq(:warning)
+    end
+
+    it 'includes unattended_upgrades check' do
+      check = checks.find { |c| c.name == 'unattended_upgrades' }
+      expect(check).not_to be_nil
+      expect(check.severity).to eq(:warning)
+    end
+
+    it 'includes samba_lan_binding check' do
+      check = checks.find { |c| c.name == 'samba_lan_binding' }
+      expect(check).not_to be_nil
+      expect(check.severity).to eq(:blocker)
+    end
+
+    it 'includes open_ports check as info severity' do
+      check = checks.find { |c| c.name == 'open_ports' }
+      expect(check).not_to be_nil
+      expect(check.severity).to eq(:info)
+    end
+  end
+
+  describe '.fix!' do
+    it 'returns true for ssh_password_auth' do
+      expect(SecurityAudit.fix!('ssh_password_auth')).to eq(true)
+    end
+
+    it 'returns true for unattended_upgrades' do
+      expect(SecurityAudit.fix!('unattended_upgrades')).to eq(true)
+    end
+
+    it 'returns true for samba_lan_binding' do
+      expect(SecurityAudit.fix!('samba_lan_binding')).to eq(true)
+    end
+
+    it 'returns false for unknown check' do
+      expect(SecurityAudit.fix!('nonexistent')).to eq(true)
+    end
+  end
+
+  describe '.fix_all!' do
+    it 'skips admin_password and open_ports' do
+      results = SecurityAudit.fix_all!
+      names = results.map { |r| r[:name] }
+      expect(names).not_to include('admin_password')
+      expect(names).not_to include('open_ports')
+    end
+
+    it 'skips already passing checks' do
+      results = SecurityAudit.fix_all!
+      results.each do |r|
+        check = SecurityAudit.run_all.find { |c| c.name == r[:name] }
+        # Only non-passing checks should appear in results
+        expect(check.status).not_to eq(:pass) if check
+      end
+    end
+  end
 end

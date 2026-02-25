@@ -48,6 +48,11 @@ FactoryBot.define do
     end
   end
 
+  factory :disk_pool_partition do
+    sequence(:path) { |n| "/mnt/data#{n}" }
+    minimum_free { 10 }
+  end
+
   factory :share do
     sequence(:path) { |n| "/path#{n}" }
     sequence(:name) { |n| "name#{n}" }
