@@ -50,10 +50,9 @@ Rails.application.configure do
   # config.action_cable.url = 'wss://example.com/cable'
   # config.action_cable.allowed_request_origins = [ 'http://example.com', /http:\/\/example.*/ ]
 
-  # Trust X-Forwarded-Proto from reverse proxies (Cloudflare Tunnel).
-  # Rails treats proxied requests as HTTPS without forcing redirects,
-  # so LAN access on port 3000 stays plain HTTP and still works.
-  config.assume_ssl = true
+  # Do NOT use force_ssl or assume_ssl — LAN users access via plain HTTP.
+  # Cloudflare Tunnel handles HTTPS on the edge for remote access.
+  # config.assume_ssl = true
 
   # Use the lowest log level to ensure availability of diagnostic information
   # when problems arise.
