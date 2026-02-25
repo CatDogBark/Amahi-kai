@@ -91,7 +91,7 @@ RSpec.describe "ShareController extended", type: :request do
     end
 
     it "sets copies count in database" do
-      put update_disk_pool_copies_share_path(share), params: { value: "5" }, as: :json rescue nil
+      put update_disk_pool_copies_share_path(share), params: { value: "5" }
       expect(share.reload.disk_pool_copies).to eq(5)
     end
   end
