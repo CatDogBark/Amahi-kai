@@ -131,12 +131,18 @@ The reverse proxy handles:
 - HTTPS upstream detection (for apps like Nextcloud and Portainer that use internal SSL)
 - MIME type correction
 
-### Proxy Modes
+### App Compatibility
 
-Apps in the catalog can use two proxy modes:
+Most apps work fully through the built-in reverse proxy at `/app/<name>`. Some apps have limitations:
 
-- **proxy** — Requests are forwarded with path rewriting. Works for apps that can run under a sub-path (Jellyfin, Grafana, Transmission, etc.)
-- **subdomain** — Designed for apps that need their own hostname. These work through the proxy but may need additional Cloudflare Tunnel routes for full functionality (Nextcloud, Portainer, Vaultwarden, etc.)
+| Status | Apps |
+|--------|------|
+| **Works fully** | Jellyfin, Grafana, Transmission, FileBrowser, Gitea, Syncthing, Pi-hole, Paperless-ngx, Audiobookshelf |
+| **Limited** | Nextcloud, Portainer, Home Assistant, Vaultwarden, Uptime Kuma |
+
+**Limited apps** are ones that hardcode absolute URLs, require WebSocket connections on their own hostname, or refuse to run under a sub-path. After installing a limited app, you'll see a notification explaining that it may need direct port access or a dedicated hostname to work fully.
+
+We're actively improving proxy compatibility to support more apps. There are **no plans for multi-container (docker-compose) support** — Amahi-kai runs single-container apps only, keeping things simple and predictable.
 
 ---
 
