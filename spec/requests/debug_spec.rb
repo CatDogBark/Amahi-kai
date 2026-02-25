@@ -28,12 +28,7 @@ describe "Debug", type: :request do
 
     it "shows the debug page" do
       get '/tab/debug'
-      # May 500 if SystemUtils.run fails in sandbox, but auth should work
-      expect(response.status).to be_in([200, 500])
-      # If 200, verify content
-      if response.status == 200
-        expect(response.body).to include("Debug")
-      end
+      expect(response).to have_http_status(:ok)
     end
   end
 end
