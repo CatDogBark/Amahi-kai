@@ -50,9 +50,10 @@ Rails.application.configure do
   # config.action_cable.url = 'wss://example.com/cable'
   # config.action_cable.allowed_request_origins = [ 'http://example.com', /http:\/\/example.*/ ]
 
-  # Force all access to the app over SSL, use Strict-Transport-Security, and use secure cookies.
-  # TODO: Enable force_ssl when deploying with HTTPS (recommended for production)
-  # config.force_ssl = true
+  # Trust X-Forwarded-Proto from reverse proxies (Cloudflare Tunnel).
+  # Rails treats proxied requests as HTTPS without forcing redirects,
+  # so LAN access on port 3000 stays plain HTTP and still works.
+  config.assume_ssl = true
 
   # Use the lowest log level to ensure availability of diagnostic information
   # when problems arise.
