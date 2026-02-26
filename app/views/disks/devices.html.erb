@@ -51,7 +51,7 @@
                     <% case part[:status] %>
                     <% when :unformatted %>
                       <%= button_to "Initialize",
-                            disks_engine.format_disk_path,
+                            disks_format_disk_path,
                             params: { device: part[:path] },
                             method: :post,
                             class: "btn btn-sm btn-outline-danger",
@@ -60,21 +60,21 @@
                       <% supported_fs = %w[ext2 ext3 ext4 xfs btrfs] %>
                       <div class="d-flex gap-1 justify-content-end">
                         <%= button_to "Preview",
-                              disks_engine.preview_disk_path,
+                              disks_preview_disk_path,
                               params: { device: part[:path] },
                               method: :post,
                               class: "btn btn-sm btn-outline-info",
                               data: { disable_with: "Loading..." } %>
                         <% if supported_fs.include?(part[:fstype].to_s.downcase) %>
                           <%= button_to "Mount",
-                                disks_engine.mount_disk_path,
+                                disks_mount_disk_path,
                                 params: { device: part[:path] },
                                 method: :post,
                                 class: "btn btn-sm btn-outline-primary",
                                 data: { disable_with: "Mounting..." } %>
                         <% else %>
                           <%= button_to "Mount as Share",
-                                disks_engine.mount_as_share_path,
+                                disks_mount_as_share_path,
                                 params: { device: part[:path] },
                                 method: :post,
                                 class: "btn btn-sm btn-outline-success",
@@ -85,7 +85,7 @@
                     <% when :mounted %>
                       <% unless ['/', '/boot', '/boot/efi'].include?(part[:mountpoint]) %>
                         <%= button_to "Unmount",
-                              disks_engine.unmount_disk_path,
+                              undisks_mount_disk_path,
                               params: { device: part[:path] },
                               method: :post,
                               class: "btn btn-sm btn-outline-warning",

@@ -52,6 +52,23 @@ Rails.application.routes.draw do
     get 'security_fix_stream', action: 'security_fix_stream'
   end
 
+  # Disks (consolidated from plugin)
+  scope '/disks', controller: 'disks', as: 'disks' do
+    get '/', action: 'index', as: '_index'
+    get 'devices', action: 'devices'
+    get 'mounts', action: 'mounts'
+    get 'storage_pool', action: 'storage_pool'
+    post 'format_disk', action: 'format_disk'
+    post 'mount_disk', action: 'mount_disk'
+    post 'unmount_disk', action: 'unmount_disk'
+    post 'preview_disk', action: 'preview_disk'
+    post 'mount_as_share', action: 'mount_as_share'
+    put 'toggle_disk_pool_partition', action: 'toggle_disk_pool_partition'
+    post 'toggle_greyhole', action: 'toggle_greyhole'
+    post 'install_greyhole', action: 'install_greyhole'
+    get 'install_greyhole_stream', action: 'install_greyhole_stream'
+  end
+
   match 'login' => 'user_sessions#new', :as => :login, via: [:get]
   match 'logout' => 'user_sessions#destroy', :as => :logout, via: [:get]
   match 'start' => 'user_sessions#start', :as => :start, via: [:get]

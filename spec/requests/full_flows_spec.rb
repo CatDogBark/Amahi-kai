@@ -79,7 +79,7 @@ RSpec.describe "Full integration flows", type: :request do
 
   describe "Disk management" do
     it "views disks page" do
-      get "/tab/disks"
+      get "/disks"
       expect(response).to have_http_status(:ok)
     end
   end

@@ -1,5 +1,5 @@
-# plugin initialization
-t = Tab.new("disks", "disks", "/tab/disks")
+# Disks tab registration (consolidated from plugin)
+t = Tab.new("disks", "disks", "/disks")
 t.add("index", "disks")
 t.add("devices", "devices")
 t.add("mounts", "mounts")

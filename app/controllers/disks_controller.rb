@@ -34,10 +34,10 @@ class DisksController < ApplicationController
       flash[:notice] = "Successfully formatted #{device} as ext4"
     rescue DiskManager::DiskError => e
       flash[:error] = "Format failed: #{e.message}"
-    rescue => e
+    rescue StandardError => e
       flash[:error] = "Unexpected error: #{e.message}"
     end
-    redirect_to disks_engine.devices_path
+    redirect_to disks_devices_path
   end
 
   def mount_disk
@@ -48,10 +48,10 @@ class DisksController < ApplicationController
       flash[:notice] = "Mounted #{device} at #{mp}"
     rescue DiskManager::DiskError => e
       flash[:error] = "Mount failed: #{e.message}"
-    rescue => e
+    rescue StandardError => e
       flash[:error] = "Unexpected error: #{e.message}"
     end
-    redirect_to disks_engine.devices_path
+    redirect_to disks_devices_path
   end
 
   def preview_disk
@@ -62,10 +62,10 @@ class DisksController < ApplicationController
       render :preview
     rescue DiskManager::DiskError => e
       flash[:error] = "Preview failed: #{e.message}"
-      redirect_to disks_engine.devices_path
-    rescue => e
+      redirect_to disks_devices_path
+    rescue StandardError => e
       flash[:error] = "Unexpected error: #{e.message}"
-      redirect_to disks_engine.devices_path
+      redirect_to disks_devices_path
     end
   end
 
@@ -93,10 +93,10 @@ class DisksController < ApplicationController
       flash[:notice] = "Mounted #{device} at #{mp} and created share '#{share_name}'"
     rescue DiskManager::DiskError => e
       flash[:error] = "Mount failed: #{e.message}"
-    rescue => e
+    rescue StandardError => e
       flash[:error] = "Error: #{e.message}"
     end
-    redirect_to disks_engine.devices_path
+    redirect_to disks_devices_path
   end
 
   def unmount_disk
@@ -106,10 +106,10 @@ class DisksController < ApplicationController
       flash[:notice] = "Unmounted #{device}"
     rescue DiskManager::DiskError => e
       flash[:error] = "Unmount failed: #{e.message}"
-    rescue => e
+    rescue StandardError => e
       flash[:error] = "Unexpected error: #{e.message}"
     end
-    redirect_to disks_engine.devices_path
+    redirect_to disks_devices_path
   end
 
   def storage_pool
@@ -135,15 +135,15 @@ class DisksController < ApplicationController
     # Regenerate Greyhole config whenever pool membership changes
     begin
       Greyhole.configure! if Greyhole.installed?
-    rescue => e
+    rescue StandardError => e
       Rails.logger.error("Greyhole configure failed: #{e.message}")
     end
 
     respond_to do |format|
-      format.html { redirect_to disks_engine.storage_pool_path }
+      format.html { redirect_to disks_storage_pool_path }
       format.any { render json: { status: 'ok', checked: checked, path: path } }
     end
-  rescue => e
+  rescue StandardError => e
     Rails.logger.error("Toggle disk pool error: #{e.message}\n#{e.backtrace.first(5).join("\n")}")
     render json: { status: 'error', message: e.message }, status: :internal_server_error
   end
@@ -154,7 +154,7 @@ class DisksController < ApplicationController
     else
       Greyhole.start!
     end
-    redirect_to disks_engine.storage_pool_path
+    redirect_to disks_storage_pool_path
   end
 
   def install_greyhole
@@ -163,10 +163,10 @@ class DisksController < ApplicationController
       flash[:notice] = "Greyhole installed successfully!"
     rescue Greyhole::GreyholeError => e
       flash[:error] = "Failed to install Greyhole: #{e.message}"
-    rescue => e
+    rescue StandardError => e
       flash[:error] = "Installation error: #{e.message}"
     end
-    redirect_to disks_engine.storage_pool_path
+    redirect_to disks_storage_pool_path
   end
 
   def install_greyhole_stream

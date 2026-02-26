@@ -14,7 +14,7 @@
     <div class="card-body">
       <% if @greyhole_status[:installed] %>
         <%= button_to(@greyhole_status[:running] ? t('stop', default: 'Stop') : t('start', default: 'Start'),
-              disks_engine.toggle_greyhole_path,
+              disks_toggle_greyhole_path,
               method: :post,
               class: "btn btn-sm #{@greyhole_status[:running] ? 'btn-outline-danger' : 'btn-outline-success'}") %>
 
@@ -64,7 +64,7 @@
                 <td><%= drive[:minimum_free] %> GB</td>
                 <td>
                   <%= button_to(t('remove', default: 'Remove'),
-                        disks_engine.toggle_disk_pool_partition_path(path: drive[:path]),
+                        disks_toggle_disk_pool_partition_path(path: drive[:path]),
                         method: :put,
                         class: 'btn btn-sm btn-outline-danger',
                         data: { confirm: t('are_you_sure', default: 'Are you sure?') }) %>
@@ -125,4 +125,4 @@
 <%= render 'shared/install_terminal',
      id: 'greyhole',
      title: 'Installing Greyhole',
-     stream_url: disks_engine.install_greyhole_stream_path %>
+     stream_url: disks_install_greyhole_stream_path %>
