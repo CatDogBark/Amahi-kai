@@ -38,10 +38,6 @@ module ApplicationHelper
     @page_title
   end
 
-  def amahi_plugins
-    AmahiHDA::Application.config.amahi_plugins
-  end
-
   def full_page_title
     page_title ? "Amahi-kai &rsaquo; #{page_title}".html_safe : "Amahi-kai Home Server"
   end

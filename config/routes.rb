@@ -4,9 +4,6 @@ Rails.application.routes.draw do
   match '/app/:app_id', to: 'app_proxy#proxy', via: :all, defaults: { path: '/' }
   match '/app/:app_id/*path', to: 'app_proxy#proxy', via: :all, format: false
 
-  # Legacy plugin routes (kept for future extensibility)
-  amahi_plugin_routes
-
   # Users (consolidated from plugin)
   resources :users do
     member do
