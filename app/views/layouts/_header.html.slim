@@ -16,6 +16,14 @@ nav.navbar.navbar-expand-md.bg-dark.navbar-inverse
             = t('help')
           a.nav-item.nav-link.text-white.text-center.nav_hover href=apps_engine.root_path
             = t('apps')
+          .nav-item.d-flex.align-items-center.mx-2
+            .theme-toggle title="Theme"
+              button.theme-btn data-theme="light" title="Light" onclick="setTheme('light')"
+                | ☀️
+              button.theme-btn data-theme="dark" title="Dark" onclick="setTheme('dark')"
+                | 🌙
+              button.theme-btn data-theme="system" title="System" onclick="setTheme('system')"
+                | 💻
           a.nav-item.nav-link.text-white.text-center.nav_hover#update-btn href="#" title="System Update" onclick="openInstallTerminal('system-update','#{settings_engine.update_system_stream_path}');return false;"
             | 🔄
           a.nav-item.nav-link.text-white.text-center.nav_hover#advanced-toggle href="#" title="#{t('advanced_settings')}" style="opacity: #{@advanced ? '1' : '0.5'}" onclick="fetch('#{toggle_advanced_path}', {method:'POST', headers:{'X-CSRF-Token':document.querySelector('meta[name=csrf-token]').content}}).then(function(){location.reload()});return false;"

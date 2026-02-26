@@ -13,6 +13,7 @@
 //= require controllers/pool_toggle_controller
 //= require controllers/file_browser_controller
 
+//= require theme
 //= require toast
 //= require lib/application
 

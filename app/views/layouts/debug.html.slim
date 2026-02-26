@@ -1,5 +1,7 @@
 doctype 5
 html[dir="#{@locale_direction}" lang="#{I18n.locale}" xml:lang="#{I18n.locale}"]
+  script
+    | (function(){var t=localStorage.getItem('theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);})();
   head
     meta charset="utf-8"
     title = full_page_title

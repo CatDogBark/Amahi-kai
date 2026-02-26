@@ -29,8 +29,9 @@
   --kai-shadow: rgba(26, 35, 50, 0.08);
 }
 
+/* Dark mode via system preference (default) */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --kai-primary: #1a9fc2;
     --kai-secondary: #22b8d6;
     --kai-accent: #f0a030;
@@ -46,6 +47,72 @@
     --kai-card-bg: #0d1117;
     --kai-shadow: rgba(0, 0, 0, 0.3);
   }
+}
+
+/* Forced dark mode */
+:root[data-theme="dark"] {
+  --kai-primary: #1a9fc2;
+  --kai-secondary: #22b8d6;
+  --kai-accent: #f0a030;
+  --kai-dark: #0d1117;
+  --kai-darker: #080c10;
+  --kai-light: #161b22;
+  --kai-text: #c9d1d9;
+  --kai-muted: #8b949e;
+  --kai-success: #2ea043;
+  --kai-danger: #da3633;
+  --kai-warning: #d29922;
+  --kai-border: #30363d;
+  --kai-card-bg: #0d1117;
+  --kai-shadow: rgba(0, 0, 0, 0.3);
+}
+
+/* Forced light mode — uses :root defaults, just ensure specificity */
+:root[data-theme="light"] {
+  --kai-primary: #0a6e8a;
+  --kai-secondary: #0d8aa8;
+  --kai-accent: #f0a030;
+  --kai-dark: #1a2332;
+  --kai-darker: #131b27;
+  --kai-light: #f4f7fa;
+  --kai-text: #2c3e50;
+  --kai-muted: #7f8c9b;
+  --kai-success: #27ae60;
+  --kai-danger: #c0392b;
+  --kai-warning: #f39c12;
+  --kai-border: #dce3eb;
+  --kai-card-bg: #ffffff;
+  --kai-shadow: rgba(26, 35, 50, 0.08);
+}
+
+/* Theme toggle in header */
+.theme-toggle {
+  display: inline-flex;
+  background: rgba(255,255,255,0.1);
+  border-radius: 20px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.theme-btn {
+  background: none;
+  border: none;
+  border-radius: 16px;
+  padding: 2px 8px;
+  font-size: 14px;
+  cursor: pointer;
+  opacity: 0.5;
+  transition: opacity 0.2s, background 0.2s;
+  line-height: 1.4;
+}
+
+.theme-btn:hover {
+  opacity: 0.8;
+}
+
+.theme-btn.active {
+  opacity: 1;
+  background: rgba(255,255,255,0.15);
 }
 
 * {
