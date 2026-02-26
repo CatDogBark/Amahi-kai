@@ -1,6 +1,6 @@
 require 'rails_helper'
 
-RSpec.describe "ShareController", type: :request do
+RSpec.describe "SharesController", type: :request do
   describe "unauthenticated" do
     it "redirects to login" do
       get shares_path

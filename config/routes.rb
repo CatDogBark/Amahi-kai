@@ -84,6 +84,8 @@ Rails.application.routes.draw do
       put 'update_disk_pool_copies'
       put 'update_extras'
       put 'clear_permissions'
+      put 'update_size'
+      put 'update_name'
     end
   end
 

@@ -71,13 +71,13 @@ describe "Shares Toggle Actions", type: :request do
     describe "GET /shares/settings" do
       it "redirects if not advanced" do
         Setting.find_by(name: "advanced")&.update!(value: "0")
-        get "/tab/shares/settings"
+        get "/shares/settings"
         expect(response).to have_http_status(:redirect)
       end
 
       it "shows settings page when advanced" do
         Setting.create!(name: "advanced", value: "1", kind: 0)
-        get "/tab/shares/settings"
+        get "/shares/settings"
         expect(response).to have_http_status(:ok)
       end
     end
