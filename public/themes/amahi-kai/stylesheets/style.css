@@ -653,6 +653,13 @@ table.settings td {
   font-style: normal;
 }
 
+/* ─── Shares location alignment fix ─── */
+#shares-table .shares-col2,
+#shares-table th.shares-col2 {
+  text-align: left;
+  padding-left: 32px;
+}
+
 /* ─── Amahi-kai branding footer note ─── */
 .kai-lineage {
   text-align: center;
