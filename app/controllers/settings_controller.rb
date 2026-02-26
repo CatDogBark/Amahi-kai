@@ -39,7 +39,7 @@ class SettingsController < ApplicationController
 	def servers
 		@page_title = t 'settings'
 		unless @advanced
-			redirect_to settings_engine_path
+			redirect_to settings_index_path
 		else
 			@message = nil
 			unless use_sample_data?
@@ -52,7 +52,7 @@ class SettingsController < ApplicationController
 	end
 
 	def change_language
-		sleep 2 if development?
+		
 		l = params[:locale]
 		if params[:locale] && I18n.available_locales.include?(params[:locale].to_sym)
 			cookies['locale'] = { :value => params[:locale], :expires => 1.year.from_now }
@@ -61,7 +61,7 @@ class SettingsController < ApplicationController
 	end
 
 	def toggle_setting
-		sleep 2 if development?
+		
 		id = params[:id]
 		s = Setting.find id
 		s.value = (1 - s.value.to_i).to_s
@@ -136,11 +136,11 @@ class SettingsController < ApplicationController
 		s.value = params[:id]
 		s.save!
 		# redirect rather than render, so that it re-displays with the new theme
-		redirect_to settings_engine.themes_path
+		redirect_to settings_themes_path
 	end
 
 	def update_system
-		redirect_to settings_engine.system_status_path
+		redirect_to settings_system_status_path
 	end
 
 	def update_system_stream

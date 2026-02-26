@@ -26,7 +26,7 @@ RSpec.describe "Full integration flows", type: :request do
 
   describe "User lifecycle" do
     it "lists users" do
-      get users_engine.users_path
+      get "/users"
       expect(response).to have_http_status(:ok)
       expect(response.body).to include("Username")
     end
@@ -67,7 +67,7 @@ RSpec.describe "Full integration flows", type: :request do
 
   describe "Settings pages" do
     it "views settings page" do
-      get "/tab/settings"
+      get "/settings"
       expect(response).to have_http_status(:ok)
     end
 

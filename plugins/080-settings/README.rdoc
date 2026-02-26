@@ -1,3 +1,0 @@
-= Amahi Settings plugin
-
-Settings control area for the Amahi platform

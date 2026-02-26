@@ -19,7 +19,7 @@ describe "Admin access", type: :request do
 
     it "cannot access admin-only pages" do
       login_as_user
-      get users_engine.users_path
+      get "/users"
       # Should redirect or show access denied
       expect(response.body).to include("admin privileges").or(
         satisfy { response.redirect? }

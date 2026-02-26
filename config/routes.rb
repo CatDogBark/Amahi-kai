@@ -4,6 +4,7 @@ Rails.application.routes.draw do
   match '/app/:app_id', to: 'app_proxy#proxy', via: :all, defaults: { path: '/' }
   match '/app/:app_id/*path', to: 'app_proxy#proxy', via: :all, format: false
 
+  # Legacy plugin routes (kept for future extensibility)
   amahi_plugin_routes
 
   # Users (consolidated from plugin)
@@ -50,6 +51,28 @@ Rails.application.routes.draw do
     post 'security_fix', action: 'security_fix'
     get 'security_audit_stream', action: 'security_audit_stream'
     get 'security_fix_stream', action: 'security_fix_stream'
+  end
+
+  # Settings (consolidated from plugin)
+  scope '/settings', controller: 'settings', as: 'settings' do
+    get '/', action: 'index', as: '_index'
+    match 'change_language', action: 'change_language', via: %i[get post]
+    match 'toggle_setting', action: 'toggle_setting', via: %i[get post]
+    match 'reboot', action: 'reboot', via: %i[get post]
+    match 'poweroff', action: 'poweroff', via: %i[get post]
+    match 'servers', action: 'servers', via: %i[get post]
+    match 'servers/:id/refresh', action: 'refresh', as: '_refresh', via: %i[get post]
+    match 'servers/:id/start', action: 'start', as: '_start', via: %i[get post]
+    match 'servers/:id/stop', action: 'stop', as: '_stop', via: %i[get post]
+    match 'servers/:id/restart', action: 'restart', as: '_restart', via: %i[get post]
+    match 'servers/:id/toggle_monitored', action: 'toggle_monitored', as: '_toggle_monitored', via: %i[get post put]
+    match 'servers/:id/toggle_start_at_boot', action: 'toggle_start_at_boot', as: '_toggle_start_at_boot', via: %i[get post put]
+    match 'themes', action: 'themes', via: %i[get post]
+    match 'activate_theme', action: 'activate_theme', via: %i[get post]
+    put 'revoke_app', action: 'revoke_app'
+    get 'system_status', action: 'system_status'
+    post 'update_system', action: 'update_system'
+    get 'update_system_stream', action: 'update_system_stream'
   end
 
   # Apps (consolidated from plugin)

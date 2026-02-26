@@ -9,7 +9,7 @@ div.settings-fields.settings-wrap.bg-white.p-2.mb-2
         td
           = select_tag 'locale', options_for_select(@available_locales, I18n.locale.to_s),
             data: { controller: 'locale', action: 'change->locale#update',
-                    locale_url_value: settings_engine.change_language_path },
+                    locale_url_value: settings_change_language_path },
             class: 'form-control f-size13'
           = spinner
       tr
@@ -25,13 +25,13 @@ div.settings-fields.settings-wrap.bg-white.p-2
     div.settings-actions
       span#systems-result.increase-font-30
         = link_to '',
-              settings_engine.poweroff_path,
+              settings_poweroff_path,
               method: :post,
               class: 'btn-system glyphicon glyphicon-off left-margin-40 float-start',
               id: 'btn-poweroff',
               data: {:confirm => t('this_will_power_off')}
         = link_to '',
-              settings_engine.reboot_path,
+              settings_reboot_path,
               method: :post,
               data: {:confirm => t('this_will_reboot')},
               class: 'btn-system glyphicon glyphicon-repeat float-start',
