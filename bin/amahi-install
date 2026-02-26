@@ -71,6 +71,7 @@ apt-get install -y --no-install-recommends \
   samba \
   samba-common-bin \
   samba-vfs-modules \
+  ntfs-3g \
   sudo
 
 # VM guest agent (auto-detect)
