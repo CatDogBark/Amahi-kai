@@ -142,22 +142,43 @@
       justify-content: space-between;
       margin-top: 24px;
     }
-    .flash-error {
-      background: #fee2e2;
-      color: #991b1b;
-      padding: 10px 14px;
-      border-radius: 8px;
-      font-size: 13px;
-      margin-bottom: 16px;
+    /* Toast styles (inline for setup layout) */
+    #toast-container {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      z-index: 1090;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      pointer-events: none;
+      max-width: 420px;
+      width: calc(100% - 2rem);
     }
-    .flash-notice {
-      background: #d1fae5;
-      color: #065f46;
-      padding: 10px 14px;
+    .amahi-toast {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      padding: 0.75rem 1rem;
       border-radius: 8px;
-      font-size: 13px;
-      margin-bottom: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3), 0 1px 4px rgba(0,0,0,0.2);
+      font-size: 0.9rem;
+      line-height: 1.4;
+      pointer-events: auto;
+      cursor: default;
+      transform: translateX(calc(100% + 1rem));
+      opacity: 0;
+      transition: transform 0.3s cubic-bezier(0.22,1,0.36,1), opacity 0.3s ease;
     }
+    .amahi-toast-visible { transform: translateX(0); opacity: 1; }
+    .amahi-toast-leaving { transform: translateX(calc(100% + 1rem)); opacity: 0; }
+    .amahi-toast-icon { font-size: 1.1rem; font-weight: bold; flex-shrink: 0; width: 1.5rem; text-align: center; }
+    .amahi-toast-text { flex: 1; word-break: break-word; }
+    .amahi-toast-close {
+      background: none; border: none; font-size: 1.3rem; line-height: 1;
+      opacity: 0.7; cursor: pointer; padding: 0 0.25rem; flex-shrink: 0;
+    }
+    .amahi-toast-close:hover { opacity: 1; }
     .drive-list {
       margin: 12px 0;
     }
@@ -208,8 +229,7 @@
       .drive-item .drive-path { color: #e6edf3; }
       .drive-item .drive-size { color: #8b949e; }
       .summary-item { border-bottom-color: #21262d; color: #c9d1d9; }
-      .flash-error { background: #3d1f1f; color: #f85149; }
-      .flash-notice { background: #1a3a2a; color: #3fb950; }
+      /* old flash classes removed — using toasts now */
     }
   </style>
 </head>
@@ -228,14 +248,53 @@
       </div>
     <% end %>
     <div class="setup-body">
-      <% if flash[:error] %>
-        <div class="flash-error"><%= flash[:error] %></div>
-      <% end %>
-      <% if flash[:notice] %>
-        <div class="flash-notice"><%= flash[:notice] %></div>
-      <% end %>
+      <% # Flash messages rendered as toasts via inline JS below %>
       <%= yield %>
     </div>
   </div>
+<script>
+// Inline toast system for setup layout
+(function() {
+  var TYPE_MAP = {
+    success: { bg: '#198754', icon: '✓' },
+    notice:  { bg: '#198754', icon: '✓' },
+    danger:  { bg: '#dc3545', icon: '✗' },
+    error:   { bg: '#dc3545', icon: '✗' },
+    warning: { bg: '#ffc107', icon: '⚠', dark: true },
+    info:    { bg: '#0dcaf0', icon: 'ℹ', dark: true }
+  };
+  function getContainer() {
+    var c = document.getElementById('toast-container');
+    if (!c) { c = document.createElement('div'); c.id = 'toast-container'; document.body.appendChild(c); }
+    return c;
+  }
+  function showToast(message, type) {
+    var cfg = TYPE_MAP[type || 'info'] || TYPE_MAP.info;
+    var container = getContainer();
+    var t = document.createElement('div');
+    t.className = 'amahi-toast';
+    t.style.cssText = 'background:' + cfg.bg + ';color:' + (cfg.dark ? '#212529' : '#fff') + ';';
+    t.innerHTML = '<span class="amahi-toast-icon">' + cfg.icon + '</span><span class="amahi-toast-text">' +
+      message.replace(/</g,'&lt;') + '</span><button class="amahi-toast-close" style="color:' +
+      (cfg.dark ? '#212529' : '#fff') + '">&times;</button>';
+    t.querySelector('.amahi-toast-close').onclick = function() { dismiss(t); };
+    container.appendChild(t);
+    requestAnimationFrame(function() { requestAnimationFrame(function() { t.classList.add('amahi-toast-visible'); }); });
+    var timer = setTimeout(function() { dismiss(t); }, 5000);
+    t._timer = timer;
+    t.addEventListener('mouseenter', function() { clearTimeout(t._timer); });
+    t.addEventListener('mouseleave', function() { t._timer = setTimeout(function() { dismiss(t); }, 2000); });
+  }
+  function dismiss(t) {
+    if (t._gone) return; t._gone = true; clearTimeout(t._timer);
+    t.classList.remove('amahi-toast-visible'); t.classList.add('amahi-toast-leaving');
+    setTimeout(function() { if (t.parentNode) t.parentNode.removeChild(t); }, 300);
+  }
+  window.showToast = showToast;
+  <% flash.each do |name, msg| %>
+    showToast(<%= msg.to_json %>, <%= name.to_json %>);
+  <% end %>
+})();
+</script>
 </body>
 </html>

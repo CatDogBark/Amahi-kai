@@ -12,6 +12,7 @@
 //= require controllers/create_form_controller
 //= require controllers/pool_toggle_controller
 
+//= require toast
 //= require lib/application
 
 //= require bootstrap

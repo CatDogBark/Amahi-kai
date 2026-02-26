@@ -34,7 +34,7 @@
             _this.element.style.opacity = "0";
             setTimeout(function() { _this.element.remove(); }, 500);
           } else {
-            alert(data.status || "Error");
+            if (typeof showToast === 'function') showToast(data.status || "Error", 'error');
             if (spinner) spinner.style.display = 'none';
             event.currentTarget.style.display = '';
           }
