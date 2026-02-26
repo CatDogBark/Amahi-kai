@@ -19,11 +19,15 @@
       min-height: 100vh;
       margin: 0;
       padding: 20px;
+      background: transparent;
     }
     .setup-container {
       width: 100%;
       max-width: 640px;
-      background: rgba(255,255,255,0.97);
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255,255,255,0.2);
       border-radius: 16px;
       box-shadow: 0 20px 60px rgba(0,0,0,0.3);
       overflow: hidden;
@@ -214,7 +218,7 @@
     /* ── Dark mode ── */
     @media (prefers-color-scheme: dark) {
       body.setup { background: transparent; }
-      .setup-container { background: rgba(22, 27, 34, 0.9); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
+      .setup-container { background: rgba(22, 27, 34, 0.75); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-color: rgba(255,255,255,0.06); box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
       .setup-body h2 { color: #e6edf3; }
       .setup-body p { color: #8b949e; }
       .setup-body label { color: #c9d1d9; }
