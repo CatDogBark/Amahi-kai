@@ -97,23 +97,22 @@ body::before {
   z-index: 1;
   pointer-events: none;
   overflow: hidden;
-  opacity: var(--particle-opacity, 0.4);
+  opacity: var(--particle-opacity, 0.7);
 }
 
 @keyframes particle-rise {
   0% {
-    transform: translateY(100vh) translateX(0) scale(0);
+    transform: translateY(100vh);
     opacity: 0;
   }
-  10% {
+  5% {
     opacity: 1;
-    transform: translateY(90vh) translateX(5px) scale(1);
   }
-  90% {
-    opacity: 0.6;
+  85% {
+    opacity: 0.8;
   }
   100% {
-    transform: translateY(-20vh) translateX(-10px) scale(0.8);
+    transform: translateY(-10vh);
     opacity: 0;
   }
 }
@@ -146,7 +145,7 @@ body::before {
     --ocean-bg-2: #0a1628;
     --ocean-bg-3: #0c2234;
     --wave-opacity: 0.08;
-    --particle-opacity: 0.4;
+    --particle-opacity: 0.7;
   }
 }
 
@@ -155,7 +154,7 @@ body::before {
   --ocean-bg-2: #0a1628;
   --ocean-bg-3: #0c2234;
   --wave-opacity: 0.08;
-  --particle-opacity: 0.4;
+  --particle-opacity: 0.7;
 }
 
 /* ── Light Mode Colors ── */
@@ -165,7 +164,7 @@ body::before {
     --ocean-bg-2: #d0eaf2;
     --ocean-bg-3: #b8e0ec;
     --wave-opacity: 0.15;
-    --particle-opacity: 0.2;
+    --particle-opacity: 0.5;
   }
 }
 
@@ -174,7 +173,7 @@ body::before {
   --ocean-bg-2: #d0eaf2;
   --ocean-bg-3: #b8e0ec;
   --wave-opacity: 0.15;
-  --particle-opacity: 0.2;
+  --particle-opacity: 0.5;
 }
 
 /* Override for system dark */
@@ -184,7 +183,7 @@ body::before {
     --ocean-bg-2: #0a1628;
     --ocean-bg-3: #0c2234;
     --wave-opacity: 0.08;
-    --particle-opacity: 0.4;
+    --particle-opacity: 0.7;
   }
 }
 
