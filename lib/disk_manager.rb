@@ -94,12 +94,14 @@ class DiskManager
       mount_cmd = "sudo /bin/mount"
       mount_cmd += " -t ntfs-3g" if fstype&.downcase == "ntfs"
       mount_cmd += " #{Shellwords.escape(device)} #{Shellwords.escape(mount_point)}"
-      execute_command(mount_cmd)
+      mount_output = `#{mount_cmd} 2>&1`
+      mount_status = $?.exitstatus
 
       # Verify mount actually worked
-      unless mount_point_active?(mount_point)
+      unless mount_status == 0 && mount_point_active?(mount_point)
         execute_command("sudo /usr/bin/rmdir #{Shellwords.escape(mount_point)} 2>/dev/null")
-        raise DiskError, "Mount failed — #{device} did not mount at #{mount_point}. Check if ntfs-3g is installed for NTFS drives."
+        detail = mount_output.to_s.strip.presence || "unknown error (exit #{mount_status})"
+        raise DiskError, "Mount failed — #{device} at #{mount_point}: #{detail}"
       end
 
       # Add to fstab using UUID for persistence
