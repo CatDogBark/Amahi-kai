@@ -54,7 +54,7 @@ RSpec.describe "ShareController", type: :request do
       let!(:share) { create(:share) }
 
       it "updates tags" do
-        put update_tags_share_path(share), params: { value: "movies, media" }, as: :json
+        put update_tags_share_path(share), params: { name: "movies, media" }, as: :json
         expect(response).to have_http_status(:ok)
       end
     end

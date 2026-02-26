@@ -138,7 +138,6 @@ class SharesController < ApplicationController
 	end
 
 	def clear_permissions
-		@share = Share.find(params[:id]) if params[:id]
 		sleep 2 if development?
 		if @share
 			@cleared = @share.clear_permissions
@@ -198,7 +197,12 @@ class SharesController < ApplicationController
 	end
 
 	def get_share
-		@share = Share.find(params[:id]) if params[:id]
+		return unless params[:id]
+		@share = if params[:id].to_s =~ /\A\d+\z/
+			Share.find(params[:id])
+		else
+			Share.find_by!(name: params[:id])
+		end
 	rescue => e
 	end
 
