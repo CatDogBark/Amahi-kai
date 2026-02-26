@@ -100,10 +100,11 @@ jobs:
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
-          bundler-cache: true
+      - name: Install lint tools
+        run: gem install rubocop rubocop-rails rubocop-rspec brakeman --no-document
       - name: RuboCop
-        run: bundle exec rubocop --parallel --format github
+        run: rubocop --parallel --format github
         continue-on-error: true
       - name: Brakeman
-        run: bundle exec brakeman --no-pager -q -w2
+        run: brakeman --no-pager -q -w2
         continue-on-error: true
