@@ -238,24 +238,7 @@ apps:
     docker_args: ["--user", "root"]
     preserve_prefix: true
 
-  filebrowser:
-    name: FileBrowser
-    description: Web-based file manager with upload, download, and sharing capabilities
-    logo_url: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/filebrowser.png
-    image: filebrowser/filebrowser:v2.28.0-amd64-s6
-    category: storage
-    url_path: /filebrowser
-    proxy_mode: proxy
-    ports:
-      80: 8085
-    volumes:
-      - /var/hda/files:/srv
-      - /opt/amahi/apps/filebrowser/database:/database
-    environment: {}
-    init_files:
-      - host: /opt/amahi/apps/filebrowser/.filebrowser.json
-        container: /.filebrowser.json
-        content: '{"port":80,"baseURL":"","address":"0.0.0.0","log":"stdout","database":"/database/filebrowser.db","root":"/srv"}'
+  # FileBrowser removed — replaced by native file browser (/files/:share/browse)
 
   audiobookshelf:
     name: Audiobookshelf
