@@ -20,21 +20,21 @@ Rails.application.routes.draw do
 
   # Network (consolidated from plugin)
   scope '/network', controller: 'network', as: 'network' do
-    get '/', action: 'index', as: '_index'
+    get '/', action: 'index', as: 'index'
     get 'leases', action: 'index'
     get 'hosts', action: 'hosts'
     post 'hosts', action: 'create_host'
-    delete 'host/:id', action: 'destroy_host', as: '_destroy_host'
+    delete 'host/:id', action: 'destroy_host', as: 'destroy_host'
     get 'dns_aliases', action: 'dns_aliases'
     post 'dns_aliases', action: 'create_dns_alias'
-    delete 'dns_alias/:id', action: 'destroy_dns_alias', as: '_destroy_dns_alias'
+    delete 'dns_alias/:id', action: 'destroy_dns_alias', as: 'destroy_dns_alias'
     get 'settings', action: 'settings'
     put 'update_lease_time', action: 'update_lease_time'
     put 'update_gateway', action: 'update_gateway'
     put 'update_dns', action: 'update_dns'
     put 'update_dns_ips', action: 'update_dns_ips'
-    put 'toggle_setting/:id', action: 'toggle_setting', as: '_toggle_setting'
-    put 'update_dhcp_range/:id', action: 'update_dhcp_range', as: '_update_dhcp_range'
+    put 'toggle_setting/:id', action: 'toggle_setting', as: 'toggle_setting'
+    put 'update_dhcp_range/:id', action: 'update_dhcp_range', as: 'update_dhcp_range'
     get 'gateway', action: 'gateway'
     post 'install_dnsmasq', action: 'install_dnsmasq'
     get 'install_dnsmasq_stream', action: 'install_dnsmasq_stream'
@@ -55,18 +55,18 @@ Rails.application.routes.draw do
 
   # Settings (consolidated from plugin)
   scope '/settings', controller: 'settings', as: 'settings' do
-    get '/', action: 'index', as: '_index'
+    get '/', action: 'index', as: 'index'
     match 'change_language', action: 'change_language', via: %i[get post]
     match 'toggle_setting', action: 'toggle_setting', via: %i[get post]
     match 'reboot', action: 'reboot', via: %i[get post]
     match 'poweroff', action: 'poweroff', via: %i[get post]
     match 'servers', action: 'servers', via: %i[get post]
-    match 'servers/:id/refresh', action: 'refresh', as: '_refresh', via: %i[get post]
-    match 'servers/:id/start', action: 'start', as: '_start', via: %i[get post]
-    match 'servers/:id/stop', action: 'stop', as: '_stop', via: %i[get post]
-    match 'servers/:id/restart', action: 'restart', as: '_restart', via: %i[get post]
-    match 'servers/:id/toggle_monitored', action: 'toggle_monitored', as: '_toggle_monitored', via: %i[get post put]
-    match 'servers/:id/toggle_start_at_boot', action: 'toggle_start_at_boot', as: '_toggle_start_at_boot', via: %i[get post put]
+    match 'servers/:id/refresh', action: 'refresh', as: 'refresh', via: %i[get post]
+    match 'servers/:id/start', action: 'start', as: 'start', via: %i[get post]
+    match 'servers/:id/stop', action: 'stop', as: 'stop', via: %i[get post]
+    match 'servers/:id/restart', action: 'restart', as: 'restart', via: %i[get post]
+    match 'servers/:id/toggle_monitored', action: 'toggle_monitored', as: 'toggle_monitored', via: %i[get post put]
+    match 'servers/:id/toggle_start_at_boot', action: 'toggle_start_at_boot', as: 'toggle_start_at_boot', via: %i[get post put]
     match 'themes', action: 'themes', via: %i[get post]
     match 'activate_theme', action: 'activate_theme', via: %i[get post]
     put 'revoke_app', action: 'revoke_app'
@@ -77,23 +77,23 @@ Rails.application.routes.draw do
 
   # Apps (consolidated from plugin)
   scope '/apps', controller: 'apps', as: 'apps' do
-    get '/', action: 'docker_apps', as: '_index'
+    get '/', action: 'docker_apps', as: 'index'
     get 'install_docker_stream', action: 'install_docker_stream'
     post 'start_docker', action: 'start_docker'
     get 'docker_apps', action: 'docker_apps'
     get 'installed_apps', action: 'installed_apps'
-    post 'docker/install/:id', action: 'docker_install', as: '_docker_install'
-    get 'docker/install_stream/:id', action: 'docker_install_stream', as: '_docker_install_stream'
-    post 'docker/uninstall/:id', action: 'docker_uninstall', as: '_docker_uninstall'
-    post 'docker/start/:id', action: 'docker_start', as: '_docker_start'
-    post 'docker/stop/:id', action: 'docker_stop', as: '_docker_stop'
-    post 'docker/restart/:id', action: 'docker_restart', as: '_docker_restart'
-    get 'docker/status/:id', action: 'docker_status', as: '_docker_status'
+    post 'docker/install/:id', action: 'docker_install', as: 'docker_install'
+    get 'docker/install_stream/:id', action: 'docker_install_stream', as: 'docker_install_stream'
+    post 'docker/uninstall/:id', action: 'docker_uninstall', as: 'docker_uninstall'
+    post 'docker/start/:id', action: 'docker_start', as: 'docker_start'
+    post 'docker/stop/:id', action: 'docker_stop', as: 'docker_stop'
+    post 'docker/restart/:id', action: 'docker_restart', as: 'docker_restart'
+    get 'docker/status/:id', action: 'docker_status', as: 'docker_status'
   end
 
   # Disks (consolidated from plugin)
   scope '/disks', controller: 'disks', as: 'disks' do
-    get '/', action: 'index', as: '_index'
+    get '/', action: 'index', as: 'index'
     get 'devices', action: 'devices'
     get 'mounts', action: 'mounts'
     get 'storage_pool', action: 'storage_pool'

@@ -36,7 +36,7 @@
 
             p
               = spinner
-              a.btn-restart.remote-btn.btn.btn-primary.btn-sm href="#" data-action="click->server-action#perform" data-url=resettings_start_path(server) data-method="POST" data-confirm=t('are_you_sure_you_want_to_restart_the_server', name: server.comment)
+              a.btn-restart.remote-btn.btn.btn-primary.btn-sm href="#" data-action="click->server-action#perform" data-url=settings_restart_path(server) data-method="POST" data-confirm=t('are_you_sure_you_want_to_restart_the_server', name: server.comment)
                 = t('restart_server')
               | &nbsp; &mdash; &nbsp;
               = t 'restart'
