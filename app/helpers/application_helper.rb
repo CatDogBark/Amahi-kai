@@ -96,4 +96,8 @@ module ApplicationHelper
   def theme_image_path(a, theme=nil)
     File.join('/themes', theme || @theme.path, 'images', a)
   end
+
+  def advanced?
+    (s = Setting.where(:name=>'advanced').first) && s.set?
+  end
 end

@@ -18,7 +18,6 @@
 # Likewise, all the methods added will be available for all controllers.
 
 require 'set_theme'
-require 'tab'
 
 class ApplicationController < ActionController::Base
   require 'ipaddr'
@@ -28,7 +27,6 @@ class ApplicationController < ActionController::Base
   before_action :before_action_hook
   before_action :check_setup_completed
   before_action :initialize_validators
-  before_action :prepare_plugins
   before_action :accessed_from_ip
 
   helper_method :current_user
@@ -241,11 +239,6 @@ class ApplicationController < ActionController::Base
     @no_subtabs = true
   end
 
-  # set up all plugins to be used
-  def prepare_plugins
-    # this gets the tabs available
-    @tabs = Tab.all
-  end
 
   def development?
     Rails.env == 'development'

@@ -1,6 +1,0 @@
-# Settings tab registration (consolidated from plugin)
-t = Tab.new("settings", "settings", "/settings")
-t.add("index", "details")
-t.add("system_status", "system status", true)
-t.add("servers", "servers", true)
-t.add("themes", "themes", true)

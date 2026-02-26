@@ -35,8 +35,6 @@ module AmahiHDA
     # config.i18n.enforce_available_locales = true
 
     # initialize tabs app variable
-    require_relative "../lib/tab"
-    config.tabs = []
 
     # in case we need to debug assets
     # config.assets.debug = true

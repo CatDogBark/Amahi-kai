@@ -1,77 +1,61 @@
-- active_tab = nil
-- visible_tabs = @advanced ? @tabs : @tabs.reject { |t| t.advanced }
+- tabs = [
+-   { id: 'users', label: 'users', url: '/users' },
+-   { id: 'shares', label: 'shares', url: '/shares', subtabs: [
+-     { id: 'index', label: 'details', url: '/shares' },
+-     { id: 'settings', label: 'settings', url: '/shares/settings', advanced: true }
+-   ]},
+-   { id: 'network', label: 'network', url: '/network', advanced: true, subtabs: [
+-     { id: 'index', label: 'leases', url: '/network' },
+-     { id: 'hosts', label: 'hosts', url: '/network/hosts' },
+-     { id: 'gateway', label: 'gateway', url: '/network/gateway', advanced: true },
+-     { id: 'dns_aliases', label: 'dns_aliases', url: '/network/dns_aliases', advanced: true },
+-     { id: 'settings', label: 'settings', url: '/network/settings', advanced: true },
+-     { id: 'remote_access', label: 'remote_access', url: '/network/remote_access' },
+-     { id: 'security', label: 'security', url: '/network/security' }
+-   ]},
+-   { id: 'disks', label: 'disks', url: '/disks', subtabs: [
+-     { id: 'index', label: 'disks', url: '/disks' },
+-     { id: 'devices', label: 'devices', url: '/disks/devices' },
+-     { id: 'mounts', label: 'mounts', url: '/disks/mounts' },
+-     { id: 'storage_pool', label: 'storage_pool', url: '/disks/storage_pool' }
+-   ]},
+-   { id: 'apps', label: 'apps', url: '/apps', subtabs: [
+-     { id: 'docker_apps', label: 'available', url: '/apps' },
+-     { id: 'installed_apps', label: 'installed', url: '/apps/installed_apps' }
+-   ]},
+-   { id: 'settings', label: 'settings', url: '/settings', subtabs: [
+-     { id: 'index', label: 'details', url: '/settings' },
+-     { id: 'system_status', label: 'system status', url: '/settings/system_status', advanced: true },
+-     { id: 'servers', label: 'servers', url: '/settings/servers', advanced: true },
+-     { id: 'themes', label: 'themes', url: '/settings/themes', advanced: true }
+-   ]}
+- ]
+
+- visible_tabs = @advanced ? tabs : tabs.reject { |t| t[:advanced] }
+- controller_name = params[:controller]
+- action_name = params[:action]
+
+/! Active tab detection: match controller name or find parent of current action
+- active_tab = visible_tabs.find { |t| t[:id] == controller_name } || visible_tabs.find { |t| t[:subtabs]&.any? { |s| s[:id] == controller_name || s[:id] == action_name } }
+
 ul.nav.nav-tabs.setup-main-tab
-    - visible_tabs.each do |tab|
-      li.nav-item
-          - if !tab_class(tab)&.include?('active')
-              a.nav-link.active.text-capitalize.tab-link-style href="#{tab.url}"
-                = t(tab.label)
-              
-              .setup-subtab-container.all-subtab-container
-                ul.nav.nav-tabs.setup-subtab
-                  - if @advanced
-                    - tab.advanced_subtabs.each do |subtab|
-                      li.nav-item
-                        - if subtab_class(subtab.id,tab.id).blank?
-                          a.text-capitalize.subtab-link href="#{subtab.url}"
-                            = t(subtab.label)
-                        - else
-                          a.text-capitalize.active-subtab-link href="#{subtab.url}"
-                            = t(subtab.label)
-                  - else
-                    - tab.basic_subtabs.each do |subtab|
-                      li.nav-item
-                        - if subtab_class(subtab.id,tab.id).blank?
-                          a.text-capitalize.subtab-link href="#{subtab.url}"
-                            = t(subtab.label)
-                        - else
-                          a.text-capitalize.active-subtab-link href="#{subtab.url}"
-                            = t(subtab.label)
+  - visible_tabs.each do |tab|
+    - is_active = (tab == active_tab)
+    li.nav-item
+      a.nav-link.text-capitalize.tab-link-style href=tab[:url] class=("active active-tab-link-style" if is_active)
+        = t(tab[:label])
 
-          - else
-              - active_tab = tab
-              a.nav-link.active.text-capitalize.active-tab-link-style href="#{tab.url}"
-                = t(tab.label)
-          
-              .setup-subtab-container.all-subtab-container
-                ul.nav.nav-tabs.setup-subtab
-                  - if @advanced
-                    - tab.advanced_subtabs.each do |subtab|
-                      li.nav-item
-                        - if subtab_class(subtab.id,tab.id).blank?
-                          a.text-capitalize.subtab-link href="#{subtab.url}"
-                            = t(subtab.label)
-                        - else
-                          a.text-capitalize.active-subtab-link href="#{subtab.url}"
-                            = t(subtab.label)
-                  - else
-                    - tab.basic_subtabs.each do |subtab|
-                      li.nav-item
-                        - if subtab_class(subtab.id,tab.id).blank?
-                          a.text-capitalize.subtab-link href="#{subtab.url}"
-                            = t(subtab.label)
-                        - else
-                          a.text-capitalize.active-subtab-link href="#{subtab.url}"
-                            = t(subtab.label)
-
-- if active_tab&.subtabs?
-  .setup-subtab-container.single-subtab-container
-    ul.nav.nav-tabs.setup-subtab
-      - if @advanced
-        - active_tab.advanced_subtabs.each do |subtab|
+- if active_tab && active_tab[:subtabs]&.any?
+  - visible_subtabs = @advanced ? active_tab[:subtabs] : active_tab[:subtabs].reject { |s| s[:advanced] }
+  - if visible_subtabs.any?
+    .setup-subtab-container
+      ul.nav.nav-tabs.setup-subtab
+        - visible_subtabs.each do |subtab|
+          - sub_active = (subtab[:id] == action_name) || (subtab[:id] == 'index' && action_name == active_tab[:id]) || (subtab[:url] == request.path)
           li.nav-item
-            - if subtab_class(subtab.id,active_tab.id).blank?
-              a.text-capitalize.subtab-link href="#{subtab.url}"
-                = t(subtab.label)
+            - if sub_active
+              a.text-capitalize.active-subtab-link href=subtab[:url]
+                = t(subtab[:label])
             - else
-              a.text-capitalize.active-subtab-link href="#{subtab.url}"
-                = t(subtab.label)
-      - else
-        - active_tab.basic_subtabs.each do |subtab|
-          li.nav-item
-            - if subtab_class(subtab.id,active_tab.id).blank?
-              a.text-capitalize.subtab-link href="#{subtab.url}"
-                = t(subtab.label)
-            - else
-              a.text-capitalize.active-subtab-link href="#{subtab.url}"
-                = t(subtab.label)
+              a.text-capitalize.subtab-link href=subtab[:url]
+                = t(subtab[:label])
