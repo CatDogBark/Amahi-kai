@@ -7,60 +7,103 @@ on:
     branches: [main]
 
 jobs:
-  lint:
+  models:
+    name: Model Specs
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.2'
-          bundler-cache: true
-
-      - name: RuboCop (lint — catches bugs, not style)
-        run: bundle exec rubocop --parallel --format github
-        continue-on-error: true
-
-      - name: Brakeman (security scan)
-        run: bundle exec brakeman --no-pager -q -w2
-        continue-on-error: true
-
-  test:
-    runs-on: ubuntu-latest
-
     env:
       RAILS_ENV: test
       BUNDLE_JOBS: 4
       BUNDLE_WITHOUT: production
-
     steps:
       - uses: actions/checkout@v4
-
       - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libsqlite3-dev libmariadb-dev
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev libmariadb-dev
+      - uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
           bundler-cache: true
-
-      - name: Prepare test environment
+      - name: Prepare DB
         run: |
           mkdir -p tmp/cache/tmpfiles tmp/pids log
           bundle exec rails db:schema:load
+      - run: bundle exec rspec spec/models/ --tag ~docker --format documentation
 
-      - name: Run model specs
-        run: bundle exec rspec spec/models/ --tag ~docker --format documentation
+  requests:
+    name: Request Specs
+    runs-on: ubuntu-latest
+    env:
+      RAILS_ENV: test
+      BUNDLE_JOBS: 4
+      BUNDLE_WITHOUT: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev libmariadb-dev
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+      - name: Prepare DB
+        run: |
+          mkdir -p tmp/cache/tmpfiles tmp/pids log
+          bundle exec rails db:schema:load
+      - run: bundle exec rspec spec/requests/ --tag ~integration --format documentation
 
-      - name: Run request specs
-        run: bundle exec rspec spec/requests/ --tag ~integration --format documentation
+  lib:
+    name: Lib Specs
+    runs-on: ubuntu-latest
+    env:
+      RAILS_ENV: test
+      BUNDLE_JOBS: 4
+      BUNDLE_WITHOUT: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev libmariadb-dev
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+      - name: Prepare DB
+        run: |
+          mkdir -p tmp/cache/tmpfiles tmp/pids log
+          bundle exec rails db:schema:load
+      - run: bundle exec rspec spec/lib/ --tag ~integration --format documentation
 
-      - name: Run lib specs
-        run: bundle exec rspec spec/lib/ --tag ~integration --format documentation
+  features:
+    name: Feature Specs
+    runs-on: ubuntu-latest
+    env:
+      RAILS_ENV: test
+      BUNDLE_JOBS: 4
+      BUNDLE_WITHOUT: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev libmariadb-dev
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+      - name: Prepare DB
+        run: |
+          mkdir -p tmp/cache/tmpfiles tmp/pids log
+          bundle exec rails db:schema:load
+      - run: bundle exec rspec spec/features/ --tag ~js --tag ~archived --format documentation
 
-      - name: Run feature specs (no JS)
-        run: bundle exec rspec spec/features/ --tag ~js --tag ~archived --format documentation
+  lint:
+    name: Lint & Security
+    needs: [models, requests, lib, features]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+      - name: RuboCop
+        run: bundle exec rubocop --parallel --format github
+        continue-on-error: true
+      - name: Brakeman
+        run: bundle exec brakeman --no-pager -q -w2
+        continue-on-error: true
