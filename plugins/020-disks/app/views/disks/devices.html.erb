@@ -115,3 +115,12 @@
     </div>
   <% end %>
 </div>
+
+<script>
+document.querySelectorAll('[data-disable-with]').forEach(function(btn) {
+  btn.closest('form').addEventListener('submit', function() {
+    btn.disabled = true;
+    btn.textContent = btn.getAttribute('data-disable-with');
+  });
+});
+</script>
