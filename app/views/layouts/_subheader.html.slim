@@ -1,6 +1,6 @@
 .container
 	.row.p-4
-		.col-2.ms-3
+		.col-2
 			- if File.exist?(Rails.public_path.join('themes', @theme.path, 'images', 'logo.svg'))
 				img src="/themes/#{@theme.path}/images/logo.svg" alt="Amahi-kai" style="max-height: 55px"
 			- else
