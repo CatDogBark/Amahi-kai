@@ -154,6 +154,7 @@ Rails.application.routes.draw do
 
   # Setup wizard
   get  'setup/welcome'  => 'setup#welcome',       as: :setup_welcome
+  get  'setup/create_swap' => 'setup#create_swap', as: :setup_create_swap
   get  'setup/admin'    => 'setup#admin',          as: :setup_admin
   post 'setup/admin'    => 'setup#update_admin',   as: :setup_update_admin
   get  'setup/network'  => 'setup#network',        as: :setup_network

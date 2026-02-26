@@ -474,6 +474,11 @@ amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get install -y unattended-upgrad
 amahi ALL=(root) NOPASSWD: /usr/bin/dpkg-reconfigure -plow unattended-upgrades
 amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/hda/tmp/sshd_config /etc/ssh/sshd_config
 amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/hda/tmp/smb.conf /etc/samba/smb.conf
+amahi ALL=(root) NOPASSWD: /usr/bin/fallocate -l * /swapfile
+amahi ALL=(root) NOPASSWD: /usr/bin/dd if=/dev/zero of=/swapfile *
+amahi ALL=(root) NOPASSWD: /usr/bin/chmod 600 /swapfile
+amahi ALL=(root) NOPASSWD: /sbin/mkswap /swapfile
+amahi ALL=(root) NOPASSWD: /sbin/swapon /swapfile
 SUDOERS
 chmod 440 /etc/sudoers.d/amahi-kai
 visudo -cf /etc/sudoers.d/amahi-kai
