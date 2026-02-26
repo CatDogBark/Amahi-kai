@@ -78,13 +78,14 @@
                               method: :post,
                               class: "btn btn-sm btn-outline-info",
                               data: { disable_with: "⏳ Loading..." } %>
-                        <%= button_to "Mount",
-                              disks_engine.mount_disk_path,
-                              params: { device: part[:path] },
-                              method: :post,
-                              class: "btn btn-sm btn-outline-primary",
-                              data: { disable_with: "⏳ Mounting..." } %>
-                        <% unless supported_fs.include?(part[:fstype].to_s.downcase) %>
+                        <% if supported_fs.include?(part[:fstype].to_s.downcase) %>
+                          <%= button_to "Mount",
+                                disks_engine.mount_disk_path,
+                                params: { device: part[:path] },
+                                method: :post,
+                                class: "btn btn-sm btn-outline-primary",
+                                data: { disable_with: "⏳ Mounting..." } %>
+                        <% else %>
                           <%= button_to "Mount as Share",
                                 disks_engine.mount_as_share_path,
                                 params: { device: part[:path] },
