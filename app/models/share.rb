@@ -21,6 +21,10 @@ require 'shellwords'
 
 class Share < ApplicationRecord
 
+	def to_param
+		name
+	end
+
 	DEFAULT_SHARES_ROOT = '/var/hda/files'
 
 	SIGNATURE = "Amahi configuration"
