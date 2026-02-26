@@ -131,6 +131,7 @@ body::before {
   height: var(--size, 4px);
   border-radius: 50%;
   background: var(--kai-primary);
+  box-shadow: 0 0 6px 1px var(--kai-primary);
   animation:
     particle-rise var(--duration, 20s) linear infinite,
     particle-sway var(--sway, 8s) ease-in-out infinite;
