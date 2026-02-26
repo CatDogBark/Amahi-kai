@@ -63,7 +63,7 @@
 
     <div class="setup-actions">
       <a href="<%= setup_greyhole_path %>" class="btn-skip">Skip</a>
-      <button type="submit" class="btn-kai">Prepare Drives & Continue →</button>
+      <button type="submit" class="btn-kai" onclick="this.disabled=true; this.innerHTML='<span style=\'display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:8px;\'></span>Preparing drives...'; this.form.submit();">Prepare Drives & Continue →</button>
     </div>
   <% end %>
 <% else %>
