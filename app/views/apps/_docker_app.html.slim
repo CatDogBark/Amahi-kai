@@ -23,7 +23,7 @@
       td.text-end.pe-3 style='width: 120px; vertical-align:middle'
         - case status
         - when 'available'
-          button.btn.btn-sm.btn-primary onclick="openAppInstall('#{identifier}', '#{apps_engine.docker_install_stream_path(identifier)}', '#{name}')"
+          button.btn.btn-sm.btn-primary onclick="openAppInstall('#{identifier}', '#{apps_docker_install_stream_path(identifier)}', '#{name}')"
             = t('install', default: 'Install')
         - when 'pulling', 'installing'
           span.badge.bg-warning.text-dark
@@ -37,13 +37,13 @@
                 a.btn.btn-sm.btn-success style="white-space:nowrap" href="http://#{request.host}:#{app.host_port}" target="_blank" Open Direct
               - else
                 a.btn.btn-sm.btn-success href="/app/#{identifier}" target="_blank" Open
-            button.btn.btn-sm.btn-outline-danger onclick="dockerAppAction('/tab/apps/docker/stop/#{identifier}', '#{identifier}', this)" Stop
+            button.btn.btn-sm.btn-outline-danger onclick="dockerAppAction('/apps/docker/stop/#{identifier}', '#{identifier}', this)" Stop
         - when 'stopped'
           .d-flex.gap-1.justify-content-end
-            button.btn.btn-sm.btn-outline-success onclick="dockerAppAction('/tab/apps/docker/start/#{identifier}', '#{identifier}', this)" Start
-            button.btn.btn-sm.btn-outline-danger onclick="if(confirm('Uninstall #{name}? This removes the container and its data.')){dockerAppAction('/tab/apps/docker/uninstall/#{identifier}', '#{identifier}', this)}" Uninstall
+            button.btn.btn-sm.btn-outline-success onclick="dockerAppAction('/apps/docker/start/#{identifier}', '#{identifier}', this)" Start
+            button.btn.btn-sm.btn-outline-danger onclick="if(confirm('Uninstall #{name}? This removes the container and its data.')){dockerAppAction('/apps/docker/uninstall/#{identifier}', '#{identifier}', this)}" Uninstall
         - when 'error'
           .d-flex.gap-1.align-items-center.justify-content-end
             span.badge.bg-danger Error
-            button.btn.btn-sm.btn-outline-primary onclick="openAppInstall('#{identifier}', '#{apps_engine.docker_install_stream_path(identifier)}', '#{name}')" title="Retry" ↻
-            button.btn.btn-sm.btn-outline-danger onclick="if(confirm('Uninstall #{name}?')){dockerAppAction('/tab/apps/docker/uninstall/#{identifier}', '#{identifier}', this)}" Uninstall
+            button.btn.btn-sm.btn-outline-primary onclick="openAppInstall('#{identifier}', '#{apps_docker_install_stream_path(identifier)}', '#{name}')" title="Retry" ↻
+            button.btn.btn-sm.btn-outline-danger onclick="if(confirm('Uninstall #{name}?')){dockerAppAction('/apps/docker/uninstall/#{identifier}', '#{identifier}', this)}" Uninstall

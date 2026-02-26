@@ -52,6 +52,22 @@ Rails.application.routes.draw do
     get 'security_fix_stream', action: 'security_fix_stream'
   end
 
+  # Apps (consolidated from plugin)
+  scope '/apps', controller: 'apps', as: 'apps' do
+    get '/', action: 'docker_apps', as: '_index'
+    get 'install_docker_stream', action: 'install_docker_stream'
+    post 'start_docker', action: 'start_docker'
+    get 'docker_apps', action: 'docker_apps'
+    get 'installed_apps', action: 'installed_apps'
+    post 'docker/install/:id', action: 'docker_install', as: '_docker_install'
+    get 'docker/install_stream/:id', action: 'docker_install_stream', as: '_docker_install_stream'
+    post 'docker/uninstall/:id', action: 'docker_uninstall', as: '_docker_uninstall'
+    post 'docker/start/:id', action: 'docker_start', as: '_docker_start'
+    post 'docker/stop/:id', action: 'docker_stop', as: '_docker_stop'
+    post 'docker/restart/:id', action: 'docker_restart', as: '_docker_restart'
+    get 'docker/status/:id', action: 'docker_status', as: '_docker_status'
+  end
+
   # Disks (consolidated from plugin)
   scope '/disks', controller: 'disks', as: 'disks' do
     get '/', action: 'index', as: '_index'

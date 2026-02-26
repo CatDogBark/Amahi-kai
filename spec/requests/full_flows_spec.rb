@@ -55,12 +55,12 @@ RSpec.describe "Full integration flows", type: :request do
 
   describe "Docker app catalog" do
     it "views the app catalog" do
-      get "/tab/apps"
+      get "/apps"
       expect(response).to have_http_status(:ok)
     end
 
     it "views installed apps" do
-      get "/tab/apps/installed_apps"
+      get "/apps/installed_apps"
       expect(response).to have_http_status(:ok)
     end
   end

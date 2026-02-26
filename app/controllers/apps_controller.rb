@@ -140,9 +140,9 @@ class AppsController < ApplicationController
 		if Rails.env.production?
 			DockerService.start!
 		end
-		redirect_to apps_engine.docker_apps_path, notice: "Docker service started."
-	rescue => e
-		redirect_to apps_engine.docker_apps_path, alert: "Failed to start Docker: #{e.message}"
+		redirect_to apps_docker_apps_path, notice: "Docker service started."
+	rescue StandardError => e
+		redirect_to apps_docker_apps_path, alert: "Failed to start Docker: #{e.message}"
 	end
 
 	# ─── Docker Apps ──────────────────────────────────────────
@@ -182,7 +182,7 @@ class AppsController < ApplicationController
 		end
 
 		@categories = catalog.map { |e| e[:category] }.compact.uniq.sort
-	rescue => e
+	rescue StandardError => e
 		Rails.logger.error("Docker apps error: #{e.message}")
 		@docker_apps = []
 		@categories = []
@@ -192,11 +192,11 @@ class AppsController < ApplicationController
 		identifier = params[:id]
 		entry = load_catalog.find { |e| e[:identifier] == identifier }
 		unless entry
-			redirect_to '/tab/apps', alert: "App not found"
+			redirect_to '/apps', alert: "App not found"
 			return
 		end
 		# Just redirect — actual install happens via streaming terminal
-		redirect_to '/tab/apps'
+		redirect_to '/apps'
 	end
 
 	def docker_install_stream
@@ -381,7 +381,7 @@ class AppsController < ApplicationController
 					sse_send.call("  Access at #{proxy_base}/app/#{identifier}") if first_port
 					sse_send.call("success", "done")
 
-				rescue => e
+				rescue StandardError => e
 					docker_app&.update(status: 'error', error_message: e.message)
 					sse_send.call("✗ #{e.message}")
 					sse_send.call("error", "done")
@@ -394,7 +394,7 @@ class AppsController < ApplicationController
 		docker_app = DockerApp.find_by!(identifier: params[:id])
 		docker_app.uninstall!
 		render json: { status: 'ok', app_status: 'available', name: docker_app.name }
-	rescue => e
+	rescue StandardError => e
 		render json: { status: 'error', message: e.message }, status: 500
 	end
 
@@ -402,7 +402,7 @@ class AppsController < ApplicationController
 		docker_app = DockerApp.find_by!(identifier: params[:id])
 		docker_app.start!
 		render json: { status: 'ok', app_status: 'running', host_port: docker_app.host_port, name: docker_app.name }
-	rescue => e
+	rescue StandardError => e
 		render json: { status: 'error', message: e.message }, status: 500
 	end
 
@@ -410,7 +410,7 @@ class AppsController < ApplicationController
 		docker_app = DockerApp.find_by!(identifier: params[:id])
 		docker_app.stop!
 		render json: { status: 'ok', app_status: 'stopped', name: docker_app.name }
-	rescue => e
+	rescue StandardError => e
 		render json: { status: 'error', message: e.message }, status: 500
 	end
 
@@ -418,8 +418,8 @@ class AppsController < ApplicationController
 		docker_app = DockerApp.find_by!(identifier: params[:id])
 		docker_app.restart!
 		render json: { status: 'ok', app_status: 'running', host_port: docker_app.host_port, name: docker_app.name }
-	rescue => e
-		redirect_to '/tab/apps/docker_apps', alert: "Restart failed: #{e.message}"
+	rescue StandardError => e
+		redirect_to '/apps/docker_apps', alert: "Restart failed: #{e.message}"
 	end
 
 	def docker_status
