@@ -53,6 +53,28 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 # ---------------------------------------------------------------------------
+# 0. Ensure swap exists (critical for low-RAM systems)
+# ---------------------------------------------------------------------------
+if ! swapon --show | grep -q '/'; then
+  TOTAL_RAM_MB=$(awk '/MemTotal/ {printf "%d", $2/1024}' /proc/meminfo)
+  if [ "$TOTAL_RAM_MB" -lt 8192 ]; then
+    SWAP_SIZE="2G"
+    [ "$TOTAL_RAM_MB" -lt 2048 ] && SWAP_SIZE="4G"
+    echo "==> No swap detected (${TOTAL_RAM_MB}MB RAM) — creating ${SWAP_SIZE} swapfile..."
+    fallocate -l "$SWAP_SIZE" /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count="${SWAP_SIZE%G}000" status=progress
+    chmod 600 /swapfile
+    mkswap /swapfile
+    swapon /swapfile
+    if ! grep -q '/swapfile' /etc/fstab; then
+      echo '/swapfile none swap sw 0 0' >> /etc/fstab
+    fi
+    echo "==> Swap enabled: ${SWAP_SIZE}"
+  fi
+else
+  echo "==> Swap already active: $(swapon --show --noheadings | awk '{print $3}')"
+fi
+
+# ---------------------------------------------------------------------------
 # 1. System packages
 # ---------------------------------------------------------------------------
 echo "==> Installing system dependencies..."
