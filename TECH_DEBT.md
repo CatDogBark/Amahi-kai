@@ -38,16 +38,11 @@ Some views are `.html.slim`, others `.html.erb`. Not a bug, just inconsistent. C
 
 ## Low Priority (dead code / cosmetic)
 
-### Plugin Model (dead code)
-`app/models/plugin.rb` — Full plugin install/uninstall system (YAML configs, migrations, restart). Completely unused since plugin consolidation. `spec/models/plugin_spec.rb` tests it.
-
-**Fix:** Delete model, spec, and DB table when ready.
-
-### amahi_plugins.rb Initializer
-`config/initializers/amahi_plugins.rb` — Now a no-op (empty method). Can delete along with the `amahi_plugin_routes` call in `config/routes.rb`.
-
-### plugins/ Directory
-Empty directory in repo. `application.rb` no longer scans it. Can delete.
+### ~~Plugin Model~~ ✅ DELETED
+### ~~amahi_plugins.rb~~ ✅ DELETED
+### ~~Plugin generator~~ ✅ DELETED
+### ~~plugins/ directory~~ ✅ DELETED
+All removed 2026-02-26 (474 lines). DB `plugins` table still exists but harmless.
 
 ### /var/hda/ Legacy Paths
 Several places use `HDA_TMP_DIR` / `/var/hda/` for staging samba/dns configs. Legacy Amahi convention. Works but not obvious. Could migrate to `/var/lib/amahi-kai/` for clarity.
