@@ -237,6 +237,9 @@ class DiskManager
   end
 
   def self.auto_mount_point
+    # Clean up stale fstab entries and empty dirs before picking a number
+    cleanup_stale_mounts! if production?
+
     # Find the lowest available storage number (reuse gaps from unmounted drives)
     num = 1
     loop do
@@ -249,6 +252,54 @@ class DiskManager
       end
       num += 1
     end
+  end
+
+  # Remove fstab entries whose UUIDs no longer exist on any attached device,
+  # and clean up orphaned /mnt/storage-* directories
+  def self.cleanup_stale_mounts!
+    return unless production?
+
+    # Get all UUIDs currently present on the system
+    live_uuids = `sudo /sbin/blkid -s UUID -o value 2>/dev/null`.strip.lines.map(&:strip).reject(&:empty?)
+
+    # Read fstab and find stale /mnt/storage-* entries
+    fstab = File.read("/etc/fstab") rescue ""
+    stale_found = false
+    new_lines = fstab.lines.map do |line|
+      next line if line.strip.start_with?("#") || line.strip.empty?
+      next line unless line.include?("/mnt/storage-")
+      # Extract UUID from fstab line
+      if line =~ /UUID=([^\s]+)/
+        uuid = $1
+        if live_uuids.include?(uuid)
+          line  # UUID still exists, keep it
+        else
+          stale_found = true
+          Rails.logger.info("[DiskManager] Removing stale fstab entry: #{line.strip}") if defined?(Rails)
+          nil   # UUID gone, remove the line
+        end
+      else
+        line
+      end
+    end.compact
+
+    if stale_found
+      File.write("/tmp/fstab.new", new_lines.join)
+      execute_command("sudo /usr/bin/cp /tmp/fstab.new /etc/fstab")
+    end
+
+    # Remove empty, unmounted /mnt/storage-* directories
+    Dir.glob("/mnt/storage-*").each do |dir|
+      next unless File.directory?(dir)
+      next if mount_point_active?(dir)
+      begin
+        Dir.rmdir(dir) if Dir.empty?(dir)
+      rescue SystemCallError
+        # Not empty or permission denied — skip
+      end
+    end
+  rescue => e
+    Rails.logger.error("[DiskManager] cleanup_stale_mounts! failed: #{e.message}") if defined?(Rails)
   end
 
   def self.mount_point_active?(path)
