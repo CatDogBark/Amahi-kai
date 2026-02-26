@@ -168,6 +168,11 @@ class User < ApplicationRecord
 		esc_name = Shellwords.escape(self.name)
 		pwd_option = password_option()
 		c = Command.new("usermod -c #{esc_name} #{pwd_option} #{esc_login}")
+		# Update Samba password when password changes
+		if password.present?
+			esc_pwd = Shellwords.escape(password)
+			c.submit("sh -c '(echo #{esc_pwd}; echo #{esc_pwd}) | pdbedit -d0 -t -a -u #{esc_login}'")
+		end
 		c.execute
 	end
 
