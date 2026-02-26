@@ -21,7 +21,7 @@ html[dir="#{@locale_direction}" lang="#{I18n.locale}" xml:lang="#{I18n.locale}"]
     - for header in theme.headers do
       = header =~ /\.js$/ ? javascript_include_tag(header) : header
 
-    link rel="search" type="application/opensearchdescription+xml" title="HDA Search" href="/search.xml"
+    link rel="search" type="application/opensearchdescription+xml" title="File Search" href="/search.xml"
     link rel="shortcut icon" href="/favicon.ico" type="image/x-icon"
 
     = csrf_meta_tags
