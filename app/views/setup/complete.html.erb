@@ -45,6 +45,15 @@
     <% end %>
   </div>
 
+  <% if @standalone_drives.any? %>
+    <% @standalone_drives.each do |drive| %>
+      <div class="summary-item">
+        <span class="check">✓</span>
+        <span>Standalone share: <strong><%= drive[:name] %></strong> (<%= drive[:fstype] %> at <%= drive[:path] %>)</span>
+      </div>
+    <% end %>
+  <% end %>
+
   <div class="summary-item">
     <% if @greyhole_installed %>
       <span class="check">✓</span>

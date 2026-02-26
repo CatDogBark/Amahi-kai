@@ -45,10 +45,15 @@
                    onclick="previewDrive('<%= part[:path] %>'); return false;">Preview contents</a>
                 <div style="margin-top: 4px;">
                   <% unless fs_supported %>
-                    <label style="font-size: 12px; display: inline; cursor: pointer; color: #ef4444;">
-                      <input type="checkbox" name="format_drives[]" value="<%= part[:path] %>" style="margin-right: 4px;" checked>
-                      Format as ext4 — required (<%= part[:fstype] %> not supported for storage pooling)
-                    </label>
+                    <span style="font-size: 12px; color: #7f8c9b;">
+                      📂 Will be mounted as a standalone share (not pooled — <%= part[:fstype] %> doesn't support Greyhole)
+                    </span>
+                    <div style="margin-top: 2px;">
+                      <label style="font-size: 12px; display: inline; cursor: pointer; color: #ef4444;">
+                        <input type="checkbox" name="format_drives[]" value="<%= part[:path] %>" style="margin-right: 4px;">
+                        Format as ext4 instead (erases all data, enables pooling)
+                      </label>
+                    </div>
                   <% else %>
                     <label style="font-size: 12px; display: inline; cursor: pointer; color: #7f8c9b;">
                       <input type="checkbox" name="format_drives[]" value="<%= part[:path] %>" style="margin-right: 4px;">

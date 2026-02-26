@@ -88,6 +88,7 @@ class SetupController < ApplicationController
 
     selected_drives = params[:drives] || []
     format_drives = params[:format_drives] || []
+    supported_fs = %w[ext2 ext3 ext4 xfs btrfs]
 
     selected_drives.each do |device_path|
       begin
@@ -96,9 +97,10 @@ class SetupController < ApplicationController
         next unless part
 
         mount_point = part[:mountpoint]
+        will_format = part[:status] == :unformatted || format_drives.include?(device_path)
 
         # Format if unformatted OR user explicitly chose to format
-        if part[:status] == :unformatted || format_drives.include?(device_path)
+        if will_format
           DiskManager.format_disk!(device_path)
         end
 
@@ -107,9 +109,36 @@ class SetupController < ApplicationController
           mount_point = DiskManager.mount!(device_path)
         end
 
-        # Add to storage pool
-        if mount_point.present?
+        next unless mount_point.present?
+
+        # Determine if this filesystem supports pooling
+        fs_after = will_format ? 'ext4' : part[:fstype].to_s.downcase
+        can_pool = supported_fs.include?(fs_after)
+
+        if can_pool
+          # Add to Greyhole storage pool
           DiskPoolPartition.create!(path: mount_point, minimum_free: 10)
+        else
+          # Unsupported fs — create a standalone share instead
+          share_name = File.basename(mount_point).gsub(/[^a-zA-Z0-9\-]/, '')
+          share_name = "drive-#{share_name}" if share_name.blank?
+          unless Share.exists?(path: mount_point)
+            share = Share.new(
+              name: share_name,
+              path: mount_point,
+              visible: true,
+              rdonly: false,
+              everyone: true,
+              tags: "storage",
+              extras: "",
+              disk_pool_copies: 0
+            )
+            # Stub hooks since the directory already exists
+            def share.before_save_hook; end
+            share.save!
+            session[:standalone_drives] ||= []
+            session[:standalone_drives] << { name: share_name, path: mount_point, fstype: part[:fstype] }
+          end
         end
       rescue => e
         Rails.logger.error("SetupController#update_storage: #{e.message} for #{device_path}")
@@ -202,6 +231,7 @@ class SetupController < ApplicationController
     @server_name = Setting.get('server-name')
     @pool_partitions = DiskPoolPartition.all rescue []
     @first_share = session[:first_share_created]
+    @standalone_drives = session[:standalone_drives] || []
     @greyhole_installed = begin
       require 'greyhole'
       Greyhole.installed?
@@ -217,6 +247,7 @@ class SetupController < ApplicationController
     session.delete(:first_share_created)
     session.delete(:greyhole_installed)
     session.delete(:default_copies)
+    session.delete(:standalone_drives)
     redirect_to root_path, notice: "Setup complete! Welcome to Amahi-kai."
   end
 end

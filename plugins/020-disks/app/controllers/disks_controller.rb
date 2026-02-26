@@ -69,6 +69,36 @@ class DisksController < ApplicationController
     end
   end
 
+  def mount_as_share
+    device = params[:device]
+    begin
+      mp = DiskManager.mount!(device)
+      share_name = File.basename(mp).gsub(/[^a-zA-Z0-9\-]/, '')
+      share_name = "drive-#{share_name}" if share_name.blank?
+
+      unless Share.exists?(path: mp)
+        share = Share.new(
+          name: share_name,
+          path: mp,
+          visible: true,
+          rdonly: false,
+          everyone: true,
+          tags: "storage",
+          extras: "",
+          disk_pool_copies: 0
+        )
+        share.save!
+      end
+
+      flash[:notice] = "Mounted #{device} at #{mp} and created share '#{share_name}'"
+    rescue DiskManager::DiskError => e
+      flash[:error] = "Mount failed: #{e.message}"
+    rescue => e
+      flash[:error] = "Error: #{e.message}"
+    end
+    redirect_to disks_engine.devices_path
+  end
+
   def unmount_disk
     device = params[:device]
     begin
