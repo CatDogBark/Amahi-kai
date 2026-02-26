@@ -73,7 +73,13 @@ class Greyhole
 
       # Generate full config and enable service
       configure! if DiskPoolPartition.any?
+
+      # Re-inject Samba globals — Greyhole's postinst may overwrite smb.conf
+      reinject_samba_globals!
+
       system('sudo systemctl enable greyhole.service')
+      system('sudo systemctl restart smbd.service')
+      system('sudo systemctl restart nmbd.service')
       system('sudo systemctl start greyhole.service')
 
       true
@@ -167,6 +173,28 @@ class Greyhole
     end
 
     private
+
+    def reinject_samba_globals!
+      return unless production?
+      smb_conf = '/etc/samba/smb.conf'
+      return unless File.exist?(smb_conf)
+
+      required_settings = [
+        'wide links = yes',
+        'follow symlinks = yes',
+        'allow insecure wide links = yes',
+        'unix extensions = no'
+      ]
+
+      content = File.read(smb_conf)
+      required_settings.each do |setting|
+        key = setting.split('=').first.strip
+        unless content.match?(/^\s*#{Regexp.escape(key)}/i)
+          # Insert after [global]
+          system("sudo sed -i '/^\\[global\\]/a\\\\\\t#{setting}' #{smb_conf}")
+        end
+      end
+    end
 
     def production?
       defined?(Rails) && Rails.env.production?
