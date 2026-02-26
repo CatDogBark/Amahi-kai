@@ -1,9 +1,20 @@
 nav.navbar.navbar-expand-md.bg-dark.navbar-inverse
-  .container
+  .container.position-relative
     a.nav-item.nav-link.text-white.nav_hover href="/"  
      = t('home')
 
     = render 'layouts/searchform'    
+
+    /! Theme toggle — absolutely centered in header
+    .theme-switcher
+      .theme-track
+        .theme-indicator
+        button.theme-opt.theme-opt-light onclick="setTheme('light')" title="Light"
+          | ☀️
+        button.theme-opt.theme-opt-dark onclick="setTheme('dark')" title="Dark"
+          | 🌙
+        button.theme-opt.theme-opt-system onclick="setTheme('system')" title="System"
+          | 💻
 
     #amahi-nav.collapse.navbar-collapse.justify-content-end    
       - if current_user_is_admin?
@@ -16,14 +27,6 @@ nav.navbar.navbar-expand-md.bg-dark.navbar-inverse
             = t('help')
           a.nav-item.nav-link.text-white.text-center.nav_hover href=apps_engine.root_path
             = t('apps')
-          .nav-item.d-flex.align-items-center.mx-2
-            .theme-toggle title="Theme"
-              button.theme-btn data-theme="light" title="Light" onclick="setTheme('light')"
-                | ☀️
-              button.theme-btn data-theme="dark" title="Dark" onclick="setTheme('dark')"
-                | 🌙
-              button.theme-btn data-theme="system" title="System" onclick="setTheme('system')"
-                | 💻
           a.nav-item.nav-link.text-white.text-center.nav_hover#update-btn href="#" title="System Update" onclick="openInstallTerminal('system-update','#{settings_engine.update_system_stream_path}');return false;"
             | 🔄
           a.nav-item.nav-link.text-white.text-center.nav_hover#advanced-toggle href="#" title="#{t('advanced_settings')}" style="opacity: #{@advanced ? '1' : '0.5'}" onclick="fetch('#{toggle_advanced_path}', {method:'POST', headers:{'X-CSRF-Token':document.querySelector('meta[name=csrf-token]').content}}).then(function(){location.reload()});return false;"
@@ -33,4 +36,3 @@ nav.navbar.navbar-expand-md.bg-dark.navbar-inverse
           a.nav-item.nav-link.text-white.text-center.nav_hover href="https://amahi-kai.com/wiki/" target='_blank'  
             = t('help')
 
- 

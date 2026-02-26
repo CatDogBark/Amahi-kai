@@ -5,7 +5,7 @@
 (function() {
   'use strict';
 
-  function setTheme(theme) {
+  window.setTheme = function(theme) {
     if (theme === 'system') {
       document.documentElement.removeAttribute('data-theme');
       localStorage.removeItem('theme');
@@ -13,17 +13,26 @@
       document.documentElement.setAttribute('data-theme', theme);
       localStorage.setItem('theme', theme);
     }
-    updateToggleButtons();
-  }
+    updateToggle();
+  };
 
   function currentTheme() {
     return localStorage.getItem('theme') || 'system';
   }
 
-  function updateToggleButtons() {
+  function updateToggle() {
     var active = currentTheme();
-    document.querySelectorAll('.theme-btn').forEach(function(btn) {
-      if (btn.dataset.theme === active) {
+
+    // Update track data attribute for indicator position
+    document.querySelectorAll('.theme-track').forEach(function(track) {
+      track.setAttribute('data-active', active);
+    });
+
+    // Update active class on buttons
+    document.querySelectorAll('.theme-opt').forEach(function(btn) {
+      var btnTheme = btn.classList.contains('theme-opt-light') ? 'light' :
+                     btn.classList.contains('theme-opt-dark') ? 'dark' : 'system';
+      if (btnTheme === active) {
         btn.classList.add('active');
       } else {
         btn.classList.remove('active');
@@ -31,9 +40,6 @@
     });
   }
 
-  // Expose globally
-  window.setTheme = setTheme;
-
-  // Update buttons on load
-  document.addEventListener('DOMContentLoaded', updateToggleButtons);
+  // Update on load
+  document.addEventListener('DOMContentLoaded', updateToggle);
 })();
