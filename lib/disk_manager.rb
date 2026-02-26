@@ -85,13 +85,27 @@ class DiskManager
 
     mount_point ||= auto_mount_point
     uuid = get_uuid(device)
+    fstype = detect_fstype(device)
 
     if production?
       execute_command("sudo /usr/bin/mkdir -p #{Shellwords.escape(mount_point)}")
-      execute_command("sudo /bin/mount #{Shellwords.escape(device)} #{Shellwords.escape(mount_point)}")
+
+      # Use appropriate mount type for the filesystem
+      mount_cmd = "sudo /bin/mount"
+      mount_cmd += " -t ntfs-3g" if fstype&.downcase == "ntfs"
+      mount_cmd += " #{Shellwords.escape(device)} #{Shellwords.escape(mount_point)}"
+      execute_command(mount_cmd)
+
+      # Verify mount actually worked
+      unless mount_point_active?(mount_point)
+        execute_command("sudo /usr/bin/rmdir #{Shellwords.escape(mount_point)} 2>/dev/null")
+        raise DiskError, "Mount failed — #{device} did not mount at #{mount_point}. Check if ntfs-3g is installed for NTFS drives."
+      end
+
       # Add to fstab using UUID for persistence
       if uuid.present?
-        fstab_line = "UUID=#{uuid} #{mount_point} ext4 defaults 0 2"
+        fstab_type = (fstype&.downcase == "ntfs") ? "ntfs-3g" : (fstype.presence || "ext4")
+        fstab_line = "UUID=#{uuid} #{mount_point} #{fstab_type} defaults 0 2"
         # Check if already in fstab
         fstab = File.read("/etc/fstab") rescue ""
         unless fstab.include?(uuid)
@@ -203,6 +217,11 @@ class DiskManager
     unless device.match?(VALID_DEVICE_PATTERN) || device.match?(VALID_NVME_PATTERN)
       raise DiskError, "Invalid device path: #{device}"
     end
+  end
+
+  def self.detect_fstype(device)
+    output = execute_command("sudo /sbin/blkid -s TYPE -o value #{Shellwords.escape(device)} 2>/dev/null")
+    output.to_s.strip.presence
   end
 
   def self.get_uuid(device)
