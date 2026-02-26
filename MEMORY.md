@@ -240,6 +240,39 @@ Async communication between Kai (sandbox) and Root Claude (host):
 **SSL — DONE** (2026-02-25): `assume_ssl` REVERTED — broke LAN HTTP. Cloudflare handles HTTPS at the edge, LAN stays plain HTTP.
 **Auth — DONE** (2026-02-25): Authlogic + SCrypt → `has_secure_password` (bcrypt). Plain Ruby UserSession class using `session[:user_id]`.
 
+### Native File Browser (2026-02-26)
+- `FileBrowserController` — browse, upload, download, rename, delete, new folder, preview, raw
+- Path traversal security: realpath validation under share root
+- Stimulus controller: drag-and-drop, multi-select, bulk delete, preview modal (image/video/audio/PDF)
+- `Share#to_param` returns name for clean URLs (`/files/Storage/browse`)
+- Share cards on dashboard link directly to file browser
+- FileBrowser Docker app removed from catalog — native replaces it
+- **Built in one pass, everything worked first try**
+
+### Toast Notifications (2026-02-26)
+- Replaced all flash banners with fixed-position toasts (top-right, no layout shift)
+- `showToast(msg, type)` global JS function — used by all controllers
+- Server flash rendered as JSON, picked up on DOMContentLoaded
+- Setup wizard has inline toast JS (separate layout, no application.js)
+
+### Theme Toggle (2026-02-26)
+- 3-state: ☀️ light / 🌙 dark / 💻 system — centered in header
+- Connected circles with sliding teal pill indicator
+- `[data-theme]` on `<html>`, localStorage persistence, applied before CSS loads
+- CSS variables for both themes in `style.css`, 0.4s transition on toggle
+
+### Dashboard Rework (2026-02-26)
+- Per-drive storage bars (all mounted drives via `DashboardStats#drive_usage`)
+- CPU + Memory + drives in "System" card, Services as sidebar
+- Share cards with Browse buttons at top
+- Quick action buttons replace oversized count cards
+- Killed redundant Storage Overview section
+
+### CI Overhaul (2026-02-26)
+- Split into 5 parallel jobs: Models, Requests, Lib, Features → Lint & Security
+- RuboCop (Lint cops only) + Brakeman (security scan) as warnings
+- Tabs → spaces across 33 legacy files, bare rescues fixed
+
 ### Setup Wizard (enhanced 2026-02-25)
 - 7 steps: Welcome → Admin → Network → Storage → Greyhole → Share → Complete
 - DiskManager detects drives via lsblk (formatted, unmounted, unformatted)

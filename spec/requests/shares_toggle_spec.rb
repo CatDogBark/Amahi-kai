@@ -3,13 +3,17 @@ require 'spec_helper'
 describe "Shares Toggle Actions", type: :request do
 
   describe "admin" do
-    before { login_as_admin }
+    before do
+      login_as_admin
+      # Stub Samba/system calls that happen on share save
+      allow(Share).to receive(:push_shares)
+      allow_any_instance_of(Share).to receive(:after_save_hook)
+    end
 
     let(:share) { create(:share) }
 
     describe "PUT /shares/:id/toggle_visible" do
       it "toggles visibility" do
-        allow_any_instance_of(Share).to receive(:push_shares)
         original = share.visible
         put toggle_visible_share_path(share), as: :json
         expect(response).to have_http_status(:ok)
@@ -21,7 +25,6 @@ describe "Shares Toggle Actions", type: :request do
 
     describe "PUT /shares/:id/toggle_readonly" do
       it "toggles readonly" do
-        allow_any_instance_of(Share).to receive(:push_shares)
         put toggle_readonly_share_path(share), as: :json
         expect(response).to have_http_status(:ok)
         body = JSON.parse(response.body)
@@ -31,7 +34,6 @@ describe "Shares Toggle Actions", type: :request do
 
     describe "PUT /shares/:id/toggle_everyone" do
       it "toggles everyone access" do
-        allow_any_instance_of(Share).to receive(:push_shares)
         put toggle_everyone_share_path(share), as: :json
         expect(response).to have_http_status(:ok)
       end
@@ -39,7 +41,6 @@ describe "Shares Toggle Actions", type: :request do
 
     describe "PUT /shares/:id/toggle_guest_access" do
       it "toggles guest access" do
-        allow_any_instance_of(Share).to receive(:push_shares)
         put toggle_guest_access_share_path(share), as: :json
         expect(response).to have_http_status(:ok)
       end
@@ -47,7 +48,6 @@ describe "Shares Toggle Actions", type: :request do
 
     describe "PUT /shares/:id/toggle_guest_writeable" do
       it "toggles guest writeable" do
-        allow_any_instance_of(Share).to receive(:push_shares)
         put toggle_guest_writeable_share_path(share), as: :json
         expect(response).to have_http_status(:ok)
       end
@@ -55,7 +55,6 @@ describe "Shares Toggle Actions", type: :request do
 
     describe "PUT /shares/:id/update_extras" do
       it "updates extras" do
-        allow_any_instance_of(Share).to receive(:push_shares)
         put update_extras_share_path(share), params: { share: { extras: "vfs objects = recycle" } }, as: :json
         expect(response).to have_http_status(:ok)
       end
@@ -63,7 +62,6 @@ describe "Shares Toggle Actions", type: :request do
 
     describe "PUT /shares/:id/clear_permissions" do
       it "clears permissions" do
-        allow_any_instance_of(Share).to receive(:push_shares)
         put clear_permissions_share_path(share), as: :json
         expect(response).to have_http_status(:ok)
       end

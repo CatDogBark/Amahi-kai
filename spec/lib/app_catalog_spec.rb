@@ -6,7 +6,7 @@ RSpec.describe AppCatalog do
 
   describe ".all" do
     it "returns all 14 apps" do
-      expect(AppCatalog.all.size).to eq(14)
+      expect(AppCatalog.all.size).to eq(13)
     end
 
     it "includes identifier and name in each entry" do

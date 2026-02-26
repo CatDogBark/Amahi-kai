@@ -9,10 +9,18 @@ RSpec.describe "ShareController", type: :request do
   end
 
   describe "authenticated admin" do
-    before { login_as_admin }
+    before do
+      login_as_admin
+      # Stub Samba/system calls that happen on share save/destroy
+      allow(Share).to receive(:push_shares)
+      allow_any_instance_of(Share).to receive(:after_save_hook)
+      allow_any_instance_of(Share).to receive(:before_destroy_hook)
+      allow_any_instance_of(Share).to receive(:after_destroy_hook)
+    end
 
     describe "POST /shares (create)" do
       it "creates a new share" do
+        allow_any_instance_of(Share).to receive(:before_save_hook)
         expect {
           post shares_path, params: { share: { name: "TestShare" } }
         }.to change(Share, :count).by(1)
@@ -49,7 +57,7 @@ RSpec.describe "ShareController", type: :request do
       let!(:share) { create(:share) }
 
       it "updates tags" do
-        put update_tags_share_path(share), params: { name: "movies, media" }, as: :json
+        put update_tags_share_path(share), params: { value: "movies, media" }, as: :json
         expect(response).to have_http_status(:ok)
       end
     end
