@@ -160,20 +160,20 @@ body::before {
 /* ── Light Mode Colors ── */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-    --ocean-bg-1: #e8f4f8;
-    --ocean-bg-2: #d0eaf2;
-    --ocean-bg-3: #b8e0ec;
-    --wave-opacity: 0.15;
-    --particle-opacity: 0.5;
+    --ocean-bg-1: #dceef4;
+    --ocean-bg-2: #c0dfe9;
+    --ocean-bg-3: #a8d4e2;
+    --wave-opacity: 0.35;
+    --particle-opacity: 0.8;
   }
 }
 
 :root[data-theme="light"] {
-  --ocean-bg-1: #e8f4f8;
-  --ocean-bg-2: #d0eaf2;
-  --ocean-bg-3: #b8e0ec;
-  --wave-opacity: 0.15;
-  --particle-opacity: 0.5;
+  --ocean-bg-1: #dceef4;
+  --ocean-bg-2: #c0dfe9;
+  --ocean-bg-3: #a8d4e2;
+  --wave-opacity: 0.35;
+  --particle-opacity: 0.8;
 }
 
 /* Override for system dark */
