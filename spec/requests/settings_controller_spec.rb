@@ -76,7 +76,7 @@ describe "Settings Controller", type: :request do
 
     describe "reboot" do
       it "issues reboot command" do
-        allow_any_instance_of(Command).to receive(:execute)
+        allow(Shell).to receive(:run).and_return(true)
         post "/settings/reboot"
         expect(response).to have_http_status(:ok)
       end
@@ -84,7 +84,7 @@ describe "Settings Controller", type: :request do
 
     describe "poweroff" do
       it "issues poweroff command" do
-        allow_any_instance_of(Command).to receive(:execute)
+        allow(Shell).to receive(:run).and_return(true)
         post "/settings/poweroff"
         expect(response).to have_http_status(:ok)
       end

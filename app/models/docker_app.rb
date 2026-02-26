@@ -1,3 +1,5 @@
+require 'shell'
+
 class DockerApp < ApplicationRecord
   # Validations
   validates :identifier, presence: true, uniqueness: true
@@ -100,14 +102,14 @@ class DockerApp < ApplicationRecord
     if container_name.present?
       cname = Shellwords.escape(effective_container_name)
       # Force stop (30s timeout) then force remove — don't fail if container is already gone
-      system("sudo docker stop -t 30 #{cname} 2>/dev/null")
-      system("sudo docker rm -f -v #{cname} 2>/dev/null")
+      Shell.run("docker stop -t 30 #{cname} 2>/dev/null")
+      Shell.run("docker rm -f -v #{cname} 2>/dev/null")
     end
     # Prune unused images to reclaim disk space
-    system("sudo docker image prune -f 2>/dev/null")
+    Shell.run("docker image prune -f 2>/dev/null")
     # Clean up host app directory (configs, databases, etc.)
     app_dir = "/opt/amahi/apps/#{identifier}"
-    system("sudo rm -rf #{Shellwords.escape(app_dir)}") if identifier.present? && File.directory?(app_dir)
+    Shell.run("rm -rf #{Shellwords.escape(app_dir)}") if identifier.present? && File.directory?(app_dir)
     update!(status: 'available', container_name: nil, host_port: nil, error_message: nil)
   rescue => e
     update!(status: 'error', error_message: e.message)
@@ -117,7 +119,7 @@ class DockerApp < ApplicationRecord
   # Start the container
   def start!
     cname = Shellwords.escape(effective_container_name)
-    result = system("sudo docker start #{cname} 2>/dev/null")
+    result = Shell.run("docker start #{cname} 2>/dev/null")
     if result
       update!(status: 'running')
     else
@@ -129,7 +131,7 @@ class DockerApp < ApplicationRecord
   # Stop the container
   def stop!
     cname = Shellwords.escape(effective_container_name)
-    output = `sudo docker stop -t 30 #{cname} 2>&1`
+    output, _stderr, _status = Shell.capture("docker stop -t 30 #{cname}")
     if $?.success?
       update!(status: 'stopped')
     else
@@ -146,7 +148,7 @@ class DockerApp < ApplicationRecord
   # Restart the container
   def restart!
     cname = Shellwords.escape(effective_container_name)
-    system("sudo docker restart #{cname} 2>/dev/null")
+    Shell.run("docker restart #{cname} 2>/dev/null")
     update!(status: 'running')
   end
 
@@ -154,7 +156,8 @@ class DockerApp < ApplicationRecord
   def refresh_status!
     return unless container_name.present?
     cname = Shellwords.escape(effective_container_name)
-    output = `sudo docker inspect --format '{{.State.Status}}' #{cname} 2>/dev/null`.strip
+    output, _stderr, _status = Shell.capture("docker inspect --format '{{.State.Status}}' #{cname}")
+    output = output.strip
     case output
     when 'running' then update!(status: 'running')
     when 'exited', 'stopped' then update!(status: 'stopped')
@@ -173,8 +176,8 @@ class DockerApp < ApplicationRecord
       next if host_path.blank?
       # Skip shared/system paths like /var/run/docker.sock
       next if host_path.start_with?('/var/run/')
-      system("sudo mkdir -p #{Shellwords.escape(host_path)}")
-      system("sudo chmod 777 #{Shellwords.escape(host_path)}")
+      Shell.run("mkdir -p #{Shellwords.escape(host_path)}")
+      Shell.run("chmod 777 #{Shellwords.escape(host_path)}")
     end
   end
 
@@ -189,14 +192,14 @@ class DockerApp < ApplicationRecord
       next unless host_path && content
 
       dir = File.dirname(host_path)
-      system("sudo mkdir -p #{Shellwords.escape(dir)}")
+      Shell.run("mkdir -p #{Shellwords.escape(dir)}")
       # Write via temp file + sudo mv to handle root-owned directories
       require 'tempfile'
       tmp = Tempfile.new('init_file')
       tmp.write(content)
       tmp.close
-      system("sudo cp #{Shellwords.escape(tmp.path)} #{Shellwords.escape(host_path)}")
-      system("sudo chmod 644 #{Shellwords.escape(host_path)}")
+      Shell.run("cp #{Shellwords.escape(tmp.path)} #{Shellwords.escape(host_path)}")
+      Shell.run("chmod 644 #{Shellwords.escape(host_path)}")
       tmp.unlink
     end
   end

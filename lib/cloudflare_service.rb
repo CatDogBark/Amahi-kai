@@ -1,3 +1,5 @@
+require 'shell'
+
 class CloudflareService
   class CloudflareError < StandardError; end
 
@@ -17,7 +19,7 @@ class CloudflareService
 
     def running?
       return false unless production?
-      system('systemctl is-active --quiet cloudflared')
+      Shell.run('systemctl is-active --quiet cloudflared')
     end
 
     def enabled?
@@ -56,18 +58,18 @@ class CloudflareService
       return true unless production?
 
       unless File.exist?(KEYRING_PATH)
-        result = system("curl -L #{GPG_URL} | sudo gpg --dearmor -o #{KEYRING_PATH}")
+        result = Shell.run("sh -c 'curl -L #{GPG_URL} | gpg --dearmor -o #{KEYRING_PATH}'")
         raise CloudflareError, 'Failed to add Cloudflare signing key' unless result
       end
 
       unless File.exist?(SOURCES_PATH)
-        result = system("echo '#{REPO_LINE}' | sudo tee #{SOURCES_PATH} > /dev/null")
+        result = Shell.run("sh -c \"echo '#{REPO_LINE}' > #{SOURCES_PATH}\"")
         raise CloudflareError, 'Failed to add Cloudflare apt source' unless result
       end
 
-      system('sudo apt-get update')
+      Shell.run('apt-get update')
 
-      result = system('sudo DEBIAN_FRONTEND=noninteractive apt-get install -y cloudflared')
+      result = Shell.run('DEBIAN_FRONTEND=noninteractive apt-get install -y cloudflared')
       raise CloudflareError, 'Failed to install cloudflared package' unless result
 
       true
@@ -80,8 +82,8 @@ class CloudflareService
       tmp_path = '/var/hda/tmp/tunnel.token'
       FileUtils.mkdir_p(File.dirname(tmp_path))
       File.write(tmp_path, token.strip)
-      system("sudo mkdir -p #{File.dirname(TOKEN_FILE)}")
-      system("sudo cp #{tmp_path} #{TOKEN_FILE}")
+      Shell.run("mkdir -p #{File.dirname(TOKEN_FILE)}")
+      Shell.run("cp #{tmp_path} #{TOKEN_FILE}")
       FileUtils.rm_f(tmp_path)
 
       # Write systemd unit file directly (avoids cloudflared service install TTY issues)
@@ -105,34 +107,34 @@ class CloudflareService
 
       tmp_path = '/var/hda/tmp/cloudflared.service'
       File.write(tmp_path, unit)
-      result = system("sudo cp #{tmp_path} /etc/systemd/system/cloudflared.service")
+      result = Shell.run("cp #{tmp_path} /etc/systemd/system/cloudflared.service")
       FileUtils.rm_f(tmp_path)
       raise CloudflareError, 'Failed to write cloudflared service file' unless result
 
-      system('sudo systemctl daemon-reload')
-      system('sudo systemctl enable cloudflared')
+      Shell.run('systemctl daemon-reload')
+      Shell.run('systemctl enable cloudflared')
 
       true
     end
 
     def start!
       return true unless production?
-      system('sudo systemctl start cloudflared')
+      Shell.run('systemctl start cloudflared')
     end
 
     def stop!
       return true unless production?
-      system('sudo systemctl stop cloudflared')
+      Shell.run('systemctl stop cloudflared')
     end
 
     def restart!
       return true unless production?
-      system('sudo systemctl restart cloudflared')
+      Shell.run('systemctl restart cloudflared')
     end
 
     def token_configured?
       return true unless production?
-      File.exist?(TOKEN_FILE) || ENV['CLOUDFLARE_TUNNEL_TOKEN'].present? || system('systemctl is-enabled --quiet cloudflared 2>/dev/null')
+      File.exist?(TOKEN_FILE) || ENV['CLOUDFLARE_TUNNEL_TOKEN'].present? || Shell.run('systemctl is-enabled --quiet cloudflared 2>/dev/null')
     end
 
     private

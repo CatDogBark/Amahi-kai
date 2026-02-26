@@ -15,12 +15,9 @@
 # team at http://www.amahi.org/ under "Contact Us."
 
 require 'platform'
-require 'command'
+require 'shell'
 
 class Server < ApplicationRecord
-
-  # CAUTION - this class *assumes* new servers are created
-  # started and enabled at boot time as services!
 
   PID_PATH = "/var/run"
 
@@ -40,11 +37,12 @@ class Server < ApplicationRecord
     fname = TempCache.unique_filename "server-conf"
     f = File.new fname, "w"
     f.write r
-    c = Command.new("cp -f #{f.path} #{Platform.file_name(:monit_conf)}")
-    c.submit("rm -f #{f.path}")
-    c.submit("chmod 644 #{Platform.file_name(:monit_log)}")
-    c.submit Platform.watchdog_restart_command
-    c.execute
+    Shell.run(
+      "cp -f #{f.path} #{Platform.file_name(:monit_conf)}",
+      "rm -f #{f.path}",
+      "chmod 644 #{Platform.file_name(:monit_log)}",
+      Platform.watchdog_restart_command
+    )
     f.close
   end
 
@@ -53,19 +51,15 @@ class Server < ApplicationRecord
   end
 
   def do_start
-    c = Command.new start_cmd
-    c.execute
+    Shell.run(start_cmd)
   end
 
   def do_stop
-    c = Command.new stop_cmd
-    c.execute
+    Shell.run(stop_cmd)
   end
 
   def do_restart
-    c = Command.new stop_cmd
-    c.submit start_cmd
-    c.execute
+    Shell.run(stop_cmd, start_cmd)
   end
 
   def stopped?
@@ -76,7 +70,6 @@ class Server < ApplicationRecord
     !stopped?
   end
 
-  # in some cases, some server names have many instances, named with @, e.g. openvpn@amahi
   def clean_name
     name.gsub /@/, '-'
   end
@@ -105,11 +98,12 @@ protected
   end
 
   def destroy_hook
-    c = Command.new("rm -f #{File.join(Platform.file_name(:monit_dir), Platform.service_name(name))}.conf")
-    c.submit Platform.watchdog_restart_command
-    c.submit disable_cmd
-    c.submit stop_cmd
-    c.execute
+    Shell.run(
+      "rm -f #{File.join(Platform.file_name(:monit_dir), Platform.service_name(name))}.conf",
+      Platform.watchdog_restart_command,
+      disable_cmd,
+      stop_cmd
+    )
   end
 
   def cmd_file
@@ -122,54 +116,47 @@ protected
   def monit_file_add
     fname = TempCache.unique_filename "server-#{self.name}"
     File.open(fname, "w") { |f| f.write cmd_file }
-    c = Command.new "cp -f #{fname} #{File.join(Platform.file_name(:monit_dir), Platform.service_name(self.name))}.conf"
-    c.submit "rm -f #{fname}"
-    c.submit Platform.watchdog_restart_command
-    c.execute
+    Shell.run(
+      "cp -f #{fname} #{File.join(Platform.file_name(:monit_dir), Platform.service_name(self.name))}.conf",
+      "rm -f #{fname}",
+      Platform.watchdog_restart_command
+    )
   end
 
   def monit_file_remove
-    c = Command.new("rm -f #{File.join(Platform.file_name(:monit_dir), Platform.service_name(name))}.conf")
-    c.submit Platform.watchdog_restart_command
-    c.execute
+    Shell.run(
+      "rm -f #{File.join(Platform.file_name(:monit_dir), Platform.service_name(name))}.conf",
+      Platform.watchdog_restart_command
+    )
   end
 
   def service_enable
-    c = Command.new enable_cmd
-    c.execute
+    Shell.run(enable_cmd)
   end
 
   def service_disable
-    c = Command.new disable_cmd
-    c.execute
+    Shell.run(disable_cmd)
   end
 
   def before_save_hook
     if monitored_changed?
       monitored ? monit_file_add : monit_file_remove
-      # DEBUG RAILS_DEFAULT_LOGGER.info "* * * MONITORED CHANGED to #{monitored}"
     end
     if start_at_boot_changed?
       start_at_boot ? service_enable : service_disable
-      # DEBUG RAILS_DEFAULT_LOGGER.info "* * * START_AT_BOOT CHANGED to #{start_at_boot}"
     end
   end
 
   def create_hook
-    c = Command.new enable_cmd
-    c.submit start_cmd
-    c.execute
+    Shell.run(enable_cmd, start_cmd)
     monit_file_add
   end
 
-  # estimate the status of the PIDs
   def estimate_pids
     pf = pid_file
     ret = []
     begin
-      # check if the pid file is there
       if File.exist?(pf) && File.readable?(pf)
-        # check the pid file and check for the process existance
         File.open(pf) do |p|
           list = p.readlines.map{ |line| line.gsub(/\n/, '').split(' ') }.flatten
           ret = list.map{|pid| File.exist?("/proc/#{pid}") ? pid : nil }.compact
@@ -180,14 +167,11 @@ protected
     end
     return ret unless ret.empty?
 
-    # use pgrep instead - fails in many cases, but
-    # it's *some fallback*
     begin
       IO.popen("pgrep #{Platform.service_name name}") do |p|
         ret = p.readlines.map {|pid| pid.gsub(/\n/, '')}
       end
       return ret unless ret.empty?
-      # third fallback -- wtf??
       IO.popen("pgrep #{name}") do |p|
         ret = p.readlines.map {|pid| pid.gsub(/\n/, '')}
       end

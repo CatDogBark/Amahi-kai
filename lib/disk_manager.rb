@@ -1,5 +1,6 @@
 require 'json'
 require 'shellwords'
+require 'shell'
 
 class DiskManager
   VALID_DEVICE_PATTERN = %r{\A/dev/[svx]d[a-z]+\d*\z}
@@ -260,7 +261,8 @@ class DiskManager
     return unless production?
 
     # Get all UUIDs currently present on the system
-    live_uuids = `sudo /sbin/blkid -s UUID -o value 2>/dev/null`.strip.lines.map(&:strip).reject(&:empty?)
+    output, _stderr, _status = Shell.capture("/sbin/blkid -s UUID -o value 2>/dev/null")
+    live_uuids = output.strip.lines.map(&:strip).reject(&:empty?)
 
     # Read fstab and find stale /mnt/storage-* entries
     fstab = File.read("/etc/fstab") rescue ""
@@ -312,11 +314,8 @@ class DiskManager
   end
 
   def self.execute_command(cmd)
-    if defined?(Command) && Command.respond_to?(:execute)
-      Command.execute(cmd)
-    else
-      `#{cmd}`
-    end
+    stdout, _stderr, _status = Shell.capture(cmd)
+    stdout
   end
 
   def self.read_directory_summary(path)

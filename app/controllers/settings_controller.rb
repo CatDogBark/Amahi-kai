@@ -14,6 +14,8 @@
 # License along with this program; if not, write to the Amahi
 # team at http://www.amahi.org/ under "Contact Us."
 
+require 'shell'
+
 class SettingsController < ApplicationController
 
   before_action :admin_required
@@ -67,14 +69,12 @@ class SettingsController < ApplicationController
   end
 
   def reboot
-    c = Command.new("reboot")
-    c.execute
+    Shell.run("reboot")
     render plain: t('rebooting')
   end
 
   def poweroff
-    c = Command.new("poweroff")
-    c.execute
+    Shell.run("poweroff")
     render plain: t('powering_off')
   end
 

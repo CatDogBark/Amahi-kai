@@ -1,3 +1,5 @@
+require 'shell'
+
 class Greyhole
   class GreyholeError < StandardError; end
 
@@ -21,7 +23,7 @@ class Greyhole
 
     def running?
       return false unless production?
-      system('systemctl is-active --quiet greyhole.service')
+      Shell.run('systemctl is-active --quiet greyhole.service')
     end
 
     def status
@@ -39,36 +41,36 @@ class Greyhole
 
       # Add Greyhole apt repository
       unless File.exist?(KEYRING_PATH)
-        result = system("curl -s #{GREYHOLE_REPO_KEY} | sudo gpg --dearmor -o #{KEYRING_PATH}")
+        result = Shell.run("sh -c 'curl -s #{GREYHOLE_REPO_KEY} | gpg --dearmor -o #{KEYRING_PATH}'")
         raise GreyholeError, 'Failed to add Greyhole signing key' unless result
       end
 
       unless File.exist?(SOURCES_PATH)
-        result = system("echo 'deb [signed-by=#{KEYRING_PATH}] #{GREYHOLE_REPO_URL} stable main' | sudo tee #{SOURCES_PATH} > /dev/null")
+        result = Shell.run("sh -c \"echo 'deb [signed-by=#{KEYRING_PATH}] #{GREYHOLE_REPO_URL} stable main' > #{SOURCES_PATH}\"")
         raise GreyholeError, 'Failed to add Greyhole apt source' unless result
       end
 
-      system('sudo apt-get update')
+      Shell.run('apt-get update')
 
       # Pre-configure: DB and minimal config must exist BEFORE dpkg postinst runs
-      system('sudo mysql -u root -e "CREATE DATABASE IF NOT EXISTS greyhole"')
-      system("sudo mysql -u root -e \"GRANT ALL PRIVILEGES ON greyhole.* TO 'amahi'@'localhost'; FLUSH PRIVILEGES;\"")
+      Shell.run('mysql -u root -e "CREATE DATABASE IF NOT EXISTS greyhole"')
+      Shell.run("mysql -u root -e \"GRANT ALL PRIVILEGES ON greyhole.* TO 'amahi'@'localhost'; FLUSH PRIVILEGES;\"")
 
       # Ensure PHP mbstring is available for greyhole
-      system('sudo apt-get install -y php8.3-mbstring php8.3-mysql 2>/dev/null')
-      system('sudo phpenmod mbstring 2>/dev/null')
+      Shell.run('apt-get install -y php8.3-mbstring php8.3-mysql 2>/dev/null')
+      Shell.run('phpenmod mbstring 2>/dev/null')
 
       unless File.exist?(CONFIG_PATH)
-        system("echo 'db_host = localhost\ndb_user = amahi\ndb_name = greyhole' | sudo tee #{CONFIG_PATH} > /dev/null")
+        Shell.run("sh -c \"echo 'db_host = localhost\ndb_user = amahi\ndb_name = greyhole' > #{CONFIG_PATH}\"")
       end
 
       # Now install — postinst script will find DB and config
-      result = system('sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -o Dpkg::Options::=--force-confold greyhole')
+      result = Shell.run('DEBIAN_FRONTEND=noninteractive apt-get install -y -o Dpkg::Options::=--force-confold greyhole')
       raise GreyholeError, 'Failed to install greyhole package' unless result
 
       # Load schema after install (schema file comes with the package)
       if File.exist?('/usr/share/greyhole/schema-mysql.sql')
-        system('sudo mysql -u root greyhole < /usr/share/greyhole/schema-mysql.sql 2>/dev/null')
+        Shell.run('mysql -u root greyhole < /usr/share/greyhole/schema-mysql.sql 2>/dev/null')
       end
 
       # Generate full config and enable service
@@ -77,27 +79,27 @@ class Greyhole
       # Re-inject Samba globals — Greyhole's postinst may overwrite smb.conf
       reinject_samba_globals!
 
-      system('sudo systemctl enable greyhole.service')
-      system('sudo systemctl restart smbd.service')
-      system('sudo systemctl restart nmbd.service')
-      system('sudo systemctl start greyhole.service')
+      Shell.run('systemctl enable greyhole.service')
+      Shell.run('systemctl restart smbd.service')
+      Shell.run('systemctl restart nmbd.service')
+      Shell.run('systemctl start greyhole.service')
 
       true
     end
 
     def start!
       return true unless production?
-      system('sudo systemctl start greyhole.service')
+      Shell.run('systemctl start greyhole.service')
     end
 
     def stop!
       return true unless production?
-      system('sudo systemctl stop greyhole.service')
+      Shell.run('systemctl stop greyhole.service')
     end
 
     def restart!
       return true unless production?
-      system('sudo systemctl restart greyhole.service')
+      Shell.run('systemctl restart greyhole.service')
     end
 
     def pool_drives
@@ -128,7 +130,7 @@ class Greyhole
       return true unless production?
       cmd = 'greyhole --fsck'
       cmd += " --dir=#{Shellwords.escape(options[:dir])}" if options[:dir]
-      system(cmd)
+      Shell.run(cmd)
     end
 
     def configure!
@@ -137,7 +139,7 @@ class Greyhole
       tmp = "/var/hda/tmp/greyhole.conf"
       FileUtils.mkdir_p(File.dirname(tmp))
       File.write(tmp, config)
-      system("sudo /usr/bin/cp #{Shellwords.escape(tmp)} #{CONFIG_PATH}")
+      Shell.run("/usr/bin/cp #{Shellwords.escape(tmp)} #{CONFIG_PATH}")
       # Only restart if Greyhole is currently running; don't crash if it fails
       restart! if running?
     rescue => e
@@ -191,7 +193,7 @@ class Greyhole
         key = setting.split('=').first.strip
         unless content.match?(/^\s*#{Regexp.escape(key)}/i)
           # Insert after [global]
-          system("sudo sed -i '/^\\[global\\]/a\\\\\\t#{setting}' #{smb_conf}")
+          Shell.run("sed -i '/^\\[global\\]/a\\\\\\t#{setting}' #{smb_conf}")
         end
       end
     end

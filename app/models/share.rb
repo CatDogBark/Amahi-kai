@@ -14,7 +14,7 @@
 # License along with this program; if not, write to the Amahi
 # team at http://www.amahi.org/ under "Contact Us."
 
-require 'command'
+require 'shell'
 require 'platform'
 require 'temp_cache'
 require 'shellwords'

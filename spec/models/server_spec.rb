@@ -96,27 +96,19 @@ describe Server do
   describe "#do_start, #do_stop, #do_restart" do
     it "should execute start command" do
       server = Server.create!(name: "starttest")
-      command_double = instance_double(Command)
-      allow(Command).to receive(:new).and_return(command_double)
-      allow(command_double).to receive(:execute)
-      allow(command_double).to receive(:submit)
+      allow(Shell).to receive(:run).and_return(true)
       expect { server.do_start }.not_to raise_error
     end
 
     it "should execute stop command" do
       server = Server.create!(name: "stoptest")
-      command_double = instance_double(Command)
-      allow(Command).to receive(:new).and_return(command_double)
-      allow(command_double).to receive(:execute)
+      allow(Shell).to receive(:run).and_return(true)
       expect { server.do_stop }.not_to raise_error
     end
 
     it "should execute restart (stop then start)" do
       server = Server.create!(name: "restarttest")
-      command_double = instance_double(Command)
-      allow(Command).to receive(:new).and_return(command_double)
-      allow(command_double).to receive(:submit)
-      allow(command_double).to receive(:execute)
+      allow(Shell).to receive(:run).and_return(true)
       expect { server.do_restart }.not_to raise_error
     end
   end

@@ -15,13 +15,12 @@
 # team at http://www.amahi.org/ under "Contact Us."
 
 require 'shellwords'
+require 'shell'
 
 class Platform
 
-  # default group for users
   DEFAULT_GROUP = "users"
 
-  # Using DNSMASQ
   DNSMASQ = true
 
   def self.dnsmasq?
@@ -74,10 +73,11 @@ class Platform
 
   class << self
     def reload(service)
-      c = Command.new("sleep 4")
-      c.submit("systemctl reload #{service2name service}.service")
-      c.submit("sleep 1")
-      c.execute
+      Shell.run(
+        "sleep 4",
+        "systemctl reload #{service2name service}.service",
+        "sleep 1"
+      )
     end
 
     def file_name(service)
@@ -128,35 +128,30 @@ class Platform
       "systemctl restart monit.service"
     end
 
-    # make a user admin — sudo capable
     def make_admin(username, is_admin)
       admin_groups = is_admin ? ",sudo" : ''
       esc_user = Shellwords.escape(username)
-      c = Command.new
-      c.submit("usermod -G #{DEFAULT_GROUP}#{admin_groups} #{esc_user}")
-      c.execute
+      Shell.run("usermod -G #{DEFAULT_GROUP}#{admin_groups} #{esc_user}")
     end
 
-    # update the public key for the user
     def update_user_pubkey(username, key)
       fname = TempCache.unique_filename "key"
       File.open(fname, "w") { |f| f.write(key) }
       esc_user = Shellwords.escape(username)
       home = "/home/#{esc_user}"
-      c = Command.new
-      c.submit("mkdir -p #{home}/.ssh/")
-      c.submit("mv #{fname} #{home}/.ssh/authorized_keys")
-      c.submit("chown -R #{esc_user}:#{DEFAULT_GROUP} #{home}/.ssh")
-      c.submit("chmod u+rwx,go-rwx #{home}/.ssh")
-      c.submit("chmod u+rw,go-rwx #{home}/.ssh/authorized_keys")
-      c.execute
+      Shell.run(
+        "mkdir -p #{home}/.ssh/",
+        "mv #{fname} #{home}/.ssh/authorized_keys",
+        "chown -R #{esc_user}:#{DEFAULT_GROUP} #{home}/.ssh",
+        "chmod u+rwx,go-rwx #{home}/.ssh",
+        "chmod u+rw,go-rwx #{home}/.ssh/authorized_keys"
+      )
     end
 
     def platform_versions
       platform = ""
       hda_ctl = ""
       begin
-        # Try dpkg for version info
         result = `dpkg -s hda-platform 2>/dev/null`
         if result =~ /Version: (.*)/
           platform = $1
@@ -169,7 +164,6 @@ class Platform
         platform = "unknown"
         hda_ctl = "unknown"
       end
-      # If no packages found, report versions from the app itself
       platform = "amahi-kai" if platform.blank?
       hda_ctl = "direct-exec" if hda_ctl.blank?
       { :platform => platform, :core => hda_ctl }
@@ -186,7 +180,6 @@ class Platform
         @@platform = "ubuntu" if line.include?("Ubuntu")
       end
       @@platform ||= nil
-      # Default to debian if we can't detect (most compatible)
       @@platform ||= "debian" if File.exist?('/usr/bin/apt-get')
       raise "unsupported platform: only Ubuntu and Debian are supported" unless PLATFORMS.include?(@@platform)
     end
@@ -204,18 +197,15 @@ class Platform
 
     def pkginstall(pkgs, sha1 = nil)
       esc_pkgs = Shellwords.escape(pkgs)
-      c = Command.new "DEBIAN_FRONTEND=noninteractive apt-get -y install #{esc_pkgs}"
-      c.run_now
+      Shell.run!("DEBIAN_FRONTEND=noninteractive apt-get -y install #{esc_pkgs}")
     end
 
     def pkguninstall(pkgs)
       esc_pkgs = Shellwords.escape(pkgs)
-      c = Command.new "DEBIAN_FRONTEND=noninteractive apt-get -y remove #{esc_pkgs}"
-      c.run_now
+      Shell.run!("DEBIAN_FRONTEND=noninteractive apt-get -y remove #{esc_pkgs}")
     end
   end
 
-  # class initialization
   set_platform
 
 end

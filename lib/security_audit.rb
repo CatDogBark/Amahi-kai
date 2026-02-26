@@ -1,4 +1,5 @@
 require 'shellwords'
+require 'shell'
 
 class SecurityAudit
   Check = Struct.new(:name, :description, :status, :severity, :fix_command, keyword_init: true)
@@ -99,7 +100,8 @@ class SecurityAudit
 
     def ufw_enabled?
       return false unless production?
-      output = `sudo /usr/sbin/ufw status 2>/dev/null`.strip
+      output, _stderr, _status = Shell.capture("/usr/sbin/ufw status 2>/dev/null")
+      output = output.strip
       output.include?('Status: active')
     end
 
@@ -221,10 +223,10 @@ class SecurityAudit
     # --- Fix methods ---
 
     def fix_ufw!
-      system('sudo ufw --force enable') &&
-        system('sudo ufw default deny incoming') &&
-        system('sudo ufw allow 22/tcp') &&
-        system('sudo ufw allow 3000/tcp')
+      Shell.run('ufw --force enable') &&
+        Shell.run('ufw default deny incoming') &&
+        Shell.run('ufw allow 22/tcp') &&
+        Shell.run('ufw allow 3000/tcp')
     end
 
     def fix_ssh_root_login!
@@ -246,17 +248,17 @@ class SecurityAudit
       end
 
       File.write(tmp_path, content)
-      system("sudo cp #{tmp_path} /etc/ssh/sshd_config") &&
-        (system('sudo systemctl restart sshd') || system('sudo systemctl restart ssh'))
+      Shell.run("cp #{tmp_path} /etc/ssh/sshd_config") &&
+        (Shell.run('systemctl restart sshd') || Shell.run('systemctl restart ssh'))
     end
 
     def fix_fail2ban!
-      system('sudo DEBIAN_FRONTEND=noninteractive apt-get install -y fail2ban')
+      Shell.run('DEBIAN_FRONTEND=noninteractive apt-get install -y fail2ban')
     end
 
     def fix_unattended_upgrades!
-      system('sudo DEBIAN_FRONTEND=noninteractive apt-get install -y unattended-upgrades') &&
-        system('sudo dpkg-reconfigure -plow unattended-upgrades')
+      Shell.run('DEBIAN_FRONTEND=noninteractive apt-get install -y unattended-upgrades') &&
+        Shell.run('dpkg-reconfigure -plow unattended-upgrades')
     end
 
     def fix_samba_lan_binding!
@@ -275,8 +277,8 @@ class SecurityAudit
       end
 
       File.write(tmp_path, content)
-      system("sudo cp #{tmp_path} /etc/samba/smb.conf") &&
-        system('sudo systemctl restart smbd.service')
+      Shell.run("cp #{tmp_path} /etc/samba/smb.conf") &&
+        Shell.run('systemctl restart smbd.service')
     end
 
     def simulated_fix(check_name)

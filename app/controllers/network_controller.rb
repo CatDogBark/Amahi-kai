@@ -2,6 +2,7 @@
 # Copyright (C) 2007-2013 Amahi
 
 require 'leases'
+require 'shell'
 
 class NetworkController < ApplicationController
   KIND = Setting::NETWORK
@@ -83,7 +84,7 @@ class NetworkController < ApplicationController
     case params[:setting_dns]
     when 'opendns', 'google', 'opennic', 'cloudflare'
       @saved = Setting.set("dns", params[:setting_dns], KIND)
-      system("hda-ctl-hup")
+      Shell.run("hda-ctl-hup")
     else
       @saved = true
     end
@@ -95,7 +96,7 @@ class NetworkController < ApplicationController
       @ip_1_saved = DnsIpSetting.set("dns_ip_1", params[:dns_ip_1], KIND)
       @ip_2_saved = DnsIpSetting.set("dns_ip_2", params[:dns_ip_2], KIND)
       Setting.set("dns", 'custom', KIND)
-      system("hda-ctl-hup")
+      Shell.run("hda-ctl-hup")
     end
     if @ip_1_saved && @ip_2_saved
       render json: { status: :ok }
@@ -107,7 +108,7 @@ class NetworkController < ApplicationController
   def update_lease_time
     @saved = params[:lease_time].present? && params[:lease_time].to_i > 0 ? Setting.set("lease_time", params[:lease_time], KIND) : false
     render json: { status: @saved ? :ok : :not_acceptable }
-    system("hda-ctl-hup")
+    Shell.run("hda-ctl-hup")
   end
 
   def update_gateway
@@ -126,7 +127,7 @@ class NetworkController < ApplicationController
     s.value = (1 - s.value.to_i).to_s
     if s.save
       render json: { status: 'ok' }
-      system("hda-ctl-hup")
+      Shell.run("hda-ctl-hup")
     else
       render json: { status: 'error' }
     end
@@ -144,7 +145,7 @@ class NetworkController < ApplicationController
     if @saved
       Setting.set("dyn_lo", dyn_lo, KIND)
       Setting.set("dyn_hi", dyn_hi, KIND)
-      system("hda-ctl-hup")
+      Shell.run("hda-ctl-hup")
       render json: { status: :ok }
     else
       render json: { status: :not_acceptable }
@@ -234,8 +235,8 @@ class NetworkController < ApplicationController
 
         if success
           sse_send.call("Stopping dnsmasq (safe until configured)...")
-          system("sudo systemctl stop dnsmasq.service 2>/dev/null")
-          system("sudo systemctl disable dnsmasq.service 2>/dev/null")
+          Shell.run("systemctl stop dnsmasq.service 2>/dev/null")
+          Shell.run("systemctl disable dnsmasq.service 2>/dev/null")
           sse_send.call("  ✓ Stopped and disabled (configure settings, then start)")
 
           sse_send.call("")
@@ -250,14 +251,14 @@ class NetworkController < ApplicationController
   end
 
   def start_dnsmasq
-    system("sudo systemctl enable dnsmasq.service 2>/dev/null")
-    system("sudo systemctl start dnsmasq.service 2>/dev/null")
+    Shell.run("systemctl enable dnsmasq.service 2>/dev/null")
+    Shell.run("systemctl start dnsmasq.service 2>/dev/null")
     redirect_to network_gateway_path
   end
 
   def stop_dnsmasq
-    system("sudo systemctl stop dnsmasq.service 2>/dev/null")
-    system("sudo systemctl disable dnsmasq.service 2>/dev/null")
+    Shell.run("systemctl stop dnsmasq.service 2>/dev/null")
+    Shell.run("systemctl disable dnsmasq.service 2>/dev/null")
     redirect_to network_gateway_path
   end
 
@@ -301,10 +302,10 @@ class NetworkController < ApplicationController
       staged = "/tmp/amahi-staging/dnsmasq-amahi.conf"
       FileUtils.mkdir_p('/tmp/amahi-staging')
       File.write(staged, config_lines.join("\n") + "\n")
-      system("sudo cp #{staged} /etc/dnsmasq.d/amahi.conf")
+      Shell.run("cp #{staged} /etc/dnsmasq.d/amahi.conf")
 
       if `systemctl is-active dnsmasq 2>/dev/null`.strip == 'active'
-        system("sudo systemctl restart dnsmasq.service")
+        Shell.run("systemctl restart dnsmasq.service")
       end
 
       flash[:notice] = "Configuration saved"

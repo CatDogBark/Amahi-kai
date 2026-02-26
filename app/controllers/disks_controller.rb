@@ -1,5 +1,6 @@
 require 'greyhole'
 require 'disk_manager'
+require 'shell'
 
 class DisksController < ApplicationController
   before_action :admin_required
@@ -273,8 +274,8 @@ class DisksController < ApplicationController
 
         # Try starting greyhole — non-fatal if it fails (needs config first)
         sse_send.call("Starting Greyhole service...")
-        system("sudo systemctl start greyhole.service 2>/dev/null")
-        if system("systemctl is-active --quiet greyhole")
+        Shell.run("systemctl start greyhole.service 2>/dev/null")
+        if Shell.run("systemctl is-active --quiet greyhole")
           sse_send.call("  ✓ Greyhole is running")
         else
           sse_send.call("  ⚠ Service not started — configure storage pool drives first")

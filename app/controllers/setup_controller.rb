@@ -1,4 +1,4 @@
-require 'command'
+require 'shell'
 require 'shellwords'
 
 class SetupController < ApplicationController
@@ -33,7 +33,7 @@ class SetupController < ApplicationController
       end
 
       sse.call("Creating #{size} swap file...")
-      result = system("sudo fallocate -l #{size} /swapfile 2>/dev/null || sudo dd if=/dev/zero of=/swapfile bs=1M count=#{size.to_i * 1024} status=none")
+      result = Shell.run("fallocate -l #{size} /swapfile 2>/dev/null || sudo dd if=/dev/zero of=/swapfile bs=1M count=#{size.to_i * 1024} status=none")
       unless result
         sse.call("✗ Failed to create swap file. Check disk space.")
         yielder << "event: done\ndata: error\n\n"
@@ -41,18 +41,18 @@ class SetupController < ApplicationController
       end
 
       sse.call("Setting permissions...")
-      system("sudo chmod 600 /swapfile")
+      Shell.run("chmod 600 /swapfile")
 
       sse.call("Setting up swap space...")
-      system("sudo mkswap /swapfile > /dev/null 2>&1")
+      Shell.run("mkswap /swapfile > /dev/null 2>&1")
 
       sse.call("Enabling swap...")
-      system("sudo swapon /swapfile")
+      Shell.run("swapon /swapfile")
 
       sse.call("Adding to /etc/fstab for persistence...")
       fstab = File.read('/etc/fstab') rescue ''
       unless fstab.include?('/swapfile')
-        system("echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab > /dev/null")
+        Shell.run("sh -c \"echo '/swapfile none swap sw 0 0' >> /etc/fstab\"")
       end
 
       sse.call("✓ Swap enabled! #{size} swap file is active and persistent.")
@@ -100,8 +100,7 @@ class SetupController < ApplicationController
       Setting.set('server-name', name)
       # Actually change the system hostname
       esc_name = Shellwords.escape(name)
-      c = Command.new("hostnamectl set-hostname #{esc_name}")
-      c.execute
+      Shell.run("hostnamectl set-hostname #{esc_name}")
     end
     redirect_to setup_storage_path
   end

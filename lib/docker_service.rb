@@ -1,3 +1,5 @@
+require 'shell'
+
 class DockerService
   class DockerError < StandardError; end
 
@@ -16,7 +18,7 @@ class DockerService
 
     def running?
       return false unless production?
-      system('systemctl is-active --quiet docker')
+      Shell.run('systemctl is-active --quiet docker')
     end
 
     def enabled?
@@ -42,7 +44,7 @@ class DockerService
       return true unless production?
 
       unless File.exist?(KEYRING_PATH)
-        result = system("curl -fsSL #{GPG_URL} | sudo gpg --dearmor -o #{KEYRING_PATH}")
+        result = Shell.run("sh -c 'curl -fsSL #{GPG_URL} | gpg --dearmor -o #{KEYRING_PATH}'")
         raise DockerError, 'Failed to add Docker signing key' unless result
       end
 
@@ -50,35 +52,35 @@ class DockerService
         arch = `dpkg --print-architecture`.strip
         codename = `lsb_release -cs`.strip
         repo_line = "deb [arch=#{arch} signed-by=#{KEYRING_PATH}] https://download.docker.com/linux/ubuntu #{codename} stable"
-        result = system("echo '#{repo_line}' | sudo tee #{SOURCES_PATH} > /dev/null")
+        result = Shell.run("sh -c \"echo '#{repo_line}' > #{SOURCES_PATH}\"")
         raise DockerError, 'Failed to add Docker apt source' unless result
       end
 
-      system('sudo apt-get update')
+      Shell.run('apt-get update')
 
-      result = system('sudo DEBIAN_FRONTEND=noninteractive apt-get install -y docker-ce docker-ce-cli containerd.io')
+      result = Shell.run('DEBIAN_FRONTEND=noninteractive apt-get install -y docker-ce docker-ce-cli containerd.io')
       raise DockerError, 'Failed to install Docker packages' unless result
 
-      system('sudo usermod -aG docker amahi')
-      system('sudo systemctl enable docker')
-      system('sudo systemctl start docker')
+      Shell.run('usermod -aG docker amahi')
+      Shell.run('systemctl enable docker')
+      Shell.run('systemctl start docker')
 
       true
     end
 
     def start!
       return true unless production?
-      system('sudo systemctl start docker')
+      Shell.run('systemctl start docker')
     end
 
     def stop!
       return true unless production?
-      system('sudo systemctl stop docker')
+      Shell.run('systemctl stop docker')
     end
 
     def restart!
       return true unless production?
-      system('sudo systemctl restart docker')
+      Shell.run('systemctl restart docker')
     end
 
     private

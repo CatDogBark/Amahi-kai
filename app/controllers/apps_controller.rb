@@ -1,6 +1,7 @@
 # Amahi Home Server
 # Copyright (C) 2007-2013 Amahi
-#
+
+require 'shell'
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License v3
 # (29 June 2007), as published in the COPYING file.
@@ -282,11 +283,11 @@ class AppsController < ApplicationController
             host_path = init[:host] || init['host']
             content = init[:content] || init['content']
             sse_send.call("Creating config #{host_path}...")
-            system("sudo mkdir -p #{Shellwords.escape(File.dirname(host_path))}")
+            Shell.run("mkdir -p #{Shellwords.escape(File.dirname(host_path))}")
             staged = "/tmp/amahi-staging/#{File.basename(host_path)}"
             FileUtils.mkdir_p('/tmp/amahi-staging')
             File.write(staged, content)
-            system("sudo cp #{Shellwords.escape(staged)} #{Shellwords.escape(host_path)}")
+            Shell.run("cp #{Shellwords.escape(staged)} #{Shellwords.escape(host_path)}")
           end
 
           # Create volume directories (world-writable so containers with non-root users can write)
@@ -295,12 +296,12 @@ class AppsController < ApplicationController
             host_path = mapping.is_a?(String) ? mapping.split(':').first : mapping.values.first
             next if host_path.start_with?('/var/run/') # skip system paths
             sse_send.call("Creating directory #{host_path}...")
-            system("sudo mkdir -p #{Shellwords.escape(host_path)}")
-            system("sudo chmod -R 777 #{Shellwords.escape(host_path)}")
+            Shell.run("mkdir -p #{Shellwords.escape(host_path)}")
+            Shell.run("chmod -R 777 #{Shellwords.escape(host_path)}")
             # chown to match container user if specified
             if entry[:user].present?
               sse_send.call("  Setting ownership to UID #{entry[:user]}...")
-              system("sudo chown -R #{Shellwords.escape(entry[:user].to_s)}:#{Shellwords.escape(entry[:user].to_s)} #{Shellwords.escape(host_path)}")
+              Shell.run("chown -R #{Shellwords.escape(entry[:user].to_s)}:#{Shellwords.escape(entry[:user].to_s)} #{Shellwords.escape(host_path)}")
             end
           end
 
@@ -317,7 +318,7 @@ class AppsController < ApplicationController
           # Remove old container if it exists (from a previous failed install)
           docker_app.update!(status: 'installing')
           container_name = "amahi-#{identifier}"
-          system("sudo docker rm -f #{Shellwords.escape(container_name)} 2>/dev/null")
+          Shell.run("docker rm -f #{Shellwords.escape(container_name)} 2>/dev/null")
 
           cmd_parts = ["sudo", "docker", "create", "--name", container_name, "--restart", "unless-stopped"]
 
@@ -367,7 +368,7 @@ class AppsController < ApplicationController
           end
 
           sse_send.call("Starting container...")
-          system("sudo docker start #{container_name} 2>/dev/null")
+          Shell.run("docker start #{container_name} 2>/dev/null")
 
           first_port = (entry[:ports] || {}).values.first
           docker_app.update!(

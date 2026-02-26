@@ -2,9 +2,9 @@ require 'rails_helper'
 
 RSpec.describe Server, type: :model do
   before do
-    # Stub all Command execution to prevent real system calls
-    allow_any_instance_of(Command).to receive(:execute)
-    allow_any_instance_of(Command).to receive(:submit).and_return(nil)
+    # Stub Shell to prevent real system calls
+    allow(Shell).to receive(:run).and_return(true)
+    allow(Shell).to receive(:run!).and_return(true)
   end
 
   let(:server) { Server.create!(name: "test-svc-#{SecureRandom.hex(4)}", comment: "Test Service", pidfile: "/var/run/test.pid") }

@@ -7,7 +7,7 @@
 # and make side effects testable in isolation.
 
 require 'shellwords'
-require 'command'
+require 'shell'
 
 class ShareFileSystem
   attr_reader :share
@@ -24,12 +24,12 @@ class ShareFileSystem
     admin = User.admins.first
     return unless admin
 
-    c = Command.new
-    c.submit("rmdir #{Shellwords.escape(share.path_was)}") unless share.path_was.blank?
-    c.submit("mkdir -p #{Shellwords.escape(share.path)}")
-    c.submit("chown #{Shellwords.escape(admin.login)}:users #{Shellwords.escape(share.path)}")
-    c.submit("chmod g+w #{Shellwords.escape(share.path)}")
-    c.execute
+    cmds = []
+    cmds << "rmdir #{Shellwords.escape(share.path_was)}" unless share.path_was.blank?
+    cmds << "mkdir -p #{Shellwords.escape(share.path)}"
+    cmds << "chown #{Shellwords.escape(admin.login)}:users #{Shellwords.escape(share.path)}"
+    cmds << "chmod g+w #{Shellwords.escape(share.path)}"
+    Shell.run(*cmds)
   end
 
   # Called before save when guest_writeable changes
@@ -45,28 +45,21 @@ class ShareFileSystem
 
   # Called before destroy — remove empty share directory
   def cleanup_directory
-    c = Command.new("rmdir --ignore-fail-on-non-empty #{Shellwords.escape(share.path)}")
-    c.execute
+    Shell.run("rmdir --ignore-fail-on-non-empty #{Shellwords.escape(share.path)}")
   end
 
   # chmod o+w on the share path
   def make_guest_writeable
-    c = Command.new
-    c.submit("chmod o+w #{Shellwords.escape(share.path)}")
-    c.execute
+    Shell.run("chmod o+w #{Shellwords.escape(share.path)}")
   end
 
   # chmod o-w on the share path
   def make_guest_non_writeable
-    c = Command.new
-    c.submit("chmod o-w #{Shellwords.escape(share.path)}")
-    c.execute
+    Shell.run("chmod o-w #{Shellwords.escape(share.path)}")
   end
 
   # chmod -R a+rwx on the share path (clear all permissions)
   def clear_permissions
-    c = Command.new
-    c.submit("chmod -R a+rwx #{Shellwords.escape(share.path)}")
-    c.execute
+    Shell.run("chmod -R a+rwx #{Shellwords.escape(share.path)}")
   end
 end

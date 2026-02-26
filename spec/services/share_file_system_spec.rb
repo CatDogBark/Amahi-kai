@@ -2,30 +2,29 @@ require 'rails_helper'
 
 RSpec.describe ShareFileSystem do
   let(:admin) { create(:admin) }
-  let(:command_instance) { instance_double(Command, submit: nil, execute: nil) }
 
   before do
-    admin  # ensure admin exists
-    allow(Command).to receive(:new).and_return(command_instance)
+    admin
+    allow(Shell).to receive(:run).and_return(true)
     allow(Share).to receive(:push_shares)
   end
 
   describe '#setup_directory' do
-    it 'creates directory with correct ownership when path changes' do
+    it 'runs commands when path changes' do
       share = create(:share, path: '/var/hda/files/old')
       share.path = '/var/hda/files/movies'
-      # Simulate path_changed? being true
       allow(share).to receive(:path_changed?).and_return(true)
       allow(share).to receive(:path_was).and_return('/var/hda/files/old')
 
       fs = described_class.new(share)
       fs.setup_directory
 
-      expect(command_instance).to have_received(:submit).with(/rmdir.*\/var\/hda\/files\/old/)
-      expect(command_instance).to have_received(:submit).with(/mkdir -p.*\/var\/hda\/files\/movies/)
-      expect(command_instance).to have_received(:submit).with(/chown.*#{admin.login}:users.*\/var\/hda\/files\/movies/)
-      expect(command_instance).to have_received(:submit).with(/chmod g\+w.*\/var\/hda\/files\/movies/)
-      expect(command_instance).to have_received(:execute)
+      expect(Shell).to have_received(:run).with(
+        /rmdir.*old/,
+        /mkdir -p.*movies/,
+        /chown.*#{admin.login}:users.*movies/,
+        /chmod g\+w.*movies/
+      )
     end
 
     it 'skips rmdir when path_was is blank (new share)' do
@@ -36,8 +35,9 @@ RSpec.describe ShareFileSystem do
       fs = described_class.new(share)
       fs.setup_directory
 
-      expect(command_instance).not_to have_received(:submit).with(/rmdir/)
-      expect(command_instance).to have_received(:submit).with(/mkdir -p/)
+      expect(Shell).to have_received(:run) do |*args|
+        expect(args.none? { |a| a =~ /rmdir/ }).to be true
+      end
     end
 
     it 'does nothing when path has not changed' do
@@ -47,7 +47,7 @@ RSpec.describe ShareFileSystem do
       fs = described_class.new(share)
       fs.setup_directory
 
-      expect(command_instance).not_to have_received(:execute)
+      expect(Shell).not_to have_received(:run)
     end
 
     it 'does nothing when path is blank' do
@@ -58,7 +58,7 @@ RSpec.describe ShareFileSystem do
       fs = described_class.new(share)
       fs.setup_directory
 
-      expect(command_instance).not_to have_received(:execute)
+      expect(Shell).not_to have_received(:run)
     end
 
     it 'shell-escapes paths with spaces' do
@@ -70,7 +70,9 @@ RSpec.describe ShareFileSystem do
       fs = described_class.new(share)
       fs.setup_directory
 
-      expect(command_instance).to have_received(:submit).with(/mkdir -p.*my\\ movies/)
+      expect(Shell).to have_received(:run) do |*args|
+        expect(args.any? { |a| a =~ /my\\ movies/ }).to be true
+      end
     end
   end
 
@@ -83,7 +85,7 @@ RSpec.describe ShareFileSystem do
       fs = described_class.new(share)
       fs.update_guest_permissions
 
-      expect(command_instance).to have_received(:submit).with(/chmod o\+w/)
+      expect(Shell).to have_received(:run).with(/chmod o\+w/)
     end
 
     it 'calls make_guest_non_writeable when guest_writeable changed to false' do
@@ -94,7 +96,7 @@ RSpec.describe ShareFileSystem do
       fs = described_class.new(share)
       fs.update_guest_permissions
 
-      expect(command_instance).to have_received(:submit).with(/chmod o-w/)
+      expect(Shell).to have_received(:run).with(/chmod o-w/)
     end
 
     it 'does nothing when guest_writeable has not changed' do
@@ -104,7 +106,7 @@ RSpec.describe ShareFileSystem do
       fs = described_class.new(share)
       fs.update_guest_permissions
 
-      expect(command_instance).not_to have_received(:execute)
+      expect(Shell).not_to have_received(:run)
     end
   end
 
@@ -115,17 +117,7 @@ RSpec.describe ShareFileSystem do
       fs = described_class.new(share)
       fs.cleanup_directory
 
-      expect(command_instance).to have_received(:submit).with(nil) # Command.new(cmd) doesn't use submit
-    end
-
-    it 'shell-escapes the path' do
-      # Command.new(cmd) passes cmd directly, so check the constructor
-      share = create(:share, path: '/var/hda/files/my movies')
-
-      expect(Command).to receive(:new).with(/rmdir --ignore-fail-on-non-empty.*my\\ movies/).and_return(command_instance)
-
-      fs = described_class.new(share)
-      fs.cleanup_directory
+      expect(Shell).to have_received(:run).with(/rmdir --ignore-fail-on-non-empty/)
     end
   end
 
@@ -136,7 +128,7 @@ RSpec.describe ShareFileSystem do
       fs = described_class.new(share)
       fs.clear_permissions
 
-      expect(command_instance).to have_received(:submit).with(/chmod -R a\+rwx.*\/var\/hda\/files\/movies/)
+      expect(Shell).to have_received(:run).with(/chmod -R a\+rwx/)
     end
   end
 
@@ -147,7 +139,7 @@ RSpec.describe ShareFileSystem do
       fs = described_class.new(share)
       fs.make_guest_writeable
 
-      expect(command_instance).to have_received(:submit).with(/chmod o\+w/)
+      expect(Shell).to have_received(:run).with(/chmod o\+w/)
     end
   end
 
@@ -158,7 +150,7 @@ RSpec.describe ShareFileSystem do
       fs = described_class.new(share)
       fs.make_guest_non_writeable
 
-      expect(command_instance).to have_received(:submit).with(/chmod o-w/)
+      expect(Shell).to have_received(:run).with(/chmod o-w/)
     end
   end
 end

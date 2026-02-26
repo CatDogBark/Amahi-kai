@@ -8,7 +8,7 @@ describe "Shares Toggle Actions", type: :request do
       # Stub all system-level calls that share callbacks trigger
       allow(Share).to receive(:push_shares)
       allow(SambaService).to receive(:push_config)
-      allow_any_instance_of(Command).to receive(:execute)
+      allow(Shell).to receive(:run).and_return(true)
       allow(Platform).to receive(:reload)
     end
 
