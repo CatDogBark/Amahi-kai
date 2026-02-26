@@ -592,6 +592,8 @@ if [ -f /etc/samba/smb.conf ]; then
 fi
 
 echo "==> Enabling services..."
+# Clean stale WINS database (causes nmbd segfault on fresh installs)
+rm -f /var/lib/samba/wins.dat /var/cache/samba/wins.tdb
 systemctl enable --now smbd nmbd
 # dnsmasq disabled by default — enable when DNS aliases are configured
 # systemctl enable --now dnsmasq
