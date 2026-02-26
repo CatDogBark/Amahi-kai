@@ -240,6 +240,27 @@ Async communication between Kai (sandbox) and Root Claude (host):
 **SSL — DONE** (2026-02-25): `assume_ssl` REVERTED — broke LAN HTTP. Cloudflare handles HTTPS at the edge, LAN stays plain HTTP.
 **Auth — DONE** (2026-02-25): Authlogic + SCrypt → `has_secure_password` (bcrypt). Plain Ruby UserSession class using `session[:user_id]`.
 
+### Ocean UI (2026-02-26)
+- Breathing gradient background (30s cycle), 3 layered SVG waves, floating particle bubbles
+- Ripple theme transition (View Transition API + clip-path circle from click point)
+- Theme toggle: 3-state (light/dark/system), localStorage, FOUC prevention on all layouts
+- Glassmorphism cards (backdrop-filter blur + translucent bg)
+- Added to ALL layouts (application, basic, debug, fullscreen, login, setup)
+- `overflow-y: scroll` on html to prevent scrollbar layout shift
+- Troy loved it: "sexy as fuck"
+
+### v0.1.2 Tagged (2026-02-26)
+- 84 commits since v0.1.1, "Ocean" release
+- Troy prefers plain markdown release notes — no emojis/fancy formatting
+- Git tags don't auto-push from sandbox cron
+
+### Plugin Consolidation (approved 2026-02-26, P0)
+- Troy frustrated with legacy plugin code blocking improvements
+- 6 plugin engines: Users, Disks, Shares, Apps, Network, Settings
+- Legacy debt: 60 sleep calls, 23 bare rescues, jQuery JS, shell injection patterns
+- Plan: merge into main app, kill engine architecture, single layout, unified routing
+- Order: Users → Network → Shares → Disks → Apps → Settings
+
 ### Native File Browser (2026-02-26)
 - `FileBrowserController` — browse, upload, download, rename, delete, new folder, preview, raw
 - Path traversal security: realpath validation under share root

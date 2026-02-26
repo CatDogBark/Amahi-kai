@@ -35,15 +35,17 @@ module RequestHelpers
   end
 
   class UsersEngineProxy
-    PREFIX = "/tab/users"
+    def root_path
+      "/users"
+    end
 
     def users_path
-      "#{PREFIX}/users"
+      "/users"
     end
 
     def user_path(user_or_id)
       id = user_or_id.respond_to?(:id) ? user_or_id.id : user_or_id
-      "#{PREFIX}/users/#{id}"
+      "/users/#{id}"
     end
 
     def update_name_user_path(user_or_id)

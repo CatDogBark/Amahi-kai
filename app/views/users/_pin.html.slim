@@ -6,7 +6,7 @@ td.top
   a.pin-info-wiki[href="https://wiki.amahi.org/index.php/PIN_user_access" id="user-pin-info-wiki-#{user.id}" target="_blank"]
     i.pin-info
   form.update-pin.update-form.form-horizontal.left-margin-20[
-    action=users_engine.update_pin_user_path(user)
+    action=update_pin_user_path(user)
     method="post"
     id="edit_user_pin_#{user.id}"
     data-user-target="pinForm"

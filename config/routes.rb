@@ -6,6 +6,17 @@ Rails.application.routes.draw do
 
   amahi_plugin_routes
 
+  # Users (consolidated from plugin)
+  resources :users do
+    member do
+      put 'toggle_admin'
+      put 'update_password'
+      put 'update_name'
+      put 'update_pubkey'
+      put 'update_pin'
+    end
+  end
+
   match 'login' => 'user_sessions#new', :as => :login, via: [:get]
   match 'logout' => 'user_sessions#destroy', :as => :logout, via: [:get]
   match 'start' => 'user_sessions#start', :as => :start, via: [:get]

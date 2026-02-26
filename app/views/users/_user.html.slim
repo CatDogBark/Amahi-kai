@@ -23,7 +23,7 @@ div.user[id="whole_user_#{user.id}" data-controller="user"]
               href="#"
               id="delete-user-#{user.id}"
               data-action="click->user#destroy"
-              data-url=users_engine.user_path(user)
+              data-url=user_path(user)
               data-confirm=confirm_user_destroy_message(user.login)]
               = t('delete') + ' ' + user.login
 
@@ -35,7 +35,7 @@ div.user[id="whole_user_#{user.id}" data-controller="user"]
               td
                 a.name_click_change[data-user-target="nameDisplay" data-action="click->user#editName"]  #{user.name}
                 form.edit_name_form.form_hidden.form-inline[
-                  action=users_engine.user_path(id: user.id)
+                  action=user_path(id: user.id)
                   method="post"
                   style="display:none"
                   data-user-target="nameForm"
@@ -68,7 +68,7 @@ div.user[id="whole_user_#{user.id}" data-controller="user"]
                     checked=user.admin?
                     disabled=(!can_i_toggle_admin?(user))
                     data-action="click->user#toggleAdmin"
-                    data-url=users_engine.toggle_admin_user_path(id: user.id)]
+                    data-url=toggle_admin_user_path(id: user.id)]
                   |  
                   span.spinner.theme-image style="display:none"
             tr
