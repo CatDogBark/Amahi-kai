@@ -1,14 +1,13 @@
 - active_tab = nil
 - visible_tabs = @advanced ? @tabs : @tabs.reject { |t| t.advanced }
-.container
-  ul.nav.nav-tabs.setup-main-tab
+ul.nav.nav-tabs.setup-main-tab
     - visible_tabs.each do |tab|
       li.nav-item
           - if !tab_class(tab)&.include?('active')
               a.nav-link.active.text-capitalize.tab-link-style href="#{tab.url}"
                 = t(tab.label)
               
-              .container.setup-subtab-container.all-subtab-container
+              .setup-subtab-container.all-subtab-container
                 ul.nav.nav-tabs.setup-subtab
                   - if @advanced
                     - tab.advanced_subtabs.each do |subtab|
@@ -34,7 +33,7 @@
               a.nav-link.active.text-capitalize.active-tab-link-style href="#{tab.url}"
                 = t(tab.label)
           
-              .container.setup-subtab-container.all-subtab-container
+              .setup-subtab-container.all-subtab-container
                 ul.nav.nav-tabs.setup-subtab
                   - if @advanced
                     - tab.advanced_subtabs.each do |subtab|
@@ -56,7 +55,7 @@
                             = t(subtab.label)
 
 - if active_tab&.subtabs?
-  .container.setup-subtab-container.single-subtab-container
+  .setup-subtab-container.single-subtab-container
     ul.nav.nav-tabs.setup-subtab
       - if @advanced
         - active_tab.advanced_subtabs.each do |subtab|
