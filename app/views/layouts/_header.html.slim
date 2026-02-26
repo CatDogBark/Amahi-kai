@@ -15,9 +15,9 @@ nav.navbar.navbar-expand-md.bg-dark.navbar-inverse
           | 🌙
         button.theme-opt.theme-opt-system onclick="setTheme('system', event)" title="System"
           | 💻
-
-      button.ocean-toggle onclick="toggleOcean()" title="Toggle ambient effects" style="background: none; border: none; font-size: 14px; cursor: pointer; opacity: 0.6; padding: 4px 6px; border-radius: 50%; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'"
-        | 🌊
+        span style="width: 1px; height: 20px; background: rgba(255,255,255,0.15); margin: 0 2px;"
+        button.theme-opt.ocean-toggle onclick="toggleOcean()" title="Toggle ambient effects"
+          | 🌊
 
     #amahi-nav.collapse.navbar-collapse.justify-content-end    
       - if current_user_is_admin?

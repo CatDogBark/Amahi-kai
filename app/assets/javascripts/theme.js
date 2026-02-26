@@ -96,19 +96,25 @@
   window.toggleOcean = function() {
     var off = document.documentElement.classList.toggle('ocean-off');
     localStorage.setItem('ocean-off', off ? '1' : '0');
-    // Update button opacity
-    document.querySelectorAll('.ocean-toggle').forEach(function(btn) {
-      btn.style.opacity = off ? '0.3' : '0.6';
-    });
+    updateOceanButton();
   };
+
+  function updateOceanButton() {
+    var off = document.documentElement.classList.contains('ocean-off');
+    document.querySelectorAll('.ocean-toggle').forEach(function(btn) {
+      if (off) {
+        btn.classList.remove('active');
+      } else {
+        btn.classList.add('active');
+      }
+    });
+  }
 
   function initOcean() {
     if (localStorage.getItem('ocean-off') === '1') {
       document.documentElement.classList.add('ocean-off');
-      document.querySelectorAll('.ocean-toggle').forEach(function(btn) {
-        btn.style.opacity = '0.3';
-      });
     }
+    updateOceanButton();
   }
 
   document.addEventListener('DOMContentLoaded', function() { initToggle(); initOcean(); });
