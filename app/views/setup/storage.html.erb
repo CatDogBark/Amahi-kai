@@ -38,15 +38,24 @@
                 <span style="color: #10b981;">✓ Mounted at <%= part[:mountpoint] %></span>
                 <span style="color: #7f8c9b; margin-left: 8px;"><%= part[:fstype] %></span>
               <% when :unmounted %>
+                <% supported_fs = %w[ext2 ext3 ext4 xfs btrfs] %>
+                <% fs_supported = supported_fs.include?(part[:fstype].to_s.downcase) %>
                 <span style="color: #f59e0b;">⚠ Has existing <%= part[:fstype] %> filesystem (may contain data)</span>
                 <a href="#" style="color: #0d8aa8; margin-left: 8px; font-size: 12px;"
                    onclick="previewDrive('<%= part[:path] %>'); return false;">Preview contents</a>
                 <div style="margin-top: 4px;">
-                  <label style="font-size: 12px; display: inline; cursor: pointer; color: #7f8c9b;">
-                    <input type="checkbox" name="format_drives[]" value="<%= part[:path] %>" style="margin-right: 4px;">
-                    Format as ext4 (erases all data)
-                  </label>
-                  <span style="font-size: 11px; color: #9ca3af; margin-left: 4px;">— or leave unchecked to mount as-is</span>
+                  <% unless fs_supported %>
+                    <label style="font-size: 12px; display: inline; cursor: pointer; color: #ef4444;">
+                      <input type="checkbox" name="format_drives[]" value="<%= part[:path] %>" style="margin-right: 4px;" checked>
+                      Format as ext4 — required (<%= part[:fstype] %> not supported for storage pooling)
+                    </label>
+                  <% else %>
+                    <label style="font-size: 12px; display: inline; cursor: pointer; color: #7f8c9b;">
+                      <input type="checkbox" name="format_drives[]" value="<%= part[:path] %>" style="margin-right: 4px;">
+                      Format as ext4 (erases all data)
+                    </label>
+                    <span style="font-size: 11px; color: #9ca3af; margin-left: 4px;">— or leave unchecked to mount as-is</span>
+                  <% end %>
                 </div>
               <% when :unformatted %>
                 <span style="color: #ef4444;">⊘ No filesystem — will be formatted (ext4) and mounted</span>
