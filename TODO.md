@@ -21,6 +21,10 @@ Replace with simple route-based nav — hardcoded header links, no dynamic tab r
 - File browser (no specs yet)
 - Setup wizard (no specs yet)
 
+### Tech Debt Review
+Periodic review of `TECH_DEBT.md` — tackle items when touching nearby code.
+Top items: Share model callbacks (extract service object), Command class consistency.
+
 ### Setup Wizard Testing
 Verify enhanced wizard end-to-end on real hardware:
 - Drive detection, formatting, mounting
