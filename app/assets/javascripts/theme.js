@@ -76,13 +76,22 @@
     }
   });
 
-  document.addEventListener('DOMContentLoaded', function() {
+  function initToggle() {
+    // Remove ready class so indicator can be positioned without animation
+    document.querySelectorAll('.theme-track').forEach(function(track) {
+      track.classList.remove('ready');
+    });
     updateToggle();
-    // Enable indicator animation AFTER initial position is set (prevents slide on page load)
+    // Re-enable animation after position is set (2 frames to be safe)
     requestAnimationFrame(function() {
-      document.querySelectorAll('.theme-track').forEach(function(track) {
-        track.classList.add('ready');
+      requestAnimationFrame(function() {
+        document.querySelectorAll('.theme-track').forEach(function(track) {
+          track.classList.add('ready');
+        });
       });
     });
-  });
+  }
+
+  document.addEventListener('DOMContentLoaded', initToggle);
+  document.addEventListener('turbo:load', initToggle);
 })();
