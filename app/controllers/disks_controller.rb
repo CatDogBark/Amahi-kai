@@ -6,12 +6,12 @@ class DisksController < ApplicationController
 
   def index
     @page_title = t('disks')
-    @disks = DiskUtils.stats
+    @disks = DiskUtils.stats rescue []
   end
 
   def mounts
     @page_title = t('disks')
-    @mounts = DiskUtils.mounts
+    @mounts = DiskUtils.mounts rescue []
   end
 
   def devices

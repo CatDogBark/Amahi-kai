@@ -41,7 +41,7 @@ class SettingsController < ApplicationController
     unless @advanced
       redirect_to settings_index_path
     else
-      @servers = Server.all
+      @servers = Server.all rescue []
     end
   end
 

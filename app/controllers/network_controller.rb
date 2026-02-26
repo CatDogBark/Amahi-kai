@@ -10,7 +10,7 @@ class NetworkController < ApplicationController
   IP_RANGE = 10
 
   def index
-    @leases = Leases.all
+    @leases = Leases.all rescue {}
   end
 
   def hosts
