@@ -64,6 +64,18 @@ Rails.application.routes.draw do
   get  'setup/complete' => 'setup#complete',        as: :setup_complete
   post 'setup/finish'   => 'setup#finish',          as: :setup_finish
 
+  # File Browser
+  get  'files/:share_id/browse',       to: 'file_browser#browse',  as: :file_browser, defaults: { path: '' }
+  get  'files/:share_id/browse/*path', to: 'file_browser#browse',  as: :file_browser_path
+  get  'files/:share_id/download',       to: 'file_browser#download', defaults: { path: '' }
+  get  'files/:share_id/download/*path', to: 'file_browser#download', as: :file_browser_download, format: false
+  get  'files/:share_id/raw/*path',      to: 'file_browser#raw',      as: :file_browser_raw, format: false
+  get  'files/:share_id/preview/*path',  to: 'file_browser#preview',  as: :file_browser_preview, format: false
+  post 'files/:share_id/upload',         to: 'file_browser#upload',   as: :file_browser_upload
+  post 'files/:share_id/new_folder',     to: 'file_browser#new_folder', as: :file_browser_new_folder
+  put  'files/:share_id/rename',         to: 'file_browser#rename',   as: :file_browser_rename
+  delete 'files/:share_id/delete',       to: 'file_browser#delete',   as: :file_browser_delete
+
   post 'toggle_advanced' => 'front#toggle_advanced', as: :toggle_advanced
 
   root :to => 'front#index'

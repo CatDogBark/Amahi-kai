@@ -1,0 +1,172 @@
+<div class="file-browser" data-controller="file-browser"
+     data-file-browser-share-value="<%= @share.name %>"
+     data-file-browser-path-value="<%= @relative_path %>"
+     data-file-browser-upload-url-value="<%= file_browser_upload_path(@share) %>"
+     data-file-browser-new-folder-url-value="<%= file_browser_new_folder_path(@share) %>"
+     data-file-browser-rename-url-value="<%= file_browser_rename_path(@share) %>"
+     data-file-browser-delete-url-value="<%= file_browser_delete_path(@share) %>">
+
+  <%# ── Header ── %>
+  <div class="fb-header">
+    <div class="fb-breadcrumbs">
+      <% @breadcrumbs.each_with_index do |crumb, i| %>
+        <% if i == @breadcrumbs.length - 1 %>
+          <span class="fb-crumb-current"><%= crumb[:name] %></span>
+        <% else %>
+          <a href="<%= file_browser_path(@share, path: crumb[:path]) %>" class="fb-crumb"><%= crumb[:name] %></a>
+          <span class="fb-crumb-sep">/</span>
+        <% end %>
+      <% end %>
+    </div>
+    <div class="fb-actions">
+      <button class="btn btn-sm btn-outline-light" data-action="click->file-browser#newFolder" title="New Folder">
+        📁 New Folder
+      </button>
+      <label class="btn btn-sm btn-outline-info mb-0" title="Upload Files">
+        ⬆️ Upload
+        <input type="file" multiple class="d-none" data-action="change->file-browser#uploadFiles" data-file-browser-target="fileInput">
+      </label>
+      <button class="btn btn-sm btn-outline-danger d-none" data-file-browser-target="bulkDelete" data-action="click->file-browser#bulkDelete">
+        🗑️ Delete Selected
+      </button>
+    </div>
+  </div>
+
+  <%# ── Drop Zone ── %>
+  <div class="fb-dropzone" data-file-browser-target="dropzone"
+       data-action="dragover->file-browser#dragOver dragenter->file-browser#dragEnter dragleave->file-browser#dragLeave drop->file-browser#drop">
+
+    <%# ── File Table ── %>
+    <% if @entries.empty? && @relative_path.blank? %>
+      <div class="fb-empty">
+        <div class="fb-empty-icon">📂</div>
+        <p>This share is empty</p>
+        <p class="text-muted">Upload files or create a folder to get started</p>
+      </div>
+    <% elsif @entries.empty? %>
+      <div class="fb-empty">
+        <div class="fb-empty-icon">📂</div>
+        <p>This folder is empty</p>
+      </div>
+    <% else %>
+      <table class="table fb-table">
+        <thead>
+          <tr>
+            <th class="fb-check-col">
+              <input type="checkbox" data-action="change->file-browser#toggleAll" data-file-browser-target="selectAll" title="Select all">
+            </th>
+            <th class="fb-icon-col"></th>
+            <th class="fb-name-col">Name</th>
+            <th class="fb-size-col">Size</th>
+            <th class="fb-date-col">Modified</th>
+            <th class="fb-action-col"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if @relative_path.present? %>
+            <tr class="fb-row fb-row-parent">
+              <td></td>
+              <td>📁</td>
+              <td colspan="4">
+                <% parent = @relative_path.split('/')[0...-1].join('/') %>
+                <a href="<%= file_browser_path(@share, path: parent) %>" class="fb-link">..</a>
+              </td>
+            </tr>
+          <% end %>
+          <% @entries.each do |entry| %>
+            <tr class="fb-row" data-name="<%= entry[:name] %>" data-directory="<%= entry[:directory] %>">
+              <td class="fb-check-col">
+                <input type="checkbox" class="fb-item-check" data-action="change->file-browser#updateSelection" value="<%= entry[:name] %>">
+              </td>
+              <td class="fb-icon-col"><%= entry[:icon] %></td>
+              <td class="fb-name-col">
+                <% if entry[:directory] %>
+                  <a href="<%= file_browser_path(@share, path: [@relative_path, entry[:name]].reject(&:blank?).join('/')) %>" class="fb-link fb-folder-link">
+                    <%= entry[:name] %>
+                  </a>
+                <% else %>
+                  <% entry_path = [@relative_path, entry[:name]].reject(&:blank?).join('/') %>
+                  <a href="<%= file_browser_raw_path(@share, path: entry_path) %>"
+                     class="fb-link fb-file-link"
+                     <% if entry[:mime]&.start_with?('image/', 'video/', 'audio/') || entry[:mime] == 'application/pdf' %>
+                       data-action="click->file-browser#previewFile"
+                       data-preview-url="<%= file_browser_raw_path(@share, path: entry_path) %>"
+                       data-preview-mime="<%= entry[:mime] %>"
+                       data-preview-name="<%= entry[:name] %>"
+                     <% end %>
+                  >
+                    <%= entry[:name] %>
+                  </a>
+                <% end %>
+              </td>
+              <td class="fb-size-col">
+                <% if entry[:size] %>
+                  <%= number_to_human_size(entry[:size]) %>
+                <% else %>
+                  —
+                <% end %>
+              </td>
+              <td class="fb-date-col">
+                <%= entry[:modified]&.strftime('%b %d, %Y %H:%M') %>
+              </td>
+              <td class="fb-action-col">
+                <div class="dropdown">
+                  <button class="btn btn-sm btn-link text-muted p-0" data-bs-toggle="dropdown" title="Actions">⋮</button>
+                  <ul class="dropdown-menu dropdown-menu-end">
+                    <% unless entry[:directory] %>
+                      <li>
+                        <% dl_path = [@relative_path, entry[:name]].reject(&:blank?).join('/') %>
+                        <a class="dropdown-item" href="<%= file_browser_download_path(@share, path: dl_path) %>">⬇️ Download</a>
+                      </li>
+                    <% end %>
+                    <li>
+                      <a class="dropdown-item" href="#" data-action="click->file-browser#renameItem" data-name="<%= entry[:name] %>">✏️ Rename</a>
+                    </li>
+                    <li>
+                      <a class="dropdown-item text-danger" href="#" data-action="click->file-browser#deleteItem" data-name="<%= entry[:name] %>">🗑️ Delete</a>
+                    </li>
+                  </ul>
+                </div>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    <% end %>
+
+    <%# Drop overlay %>
+    <div class="fb-drop-overlay" data-file-browser-target="dropOverlay">
+      <div class="fb-drop-message">
+        <div style="font-size: 3rem;">📥</div>
+        <div>Drop files here to upload</div>
+      </div>
+    </div>
+  </div>
+
+  <%# ── Preview Modal ── %>
+  <div class="modal fade" id="previewModal" tabindex="-1" data-file-browser-target="previewModal">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content" style="background: var(--kai-card-bg, #1a2332);">
+        <div class="modal-header border-0">
+          <h5 class="modal-title" data-file-browser-target="previewTitle"></h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body text-center p-2" data-file-browser-target="previewBody">
+        </div>
+        <div class="modal-footer border-0">
+          <a href="#" class="btn btn-sm btn-outline-info" data-file-browser-target="previewDownload">⬇️ Download</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <%# ── Status Bar ── %>
+  <div class="fb-statusbar">
+    <%= @entries.count { |e| e[:directory] } %> folders,
+    <%= @entries.count { |e| !e[:directory] } %> files
+    <% total = @entries.sum { |e| e[:size] || 0 } %>
+    <% if total > 0 %>
+      (<%= number_to_human_size(total) %>)
+    <% end %>
+  </div>
+</div>

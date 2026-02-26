@@ -11,6 +11,7 @@
 //= require controllers/user_controller
 //= require controllers/create_form_controller
 //= require controllers/pool_toggle_controller
+//= require controllers/file_browser_controller
 
 //= require toast
 //= require lib/application

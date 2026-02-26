@@ -23,6 +23,7 @@ class FrontController < ApplicationController
 		@page_title = t('dashboard')
 		@apps = DockerApp.dashboard.running
 		@stats = DashboardStats.summary
+		@shares = Share.where(visible: true).order(:name)
 	end
 
 	def toggle_advanced
