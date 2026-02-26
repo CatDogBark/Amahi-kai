@@ -20,13 +20,11 @@
 
 ## Medium Priority (messy but working)
 
-### Tab/Subtab System
-6 `config/initializers/*_tab.rb` files register nav items into a Tab model. Header iterates over them. Works fine but unnecessary indirection — the nav is static, never changes at runtime. Could replace with hardcoded links in the header partial.
+### ~~Tab/Subtab System~~ ✅ REPLACED
+Replaced with inline nav structure in `_tabs.html.slim`. Tab model, 6 initializers, tabs_helper all deleted. 200 lines removed.
 
-**Files:** `app/models/tab.rb`, `app/models/subtab.rb`, `config/initializers/*_tab.rb`, `app/helpers/tabs_helper.rb`
-
-### Three Layouts
-`application.html.slim`, `basic.html.slim`, `debug.html.slim` — basic is used by pages that don't need tabs. Dashboard already uses application with `@no_tabs = true`. Could consolidate to one layout.
+### ~~Three Layouts~~ ✅ CONSOLIDATED
+`basic.html.slim` deleted. Search uses `application.html.slim` with `@no_tabs = true`. Remaining layouts (debug, setup, login) are genuinely different.
 
 ### Mixed View Formats
 Some views are `.html.slim`, others `.html.erb`. Not a bug, just inconsistent. Consolidated plugin views kept their original format. Pick one and migrate over time.
@@ -45,10 +43,10 @@ Some views are `.html.slim`, others `.html.erb`. Not a bug, just inconsistent. C
 All removed 2026-02-26 (474 lines). DB `plugins` table still exists but harmless.
 
 ### /var/hda/ Legacy Paths
-Several places use `HDA_TMP_DIR` / `/var/hda/` for staging samba/dns configs. Legacy Amahi convention. Works but not obvious. Could migrate to `/var/lib/amahi-kai/` for clarity.
+Several places use `HDA_TMP_DIR` / `/var/hda/` for staging samba/dns configs. Legacy Amahi convention. Works but not obvious. Migrate to `/var/lib/amahi-kai/` on next fresh install.
 
-### use_sample_data? Dev Mode
-`settings_controller.rb` has a dev mode that loads fake server data from JSON files. Probably unused now that we have real installs. Harmless but confusing if you stumble into it.
+### ~~use_sample_data?~~ ✅ DELETED
+Removed along with SampleData class. Controllers now use real system data with rescue fallbacks for CI.
 
 ### Server Model
 `app/models/server.rb` — monit-style service monitoring from old Amahi. Works but overlaps with dashboard's `systemctl` status checks. Two systems doing similar things.
