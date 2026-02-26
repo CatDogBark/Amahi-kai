@@ -39,11 +39,9 @@ html[dir="#{@locale_direction}" lang="#{I18n.locale}" xml:lang="#{I18n.locale}"]
       #app.inner.container
         - unless @no_tabs
           = render 'shared/tabs'
-          #preferences
-            .preftab
-                = yield
-        - else
-          = yield
+        #preferences
+          .preftab
+              = yield
       .push
     = render 'layouts/footer'
 
