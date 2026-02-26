@@ -41,4 +41,7 @@ html[dir="#{@locale_direction}" lang="#{I18n.locale}" xml:lang="#{I18n.locale}"]
 
     = render 'layouts/footer'
 
+    - if current_user_is_admin?
+      == render 'shared/install_terminal', id: 'system-update', title: 'Updating Amahi-kai', stream_url: settings_engine.update_system_stream_path
+
     #js-templates[style="display:none"]
