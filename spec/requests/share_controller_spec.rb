@@ -11,9 +11,11 @@ RSpec.describe "ShareController", type: :request do
   describe "authenticated admin" do
     before do
       login_as_admin
-      # Stub system calls (Samba config push, shell commands)
+      # Stub all system-level calls that share callbacks trigger
       allow(Share).to receive(:push_shares)
+      allow_any_instance_of(Share).to receive(:push_shares)
       allow_any_instance_of(Command).to receive(:execute)
+      allow(Platform).to receive(:reload)
     end
 
     describe "POST /shares (create)" do
@@ -31,22 +33,20 @@ RSpec.describe "ShareController", type: :request do
     end
 
     describe "PUT /shares/:id/toggle_visible" do
-      let!(:share) { create(:share) }
+      let!(:share) { create(:share, visible: true) }
 
       it "toggles visibility" do
-        original = share.visible
         put toggle_visible_share_path(share), as: :json
-        expect(share.reload.visible).not_to eq(original)
+        expect(share.reload.visible).to eq(false)
       end
     end
 
     describe "PUT /shares/:id/toggle_readonly" do
-      let!(:share) { create(:share) }
+      let!(:share) { create(:share, rdonly: false) }
 
       it "toggles readonly" do
-        original = share.rdonly
         put toggle_readonly_share_path(share), as: :json
-        expect(share.reload.rdonly).not_to eq(original)
+        expect(share.reload.rdonly).to eq(true)
       end
     end
 

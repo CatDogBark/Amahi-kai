@@ -1,25 +1,26 @@
-require 'spec_helper'
+require 'rails_helper'
 
 describe "Shares Toggle Actions", type: :request do
 
   describe "admin" do
     before do
       login_as_admin
-      # Stub system calls (Samba config push, shell commands)
+      # Stub all system-level calls that share callbacks trigger
       allow(Share).to receive(:push_shares)
+      allow_any_instance_of(Share).to receive(:push_shares)
       allow_any_instance_of(Command).to receive(:execute)
+      allow(Platform).to receive(:reload)
     end
 
-    let(:share) { create(:share) }
+    let(:share) { create(:share, visible: true, rdonly: false) }
 
     describe "PUT /shares/:id/toggle_visible" do
       it "toggles visibility" do
-        original = share.visible
         put toggle_visible_share_path(share), as: :json
         expect(response).to have_http_status(:ok)
         body = JSON.parse(response.body)
         expect(body["status"]).to eq("ok")
-        expect(share.reload.visible).to eq(!original)
+        expect(share.reload.visible).to eq(false)
       end
     end
 
@@ -55,7 +56,7 @@ describe "Shares Toggle Actions", type: :request do
 
     describe "PUT /shares/:id/update_extras" do
       it "updates extras" do
-        put update_extras_share_path(share), params: { share: { extras: "vfs objects = recycle" } }, as: :json
+        put update_extras_share_path(share), params: { value: "vfs objects = recycle" }, as: :json
         expect(response).to have_http_status(:ok)
       end
     end
