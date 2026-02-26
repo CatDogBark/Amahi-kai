@@ -82,7 +82,7 @@ class SecurityAudit
       return true if admin.nil?
       # Check if default password still works
       !admin.authenticate('secretpassword')
-    rescue
+    rescue StandardError
       true # If we can't check, assume it's fine
     end
 

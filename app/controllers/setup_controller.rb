@@ -19,15 +19,15 @@ class SetupController < ApplicationController
     user = current_user
     if params[:password].blank?
       flash[:error] = "Password cannot be blank."
-      render :admin and return
+      render :admin; return
     end
     if params[:password] != params[:password_confirmation]
       flash[:error] = "Passwords do not match."
-      render :admin and return
+      render :admin; return
     end
     if params[:password].length < 8
       flash[:error] = "Password must be at least 8 characters."
-      render :admin and return
+      render :admin; return
     end
     user.password = params[:password]
     user.password_confirmation = params[:password_confirmation]
@@ -154,7 +154,7 @@ class SetupController < ApplicationController
     @greyhole_installed = begin
       require 'greyhole'
       Greyhole.installed?
-    rescue
+    rescue StandardError
       false
     end
     @default_copies = Setting.get('default_pool_copies') || '2'
@@ -189,7 +189,7 @@ class SetupController < ApplicationController
   def create_share
     name = params[:share_name].to_s.strip
     if name.blank?
-      redirect_to setup_complete_path and return
+      redirect_to setup_complete_path; return
     end
 
     path = File.join(Share::DEFAULT_SHARES_ROOT, name.downcase.gsub(/\s+/, '-'))
@@ -220,7 +220,7 @@ class SetupController < ApplicationController
       end
     else
       flash[:error] = share.errors.full_messages.join(", ")
-      render :share and return
+      render :share; return
     end
 
     redirect_to setup_complete_path
@@ -235,7 +235,7 @@ class SetupController < ApplicationController
     @greyhole_installed = begin
       require 'greyhole'
       Greyhole.installed?
-    rescue
+    rescue StandardError
       false
     end
     @default_copies = Setting.get('default_pool_copies') || '0'

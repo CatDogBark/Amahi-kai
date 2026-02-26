@@ -52,14 +52,14 @@ class DashboardStats
       services.map do |svc|
         status = begin
           `systemctl is-active #{svc[:unit]} 2>/dev/null`.strip
-        rescue
+        rescue StandardError
           'unknown'
         end
         since = if status == 'active'
           begin
             `systemctl show #{svc[:unit]} --property=ActiveEnterTimestamp 2>/dev/null`
               .strip.sub('ActiveEnterTimestamp=', '')
-          rescue
+          rescue StandardError
             nil
           end
         end
@@ -101,7 +101,7 @@ class DashboardStats
       else
         'Linux'
       end
-    rescue
+    rescue StandardError
       'Linux'
     end
 
@@ -115,7 +115,7 @@ class DashboardStats
       else
         { percent: 0, detail: 'unavailable' }
       end
-    rescue
+    rescue StandardError
       { percent: 0, detail: 'unavailable' }
     end
 
@@ -136,7 +136,7 @@ class DashboardStats
       else
         { percent: 0, detail: 'unavailable' }
       end
-    rescue
+    rescue StandardError
       { percent: 0, detail: 'unavailable' }
     end
 
@@ -165,7 +165,7 @@ class DashboardStats
         }
       end
       drives
-    rescue
+    rescue StandardError
       []
     end
 
@@ -177,7 +177,7 @@ class DashboardStats
       else
         { percent: 0, detail: 'unavailable' }
       end
-    rescue
+    rescue StandardError
       { percent: 0, detail: 'unavailable' }
     end
   end

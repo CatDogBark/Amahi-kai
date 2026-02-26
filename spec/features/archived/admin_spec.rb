@@ -25,7 +25,7 @@ feature "Admin", archived: true do
     fill_in "password", :with => "secretpassword"
     click_button "Log In"
     elements = page.all('.nav-item', visible: :all)
-    elements.each do |element|      
+    elements.each do |element|
       expect(element).not_to match_css('.nav-item', visible: :all, text: "Setup")
     end
     visit users_engine.users_path

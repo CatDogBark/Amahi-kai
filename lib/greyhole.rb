@@ -119,7 +119,7 @@ class Greyhole
       begin
         output = `greyhole --status 2>/dev/null`
         parse_queue_status(output)
-      rescue
+      rescue StandardError
         { pending: 0, last_action: nil }
       end
     end

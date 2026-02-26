@@ -206,7 +206,7 @@ class AppProxyController < ApplicationController
     ports = JSON.parse(ports) if ports.is_a?(String)
     ssl_ports = %w[443 9443 8443]
     ports.keys.any? { |k| ssl_ports.include?(k.to_s) }
-  rescue
+  rescue StandardError
     false
   end
 
