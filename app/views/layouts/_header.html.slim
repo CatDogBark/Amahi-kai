@@ -9,11 +9,11 @@ nav.navbar.navbar-expand-md.bg-dark.navbar-inverse
     .theme-switcher
       .theme-track
         .theme-indicator
-        button.theme-opt.theme-opt-light onclick="setTheme('light')" title="Light"
+        button.theme-opt.theme-opt-light onclick="setTheme('light', event)" title="Light"
           | ☀️
-        button.theme-opt.theme-opt-dark onclick="setTheme('dark')" title="Dark"
+        button.theme-opt.theme-opt-dark onclick="setTheme('dark', event)" title="Dark"
           | 🌙
-        button.theme-opt.theme-opt-system onclick="setTheme('system')" title="System"
+        button.theme-opt.theme-opt-system onclick="setTheme('system', event)" title="System"
           | 💻
 
     #amahi-nav.collapse.navbar-collapse.justify-content-end    

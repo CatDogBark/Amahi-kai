@@ -85,6 +85,58 @@
   --kai-shadow: rgba(26, 35, 50, 0.08);
 }
 
+/* ── View Transition: Ocean Ripple 🌊 ── */
+
+/* The main circle reveal — expands from click point */
+@keyframes theme-ripple-reveal {
+  from { clip-path: circle(0% at var(--ripple-x, 50%) var(--ripple-y, 50%)); }
+  to   { clip-path: circle(150% at var(--ripple-x, 50%) var(--ripple-y, 50%)); }
+}
+
+/* Old snapshot just sits still */
+html.theme-ripple::view-transition-old(root) {
+  animation: none;
+  z-index: 1;
+  mix-blend-mode: normal;
+}
+
+/* New snapshot expands as a circle from click point */
+html.theme-ripple::view-transition-new(root) {
+  animation: theme-ripple-reveal 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  z-index: 2;
+  mix-blend-mode: normal;
+}
+
+/* Decorative ripple rings — water drop effect */
+@keyframes ripple-ring-expand {
+  0% {
+    width: 0;
+    height: 0;
+    opacity: 0.6;
+    border-width: 3px;
+  }
+  60% {
+    opacity: 0.3;
+    border-width: 2px;
+  }
+  100% {
+    width: 600px;
+    height: 600px;
+    opacity: 0;
+    border-width: 1px;
+  }
+}
+
+.theme-ripple-ring {
+  position: fixed;
+  border-radius: 50%;
+  border: 3px solid var(--kai-primary, #0d8aa8);
+  pointer-events: none;
+  z-index: 999999;
+  transform: translate(-50%, -50%);
+  animation: ripple-ring-expand 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
 /* Theme switcher — centered in header */
 .theme-switcher {
   position: absolute;
