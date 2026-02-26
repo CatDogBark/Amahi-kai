@@ -6,10 +6,8 @@
 
 ## High Priority (will bite you)
 
-### Share Model Callbacks
-`app/models/share.rb` — `before_save_hook`, `after_save_hook`, `before_destroy_hook` do everything: write samba config, push to disk, update user permissions, reload services. One monolithic cascade that's hard to test and hard to debug. The factory stubs all of them out, which means specs never test the real save path.
-
-**Fix:** Extract into a `ShareProvisioner` service object. Test the service directly.
+### ~~Share Model Callbacks~~ ✅ EXTRACTED
+Extracted into 3 service objects: `ShareFileSystem`, `SambaService`, `ShareAccessManager`. Model delegates via thin callbacks. Factory stubs inject null services. 3 new spec files. (`1245870`, 2026-02-26)
 
 ### Command Class Inconsistency
 `lib/command.rb` wraps shell execution with sudo. But newer code (SSE streaming controllers, setup wizard) calls `system("sudo ...")` directly. Two patterns for the same thing = confusion about which is "right."
