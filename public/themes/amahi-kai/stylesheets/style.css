@@ -136,6 +136,12 @@ html.theme-ripple::view-transition-new(root) {
   left: 3px;
   top: 3px;
   z-index: 0;
+  opacity: 0;
+}
+
+/* Show indicator only after JS has positioned it */
+.theme-track.ready .theme-indicator {
+  opacity: 1;
 }
 
 /* Only animate after user interacts — prevents slide on page load */
