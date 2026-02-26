@@ -2,7 +2,7 @@ doctype html
 
 html[dir="#{@locale_direction}" lang="#{I18n.locale}" xml:lang="#{I18n.locale}"]
   script
-    | (function(){var t=localStorage.getItem('theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);})();
+    | (function(){var t=localStorage.getItem('theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('ocean-off')==='1')document.documentElement.classList.add('ocean-off');})();
   head
     meta charset="utf-8"
     meta content="width=device-width, initial-scale=1.0" name="viewport" /

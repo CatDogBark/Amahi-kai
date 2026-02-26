@@ -92,6 +92,25 @@
     });
   }
 
-  document.addEventListener('DOMContentLoaded', initToggle);
-  document.addEventListener('turbo:load', initToggle);
+  // 🌊 Ocean ambient toggle
+  window.toggleOcean = function() {
+    var off = document.documentElement.classList.toggle('ocean-off');
+    localStorage.setItem('ocean-off', off ? '1' : '0');
+    // Update button opacity
+    document.querySelectorAll('.ocean-toggle').forEach(function(btn) {
+      btn.style.opacity = off ? '0.3' : '0.6';
+    });
+  };
+
+  function initOcean() {
+    if (localStorage.getItem('ocean-off') === '1') {
+      document.documentElement.classList.add('ocean-off');
+      document.querySelectorAll('.ocean-toggle').forEach(function(btn) {
+        btn.style.opacity = '0.3';
+      });
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', function() { initToggle(); initOcean(); });
+  document.addEventListener('turbo:load', function() { initToggle(); initOcean(); });
 })();

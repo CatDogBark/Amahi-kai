@@ -187,6 +187,11 @@ body::before {
   }
 }
 
+/* ── User Toggle Off ── */
+html.ocean-off body::before { animation: none; }
+html.ocean-off .ocean-waves { display: none; }
+html.ocean-off .ocean-particles { display: none; }
+
 /* ── Reduced Motion ── */
 @media (prefers-reduced-motion: reduce) {
   body::before { animation: none; }
