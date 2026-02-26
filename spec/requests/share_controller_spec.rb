@@ -11,16 +11,13 @@ RSpec.describe "ShareController", type: :request do
   describe "authenticated admin" do
     before do
       login_as_admin
-      # Stub Samba/system calls that happen on share save/destroy
+      # Stub system calls (Samba config push, shell commands)
       allow(Share).to receive(:push_shares)
-      allow_any_instance_of(Share).to receive(:after_save_hook)
-      allow_any_instance_of(Share).to receive(:before_destroy_hook)
-      allow_any_instance_of(Share).to receive(:after_destroy_hook)
+      allow_any_instance_of(Command).to receive(:execute)
     end
 
     describe "POST /shares (create)" do
       it "creates a new share" do
-        allow_any_instance_of(Share).to receive(:before_save_hook)
         expect {
           post shares_path, params: { share: { name: "TestShare" } }
         }.to change(Share, :count).by(1)

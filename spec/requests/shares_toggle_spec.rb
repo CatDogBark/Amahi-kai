@@ -5,9 +5,9 @@ describe "Shares Toggle Actions", type: :request do
   describe "admin" do
     before do
       login_as_admin
-      # Stub Samba/system calls that happen on share save
+      # Stub system calls (Samba config push, shell commands)
       allow(Share).to receive(:push_shares)
-      allow_any_instance_of(Share).to receive(:after_save_hook)
+      allow_any_instance_of(Command).to receive(:execute)
     end
 
     let(:share) { create(:share) }
