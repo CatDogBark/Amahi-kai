@@ -32,7 +32,6 @@ class Share < ApplicationRecord
   PDC_SETTINGS = "/var/hda/domain-settings"
 
   default_scope {order("name")}
-  # scope :in_disk_pool, where([ "disk_pool_copies > ?", 0])
 
   has_many :cap_accesses, :dependent => :destroy
   has_many :users_with_share_access, :through => :cap_accesses, :source => :user
@@ -42,14 +41,14 @@ class Share < ApplicationRecord
 
   has_many :share_files, dependent: :destroy
 
-  before_save :before_save_hook
-  before_destroy :before_destroy_hook
+  # --- Callbacks (delegate to services) ---
+  before_save :normalize_tags, if: :tags_changed?
+  before_save -> { file_system.update_guest_permissions }
+  before_save -> { file_system.setup_directory }
+  before_destroy -> { file_system.cleanup_directory }
   after_create :index_share_files
-  after_destroy :cleanup_share_index
-  after_save :after_save_hook
-  after_commit :push_shares_after_commit, on: [:create, :update]
-  after_destroy :after_destroy_hook
-  after_commit :push_shares_after_commit, on: :destroy
+  after_save -> { access_manager.sync_everyone_access }
+  after_commit :push_samba_config, on: [:create, :update, :destroy]
 
   validates :name, presence: true,
     format: { :with => /\A\S[\S ]+\z/ },
@@ -59,42 +58,25 @@ class Share < ApplicationRecord
   validates :path, presence: true,
     length: 2..64
 
-  # return the full path of a share (even if it does not exist!).
-  # (this is for encapsulation purposes mostly)
+  # --- Service accessors ---
+
+  def file_system
+    @file_system ||= ShareFileSystem.new(self)
+  end
+
+  def access_manager
+    @access_manager ||= ShareAccessManager.new(self)
+  end
+
+  # --- Class methods ---
+
   def self.default_full_path(name)
     File.join(DEFAULT_SHARES_ROOT, name.downcase)
   end
 
-  # save the samba config file
+  # Save the samba config file — delegates to SambaService
   def self.push_shares
-    domain = Setting.value_by_name "domain"
-    debug = Setting.shares.value_by_name('debug') == '1'
-
-    smbconf = TempCache.unique_filename "smbconf"
-    File.open(smbconf, "w") do |l|
-      l.write(self.samba_conf(domain))
-    end
-
-    lmhosts = TempCache.unique_filename "lmhosts"
-    File.open(lmhosts, "w") do |l|
-      l.write(self.samba_lmhosts(domain))
-    end
-
-    # copy files to the samba area
-    time = Time.now
-    c = Command.new
-    c.submit("cp /etc/samba/smb.conf \"/tmp/smb.conf.#{time}\"") if debug
-    c.submit("cp #{smbconf} /etc/samba/smb.conf")
-    c.submit("rm -f #{smbconf}")
-
-    c.submit("cp /etc/samba/lmhosts \"/tmp/lmhosts.#{time}\"") if debug
-    c.submit("cp #{lmhosts} /etc/samba/lmhosts")
-    c.submit("rm -f #{lmhosts}")
-
-    c.execute
-
-    # reload the server - nmbd will do it on it's own!
-    Platform.reload(:nmb)
+    SambaService.push_config
   end
 
   def self.create_default_shares
@@ -111,7 +93,8 @@ class Share < ApplicationRecord
     end
   end
 
-  # configuration for one share
+  # --- Samba config generation ---
+
   def share_conf
     ret = "[%s]\n"    \
     "\tcomment = %s\n"   \
@@ -160,33 +143,18 @@ class Share < ApplicationRecord
     all.map { |s| [s.path, s.name] }
   end
 
+  # --- Delegated instance methods ---
+
   def make_guest_writeable
-    c = Command.new
-    c.submit("chmod o+w \"#{self.path}\"")
-    c.execute
+    file_system.make_guest_writeable
   end
 
   def make_guest_non_writeable
-    c = Command.new
-    c.submit("chmod o-w \"#{self.path}\"")
-    c.execute
+    file_system.make_guest_non_writeable
   end
 
   def toggle_everyone!
-    if self.everyone
-      users = User.all
-      self.users_with_share_access = users
-      self.users_with_write_access = users
-      self.everyone = false
-      self.rdonly = true
-    else
-      self.users_with_share_access = []
-      self.users_with_write_access = []
-      self.guest_access = false
-      self.guest_writeable = false
-      self.everyone = true
-    end
-    self.save
+    access_manager.toggle_everyone!
   end
 
   def toggle_visible!
@@ -200,48 +168,22 @@ class Share < ApplicationRecord
   end
 
   def toggle_access!(user_id)
-    unless self.everyone
-      user = User.find(user_id)
-      if self.users_with_share_access.include? user
-        self.users_with_share_access -= [user]
-      else
-        self.users_with_share_access += [user]
-      end
-    end
-    self.save
+    access_manager.toggle_access!(user_id)
   end
 
   def toggle_write!(user_id)
-    unless self.everyone
-      user = User.find(user_id)
-      if self.users_with_write_access.include? user
-        self.users_with_write_access -= [user]
-      else
-        self.users_with_write_access += [user]
-      end
-    end
-    self.save
+    access_manager.toggle_write!(user_id)
   end
 
   def toggle_guest_access!
-    if self.guest_access
-      self.guest_access = false
-    else
-      self.guest_access = true
-      # forced read-only as default
-      self.guest_writeable = false
-    end
-    self.save
+    access_manager.toggle_guest_access!
   end
 
   def toggle_guest_writeable!
-    self.guest_writeable = !self.guest_writeable
-    self.save
+    access_manager.toggle_guest_writeable!
   end
 
   def update_tags!(params)
-    # format with coma is set in before save
-
     unless params[:path].blank?
       self.update(params)
     else
@@ -253,7 +195,6 @@ class Share < ApplicationRecord
       end
       self.save
     end
-
   end
 
   def toggle_disk_pool!
@@ -265,53 +206,11 @@ class Share < ApplicationRecord
     self.update(params)
   end
 
-  # make all the files in the share globally writeable
   def clear_permissions
-    c = Command.new
-    c.submit("chmod -R a+rwx \"#{self.path}\"")
-    c.execute
+    file_system.clear_permissions
   end
 
-  private
-
-  def before_save_hook
-    if guest_writeable_changed?
-      guest_writeable ? make_guest_writeable : make_guest_non_writeable
-    end
-    self.tags = self.tags.split(/\s*,\s*|\s+/).reject {|s| s.empty? }.join(', ').downcase if self.tags_changed?
-    return unless self.path_changed?
-    return if self.path.nil? or self.path.blank?
-    user = User.admins.first.login
-    c = Command.new
-    c.submit("rmdir \"#{self.path_was}\"") unless self.path_was.blank?
-    c.submit("mkdir -p \"#{self.path}\"")
-    c.submit("chown #{Shellwords.escape(user)}:users #{Shellwords.escape(self.path)}")
-    c.submit("chmod g+w \"#{self.path}\"")
-    c.execute
-  end
-
-  def after_save_hook
-    if everyone
-      users = User.all
-      self.users_with_share_access = users
-      self.users_with_write_access = users
-    end
-  end
-
-  def push_shares_after_commit
-    Share.push_shares
-  rescue => e
-    Rails.logger.error("Failed to push Samba config: #{e.message}")
-  end
-
-  def before_destroy_hook
-    c = Command.new("rmdir --ignore-fail-on-non-empty \"#{self.path}\"")
-    c.execute
-  end
-
-  def after_destroy_hook
-    # push_shares now handled by after_commit
-  end
+  # --- Samba config class methods ---
 
   def self.samba_conf(domain)
     ret = self.header(domain)
@@ -455,7 +354,6 @@ class Share < ApplicationRecord
   end
 
   def self.create_logon_script(username)
-    # do nothing for PDC
     pdc = Setting.shares.value_by_name('pdc') == '1'
     return unless pdc
     return if File.exist?("#{PDC_SETTINGS}/netlogon/#{username}.bat")
@@ -480,10 +378,21 @@ class Share < ApplicationRecord
   def self.default_samba_domain(domain)
     d = domain.gsub /\.(com|net|org|local|co.uk|mobi|pro|info|asia|biz|..)$/, ''
     d = d.gsub /\./, '_'
-    # fallback, in case too much gets chopped
     d = domain if d.size == 0
     d = d[-15..-1] if d.size > 15
     d
+  end
+
+  private
+
+  def normalize_tags
+    self.tags = self.tags.split(/\s*,\s*|\s+/).reject {|s| s.empty? }.join(', ').downcase
+  end
+
+  def push_samba_config
+    Share.push_shares
+  rescue => e
+    Rails.logger.error("Failed to push Samba config: #{e.message}")
   end
 
   # Index files in this share after creation
@@ -496,9 +405,5 @@ class Share < ApplicationRecord
         Rails.logger.error("Share#index_share_files failed: #{e.message}")
       end
     end
-  end
-
-  def cleanup_share_index
-    # share_files destroyed via dependent: :destroy
   end
 end

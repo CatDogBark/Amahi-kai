@@ -48,7 +48,7 @@ describe "Setup Controller", type: :request do
     before do
       login_as_admin
       mark_setup_incomplete
-      allow_any_instance_of(Share).to receive(:push_shares)
+      allow(SambaService).to receive(:push_config)
     end
 
     describe "GET /setup/welcome" do
@@ -165,7 +165,7 @@ describe "Setup Controller", type: :request do
 
     describe "POST /setup/share" do
       it "creates a share and redirects to complete step" do
-        allow_any_instance_of(Share).to receive(:push_shares)
+        allow(SambaService).to receive(:push_config)
         post setup_create_share_path, params: { share_name: "Media" }
         expect(response).to redirect_to(setup_complete_path)
         expect(Share.where(name: "Media").count).to eq(1)

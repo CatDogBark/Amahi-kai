@@ -181,8 +181,11 @@ class SetupController < ApplicationController
               extras: "",
               disk_pool_copies: 0
             )
-            # Stub hooks since the directory already exists
-            def share.before_save_hook; end
+            # Skip filesystem setup since the directory already exists
+            null_fs = ShareFileSystem.new(share)
+            def null_fs.setup_directory; end
+            def null_fs.update_guest_permissions; end
+            share.instance_variable_set(:@file_system, null_fs)
             share.save!
             session[:standalone_drives] ||= []
             session[:standalone_drives] << { name: share_name, path: mount_point, fstype: part[:fstype] }

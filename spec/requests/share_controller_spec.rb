@@ -13,7 +13,7 @@ RSpec.describe "SharesController", type: :request do
       login_as_admin
       # Stub all system-level calls that share callbacks trigger
       allow(Share).to receive(:push_shares)
-      allow_any_instance_of(Share).to receive(:push_shares)
+      allow(SambaService).to receive(:push_config)
       allow_any_instance_of(Command).to receive(:execute)
       allow(Platform).to receive(:reload)
     end

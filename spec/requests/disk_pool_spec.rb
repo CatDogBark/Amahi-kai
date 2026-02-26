@@ -9,7 +9,7 @@ describe "Disk Pool Actions", type: :request, integration: true do
 
     describe "PUT /shares/:id/toggle_disk_pool_enabled" do
       it "enables disk pooling" do
-        allow_any_instance_of(Share).to receive(:push_shares)
+        allow(SambaService).to receive(:push_config)
         expect(share.disk_pool_copies).to eq(0)
         put toggle_disk_pool_enabled_share_path(share)
         expect(response).to have_http_status(:ok)
@@ -17,7 +17,7 @@ describe "Disk Pool Actions", type: :request, integration: true do
       end
 
       it "disables disk pooling when already enabled" do
-        allow_any_instance_of(Share).to receive(:push_shares)
+        allow(SambaService).to receive(:push_config)
         share.update!(disk_pool_copies: 2)
         put toggle_disk_pool_enabled_share_path(share)
         expect(response).to have_http_status(:ok)
@@ -27,7 +27,7 @@ describe "Disk Pool Actions", type: :request, integration: true do
 
     describe "PUT /shares/:id/update_disk_pool_copies" do
       it "updates the number of copies" do
-        allow_any_instance_of(Share).to receive(:push_shares)
+        allow(SambaService).to receive(:push_config)
         put update_disk_pool_copies_share_path(share), params: { value: 3 }
         expect(response).to have_http_status(:ok)
         expect(share.reload.disk_pool_copies).to eq(3)

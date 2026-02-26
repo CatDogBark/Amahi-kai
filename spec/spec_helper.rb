@@ -1,7 +1,11 @@
 # This file is copied to spec/ when you run 'rails generate rspec:install'
 ENV["RAILS_ENV"] ||= 'test'
-require 'simplecov'
-require 'simplecov_helper'
+begin
+  require 'simplecov'
+  require 'simplecov_helper'
+rescue LoadError
+  # SimpleCov unavailable (e.g., GLIBC mismatch in sandbox)
+end
 require File.expand_path("../../config/environment", __FILE__)
 require 'rspec/rails'
 require 'capybara/rspec'

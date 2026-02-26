@@ -65,12 +65,25 @@ FactoryBot.define do
     sequence(:name) { |n| "name#{n}" }
 
     before(:create) do |share|
-      def share.before_save_hook; end
-      def share.after_save_hook; end
-      def share.before_destroy_hook; end
-      def share.after_destroy_hook; end
+      # Stub filesystem service with no-op to avoid shell commands in tests
+      null_fs = ShareFileSystem.new(share)
+      def null_fs.setup_directory; end
+      def null_fs.update_guest_permissions; end
+      def null_fs.cleanup_directory; end
+      def null_fs.make_guest_writeable; end
+      def null_fs.make_guest_non_writeable; end
+      def null_fs.clear_permissions; end
+      share.instance_variable_set(:@file_system, null_fs)
+
+      # Stub access manager sync (after_save)
+      null_am = ShareAccessManager.new(share)
+      def null_am.sync_everyone_access; end
+      share.instance_variable_set(:@access_manager, null_am)
+
+      # Stub other callbacks
+      def share.normalize_tags; end
+      def share.push_samba_config; end
       def share.index_share_files; end
-      def share.cleanup_share_index; end
     end
   end
 end
