@@ -56,7 +56,7 @@ describe "Shares Toggle Actions", type: :request do
 
     describe "PUT /shares/:id/update_extras" do
       it "updates extras" do
-        put update_extras_share_path(share), params: { value: "vfs objects = recycle" }, as: :json
+        put update_extras_share_path(share), params: { share: { extras: "vfs objects = recycle" } }, as: :json
         expect(response).to have_http_status(:ok)
       end
     end
