@@ -17,10 +17,10 @@
 class FrontController < ApplicationController
 
   before_action :login_required
-  layout 'basic'
 
   def index
     @page_title = t('dashboard')
+    @no_tabs = true
     @apps = DockerApp.dashboard.running
     @stats = DashboardStats.summary
     @shares = Share.where(visible: true).order(:name)
