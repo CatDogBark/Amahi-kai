@@ -1,6 +1,6 @@
 # MEMORY.md — Kai's Long-Term Memory
 
-*Load this only in direct sessions with Troy. Last updated: 2026-02-24.*
+*Load this only in direct sessions with Troy. Last updated: 2026-02-26.*
 
 ---
 
@@ -237,6 +237,24 @@ Async communication between Kai (sandbox) and Root Claude (host):
 2. Sprockets → Propshaft (unblock research)
 3. Firewall plugin (new feature, large scope)
 
+### Dashboard App Quick-Launch (2026-02-26)
+- Running Docker apps shown as icon grid on dashboard (like phone home screen)
+- Uses `logo_url` from catalog, falls back to 📦
+- One click launches app via reverse proxy at `/app/{identifier}`
+- Dashboard order: Welcome → Shares → Apps → System/Services → Quick Actions
+- Troy approved this over iframe approach — iframes break app security headers, responsive design, etc.
+
+### nmbd WINS Fix (2026-02-26)
+- nmbd segfaults on fresh install: corrupted `wins.tdb` → `initiate_wins_processing` crash
+- Fix: `rm -f /var/lib/samba/wins.dat /var/cache/samba/wins.tdb` before starting nmbd
+- Added to `bin/amahi-install`
+
+### Setup Wizard Swap Detection (2026-02-26)
+- Welcome step shows RAM + swap status
+- Systems <8GB with no swap: recommendation + "Create Swap File" button
+- SSE streaming terminal creates swap via fallocate/mkswap/swapon/fstab
+- Thresholds: <2GB→4G, <4GB→2G, <8GB→1G
+
 **SSL — DONE** (2026-02-25): `assume_ssl` REVERTED — broke LAN HTTP. Cloudflare handles HTTPS at the edge, LAN stays plain HTTP.
 **Auth — DONE** (2026-02-25): Authlogic + SCrypt → `has_secure_password` (bcrypt). Plain Ruby UserSession class using `session[:user_id]`.
 
@@ -254,7 +272,18 @@ Async communication between Kai (sandbox) and Root Claude (host):
 - Troy prefers plain markdown release notes — no emojis/fancy formatting
 - Git tags don't auto-push from sandbox cron
 
-### Plugin Consolidation (approved 2026-02-26, P0)
+### Plugin Consolidation (DONE 2026-02-26)
+- All 6 engines merged in one session: Users → Network → Shares → Disks → Apps → Settings
+- `config.amahi_plugins = []` unconditional, `amahi_plugin_routes` is a no-op
+- Plugin engine loading disabled — host had stale plugin dirs causing route conflicts
+- ~60 sleep calls removed, 23+ bare rescues → StandardError, tabs→spaces
+- Routes: `/tab/*` → `/users`, `/shares`, `/network`, `/disks`, `/apps`, `/settings`
+- Missing files caught by CI: `shares.js`, `ServersHelper` — restored
+- Asset precompile updated: explicit list replaces dead plugin glob
+- **Lesson:** `git pull` doesn't delete removed directories — host needs `rm -rf plugins/0*`
+- **Lesson:** Always check for deleted helpers/JS when consolidating engines
+
+### Plugin Consolidation (approved 2026-02-26, P0) [HISTORICAL]
 - Troy frustrated with legacy plugin code blocking improvements
 - 6 plugin engines: Users, Disks, Shares, Apps, Network, Settings
 - Legacy debt: 60 sleep calls, 23 bare rescues, jQuery JS, shell injection patterns
