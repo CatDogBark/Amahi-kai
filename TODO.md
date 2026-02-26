@@ -29,6 +29,17 @@ Verify enhanced wizard end-to-end on real hardware:
 
 ## P1 — Polish
 
+### Mobile Responsive Pass
+Full mobile optimization — test every page on phone screens, fix what's broken:
+- Header nav → hamburger menu collapse
+- Dashboard cards stacking
+- Tab bar scrollable on small screens
+- File browser: bigger tap targets, touch-friendly actions
+- Setup wizard mobile-friendly
+- Share/user forms sized for thumbs
+- Upload via phone camera shortcut
+- Theme toggle accessible on mobile
+
 ### Backup/Snapshot Scheduling
 The #1 reason people buy a NAS. Scope TBD — rsync-based, scheduling, retention, restore UI.
 
