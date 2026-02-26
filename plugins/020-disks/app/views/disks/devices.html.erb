@@ -68,7 +68,7 @@
                             params: { device: part[:path] },
                             method: :post,
                             class: "btn btn-sm btn-outline-danger",
-                            data: { confirm: "⚠️ This will ERASE ALL DATA on #{part[:path]}. Are you sure?" } %>
+                            data: { confirm: "⚠️ This will ERASE ALL DATA on #{part[:path]}. Are you sure?", disable_with: "⏳ Formatting..." } %>
                     <% when :unmounted %>
                       <% supported_fs = %w[ext2 ext3 ext4 xfs btrfs] %>
                       <div class="d-flex gap-1 justify-content-end">
@@ -76,19 +76,22 @@
                               disks_engine.preview_disk_path,
                               params: { device: part[:path] },
                               method: :post,
-                              class: "btn btn-sm btn-outline-info" %>
+                              class: "btn btn-sm btn-outline-info",
+                              data: { disable_with: "⏳ Loading..." } %>
                         <%= button_to "Mount",
                               disks_engine.mount_disk_path,
                               params: { device: part[:path] },
                               method: :post,
-                              class: "btn btn-sm btn-outline-primary" %>
+                              class: "btn btn-sm btn-outline-primary",
+                              data: { disable_with: "⏳ Mounting..." } %>
                         <% unless supported_fs.include?(part[:fstype].to_s.downcase) %>
                           <%= button_to "Mount as Share",
                                 disks_engine.mount_as_share_path,
                                 params: { device: part[:path] },
                                 method: :post,
                                 class: "btn btn-sm btn-outline-success",
-                                title: "Mount and create a network share (#{part[:fstype]} — not pooled)" %>
+                                title: "Mount and create a network share (#{part[:fstype]} — not pooled)",
+                                data: { disable_with: "⏳ Mounting..." } %>
                         <% end %>
                       </div>
                     <% when :mounted %>
@@ -98,7 +101,7 @@
                               params: { device: part[:path] },
                               method: :post,
                               class: "btn btn-sm btn-outline-warning",
-                              data: { confirm: "Unmount #{part[:path]} from #{part[:mountpoint]}?" } %>
+                              data: { confirm: "Unmount #{part[:path]} from #{part[:mountpoint]}?", disable_with: "⏳ Unmounting..." } %>
                       <% end %>
                     <% end %>
                   <% end %>
