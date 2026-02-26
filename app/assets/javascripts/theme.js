@@ -54,7 +54,7 @@
     return localStorage.getItem('theme') || 'system';
   }
 
-  // Decorative ripple rings that expand from click point
+  // Decorative ripple rings that expand from click point — like water rings
   function spawnRipples(cx, cy) {
     var count = 3;
     for (var i = 0; i < count; i++) {
@@ -62,10 +62,9 @@
       ring.className = 'theme-ripple-ring';
       ring.style.left = cx + 'px';
       ring.style.top = cy + 'px';
-      ring.style.animationDelay = (i * 120) + 'ms';
+      ring.style.animationDelay = (i * 300) + 'ms';  // 300ms apart for visible spacing
       document.body.appendChild(ring);
 
-      // Clean up after animation
       ring.addEventListener('animationend', function() {
         this.remove();
       });
