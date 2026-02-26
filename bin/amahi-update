@@ -98,6 +98,10 @@ chown -R "$APP_USER:$APP_GROUP" "$APP_DIR"
 log "Restarting Amahi-kai..."
 systemctl restart amahi-kai 2>&1 || error "Failed to restart service"
 
+# 7. Ensure all fstab mounts are active (FUSE mounts like ntfs-3g can get lost)
+log "Restoring mounts..."
+mount -a 2>&1 || log "⚠ Some mounts may have failed — check 'mount -a' manually"
+
 # Verify it's running
 sleep 2
 if systemctl is-active --quiet amahi-kai; then
