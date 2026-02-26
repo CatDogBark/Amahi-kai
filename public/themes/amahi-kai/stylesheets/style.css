@@ -162,10 +162,14 @@ html.theme-ripple::view-transition-new(root) {
   border-radius: 50%;
   background: var(--kai-primary);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   left: 3px;
   top: 3px;
   z-index: 0;
+}
+
+/* Only animate after user interacts — prevents slide on page load */
+.theme-track.ready .theme-indicator {
+  transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Indicator positions */

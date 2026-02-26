@@ -96,5 +96,13 @@
     }
   });
 
-  document.addEventListener('DOMContentLoaded', updateToggle);
+  document.addEventListener('DOMContentLoaded', function() {
+    updateToggle();
+    // Enable indicator animation AFTER initial position is set (prevents slide on page load)
+    requestAnimationFrame(function() {
+      document.querySelectorAll('.theme-track').forEach(function(track) {
+        track.classList.add('ready');
+      });
+    });
+  });
 })();
