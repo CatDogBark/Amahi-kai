@@ -7,6 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="alternate icon" href="/favicon.ico">
   <%= stylesheet_link_tag "login" %>
+  <%= stylesheet_link_tag "ocean-bg" %>
   <%= csrf_meta_tags %>
   <style>
     body.setup {
@@ -211,8 +212,8 @@
 
     /* ── Dark mode ── */
     @media (prefers-color-scheme: dark) {
-      body.setup { background: #0d1117; }
-      .setup-container { background: #161b22; box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
+      body.setup { background: transparent; }
+      .setup-container { background: rgba(22, 27, 34, 0.9); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
       .setup-body h2 { color: #e6edf3; }
       .setup-body p { color: #8b949e; }
       .setup-body label { color: #c9d1d9; }
@@ -234,6 +235,7 @@
   </style>
 </head>
 <body class="login setup" data-turbo="false">
+  <%= render 'layouts/ocean_bg' %>
   <div class="setup-container">
     <div class="setup-header">
       <h1 style="display: flex; align-items: center; gap: 10px;">

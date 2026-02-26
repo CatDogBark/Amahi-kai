@@ -9,7 +9,9 @@ html[dir="#{@locale_direction}" lang="#{I18n.locale}" xml:lang="#{I18n.locale}"]
     link rel="alternate icon" href="/favicon.ico"
     title= @title || "Amahi-kai #{t('log_in')}"
     = stylesheet_link_tag "login"
+    = stylesheet_link_tag "ocean-bg"
     = csrf_meta_tags
 
   body.login data-turbo="false"
+    == render 'layouts/ocean_bg'
     = yield

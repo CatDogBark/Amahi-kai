@@ -24,8 +24,7 @@ body {
 }
 
 html {
-  background: $kai-darker;
-  background: linear-gradient(135deg, $kai-darker 0%, darken($kai-primary, 25%) 50%, $kai-darker 100%);
+  background: transparent;
   min-height: 100%;
   height: 100%;
 }
@@ -213,8 +212,7 @@ input:-ms-input-placeholder { color: #aaa; font-weight: normal; }
 // ─── Dark Mode ───
 @media (prefers-color-scheme: dark) {
   html {
-    background: #080c10;
-    background: linear-gradient(135deg, #080c10 0%, #0a2a3a 50%, #080c10 100%);
+    background: transparent;
   }
 
   form {
