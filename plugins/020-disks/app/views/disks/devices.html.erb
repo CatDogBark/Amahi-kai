@@ -68,7 +68,7 @@
                             params: { device: part[:path] },
                             method: :post,
                             class: "btn btn-sm btn-outline-danger",
-                            data: { confirm: "⚠️ This will ERASE ALL DATA on #{part[:path]}. Are you sure?", disable_with: "⏳ Formatting..." } %>
+                            data: { confirm: "⚠️ This will ERASE ALL DATA on #{part[:path]}. Are you sure?", disable_with: "Formatting..." } %>
                     <% when :unmounted %>
                       <% supported_fs = %w[ext2 ext3 ext4 xfs btrfs] %>
                       <div class="d-flex gap-1 justify-content-end">
@@ -77,14 +77,14 @@
                               params: { device: part[:path] },
                               method: :post,
                               class: "btn btn-sm btn-outline-info",
-                              data: { disable_with: "⏳ Loading..." } %>
+                              data: { disable_with: "Loading..." } %>
                         <% if supported_fs.include?(part[:fstype].to_s.downcase) %>
                           <%= button_to "Mount",
                                 disks_engine.mount_disk_path,
                                 params: { device: part[:path] },
                                 method: :post,
                                 class: "btn btn-sm btn-outline-primary",
-                                data: { disable_with: "⏳ Mounting..." } %>
+                                data: { disable_with: "Mounting..." } %>
                         <% else %>
                           <%= button_to "Mount as Share",
                                 disks_engine.mount_as_share_path,
@@ -92,7 +92,7 @@
                                 method: :post,
                                 class: "btn btn-sm btn-outline-success",
                                 title: "Mount and create a network share (#{part[:fstype]} — not pooled)",
-                                data: { disable_with: "⏳ Mounting..." } %>
+                                data: { disable_with: "Mounting..." } %>
                         <% end %>
                       </div>
                     <% when :mounted %>
@@ -102,7 +102,7 @@
                               params: { device: part[:path] },
                               method: :post,
                               class: "btn btn-sm btn-outline-warning",
-                              data: { confirm: "Unmount #{part[:path]} from #{part[:mountpoint]}?", disable_with: "⏳ Unmounting..." } %>
+                              data: { confirm: "Unmount #{part[:path]} from #{part[:mountpoint]}?", disable_with: "Unmounting..." } %>
                       <% end %>
                     <% end %>
                   <% end %>
@@ -120,7 +120,7 @@
 document.querySelectorAll('[data-disable-with]').forEach(function(btn) {
   btn.closest('form').addEventListener('submit', function() {
     btn.disabled = true;
-    btn.textContent = btn.getAttribute('data-disable-with');
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>' + btn.getAttribute('data-disable-with');
   });
 });
 </script>
