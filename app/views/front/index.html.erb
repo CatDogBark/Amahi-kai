@@ -19,58 +19,6 @@
     </div>
   </div>
 
-  <%# ── Resource Gauges ── %>
-  <div class="row mb-4 g-3">
-    <div class="col-md-4">
-      <div class="card h-100">
-        <div class="card-body">
-          <div class="d-flex justify-content-between align-items-center mb-2">
-            <span class="fw-bold">🔲 CPU</span>
-            <span class="text-muted" style="font-size: 12px;"><%= @stats[:resources][:cpu][:detail] %></span>
-          </div>
-          <div class="progress" style="height: 10px;">
-            <% cpu = @stats[:resources][:cpu][:percent] %>
-            <div class="progress-bar <%= cpu > 80 ? 'bg-danger' : cpu > 50 ? 'bg-warning' : 'bg-success' %>"
-                 role="progressbar" style="width: <%= cpu %>%"></div>
-          </div>
-          <div class="text-end mt-1" style="font-size: 12px; color: var(--kai-muted);"><%= cpu %>%</div>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-4">
-      <div class="card h-100">
-        <div class="card-body">
-          <div class="d-flex justify-content-between align-items-center mb-2">
-            <span class="fw-bold">💾 Memory</span>
-            <span class="text-muted" style="font-size: 12px;"><%= @stats[:resources][:memory][:detail] %></span>
-          </div>
-          <div class="progress" style="height: 10px;">
-            <% mem = @stats[:resources][:memory][:percent] %>
-            <div class="progress-bar <%= mem > 80 ? 'bg-danger' : mem > 50 ? 'bg-warning' : 'bg-success' %>"
-                 role="progressbar" style="width: <%= mem %>%"></div>
-          </div>
-          <div class="text-end mt-1" style="font-size: 12px; color: var(--kai-muted);"><%= mem %>%</div>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-4">
-      <div class="card h-100">
-        <div class="card-body">
-          <div class="d-flex justify-content-between align-items-center mb-2">
-            <span class="fw-bold">📀 Disk</span>
-            <span class="text-muted" style="font-size: 12px;"><%= @stats[:resources][:disk][:detail] %></span>
-          </div>
-          <div class="progress" style="height: 10px;">
-            <% disk = @stats[:resources][:disk][:percent] %>
-            <div class="progress-bar <%= disk > 80 ? 'bg-danger' : disk > 50 ? 'bg-warning' : 'bg-success' %>"
-                 role="progressbar" style="width: <%= disk %>%"></div>
-          </div>
-          <div class="text-end mt-1" style="font-size: 12px; color: var(--kai-muted);"><%= disk %>%</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <%# ── Shares (Quick Access) ── %>
   <% if @shares.any? %>
   <div class="row mb-4 g-3">
@@ -104,22 +52,72 @@
   </div>
   <% end %>
 
-  <%# ── Services + Quick Stats ── %>
+  <%# ── System Health (CPU + Memory) + Services ── %>
   <div class="row mb-4 g-3">
+    <div class="col-md-8">
+      <div class="card h-100">
+        <div class="card-header" style="background: var(--kai-dark); color: white;">
+          <strong>📊 System</strong>
+        </div>
+        <div class="card-body">
+          <%# CPU %>
+          <div class="mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <span style="font-size: 0.85rem;">CPU</span>
+              <span class="text-muted" style="font-size: 0.8rem;"><%= @stats[:resources][:cpu][:detail] %></span>
+            </div>
+            <div class="progress" style="height: 8px;">
+              <% cpu = @stats[:resources][:cpu][:percent] %>
+              <div class="progress-bar <%= cpu > 80 ? 'bg-danger' : cpu > 50 ? 'bg-warning' : 'bg-success' %>"
+                   style="width: <%= cpu %>%"></div>
+            </div>
+          </div>
+          <%# Memory %>
+          <div class="mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <span style="font-size: 0.85rem;">Memory</span>
+              <span class="text-muted" style="font-size: 0.8rem;"><%= @stats[:resources][:memory][:detail] %></span>
+            </div>
+            <div class="progress" style="height: 8px;">
+              <% mem = @stats[:resources][:memory][:percent] %>
+              <div class="progress-bar <%= mem > 80 ? 'bg-danger' : mem > 50 ? 'bg-warning' : 'bg-success' %>"
+                   style="width: <%= mem %>%"></div>
+            </div>
+          </div>
+          <%# Drives %>
+          <% @stats[:drives].each do |drive| %>
+            <div class="mb-3">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <span style="font-size: 0.85rem;">
+                  <%= drive[:label] %>
+                  <span class="text-muted" style="font-size: 0.75rem;">(<%= drive[:device] %>)</span>
+                </span>
+                <span class="text-muted" style="font-size: 0.8rem;"><%= drive[:used] %> / <%= drive[:total] %></span>
+              </div>
+              <div class="progress" style="height: 8px;">
+                <% pct = drive[:percent] %>
+                <div class="progress-bar <%= pct > 90 ? 'bg-danger' : pct > 70 ? 'bg-warning' : 'bg-info' %>"
+                     style="width: <%= pct %>%"></div>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      </div>
+    </div>
 
     <%# Services %>
-    <div class="col-md-5">
+    <div class="col-md-4">
       <div class="card h-100">
         <div class="card-header" style="background: var(--kai-dark); color: white;">
           <strong>⚙️ Services</strong>
         </div>
         <div class="card-body p-0">
-          <table class="table table-sm mb-0">
+          <table class="table table-sm mb-0" style="color: var(--kai-text);">
             <tbody>
               <% @stats[:services].each do |svc| %>
                 <tr>
-                  <td class="ps-3 py-2"><%= svc[:name] %></td>
-                  <td class="text-end pe-3 py-2">
+                  <td class="ps-3 py-2" style="border-color: var(--kai-border, rgba(255,255,255,0.05));"><%= svc[:name] %></td>
+                  <td class="text-end pe-3 py-2" style="border-color: var(--kai-border, rgba(255,255,255,0.05));">
                     <% if svc[:running] %>
                       <span class="badge bg-success">Running</span>
                     <% else %>
@@ -133,90 +131,18 @@
         </div>
       </div>
     </div>
-
-    <%# Quick Stats %>
-    <div class="col-md-7">
-      <div class="row g-3 h-100">
-        <div class="col-6">
-          <a href="/tab/users" class="text-decoration-none">
-            <div class="card h-100 dashboard-stat-card">
-              <div class="card-body text-center py-4">
-                <div style="font-size: 2rem;">👥</div>
-                <div class="fs-4 fw-bold" style="color: var(--kai-text);"><%= @stats[:counts][:users] %></div>
-                <div class="text-muted">Users</div>
-              </div>
-            </div>
-          </a>
-        </div>
-        <div class="col-6">
-          <a href="/tab/shares" class="text-decoration-none">
-            <div class="card h-100 dashboard-stat-card">
-              <div class="card-body text-center py-4">
-                <div style="font-size: 2rem;">📁</div>
-                <div class="fs-4 fw-bold" style="color: var(--kai-text);"><%= @stats[:counts][:shares] %></div>
-                <div class="text-muted">Shares</div>
-              </div>
-            </div>
-          </a>
-        </div>
-        <div class="col-6">
-          <a href="/tab/network" class="text-decoration-none">
-            <div class="card h-100 dashboard-stat-card">
-              <div class="card-body text-center py-4">
-                <div style="font-size: 2rem;">🌐</div>
-                <div class="fs-4 fw-bold" style="color: var(--kai-text);"><%= @stats[:counts][:dns_aliases] %></div>
-                <div class="text-muted">DNS Aliases</div>
-              </div>
-            </div>
-          </a>
-        </div>
-        <div class="col-6">
-          <a href="/tab/apps/docker_apps" class="text-decoration-none">
-            <div class="card h-100 dashboard-stat-card">
-              <div class="card-body text-center py-4">
-                <div style="font-size: 2rem;">📦</div>
-                <div class="fs-4 fw-bold" style="color: var(--kai-text);"><%= @stats[:counts][:docker_apps] %></div>
-                <div class="text-muted">Running Apps</div>
-              </div>
-            </div>
-          </a>
-        </div>
-      </div>
-    </div>
   </div>
 
-  <%# ── Storage Overview ── %>
-  <div class="row mb-4 g-3">
+  <%# ── Quick Actions ── %>
+  <div class="row mb-4">
     <div class="col-12">
-      <div class="card">
-        <div class="card-header" style="background: var(--kai-dark); color: white;">
-          <div class="d-flex justify-content-between align-items-center">
-            <strong>🗄️ Storage</strong>
-            <a href="/tab/disks/storage_pool" class="text-white text-decoration-none" style="font-size: 12px;">Manage →</a>
-          </div>
-        </div>
-        <div class="card-body">
-          <div class="row">
-            <div class="col-md-4">
-              <div class="text-muted mb-1" style="font-size: 12px;">Shares</div>
-              <div class="fs-5 fw-bold"><%= @stats[:storage][:shares_count] %></div>
-            </div>
-            <div class="col-md-4">
-              <div class="text-muted mb-1" style="font-size: 12px;">Indexed Files</div>
-              <div class="fs-5 fw-bold"><%= number_with_delimiter(@stats[:storage][:total_files]) %></div>
-            </div>
-            <div class="col-md-4">
-              <div class="text-muted mb-1" style="font-size: 12px;">Storage Pool</div>
-              <div class="fs-5 fw-bold">
-                <% if @stats[:storage][:greyhole_installed] %>
-                  <span class="text-success"><%= @stats[:storage][:pool_drives] %> drives</span>
-                <% else %>
-                  <span class="text-muted">Not configured</span>
-                <% end %>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div class="d-flex flex-wrap gap-2">
+        <a href="/tab/users" class="btn btn-sm btn-outline-secondary">👥 <%= @stats[:counts][:users] %> Users</a>
+        <a href="/tab/shares" class="btn btn-sm btn-outline-secondary">📁 <%= @stats[:counts][:shares] %> Shares</a>
+        <a href="/tab/network" class="btn btn-sm btn-outline-secondary">🌐 <%= @stats[:counts][:dns_aliases] %> DNS Aliases</a>
+        <a href="/tab/apps/docker_apps" class="btn btn-sm btn-outline-secondary">📦 <%= @stats[:counts][:docker_apps] %> Running Apps</a>
+        <a href="/tab/disks" class="btn btn-sm btn-outline-secondary">💽 Disks</a>
+        <a href="/tab/settings" class="btn btn-sm btn-outline-secondary">⚙️ Settings</a>
       </div>
     </div>
   </div>
@@ -249,14 +175,3 @@
   <% end %>
 
 </div>
-
-<style>
-  .dashboard-stat-card {
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
-    cursor: pointer;
-  }
-  .dashboard-stat-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px var(--kai-shadow);
-  }
-</style>

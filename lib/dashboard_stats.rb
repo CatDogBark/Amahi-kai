@@ -9,7 +9,8 @@ class DashboardStats
         resources: resource_usage,
         services: service_status,
         storage: storage_summary,
-        counts: entity_counts
+        counts: entity_counts,
+        drives: drive_usage
       }
     end
 
@@ -137,6 +138,35 @@ class DashboardStats
       end
     rescue
       { percent: 0, detail: 'unavailable' }
+    end
+
+    def drive_usage
+      # Get all mounted filesystems, excluding virtual/system ones
+      lines = `df -BG 2>/dev/null`.lines.drop(1)
+      drives = []
+      lines.each do |line|
+        parts = line.split
+        next if parts.length < 6
+        device, total, used, avail, percent_str, mount = parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]
+        # Only real block devices
+        next unless device.start_with?('/dev/')
+        # Skip tiny partitions (boot, EFI)
+        total_gb = total.to_f
+        next if total_gb < 1
+
+        drives << {
+          device: device,
+          mount: mount,
+          total: total.sub(/G$/, '') + ' GB',
+          used: used.sub(/G$/, '') + ' GB',
+          available: avail.sub(/G$/, '') + ' GB',
+          percent: percent_str.to_i,
+          label: mount == '/' ? 'System' : File.basename(mount)
+        }
+      end
+      drives
+    rescue
+      []
     end
 
     def disk_usage
