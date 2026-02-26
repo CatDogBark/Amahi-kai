@@ -19,6 +19,19 @@ require 'partition_utils'
 class ShareController < ApplicationController
 	before_action :admin_required
 
+	private
+
+	def find_share!(id = params[:id])
+		# Support both numeric ID and name (since Share#to_param returns name)
+		if id.to_s =~ /\A\d+\z/
+			Share.find(id)
+		else
+			Share.find_by!(name: id)
+		end
+	end
+
+	public
+
 	VALID_NAME = Regexp.new "\A\\w[\\w ]+\z"
 	# Disk Pool minimum free: default og 10GB, but for root,
 	# 20GB. so that when all drives are full, / should still have 10GB free.
@@ -26,7 +39,7 @@ class ShareController < ApplicationController
 	DP_MIN_FREE_ROOT = 20
 
 	def update_name
-		s = Share.find(params[:id])
+		s = find_share!
 		s.name = params[:value]
 		if s.save
 			s.reload
@@ -37,7 +50,7 @@ class ShareController < ApplicationController
 	end
 
 	def update_extras
-		s = Share.find(params[:id])
+		s = find_share!
 		s.extras = params[:value]
 		if s.save
 			s.reload
@@ -49,7 +62,7 @@ class ShareController < ApplicationController
 	end
 
 	def update_path
-		s = Share.find(params[:id])
+		s = find_share!
 		s.path = params[:value]
 		if s.save
 			s.reload
@@ -60,7 +73,7 @@ class ShareController < ApplicationController
 	end
 
 	def update_tags
-		s = Share.find(params[:id])
+		s = find_share!
 		s.tags = params[:value].to_s.downcase
 		if s.save
 			s.reload
@@ -71,7 +84,7 @@ class ShareController < ApplicationController
 	end
 
 	def delete
-		s = Share.find params[:id]
+		s = find_share!
 		s.destroy
 		render json: { status: 'ok', id: s.id }
 	end
@@ -138,7 +151,7 @@ class ShareController < ApplicationController
 
 	def toggle_everyone
 		begin
-			share = Share.find params[:id]
+			share = find_share!
 			if share.everyone
 				allu = User.all
 				share.users_with_share_access = allu
@@ -156,11 +169,14 @@ class ShareController < ApplicationController
 		rescue => e
 			Rails.logger.error("Share action failed: #{e.message}")
 		end
-		render :partial => 'shares/access', :locals => { :share => share }
+		respond_to do |format|
+			format.json { render json: { status: 'ok' } }
+			format.any { render json: { status: 'ok' } }
+		end
 	end
 
 	def toggle_guest_access
-		share = Share.find params[:id]
+		share = find_share!
 		if share.guest_access
 			share.guest_access = false
 		else
@@ -169,21 +185,30 @@ class ShareController < ApplicationController
 			share.guest_writeable = false
 		end
 		share.save
-		render :partial => 'shares/access', :locals => { :share => share }
+		respond_to do |format|
+			format.json { render json: { status: 'ok' } }
+			format.any { render json: { status: 'ok' } }
+		end
 	end
 
 	def toggle_guest_writeable
-		share = Share.find params[:id]
+		share = find_share!
 		share.guest_writeable = ! share.guest_writeable
 		share.save
-		render :partial => 'shares/access', :locals => { :share => share }
+		respond_to do |format|
+			format.json { render json: { status: 'ok' } }
+			format.any { render json: { status: 'ok' } }
+		end
 	end
 
 	def toggle_access
 		begin
-			share = Share.find params[:id]
+			share = find_share!
 			if share.everyone
-				render :partial => 'shares/access', :locals => { :share => share }
+				respond_to do |format|
+			format.json { render json: { status: 'ok' } }
+			format.any { render json: { status: 'ok' } }
+		end
 				return
 			end
 			user = User.find params[:user]
@@ -196,14 +221,20 @@ class ShareController < ApplicationController
 		rescue => e
 			Rails.logger.error("Share action failed: #{e.message}")
 		end
-		render :partial => 'shares/access', :locals => { :share => share }
+		respond_to do |format|
+			format.json { render json: { status: 'ok' } }
+			format.any { render json: { status: 'ok' } }
+		end
 	end
 
 	def toggle_write
 		begin
-			share = Share.find params[:id]
+			share = find_share!
 			if share.everyone
-				render :partial => 'shares/access', :locals => { :share => share }
+				respond_to do |format|
+			format.json { render json: { status: 'ok' } }
+			format.any { render json: { status: 'ok' } }
+		end
 				return
 			end
 			user = User.find params[:user]
@@ -216,35 +247,55 @@ class ShareController < ApplicationController
 		rescue => e
 			Rails.logger.error("Share action failed: #{e.message}")
 		end
-		render :partial => 'shares/access', :locals => { :share => share }
+		respond_to do |format|
+			format.json { render json: { status: 'ok' } }
+			format.any { render json: { status: 'ok' } }
+		end
+	end
+
+	def clear_permissions
+		share = find_share!
+		share.users_with_share_access = []
+		share.users_with_write_access = []
+		share.save
+		respond_to do |format|
+			format.json { render json: { status: 'ok' } }
+			format.any { render json: { status: 'ok' } }
+		end
 	end
 
 	def toggle_readonly
 		begin
-			share = Share.find params[:id]
+			share = find_share!
 			share.rdonly = ! share.rdonly
 			share.save
 		rescue => e
 			Rails.logger.error("Share action failed: #{e.message}")
 		end
-		render :partial => 'shares/access', :locals => { :share => share }
+		respond_to do |format|
+			format.json { render json: { status: 'ok' } }
+			format.any { render json: { status: 'ok' } }
+		end
 	end
 
 	def toggle_visible
 		begin
-			share = Share.find params[:id]
+			share = find_share!
 			share.visible = ! share.visible
 			share.save
 		rescue => e
 			Rails.logger.error("Share action failed: #{e.message}")
 		end
-		render :partial => 'shares/share', :locals => { :share => share }
+		respond_to do |format|
+			format.json { render json: { status: 'ok' } }
+			format.any { render json: { status: 'ok' } }
+		end
 	end
 
 	def toggle_tag
 		begin
 			t = params[:tag]
-			share = Share.find(params[:id])
+			share = find_share!
 			st = share.tag_list
 			if st.include? t
 				st -= [t]
@@ -257,7 +308,10 @@ class ShareController < ApplicationController
 		rescue => e
 			Rails.logger.error("Share action failed: #{e.message}")
 		end
-		render :partial => 'shares/tags', :locals => { :share => share }
+		respond_to do |format|
+			format.json { render json: { status: 'ok' } }
+			format.any { render json: { status: 'ok' } }
+		end
 	end
 
 	def toggle_setting
@@ -285,7 +339,7 @@ class ShareController < ApplicationController
 	end
 
 	def toggle_disk_pool_enabled
-		share = Share.find params[:id]
+		share = find_share!
 		if share.disk_pool_copies > 0
 			share.disk_pool_copies = 0
 		else
@@ -298,7 +352,7 @@ class ShareController < ApplicationController
 	end
 
 	def update_disk_pool_copies
-		share = Share.find params[:id]
+		share = find_share!
 		share.disk_pool_copies = params[:value].to_i
 		share.save
 		Greyhole.configure! if Greyhole.enabled?
