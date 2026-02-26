@@ -310,7 +310,7 @@ class DisksController < ApplicationController
   def partition_list
     begin
       PartitionUtils.new.info
-    rescue
+    rescue StandardError
       []
     end
   end

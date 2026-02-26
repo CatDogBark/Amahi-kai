@@ -70,7 +70,7 @@ class DiskUtils
               output.match(/Current Drive Temperature:\s*(\d+)/) ||
               output.match(/Temperature:\s*(\d+)/)
       match ? match[1].to_i : 0
-    rescue
+    rescue StandardError
       0
     end
 
