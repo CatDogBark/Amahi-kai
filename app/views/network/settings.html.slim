@@ -7,7 +7,7 @@
         td.pe-3
           label = t 'dhcp_server'
         td
-          span data-controller="toggle" data-toggle-url-value=network_engine.toggle_setting_path(@dnsmasq_dhcp)
+          span data-controller="toggle" data-toggle-url-value=network_toggle_setting_path(@dnsmasq_dhcp)
             input.form-check-input type="checkbox" id="checkbox_setting_dnsmasq_dhcp" checked=@dnsmasq_dhcp.set? data-toggle-target="checkbox" data-action="click->toggle#toggle"
             |  
             span.spinner.theme-image data-toggle-target="spinner" style="display:none"
@@ -15,10 +15,10 @@
       tr
         td.pe-3
           label= t 'lease_time'
-        td data-controller="inline-edit" data-inline-edit-url-value=network_engine.update_lease_time_path data-inline-edit-method-value="PUT"
+        td data-controller="inline-edit" data-inline-edit-url-value=network_update_lease_time_path data-inline-edit-method-value="PUT"
           a.lease_click_change href="#" data-inline-edit-target="display" data-action="click->inline-edit#edit"
             = @lease_time
-          form.edit_lease_form.form-inline.form_hidden action=network_engine.update_lease_time_path method="post" style="display:none" data-inline-edit-target="form" data-action="submit->inline-edit#submit"
+          form.edit_lease_form.form-inline.form_hidden action=network_update_lease_time_path method="post" style="display:none" data-inline-edit-target="form" data-action="submit->inline-edit#submit"
             input type="hidden" name="_method" value="put"
             input type="hidden" name="authenticity_token" value=form_authenticity_token
             input.form-control.input-sm type="text" name="lease_time" value=@lease_time data-inline-edit-target="input"
@@ -35,13 +35,13 @@
           label = t 'dns_provider'
         td
           .dns-area
-            span data-controller="toggle" data-toggle-url-value=network_engine.update_dns_path data-toggle-method-value="PUT"
+            span data-controller="toggle" data-toggle-url-value=network_update_dns_path data-toggle-method-value="PUT"
               = select_tag "setting_dns", options_for_select(dns_select_options, @dns.value),
                 class: "form-control", data: { toggle_target: "checkbox", action: "change->toggle#toggle" }
               span.spinner.theme-image data-toggle-target="spinner" style="display:none"
 
           .dns-ips-area style=(@dns.value == "custom" ? "" : "display: none")
-            form.update-form.form-horizontal action=network_engine.update_dns_ips_path method="post" id="update-dns-ips-form" data-controller="inline-edit" data-inline-edit-url-value=network_engine.update_dns_ips_path data-inline-edit-method-value="PUT" data-action="submit->inline-edit#submit"
+            form.update-form.form-horizontal action=network_update_dns_ips_path method="post" id="update-dns-ips-form" data-controller="inline-edit" data-inline-edit-url-value=network_update_dns_ips_path data-inline-edit-method-value="PUT" data-action="submit->inline-edit#submit"
               input type="hidden" name="_method" value="put"
               input type="hidden" name="authenticity_token" value=form_authenticity_token
               div data-inline-edit-target="form"
@@ -61,11 +61,11 @@
       tr
         td.pe-3
           label= t 'gateway'
-        td data-controller="inline-edit" data-inline-edit-url-value=network_engine.update_gateway_path data-inline-edit-method-value="PUT"
+        td data-controller="inline-edit" data-inline-edit-url-value=network_update_gateway_path data-inline-edit-method-value="PUT"
           a.gateway_click_change href="#" data-inline-edit-target="display" data-action="click->inline-edit#edit"
             =@net +'.'
             b.gateway_value = @gateway
-          form.edit_gateway_form.form-inline.form_hidden action=network_engine.update_gateway_path method="post" style="display:none" data-inline-edit-target="form" data-action="submit->inline-edit#submit"
+          form.edit_gateway_form.form-inline.form_hidden action=network_update_gateway_path method="post" style="display:none" data-inline-edit-target="form" data-action="submit->inline-edit#submit"
             input type="hidden" name="_method" value="put"
             input type="hidden" name="authenticity_token" value=form_authenticity_token
             input.form-control.input-sm type="text" name="gateway" value=@gateway data-inline-edit-target="input"
@@ -88,10 +88,10 @@
       tr
         td.pe-3
           label= t 'minimum'
-        td data-controller="inline-edit" data-inline-edit-url-value=network_engine.update_dhcp_range_path("min") data-inline-edit-method-value="PUT"
+        td data-controller="inline-edit" data-inline-edit-url-value=network_update_dhcp_range_path("min") data-inline-edit-method-value="PUT"
           a.dyn_lo_click_change href="#" data-inline-edit-target="display" data-action="click->inline-edit#edit"
             b = @dyn_lo
-          form.edit_dyn_lo_form.form-inline.form_hidden action=network_engine.update_dhcp_range_path("min") method="post" style="display:none" data-inline-edit-target="form" data-action="submit->inline-edit#submit"
+          form.edit_dyn_lo_form.form-inline.form_hidden action=network_update_dhcp_range_path("min") method="post" style="display:none" data-inline-edit-target="form" data-action="submit->inline-edit#submit"
             input type="hidden" name="_method" value="put"
             input type="hidden" name="authenticity_token" value=form_authenticity_token
             input.form-control.input-sm type="text" name="dyn_lo" value=@dyn_lo data-inline-edit-target="input"
@@ -106,10 +106,10 @@
       tr
         td.pe-3
           label= t 'maximum'
-        td data-controller="inline-edit" data-inline-edit-url-value=network_engine.update_dhcp_range_path("max") data-inline-edit-method-value="PUT"
+        td data-controller="inline-edit" data-inline-edit-url-value=network_update_dhcp_range_path("max") data-inline-edit-method-value="PUT"
           a.dyn_hi_click_change href="#" data-inline-edit-target="display" data-action="click->inline-edit#edit"
             b = @dyn_hi
-          form.edit_dyn_hi_form.form-inline.form_hidden action=network_engine.update_dhcp_range_path("max") method="post" style="display:none" data-inline-edit-target="form" data-action="submit->inline-edit#submit"
+          form.edit_dyn_hi_form.form-inline.form_hidden action=network_update_dhcp_range_path("max") method="post" style="display:none" data-inline-edit-target="form" data-action="submit->inline-edit#submit"
             input type="hidden" name="_method" value="put"
             input type="hidden" name="authenticity_token" value=form_authenticity_token
             input.form-control.input-sm type="text" name="dyn_hi" value=@dyn_hi data-inline-edit-target="input"

@@ -37,7 +37,7 @@
           Configure the settings below, then start the service.
         </p>
 
-        <form action="<%= network_engine.update_dnsmasq_config_path %>" method="post">
+        <form action="<%= network_update_dnsmasq_config_path %>" method="post">
           <input type="hidden" name="_method" value="put">
           <input type="hidden" name="authenticity_token" value="<%= form_authenticity_token %>">
 
@@ -113,11 +113,11 @@
             <button type="submit" class="btn btn-info">Save Configuration</button>
 
             <% if @dnsmasq_running %>
-              <%= button_to "Stop dnsmasq", network_engine.stop_dnsmasq_path,
+              <%= button_to "Stop dnsmasq", network_stop_dnsmasq_path,
                     method: :post, class: "btn btn-outline-danger",
                     data: { confirm: "This will stop DHCP/DNS — devices on your network may lose connectivity. Continue?" } %>
             <% else %>
-              <%= button_to "Start dnsmasq", network_engine.start_dnsmasq_path,
+              <%= button_to "Start dnsmasq", network_start_dnsmasq_path,
                     method: :post, class: "btn btn-outline-success" %>
             <% end %>
           </div>
@@ -130,4 +130,4 @@
 <%= render 'shared/install_terminal',
      id: 'dnsmasq',
      title: 'Installing dnsmasq',
-     stream_url: network_engine.install_dnsmasq_stream_path %>
+     stream_url: network_install_dnsmasq_stream_path %>

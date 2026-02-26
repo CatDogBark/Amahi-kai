@@ -41,14 +41,14 @@ RSpec.describe "Full integration flows", type: :request do
     it "creates and destroys a DNS alias" do
       allow_any_instance_of(DnsAlias).to receive(:restart)
 
-      post "/tab/network/dns_aliases", params: {
+      post "/network/dns_aliases", params: {
         dns_alias: { name: "testflow", address: "192.168.1.200" }
       }, as: :json
       dns = DnsAlias.find_by(name: "testflow")
       expect(dns).to be_present
       expect(dns.address).to eq("192.168.1.200")
 
-      delete "/tab/network/dns_alias/#{dns.id}", as: :json
+      delete "/network/dns_alias/#{dns.id}", as: :json
       expect(DnsAlias.find_by(id: dns.id)).to be_nil
     end
   end
@@ -105,7 +105,7 @@ RSpec.describe "Full integration flows", type: :request do
     end
 
     it "shows security page" do
-      get "/tab/network/security"
+      get "/network/security"
       expect(response).to have_http_status(:ok)
     end
   end

@@ -62,14 +62,16 @@ module RequestHelpers
   end
 
   class NetworkEngineProxy
-    PREFIX = "/tab/network"
+    def root_path
+      "/network"
+    end
 
     def hosts_path
-      "#{PREFIX}/hosts"
+      "/network/hosts"
     end
 
     def dns_aliases_path
-      "#{PREFIX}/dns_aliases"
+      "/network/dns_aliases"
     end
   end
 end

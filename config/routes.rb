@@ -17,6 +17,41 @@ Rails.application.routes.draw do
     end
   end
 
+  # Network (consolidated from plugin)
+  scope '/network', controller: 'network', as: 'network' do
+    get '/', action: 'index', as: '_index'
+    get 'leases', action: 'index'
+    get 'hosts', action: 'hosts'
+    post 'hosts', action: 'create_host'
+    delete 'host/:id', action: 'destroy_host', as: '_destroy_host'
+    get 'dns_aliases', action: 'dns_aliases'
+    post 'dns_aliases', action: 'create_dns_alias'
+    delete 'dns_alias/:id', action: 'destroy_dns_alias', as: '_destroy_dns_alias'
+    get 'settings', action: 'settings'
+    put 'update_lease_time', action: 'update_lease_time'
+    put 'update_gateway', action: 'update_gateway'
+    put 'update_dns', action: 'update_dns'
+    put 'update_dns_ips', action: 'update_dns_ips'
+    put 'toggle_setting/:id', action: 'toggle_setting', as: '_toggle_setting'
+    put 'update_dhcp_range/:id', action: 'update_dhcp_range', as: '_update_dhcp_range'
+    get 'gateway', action: 'gateway'
+    post 'install_dnsmasq', action: 'install_dnsmasq'
+    get 'install_dnsmasq_stream', action: 'install_dnsmasq_stream'
+    post 'start_dnsmasq', action: 'start_dnsmasq'
+    post 'stop_dnsmasq', action: 'stop_dnsmasq'
+    put 'update_dnsmasq_config', action: 'update_dnsmasq_config'
+    get 'remote_access', action: 'remote_access'
+    post 'configure_tunnel', action: 'configure_tunnel'
+    post 'start_tunnel', action: 'start_tunnel'
+    post 'stop_tunnel', action: 'stop_tunnel'
+    get 'install_cloudflared_stream', action: 'install_cloudflared_stream'
+    get 'setup_tunnel_stream', action: 'setup_tunnel_stream'
+    get 'security', action: 'security'
+    post 'security_fix', action: 'security_fix'
+    get 'security_audit_stream', action: 'security_audit_stream'
+    get 'security_fix_stream', action: 'security_fix_stream'
+  end
+
   match 'login' => 'user_sessions#new', :as => :login, via: [:get]
   match 'logout' => 'user_sessions#destroy', :as => :logout, via: [:get]
   match 'start' => 'user_sessions#start', :as => :start, via: [:get]
