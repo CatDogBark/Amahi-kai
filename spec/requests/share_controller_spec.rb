@@ -80,7 +80,7 @@ RSpec.describe "SharesController", type: :request do
 
       it "updates disk pool copies" do
         allow(Greyhole).to receive(:configure!)
-        put update_disk_pool_copies_share_path(share), params: { copies: "3" }, as: :json
+        put update_disk_pool_copies_share_path(share), params: { value: "3" }, as: :json
         expect(share.reload.disk_pool_copies).to eq(3)
       end
     end

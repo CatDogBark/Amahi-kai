@@ -114,12 +114,14 @@ describe "Users Controller", type: :request do
     describe "PUT /users/:id/update_pubkey" do
       it "updates a user's public key" do
         user = create(:user)
-        put "/users/#{user.id}/update_pubkey", params: { "public_key_#{user.id}" => "ssh-rsa AAAA..." }, as: :json
-        expect(user.reload.public_key).to eq("ssh-rsa AAAA...")
+        valid_key = "ssh-rsa " + "A" * 300
+        put "/users/#{user.id}/update_pubkey", params: { "public_key_#{user.id}" => valid_key }, as: :json
+        expect(user.reload.public_key).to eq(valid_key)
       end
 
       it "clears a blank public key" do
-        user = create(:user, public_key: "ssh-rsa old")
+        valid_key = "ssh-rsa " + "A" * 300
+        user = create(:user, public_key: valid_key)
         put "/users/#{user.id}/update_pubkey", params: { "public_key_#{user.id}" => "" }, as: :json
         expect(user.reload.public_key).to be_nil
       end

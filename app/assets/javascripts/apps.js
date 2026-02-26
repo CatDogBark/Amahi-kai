@@ -63,17 +63,17 @@ function buildAppButtons(identifier, status, hostPort, name) {
     } else if (hostPort) {
       html += '<a class="btn btn-sm btn-success" href="/app/' + identifier + '" target="_blank">Open</a>';
     }
-    html += '<button class="btn btn-sm btn-outline-danger" onclick="dockerAppAction(\'/tab/apps/docker/stop/' + identifier + '\', \'' + identifier + '\', this)">Stop</button>';
+    html += '<button class="btn btn-sm btn-outline-danger" onclick="dockerAppAction(\'/apps/docker/stop/' + identifier + '\', \'' + identifier + '\', this)">Stop</button>';
     html += '</div>';
     return html;
   } else if (status === 'stopped') {
     var html = '<div class="d-flex gap-1 justify-content-end">';
-    html += '<button class="btn btn-sm btn-outline-success" onclick="dockerAppAction(\'/tab/apps/docker/start/' + identifier + '\', \'' + identifier + '\', this)">Start</button>';
-    html += '<button class="btn btn-sm btn-outline-danger" onclick="if(confirm(\'Uninstall ' + name + '?\')){dockerAppAction(\'/tab/apps/docker/uninstall/' + identifier + '\', \'' + identifier + '\', this)}">Uninstall</button>';
+    html += '<button class="btn btn-sm btn-outline-success" onclick="dockerAppAction(\'/apps/docker/start/' + identifier + '\', \'' + identifier + '\', this)">Start</button>';
+    html += '<button class="btn btn-sm btn-outline-danger" onclick="if(confirm(\'Uninstall ' + name + '?\')){dockerAppAction(\'/apps/docker/uninstall/' + identifier + '\', \'' + identifier + '\', this)}">Uninstall</button>';
     html += '</div>';
     return html;
   } else if (status === 'available') {
-    return '<button class="btn btn-sm btn-primary" onclick="openAppInstall(\'' + identifier + '\', \'/tab/apps/docker/install_stream/' + identifier + '\', \'' + name + '\')">Install</button>';
+    return '<button class="btn btn-sm btn-primary" onclick="openAppInstall(\'' + identifier + '\', \'/apps/docker/install_stream/' + identifier + '\', \'' + name + '\')">Install</button>';
   }
   return '';
 }
