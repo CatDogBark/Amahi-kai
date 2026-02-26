@@ -47,7 +47,9 @@ class Share < ApplicationRecord
   after_create :index_share_files
   after_destroy :cleanup_share_index
   after_save :after_save_hook
+  after_commit :push_shares_after_commit, on: [:create, :update]
   after_destroy :after_destroy_hook
+  after_commit :push_shares_after_commit, on: :destroy
 
   validates :name, presence: true,
     format: { :with => /\A\S[\S ]+\z/ },
@@ -294,7 +296,12 @@ class Share < ApplicationRecord
       self.users_with_share_access = users
       self.users_with_write_access = users
     end
+  end
+
+  def push_shares_after_commit
     Share.push_shares
+  rescue => e
+    Rails.logger.error("Failed to push Samba config: #{e.message}")
   end
 
   def before_destroy_hook
@@ -303,7 +310,7 @@ class Share < ApplicationRecord
   end
 
   def after_destroy_hook
-    Share.push_shares
+    # push_shares now handled by after_commit
   end
 
   def self.samba_conf(domain)
