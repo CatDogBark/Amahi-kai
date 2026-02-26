@@ -87,6 +87,7 @@ class SetupController < ApplicationController
     DiskPoolPartition.destroy_all
 
     selected_drives = params[:drives] || []
+    format_drives = params[:format_drives] || []
 
     selected_drives.each do |device_path|
       begin
@@ -96,13 +97,13 @@ class SetupController < ApplicationController
 
         mount_point = part[:mountpoint]
 
-        # Format if unformatted
-        if part[:status] == :unformatted
+        # Format if unformatted OR user explicitly chose to format
+        if part[:status] == :unformatted || format_drives.include?(device_path)
           DiskManager.format_disk!(device_path)
         end
 
-        # Mount if not mounted
-        if part[:status] == :unformatted || part[:status] == :unmounted
+        # Mount if not already mounted
+        if mount_point.blank?
           mount_point = DiskManager.mount!(device_path)
         end
 
