@@ -33,6 +33,91 @@
       background: var(--bg);
       color: var(--text);
       line-height: 1.6;
+      overflow-y: scroll;
+    }
+
+    /* 🌊 Ocean Background */
+    @keyframes ocean-breathe {
+      0%, 100% { background-position: 0% 50%; }
+      50%      { background-position: 100% 50%; }
+    }
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: -3;
+      background: linear-gradient(135deg, #0d1117 0%, #0a1628 25%, #0c2234 50%, #0a1628 75%, #0d1117 100%);
+      background-size: 400% 400%;
+      animation: ocean-breathe 30s ease-in-out infinite;
+      pointer-events: none;
+    }
+    .ocean-waves {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 350px;
+      z-index: -2;
+      overflow: hidden;
+      pointer-events: none;
+      opacity: 0.08;
+    }
+    @keyframes wave-drift-1 {
+      0%, 100% { transform: translateX(0) translateY(0); }
+      25%      { transform: translateX(-20px) translateY(5px); }
+      50%      { transform: translateX(-10px) translateY(-3px); }
+      75%      { transform: translateX(15px) translateY(4px); }
+    }
+    @keyframes wave-drift-2 {
+      0%, 100% { transform: translateX(0) translateY(0); }
+      25%      { transform: translateX(15px) translateY(-4px); }
+      50%      { transform: translateX(-5px) translateY(6px); }
+      75%      { transform: translateX(-20px) translateY(-2px); }
+    }
+    @keyframes wave-drift-3 {
+      0%, 100% { transform: translateX(0) translateY(0); }
+      33%      { transform: translateX(10px) translateY(3px); }
+      66%      { transform: translateX(-15px) translateY(-5px); }
+    }
+    .ocean-wave {
+      position: absolute;
+      width: 200%; left: -50%;
+    }
+    .ocean-wave--1 { top: 40px; animation: wave-drift-1 12s ease-in-out infinite; opacity: 0.7; }
+    .ocean-wave--2 { top: 80px; animation: wave-drift-2 16s ease-in-out infinite; opacity: 0.5; }
+    .ocean-wave--3 { top: 130px; animation: wave-drift-3 20s ease-in-out infinite; opacity: 0.3; }
+    .ocean-particles {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      overflow: hidden;
+      opacity: 0.7;
+    }
+    @keyframes particle-rise {
+      0%   { transform: translateY(0); opacity: 0; }
+      10%  { opacity: 1; }
+      60%  { opacity: 0.6; }
+      100% { transform: translateY(-40vh); opacity: 0; }
+    }
+    @keyframes particle-sway {
+      0%, 100% { margin-left: 0; }
+      25%      { margin-left: 15px; }
+      75%      { margin-left: -15px; }
+    }
+    .ocean-particle {
+      position: absolute;
+      bottom: -20px;
+      width: var(--size, 4px);
+      height: var(--size, 4px);
+      border-radius: 50%;
+      background: var(--ocean-light);
+      box-shadow: 0 0 6px 1px var(--ocean-light);
+      animation: particle-rise var(--duration, 20s) linear infinite, particle-sway var(--sway, 8s) ease-in-out infinite;
+      animation-delay: var(--delay, 0s);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      body::before { animation: none; }
+      .ocean-wave { animation: none !important; }
+      .ocean-particle { animation: none !important; display: none; }
     }
 
     /* Nav */
@@ -85,8 +170,10 @@
 
     /* Install box */
     .install-box {
-      background: var(--bg-card);
-      border: 1px solid #2a3a4a;
+      background: rgba(26, 35, 50, 0.6);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.06);
       border-radius: 12px;
       padding: 1.5rem 2rem;
       max-width: 620px;
@@ -132,8 +219,10 @@
       padding: 2rem;
     }
     .feature {
-      background: var(--bg-card);
-      border: 1px solid #2a3a4a;
+      background: rgba(26, 35, 50, 0.6);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.06);
       border-radius: 12px;
       padding: 2rem;
     }
@@ -164,8 +253,10 @@
       padding: 0 2rem;
     }
     .app-badge {
-      background: var(--bg-card);
-      border: 1px solid #2a3a4a;
+      background: rgba(26, 35, 50, 0.6);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.06);
       border-radius: 10px;
       padding: 1rem;
       text-align: center;
@@ -219,8 +310,10 @@
       padding: 0 2rem 4rem;
     }
     .stack-badge {
-      background: var(--bg-card);
-      border: 1px solid #2a3a4a;
+      background: rgba(26, 35, 50, 0.6);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.06);
       border-radius: 20px;
       padding: 0.4rem 1rem;
       font-size: 0.8rem;
@@ -235,6 +328,31 @@
   </style>
 </head>
 <body>
+
+<!-- 🌊 Ocean Background -->
+<div class="ocean-waves" aria-hidden="true">
+  <svg class="ocean-wave ocean-wave--1" viewBox="0 0 1440 120" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M0,60 C240,20 480,100 720,60 C960,20 1200,100 1440,60 L1440,0 L0,0 Z" fill="#0d8aa8"/>
+  </svg>
+  <svg class="ocean-wave ocean-wave--2" viewBox="0 0 1440 120" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M0,80 C360,30 720,110 1080,50 C1260,30 1380,70 1440,80 L1440,0 L0,0 Z" fill="#1a9fc2"/>
+  </svg>
+  <svg class="ocean-wave ocean-wave--3" viewBox="0 0 1440 120" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M0,40 C180,90 540,10 900,70 C1080,90 1260,40 1440,50 L1440,0 L0,0 Z" fill="#0d8aa8"/>
+  </svg>
+</div>
+<div class="ocean-particles" aria-hidden="true">
+  <div class="ocean-particle" style="left: 5%;  --size: 5px; --duration: 10s; --sway: 7s;  --delay: 0s;"></div>
+  <div class="ocean-particle" style="left: 12%; --size: 7px; --duration: 8s;  --sway: 9s;  --delay: 2s;"></div>
+  <div class="ocean-particle" style="left: 22%; --size: 4px; --duration: 12s; --sway: 6s;  --delay: 5s;"></div>
+  <div class="ocean-particle" style="left: 35%; --size: 6px; --duration: 9s;  --sway: 11s; --delay: 1s;"></div>
+  <div class="ocean-particle" style="left: 45%; --size: 5px; --duration: 14s; --sway: 8s;  --delay: 8s;"></div>
+  <div class="ocean-particle" style="left: 55%; --size: 8px; --duration: 7s;  --sway: 10s; --delay: 3s;"></div>
+  <div class="ocean-particle" style="left: 65%; --size: 4px; --duration: 11s; --sway: 7s;  --delay: 6s;"></div>
+  <div class="ocean-particle" style="left: 75%; --size: 6px; --duration: 10s; --sway: 12s; --delay: 0s;"></div>
+  <div class="ocean-particle" style="left: 85%; --size: 5px; --duration: 8s;  --sway: 6s;  --delay: 4s;"></div>
+  <div class="ocean-particle" style="left: 92%; --size: 7px; --duration: 13s; --sway: 9s;  --delay: 10s;"></div>
+</div>
 
 <nav>
   <a href="/" class="logo"><img src="/logo.svg" alt="Amahi-kai" height="48" style="vertical-align: middle;"></a>
