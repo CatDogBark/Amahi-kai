@@ -170,8 +170,8 @@ html.theme-ripple::view-transition-new(root) {
 
 /* Indicator positions */
 .theme-track[data-active="light"] .theme-indicator { left: 3px; }
-.theme-track[data-active="dark"] .theme-indicator { left: 37px; }
-.theme-track[data-active="system"] .theme-indicator { left: 71px; }
+.theme-track[data-active="dark"] .theme-indicator { left: 35px; }
+.theme-track[data-active="system"] .theme-indicator { left: 67px; }
 
 .theme-opt {
   width: 32px;
