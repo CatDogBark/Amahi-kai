@@ -10,7 +10,7 @@ class NetworkController < ApplicationController
   IP_RANGE = 10
 
   def index
-    @leases = use_sample_data? ? SampleData.load('leases') : Leases.all
+    @leases = Leases.all
   end
 
   def hosts

@@ -41,13 +41,7 @@ class SettingsController < ApplicationController
     unless @advanced
       redirect_to settings_index_path
     else
-      @message = nil
-      unless use_sample_data?
-        @servers = Server.all
-      else
-        @message = "NOTE: these servers are fake data! Interacting with them will not work."
-        @servers = SampleData.load('servers').map { |h| Server.new(h.slice(*Server.column_names)) }
-      end
+      @servers = Server.all
     end
   end
 

@@ -34,11 +34,7 @@ class SearchController < ApplicationController
       @page = (params[:page] && params[:page].to_i.abs) || 1
       @rpp = (params[:per_page] && params[:per_page].to_i.abs) || RESULTS_PER_PAGE
 
-      unless use_sample_data?
-        @results = search_share_files(@query, nil, @page, @rpp)
-      else
-        @results = SampleData.load('search')
-      end
+      @results = search_share_files(@query, nil, @page, @rpp)
     end
   end
 

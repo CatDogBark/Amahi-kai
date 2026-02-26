@@ -6,20 +6,12 @@ class DisksController < ApplicationController
 
   def index
     @page_title = t('disks')
-    unless use_sample_data?
-      @disks = DiskUtils.stats
-    else
-      @disks = SampleData.load('disks')
-    end
+    @disks = DiskUtils.stats
   end
 
   def mounts
     @page_title = t('disks')
-    unless use_sample_data?
-      @mounts = DiskUtils.mounts
-    else
-      @mounts = SampleData.load('mounts')
-    end
+    @mounts = DiskUtils.mounts
   end
 
   def devices
