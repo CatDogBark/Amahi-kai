@@ -1,0 +1,195 @@
+/* 🌊 Ocean Background — Animated ambient atmosphere
+ *
+ * Three layers:
+ *   1. Breathing gradient (deep navy ↔ dark teal, 30s cycle)
+ *   2. Layered SVG waves along the top (gentle bobbing)
+ *   3. Floating particles (bubbles drifting upward)
+ *
+ * All pure CSS — no JS, no canvas, no performance cost.
+ * Adapts to light/dark mode automatically.
+ */
+
+/* ── Layer 1: Breathing Gradient ── */
+@keyframes ocean-breathe {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -3;
+  background: linear-gradient(
+    135deg,
+    var(--ocean-bg-1, #0d1117) 0%,
+    var(--ocean-bg-2, #0a1628) 25%,
+    var(--ocean-bg-3, #0c2234) 50%,
+    var(--ocean-bg-2, #0a1628) 75%,
+    var(--ocean-bg-1, #0d1117) 100%
+  );
+  background-size: 400% 400%;
+  animation: ocean-breathe 30s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ── Layer 2: Waves ── */
+.ocean-waves {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 350px;
+  z-index: -2;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: var(--wave-opacity, 0.08);
+}
+
+@keyframes wave-drift-1 {
+  0%, 100% { transform: translateX(0) translateY(0); }
+  25%      { transform: translateX(-20px) translateY(5px); }
+  50%      { transform: translateX(-10px) translateY(-3px); }
+  75%      { transform: translateX(15px) translateY(4px); }
+}
+
+@keyframes wave-drift-2 {
+  0%, 100% { transform: translateX(0) translateY(0); }
+  25%      { transform: translateX(15px) translateY(-4px); }
+  50%      { transform: translateX(-5px) translateY(6px); }
+  75%      { transform: translateX(-20px) translateY(-2px); }
+}
+
+@keyframes wave-drift-3 {
+  0%, 100% { transform: translateX(0) translateY(0); }
+  33%      { transform: translateX(10px) translateY(3px); }
+  66%      { transform: translateX(-15px) translateY(-5px); }
+}
+
+.ocean-wave {
+  position: absolute;
+  width: 200%;
+  left: -50%;
+}
+
+.ocean-wave--1 {
+  top: 40px;
+  animation: wave-drift-1 12s ease-in-out infinite;
+  opacity: 0.7;
+}
+
+.ocean-wave--2 {
+  top: 80px;
+  animation: wave-drift-2 16s ease-in-out infinite;
+  opacity: 0.5;
+}
+
+.ocean-wave--3 {
+  top: 130px;
+  animation: wave-drift-3 20s ease-in-out infinite;
+  opacity: 0.3;
+}
+
+/* ── Layer 3: Floating Particles (Bubbles) ── */
+.ocean-particles {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: var(--particle-opacity, 0.4);
+}
+
+@keyframes particle-rise {
+  0% {
+    transform: translateY(100vh) translateX(0) scale(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+    transform: translateY(90vh) translateX(5px) scale(1);
+  }
+  90% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: translateY(-20vh) translateX(-10px) scale(0.8);
+    opacity: 0;
+  }
+}
+
+@keyframes particle-sway {
+  0%, 100% { margin-left: 0; }
+  25%      { margin-left: 15px; }
+  75%      { margin-left: -15px; }
+}
+
+.ocean-particle {
+  position: absolute;
+  bottom: -20px;
+  width: var(--size, 4px);
+  height: var(--size, 4px);
+  border-radius: 50%;
+  background: var(--kai-primary);
+  animation:
+    particle-rise var(--duration, 20s) linear infinite,
+    particle-sway var(--sway, 8s) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+/* ── Dark Mode Colors ── */
+/* Default dark (system preference) */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ocean-bg-1: #0d1117;
+    --ocean-bg-2: #0a1628;
+    --ocean-bg-3: #0c2234;
+    --wave-opacity: 0.08;
+    --particle-opacity: 0.4;
+  }
+}
+
+:root[data-theme="dark"] {
+  --ocean-bg-1: #0d1117;
+  --ocean-bg-2: #0a1628;
+  --ocean-bg-3: #0c2234;
+  --wave-opacity: 0.08;
+  --particle-opacity: 0.4;
+}
+
+/* ── Light Mode Colors ── */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --ocean-bg-1: #e8f4f8;
+    --ocean-bg-2: #d0eaf2;
+    --ocean-bg-3: #b8e0ec;
+    --wave-opacity: 0.15;
+    --particle-opacity: 0.2;
+  }
+}
+
+:root[data-theme="light"] {
+  --ocean-bg-1: #e8f4f8;
+  --ocean-bg-2: #d0eaf2;
+  --ocean-bg-3: #b8e0ec;
+  --wave-opacity: 0.15;
+  --particle-opacity: 0.2;
+}
+
+/* Override for system dark */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ocean-bg-1: #0d1117;
+    --ocean-bg-2: #0a1628;
+    --ocean-bg-3: #0c2234;
+    --wave-opacity: 0.08;
+    --particle-opacity: 0.4;
+  }
+}
+
+/* ── Reduced Motion ── */
+@media (prefers-reduced-motion: reduce) {
+  body::before { animation: none; }
+  .ocean-wave { animation: none !important; }
+  .ocean-particle { animation: none !important; display: none; }
+}
