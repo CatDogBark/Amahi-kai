@@ -84,6 +84,7 @@
 </div>
 
 <style>
+  @keyframes spin { to { transform: rotate(360deg); } }
   @media (prefers-color-scheme: dark) {
     #preview-modal > div { background: #161b22 !important; }
     #preview-modal > div > div:first-child { border-bottom-color: #30363d !important; }
@@ -99,7 +100,7 @@
     var body = document.getElementById('preview-body');
     var title = document.getElementById('preview-title');
     modal.style.display = 'flex';
-    body.innerHTML = '<div style="text-align:center;padding:20px;color:#7f8c9b;"><span class="spinner-border spinner-border-sm"></span> Mounting and reading drive...</div>';
+    body.innerHTML = '<div style="text-align:center;padding:20px;color:#7f8c9b;"><span style="display:inline-block;width:16px;height:16px;border:2px solid rgba(127,140,155,0.3);border-top-color:#7f8c9b;border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:8px;"></span>Mounting and reading drive...</div>';
     title.textContent = '📂 Preview: ' + device;
 
     var token = document.querySelector('meta[name="csrf-token"]');
