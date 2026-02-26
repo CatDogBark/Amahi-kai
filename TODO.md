@@ -6,17 +6,38 @@
 
 ## P0 — Next Up
 
-### Native File Browser
-Browse, upload, download, rename, delete files directly in the web UI — no Samba/Windows needed.
-- Integrates with existing shares model
-- Per-share browsing with breadcrumb navigation
-- Drag-and-drop upload, multi-file download (zip)
-- Rename, delete, new folder
-- File preview (images, text, video)
-- Replaces FileBrowser Docker app (remove from catalog)
+### Legacy Plugin Consolidation 🔥
+Kill the engine architecture. Move all 6 plugin controllers/views/JS into the main app.
+This is the #1 blocker for clean development — every improvement we make breaks legacy plugin assumptions.
+
+**Scope:**
+- **6 controllers** to merge: Users, Disks, Shares, Apps, Network, Settings (~2,168 lines)
+- **41 views** to move from `plugins/*/app/views/` → `app/views/`
+- **6 JS files** to rewrite as Stimulus controllers (replace jQuery-era code)
+- **Kill the Tab/Subtab system** — replace with simple route-based nav
+- **Single layout** — retire `basic.html.slim`, everything uses `application.html.slim`
+- **Unified routing** — all routes in `config/routes.rb`, no engine mount points
+
+**Legacy debt to clean up during merge:**
+- Remove 60 `sleep` calls (fake loading states)
+- Fix 23 bare rescues (swallowed errors)
+- Sanitize shell commands (Shellwords everywhere)
+- Tabs → spaces (5 files still use tabs)
+- Monolithic model callbacks → smaller focused methods
+- `Share.find(params[:id])` → name-based lookup everywhere
+
+**Order of operations:**
+1. Users plugin (simplest, ~200 lines controller)
+2. Network plugin
+3. Shares plugin (biggest, most interconnected)
+4. Disks plugin
+5. Apps plugin
+6. Settings plugin
+7. Delete `plugins/` directory, remove engine configs
 
 ### Test Coverage Push
 44% → 70%+ with quality specs. Focus on edge cases, error paths, real business logic.
+Run alongside plugin consolidation — write new specs as we merge each plugin.
 
 ### Setup Wizard Testing
 Verify enhanced wizard end-to-end on real hardware:
@@ -57,7 +78,7 @@ Build UI for connecting apps that need their own subdomain:
 ### Docker App System — Production Ready
 - Share integration — app volumes auto-map to Amahi share paths
 - Container logs/stats UI
-- More apps in catalog (remove FileBrowser — native file browser replaces it)
+- More apps in catalog
 
 ---
 
@@ -107,3 +128,11 @@ Optional mesh networking for encrypted push alerts and remote management over Lo
 - Toast notification system (replaced layout-shifting flash banners)
 - NTFS mount support + stale fstab auto-cleanup
 - Samba password sync on user password changes
+- Native file browser (browse, upload, download, rename, delete, preview)
+- Dashboard rework (shares prominent, per-drive bars, compact services)
+- 🌊 Ocean UI (breathing gradient, SVG waves, particles, ripple theme transition)
+- Theme toggle (light/dark/system, localStorage, FOUC prevention)
+- CI overhaul (5 parallel jobs, lint & security as warnings)
+- Scrollbar layout shift fix
+</content>
+</invoke>
