@@ -28,15 +28,15 @@
 # Removed: Zeitwerk autoloads Server model on first reference
 
 class SampleData
-	ROOT = "#{Rails.root}/db/sample-data/%s.yml.gz"
+  ROOT = "#{Rails.root}/db/sample-data/%s.yml.gz"
 
-	class << self
-		def load(filename)
-			file = ROOT % filename
-			YAML.safe_load(
-				Zlib::GzipReader.new(StringIO.new(File.read(file))).read,
-				permitted_classes: [Symbol, Date, Time]
-			)
-		end
-	end
+  class << self
+    def load(filename)
+      file = ROOT % filename
+      YAML.safe_load(
+        Zlib::GzipReader.new(StringIO.new(File.read(file))).read,
+        permitted_classes: [Symbol, Date, Time]
+      )
+    end
+  end
 end

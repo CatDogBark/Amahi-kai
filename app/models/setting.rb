@@ -16,61 +16,61 @@
 
 class Setting < ApplicationRecord
 
-	KINDS = [GENERAL = "general", NETWORK = "network", SHARES = "shares"]
+  KINDS = [GENERAL = "general", NETWORK = "network", SHARES = "shares"]
 
-	scope :by_name,  lambda{|name| where(:name => name)} 
-	scope :by_kind,  lambda{|kind| where(:kind => kind)} 
+  scope :by_name,  lambda{|name| where(:name => name)} 
+  scope :by_kind,  lambda{|kind| where(:kind => kind)} 
 
-	scope :general, ->{by_kind(GENERAL)}
-	scope :network, ->{by_kind(NETWORK)}
-	scope :shares,  ->{by_kind(SHARES)}
+  scope :general, ->{by_kind(GENERAL)}
+  scope :network, ->{by_kind(NETWORK)}
+  scope :shares,  ->{by_kind(SHARES)}
 
-	validates :value,
-	          :length => { :maximum => 15 },
-	          :format => { :with => /\A[a-zA-Z][a-zA-Z0-9]{0,14}\z/ },
-	          :if => Proc.new { |x| x.kind.eql?(Setting::GENERAL) && x.name.eql?('workgroup') },
-	          :on => :update
+  validates :value,
+            :length => { :maximum => 15 },
+            :format => { :with => /\A[a-zA-Z][a-zA-Z0-9]{0,14}\z/ },
+            :if => Proc.new { |x| x.kind.eql?(Setting::GENERAL) && x.name.eql?('workgroup') },
+            :on => :update
 
-	class << self
+  class << self
 
-		def value_by_name(name)
-			get_by_name(name).try(:value)
-		end
+    def value_by_name(name)
+      get_by_name(name).try(:value)
+    end
 
-		def get_by_name(name)
-			by_name(name).first
-		end
+    def get_by_name(name)
+      by_name(name).first
+    end
 
-		def get(name)
-			s = by_name(name).first
-			s && s.value
-		end
+    def get(name)
+      s = by_name(name).first
+      s && s.value
+    end
 
-		def set(name, value, kind=GENERAL)
-			self.where(:name => name).first_or_create.update(value: value, kind: kind)
-		end
+    def set(name, value, kind=GENERAL)
+      self.where(:name => name).first_or_create.update(value: value, kind: kind)
+    end
 
-		def get_kind(kind, name)
-			by_kind(kind).by_name(name).first
-		end
+    def get_kind(kind, name)
+      by_kind(kind).by_name(name).first
+    end
 
-		def set_kind(kind, name, value)
-			setting = get_kind(kind, name)
-			if setting
-				setting.update_attribute!(:value, value)
-			else
-				setting = create(:kind => kind, :name => name, :value => value)
-			end
-			setting
-		end
+    def set_kind(kind, name, value)
+      setting = get_kind(kind, name)
+      if setting
+        setting.update_attribute!(:value, value)
+      else
+        setting = create(:kind => kind, :name => name, :value => value)
+      end
+      setting
+    end
 
-		def find_or_create_by(kind, name, value)
-			get_kind(kind, name) || create(kind: kind, name: name, value: value)
-		end
-	end
+    def find_or_create_by(kind, name, value)
+      get_kind(kind, name) || create(kind: kind, name: name, value: value)
+    end
+  end
 
-	def set?
-		value == '1' || value == 'true'
-	end
+  def set?
+    value == '1' || value == 'true'
+  end
 
 end

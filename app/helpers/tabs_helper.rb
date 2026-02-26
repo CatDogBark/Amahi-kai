@@ -16,42 +16,42 @@
 
 module TabsHelper
 
-	def tab_class(tab)
-		active = params[:controller] == tab.id || (!Tab.find(params[:controller]) && Tab.ischild(params[:controller], tab))
-		parts = []
-		parts << 'active' if active
-		parts << 'empty' unless tab.subtabs?
-		parts.empty? ? nil : parts.join(' ')
-	end
+  def tab_class(tab)
+    active = params[:controller] == tab.id || (!Tab.find(params[:controller]) && Tab.ischild(params[:controller], tab))
+    parts = []
+    parts << 'active' if active
+    parts << 'empty' unless tab.subtabs?
+    parts.empty? ? nil : parts.join(' ')
+  end
 
-	def subtab_class(action = nil, tab_id)
-		((action == params[:action] && params[:controller] == tab_id) or (action == params[:controller] && Tab.find(params[:controller])==nil) ) ? 'active' : ''
-	end
+  def subtab_class(action = nil, tab_id)
+    ((action == params[:action] && params[:controller] == tab_id) or (action == params[:controller] && Tab.find(params[:controller])==nil) ) ? 'active' : ''
+  end
 
-	def nav_class(tabs)
-		tabs.each do |tab|
-			return "subtab" if is_subtab(tab) && tab.subtabs?
-		end
-		""
-	end
+  def nav_class(tabs)
+    tabs.each do |tab|
+      return "subtab" if is_subtab(tab) && tab.subtabs?
+    end
+    ""
+  end
 
-	def is_subtab(tab)
-	  return true if params[:controller] == tab.id
-	  return true if !Tab.find(params[:controller]) && Tab.ischild(params[:controller],tab)
-	  false
-	end
+  def is_subtab(tab)
+    return true if params[:controller] == tab.id
+    return true if !Tab.find(params[:controller]) && Tab.ischild(params[:controller],tab)
+    false
+  end
 
-	def debug_tab?
-		advanced? || debug?
-	end
+  def debug_tab?
+    advanced? || debug?
+  end
 
-	def advanced?
-		(s = Setting.where(:name=>'advanced').first) && s.set?
-	end
+  def advanced?
+    (s = Setting.where(:name=>'advanced').first) && s.set?
+  end
 
-	def debug?
-		false
-	end
+  def debug?
+    false
+  end
 end
 
 

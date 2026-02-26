@@ -36,6 +36,10 @@ group :development do
   gem 'better_errors'
   gem 'binding_of_caller', '~> 2.0'
   gem 'bullet'
+  gem 'rubocop', require: false
+  gem 'rubocop-rails', require: false
+  gem 'rubocop-rspec', require: false
+  gem 'brakeman', require: false
 end
 
 gem 'rspec-rails', group: [:test, :development]

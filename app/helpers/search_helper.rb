@@ -16,54 +16,54 @@
 
 module SearchHelper
 
-	EXT2ICON = {	'photo'   => 'jpg|png|tiff|tif|jpeg',
-			'image'   => 'gif|bmp|ico|drw|3dm|3dmf|dxf|mng|pct|psp|svg|thm',
-			'music'   => 'wav|mid|midi',
-			'audio'   => 'mp3|ogg|flac|aac|aif|iff|m4a|mpa|ra|wma|ram|m3u',
-			'movie'   => 'vob|mp4|mkv|3g2|3gp|asf|asx|avi|flv|mov|mpg|mpeg|qt|rm|wmv',
-			'archive' => 'zip|tar.gz|tgz|tar.bz2|par2|par',
-			'rar'     => 'rar',
-			'pdf'     => 'pdf|eps|ps',
-			'aex'     => 'aex',
-			'doc'     => 'doc|docx|odt',
-			'xls'     => 'xls|xlsx',
-			'ppt'     => 'ppt|pptx',
-			'xml'     => 'xml|xhtml',
-			'html'    => 'html|htm',
-			'swf'     => 'swf',
-			'ai'      => 'ai',
-			'fla'     => 'fla',
-			'iso'     => 'iso|img',
-			'maya'    => 'mb|ma|obj',
-			'jar'     => 'jar',
-			'hdr'     => 'hdr',
-			'max'     => 'max',
-			'php'     => 'php',
-			'psd'     => 'psd|ai',
-			'exe'     => 'exe|com',
-			'ocd'     => 'ocd',
-			'xfl'     => 'xfl',
-			'text'    => 'txt'	}
-			# default is 'text'
+  EXT2ICON = {  'photo'   => 'jpg|png|tiff|tif|jpeg',
+      'image'   => 'gif|bmp|ico|drw|3dm|3dmf|dxf|mng|pct|psp|svg|thm',
+      'music'   => 'wav|mid|midi',
+      'audio'   => 'mp3|ogg|flac|aac|aif|iff|m4a|mpa|ra|wma|ram|m3u',
+      'movie'   => 'vob|mp4|mkv|3g2|3gp|asf|asx|avi|flv|mov|mpg|mpeg|qt|rm|wmv',
+      'archive' => 'zip|tar.gz|tgz|tar.bz2|par2|par',
+      'rar'     => 'rar',
+      'pdf'     => 'pdf|eps|ps',
+      'aex'     => 'aex',
+      'doc'     => 'doc|docx|odt',
+      'xls'     => 'xls|xlsx',
+      'ppt'     => 'ppt|pptx',
+      'xml'     => 'xml|xhtml',
+      'html'    => 'html|htm',
+      'swf'     => 'swf',
+      'ai'      => 'ai',
+      'fla'     => 'fla',
+      'iso'     => 'iso|img',
+      'maya'    => 'mb|ma|obj',
+      'jar'     => 'jar',
+      'hdr'     => 'hdr',
+      'max'     => 'max',
+      'php'     => 'php',
+      'psd'     => 'psd|ai',
+      'exe'     => 'exe|com',
+      'ocd'     => 'ocd',
+      'xfl'     => 'xfl',
+      'text'    => 'txt'  }
+      # default is 'text'
 
-	def file_type_to_icon(type, path)
-		return theme_image_tag(File.join('icons', 'folder.png')) if type == 'directory'
-		return theme_image_tag(File.join('icons', extmatch(File.extname(path))))
-	end
+  def file_type_to_icon(type, path)
+    return theme_image_tag(File.join('icons', 'folder.png')) if type == 'directory'
+    return theme_image_tag(File.join('icons', extmatch(File.extname(path))))
+  end
 
-	# active class if the the controller matches
-	def active(controller)
-		action_name == controller ? 'active' : ''
-	end
+  # active class if the the controller matches
+  def active(controller)
+    action_name == controller ? 'active' : ''
+  end
 
 protected
 
-	def extmatch(ext)
-		EXT2ICON.each_pair do |type, regexp|
-			return "#{type}.png" if ext =~ /\.(#{regexp})$/i
-		end
-		# fall back to text as default
-		'text.png'
-	end
+  def extmatch(ext)
+    EXT2ICON.each_pair do |type, regexp|
+      return "#{type}.png" if ext =~ /\.(#{regexp})$/i
+    end
+    # fall back to text as default
+    'text.png'
+  end
 
 end

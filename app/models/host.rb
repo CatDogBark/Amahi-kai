@@ -16,22 +16,22 @@
 
 class Host < ApplicationRecord
 
-	before_save :convert_address
-	after_save :restart
-	after_create :restart
-	after_destroy :restart
+  before_save :convert_address
+  after_save :restart
+  after_create :restart
+  after_destroy :restart
 
-	validates :name, presence: true, format: { with: /\A[a-z][a-z0-9-]*\z/i }, uniqueness: true
-	validates :mac, presence: true, uniqueness: true, format: { with: /\A([0-9a-f]{2}:){5}([0-9a-f]{2})\z/i }
-	validates :address, presence: true, uniqueness: true, numericality: { greater_than: 0, less_than: 255, only_integer: true }
+  validates :name, presence: true, format: { with: /\A[a-z][a-z0-9-]*\z/i }, uniqueness: true
+  validates :mac, presence: true, uniqueness: true, format: { with: /\A([0-9a-f]{2}:){5}([0-9a-f]{2})\z/i }
+  validates :address, presence: true, uniqueness: true, numericality: { greater_than: 0, less_than: 255, only_integer: true }
 
-	protected
+  protected
 
-	def restart
-		system "hda-ctl-hup"
-	end
+  def restart
+    system "hda-ctl-hup"
+  end
 
-	def convert_address
-		self.address = self.address.to_i.to_s
-	end
+  def convert_address
+    self.address = self.address.to_i.to_s
+  end
 end

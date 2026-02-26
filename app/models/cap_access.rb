@@ -15,6 +15,6 @@
 # team at http://www.amahi.org/ under "Contact Us."
 
 class CapAccess < ApplicationRecord
-	belongs_to :user
-	belongs_to :share
+  belongs_to :user
+  belongs_to :share
 end

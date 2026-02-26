@@ -18,24 +18,24 @@ require 'system_utils'
 
 class DebugController < ApplicationController
 
-	before_action :admin_required
-	layout 'debug'
+  before_action :admin_required
+  layout 'debug'
 
-	def index
-		@page_title = t('debug')
-	end
+  def index
+    @page_title = t('debug')
+  end
 
-	def logs
-		@page_title = t('debug')
-	end
+  def logs
+    @page_title = t('debug')
+  end
 
-	def system
-		@page_title = t('debug')
-	end
+  def system
+    @page_title = t('debug')
+  end
 
-	def submit
-		report = SystemUtils.run 'tail -200 /var/hda/platform/html/log/production.log'
-		render json: { status: 'ok', report_lines: report.to_s.lines.count }
-	end
+  def submit
+    report = SystemUtils.run 'tail -200 /var/hda/platform/html/log/production.log'
+    render json: { status: 'ok', report_lines: report.to_s.lines.count }
+  end
 
 end

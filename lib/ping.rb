@@ -18,17 +18,17 @@ require 'timeout'
 require 'socket'
 
 class Ping
-	def self.pingecho(host, timeout=5, service="echo")
-		begin
-			Timeout::timeout(timeout) {
-				s = TCPSocket.new(host, service)
-				s.close
-			}
-		rescue Errno::ECONNREFUSED
-			return true
-		rescue   Timeout::Error, StandardError
-			return false
-		end
-		return true
-	end
+  def self.pingecho(host, timeout=5, service="echo")
+    begin
+      Timeout::timeout(timeout) {
+        s = TCPSocket.new(host, service)
+        s.close
+      }
+    rescue Errno::ECONNREFUSED
+      return true
+    rescue   Timeout::Error, StandardError
+      return false
+    end
+    return true
+  end
 end

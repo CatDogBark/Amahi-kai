@@ -15,6 +15,6 @@
 # team at http://www.amahi.org/ under "Contact Us."
 
 class CapWriter < ApplicationRecord
-	belongs_to :user
-	belongs_to :share
+  belongs_to :user
+  belongs_to :share
 end

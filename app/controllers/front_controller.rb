@@ -16,23 +16,23 @@
 
 class FrontController < ApplicationController
 
-	before_action :login_required
-	layout 'basic'
+  before_action :login_required
+  layout 'basic'
 
-	def index
-		@page_title = t('dashboard')
-		@apps = DockerApp.dashboard.running
-		@stats = DashboardStats.summary
-		@shares = Share.where(visible: true).order(:name)
-	end
+  def index
+    @page_title = t('dashboard')
+    @apps = DockerApp.dashboard.running
+    @stats = DashboardStats.summary
+    @shares = Share.where(visible: true).order(:name)
+  end
 
-	def toggle_advanced
-		return head(:forbidden) unless current_user&.admin?
-		s = Setting.where(name: 'advanced').first
-		if s
-			s.value = (1 - s.value.to_i).to_s
-			s.save
-		end
-		render json: { status: 'ok', advanced: s&.value == '1' }
-	end
+  def toggle_advanced
+    return head(:forbidden) unless current_user&.admin?
+    s = Setting.where(name: 'advanced').first
+    if s
+      s.value = (1 - s.value.to_i).to_s
+      s.save
+    end
+    render json: { status: 'ok', advanced: s&.value == '1' }
+  end
 end
