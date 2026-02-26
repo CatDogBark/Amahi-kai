@@ -23,9 +23,6 @@
       document.documentElement.style.setProperty('--ripple-y', y);
       document.documentElement.classList.add('theme-ripple');
 
-      // Spawn decorative ripple rings from click point
-      spawnRipples(event.clientX, event.clientY);
-
       var transition = document.startViewTransition(function() {
         applyTheme(theme);
       });
@@ -52,23 +49,6 @@
 
   function currentTheme() {
     return localStorage.getItem('theme') || 'system';
-  }
-
-  // Decorative ripple rings that expand from click point — like water rings
-  function spawnRipples(cx, cy) {
-    var count = 3;
-    for (var i = 0; i < count; i++) {
-      var ring = document.createElement('div');
-      ring.className = 'theme-ripple-ring';
-      ring.style.left = cx + 'px';
-      ring.style.top = cy + 'px';
-      ring.style.animationDelay = (i * 300) + 'ms';  // 300ms apart for visible spacing
-      document.body.appendChild(ring);
-
-      ring.addEventListener('animationend', function() {
-        this.remove();
-      });
-    }
   }
 
   function updateToggle() {

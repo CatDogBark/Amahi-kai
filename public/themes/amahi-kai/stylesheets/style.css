@@ -107,35 +107,6 @@ html.theme-ripple::view-transition-new(root) {
   mix-blend-mode: normal;
 }
 
-/* Decorative ripple rings — water drop spreading across the surface */
-@keyframes ripple-ring-expand {
-  0% {
-    width: 0;
-    height: 0;
-    opacity: 0.5;
-    border-width: 2px;
-  }
-  40% {
-    opacity: 0.3;
-  }
-  100% {
-    width: 200vmax;
-    height: 200vmax;
-    opacity: 0;
-    border-width: 1px;
-  }
-}
-
-.theme-ripple-ring {
-  position: fixed;
-  border-radius: 50%;
-  border: 2px solid var(--kai-primary, #0d8aa8);
-  pointer-events: none;
-  z-index: 999999;
-  transform: translate(-50%, -50%);
-  animation: ripple-ring-expand 1.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
 /* Theme switcher — centered in header */
 .theme-switcher {
   position: absolute;
