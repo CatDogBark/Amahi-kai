@@ -653,7 +653,10 @@ table.settings td {
   font-style: normal;
 }
 
-/* ─── Shares location alignment fix ─── */
+/* ─── Shares column alignment fix ─── */
+#shares-table .shares-col1 {
+  width: 30%;
+}
 #shares-table .shares-col2,
 #shares-table th.shares-col2 {
   text-align: left;
