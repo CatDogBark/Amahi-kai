@@ -127,11 +127,11 @@ done
 
 if $WITH_GREYHOLE; then
   echo "==> Adding Greyhole apt repository..."
-  if [ ! -f /usr/share/keyrings/greyhole-archive-keyring.gpg ]; then
-    curl -s https://www.greyhole.net/releases/deb/greyhole-debsig.asc | gpg --dearmor -o /usr/share/keyrings/greyhole-archive-keyring.gpg
+  if [ ! -f /usr/share/keyrings/greyhole-archive-keyring.asc ]; then
+    curl -fsSL -o /usr/share/keyrings/greyhole-archive-keyring.asc https://www.greyhole.net/releases/deb/greyhole-debsig.asc
   fi
   if [ ! -f /etc/apt/sources.list.d/greyhole.list ]; then
-    echo "deb [signed-by=/usr/share/keyrings/greyhole-archive-keyring.gpg] https://www.greyhole.net/releases/deb stable main" > /etc/apt/sources.list.d/greyhole.list
+    echo "deb [signed-by=/usr/share/keyrings/greyhole-archive-keyring.asc] https://www.greyhole.net/releases/deb stable main" > /etc/apt/sources.list.d/greyhole.list
     apt-get update
   fi
   echo "==> Installing Greyhole and PHP dependencies..."
@@ -427,9 +427,8 @@ amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/lib/amahi-kai/tmp/* /etc/greyhole.co
 # Greyhole installation (web UI triggered)
 amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get update
 amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get install *
-amahi ALL=(root) NOPASSWD: /usr/bin/gpg --dearmor -o /usr/share/keyrings/greyhole-archive-keyring.gpg
-amahi ALL=(root) NOPASSWD: /usr/bin/curl -s https\://www.greyhole.net/*
-amahi ALL=(root) NOPASSWD: /usr/bin/tee /etc/apt/sources.list.d/greyhole.list
+amahi ALL=(root) NOPASSWD: /usr/bin/cp /tmp/greyhole-debsig.asc /usr/share/keyrings/greyhole-archive-keyring.asc
+amahi ALL=(root) NOPASSWD: /usr/bin/cp /tmp/greyhole.list /etc/apt/sources.list.d/greyhole.list
 amahi ALL=(root) NOPASSWD: /usr/bin/tee /etc/greyhole.conf
 amahi ALL=(root) NOPASSWD: /usr/bin/mysql -u root *
 amahi ALL=(root) NOPASSWD: /usr/bin/dpkg --configure -a

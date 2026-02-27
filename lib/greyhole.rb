@@ -41,13 +41,26 @@ class Greyhole
 
       # Add Greyhole apt repository
       unless File.exist?(KEYRING_PATH)
-        result = Shell.run("bash -c 'curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 10 -o #{KEYRING_PATH} #{GREYHOLE_REPO_KEY}'")
-        raise GreyholeError, 'Failed to download Greyhole signing key' unless result
+        tmpkey = '/tmp/greyhole-debsig.asc'
+        # Download to /tmp — no sudo needed
+        unless system("curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 10 -o #{tmpkey} #{GREYHOLE_REPO_KEY}")
+          raise GreyholeError, 'Failed to download Greyhole signing key'
+        end
+
+        # cp gets sudo via SUDO_COMMANDS — moves key to system keyrings dir
+        result = Shell.run("cp #{tmpkey} #{KEYRING_PATH}")
+        raise GreyholeError, 'Failed to install Greyhole signing key' unless result
+
+        FileUtils.rm_f(tmpkey)
       end
 
       unless File.exist?(SOURCES_PATH)
-        result = Shell.run("bash -c \"echo 'deb [signed-by=#{KEYRING_PATH}] #{GREYHOLE_REPO_URL} stable main' > #{SOURCES_PATH}\"")
+        tmplist = '/tmp/greyhole.list'
+        File.write(tmplist, "deb [signed-by=#{KEYRING_PATH}] #{GREYHOLE_REPO_URL} stable main\n")
+        result = Shell.run("cp #{tmplist} #{SOURCES_PATH}")
         raise GreyholeError, 'Failed to add Greyhole apt source' unless result
+
+        FileUtils.rm_f(tmplist)
       end
 
       Shell.run('apt-get update')
