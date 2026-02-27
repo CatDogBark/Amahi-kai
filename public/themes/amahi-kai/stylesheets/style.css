@@ -27,6 +27,106 @@
   --kai-border: #dce3eb;
   --kai-card-bg: rgba(255, 255, 255, 0.88);
   --kai-shadow: rgba(26, 35, 50, 0.08);
+
+  /* Inputs / forms */
+  --kai-input-bg: #fff;
+  --kai-input-text: #2c3e50;
+  --kai-input-border: #dce3eb;
+  --kai-placeholder: #7f8c9b;
+
+  /* Hover */
+  --kai-hover-bg: #f8f9fa;
+
+  /* Tab data area */
+  --kai-tab-data-bg: #eaeef2;
+
+  /* Subtab container */
+  --kai-subtab-bg: rgba(255, 255, 255, 0.88);
+  --kai-subtab-border: #dce3eb;
+
+  /* Tab link styles (tab-link-style class) */
+  --kai-tab-link-bg: #f4f7fa;
+  --kai-tab-link-text: #7f8c9b;
+  --kai-tab-link-border: #dce3eb;
+  --kai-tab-link-hover-bg: #eaeef2;
+  --kai-tab-link-hover-text: #2c3e50;
+
+  /* Preftab (sub-subtabs) */
+  --kai-preftab-bg: #f4f7fa;
+  --kai-preftab-border: #dce3eb;
+  --kai-preftab-link-text: #7f8c9b;
+  --kai-preftab-link-hover-bg: #eaeef2;
+  --kai-preftab-link-hover-text: #2c3e50;
+  --kai-preftab-active-bg: #fff;
+  --kai-preftab-active-text: #2c3e50;
+  --kai-preftab-dropdown-bg: #fff;
+
+  /* Alerts */
+  --kai-alert-danger-bg: #fdf0ef;
+  --kai-alert-danger-border: #f5c6cb;
+  --kai-alert-danger-text: #c0392b;
+  --kai-alert-success-bg: #e8f5e9;
+  --kai-alert-success-border: #27ae60;
+  --kai-alert-success-text: #27ae60;
+  --kai-alert-warning-bg: #fff8e1;
+  --kai-alert-warning-border: #f39c12;
+  --kai-alert-warning-text: #f39c12;
+  --kai-alert-info-bg: #e3f2fd;
+  --kai-alert-info-border: #0a6e8a;
+  --kai-alert-info-text: #0a6e8a;
+
+  /* Code */
+  --kai-code-color: #e06c75;
+  --kai-code-bg: #f4f7fa;
+  --kai-pre-color: #2c3e50;
+  --kai-pre-bg: #f4f7fa;
+
+  /* Modals */
+  --kai-modal-bg: #fff;
+  --kai-modal-border: #dce3eb;
+  --kai-modal-text: #2c3e50;
+
+  /* List groups */
+  --kai-list-group-bg: #fff;
+  --kai-list-group-border: #dce3eb;
+  --kai-list-group-text: #2c3e50;
+
+  /* Badges */
+  --kai-badge-secondary-bg: #7f8c9b;
+  --kai-badge-secondary-text: #fff;
+
+  /* Progress */
+  --kai-progress-bg: #e9ecef;
+
+  /* Bootstrap overrides */
+  --kai-bg-light: #f4f7fa;
+  --kai-bg-white: #fff;
+
+  /* Table */
+  --kai-table-striped-bg: #f8f9fa;
+  --kai-table-hover-bg: #f8f9fa;
+
+  /* Nav tabs */
+  --kai-nav-tab-border: #dce3eb;
+  --kai-nav-tab-text: #7f8c9b;
+  --kai-nav-tab-active-border: #dce3eb #dce3eb rgba(255,255,255,0.88);
+
+  /* HR */
+  --kai-hr-border: #dce3eb;
+  --kai-hr-opacity: 0.5;
+
+  /* Delete button */
+  --kai-delete-color: #dc3545;
+  --kai-delete-hover-text: #f85149;
+
+  /* Btn outline secondary */
+  --kai-btn-outline-text: #7f8c9b;
+  --kai-btn-outline-border: #dce3eb;
+  --kai-btn-outline-hover-bg: #eaeef2;
+  --kai-btn-outline-hover-text: #2c3e50;
+
+  /* Card glassmorphism dark override */
+  --kai-card-bg-opaque: rgba(255, 255, 255, 0.88);
 }
 
 /* Dark mode via system preference (default) */
@@ -46,6 +146,68 @@
     --kai-border: #30363d;
     --kai-card-bg: #0d1117;
     --kai-shadow: rgba(0, 0, 0, 0.3);
+    --kai-input-bg: #161b22;
+    --kai-input-text: #c9d1d9;
+    --kai-input-border: #30363d;
+    --kai-placeholder: #8b949e;
+    --kai-hover-bg: #1c2128;
+    --kai-tab-data-bg: rgba(28, 33, 40, 0.85);
+    --kai-subtab-bg: #161b22;
+    --kai-subtab-border: #30363d;
+    --kai-tab-link-bg: #1c2128;
+    --kai-tab-link-text: #8b949e;
+    --kai-tab-link-border: #30363d;
+    --kai-tab-link-hover-bg: #262c36;
+    --kai-tab-link-hover-text: #c9d1d9;
+    --kai-preftab-bg: #161b22;
+    --kai-preftab-border: #30363d;
+    --kai-preftab-link-text: #8b949e;
+    --kai-preftab-link-hover-bg: #1c2128;
+    --kai-preftab-link-hover-text: #c9d1d9;
+    --kai-preftab-active-bg: #0d1117;
+    --kai-preftab-active-text: #c9d1d9;
+    --kai-preftab-dropdown-bg: #0d1117;
+    --kai-alert-danger-bg: #2d1214;
+    --kai-alert-danger-border: #da3633;
+    --kai-alert-danger-text: #f85149;
+    --kai-alert-success-bg: #122117;
+    --kai-alert-success-border: #2ea043;
+    --kai-alert-success-text: #3fb950;
+    --kai-alert-warning-bg: #2d2208;
+    --kai-alert-warning-border: #d29922;
+    --kai-alert-warning-text: #e3b341;
+    --kai-alert-info-bg: #0c2d3f;
+    --kai-alert-info-border: #1a9fc2;
+    --kai-alert-info-text: #58a6ff;
+    --kai-code-color: #e06c75;
+    --kai-code-bg: #1c2128;
+    --kai-pre-color: #c9d1d9;
+    --kai-pre-bg: #161b22;
+    --kai-modal-bg: #0d1117;
+    --kai-modal-border: #30363d;
+    --kai-modal-text: #c9d1d9;
+    --kai-list-group-bg: #0d1117;
+    --kai-list-group-border: #30363d;
+    --kai-list-group-text: #c9d1d9;
+    --kai-badge-secondary-bg: #30363d;
+    --kai-badge-secondary-text: #c9d1d9;
+    --kai-progress-bg: #30363d;
+    --kai-bg-light: #161b22;
+    --kai-bg-white: #0d1117;
+    --kai-table-striped-bg: #1c2128;
+    --kai-table-hover-bg: #1c2128;
+    --kai-nav-tab-border: #30363d;
+    --kai-nav-tab-text: #8b949e;
+    --kai-nav-tab-active-border: #30363d #30363d #0d1117;
+    --kai-hr-border: #30363d;
+    --kai-hr-opacity: 0.3;
+    --kai-delete-color: #f85149;
+    --kai-delete-hover-text: #fff;
+    --kai-btn-outline-text: #8b949e;
+    --kai-btn-outline-border: #30363d;
+    --kai-btn-outline-hover-bg: #30363d;
+    --kai-btn-outline-hover-text: #c9d1d9;
+    --kai-card-bg-opaque: rgba(13, 17, 23, 0.85);
   }
 }
 
@@ -65,6 +227,68 @@
   --kai-border: #30363d;
   --kai-card-bg: #0d1117;
   --kai-shadow: rgba(0, 0, 0, 0.3);
+  --kai-input-bg: #161b22;
+  --kai-input-text: #c9d1d9;
+  --kai-input-border: #30363d;
+  --kai-placeholder: #8b949e;
+  --kai-hover-bg: #1c2128;
+  --kai-tab-data-bg: rgba(28, 33, 40, 0.85);
+  --kai-subtab-bg: #161b22;
+  --kai-subtab-border: #30363d;
+  --kai-tab-link-bg: #1c2128;
+  --kai-tab-link-text: #8b949e;
+  --kai-tab-link-border: #30363d;
+  --kai-tab-link-hover-bg: #262c36;
+  --kai-tab-link-hover-text: #c9d1d9;
+  --kai-preftab-bg: #161b22;
+  --kai-preftab-border: #30363d;
+  --kai-preftab-link-text: #8b949e;
+  --kai-preftab-link-hover-bg: #1c2128;
+  --kai-preftab-link-hover-text: #c9d1d9;
+  --kai-preftab-active-bg: #0d1117;
+  --kai-preftab-active-text: #c9d1d9;
+  --kai-preftab-dropdown-bg: #0d1117;
+  --kai-alert-danger-bg: #2d1214;
+  --kai-alert-danger-border: #da3633;
+  --kai-alert-danger-text: #f85149;
+  --kai-alert-success-bg: #122117;
+  --kai-alert-success-border: #2ea043;
+  --kai-alert-success-text: #3fb950;
+  --kai-alert-warning-bg: #2d2208;
+  --kai-alert-warning-border: #d29922;
+  --kai-alert-warning-text: #e3b341;
+  --kai-alert-info-bg: #0c2d3f;
+  --kai-alert-info-border: #1a9fc2;
+  --kai-alert-info-text: #58a6ff;
+  --kai-code-color: #e06c75;
+  --kai-code-bg: #1c2128;
+  --kai-pre-color: #c9d1d9;
+  --kai-pre-bg: #161b22;
+  --kai-modal-bg: #0d1117;
+  --kai-modal-border: #30363d;
+  --kai-modal-text: #c9d1d9;
+  --kai-list-group-bg: #0d1117;
+  --kai-list-group-border: #30363d;
+  --kai-list-group-text: #c9d1d9;
+  --kai-badge-secondary-bg: #30363d;
+  --kai-badge-secondary-text: #c9d1d9;
+  --kai-progress-bg: #30363d;
+  --kai-bg-light: #161b22;
+  --kai-bg-white: #0d1117;
+  --kai-table-striped-bg: #1c2128;
+  --kai-table-hover-bg: #1c2128;
+  --kai-nav-tab-border: #30363d;
+  --kai-nav-tab-text: #8b949e;
+  --kai-nav-tab-active-border: #30363d #30363d #0d1117;
+  --kai-hr-border: #30363d;
+  --kai-hr-opacity: 0.3;
+  --kai-delete-color: #f85149;
+  --kai-delete-hover-text: #fff;
+  --kai-btn-outline-text: #8b949e;
+  --kai-btn-outline-border: #30363d;
+  --kai-btn-outline-hover-bg: #30363d;
+  --kai-btn-outline-hover-text: #c9d1d9;
+  --kai-card-bg-opaque: rgba(13, 17, 23, 0.85);
 }
 
 /* Forced light mode — uses :root defaults, just ensure specificity */
@@ -83,6 +307,68 @@
   --kai-border: #dce3eb;
   --kai-card-bg: rgba(255, 255, 255, 0.88);
   --kai-shadow: rgba(26, 35, 50, 0.08);
+  --kai-input-bg: #fff;
+  --kai-input-text: #2c3e50;
+  --kai-input-border: #dce3eb;
+  --kai-placeholder: #7f8c9b;
+  --kai-hover-bg: #f8f9fa;
+  --kai-tab-data-bg: #eaeef2;
+  --kai-subtab-bg: rgba(255, 255, 255, 0.88);
+  --kai-subtab-border: #dce3eb;
+  --kai-tab-link-bg: #f4f7fa;
+  --kai-tab-link-text: #7f8c9b;
+  --kai-tab-link-border: #dce3eb;
+  --kai-tab-link-hover-bg: #eaeef2;
+  --kai-tab-link-hover-text: #2c3e50;
+  --kai-preftab-bg: #f4f7fa;
+  --kai-preftab-border: #dce3eb;
+  --kai-preftab-link-text: #7f8c9b;
+  --kai-preftab-link-hover-bg: #eaeef2;
+  --kai-preftab-link-hover-text: #2c3e50;
+  --kai-preftab-active-bg: #fff;
+  --kai-preftab-active-text: #2c3e50;
+  --kai-preftab-dropdown-bg: #fff;
+  --kai-alert-danger-bg: #fdf0ef;
+  --kai-alert-danger-border: #f5c6cb;
+  --kai-alert-danger-text: #c0392b;
+  --kai-alert-success-bg: #e8f5e9;
+  --kai-alert-success-border: #27ae60;
+  --kai-alert-success-text: #27ae60;
+  --kai-alert-warning-bg: #fff8e1;
+  --kai-alert-warning-border: #f39c12;
+  --kai-alert-warning-text: #f39c12;
+  --kai-alert-info-bg: #e3f2fd;
+  --kai-alert-info-border: #0a6e8a;
+  --kai-alert-info-text: #0a6e8a;
+  --kai-code-color: #e06c75;
+  --kai-code-bg: #f4f7fa;
+  --kai-pre-color: #2c3e50;
+  --kai-pre-bg: #f4f7fa;
+  --kai-modal-bg: #fff;
+  --kai-modal-border: #dce3eb;
+  --kai-modal-text: #2c3e50;
+  --kai-list-group-bg: #fff;
+  --kai-list-group-border: #dce3eb;
+  --kai-list-group-text: #2c3e50;
+  --kai-badge-secondary-bg: #7f8c9b;
+  --kai-badge-secondary-text: #fff;
+  --kai-progress-bg: #e9ecef;
+  --kai-bg-light: #f4f7fa;
+  --kai-bg-white: #fff;
+  --kai-table-striped-bg: #f8f9fa;
+  --kai-table-hover-bg: #f8f9fa;
+  --kai-nav-tab-border: #dce3eb;
+  --kai-nav-tab-text: #7f8c9b;
+  --kai-nav-tab-active-border: #dce3eb #dce3eb rgba(255,255,255,0.88);
+  --kai-hr-border: #dce3eb;
+  --kai-hr-opacity: 0.5;
+  --kai-delete-color: #dc3545;
+  --kai-delete-hover-text: #f85149;
+  --kai-btn-outline-text: #7f8c9b;
+  --kai-btn-outline-border: #dce3eb;
+  --kai-btn-outline-hover-bg: #eaeef2;
+  --kai-btn-outline-hover-text: #2c3e50;
+  --kai-card-bg-opaque: rgba(255, 255, 255, 0.88);
 }
 
 /* ── View Transition: Ocean Ripple 🌊 ── */
@@ -469,8 +755,8 @@ legend {
   display: block;
 }
 .setup-subtab-container {
-  background: var(--kai-card-bg);
-  border-bottom: 1px solid var(--kai-border);
+  background: var(--kai-subtab-bg);
+  border-bottom: 1px solid var(--kai-subtab-border);
 }
 
 .setup-subtab {
@@ -502,7 +788,7 @@ legend {
 
 /* ─── Content area ─── */
 .tab_data {
-  background: #eaeef2;
+  background: var(--kai-tab-data-bg);
   padding: 15px;
   min-height: 400px;
 }
@@ -596,7 +882,7 @@ table.settings td {
 
 /* ─── Progress bars ─── */
 .progress {
-  background-color: #e9ecef;
+  background-color: var(--kai-progress-bg);
   border-radius: 4px;
 }
 .progress-bar.bg-success { background-color: var(--kai-success) !important; }
@@ -605,24 +891,68 @@ table.settings td {
 
 /* ─── Alerts ─── */
 .alert-danger {
-  background-color: #fdf0ef;
-  border-color: #f5c6cb;
-  color: var(--kai-danger);
+  background-color: var(--kai-alert-danger-bg);
+  border-color: var(--kai-alert-danger-border);
+  color: var(--kai-alert-danger-text);
+  border-radius: 4px;
+}
+.alert-success, .alert-notice {
+  background-color: var(--kai-alert-success-bg);
+  border-color: var(--kai-alert-success-border);
+  color: var(--kai-alert-success-text);
+  border-radius: 4px;
+}
+.alert-warning {
+  background-color: var(--kai-alert-warning-bg);
+  border-color: var(--kai-alert-warning-border);
+  color: var(--kai-alert-warning-text);
+  border-radius: 4px;
+}
+.alert-info {
+  background-color: var(--kai-alert-info-bg);
+  border-color: var(--kai-alert-info-border);
+  color: var(--kai-alert-info-text);
   border-radius: 4px;
 }
 
 /* ─── Forms ─── */
 .form-control {
-  border: 1px solid var(--kai-border);
+  background-color: var(--kai-input-bg);
+  color: var(--kai-input-text);
+  border: 1px solid var(--kai-input-border);
   border-radius: 4px;
   padding: 6px 10px;
   font-size: 13px;
-  transition: border-color 0.15s ease;
+  transition: border-color 0.15s ease, background-color 0.4s ease, color 0.4s ease;
 }
 .form-control:focus {
+  background-color: var(--kai-input-bg);
+  color: var(--kai-input-text);
   border-color: var(--kai-primary);
   box-shadow: 0 0 0 2px rgba(10, 110, 138, 0.15);
   outline: none;
+}
+.form-control::placeholder,
+input::placeholder {
+  color: var(--kai-placeholder);
+  opacity: 1;
+}
+select, input[type="text"], input[type="password"], input[type="email"], textarea {
+  background-color: var(--kai-input-bg);
+  color: var(--kai-input-text);
+  border-color: var(--kai-input-border);
+}
+select:focus, input[type="text"]:focus, input[type="password"]:focus {
+  background-color: var(--kai-input-bg);
+  color: var(--kai-input-text);
+}
+.form-select {
+  background-color: var(--kai-input-bg);
+  color: var(--kai-input-text);
+  border-color: var(--kai-input-border);
+}
+.form-check-label {
+  color: var(--kai-text);
 }
 
 .form-check-input:checked {
@@ -826,352 +1156,166 @@ table.settings td {
   color: rgba(255,255,255,0.6);
 }
 
-/* ─── Dark Mode Overrides ─── */
+/* ─── Var-driven element styles (work in all modes) ─── */
+.container, .inner {
+  color: var(--kai-text);
+}
+table.settings {
+  color: var(--kai-text);
+}
+table.settings tbody tr:hover {
+  background: var(--kai-hover-bg);
+}
+.table {
+  color: var(--kai-text);
+  --bs-table-bg: transparent;
+  --bs-table-striped-bg: var(--kai-table-striped-bg);
+  --bs-table-hover-bg: var(--kai-table-hover-bg);
+}
+.table > :not(caption) > * > * {
+  background-color: transparent;
+  border-bottom-color: var(--kai-border);
+  color: var(--kai-text);
+}
+.table-sm td, .table-sm th {
+  color: var(--kai-text);
+}
+.card {
+  background-color: var(--kai-card-bg-opaque);
+  border-color: var(--kai-border);
+  color: var(--kai-text);
+}
+.card-body {
+  background-color: transparent;
+  color: var(--kai-text);
+}
+.card-header {
+  border-bottom-color: var(--kai-border);
+}
+fieldset {
+  background: var(--kai-card-bg) !important;
+  border-color: var(--kai-border) !important;
+  color: var(--kai-text) !important;
+}
+legend {
+  color: var(--kai-muted) !important;
+  background: transparent;
+}
+.hover-style:hover {
+  background: var(--kai-hover-bg);
+}
+.search-results .result-item:hover {
+  background: var(--kai-hover-bg);
+}
+code {
+  color: var(--kai-code-color);
+  background-color: var(--kai-code-bg);
+}
+pre {
+  color: var(--kai-pre-color);
+  background-color: var(--kai-pre-bg);
+}
+hr {
+  border-color: var(--kai-hr-border);
+  opacity: var(--kai-hr-opacity);
+}
+.modal-content {
+  background-color: var(--kai-modal-bg);
+  border-color: var(--kai-modal-border);
+  color: var(--kai-modal-text);
+}
+.modal-header, .modal-footer {
+  border-color: var(--kai-modal-border);
+}
+.list-group-item {
+  background-color: var(--kai-list-group-bg);
+  border-color: var(--kai-list-group-border);
+  color: var(--kai-list-group-text);
+}
+.badge.bg-secondary {
+  background-color: var(--kai-badge-secondary-bg) !important;
+  color: var(--kai-badge-secondary-text) !important;
+}
+.btn-outline-secondary {
+  color: var(--kai-btn-outline-text);
+  border-color: var(--kai-btn-outline-border);
+}
+.btn-outline-secondary:hover {
+  background-color: var(--kai-btn-outline-hover-bg);
+  color: var(--kai-btn-outline-hover-text);
+}
+.tab-link-style {
+  background: var(--kai-tab-link-bg) !important;
+  color: var(--kai-tab-link-text) !important;
+  border-color: var(--kai-tab-link-border) !important;
+}
+.tab-link-style:hover {
+  background: var(--kai-tab-link-hover-bg) !important;
+  color: var(--kai-tab-link-hover-text) !important;
+}
+.active-tab-link-style {
+  background: var(--kai-primary) !important;
+  color: white !important;
+}
+nav.preftab {
+  background: var(--kai-preftab-bg) !important;
+  border-color: var(--kai-preftab-border) !important;
+}
+nav.preftab li {
+  border-right-color: var(--kai-preftab-border) !important;
+}
+nav.preftab li a {
+  color: var(--kai-preftab-link-text) !important;
+  background: transparent !important;
+}
+nav.preftab li a:hover {
+  background: var(--kai-preftab-link-hover-bg) !important;
+  color: var(--kai-preftab-link-hover-text) !important;
+}
+nav.preftab li.active > a {
+  background: var(--kai-preftab-active-bg) !important;
+  color: var(--kai-preftab-active-text) !important;
+}
+nav.preftab li ul {
+  background: var(--kai-preftab-dropdown-bg) !important;
+  border-color: var(--kai-preftab-border) !important;
+}
+.nav-tabs {
+  border-bottom-color: var(--kai-nav-tab-border) !important;
+}
+.nav-tabs .nav-link {
+  color: var(--kai-nav-tab-text);
+}
+.nav-tabs .nav-link.active {
+  background-color: var(--kai-card-bg);
+  border-color: var(--kai-nav-tab-active-border);
+  color: var(--kai-text);
+}
+
+/* Bootstrap utility overrides — use !important to beat utility specificity */
+.bg-light {
+  background-color: var(--kai-bg-light) !important;
+}
+.bg-white {
+  background-color: var(--kai-bg-white) !important;
+}
+.text-muted, small.text-muted {
+  color: var(--kai-muted) !important;
+}
+.text-dark {
+  color: var(--kai-text) !important;
+}
+.border {
+  border-color: var(--kai-border) !important;
+}
+.border-bottom {
+  border-bottom-color: var(--kai-border) !important;
+}
+
+/* ─── Dark Mode ─── */
 @media (prefers-color-scheme: dark) {
   body {
     color-scheme: dark;
-  }
-
-  /* ── Main content areas ── */
-  #content {
-    background: transparent;
-  }
-  .container, .inner {
-    color: var(--kai-text);
-  }
-  .tab_data {
-    background: rgba(28, 33, 40, 0.85);
-  }
-
-  /* ── Tabs ── */
-  .setup-tab-container {
-    background: #0d1117;
-  }
-  .setup-tab .tab-link {
-    color: rgba(255,255,255,0.6);
-  }
-  .setup-tab .active-tab-link {
-    background: var(--kai-primary);
-    color: white;
-  }
-
-  /* ── Subtabs ── */
-  .setup-subtab-container {
-    background: #161b22;
-    border-bottom-color: #30363d;
-  }
-  .setup-subtab .subtab-link {
-    color: #8b949e;
-  }
-  .setup-subtab .active-subtab-link {
-    color: var(--kai-primary);
-    border-bottom-color: var(--kai-primary);
-  }
-
-  /* ── Subheader / Logo area ── */
-  #subheader {
-    background: #0d1117;
-    border-bottom-color: #30363d;
-  }
-
-  /* ── Tables ── */
-  table.settings {
-    color: var(--kai-text);
-  }
-  table.settings tbody tr {
-    border-bottom-color: #30363d;
-  }
-  table.settings tbody tr:hover {
-    background: #1c2128;
-  }
-  .table {
-    color: var(--kai-text);
-    --bs-table-bg: transparent;
-    --bs-table-striped-bg: #1c2128;
-    --bs-table-hover-bg: #1c2128;
-  }
-  .table > :not(caption) > * > * {
-    background-color: transparent;
-    border-bottom-color: #30363d;
-    color: var(--kai-text);
-  }
-  .table-sm td, .table-sm th {
-    color: var(--kai-text);
-  }
-
-  /* ── Settings tables/wraps ── */
-  .settings-wrap {
-    background: var(--kai-card-bg);
-  }
-  .settings-table {
-    background: var(--kai-card-bg);
-  }
-
-  /* ── Fieldsets ── */
-  fieldset {
-    border-color: #30363d;
-    color: var(--kai-text);
-    background: transparent;
-  }
-  legend {
-    color: #8b949e;
-  }
-
-  /* ── Cards (glassmorphism over ocean background) ── */
-  .card {
-    background-color: rgba(13, 17, 23, 0.85);
-    border-color: var(--kai-border);
-    color: var(--kai-text);
-  }
-  .card-body {
-    background-color: transparent;
-    color: var(--kai-text);
-  }
-  .card-header {
-    border-bottom-color: #30363d;
-  }
-  .card-header.bg-dark {
-    background-color: #0d1117 !important;
-  }
-
-  /* ── Forms ── */
-  .form-control {
-    background-color: #161b22;
-    color: #c9d1d9;
-    border-color: #30363d;
-  }
-  .form-control:focus {
-    background-color: #161b22;
-    color: #c9d1d9;
-    border-color: var(--kai-primary);
-  }
-  select, input[type="text"], input[type="password"], input[type="email"], textarea {
-    background-color: #161b22;
-    color: #c9d1d9;
-    border-color: #30363d;
-  }
-  select:focus, input[type="text"]:focus, input[type="password"]:focus {
-    background-color: #161b22;
-    color: #c9d1d9;
-  }
-  .form-select {
-    background-color: #161b22;
-    color: #c9d1d9;
-    border-color: #30363d;
-  }
-  .form-check-label {
-    color: var(--kai-text);
-  }
-
-  /* ── Hover styles ── */
-  .hover-style:hover {
-    background: #1c2128;
-  }
-
-  /* ── Click-to-change elements ── */
-  .workgroup_click_change, .name_click_change, .lease_click_change,
-  .gateway_click_change, .dyn_lo_click_change, .dyn_hi_click_change {
-    color: #c9d1d9 !important;
-    border-bottom-color: #8b949e;
-  }
-
-  /* ── Alerts ── */
-  .alert-danger {
-    background-color: #2d1214;
-    border-color: #da3633;
-    color: #f85149;
-  }
-  .alert-success, .alert-notice {
-    background-color: #122117;
-    border-color: #2ea043;
-    color: #3fb950;
-  }
-  .alert-warning {
-    background-color: #2d2208;
-    border-color: #d29922;
-    color: #e3b341;
-  }
-  .alert-info {
-    background-color: #0c2d3f;
-    border-color: #1a9fc2;
-    color: #58a6ff;
-  }
-
-  /* ── Progress bars ── */
-  .progress {
-    background-color: #30363d;
-  }
-
-  /* ── Badges ── */
-  .badge.bg-secondary {
-    background-color: #30363d !important;
-    color: #c9d1d9 !important;
-  }
-
-  /* ── Buttons ── */
-  .btn-outline-secondary {
-    color: #8b949e;
-    border-color: #30363d;
-  }
-  .btn-outline-secondary:hover {
-    background-color: #30363d;
-    color: #c9d1d9;
-  }
-
-  /* ── Search results ── */
-  .search-results .result-item:hover {
-    background: #1c2128;
-  }
-
-  /* ── Bootstrap overrides ── */
-  .bg-light {
-    background-color: #161b22 !important;
-  }
-  .bg-white {
-    background-color: #0d1117 !important;
-  }
-  .text-muted {
-    color: #8b949e !important;
-  }
-  .text-dark {
-    color: #c9d1d9 !important;
-  }
-  .border {
-    border-color: #30363d !important;
-  }
-  .border-bottom {
-    border-bottom-color: #30363d !important;
-  }
-  code {
-    color: #e06c75;
-    background-color: #1c2128;
-  }
-  pre {
-    color: #c9d1d9;
-    background-color: #161b22;
-  }
-  hr {
-    border-color: #30363d;
-    opacity: 0.3;
-  }
-
-  /* ── Modals ── */
-  .modal-content {
-    background-color: #0d1117;
-    border-color: #30363d;
-    color: #c9d1d9;
-  }
-  .modal-header, .modal-footer {
-    border-color: #30363d;
-  }
-
-  /* ── List groups ── */
-  .list-group-item {
-    background-color: #0d1117;
-    border-color: #30363d;
-    color: #c9d1d9;
-  }
-
-  /* ── Page title ── */
-  .page-title {
-    color: #8b949e !important;
-  }
-
-  /* ── Access/permissions areas ── */
-  .access fieldset {
-    background: transparent;
-  }
-
-  /* ── Tab buttons (inherited from default theme with !important) ── */
-  .tab-link-style {
-    background: #1c2128 !important;
-    color: #8b949e !important;
-    border-color: #30363d !important;
-  }
-  .tab-link-style:hover {
-    background: #262c36 !important;
-    color: #c9d1d9 !important;
-  }
-  .active-tab-link-style {
-    background: var(--kai-primary) !important;
-    color: white !important;
-  }
-
-  /* ── Preftab (sub-subtabs from default theme) ── */
-  nav.preftab {
-    background: #161b22 !important;
-    border-color: #30363d !important;
-  }
-  nav.preftab li {
-    border-right-color: #30363d !important;
-  }
-  nav.preftab li a {
-    color: #8b949e !important;
-    background: transparent !important;
-  }
-  nav.preftab li a:hover {
-    background: #1c2128 !important;
-    color: #c9d1d9 !important;
-  }
-  nav.preftab li.active > a {
-    background: #0d1117 !important;
-    color: #c9d1d9 !important;
-  }
-  nav.preftab li ul {
-    background: #0d1117 !important;
-    border-color: #30363d !important;
-  }
-
-  /* ── Fieldsets (override default theme hardcoded whites) ── */
-  fieldset {
-    background: var(--kai-card-bg) !important;
-    border-color: #30363d !important;
-    color: var(--kai-text) !important;
-  }
-  legend {
-    color: #8b949e !important;
-    background: transparent;
-  }
-
-  /* ── Settings tables thead (default theme may hardcode) ── */
-  table.settings thead tr {
-    background: #0d1117 !important;
-    color: #c9d1d9 !important;
-  }
-  table.settings thead th {
-    color: #c9d1d9 !important;
-  }
-
-  /* ── .nav-tabs border (Bootstrap default) ── */
-  .nav-tabs {
-    border-bottom-color: #30363d !important;
-  }
-  .nav-tabs .nav-link {
-    color: #8b949e;
-  }
-  .nav-tabs .nav-link.active {
-    background-color: var(--kai-card-bg);
-    border-color: #30363d #30363d var(--kai-card-bg);
-    color: var(--kai-text);
-  }
-
-  /* ── Misc text that may be hard-coded ── */
-  .fw-bold, strong, b {
-    color: inherit;
-  }
-  small.text-muted {
-    color: #8b949e !important;
-  }
-  .no-users h2, .no-shares h2 {
-    color: #8b949e;
-  }
-  .btn-delete {
-    color: #f85149;
-    border-color: #f85149;
-  }
-  .btn-delete:hover {
-    background: #f85149;
-    color: #fff;
   }
 }
 

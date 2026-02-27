@@ -18,7 +18,8 @@ class DockerService
 
     def running?
       return false unless production?
-      Shell.run('systemctl is-active --quiet docker')
+      # Use docker info instead of systemctl — avoids sudoers restrictions
+      system('docker info > /dev/null 2>&1')
     end
 
     def enabled?

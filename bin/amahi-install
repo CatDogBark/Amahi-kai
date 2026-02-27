@@ -448,6 +448,9 @@ amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable docker
 amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start docker
 amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop docker
 amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart docker
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl is-active docker
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl is-active --quiet docker
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl status docker
 
 # Docker container management (app install/uninstall/start/stop)
 amahi ALL=(root) NOPASSWD: /usr/bin/docker
