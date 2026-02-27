@@ -36,53 +36,57 @@ class Greyhole
       }
     end
 
-    def install!
+    def install!(&progress)
+      progress ||= proc { |_msg| } # no-op if no block given
       return true unless production?
 
       # Add Greyhole apt repository
       unless File.exist?(KEYRING_PATH)
+        progress.call("Downloading Greyhole signing key...")
         tmpkey = '/tmp/greyhole-debsig.asc'
-        # Download to /tmp — no sudo needed
         unless system("curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 10 -o #{tmpkey} #{GREYHOLE_REPO_KEY}")
           raise GreyholeError, 'Failed to download Greyhole signing key'
         end
-
-        # cp gets sudo via SUDO_COMMANDS — moves key to system keyrings dir
         result = Shell.run("cp #{tmpkey} #{KEYRING_PATH}")
         raise GreyholeError, 'Failed to install Greyhole signing key' unless result
-
         FileUtils.rm_f(tmpkey)
+        progress.call("✓ Signing key installed")
       end
 
       unless File.exist?(SOURCES_PATH)
+        progress.call("Adding Greyhole apt repository...")
         tmplist = '/tmp/greyhole.list'
         File.write(tmplist, "deb [signed-by=#{KEYRING_PATH}] #{GREYHOLE_REPO_URL} stable main\n")
         result = Shell.run("cp #{tmplist} #{SOURCES_PATH}")
         raise GreyholeError, 'Failed to add Greyhole apt source' unless result
-
         FileUtils.rm_f(tmplist)
       end
 
+      progress.call("Updating package lists...")
       Shell.run('apt-get update')
 
       # Pre-configure: DB and minimal config must exist BEFORE dpkg postinst runs
+      progress.call("Pre-configuring database...")
       Shell.run('mysql -u root -e "CREATE DATABASE IF NOT EXISTS greyhole"')
       Shell.run("mysql -u root -e \"GRANT ALL PRIVILEGES ON greyhole.* TO 'amahi'@'localhost'; FLUSH PRIVILEGES;\"")
 
-      # Ensure PHP mbstring is available for greyhole
+      progress.call("Installing PHP dependencies...")
       Shell.run('apt-get install -y php8.3-mbstring php8.3-mysql 2>/dev/null')
       Shell.run('phpenmod mbstring 2>/dev/null')
 
       unless File.exist?(CONFIG_PATH)
+        progress.call("Writing minimal Greyhole config...")
         Shell.run("sh -c \"echo 'db_host = localhost\ndb_user = amahi\ndb_name = greyhole' > #{CONFIG_PATH}\"")
       end
 
-      # Now install — postinst script will find DB and config
+      progress.call("Installing Greyhole package (this may take a minute)...")
       result = Shell.run('DEBIAN_FRONTEND=noninteractive apt-get install -y -o Dpkg::Options::=--force-confold greyhole')
       raise GreyholeError, 'Failed to install greyhole package' unless result
+      progress.call("✓ Greyhole package installed")
 
       # Load schema after install (schema file comes with the package)
       if File.exist?('/usr/share/greyhole/schema-mysql.sql')
+        progress.call("Loading database schema...")
         Shell.run('mysql -u root greyhole < /usr/share/greyhole/schema-mysql.sql 2>/dev/null')
       end
 
@@ -90,8 +94,10 @@ class Greyhole
       configure! if DiskPoolPartition.any?
 
       # Re-inject Samba globals — Greyhole's postinst may overwrite smb.conf
+      progress.call("Configuring Samba integration...")
       reinject_samba_globals!
 
+      progress.call("Enabling and starting services...")
       Shell.run('systemctl enable greyhole.service')
       Shell.run('systemctl restart smbd.service')
       Shell.run('systemctl restart nmbd.service')

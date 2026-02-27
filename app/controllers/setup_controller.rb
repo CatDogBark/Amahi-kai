@@ -260,9 +260,7 @@ class SetupController < ApplicationController
       end
 
       begin
-        sse.send("Installing Greyhole package and dependencies...")
-        Greyhole.install!
-        sse.send("✓ Greyhole installed")
+        Greyhole.install! { |msg| sse.send(msg) }
 
         sse.send("")
         sse.send("Generating configuration...")
