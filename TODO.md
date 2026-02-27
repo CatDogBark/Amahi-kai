@@ -1,35 +1,43 @@
 # TODO — Amahi-kai
 
-*Updated: 2026-02-26*
+*Updated: 2026-02-27*
 
 ---
 
 ## P0 — Next Up
 
-### Kill Tab/Subtab System
-Plugins are consolidated but navigation still uses the old Tab/Subtab registration system.
-Replace with simple route-based nav — hardcoded header links, no dynamic tab registry.
-- Delete `app/models/tab.rb`, `app/models/subtab.rb` if they exist
-- Remove `config/initializers/*_tab.rb` files (6 of them)
-- Simplify header partial — direct links instead of tab iteration
-- Retire `basic.html.slim` layout — everything uses `application.html.slim`
+### Refactor: StreamingConcern
+Extract SSE streaming boilerplate from 5 controllers (10 endpoints) into a shared concern. ~300 lines of duplication.
+**Status: IN PROGRESS**
+
+### Refactor: Split NetworkController (660 lines)
+Break into focused controllers:
+- `NetworkController` — DHCP leases, hosts
+- `SecurityController` — security audit, auto-fix
+- `RemoteAccessController` — Cloudflare tunnel
+- Keep gateway/DNS/settings as subtabs in NetworkController
+
+### Refactor: Bare Rescue Cleanup
+29 in app/, 11 in lib/. Narrow to specific exception classes.
+
+### Refactor: Controller → Service Objects
+Extract Shell.run calls from controllers into service objects. Priority:
+- `DisksController` → `DiskService` (format, mount, unmount)
+- `AppsController` → `DockerEngineService` (install, start, stop)
+- `SetupController` → `SetupService` (wizard step logic)
 
 ### Test Coverage Push
 44% → 70%+ with quality specs. Focus on:
-- New consolidated controllers (shares, settings, network have zero coverage on some actions)
+- Consolidated controllers (shares, settings, network have gaps)
 - Error paths and edge cases
 - File browser (no specs yet)
 - Setup wizard (no specs yet)
-
-### Tech Debt Review
-Periodic review of `TECH_DEBT.md` — tackle items when touching nearby code.
-Top items: Share model callbacks (extract service object), Command class consistency.
 
 ### Setup Wizard Testing
 Verify enhanced wizard end-to-end on real hardware:
 - Drive detection, formatting, mounting
 - Greyhole install flow
-- Swap file creation (new)
+- Swap file creation
 - Hostname change
 - Share creation with pool copies
 
@@ -38,21 +46,19 @@ Verify enhanced wizard end-to-end on real hardware:
 ## P1 — Polish
 
 ### Mobile Responsive Pass
-Full mobile optimization — test every page on phone screens, fix what's broken:
+Full mobile optimization — test every page on phone screens:
 - Header nav → hamburger menu collapse
 - Dashboard cards stacking
 - Tab bar scrollable on small screens
 - File browser: bigger tap targets, touch-friendly actions
 - Setup wizard mobile-friendly
-- Share/user forms sized for thumbs
-- Theme toggle accessible on mobile
 
 ### Backup/Snapshot Scheduling
 The #1 reason people buy a NAS. Scope TBD — rsync-based, scheduling, retention, restore UI.
 
 ### Storage Management Enhancements
-- **Add existing drive to pool without formatting** — Mount drive with data, add to Greyhole pool as-is
-- **RAID support** — mdadm RAID 1/5/6 as advanced option. v0.3+ scope.
+- Add existing drive to pool without formatting
+- RAID support (mdadm RAID 1/5/6) — v0.3+ scope
 
 ### Cloudflare Tunnel App Integration
 Build UI for connecting apps that need their own subdomain.
@@ -95,10 +101,8 @@ Optional mesh networking for encrypted push alerts and remote management over Lo
 - Security audit with auto-fix (8 checks)
 - Setup wizard (7-step + swap detection + drive preview)
 - System dashboard, search, themes
-- v0.1.0 public release, v0.1.1, v0.1.2 "Ocean"
-- **Plugin consolidation — all 6 engines merged into main app**
-- ~60 sleep calls removed, 23+ bare rescues fixed, tabs→spaces
-- Plugin engine loading disabled, amahi_plugin_routes no-op
+- v0.1.0 public release, v0.1.1, v0.1.2 "Ocean", v0.1.3 "Consolidation"
+- Plugin consolidation — all 6 engines merged into main app
 - Auth modernization: Authlogic → has_secure_password (bcrypt)
 - Login rate limiting (rack-attack)
 - Toast notification system (replaced flash banners)
@@ -106,10 +110,11 @@ Optional mesh networking for encrypted push alerts and remote management over Lo
 - Dashboard rework (shares prominent, per-drive bars, compact services)
 - 🌊 Ocean UI (breathing gradient, SVG waves, particles, glassmorphism)
 - Theme toggle (light/dark/system) with circle-wipe transition
-- Ocean background on GitHub Pages site + wiki
+- **Theme system overhaul** — single amahi-kai theme, var-only dark mode, deleted Classic theme (-4,093 lines)
+- **Lucide icon pack** — 34 vendored SVGs, IconHelper, replaced all emoji icons
+- **CSS cache busting** — theme CSS URLs include ?v=mtime
+- **Docker service toggle** — slide switch with optimistic UI, no page reload
+- **Disk detection** — JSON lsblk parsing, VM/passthrough support, size column
 - CI overhaul (5 parallel jobs, 211 specs green)
-- nmbd WINS database fix in installer
-- NTFS mount support + stale fstab auto-cleanup
-- Samba password sync on user password changes
 - Agent relay system (Kai ↔ Root Claude async comms)
 - Wiki/docs at amahi-kai.com/wiki (9 pages)

@@ -17,6 +17,7 @@
 require 'shell'
 
 class SettingsController < ApplicationController
+  include SseStreaming
 
   before_action :admin_required
 
@@ -126,24 +127,10 @@ class SettingsController < ApplicationController
   end
 
   def update_system_stream
-    response.headers['Content-Type'] = 'text/event-stream'
-    response.headers['Cache-Control'] = 'no-cache, no-store'
-    response.headers['X-Accel-Buffering'] = 'no'
-    response.headers['Connection'] = 'keep-alive'
-    response.headers['Last-Modified'] = Time.now.httpdate
-
-    self.response_body = Enumerator.new do |yielder|
-      sse_send = ->(data, event = nil) {
-        msg = ""
-        msg += "event: #{event}\n" if event
-        msg += "data: #{data}\n\n"
-        yielder << msg
-      }
-
-      sse_send.call("Starting system update...")
+    stream_sse do |sse|
+      sse.send("Starting system update...")
 
       unless Rails.env.production?
-        # Dev/test simulation
         ["Pulling latest code...", "  Already up to date.",
          "Installing dependencies...", "  Bundle complete!",
          "Running database migrations...", "  No pending migrations.",
@@ -151,25 +138,12 @@ class SettingsController < ApplicationController
          "Fixing file ownership...", "Restarting Amahi-kai...",
          "✓ Amahi-kai updated and running!"].each do |line|
           sleep(0.3)
-          sse_send.call(line)
+          sse.send(line)
         end
-        sse_send.call("success", "done")
+        sse.done
       else
-        success = true
-        IO.popen("sudo /opt/amahi-kai/bin/amahi-update --stream 2>&1") do |io|
-          io.each_line do |line|
-            sse_send.call(line.chomp)
-            if line.include?("✗")
-              success = false
-            end
-          end
-        end
-
-        if success && $?.success?
-          sse_send.call("success", "done")
-        else
-          sse_send.call("error", "done")
-        end
+        success = sse.stream_command("sudo /opt/amahi-kai/bin/amahi-update --stream 2>&1")
+        sse.done(success ? "success" : "error")
       end
     end
   end

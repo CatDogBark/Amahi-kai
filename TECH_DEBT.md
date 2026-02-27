@@ -1,57 +1,77 @@
-# TECH_DEBT.md — Known Legacy Code & Future Cleanup
+# TECH_DEBT.md — Known Technical Debt
 
-*Updated: 2026-02-26. Review periodically — tackle items when touching nearby code.*
-
----
-
-## High Priority (will bite you)
-
-### ~~Share Model Callbacks~~ ✅ EXTRACTED
-Extracted into 3 service objects: `ShareFileSystem`, `SambaService`, `ShareAccessManager`. Model delegates via thin callbacks. Factory stubs inject null services. 3 new spec files. (`1245870`, 2026-02-26)
-
-### ~~Command Class Inconsistency~~ ✅ REPLACED
-`lib/command.rb` replaced by `lib/shell.rb` — unified `Shell.run()`, `Shell.run!()`, `Shell.capture()` API. All 113 call sites migrated (33 Command.new + 80 system("sudo ...")). `lib/command.rb` still exists but nothing imports it. (`3a9b0e1`, 2026-02-26)
+*Updated: 2026-02-27. Review periodically — tackle items when touching nearby code.*
 
 ---
 
-## Medium Priority (messy but working)
+## High Priority
 
-### ~~Tab/Subtab System~~ ✅ REPLACED
-Replaced with inline nav structure in `_tabs.html.slim`. Tab model, 6 initializers, tabs_helper all deleted. 200 lines removed.
+### Fat Controllers
+Several controllers exceed 300 lines with mixed responsibilities:
+- `network_controller.rb` (660 lines) — DHCP, DNS, gateway, security, remote access, Cloudflare, 5 SSE streams
+- `apps_controller.rb` (459 lines) — Docker engine management + app CRUD + 2 SSE streams
+- `disks_controller.rb` (310 lines) — Disk management + Greyhole install streaming
+- `setup_controller.rb` (336 lines) — 7-step wizard with inline logic
+- `shares_controller.rb` (310 lines) — Share CRUD + file operations
 
-### ~~Three Layouts~~ ✅ CONSOLIDATED
-`basic.html.slim` deleted. Search uses `application.html.slim` with `@no_tabs = true`. Remaining layouts (debug, setup, login) are genuinely different.
+**Fix:** Split NetworkController (→ SecurityController, RemoteAccessController, etc.), extract Docker engine to its own controller, use service objects for business logic.
+
+### SSE Streaming Duplication
+10 streaming endpoints across 5 controllers, all copy-pasting the same boilerplate (headers, Enumerator, sse_send lambda, dev simulation, error handling). ~300 lines of duplication.
+
+**Fix:** Extract `StreamingConcern` with `stream_sse { |send| ... }` helper. **IN PROGRESS**
+
+### Shell.run in Controllers
+30 `Shell.run` / `Shell.capture` calls directly in controllers. Business logic should be in service objects or models.
+
+**Fix:** Extract to service objects as controllers are refactored.
+
+### Bare Rescues
+29 `rescue => e` catching everything in app/, 11 in lib/. Should be narrowed to specific exceptions.
+
+---
+
+## Medium Priority
+
+### Share Model (420 lines)
+Does too much: Samba config, Greyhole config, system commands, validation. Service objects exist (ShareFileSystem, SambaService, ShareAccessManager) but model still has direct logic.
+
+### Inline JS in Views
+8 `<script>` blocks in views (Docker toggle, install terminal, onclick handlers). Should be Stimulus controllers.
 
 ### Mixed View Formats
-Some views are `.html.slim`, others `.html.erb`. Not a bug, just inconsistent. Consolidated plugin views kept their original format. Pick one and migrate over time.
+Some views `.html.slim`, others `.html.erb`. Not a bug, just inconsistent. Pick one over time.
 
-### Platform Model
-`app/models/platform.rb` — methods like `Platform.reload` that restart services. Now uses Shell internally, but some controllers still call `Shell.run("systemctl ...")` directly instead of going through Platform. Minor inconsistency.
+### Missing Model Validations
+`cap_access`, `cap_writer`, `db`, `theme`, `user_session` have zero validations. Some are fine (join tables) but worth auditing.
 
----
+### Platform Model Overlap
+`Platform.reload` restarts services, but controllers also call `Shell.run("systemctl ...")` directly. Two paths to the same thing.
 
-## Low Priority (dead code / cosmetic)
-
-### ~~Plugin Model~~ ✅ DELETED
-### ~~amahi_plugins.rb~~ ✅ DELETED
-### ~~Plugin generator~~ ✅ DELETED
-### ~~plugins/ directory~~ ✅ DELETED
-All removed 2026-02-26 (474 lines). DB `plugins` table still exists but harmless.
-
-### ~~/var/hda/ Legacy Paths~~ ✅ DONE
-Migrated to `/var/lib/amahi-kai/` across 20 files (2026-02-26). Constants: `AMAHI_DATA_DIR`, `AMAHI_TMP_DIR`.
-
-### ~~use_sample_data?~~ ✅ DELETED
-Removed along with SampleData class. Controllers now use real system data with rescue fallbacks for CI.
-
-### Server Model
-`app/models/server.rb` — monit-style service monitoring from old Amahi. Works but overlaps with dashboard's `systemctl` status checks. Two systems doing similar things.
+### Server Model Overlap
+Monit-style service monitoring overlaps with dashboard's `systemctl` status checks.
 
 ---
 
-## Not Debt (intentional decisions)
+## Low Priority
 
-- **Sprockets over Propshaft** — blocked by Bootstrap gem dependency. Not urgent.
-- **Sleep calls in SSE streams** — intentional pacing for streaming output. Not waste.
-- **Sleep in login failure** — timing attack prevention. Keep it.
-- **`after_commit` for push_shares** — moved out of transaction intentionally to prevent rollback issues.
+### Route Audit
+137 routes — likely some dead ones. Audit for unused routes.
+
+### JS → Stimulus Migration
+8 plain JS files using global functions. Could be Stimulus controllers for better lifecycle.
+
+### View Extraction
+Several views over 150 lines that could use partials:
+- `setup.html.erb` layout (330 lines)
+- `remote_access.html.erb` (203 lines)
+- `system_status.html.slim` (187 lines)
+
+---
+
+## Not Debt (intentional)
+
+- **Sprockets over Propshaft** — blocked by Bootstrap gem dependency
+- **Sleep in SSE streams** — intentional pacing for streaming output
+- **Sleep in login failure** — timing attack prevention
+- **`after_commit` for push_shares** — prevents rollback issues
