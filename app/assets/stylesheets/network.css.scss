@@ -13,3 +13,18 @@ form #host_address {
 #update-gateway-form .control-group input[type=text] {
   width: 25px;
 }
+
+/* Security audit status badges */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 16px;
+  font-weight: bold;
+}
+.status-pass { background: #d4edda; color: #155724; }
+.status-warn { background: #fff3cd; color: #856404; }
+.status-fail { background: #f8d7da; color: #721c24; }

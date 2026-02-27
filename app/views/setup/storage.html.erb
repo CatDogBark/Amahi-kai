@@ -27,7 +27,7 @@
                    <%= 'checked' if @pool_paths.include?(part[:path]) || @pool_paths.include?(part[:mountpoint]) %>>
             <label for="drive_<%= part[:path].gsub('/', '_') %>" style="display: inline; margin: 0; cursor: pointer; flex: 1;">
               <span class="drive-path"><%= device[:model] %></span>
-              <span style="color: #7f8c9b; font-size: 13px; margin-left: 6px;">
+              <span class="setup-muted" style="font-size: 13px; margin-left: 6px;">
                 (<%= part[:path] %>)
               </span>
             </label>
@@ -35,35 +35,35 @@
             <div style="width: 100%; margin-left: 30px; margin-top: 4px; font-size: 12px;">
               <% case part[:status] %>
               <% when :mounted %>
-                <span style="color: #10b981;">✓ Mounted at <%= part[:mountpoint] %></span>
-                <span style="color: #7f8c9b; margin-left: 8px;"><%= part[:fstype] %></span>
+                <span class="setup-success">✓ Mounted at <%= part[:mountpoint] %></span>
+                <span class="setup-muted" style="margin-left: 8px;"><%= part[:fstype] %></span>
               <% when :unmounted %>
                 <% supported_fs = %w[ext2 ext3 ext4 xfs btrfs] %>
                 <% fs_supported = supported_fs.include?(part[:fstype].to_s.downcase) %>
-                <span style="color: #f59e0b;">⚠ Has existing <%= part[:fstype] %> filesystem (may contain data)</span>
-                <a href="#" style="color: #0d8aa8; margin-left: 8px; font-size: 12px;"
+                <span class="setup-warning">⚠ Has existing <%= part[:fstype] %> filesystem (may contain data)</span>
+                <a href="#" class="setup-link" style="margin-left: 8px; font-size: 12px;"
                    onclick="previewDrive('<%= part[:path] %>'); return false;">Preview contents</a>
                 <div style="margin-top: 4px;">
                   <% unless fs_supported %>
-                    <span style="font-size: 12px; color: #7f8c9b;">
+                    <span class="setup-muted" style="font-size: 12px;">
                       📂 Will be mounted as a standalone share (not pooled — <%= part[:fstype] %> doesn't support Greyhole)
                     </span>
                     <div style="margin-top: 2px;">
-                      <label style="font-size: 12px; display: inline; cursor: pointer; color: #ef4444;">
+                      <label class="setup-danger" style="font-size: 12px; display: inline; cursor: pointer;">
                         <input type="checkbox" name="format_drives[]" value="<%= part[:path] %>" style="margin-right: 4px;">
                         Format as ext4 instead (erases all data, enables pooling)
                       </label>
                     </div>
                   <% else %>
-                    <label style="font-size: 12px; display: inline; cursor: pointer; color: #7f8c9b;">
+                    <label class="setup-muted" style="font-size: 12px; display: inline; cursor: pointer;">
                       <input type="checkbox" name="format_drives[]" value="<%= part[:path] %>" style="margin-right: 4px;">
                       Format as ext4 (erases all data)
                     </label>
-                    <span style="font-size: 11px; color: #9ca3af; margin-left: 4px;">— or leave unchecked to mount as-is</span>
+                    <span class="setup-hint" style="font-size: 11px; margin-left: 4px;">— or leave unchecked to mount as-is</span>
                   <% end %>
                 </div>
               <% when :unformatted %>
-                <span style="color: #ef4444;">⊘ No filesystem — will be formatted (ext4) and mounted</span>
+                <span class="setup-danger">⊘ No filesystem — will be formatted (ext4) and mounted</span>
               <% end %>
             </div>
           </div>
@@ -71,7 +71,7 @@
       <% end %>
     </div>
 
-    <p style="font-size: 12px; color: #9ca3af; margin-top: 4px;">
+    <p class="setup-hint" style="font-size: 12px; margin-top: 4px;">
       ⚠️ Formatting a drive erases all data on it. Only unformatted drives will be formatted.
     </p>
 
@@ -81,7 +81,7 @@
     </div>
   <% end %>
 <% else %>
-  <div style="text-align: center; padding: 20px; color: #7f8c9b;">
+  <div class="setup-muted" style="text-align: center; padding: 20px;">
     <p>No additional drives detected beyond your OS disk.</p>
     <p style="font-size: 13px;">You can add drives later from the Shares settings.</p>
   </div>

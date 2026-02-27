@@ -14,29 +14,29 @@
   <p style="max-width: 400px; margin: 0 auto 24px;">
     Your home server is almost ready. Let's walk through a few quick steps to get everything configured.
   </p>
-  <p style="color: #7f8c9b; font-size: 13px; margin-bottom: 24px;">
+  <p class="setup-muted" style="font-size: 13px; margin-bottom: 24px;">
     This will only take a couple of minutes.
   </p>
 
   <%# System Memory Check %>
   <div style="max-width: 420px; margin: 0 auto 24px; text-align: left; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 16px;">
-    <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px; color: #cdd6e0;">
+    <div class="setup-label" style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">
       🖥️ System Memory
     </div>
-    <div style="display: flex; justify-content: space-between; font-size: 13px; color: #7f8c9b; margin-bottom: 4px;">
+    <div class="setup-muted" style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px;">
       <span>RAM</span>
-      <span style="color: #cdd6e0;"><%= number_to_human_size(@memory[:total_mb] * 1024 * 1024, precision: 1) %></span>
+      <span class="setup-label"><%= number_to_human_size(@memory[:total_mb] * 1024 * 1024, precision: 1) %></span>
     </div>
-    <div style="display: flex; justify-content: space-between; font-size: 13px; color: #7f8c9b; margin-bottom: 12px;">
+    <div class="setup-muted" style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 12px;">
       <span>Swap</span>
       <% if @memory[:has_swap] %>
-        <span style="color: #5cb85c;"><%= number_to_human_size(@memory[:swap_mb] * 1024 * 1024, precision: 1) %> ✓</span>
+        <span class="setup-success"><%= number_to_human_size(@memory[:swap_mb] * 1024 * 1024, precision: 1) %> ✓</span>
       <% else %>
-        <span style="color: #d9534f;">None</span>
+        <span class="setup-danger">None</span>
       <% end %>
     </div>
     <% if @memory[:needs_swap] %>
-      <div style="background: rgba(217, 83, 79, 0.1); border: 1px solid rgba(217, 83, 79, 0.3); border-radius: 6px; padding: 10px; margin-bottom: 10px; font-size: 12px; color: #e8a09c;">
+      <div class="setup-danger-box" style="padding: 10px; margin-bottom: 10px; font-size: 12px;">
         <strong>Recommended:</strong> Create a <%= @memory[:recommended_swap] %> swap file.
         Systems with less than 8 GB RAM can run out of memory during heavy operations.
       </div>
@@ -44,11 +44,11 @@
               onclick="openInstallTerminal('swap-setup', '<%= setup_create_swap_path %>?size=<%= @memory[:recommended_swap] %>')">
         Create <%= @memory[:recommended_swap] %> Swap File
       </button>
-      <div id="swap-success" style="display: none; text-align: center; margin-top: 8px; font-size: 12px; color: #5cb85c;">
+      <div id="swap-success" class="setup-success" style="display: none; text-align: center; margin-top: 8px; font-size: 12px;">
         ✓ Swap file created and enabled
       </div>
     <% elsif @memory[:has_swap] %>
-      <div style="font-size: 12px; color: #5cb85c;">✓ Memory looks good</div>
+      <div class="setup-success" style="font-size: 12px;">✓ Memory looks good</div>
     <% end %>
   </div>
 

@@ -215,6 +215,29 @@
     .summary-item .check { color: #10b981; margin-right: 10px; font-size: 18px; }
     .summary-item .skip { color: #9ca3af; margin-right: 10px; font-size: 18px; }
 
+    /* ── Setup utility classes ── */
+    .setup-muted { color: var(--setup-muted, #7f8c9b); }
+    .setup-label { color: var(--setup-label, #cdd6e0); }
+    .setup-success { color: var(--setup-success, #5cb85c); }
+    .setup-danger { color: var(--setup-danger, #ef4444); }
+    .setup-warning { color: var(--setup-warning, #f59e0b); }
+    .setup-link { color: var(--setup-link, #0d8aa8); }
+    .setup-hint { color: var(--setup-hint, #9ca3af); }
+    .setup-danger-box {
+      background: rgba(217, 83, 79, 0.1);
+      border: 1px solid rgba(217, 83, 79, 0.3);
+      border-radius: 6px;
+      color: var(--setup-danger-box, #e8a09c);
+    }
+    .status-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px; border-radius: 50%;
+      font-size: 16px; font-weight: bold;
+    }
+    .status-pass { background: var(--status-pass-bg, #d4edda); color: var(--status-pass-fg, #155724); }
+    .status-warn { background: var(--status-warn-bg, #fff3cd); color: var(--status-warn-fg, #856404); }
+    .status-fail { background: var(--status-fail-bg, #f8d7da); color: var(--status-fail-fg, #721c24); }
+
     /* ── Dark mode ── */
     @media (prefers-color-scheme: dark) {
       body.setup { background: transparent; }
