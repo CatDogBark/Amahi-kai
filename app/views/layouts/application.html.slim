@@ -10,7 +10,7 @@ html[dir="#{@locale_direction}" lang="#{I18n.locale}" xml:lang="#{I18n.locale}"]
 
     = stylesheet_link_tag 'application'
 
-    - if theme.name != "default" and theme.disable_inheritance == false
+    - if !theme.default? && !theme.disable_inheritance
       = stylesheet_link_tag(theme_stylesheet_path('style', theme.default))
       = stylesheet_link_tag(theme_stylesheet_path('rtl', theme.default)) if rtl?
 

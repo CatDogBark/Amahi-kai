@@ -15,7 +15,7 @@ def theme_init
 	ret[:name] = "Sidebar"
 	ret[:version] = "2.0"
 	ret[:theme_uri] = "https://github.com/CatDogBark/Amahi-kai"
-	ret[:author] = "Originally by Solomon Seal (slm4996) for Amahi, updated for Amahi-kai"
+	ret[:author] = "Originally by Solomon Seal (slm4996) for Amahi, updated for Amahi-kai. Inherits from Amahi-kai Ocean theme."
 	ret[:author_uri] = ""
 	ret[:disable_inheritance] = false
 	ret[:gruff_theme] = {

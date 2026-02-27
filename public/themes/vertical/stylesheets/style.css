@@ -8,16 +8,16 @@
 #tabs {
   width: 145px;
   float: left;
-  border: 1px solid var(--classic-tab-border, #e2e8f0);
-  border-bottom-color: var(--classic-border, #e2e8f0);
+  border: 1px solid var(--kai-border, #e2e8f0);
+  border-bottom-color: var(--kai-border, #e2e8f0);
   border-radius: 5px 0 0 5px;
-  background: linear-gradient(to bottom, var(--classic-card-bg, #ffffff), var(--classic-tab-bg, #f7fafc));
+  background: linear-gradient(to bottom, var(--kai-card-bg, #ffffff), var(--kai-light, #f7fafc));
 }
 
 #preferences {
   width: 760px;
   float: left;
-  border: 1px solid var(--classic-tab-border, #e2e8f0);
+  border: 1px solid var(--kai-border, #e2e8f0);
   border-radius: 0 5px 5px 0px;
 }
 
@@ -121,11 +121,11 @@ nav.preftab li ul li > a {
 }
 
 .setup-main-tab {
-  border-bottom: 1px solid var(--classic-subtab-border, #e2e8f0) !important;
+  border-bottom: 1px solid var(--kai-border, #e2e8f0) !important;
 }
 
 .setup-subtab-container {
-  background: var(--classic-tab-bg, #f7fafc);
+  background: var(--kai-light, #f7fafc);
 }
 
 .all-subtab-container {
@@ -144,7 +144,7 @@ nav.preftab li ul li > a {
   width: 100%;
   margin-left: -2px;
   margin-bottom: -1px;
-  border: 1px solid var(--classic-tab-bg, #f7fafc);
+  border: 1px solid var(--kai-light, #f7fafc);
   display: inline-block;
   border-radius: 0px;
 }
@@ -153,7 +153,7 @@ nav.preftab li ul li > a {
   border-radius: 0px;
   margin-left: -2px;
   margin-top: 0px;
-  border: 1px solid var(--classic-border, #e2e8f0);
+  border: 1px solid var(--kai-border, #e2e8f0);
 }
 
 .active-subtab-link {
@@ -162,15 +162,15 @@ nav.preftab li ul li > a {
   font-size: 11px;
   margin-left: -2px;
   margin-bottom: -1px;
-  border: 1px solid var(--classic-border, #e2e8f0);
+  border: 1px solid var(--kai-border, #e2e8f0);
   border-radius: 0px;
   display: inline-block;
-  background: var(--classic-card-bg, #ffffff);
+  background: var(--kai-card-bg, #ffffff);
 }
 
 .active-subtab-link:hover {
   border-radius: 0px;
-  border: 1px solid var(--classic-border, #e2e8f0);
+  border: 1px solid var(--kai-border, #e2e8f0);
 }
 
 .setup-main-tab .nav-item {
@@ -231,37 +231,37 @@ nav.preftab li ul li > a {
 
 @media (prefers-color-scheme: dark) {
   #tabs {
-    background: linear-gradient(to bottom, var(--classic-card-bg), var(--classic-tab-bg));
-    border-color: var(--classic-tab-border);
+    background: linear-gradient(to bottom, var(--kai-card-bg), var(--kai-light));
+    border-color: var(--kai-border);
   }
 
   #preferences {
-    border-color: var(--classic-tab-border);
+    border-color: var(--kai-border);
   }
 
   .setup-subtab-container {
-    background: var(--classic-tab-bg);
+    background: var(--kai-light);
   }
 
   .subtab-link {
-    border-color: var(--classic-tab-bg);
+    border-color: var(--kai-light);
   }
 
   .subtab-link:hover {
-    border-color: var(--classic-border);
+    border-color: var(--kai-border);
   }
 
   .active-subtab-link {
-    border-color: var(--classic-border);
-    background: var(--classic-card-bg);
+    border-color: var(--kai-border);
+    background: var(--kai-card-bg);
   }
 
   .active-subtab-link:hover {
-    border-color: var(--classic-border);
+    border-color: var(--kai-border);
   }
 
   .setup-main-tab {
-    border-bottom-color: var(--classic-subtab-border) !important;
+    border-bottom-color: var(--kai-border) !important;
   }
 }
 
