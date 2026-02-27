@@ -1,5 +1,6 @@
 require 'shell'
 require 'shellwords'
+require 'swap_service'
 
 class SetupController < ApplicationController
   include SseStreaming
@@ -28,27 +29,11 @@ class SetupController < ApplicationController
         next
       end
 
-      sse.send("Creating #{size} swap file...")
-      result = Shell.run("fallocate -l #{size} /swapfile 2>/dev/null || sudo dd if=/dev/zero of=/swapfile bs=1M count=#{size.to_i * 1024} status=none")
-      unless result
+      success = SwapService.create!(size) { |msg| sse.send(msg) }
+      unless success
         sse.send("✗ Failed to create swap file. Check disk space.")
         sse.done("error")
         next
-      end
-
-      sse.send("Setting permissions...")
-      Shell.run("chmod 600 /swapfile")
-
-      sse.send("Setting up swap space...")
-      Shell.run("mkswap /swapfile > /dev/null 2>&1")
-
-      sse.send("Enabling swap...")
-      Shell.run("swapon /swapfile")
-
-      sse.send("Adding to /etc/fstab for persistence...")
-      fstab = File.read('/etc/fstab') rescue ''
-      unless fstab.include?('/swapfile')
-        Shell.run("sh -c \"echo '/swapfile none swap sw 0 0' >> /etc/fstab\"")
       end
 
       sse.send("✓ Swap enabled! #{size} swap file is active and persistent.")
@@ -95,8 +80,7 @@ class SetupController < ApplicationController
     unless name.blank?
       Setting.set('server-name', name)
       # Actually change the system hostname
-      esc_name = Shellwords.escape(name)
-      Shell.run("hostnamectl set-hostname #{esc_name}")
+      Platform.set_hostname!(name)
     end
     redirect_to setup_storage_path
   end

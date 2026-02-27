@@ -70,12 +70,12 @@ class SettingsController < ApplicationController
   end
 
   def reboot
-    Shell.run("reboot")
+    Platform.reboot!
     render plain: t('rebooting')
   end
 
   def poweroff
-    Shell.run("poweroff")
+    Platform.poweroff!
     render plain: t('powering_off')
   end
 

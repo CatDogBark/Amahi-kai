@@ -44,7 +44,7 @@ describe "Apps Controller", type: :request, integration: true do
       it "starts docker and redirects to docker apps" do
         allow(DockerService).to receive(:start!)
         post "/apps/start_docker"
-        expect(response).to redirect_to("/apps/docker_apps")
+        expect(response).to redirect_to("/apps")
       end
     end
 

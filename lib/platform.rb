@@ -145,6 +145,18 @@ class Platform
       )
     end
 
+    def set_hostname!(name)
+      Shell.run("hostnamectl set-hostname #{Shellwords.escape(name)}")
+    end
+
+    def reboot!
+      Shell.run("reboot")
+    end
+
+    def poweroff!
+      Shell.run("poweroff")
+    end
+
     def platform_versions
       { platform: 'amahi-kai', core: 'shell' }
     end

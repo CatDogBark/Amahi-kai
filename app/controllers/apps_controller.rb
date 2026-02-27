@@ -2,6 +2,7 @@
 # Copyright (C) 2007-2013 Amahi
 
 require 'shell'
+require 'docker_app_installer'
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License v3
 # (29 June 2007), as published in the COPYING file.
@@ -269,98 +270,20 @@ class AppsController < ApplicationController
           )
           docker_app.save!
 
-          # Create init files (config files that must exist before container starts)
-          # Always overwrite on reinstall to ensure correct config
-          (entry[:init_files] || []).each do |init|
-            host_path = init[:host] || init['host']
-            content = init[:content] || init['content']
-            sse.send("Creating config #{host_path}...")
-            Shell.run("mkdir -p #{Shellwords.escape(File.dirname(host_path))}")
-            staged = "/tmp/amahi-staging/#{File.basename(host_path)}"
-            FileUtils.mkdir_p('/tmp/amahi-staging')
-            File.write(staged, content)
-            Shell.run("cp #{Shellwords.escape(staged)} #{Shellwords.escape(host_path)}")
-          end
+          reporter = ->(msg) { sse.send(msg) }
 
-          # Create volume directories (world-writable so containers with non-root users can write)
-          # Also fix permissions on existing dirs from previous installs
-          (entry[:volumes] || []).each do |mapping|
-            host_path = mapping.is_a?(String) ? mapping.split(':').first : mapping.values.first
-            next if host_path.start_with?('/var/run/') # skip system paths
-            sse.send("Creating directory #{host_path}...")
-            Shell.run("mkdir -p #{Shellwords.escape(host_path)}")
-            Shell.run("chmod -R 777 #{Shellwords.escape(host_path)}")
-            # chown to match container user if specified
-            if entry[:user].present?
-              sse.send("  Setting ownership to UID #{entry[:user]}...")
-              Shell.run("chown -R #{Shellwords.escape(entry[:user].to_s)}:#{Shellwords.escape(entry[:user].to_s)} #{Shellwords.escape(host_path)}")
-            end
-          end
+          DockerAppInstaller.create_init_files(entry[:init_files], reporter: reporter)
+          DockerAppInstaller.create_volumes(entry[:volumes], user: entry[:user], reporter: reporter)
+          DockerAppInstaller.pull_image(image, reporter: reporter)
 
-          # Pull image with progress
-          sse.send("Pulling image #{image}...")
-          IO.popen("sudo docker pull #{image} 2>&1") do |io|
-            io.each_line { |line| sse.send("  #{line.chomp}") }
-          end
-          unless $?.success?
-            raise "Failed to pull image #{image}"
-          end
-          sse.send("  ✓ Pull complete")
-
-          # Remove old container if it exists (from a previous failed install)
           docker_app.update!(status: 'installing')
-          container_name = "amahi-#{identifier}"
-          Shell.run("docker rm -f #{Shellwords.escape(container_name)} 2>/dev/null")
-
-          cmd_parts = ["sudo", "docker", "create", "--name", container_name, "--restart", "unless-stopped"]
-
-          # Port mappings
-          (entry[:ports] || {}).each do |container_port, host_port|
-            cmd_parts += ["-p", "#{host_port}:#{container_port}"]
-          end
-
-          # Volume mappings
-          (entry[:volumes] || []).each do |mapping|
-            if mapping.is_a?(String)
-              cmd_parts += ["-v", mapping]
-            else
-              mapping.each { |cp, hp| cmd_parts += ["-v", "#{hp}:#{cp}"] }
-            end
-          end
-
-          # Init file bind mounts (only if container path is specified)
-          (entry[:init_files] || []).each do |init|
-            host_path = init[:host] || init['host']
-            container_path = init[:container] || init['container']
-            next unless container_path.present?
-            cmd_parts += ["-v", "#{host_path}:#{container_path}"]
-          end
-
-          # Environment
-          (entry[:environment] || {}).each do |key, val|
-            cmd_parts += ["-e", "#{key}=#{val}"]
-          end
-
-          # Extra docker args (e.g., --user, --network)
-          (entry[:docker_args] || []).each do |arg|
-            cmd_parts << arg.to_s
-          end
-
-          # Labels
-          cmd_parts += ["-l", "amahi.managed=true", "-l", "amahi.app=#{identifier}"]
-          cmd_parts << image
-
-          sse.send("Creating container #{container_name}...")
-          create_cmd = cmd_parts.map { |p| Shellwords.escape(p) }.join(' ')
-          result = `#{create_cmd} 2>&1`
-          sse.send("  #{result.strip}") if result.present?
-
-          unless $?.success?
-            raise "Failed to create container"
-          end
-
-          sse.send("Starting container...")
-          Shell.run("docker start #{container_name} 2>/dev/null")
+          container_name = DockerAppInstaller.create_container(
+            identifier: identifier,
+            image: image,
+            entry: entry,
+            reporter: reporter
+          )
+          DockerAppInstaller.start_container(container_name, reporter: reporter)
 
           first_port = (entry[:ports] || {}).values.first
           docker_app.update!(

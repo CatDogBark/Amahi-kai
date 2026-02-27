@@ -261,8 +261,8 @@ class DisksController < ApplicationController
 
         # Try starting greyhole — non-fatal if it fails (needs config first)
         sse.send("Starting Greyhole service...")
-        Shell.run("systemctl start greyhole.service 2>/dev/null")
-        if Shell.run("systemctl is-active --quiet greyhole")
+        Greyhole.start!
+        if Greyhole.running?
           sse.send("  ✓ Greyhole is running")
         else
           sse.send("  ⚠ Service not started — configure storage pool drives first")

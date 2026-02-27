@@ -3,6 +3,7 @@
 
 require 'leases'
 require 'shell'
+require 'dnsmasq_service'
 
 class NetworkController < ApplicationController
   include SseStreaming
@@ -86,7 +87,7 @@ class NetworkController < ApplicationController
     case params[:setting_dns]
     when 'cloudflare', 'google', 'custom'
       @saved = Setting.set("dns", params[:setting_dns], KIND)
-      Shell.run("systemctl restart dnsmasq.service")
+      DnsmasqService.restart!
     else
       @saved = true
     end
@@ -98,7 +99,7 @@ class NetworkController < ApplicationController
       @ip_1_saved = DnsIpSetting.set("dns_ip_1", params[:dns_ip_1], KIND)
       @ip_2_saved = DnsIpSetting.set("dns_ip_2", params[:dns_ip_2], KIND)
       Setting.set("dns", 'custom', KIND)
-      Shell.run("systemctl restart dnsmasq.service")
+      DnsmasqService.restart!
     end
     if @ip_1_saved && @ip_2_saved
       render json: { status: :ok }
@@ -110,7 +111,7 @@ class NetworkController < ApplicationController
   def update_lease_time
     @saved = params[:lease_time].present? && params[:lease_time].to_i > 0 ? Setting.set("lease_time", params[:lease_time], KIND) : false
     render json: { status: @saved ? :ok : :not_acceptable }
-    Shell.run("systemctl restart dnsmasq.service")
+    DnsmasqService.restart!
   end
 
   def update_gateway
@@ -129,7 +130,7 @@ class NetworkController < ApplicationController
     s.value = (1 - s.value.to_i).to_s
     if s.save
       render json: { status: 'ok' }
-      Shell.run("systemctl restart dnsmasq.service")
+      DnsmasqService.restart!
     else
       render json: { status: 'error' }
     end
@@ -147,7 +148,7 @@ class NetworkController < ApplicationController
     if @saved
       Setting.set("dyn_lo", dyn_lo, KIND)
       Setting.set("dyn_hi", dyn_hi, KIND)
-      Shell.run("systemctl restart dnsmasq.service")
+      DnsmasqService.restart!
       render json: { status: :ok }
     else
       render json: { status: :not_acceptable }
@@ -161,8 +162,8 @@ class NetworkController < ApplicationController
       redirect_to network_index_path
       return
     end
-    @dnsmasq_installed = File.exist?('/usr/sbin/dnsmasq')
-    @dnsmasq_running = @dnsmasq_installed && `systemctl is-active dnsmasq 2>/dev/null`.strip == 'active'
+    @dnsmasq_installed = DnsmasqService.installed?
+    @dnsmasq_running = DnsmasqService.running?
     @net = Setting.get('net') || '192.168.1'
     @gateway_ip = Setting.find_or_create_by(KIND, 'gateway', '1').value
     @dnsmasq_dhcp = Setting.find_or_create_by(KIND, 'dnsmasq_dhcp', '1')
@@ -224,8 +225,7 @@ class NetworkController < ApplicationController
 
         if success
           sse.send("Stopping dnsmasq (safe until configured)...")
-          Shell.run("systemctl stop dnsmasq.service 2>/dev/null")
-          Shell.run("systemctl disable dnsmasq.service 2>/dev/null")
+          DnsmasqService.stop!
           sse.send("  ✓ Stopped and disabled (configure settings, then start)")
 
           sse.send("")
@@ -240,14 +240,12 @@ class NetworkController < ApplicationController
   end
 
   def start_dnsmasq
-    Shell.run("systemctl enable dnsmasq.service 2>/dev/null")
-    Shell.run("systemctl start dnsmasq.service 2>/dev/null")
+    DnsmasqService.start!
     redirect_to network_gateway_path
   end
 
   def stop_dnsmasq
-    Shell.run("systemctl stop dnsmasq.service 2>/dev/null")
-    Shell.run("systemctl disable dnsmasq.service 2>/dev/null")
+    DnsmasqService.stop!
     redirect_to network_gateway_path
   end
 
@@ -267,36 +265,17 @@ class NetworkController < ApplicationController
     gateway = params[:gateway] || Setting.get("gateway") || "1"
     lease_time = (params[:lease_time] || Setting.get("lease_time") || "14400").to_i
 
-    config_lines = []
-    config_lines << "# Amahi-kai dnsmasq configuration"
-    config_lines << "# Auto-generated — do not edit manually"
-    config_lines << ""
-
-    if dhcp_enabled
-      config_lines << "dhcp-range=#{net}.#{dyn_lo},#{net}.#{dyn_hi},#{lease_time}s"
-      config_lines << "dhcp-option=option:router,#{net}.#{gateway}"
-      config_lines << "dhcp-authoritative"
-    end
-
-    if dns_enabled
-      config_lines << "local=/#{Setting.get('domain') || 'local'}/"
-      config_lines << "expand-hosts"
-      config_lines << "domain=#{Setting.get('domain') || 'local'}"
-    end
-
-    config_lines << "bind-interfaces"
-    config_lines << "except-interface=lo"
-
     begin
-      staged = "/tmp/amahi-staging/dnsmasq-amahi.conf"
-      FileUtils.mkdir_p('/tmp/amahi-staging')
-      File.write(staged, config_lines.join("\n") + "\n")
-      Shell.run("cp #{staged} /etc/dnsmasq.d/amahi.conf")
-
-      if `systemctl is-active dnsmasq 2>/dev/null`.strip == 'active'
-        Shell.run("systemctl restart dnsmasq.service")
-      end
-
+      DnsmasqService.write_config!(
+        net: net,
+        dyn_lo: dyn_lo,
+        dyn_hi: dyn_hi,
+        gateway: gateway,
+        lease_time: lease_time,
+        domain: Setting.get('domain') || 'local',
+        dhcp_enabled: dhcp_enabled,
+        dns_enabled: dns_enabled
+      )
       flash[:notice] = "Configuration saved"
       redirect_to network_gateway_path
     rescue StandardError => e
