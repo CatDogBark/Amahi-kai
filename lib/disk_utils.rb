@@ -81,8 +81,8 @@ class DiskUtils
     end
 
     def smartctl_temp(device)
-      output = `smartctl -A #{Shellwords.escape(device)} 2>/dev/null`
-      # Look for temperature in smartctl output
+      # smartctl needs sudo for SMART data; timeout to avoid hangs
+      output = `timeout 5 sudo smartctl -A #{Shellwords.escape(device)} 2>/dev/null`
       match = output.match(/Temperature_Celsius.*?(\d+)\s*$/) ||
               output.match(/Current Drive Temperature:\s*(\d+)/) ||
               output.match(/Temperature:\s*(\d+)/)

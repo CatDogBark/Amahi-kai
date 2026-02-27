@@ -454,6 +454,7 @@ amahi ALL=(root) NOPASSWD: /usr/bin/systemctl status docker
 
 # Docker container management (app install/uninstall/start/stop)
 amahi ALL=(root) NOPASSWD: /usr/bin/docker
+amahi ALL=(root) NOPASSWD: /usr/sbin/smartctl
 
 # Cloudflare Tunnel
 amahi ALL=(root) NOPASSWD: /usr/bin/cloudflared
