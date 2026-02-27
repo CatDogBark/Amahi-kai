@@ -124,8 +124,9 @@ class Platform
       "/usr/bin/systemctl disable #{service_name(name)}.service"
     end
 
+    # Monit removed — method kept as no-op for any remaining callers
     def watchdog_restart_command
-      "systemctl restart monit.service"
+      "true"  # no-op
     end
 
     def make_admin(username, is_admin)

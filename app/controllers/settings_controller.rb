@@ -101,12 +101,6 @@ class SettingsController < ApplicationController
     render 'server_status'
   end
 
-  def toggle_monitored
-    @server = Server.find(params[:id])
-    @server.toggle!(:monitored)
-    render 'server_status'
-  end
-
   def toggle_start_at_boot
     @server = Server.find(params[:id])
     @server.toggle!(:start_at_boot)

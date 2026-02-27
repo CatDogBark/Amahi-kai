@@ -62,7 +62,7 @@ Rails.application.routes.draw do
     match 'servers/:id/start', action: 'start', as: 'start', via: %i[get post]
     match 'servers/:id/stop', action: 'stop', as: 'stop', via: %i[get post]
     match 'servers/:id/restart', action: 'restart', as: 'restart', via: %i[get post]
-    match 'servers/:id/toggle_monitored', action: 'toggle_monitored', as: 'toggle_monitored', via: %i[get post put]
+    # monit monitoring removed — toggle_monitored route deleted
     match 'servers/:id/toggle_start_at_boot', action: 'toggle_start_at_boot', as: 'toggle_start_at_boot', via: %i[get post put]
     match 'themes', action: 'themes', via: %i[get post]
     match 'activate_theme', action: 'activate_theme', via: %i[get post]
