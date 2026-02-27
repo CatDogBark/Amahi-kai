@@ -106,7 +106,7 @@
                 <td><%= number_to_human_size(part[:bytes_free]) %></td>
                 <td>
                   <% checked = pool_paths.include?(part[:path]) %>
-                  <%= render partial: 'share/disk_pooling_partition_checkbox',
+                  <%= render partial: 'shares/disk_pooling_partition_checkbox',
                              locals: { checked: checked, path: part[:path] } %>
                 </td>
               </tr>

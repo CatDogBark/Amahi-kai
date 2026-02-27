@@ -5,6 +5,12 @@ ruby:
       { id: 'index', label: 'details', url: '/shares' },
       { id: 'settings', label: 'settings', url: '/shares/settings', advanced: true }
     ]},
+    { id: 'disks', label: 'disks', url: '/disks', subtabs: [
+      { id: 'index', label: 'disks', url: '/disks' },
+      { id: 'devices', label: 'devices', url: '/disks/devices' },
+      { id: 'mounts', label: 'mounts', url: '/disks/mounts' },
+      { id: 'storage_pool', label: 'storage_pool', url: '/disks/storage_pool' }
+    ]},
     { id: 'network', label: 'network', url: '/network', advanced: true, subtabs: [
       { id: 'index', label: 'leases', url: '/network' },
       { id: 'hosts', label: 'hosts', url: '/network/hosts' },
@@ -13,12 +19,6 @@ ruby:
       { id: 'settings', label: 'settings', url: '/network/settings', advanced: true },
       { id: 'remote_access', label: 'remote_access', url: '/network/remote_access' },
       { id: 'security', label: 'security', url: '/network/security' }
-    ]},
-    { id: 'disks', label: 'disks', url: '/disks', subtabs: [
-      { id: 'index', label: 'disks', url: '/disks' },
-      { id: 'devices', label: 'devices', url: '/disks/devices' },
-      { id: 'mounts', label: 'mounts', url: '/disks/mounts' },
-      { id: 'storage_pool', label: 'storage_pool', url: '/disks/storage_pool' }
     ]},
     { id: 'apps', label: 'apps', url: '/apps', subtabs: [
       { id: 'docker_apps', label: 'available', url: '/apps' },
