@@ -60,6 +60,9 @@ class FileBrowserController < ApplicationController
     end
 
     render json: { status: 'ok', uploaded: uploaded, count: uploaded.size }
+  rescue StandardError => e
+    Rails.logger.error("FileBrowser#upload ERROR: #{e.class}: #{e.message}\n#{e.backtrace&.first(5)&.join("\n")}")
+    render json: { error: e.message }, status: :internal_server_error
   end
 
   # POST /files/:share_id/new_folder
@@ -76,6 +79,9 @@ class FileBrowserController < ApplicationController
 
     FileUtils.mkdir_p(folder_path)
     render json: { status: 'ok', name: name }
+  rescue StandardError => e
+    Rails.logger.error("FileBrowser#new_folder ERROR: #{e.class}: #{e.message}\n#{e.backtrace&.first(5)&.join("\n")}")
+    render json: { error: e.message }, status: :internal_server_error
   end
 
   # PUT /files/:share_id/rename
