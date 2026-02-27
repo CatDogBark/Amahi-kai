@@ -2288,6 +2288,28 @@ span#setting_dns select {
   }
 
   /* Forms */
+  .form-control,
+  .form-control:focus {
+    background-color: var(--classic-input-bg);
+    color: var(--classic-input-text);
+    border-color: var(--classic-input-border);
+  }
+
+  .form-control::placeholder {
+    color: var(--classic-muted);
+    opacity: 1;
+  }
+
+  fieldset.bg-white,
+  .create-form fieldset {
+    background-color: var(--classic-card-bg) !important;
+    border-color: var(--classic-fieldset-border);
+  }
+
+  .create-form legend {
+    color: var(--classic-legend-text, var(--classic-muted));
+  }
+
   .field_with_errors input {
     background-color: #553c00;
   }
