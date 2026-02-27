@@ -59,6 +59,8 @@ module SseStreaming
     # Convenience: send a "done" event with success/error status.
     def done(status = "success")
       send(status, event: "done")
+      # Send padding to flush any buffering proxies/middleware
+      @yielder << "\n"
     end
 
     # Convenience: send a step line (blue in terminal UI).
