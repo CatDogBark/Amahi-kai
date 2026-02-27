@@ -51,14 +51,31 @@ class DiskUtils
     private
 
     def lsblk_disks
-      output = `lsblk -dno NAME,MODEL,TYPE 2>/dev/null`.strip
+      # Use JSON output for reliable parsing (MODEL can be empty on virtual disks)
+      output = `lsblk -dno NAME,MODEL,TYPE -J 2>/dev/null`.strip
+      return lsblk_disks_fallback if output.empty?
+
+      data = JSON.parse(output) rescue (return lsblk_disks_fallback)
+      (data['blockdevices'] || []).filter_map do |dev|
+        next unless dev['type'] == 'disk'
+        {
+          device: "/dev/#{dev['name']}",
+          model: (dev['model']&.strip.presence || 'Virtual Disk')
+        }
+      end
+    end
+
+    # Fallback for systems without lsblk JSON support
+    def lsblk_disks_fallback
+      output = `lsblk -dno NAME,TYPE 2>/dev/null`.strip
       return [] if output.empty?
       output.split("\n").filter_map do |line|
-        fields = line.split(/\s+/, 3)
-        next unless fields[2]&.strip == 'disk'
+        name, type = line.split(/\s+/)
+        next unless type == 'disk'
+        model = `lsblk -dno MODEL /dev/#{name} 2>/dev/null`.strip
         {
-          device: "/dev/#{fields[0]}",
-          model: fields[1]&.gsub(/[^A-Za-z0-9\-_\s\.]/, '') || 'Unknown'
+          device: "/dev/#{name}",
+          model: model.presence || 'Virtual Disk'
         }
       end
     end
