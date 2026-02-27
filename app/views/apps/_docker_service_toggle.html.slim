@@ -1,7 +1,7 @@
 - if @docker_installed
-  .d-flex.align-items-center.justify-content-between.mb-3.p-2.rounded style="background: var(--card-bg, #f8f9fa); border: 1px solid var(--border-color, #dee2e6);"
+  .d-flex.align-items-center.justify-content-between.mb-3.p-2.rounded style="background: var(--classic-card-bg, #f8f9fa); border: 1px solid var(--classic-border, #dee2e6);"
     .d-flex.align-items-center.gap-2
-      span.fw-bold Docker Service
+      span.fw-bold style="color: var(--classic-text, inherit);" Docker Service
       - if @docker_running
         span.badge.bg-success Running
       - else

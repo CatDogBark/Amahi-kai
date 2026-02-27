@@ -12,7 +12,6 @@
 - if @docker_installed
   = render 'docker_service_toggle'
 
-- if @docker_installed && @docker_running
   - if @categories.any?
     .app-store-header.row
       .col-12
