@@ -187,12 +187,20 @@ class Share < ApplicationRecord
     unless params[:path].blank?
       self.update(params)
     else
-      name = params[:tags].downcase
-      if self.tags.include?(name)
-        self.tags = self.tags.gsub(name, '')
+      # Strip any HTML tags and whitespace from input
+      name = ActionController::Base.helpers.strip_tags(params[:tags]).strip.downcase
+      return false if name.blank?
+
+      # Parse existing tags into a clean array
+      current = (self.tags || '').split(',').map { |t| ActionController::Base.helpers.strip_tags(t).strip.downcase }.reject(&:blank?).uniq
+
+      if current.include?(name)
+        current.delete(name)
       else
-        self.tags = "#{self.tags}, #{name}"
+        current << name
       end
+
+      self.tags = current.join(', ')
       self.save
     end
   end
@@ -385,7 +393,11 @@ class Share < ApplicationRecord
   private
 
   def normalize_tags
-    self.tags = self.tags.split(/\s*,\s*|\s+/).reject {|s| s.empty? }.join(', ').downcase
+    self.tags = (self.tags || '').split(/\s*,\s*|\s+/)
+      .map { |t| ActionController::Base.helpers.strip_tags(t).strip.downcase }
+      .reject(&:blank?)
+      .uniq
+      .join(', ')
   end
 
   def push_samba_config
