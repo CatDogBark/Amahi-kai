@@ -14,7 +14,7 @@ def theme_init
 	ret[:name] = "Amahi-kai Ocean"
 	ret[:version] = "1.0"
 	ret[:theme_uri] = "https://github.com/CatDogBark/Amahi-kai"
-	ret[:author] = "Kai & Troy, built on Amahi by Carlos Puchol"
+	ret[:author] = "Kai & Troy, built on Amahi"
 	ret[:author_uri] = ""
 	ret[:disable_inheritance] = false
 	ret[:gruff_theme] = {

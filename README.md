@@ -91,7 +91,7 @@ Monolithic Rails app — clean, no plugins.
 
 ## Credits
 
-- **Original**: [Amahi](http://www.amahi.org) by Carlos Puchol (2007-2013)
+- **Original**: [Amahi](http://www.amahi.org) (2007-2013)
 - **Modernization**: Kai 🌊 + Troy (2026)
 
 ## License

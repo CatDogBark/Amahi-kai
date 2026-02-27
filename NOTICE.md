@@ -73,7 +73,7 @@ For the full license text, see the [COPYING](COPYING) file.
 The Amahi team created an excellent home server platform that served thousands of users for over a decade. This fork aims to extend that legacy by making the platform viable on modern Linux distributions.
 
 **We are grateful to:**
-- Carlos Puchol and the original Amahi team for creating and open-sourcing this platform
+- The original Amahi team for creating and open-sourcing this platform
 - The Ubuntu, Debian, Ruby, and Rails communities
 - All contributors to the open-source dependencies that make this software possible
 
