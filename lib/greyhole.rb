@@ -6,7 +6,7 @@ class Greyhole
   CONFIG_PATH = '/etc/greyhole.conf'
   GREYHOLE_REPO_KEY = 'https://www.greyhole.net/releases/deb/greyhole-debsig.asc'
   GREYHOLE_REPO_URL = 'https://www.greyhole.net/releases/deb'
-  KEYRING_PATH = '/usr/share/keyrings/greyhole-archive-keyring.gpg'
+  KEYRING_PATH = '/usr/share/keyrings/greyhole-archive-keyring.asc'
   SOURCES_PATH = '/etc/apt/sources.list.d/greyhole.list'
 
   class << self
@@ -41,14 +41,8 @@ class Greyhole
 
       # Add Greyhole apt repository
       unless File.exist?(KEYRING_PATH)
-        tmpkey = '/tmp/greyhole-debsig.asc'
-        result = Shell.run("curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 10 -o #{tmpkey} #{GREYHOLE_REPO_KEY}")
+        result = Shell.run("bash -c 'curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 10 -o #{KEYRING_PATH} #{GREYHOLE_REPO_KEY}'")
         raise GreyholeError, 'Failed to download Greyhole signing key' unless result
-
-        result = Shell.run("bash -c 'gpg --dearmor -o #{KEYRING_PATH} < #{tmpkey}'")
-        raise GreyholeError, 'Failed to dearmor Greyhole signing key' unless result
-
-        FileUtils.rm_f(tmpkey)
       end
 
       unless File.exist?(SOURCES_PATH)
