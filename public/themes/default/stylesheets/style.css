@@ -2526,3 +2526,323 @@ span#setting_dns select {
     border-color: var(--classic-border);
   }
 }
+
+/* ══════════════════════════════════════════════
+   Dark Mode via data-theme toggle
+   ══════════════════════════════════════════════ */
+:root[data-theme="dark"] {
+    --classic-primary: #63b3ed;
+    --classic-secondary: #90cdf4;
+    --classic-accent: #d4a03c;
+    --classic-dark: #1a202c;
+    --classic-darker: #171923;
+    --classic-light: #2d3748;
+    --classic-text: #e2e8f0;
+    --classic-muted: #a0aec0;
+    --classic-success: #68d391;
+    --classic-danger: #fc8181;
+    --classic-warning: #f6ad55;
+    --classic-border: #4a5568;
+    --classic-card-bg: #1a202c;
+    --classic-shadow: rgba(0, 0, 0, 0.3);
+    --classic-body-bg: #171923;
+    --classic-content-bg: #1a202c;
+    --classic-header-bg: #171923;
+    --classic-header-border: #000000;
+    --classic-tab-bg: #2d3748;
+    --classic-tab-border: #4a5568;
+    --classic-tab-active-bg: #1a202c;
+    --classic-tab-text: #a0aec0;
+    --classic-tab-active-text: #e2e8f0;
+    --classic-subtab-bg: #2d3748;
+    --classic-subtab-active-bg: #1a202c;
+    --classic-subtab-border: #4a5568;
+    --classic-table-header-bg: #171923;
+    --classic-table-header-text: #e2e8f0;
+    --classic-table-odd-bg: #2d3748;
+    --classic-table-even-bg: #1a202c;
+    --classic-input-bg: #2d3748;
+    --classic-input-border: #4a5568;
+    --classic-input-text: #e2e8f0;
+    --classic-btn-bg: #4a6fa5;
+    --classic-btn-hover: #5d8ac4;
+    --classic-btn-text: #ffffff;
+    --classic-link: #63b3ed;
+    --classic-footer-bg: #171923;
+    --classic-footer-text: #e2e8f0;
+    --classic-stretch-bg: #2d3748;
+    --classic-fieldset-border: #4a5568;
+    --classic-legend-text: #a0aec0;
+    --classic-pref-bg: rgba(255, 255, 255, 0.03);
+}
+
+/* Body & content */
+html[data-theme="dark"] body {
+  color: var(--classic-text);
+}
+
+html[data-theme="dark"] #content {
+  background: var(--classic-content-bg);
+}
+
+/* Subheader */
+html[data-theme="dark"] #subheader li#first {
+  color: var(--classic-muted);
+}
+
+/* Tables */
+html[data-theme="dark"] tr.even {
+  background: var(--classic-table-even-bg);
+}
+
+html[data-theme="dark"] table.settings .odd td {
+  background: var(--classic-table-odd-bg);
+}
+
+/* Cards & panels */
+html[data-theme="dark"] .collapsed-div-style {
+  background: var(--classic-card-bg);
+}
+
+html[data-theme="dark"] #new-user-form {
+  background: var(--classic-card-bg);
+}
+
+/* Forms */
+html[data-theme="dark"] .form-control,
+html[data-theme="dark"] .form-control:focus {
+  background-color: var(--classic-input-bg);
+  color: var(--classic-input-text);
+  border-color: var(--classic-input-border);
+}
+
+html[data-theme="dark"] .form-control::placeholder {
+  color: var(--classic-muted);
+  opacity: 1;
+}
+
+html[data-theme="dark"] fieldset.bg-white,
+html[data-theme="dark"] .create-form fieldset {
+  background-color: var(--classic-card-bg) !important;
+  border-color: var(--classic-fieldset-border);
+}
+
+html[data-theme="dark"] .create-form legend {
+  color: var(--classic-legend-text, var(--classic-muted));
+}
+
+html[data-theme="dark"] .field_with_errors input {
+  background-color: #553c00;
+}
+
+html[data-theme="dark"] select {
+  background: var(--classic-input-bg);
+  color: var(--classic-input-text);
+  border: 1px solid var(--classic-input-border);
+}
+
+/* Alerts */
+html[data-theme="dark"] .alert-success {
+  color: #68d391;
+  background-color: #1c4532;
+  border-color: #276749;
+}
+
+html[data-theme="dark"] .alert-info {
+  color: #63b3ed;
+  background-color: #1a365d;
+  border-color: #2b6cb0;
+}
+
+html[data-theme="dark"] .alert-warn {
+  color: #f6ad55;
+  background-color: #652b19;
+  border-color: #9c4221;
+}
+
+html[data-theme="dark"] .alert-warn a {
+  color: #fbd38d;
+}
+
+html[data-theme="dark"] .alert-danger {
+  color: #fc8181;
+  background-color: #63171b;
+  border-color: #c53030;
+}
+
+html[data-theme="dark"] .app-flash-notice {
+  border-color: #276749;
+  background: #1c4532;
+  color: var(--classic-text);
+}
+
+/* Error explanation */
+html[data-theme="dark"] #error_explanation {
+  background: #63171b;
+  border-color: var(--classic-danger);
+  color: var(--classic-danger);
+}
+
+/* Warning */
+html[data-theme="dark"] .warning {
+  background-color: #652b19;
+  border-color: var(--classic-warning);
+  color: var(--classic-text);
+}
+
+/* Progress bars */
+html[data-theme="dark"] .progress {
+  background-color: var(--classic-light);
+}
+
+html[data-theme="dark"] .progress-bar {
+  background-color: var(--classic-primary);
+}
+
+/* Badges */
+html[data-theme="dark"] .badge {
+  color: var(--classic-text);
+}
+
+/* Modals */
+html[data-theme="dark"] .modal-content {
+  background-color: var(--classic-card-bg);
+  border-color: var(--classic-border);
+  color: var(--classic-text);
+}
+
+html[data-theme="dark"] .modal-header {
+  border-bottom-color: var(--classic-border);
+}
+
+html[data-theme="dark"] .modal-footer {
+  border-top-color: var(--classic-border);
+}
+
+/* Search results */
+html[data-theme="dark"] #search-results .even {
+  background-color: var(--classic-table-odd-bg);
+}
+
+html[data-theme="dark"] #search-types {
+  background-color: var(--classic-light);
+  border-color: var(--classic-primary);
+}
+
+/* Bootstrap overrides */
+html[data-theme="dark"] .bg-light {
+  background-color: var(--classic-light) !important;
+}
+
+html[data-theme="dark"] .bg-white {
+  background-color: var(--classic-card-bg) !important;
+}
+
+html[data-theme="dark"] .text-muted {
+  color: var(--classic-muted) !important;
+}
+
+html[data-theme="dark"] .text-dark {
+  color: var(--classic-text) !important;
+}
+
+html[data-theme="dark"] .border {
+  border-color: var(--classic-border) !important;
+}
+
+html[data-theme="dark"] .border-top, .border-bottom, .border-left, .border-right {
+  border-color: var(--classic-border) !important;
+}
+
+html[data-theme="dark"] code {
+  color: var(--classic-accent);
+  background: var(--classic-light);
+}
+
+html[data-theme="dark"] pre {
+  color: var(--classic-text);
+  background: var(--classic-light);
+  border: 1px solid var(--classic-border);
+}
+
+html[data-theme="dark"] hr {
+  border-top-color: var(--classic-border);
+}
+
+/* Cancel button */
+html[data-theme="dark"] .cancel-btn-style {
+  background: var(--classic-card-bg);
+}
+
+html[data-theme="dark"] .cancel-btn-style:hover {
+  background: var(--classic-card-bg);
+}
+
+/* Latest news */
+html[data-theme="dark"] #latest_news > ul li {
+  background: linear-gradient(to bottom, var(--classic-card-bg), var(--classic-light));
+}
+
+/* Welcome logos */
+html[data-theme="dark"] .welcome-logo, .welcome-logo-small {
+  background: var(--classic-card-bg);
+  border-color: var(--classic-border);
+}
+
+/* App description */
+html[data-theme="dark"] .welcome_desc a, .welcome_desc-small a {
+  color: var(--classic-text);
+}
+
+/* Fieldset in dark mode */
+html[data-theme="dark"] legend b, fieldset b, .editable {
+  color: var(--classic-text);
+}
+
+/* Stretchtoggle */
+html[data-theme="dark"] .stretchtoggle {
+  background: linear-gradient(to bottom, var(--classic-card-bg), var(--classic-light));
+}
+
+/* Tab gradients */
+html[data-theme="dark"] #tabs {
+  background: linear-gradient(to bottom, var(--classic-card-bg), var(--classic-light));
+}
+
+html[data-theme="dark"] thead.apptable td {
+  background: linear-gradient(to bottom, var(--classic-card-bg), var(--classic-light));
+}
+
+/* Table headers */
+html[data-theme="dark"] .settings th, thead.apptable td {
+  background: var(--classic-table-header-bg);
+  color: var(--classic-table-header-text);
+}
+
+/* Search pagination */
+html[data-theme="dark"] #search-pagination .pagination em {
+  border-color: var(--classic-border);
+  color: var(--classic-text);
+}
+
+html[data-theme="dark"] #search-pagination .pagination a {
+  border-color: var(--classic-border);
+  color: var(--classic-link);
+}
+
+/* Image borders */
+html[data-theme="dark"] .theme-thumbs img {
+  border-color: var(--classic-border);
+}
+
+html[data-theme="dark"] .theme-thumbs img:hover {
+  border-color: var(--classic-text);
+}
+
+html[data-theme="dark"] #theme_sshot_image img {
+  border-color: var(--classic-border);
+}
+
+html[data-theme="dark"] .app-screenshot {
+  border-color: var(--classic-border);
+}
