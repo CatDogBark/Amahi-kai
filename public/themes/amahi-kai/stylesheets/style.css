@@ -573,7 +573,10 @@ fieldset {
   border: 1px solid var(--kai-border);
   padding: 5px 10px;
   color: var(--kai-text);
+  background: var(--kai-card-bg);
   border-radius: 6px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .access fieldset {
@@ -876,6 +879,13 @@ table.settings td {
   -webkit-backdrop-filter: blur(12px);
   color: var(--kai-text);
   transition: background-color 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
+}
+.card-body {
+  background-color: transparent;
+  color: var(--kai-text);
+}
+.card-header {
+  border-bottom-color: var(--kai-border);
 }
 .card-header.bg-dark {
   background-color: var(--kai-dark) !important;
@@ -1181,27 +1191,7 @@ table.settings tbody tr:hover {
 .table-sm td, .table-sm th {
   color: var(--kai-text);
 }
-.card {
-  background-color: var(--kai-card-bg-opaque);
-  border-color: var(--kai-border);
-  color: var(--kai-text);
-}
-.card-body {
-  background-color: transparent;
-  color: var(--kai-text);
-}
-.card-header {
-  border-bottom-color: var(--kai-border);
-}
-fieldset {
-  background: var(--kai-card-bg) !important;
-  border-color: var(--kai-border) !important;
-  color: var(--kai-text) !important;
-}
-legend {
-  color: var(--kai-muted) !important;
-  background: transparent;
-}
+/* card, card-body, card-header, fieldset, legend — defined earlier in base styles */
 .hover-style:hover {
   background: var(--kai-hover-bg);
 }
