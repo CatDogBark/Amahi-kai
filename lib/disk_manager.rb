@@ -73,6 +73,9 @@ class DiskManager
 
     if production?
       execute_command("sudo /sbin/mkfs.ext4 -F #{Shellwords.escape(device)}")
+      # Let kernel update block device info after formatting
+      execute_command("sudo /sbin/udevadm settle 2>/dev/null")
+      sleep 1
     else
       Rails.logger.info("[DiskManager] SIMULATED: mkfs.ext4 -F #{device}") if defined?(Rails)
     end
