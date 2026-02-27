@@ -219,5 +219,6 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_25_000000) do
     t.datetime "updated_at", precision: nil
   end
 
-  add_foreign_key "share_files", "shares"
+  # Foreign key removed — share_files.share_id is int, shares.id is int(11) from legacy migration
+  # Referential integrity enforced at application level
 end
