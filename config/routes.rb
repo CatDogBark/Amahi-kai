@@ -38,16 +38,24 @@ Rails.application.routes.draw do
     post 'start_dnsmasq', action: 'start_dnsmasq'
     post 'stop_dnsmasq', action: 'stop_dnsmasq'
     put 'update_dnsmasq_config', action: 'update_dnsmasq_config'
-    get 'remote_access', action: 'remote_access'
+  end
+
+  # Remote Access (Cloudflare Tunnel) — split from network
+  scope '/network/remote_access', controller: 'remote_access', as: 'remote_access' do
+    get '/', action: 'index', as: 'index'
     post 'configure_tunnel', action: 'configure_tunnel'
     post 'start_tunnel', action: 'start_tunnel'
     post 'stop_tunnel', action: 'stop_tunnel'
     get 'install_cloudflared_stream', action: 'install_cloudflared_stream'
     get 'setup_tunnel_stream', action: 'setup_tunnel_stream'
-    get 'security', action: 'security'
-    post 'security_fix', action: 'security_fix'
-    get 'security_audit_stream', action: 'security_audit_stream'
-    get 'security_fix_stream', action: 'security_fix_stream'
+  end
+
+  # Security Audit — split from network
+  scope '/network/security', controller: 'security', as: 'security' do
+    get '/', action: 'index', as: 'index'
+    post 'fix', action: 'fix'
+    get 'audit_stream', action: 'audit_stream'
+    get 'fix_stream', action: 'fix_stream'
   end
 
   # Settings (consolidated from plugin)

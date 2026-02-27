@@ -13,7 +13,7 @@
         <button type="button" class="btn btn-sm btn-primary" onclick="runSecurityAudit()">
           Run Audit
         </button>
-        <button type="button" class="btn btn-sm btn-warning" onclick="openInstallTerminal('security-fix', '<%= network_security_fix_stream_path %>')">
+        <button type="button" class="btn btn-sm btn-warning" onclick="openInstallTerminal('security-fix', '<%= security_fix_stream_path %>')">
           Fix All
         </button>
       </div>
@@ -69,13 +69,13 @@
   </div>
 </div>
 
-<%= render 'shared/install_terminal', id: 'security-audit', title: 'Security Audit', stream_url: network_security_audit_stream_path %>
-<%= render 'shared/install_terminal', id: 'security-fix', title: 'Applying Security Fixes', stream_url: network_security_fix_stream_path %>
+<%= render 'shared/install_terminal', id: 'security-audit', title: 'Security Audit', stream_url: security_audit_stream_path %>
+<%= render 'shared/install_terminal', id: 'security-fix', title: 'Applying Security Fixes', stream_url: security_fix_stream_path %>
 
 <script>
 function runSecurityAudit() {
   var id = 'security-audit';
-  var url = '<%= network_security_audit_stream_path %>';
+  var url = '<%= security_audit_stream_path %>';
   var modal = document.getElementById(id + '-install-modal');
   var output = document.getElementById(id + '-output');
   var cursor = document.getElementById(id + '-cursor');
@@ -126,7 +126,7 @@ function runSecurityAudit() {
       fixBtn.onclick = function() {
         // Hide audit modal without reloading (closeInstallTerminal reloads the page)
         document.getElementById('security-audit-install-modal').style.display = 'none';
-        openInstallTerminal('security-fix', '<%= network_security_fix_stream_path %>');
+        openInstallTerminal('security-fix', '<%= security_fix_stream_path %>');
       };
       footer.insertBefore(fixBtn, footer.firstChild);
     }
@@ -152,7 +152,7 @@ function runSecurityAudit() {
 function fixCheck(name, btn) {
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
-  fetch('<%= network_security_fix_path %>', {
+  fetch('<%= security_fix_path %>', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content },
     body: JSON.stringify({ check_name: name })

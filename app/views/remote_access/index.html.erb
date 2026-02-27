@@ -6,7 +6,7 @@
         <strong>Security issues must be fixed before enabling remote access.</strong><br>
         <%= @security_blockers.size %> blocker<%= @security_blockers.size == 1 ? '' : 's' %> found —
         <a href="#" class="alert-link" onclick="runSecurityAudit(); return false;">Run security audit</a>
-        or <a href="<%= network_security_path %>" class="alert-link">go to Security tab</a>
+        or <a href="<%= security_index_path %>" class="alert-link">go to Security tab</a>
       </div>
     </div>
   <% end %>
@@ -120,20 +120,20 @@
 </div>
 
 <%= render 'shared/install_terminal', id: 'tunnel-setup', title: 'Setting up Cloudflare Tunnel', stream_url: '' %>
-<%= render 'shared/install_terminal', id: 'security-audit', title: 'Security Audit', stream_url: network_security_audit_stream_path %>
-<%= render 'shared/install_terminal', id: 'security-fix', title: 'Applying Security Fixes', stream_url: network_security_fix_stream_path %>
+<%= render 'shared/install_terminal', id: 'security-audit', title: 'Security Audit', stream_url: security_audit_stream_path %>
+<%= render 'shared/install_terminal', id: 'security-fix', title: 'Applying Security Fixes', stream_url: security_fix_stream_path %>
 
 <script>
 function setupTunnel() {
   var token = document.getElementById('tunnel-token-field').value.trim();
   if (!token) { alert('Please paste your tunnel token first.'); return; }
-  var url = '<%= network_setup_tunnel_stream_path %>' + '?token=' + encodeURIComponent(token);
+  var url = '<%= remote_access_setup_tunnel_stream_path %>' + '?token=' + encodeURIComponent(token);
   openInstallTerminal('tunnel-setup', url);
 }
 
 function runSecurityAudit() {
   var id = 'security-audit';
-  var url = '<%= network_security_audit_stream_path %>';
+  var url = '<%= security_audit_stream_path %>';
   var modal = document.getElementById(id + '-install-modal');
   var output = document.getElementById(id + '-output');
   var cursor = document.getElementById(id + '-cursor');
@@ -170,7 +170,7 @@ function runSecurityAudit() {
       fixBtn.innerHTML = 'Fix All Issues';
       fixBtn.onclick = function() {
         document.getElementById('security-audit-install-modal').style.display = 'none';
-        openInstallTerminal('security-fix', '<%= network_security_fix_stream_path %>');
+        openInstallTerminal('security-fix', '<%= security_fix_stream_path %>');
       };
       footer.insertBefore(fixBtn, footer.firstChild);
     }
@@ -194,7 +194,7 @@ function runSecurityAudit() {
 }
 
 function tunnelAction(action) {
-  var url = action === 'stop' ? '<%= network_stop_tunnel_path %>' : '<%= network_start_tunnel_path %>';
+  var url = action === 'stop' ? '<%= remote_access_stop_tunnel_path %>' : '<%= remote_access_start_tunnel_path %>';
   fetch(url, {
     method: 'POST',
     headers: { 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content }

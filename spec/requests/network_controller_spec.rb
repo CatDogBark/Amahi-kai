@@ -297,27 +297,27 @@ describe "Network Controller", type: :request do
       it "configures and starts tunnel with valid token" do
         allow(CloudflareService).to receive(:configure!)
         allow(CloudflareService).to receive(:start!)
-        post "/network/configure_tunnel", params: { tunnel_token: "eyJhIjoiYWJjMTIzIn0=" }, as: :json
+        post "/network/remote_access/configure_tunnel", params: { tunnel_token: "eyJhIjoiYWJjMTIzIn0=" }, as: :json
         body = JSON.parse(response.body)
         expect(body["status"]).to eq("ok")
       end
 
       it "rejects blank token" do
-        post "/network/configure_tunnel", params: { tunnel_token: "" }, as: :json
+        post "/network/remote_access/configure_tunnel", params: { tunnel_token: "" }, as: :json
         body = JSON.parse(response.body)
         expect(body["status"]).to eq("not_acceptable")
         expect(body["error"]).to eq("Token is required")
       end
 
       it "rejects whitespace-only token" do
-        post "/network/configure_tunnel", params: { tunnel_token: "   " }, as: :json
+        post "/network/remote_access/configure_tunnel", params: { tunnel_token: "   " }, as: :json
         body = JSON.parse(response.body)
         expect(body["status"]).to eq("not_acceptable")
       end
 
       it "handles configuration errors gracefully" do
         allow(CloudflareService).to receive(:configure!).and_raise(RuntimeError, "Invalid token format")
-        post "/network/configure_tunnel", params: { tunnel_token: "bad-token" }, as: :json
+        post "/network/remote_access/configure_tunnel", params: { tunnel_token: "bad-token" }, as: :json
         body = JSON.parse(response.body)
         expect(body["status"]).to eq("error")
         expect(body["error"]).to include("Invalid token format")
@@ -327,7 +327,7 @@ describe "Network Controller", type: :request do
     describe "POST /network/start_tunnel" do
       it "starts the tunnel" do
         allow(CloudflareService).to receive(:start!)
-        post "/network/start_tunnel", as: :json
+        post "/network/remote_access/start_tunnel", as: :json
         body = JSON.parse(response.body)
         expect(body["status"]).to eq("ok")
       end
@@ -336,7 +336,7 @@ describe "Network Controller", type: :request do
     describe "POST /network/stop_tunnel" do
       it "stops the tunnel" do
         allow(CloudflareService).to receive(:stop!)
-        post "/network/stop_tunnel", as: :json
+        post "/network/remote_access/stop_tunnel", as: :json
         body = JSON.parse(response.body)
         expect(body["status"]).to eq("ok")
       end
@@ -344,7 +344,7 @@ describe "Network Controller", type: :request do
 
     describe "GET /network/install_cloudflared_stream" do
       it "returns SSE content type" do
-        get "/network/install_cloudflared_stream"
+        get "/network/remote_access/install_cloudflared_stream"
         expect(response.headers['Content-Type']).to include('text/event-stream')
       end
     end
@@ -367,25 +367,25 @@ describe "Network Controller", type: :request do
       end
     end
 
-    describe "GET /network/security_audit_stream" do
+    describe "GET /network/security/audit_stream" do
       it "returns SSE content type" do
         allow(SecurityAudit).to receive(:run_all).and_return([])
-        get "/network/security_audit_stream"
+        get "/network/security/audit_stream"
         expect(response.headers['Content-Type']).to include('text/event-stream')
       end
     end
 
-    describe "GET /network/security_fix_stream" do
+    describe "GET /network/security/fix_stream" do
       it "returns SSE content type" do
-        get "/network/security_fix_stream"
+        get "/network/security/fix_stream"
         expect(response.headers['Content-Type']).to include('text/event-stream')
       end
     end
 
-    describe "POST /network/security_fix" do
+    describe "POST /network/security/fix" do
       it "fixes a specific security check" do
         allow(SecurityAudit).to receive(:fix!).with("ufw_firewall").and_return(true)
-        post "/network/security_fix", params: { check_name: "ufw_firewall" }, as: :json
+        post "/network/security/fix", params: { check_name: "ufw_firewall" }, as: :json
         body = JSON.parse(response.body)
         expect(body["status"]).to eq("ok")
         expect(body["check"]).to eq("ufw_firewall")
@@ -393,7 +393,7 @@ describe "Network Controller", type: :request do
 
       it "returns error when fix fails" do
         allow(SecurityAudit).to receive(:fix!).with("unknown_check").and_return(false)
-        post "/network/security_fix", params: { check_name: "unknown_check" }, as: :json
+        post "/network/security/fix", params: { check_name: "unknown_check" }, as: :json
         body = JSON.parse(response.body)
         expect(body["status"]).to eq("error")
       end
