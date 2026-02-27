@@ -35,6 +35,7 @@ fi
 # Clone or update
 if [ -d "$INSTALL_DIR/.git" ]; then
   echo "  Updating existing installation..."
+  git config --global --add safe.directory "$INSTALL_DIR"
   cd "$INSTALL_DIR"
   git fetch origin "$BRANCH"
   git reset --hard "origin/$BRANCH"
