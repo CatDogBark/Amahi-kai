@@ -73,11 +73,7 @@ class Platform
 
   class << self
     def reload(service)
-      Shell.run(
-        "sleep 4",
-        "systemctl reload #{service2name service}.service",
-        "sleep 1"
-      )
+      Shell.run("systemctl reload #{service2name service}.service")
     end
 
     def file_name(service)

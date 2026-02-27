@@ -15,6 +15,7 @@
 # team at http://www.amahi.org/ under "Contact Us."
 
 require 'shellwords'
+require 'shell'
 
 class Db < ApplicationRecord
 
@@ -64,10 +65,8 @@ private
     safe_user = Shellwords.escape(user)
     safe_name = Shellwords.escape(name)
     safe_filename = Shellwords.escape(filename)
-    system("mysqldump --add-drop-table -u#{safe_user} -p#{safe_user} #{safe_name} | bzip2 > #{safe_filename}")
-    Dir.chdir(DB_BACKUPS_DIR) do
-      system("ln -sf #{safe_filename} #{Shellwords.escape("latest-#{name}.bz2")}")
-    end
+    Shell.run("sh -c 'mysqldump --add-drop-table -u#{safe_user} -p#{safe_user} #{safe_name} | bzip2 > #{safe_filename}'")
+    Shell.run("ln -sf #{safe_filename} #{Shellwords.escape("#{DB_BACKUPS_DIR}/latest-#{name}.bz2")}")
     c = self.class.connection
     host = 'localhost'
     quoted_user = c.quote(user)

@@ -74,15 +74,16 @@ class SystemUtils
 
   def self.unpack(url, fname)
     require 'shellwords'
+    require 'shell'
     safe_fname = Shellwords.escape(fname)
     if (url =~ /\.zip$/)
-      system("unzip -q #{safe_fname}")
+      Shell.run("unzip -q #{safe_fname}")
     elsif (url =~ /\.(tar.gz|tgz)$/)
-      system("tar -xzf #{safe_fname}")
+      Shell.run("tar -xzf #{safe_fname}")
     elsif (url =~ /\.(tar.bz2)$/)
-      system("tar -xjf #{safe_fname}")
+      Shell.run("tar -xjf #{safe_fname}")
     else
-      raise "File #{url} is not supported for unpacking please report it to the Amahi community!"
+      raise "File #{url} is not supported for unpacking — report to the Amahi-kai community!"
     end
   end
 
