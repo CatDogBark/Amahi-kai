@@ -1,0 +1,15 @@
+- if @docker_installed
+  .d-flex.align-items-center.justify-content-between.mb-3.p-2.rounded style="background: var(--card-bg, #f8f9fa); border: 1px solid var(--border-color, #dee2e6);"
+    .d-flex.align-items-center.gap-2
+      span.fw-bold Docker Service
+      - if @docker_running
+        span.badge.bg-success Running
+      - else
+        span.badge.bg-secondary Stopped
+    .d-flex.gap-2
+      - if @docker_running
+        = form_tag apps_stop_docker_path, method: :post, class: 'd-inline' do
+          button.btn.btn-sm.btn-outline-danger type="submit" Stop Docker
+      - else
+        = form_tag apps_start_docker_path, method: :post, class: 'd-inline' do
+          button.btn.btn-sm.btn-success type="submit" Start Docker

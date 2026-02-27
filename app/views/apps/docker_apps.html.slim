@@ -9,13 +9,8 @@
 - if !@docker_installed
   == render 'shared/install_terminal', id: 'docker', title: 'Installing Docker', stream_url: apps_install_docker_stream_path
 
-- if @docker_installed && !@docker_running
-  .card.mb-4.border-warning
-    .card-body.text-center.py-4
-      h5.mb-3 Docker is installed but not running
-      p.text-muted.mb-3 The Docker service needs to be started before you can manage apps.
-      = form_tag apps_start_docker_path, method: :post do
-        button.btn.btn-warning type="submit" Start Docker
+- if @docker_installed
+  = render 'docker_service_toggle'
 
 - if @docker_installed && @docker_running
   - if @categories.any?

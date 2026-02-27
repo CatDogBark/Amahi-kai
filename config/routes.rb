@@ -77,6 +77,7 @@ Rails.application.routes.draw do
     get '/', action: 'docker_apps', as: 'index'
     get 'install_docker_stream', action: 'install_docker_stream'
     post 'start_docker', action: 'start_docker'
+    post 'stop_docker', action: 'stop_docker'
     get 'docker_apps', action: 'docker_apps'
     get 'installed_apps', action: 'installed_apps'
     post 'docker/install/:id', action: 'docker_install', as: 'docker_install'

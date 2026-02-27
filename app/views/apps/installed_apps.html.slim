@@ -5,12 +5,17 @@
       p.text-muted.mb-4 Install Docker from the Available tab to get started with apps.
       a.btn.btn-primary href="/apps" Go to Available Apps
 
-- elsif !@docker_running
+- else
+  = render 'docker_service_toggle'
+
+- if @docker_installed && !@docker_running
   .card.mb-4.border-warning
     .card-body.text-center.py-4
       h5.mb-3 Docker is installed but not running
-      = form_tag apps_start_docker_path, method: :post do
-        button.btn.btn-warning type="submit" Start Docker
+      p.text-muted.mb-3 Start the Docker service above to manage your apps.
+
+- elsif !@docker_installed
+  /! handled above
 
 - elsif @docker_apps.empty?
   .text-center.py-5

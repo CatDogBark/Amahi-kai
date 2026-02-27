@@ -141,9 +141,18 @@ class AppsController < ApplicationController
     if Rails.env.production?
       DockerService.start!
     end
-    redirect_to apps_docker_apps_path, notice: "Docker service started."
+    redirect_to apps_index_path, notice: "Docker service started."
   rescue StandardError => e
-    redirect_to apps_docker_apps_path, alert: "Failed to start Docker: #{e.message}"
+    redirect_to apps_index_path, alert: "Failed to start Docker: #{e.message}"
+  end
+
+  def stop_docker
+    if Rails.env.production?
+      DockerService.stop!
+    end
+    redirect_to apps_index_path, notice: "Docker service stopped."
+  rescue StandardError => e
+    redirect_to apps_index_path, alert: "Failed to stop Docker: #{e.message}"
   end
 
   # ─── Docker Apps ──────────────────────────────────────────
