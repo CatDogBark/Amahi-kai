@@ -50,13 +50,15 @@
                     </span>
                     <div style="margin-top: 2px;">
                       <label class="setup-danger" style="font-size: 12px; display: inline; cursor: pointer;">
-                        <input type="checkbox" name="format_drives[]" value="<%= part[:path] %>" style="margin-right: 4px;">
+                        <input type="checkbox" name="format_drives[]" value="<%= part[:path] %>" style="margin-right: 4px;"
+                               disabled data-requires="drive_<%= part[:path].gsub('/', '_') %>">
                         Format as ext4 instead (erases all data, enables pooling)
                       </label>
                     </div>
                   <% else %>
                     <label class="setup-muted" style="font-size: 12px; display: inline; cursor: pointer;">
-                      <input type="checkbox" name="format_drives[]" value="<%= part[:path] %>" style="margin-right: 4px;">
+                      <input type="checkbox" name="format_drives[]" value="<%= part[:path] %>" style="margin-right: 4px;"
+                             disabled data-requires="drive_<%= part[:path].gsub('/', '_') %>">
                       Format as ext4 (erases all data)
                     </label>
                     <span class="setup-hint" style="font-size: 11px; margin-left: 4px;">— or leave unchecked to mount as-is</span>
@@ -173,5 +175,15 @@
   // Close modal on backdrop click
   document.getElementById('preview-modal').addEventListener('click', function(e) {
     if (e.target === this) closePreview();
+  });
+
+  // Enable/disable format checkbox based on drive selection
+  document.querySelectorAll('input[name="drives[]"]').forEach(function(driveBox) {
+    driveBox.addEventListener('change', function() {
+      document.querySelectorAll('[data-requires="' + this.id + '"]').forEach(function(formatBox) {
+        formatBox.disabled = !driveBox.checked;
+        if (!driveBox.checked) formatBox.checked = false;
+      });
+    });
   });
 </script>
