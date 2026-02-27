@@ -532,7 +532,7 @@ a:hover {
   cursor: pointer;
 }
 .hover-style:hover {
-  background: var(--kai-light);
+  background: var(--kai-hover-bg);
 }
 
 .inside {
@@ -822,7 +822,7 @@ table.settings tbody tr {
   transition: background 0.1s ease;
 }
 table.settings tbody tr:hover {
-  background: var(--kai-light);
+  background: var(--kai-hover-bg);
 }
 
 table.settings td {
@@ -871,9 +871,10 @@ table.settings td {
   border: 1px solid var(--kai-border);
   border-radius: 6px;
   box-shadow: 0 1px 3px var(--kai-shadow);
-  background: var(--kai-card-bg);
+  background: var(--kai-card-bg-opaque);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  color: var(--kai-text);
   transition: background-color 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
 }
 .card-header.bg-dark {
@@ -1035,7 +1036,7 @@ select:focus, input[type="text"]:focus, input[type="password"]:focus {
   transition: background 0.1s ease;
 }
 .search-results .result-item:hover {
-  background: var(--kai-light);
+  background: var(--kai-hover-bg);
 }
 
 /* ─── Responsive ─── */
@@ -1322,19 +1323,19 @@ nav.preftab li ul {
 /* ── Delete button ── */
 .btn-delete {
   display: inline-block;
-  color: #dc3545;
+  color: var(--kai-delete-color);
   cursor: pointer;
   font-size: 13px;
   text-decoration: none;
   padding: 4px 12px;
-  border: 1px solid #dc3545;
+  border: 1px solid var(--kai-delete-color);
   border-radius: 4px;
   background: transparent;
   transition: all 0.2s;
 }
 .btn-delete:hover {
-  background: #dc3545;
-  color: #fff;
+  background: var(--kai-delete-color);
+  color: var(--kai-delete-hover-text);
   text-decoration: none;
 }
 .settings-actions {
