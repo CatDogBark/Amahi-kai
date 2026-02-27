@@ -79,7 +79,7 @@ class CloudflareService
       return true unless production?
 
       # Write token to temp, then copy to secure location
-      tmp_path = '/var/hda/tmp/tunnel.token'
+      tmp_path = File.join(AMAHI_TMP_DIR, 'tunnel.token')
       FileUtils.mkdir_p(File.dirname(tmp_path))
       File.write(tmp_path, token.strip)
       Shell.run("mkdir -p #{File.dirname(TOKEN_FILE)}")
@@ -105,7 +105,7 @@ class CloudflareService
         WantedBy=multi-user.target
       UNIT
 
-      tmp_path = '/var/hda/tmp/cloudflared.service'
+      tmp_path = File.join(AMAHI_TMP_DIR, 'cloudflared.service')
       File.write(tmp_path, unit)
       result = Shell.run("cp #{tmp_path} /etc/systemd/system/cloudflared.service")
       FileUtils.rm_f(tmp_path)

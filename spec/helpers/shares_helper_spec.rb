@@ -38,7 +38,7 @@ RSpec.describe SharesHelper, type: :helper do
     end
 
     it "returns nil for normal paths" do
-      expect(helper.warning_greyhole_on_root("/var/hda/files")).to be_nil
+      expect(helper.warning_greyhole_on_root("/var/lib/amahi-kai/files")).to be_nil
     end
   end
 

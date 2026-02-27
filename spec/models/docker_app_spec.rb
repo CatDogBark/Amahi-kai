@@ -57,10 +57,10 @@ describe DockerApp do
 
     it "serializes volume_mappings" do
       app = build_app
-      app.volume_mappings = { "/data" => "/var/hda/apps/test/data" }
+      app.volume_mappings = { "/data" => "/var/lib/amahi-kai/apps/test/data" }
       app.save!
       app.reload
-      expect(app.volume_mappings).to eq({ "/data" => "/var/hda/apps/test/data" })
+      expect(app.volume_mappings).to eq({ "/data" => "/var/lib/amahi-kai/apps/test/data" })
     end
 
     it "serializes environment" do

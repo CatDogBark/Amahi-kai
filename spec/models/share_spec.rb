@@ -120,11 +120,11 @@ describe Share do
 
   describe ".default_full_path" do
     it "should return path under DEFAULT_SHARES_ROOT" do
-      expect(Share.default_full_path("Books")).to eq("/var/hda/files/books")
+      expect(Share.default_full_path("Books")).to eq("/var/lib/amahi-kai/files/books")
     end
 
     it "should downcase the name" do
-      expect(Share.default_full_path("MOVIES")).to eq("/var/hda/files/movies")
+      expect(Share.default_full_path("MOVIES")).to eq("/var/lib/amahi-kai/files/movies")
     end
   end
 

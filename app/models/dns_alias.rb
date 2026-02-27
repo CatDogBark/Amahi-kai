@@ -45,8 +45,8 @@ class DnsAlias < ApplicationRecord
       end
     end
 
-    FileUtils.mkdir_p(HDA_TMP_DIR)
-    staged_file = File.join(HDA_TMP_DIR, "amahi-aliases.conf")
+    FileUtils.mkdir_p(AMAHI_TMP_DIR)
+    staged_file = File.join(AMAHI_TMP_DIR, "amahi-aliases.conf")
     File.write(staged_file, lines.join("\n") + "\n")
 
     Shell.run("cp #{Shellwords.escape(staged_file)} /etc/dnsmasq.d/amahi-aliases.conf")

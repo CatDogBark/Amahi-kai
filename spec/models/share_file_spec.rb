@@ -47,11 +47,11 @@ describe ShareFile, type: :model do
     let(:share) { create(:share) }
 
     before do
-      ShareFile.create!(share: share, name: 'song.mp3', path: '/var/hda/files/test/song.mp3',
+      ShareFile.create!(share: share, name: 'song.mp3', path: '/var/lib/amahi-kai/files/test/song.mp3',
                         relative_path: 'song.mp3', content_type: 'audio', extension: 'mp3', size: 1000)
-      ShareFile.create!(share: share, name: 'photo.jpg', path: '/var/hda/files/test/photo.jpg',
+      ShareFile.create!(share: share, name: 'photo.jpg', path: '/var/lib/amahi-kai/files/test/photo.jpg',
                         relative_path: 'photo.jpg', content_type: 'image', extension: 'jpg', size: 2000)
-      ShareFile.create!(share: share, name: 'docs', path: '/var/hda/files/test/docs',
+      ShareFile.create!(share: share, name: 'docs', path: '/var/lib/amahi-kai/files/test/docs',
                         relative_path: 'docs', content_type: 'directory', directory: true)
     end
 

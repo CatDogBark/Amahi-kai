@@ -29,8 +29,8 @@ describe Db do
   end
 
   describe "DB_BACKUPS_DIR" do
-    it "is set to /var/hda/dbs" do
-      expect(Db::DB_BACKUPS_DIR).to eq("/var/hda/dbs")
+    it "is set to /var/lib/amahi-kai/dbs" do
+      expect(Db::DB_BACKUPS_DIR).to eq("/var/lib/amahi-kai/dbs")
     end
   end
 

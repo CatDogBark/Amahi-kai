@@ -4,7 +4,7 @@
 # Handles sudo escalation, logging, and error reporting.
 #
 # Usage:
-#   Shell.run("mkdir -p /var/hda/files/movies")
+#   Shell.run("mkdir -p /var/lib/amahi-kai/files/movies")
 #   Shell.run("chown user:users /path", "chmod g+w /path")
 #   Shell.run!("systemctl restart smbd")  # raises on failure
 #

@@ -34,7 +34,7 @@ class DebugController < ApplicationController
   end
 
   def submit
-    report = SystemUtils.run 'tail -200 /var/hda/platform/html/log/production.log'
+    report = SystemUtils.run "tail -200 #{Rails.root.join('log/production.log')}"
     render json: { status: 'ok', report_lines: report.to_s.lines.count }
   end
 

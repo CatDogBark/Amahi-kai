@@ -1,8 +1,9 @@
-# temp dir for our own use
-if Rails.env != "production"
-  # used in development
-  HDA_TMP_DIR = File.join(Rails.root, 'tmp/cache/tmpfiles')
+# Amahi-kai data and temp directories
+AMAHI_DATA_DIR = if Rails.env.production?
+  '/var/lib/amahi-kai'
 else
-  HDA_TMP_DIR = '/var/hda/tmp'
+  File.join(Rails.root, 'tmp/amahi-kai')
 end
-FileUtils.mkdir_p(HDA_TMP_DIR)
+
+AMAHI_TMP_DIR = File.join(AMAHI_DATA_DIR, 'tmp')
+FileUtils.mkdir_p(AMAHI_TMP_DIR)

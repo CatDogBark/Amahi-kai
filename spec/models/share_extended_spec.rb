@@ -10,10 +10,10 @@ RSpec.describe Share, type: :model do
 
   describe "#share_conf" do
     it "generates samba share configuration" do
-      share = create(:share, name: "Movies", path: "/var/hda/files/movies", rdonly: false, visible: true, everyone: true)
+      share = create(:share, name: "Movies", path: "/var/lib/amahi-kai/files/movies", rdonly: false, visible: true, everyone: true)
       conf = share.share_conf
       expect(conf).to include("[Movies]")
-      expect(conf).to include("path = /var/hda/files/movies")
+      expect(conf).to include("path = /var/lib/amahi-kai/files/movies")
     end
 
     it "sets writeable no when rdonly is true" do

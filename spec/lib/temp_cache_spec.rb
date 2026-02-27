@@ -2,9 +2,9 @@ require 'spec_helper'
 
 RSpec.describe TempCache do
   describe ".unique_filename" do
-    it "returns a path inside HDA_TMP_DIR" do
+    it "returns a path inside AMAHI_TMP_DIR" do
       filename = TempCache.unique_filename("test")
-      expect(filename).to start_with(HDA_TMP_DIR)
+      expect(filename).to start_with(AMAHI_TMP_DIR)
     end
 
     it "includes the base name" do

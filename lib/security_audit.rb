@@ -238,7 +238,7 @@ class SecurityAudit
     end
 
     def fix_sshd_setting!(key, value)
-      tmp_path = '/var/hda/tmp/sshd_config'
+      tmp_path = File.join(AMAHI_TMP_DIR, 'sshd_config')
       content = File.exist?('/etc/ssh/sshd_config') ? File.read('/etc/ssh/sshd_config') : ''
 
       if content.match?(/^\s*#?\s*#{key}/)
@@ -263,7 +263,7 @@ class SecurityAudit
 
     def fix_samba_lan_binding!
       return false unless File.exist?('/etc/samba/smb.conf')
-      tmp_path = '/var/hda/tmp/smb.conf'
+      tmp_path = File.join(AMAHI_TMP_DIR, 'smb.conf')
       content = File.read('/etc/samba/smb.conf')
 
       unless content.match?(/^\s*interfaces\s*=/i)

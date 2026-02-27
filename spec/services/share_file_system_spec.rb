@@ -11,10 +11,10 @@ RSpec.describe ShareFileSystem do
 
   describe '#setup_directory' do
     it 'runs commands when path changes' do
-      share = create(:share, path: '/var/hda/files/old')
-      share.path = '/var/hda/files/movies'
+      share = create(:share, path: '/var/lib/amahi-kai/files/old')
+      share.path = '/var/lib/amahi-kai/files/movies'
       allow(share).to receive(:path_changed?).and_return(true)
-      allow(share).to receive(:path_was).and_return('/var/hda/files/old')
+      allow(share).to receive(:path_was).and_return('/var/lib/amahi-kai/files/old')
 
       fs = described_class.new(share)
       fs.setup_directory
@@ -62,10 +62,10 @@ RSpec.describe ShareFileSystem do
     end
 
     it 'shell-escapes paths with spaces' do
-      share = create(:share, path: '/var/hda/files/old')
-      share.path = '/var/hda/files/my movies'
+      share = create(:share, path: '/var/lib/amahi-kai/files/old')
+      share.path = '/var/lib/amahi-kai/files/my movies'
       allow(share).to receive(:path_changed?).and_return(true)
-      allow(share).to receive(:path_was).and_return('/var/hda/files/old')
+      allow(share).to receive(:path_was).and_return('/var/lib/amahi-kai/files/old')
 
       fs = described_class.new(share)
       fs.setup_directory
@@ -112,7 +112,7 @@ RSpec.describe ShareFileSystem do
 
   describe '#cleanup_directory' do
     it 'runs rmdir with ignore-fail-on-non-empty' do
-      share = create(:share, path: '/var/hda/files/movies')
+      share = create(:share, path: '/var/lib/amahi-kai/files/movies')
 
       fs = described_class.new(share)
       fs.cleanup_directory
@@ -123,7 +123,7 @@ RSpec.describe ShareFileSystem do
 
   describe '#clear_permissions' do
     it 'runs chmod -R a+rwx' do
-      share = create(:share, path: '/var/hda/files/movies')
+      share = create(:share, path: '/var/lib/amahi-kai/files/movies')
 
       fs = described_class.new(share)
       fs.clear_permissions
@@ -134,7 +134,7 @@ RSpec.describe ShareFileSystem do
 
   describe '#make_guest_writeable' do
     it 'runs chmod o+w' do
-      share = create(:share, path: '/var/hda/files/public')
+      share = create(:share, path: '/var/lib/amahi-kai/files/public')
 
       fs = described_class.new(share)
       fs.make_guest_writeable
@@ -145,7 +145,7 @@ RSpec.describe ShareFileSystem do
 
   describe '#make_guest_non_writeable' do
     it 'runs chmod o-w' do
-      share = create(:share, path: '/var/hda/files/public')
+      share = create(:share, path: '/var/lib/amahi-kai/files/public')
 
       fs = described_class.new(share)
       fs.make_guest_non_writeable

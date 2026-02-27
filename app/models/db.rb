@@ -18,7 +18,7 @@ require 'shellwords'
 
 class Db < ApplicationRecord
 
-  DB_BACKUPS_DIR = "/var/hda/dbs"
+  DB_BACKUPS_DIR = "/var/lib/amahi-kai/dbs"
 
   after_create :after_create_hook
   after_destroy :after_destroy_hook

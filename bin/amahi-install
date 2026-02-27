@@ -6,7 +6,7 @@ set -euo pipefail
 APP_DIR="/opt/amahi-kai"
 CONFIG_DIR="/etc/amahi-kai"
 ENV_FILE="$CONFIG_DIR/amahi.env"
-SHARE_ROOT="/var/hda/files"
+SHARE_ROOT="/var/lib/amahi-kai/files"
 RUBY_VERSION="3.2.10"
 APP_USER="amahi"
 APP_GROUP="amahi"
@@ -240,9 +240,9 @@ chown -R "$APP_USER:$APP_GROUP" "$APP_DIR"
 echo "==> Creating data directories..."
 mkdir -p "$SHARE_ROOT"
 mkdir -p "$CONFIG_DIR"
-mkdir -p /var/hda/dbs
-mkdir -p /var/hda/tmp
-chown "$APP_USER:$APP_GROUP" /var/hda/tmp
+mkdir -p /var/lib/amahi-kai/dbs
+mkdir -p /var/lib/amahi-kai/tmp
+chown "$APP_USER:$APP_GROUP" /var/lib/amahi-kai/tmp
 
 # ---------------------------------------------------------------------------
 # 6. Generate config (if not exists)
@@ -270,8 +270,8 @@ AMAHI_DUMMY_MODE=false
 # Allow access via Cloudflare Tunnel (set to your domain, or remove if not using one)
 # RAILS_ALLOWED_HOST=your-domain.example.com
 
-# Share root (default: /var/hda/files)
-# AMAHI_SHARE_ROOT=/var/hda/files
+# Share root (default: /var/lib/amahi-kai/files)
+# AMAHI_SHARE_ROOT=/var/lib/amahi-kai/files
 EOF
   chmod 640 "$ENV_FILE"
   chown root:"$APP_USER" "$ENV_FILE"
@@ -353,22 +353,22 @@ amahi ALL=(root) NOPASSWD: /usr/sbin/userdel
 amahi ALL=(root) NOPASSWD: /usr/bin/pdbedit
 
 # File operations — scoped to share and SSH paths
-amahi ALL=(root) NOPASSWD: /usr/bin/chmod [0-9]* /var/hda/*
-amahi ALL=(root) NOPASSWD: /usr/bin/chmod -R [a-z]* /var/hda/*
-amahi ALL=(root) NOPASSWD: /usr/bin/chmod [a-z]* /var/hda/*
+amahi ALL=(root) NOPASSWD: /usr/bin/chmod [0-9]* /var/lib/amahi-kai/*
+amahi ALL=(root) NOPASSWD: /usr/bin/chmod -R [a-z]* /var/lib/amahi-kai/*
+amahi ALL=(root) NOPASSWD: /usr/bin/chmod [a-z]* /var/lib/amahi-kai/*
 amahi ALL=(root) NOPASSWD: /usr/bin/chmod u+rwx\,go-rwx /home/*/.ssh
 amahi ALL=(root) NOPASSWD: /usr/bin/chmod u+rw\,go-rwx /home/*/.ssh/authorized_keys
-amahi ALL=(root) NOPASSWD: /usr/bin/chown * /var/hda/*
+amahi ALL=(root) NOPASSWD: /usr/bin/chown * /var/lib/amahi-kai/*
 amahi ALL=(root) NOPASSWD: /usr/bin/chown -R * /home/*/.ssh
 
 # Directory creation for shares
-amahi ALL=(root) NOPASSWD: /usr/bin/mkdir -p /var/hda/*
+amahi ALL=(root) NOPASSWD: /usr/bin/mkdir -p /var/lib/amahi-kai/*
 
 # Config file staging
 amahi ALL=(root) NOPASSWD: /usr/bin/cp /tmp/amahi-staging/* /etc/samba/*
 amahi ALL=(root) NOPASSWD: /usr/bin/cp /tmp/amahi-staging/* /etc/dnsmasq.d/*
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/hda/tmp/* /etc/samba/*
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/hda/tmp/* /etc/dnsmasq.d/*
+amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/lib/amahi-kai/tmp/* /etc/samba/*
+amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/lib/amahi-kai/tmp/* /etc/dnsmasq.d/*
 
 # Service management — scoped to Amahi-managed services ONLY
 amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start smbd.service
@@ -406,7 +406,7 @@ amahi ALL=(root) NOPASSWD: /usr/bin/systemctl disable greyhole.service
 amahi ALL=(root) NOPASSWD: /usr/bin/systemctl status greyhole.service
 
 # Greyhole config management
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/hda/tmp/* /etc/greyhole.conf
+amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/lib/amahi-kai/tmp/* /etc/greyhole.conf
 
 # Greyhole installation (web UI triggered)
 amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get update
@@ -446,7 +446,7 @@ amahi ALL=(root) NOPASSWD: /usr/bin/docker
 
 # Cloudflare Tunnel
 amahi ALL=(root) NOPASSWD: /usr/bin/cloudflared
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/hda/tmp/cloudflared.service /etc/systemd/system/cloudflared.service
+amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/lib/amahi-kai/tmp/cloudflared.service /etc/systemd/system/cloudflared.service
 amahi ALL=(root) NOPASSWD: /usr/bin/rm -f /etc/systemd/system/cloudflared*
 amahi ALL=(root) NOPASSWD: /usr/bin/systemctl daemon-reload
 amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start cloudflared
@@ -454,7 +454,7 @@ amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop cloudflared
 amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart cloudflared
 amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable cloudflared
 amahi ALL=(root) NOPASSWD: /usr/bin/mkdir -p /etc/amahi-kai
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/hda/tmp/tunnel.token /etc/amahi-kai/tunnel.token
+amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/lib/amahi-kai/tmp/tunnel.token /etc/amahi-kai/tunnel.token
 amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get install -y cloudflared
 amahi ALL=(root) NOPASSWD: /usr/bin/tee /etc/apt/sources.list.d/cloudflared.list
 amahi ALL=(root) NOPASSWD: /usr/bin/gpg --dearmor -o /usr/share/keyrings/cloudflare-archive-keyring.gpg
@@ -472,8 +472,8 @@ amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart ssh
 amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get install -y fail2ban
 amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get install -y unattended-upgrades
 amahi ALL=(root) NOPASSWD: /usr/bin/dpkg-reconfigure -plow unattended-upgrades
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/hda/tmp/sshd_config /etc/ssh/sshd_config
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/hda/tmp/smb.conf /etc/samba/smb.conf
+amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/lib/amahi-kai/tmp/sshd_config /etc/ssh/sshd_config
+amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/lib/amahi-kai/tmp/smb.conf /etc/samba/smb.conf
 amahi ALL=(root) NOPASSWD: /usr/bin/fallocate -l * /swapfile
 amahi ALL=(root) NOPASSWD: /usr/bin/dd if=/dev/zero of=/swapfile *
 amahi ALL=(root) NOPASSWD: /usr/bin/chmod 600 /swapfile

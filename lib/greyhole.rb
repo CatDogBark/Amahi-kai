@@ -136,7 +136,7 @@ class Greyhole
     def configure!
       return true unless production?
       config = generate_config
-      tmp = "/var/hda/tmp/greyhole.conf"
+      tmp = File.join(AMAHI_TMP_DIR, 'greyhole.conf')
       FileUtils.mkdir_p(File.dirname(tmp))
       File.write(tmp, config)
       Shell.run("/usr/bin/cp #{Shellwords.escape(tmp)} #{CONFIG_PATH}")

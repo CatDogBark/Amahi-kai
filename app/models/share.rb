@@ -25,11 +25,11 @@ class Share < ApplicationRecord
     name
   end
 
-  DEFAULT_SHARES_ROOT = '/var/hda/files'
+  DEFAULT_SHARES_ROOT = '/var/lib/amahi-kai/files'
 
   SIGNATURE = "Amahi configuration"
   DEFAULT_SHARES = [ "Books", "Pictures", "Movies", "Videos", "Music", "Docs", "Public", "TV" ].each {|s| I18n.t s }
-  PDC_SETTINGS = "/var/hda/domain-settings"
+  PDC_SETTINGS = "/var/lib/amahi-kai/domain-settings"
 
   default_scope {order("name")}
 
