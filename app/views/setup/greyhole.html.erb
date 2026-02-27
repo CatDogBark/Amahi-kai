@@ -55,31 +55,77 @@
     </p>
   <% end %>
 
-  <%= form_tag(setup_install_greyhole_path, method: :post) do %>
-    <div style="margin: 16px 0;">
-      <label for="default_copies">Default file copies per share:</label>
-      <select name="default_copies" id="default_copies"
-              style="padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; margin-top: 4px;
-                     background: #f8fafc; color: #1a2332;">
-        <option value="1" <%= 'selected' if @pool_drives < 2 %>>1 copy (no duplication)</option>
-        <option value="2" <%= 'selected' if @pool_drives >= 2 %>>2 copies (recommended)</option>
-        <% if @pool_drives >= 3 %>
-          <option value="3">3 copies (maximum safety)</option>
-        <% end %>
-      </select>
-      <p style="font-size: 12px; color: #9ca3af; margin-top: 4px;">
-        Each copy uses one drive's worth of space. You can adjust this per-share later.
-      </p>
-    </div>
+  <div style="margin: 16px 0;">
+    <label for="default_copies">Default file copies per share:</label>
+    <select id="default_copies"
+            style="padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; margin-top: 4px;
+                   background: #f8fafc; color: #1a2332;">
+      <option value="1" <%= 'selected' if @pool_drives < 2 %>>1 copy (no duplication)</option>
+      <option value="2" <%= 'selected' if @pool_drives >= 2 %>>2 copies (recommended)</option>
+      <% if @pool_drives >= 3 %>
+        <option value="3">3 copies (maximum safety)</option>
+      <% end %>
+    </select>
+    <p style="font-size: 12px; color: #9ca3af; margin-top: 4px;">
+      Each copy uses one drive's worth of space. You can adjust this per-share later.
+    </p>
+  </div>
 
-    <div class="setup-actions">
-      <a href="<%= setup_share_path %>" class="btn-skip">Skip — I'll set this up later</a>
-      <button type="submit" class="btn-kai" id="install-greyhole-btn"
-              onclick="var btn=this; setTimeout(function(){ btn.disabled=true; btn.innerHTML='<span class=\'spinner-border spinner-border-sm me-1\'></span> Installing...'; }, 10);">
-        Install Greyhole →
-      </button>
-    </div>
-  <% end %>
+  <div class="setup-actions">
+    <a href="<%= setup_share_path %>" class="btn-skip">Skip — I'll set this up later</a>
+    <button type="button" class="btn-kai" onclick="installGreyhole()">
+      Install Greyhole →
+    </button>
+  </div>
+
+  <%= render 'shared/install_terminal', id: 'greyhole-install', title: 'Installing Greyhole', stream_url: '' %>
+
+  <script>
+  function installGreyhole() {
+    var copies = document.getElementById('default_copies').value;
+    var url = '<%= setup_install_greyhole_stream_path %>' + '?default_copies=' + copies;
+
+    var id = 'greyhole-install';
+    var modal = document.getElementById(id + '-install-modal');
+    var output = document.getElementById(id + '-output');
+    var cursor = document.getElementById(id + '-cursor');
+    var footer = document.getElementById(id + '-install-footer');
+    var terminal = document.getElementById(id + '-terminal');
+
+    modal.style.display = 'flex';
+    output.innerHTML = '';
+    cursor.style.display = '';
+    footer.style.display = 'none';
+    footer.innerHTML = '<a href="<%= setup_share_path %>" class="btn btn-sm btn-outline-light">Continue →</a>';
+
+    var source = new EventSource(url);
+
+    source.onmessage = function(e) {
+      var line = document.createElement('div');
+      line.className = 'term-line';
+      var text = e.data;
+      if (text.match(/^(Installing|Generating|Starting)/)) { line.classList.add('step'); }
+      else if (text.match(/✓/)) { line.classList.add('success'); }
+      else if (text.match(/✗/)) { line.classList.add('error'); }
+      else if (text.match(/⚠/)) { line.classList.add('warn'); }
+      line.textContent = text;
+      output.appendChild(line);
+      terminal.scrollTop = terminal.scrollHeight;
+    };
+
+    source.addEventListener('done', function(e) {
+      source.close();
+      cursor.style.display = 'none';
+      footer.style.display = 'block';
+    });
+
+    source.onerror = function() {
+      source.close();
+      cursor.style.display = 'none';
+      footer.style.display = 'block';
+    };
+  }
+  </script>
 <% end %>
 
 <style>

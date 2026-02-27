@@ -214,26 +214,79 @@ class SetupController < ApplicationController
   end
 
   def install_greyhole
+    redirect_to setup_share_path
+  end
+
+  def install_greyhole_stream
     require 'greyhole'
 
     default_copies = (params[:default_copies] || '2').to_i
     default_copies = 2 if default_copies < 1
 
-    # Save the default copies setting
-    Setting.set('default_pool_copies', default_copies.to_s)
+    stream_sse do |sse|
+      sse.send("Installing Greyhole...")
+      sse.send("")
 
-    begin
-      Greyhole.install!
-      Greyhole.configure!
-      session[:greyhole_installed] = true
-      session[:default_copies] = default_copies
-      flash[:notice] = "Greyhole installed successfully!"
-    rescue StandardError => e
-      Rails.logger.error("SetupController#install_greyhole: #{e.message}")
-      flash[:error] = "Greyhole installation failed: #{e.message}"
+      Setting.set('default_pool_copies', default_copies.to_s)
+
+      unless Rails.env.production?
+        lines = [
+          "Installing dependencies...",
+          "  php8.3-cli php8.3-mbstring php8.3-mysql",
+          "  Setting up php8.3-cli...",
+          "Adding Greyhole repository...",
+          "  Downloading signing key...",
+          "  Adding source list...",
+          "Updating package lists...",
+          "Installing Greyhole...",
+          "  Setting up greyhole (0.15.36-1) ...",
+          "✓ Greyhole installed",
+          "",
+          "Generating configuration...",
+          "  Writing /etc/greyhole.conf",
+          "  #{DiskPoolPartition.count} pool drives configured",
+          "  Default copies: #{default_copies}",
+          "✓ Configuration written",
+          "",
+          "Starting Greyhole service...",
+          "✓ Greyhole is running!"
+        ]
+        lines.each do |line|
+          sleep 0.3
+          sse.send(line)
+        end
+        sse.done
+        next
+      end
+
+      begin
+        sse.send("Installing Greyhole package and dependencies...")
+        Greyhole.install!
+        sse.send("✓ Greyhole installed")
+
+        sse.send("")
+        sse.send("Generating configuration...")
+        Greyhole.configure!
+        sse.send("  #{DiskPoolPartition.count} pool drives configured")
+        sse.send("  Default copies: #{default_copies}")
+        sse.send("✓ Configuration written")
+
+        sse.send("")
+        sse.send("Starting Greyhole service...")
+        Greyhole.start!
+        if Greyhole.running?
+          sse.send("✓ Greyhole is running!")
+        else
+          sse.send("⚠ Service started but may take a moment to initialize")
+        end
+
+        sse.done
+      rescue StandardError => e
+        sse.send("✗ Error: #{e.message}")
+        Rails.logger.error("SetupController#install_greyhole_stream: #{e.message}")
+        sse.done("error")
+      end
     end
-
-    redirect_to setup_share_path
   end
 
   def share

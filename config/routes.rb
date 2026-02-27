@@ -176,6 +176,7 @@ Rails.application.routes.draw do
   post 'setup/preview_drive' => 'setup#preview_drive',  as: :setup_preview_drive
   get  'setup/greyhole' => 'setup#greyhole',          as: :setup_greyhole
   post 'setup/greyhole' => 'setup#install_greyhole',  as: :setup_install_greyhole
+  get  'setup/install_greyhole_stream' => 'setup#install_greyhole_stream', as: :setup_install_greyhole_stream
   get  'setup/share'    => 'setup#share',              as: :setup_share
   post 'setup/share'    => 'setup#create_share',   as: :setup_create_share
   get  'setup/complete' => 'setup#complete',        as: :setup_complete
