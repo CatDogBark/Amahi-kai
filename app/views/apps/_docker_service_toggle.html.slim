@@ -4,12 +4,12 @@
       input#docker-toggle type="checkbox" checked=@docker_running style="opacity:0; width:0; height:0;" onchange="toggleDocker(this)"
       span.docker-slider style="position:absolute; top:0; left:0; right:0; bottom:0; background:#4a5568; border-radius:24px; transition:0.3s;"
       span.docker-knob style="position:absolute; top:2px; left:#{@docker_running ? '22px' : '2px'}; width:20px; height:20px; background:white; border-radius:50%; transition:0.3s; box-shadow:0 1px 3px rgba(0,0,0,0.3);"
-    span.docker-status style="font-size:13px; color:var(--classic-muted, #a0aec0);"
+    span.docker-status style="font-size:13px; color:var(--kai-muted, #a0aec0);"
       | Docker
       - if @docker_running
-        span.ms-1 style="color:var(--classic-success, #68d391);" ● Running
+        span.ms-1 style="color:var(--kai-success, #68d391);" ● Running
       - else
-        span.ms-1 style="color:var(--classic-muted, #a0aec0);" ○ Stopped
+        span.ms-1 style="color:var(--kai-muted, #a0aec0);" ○ Stopped
 
   javascript:
     function toggleDocker(cb) {
@@ -21,12 +21,12 @@
       // Optimistic UI
       if (cb.checked) {
         knob.style.left = '22px';
-        slider.style.background = 'var(--classic-success, #68d391)';
-        statusEl.innerHTML = 'Docker <span class="ms-1" style="color:var(--classic-success, #68d391);">● Starting...</span>';
+        slider.style.background = 'var(--kai-success, #68d391)';
+        statusEl.innerHTML = 'Docker <span class="ms-1" style="color:var(--kai-success, #68d391);">● Starting...</span>';
       } else {
         knob.style.left = '2px';
         slider.style.background = '#4a5568';
-        statusEl.innerHTML = 'Docker <span class="ms-1" style="color:var(--classic-muted, #a0aec0);">○ Stopping...</span>';
+        statusEl.innerHTML = 'Docker <span class="ms-1" style="color:var(--kai-muted, #a0aec0);">○ Stopping...</span>';
       }
 
       fetch(url, {
@@ -35,19 +35,19 @@
         credentials: 'same-origin'
       }).then(function(r) {
         if (cb.checked) {
-          statusEl.innerHTML = 'Docker <span class="ms-1" style="color:var(--classic-success, #68d391);">● Running</span>';
+          statusEl.innerHTML = 'Docker <span class="ms-1" style="color:var(--kai-success, #68d391);">● Running</span>';
         } else {
-          statusEl.innerHTML = 'Docker <span class="ms-1" style="color:var(--classic-muted, #a0aec0);">○ Stopped</span>';
+          statusEl.innerHTML = 'Docker <span class="ms-1" style="color:var(--kai-muted, #a0aec0);">○ Stopped</span>';
           slider.style.background = '#4a5568';
         }
       }).catch(function() {
         // Revert on error
         cb.checked = !cb.checked;
         knob.style.left = cb.checked ? '22px' : '2px';
-        slider.style.background = cb.checked ? 'var(--classic-success, #68d391)' : '#4a5568';
+        slider.style.background = cb.checked ? 'var(--kai-success, #68d391)' : '#4a5568';
         statusEl.innerHTML = cb.checked
-          ? 'Docker <span class="ms-1" style="color:var(--classic-success, #68d391);">● Running</span>'
-          : 'Docker <span class="ms-1" style="color:var(--classic-muted, #a0aec0);">○ Stopped</span>';
+          ? 'Docker <span class="ms-1" style="color:var(--kai-success, #68d391);">● Running</span>'
+          : 'Docker <span class="ms-1" style="color:var(--kai-muted, #a0aec0);">○ Stopped</span>';
       });
     }
 
@@ -55,6 +55,6 @@
     (function(){
       var cb = document.getElementById('docker-toggle');
       if (cb && cb.checked) {
-        cb.closest('.docker-toggle-switch').querySelector('.docker-slider').style.background = 'var(--classic-success, #68d391)';
+        cb.closest('.docker-toggle-switch').querySelector('.docker-slider').style.background = 'var(--kai-success, #68d391)';
       }
     })();
