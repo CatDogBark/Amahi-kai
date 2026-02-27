@@ -167,6 +167,41 @@
     </div>
   </div>
 
+  <%# ── Storage Pool (only when Greyhole active) ── %>
+  <% pool = @stats[:pool] %>
+  <% if pool[:active] %>
+    <div class="row mb-4">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header d-flex justify-content-between align-items-center" style="background: var(--kai-dark); color: white;">
+            <strong><%= lucide_icon('database', size: 16) %> Storage Pool</strong>
+            <a href="/disks/storage_pool" class="text-muted text-decoration-none" style="font-size: 0.8rem;">Manage →</a>
+          </div>
+          <div class="card-body">
+            <%
+              bar_color = pool[:percent] > 90 ? '#dc3545' : pool[:percent] > 70 ? '#ffc107' : '#0d8aa8'
+            %>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span>
+                <strong><%= number_to_human_size(pool[:used]) %></strong> used of
+                <strong><%= number_to_human_size(pool[:total]) %></strong>
+                <span class="text-muted ms-2">(<%= number_to_human_size(pool[:free]) %> free)</span>
+              </span>
+              <span style="font-size: 1.1em; font-weight: 600; color: <%= bar_color %>"><%= pool[:percent] %>%</span>
+            </div>
+            <div style="height: 10px; background: var(--kai-card-bg, #1a1a2e); border-radius: 5px; overflow: hidden;">
+              <div style="height: 100%; width: <%= pool[:percent] %>%; background: <%= bar_color %>; border-radius: 5px; transition: width 0.3s;"></div>
+            </div>
+            <div class="d-flex justify-content-between mt-2 text-muted" style="font-size: 0.82em;">
+              <span><%= pool[:drives] %> drives · <%= pool[:copies] %> copies · ~<%= number_to_human_size(pool[:effective_capacity]) %> effective</span>
+              <span><%= pool[:pending] %> pending operations</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  <% end %>
+
   <%# ── Quick Actions ── %>
   <div class="row mb-4">
     <div class="col-12">

@@ -36,6 +36,42 @@
     </div>
   </div>
 
+  <%# Pool Summary — only show when drives exist %>
+  <% if @pool_drives.any? %>
+    <%
+      pool_total = @pool_drives.sum { |d| d[:total].to_i }
+      pool_used = @pool_drives.sum { |d| d[:used].to_i }
+      pool_free = @pool_drives.sum { |d| d[:free].to_i }
+      pool_pct = pool_total > 0 ? (pool_used.to_f / pool_total * 100).round(1) : 0
+      default_copies = (Setting.get('default_pool_copies') rescue '2').to_i
+      default_copies = 2 if default_copies < 1
+      effective_capacity = default_copies > 0 ? pool_total / default_copies : pool_total
+      bar_color = pool_pct > 90 ? '#dc3545' : pool_pct > 70 ? '#ffc107' : '#0d8aa8'
+    %>
+    <div class="card mb-3">
+      <div class="card-header">
+        <h5 class="mb-0">Pool Summary</h5>
+      </div>
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span>
+            <strong><%= number_to_human_size(pool_used) %></strong> used of
+            <strong><%= number_to_human_size(pool_total) %></strong> raw
+            <span class="text-muted ms-2">(<%= number_to_human_size(pool_free) %> free)</span>
+          </span>
+          <span style="font-size: 1.1em; font-weight: 600; color: <%= bar_color %>"><%= pool_pct %>%</span>
+        </div>
+        <div style="height: 12px; background: var(--kai-card-bg, #1a1a2e); border-radius: 6px; overflow: hidden;">
+          <div style="height: 100%; width: <%= pool_pct %>%; background: <%= bar_color %>; border-radius: 6px; transition: width 0.3s;"></div>
+        </div>
+        <div class="d-flex justify-content-between mt-2 text-muted" style="font-size: 0.85em;">
+          <span><%= @pool_drives.size %> drives · <%= default_copies %> copies per share</span>
+          <span>Effective capacity: ~<%= number_to_human_size(effective_capacity) %></span>
+        </div>
+      </div>
+    </div>
+  <% end %>
+
   <!-- Pool Drives -->
   <div class="card mb-3">
     <div class="card-header">

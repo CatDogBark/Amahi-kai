@@ -10,7 +10,8 @@ class DashboardStats
         services: service_status,
         storage: storage_summary,
         counts: entity_counts,
-        drives: drive_usage
+        drives: drive_usage,
+        pool: pool_status
       }
     end
 
@@ -92,6 +93,40 @@ class DashboardStats
         total_files: total_files,
         pool_drives: pool_partitions.size,
         greyhole_installed: greyhole_installed
+      }
+    end
+
+    def pool_status
+      installed = begin; Greyhole.installed?; rescue StandardError; false; end
+      running = begin; Greyhole.running?; rescue StandardError; false; end
+      return { active: false } unless installed && running
+
+      drives = begin; Greyhole.pool_drives; rescue StandardError; []; end
+      return { active: false } if drives.empty?
+
+      total = drives.sum { |d| d[:total].to_i }
+      used = drives.sum { |d| d[:used].to_i }
+      free = drives.sum { |d| d[:free].to_i }
+      pct = total > 0 ? (used.to_f / total * 100).round(1) : 0
+      copies = (Setting.get('default_pool_copies') rescue '2').to_i
+      copies = 2 if copies < 1
+      pending = begin
+        q = Greyhole.queue_status
+        q[:pending] || 0
+      rescue StandardError
+        0
+      end
+
+      {
+        active: true,
+        drives: drives.size,
+        total: total,
+        used: used,
+        free: free,
+        percent: pct,
+        copies: copies,
+        effective_capacity: copies > 0 ? total / copies : total,
+        pending: pending
       }
     end
 
