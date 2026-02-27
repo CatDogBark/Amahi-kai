@@ -9,7 +9,7 @@
   box-shadow: $shadow;
 }
 
-// VARIABLES
+// VARIABLES (SCSS — used for light defaults)
 $kai-primary: #0a6e8a;
 $kai-secondary: #0d8aa8;
 $kai-accent: #f0a030;
@@ -17,6 +17,123 @@ $kai-dark: #1a2332;
 $kai-darker: #131b27;
 $kai-text: #2c3e50;
 $kai-muted: #7f8c9b;
+
+// ─── CSS Custom Properties (Light defaults) ───
+:root {
+  // Form
+  --login-form-bg: #{$kai-dark};
+  --login-form-bg-gradient: linear-gradient(180deg, #{lighten($kai-dark, 8%)} 0%, #{$kai-dark} 100%);
+  --login-form-border: rgba(255, 255, 255, 0.08);
+
+  // Input
+  --login-input-color: #{$kai-text};
+  --login-input-bg: #f4f7fa;
+  --login-input-border: rgba(255, 255, 255, 0.15);
+  --login-input-focus-border: #{$kai-secondary};
+  --login-input-focus-shadow: rgba(#{red($kai-secondary)}, #{green($kai-secondary)}, #{blue($kai-secondary)}, 0.3);
+  --login-input-disabled-color: #999;
+  --login-input-disabled-bg: #eee;
+  --login-placeholder-color: #aaa;
+
+  // Label / text
+  --login-label-color: #ccc;
+  --login-rememberme-color: #{$kai-muted};
+
+  // Submit button
+  --login-submit-bg: #{$kai-primary};
+  --login-submit-gradient: linear-gradient(180deg, #{$kai-secondary} 0%, #{$kai-primary} 100%);
+  --login-submit-border: #{darken($kai-primary, 5%)};
+  --login-submit-hover-bg: #{lighten($kai-primary, 5%)};
+  --login-submit-hover-gradient: linear-gradient(180deg, #{lighten($kai-secondary, 5%)} 0%, #{lighten($kai-primary, 5%)} 100%);
+  --login-submit-hover-border: #{$kai-primary};
+
+  // Alert danger
+  --login-alert-danger-bg: rgba(192, 57, 43, 0.15);
+  --login-alert-danger-border: rgba(192, 57, 43, 0.4);
+  --login-alert-danger-color: #e74c3c;
+
+  // Message (success)
+  --login-message-bg: rgba(39, 174, 96, 0.15);
+  --login-message-border: rgba(39, 174, 96, 0.4);
+  --login-message-color: #2ecc71;
+
+  // Alert info
+  --login-alert-info-bg: rgba(#{red($kai-secondary)}, #{green($kai-secondary)}, #{blue($kai-secondary)}, 0.15);
+  --login-alert-info-border: rgba(#{red($kai-secondary)}, #{green($kai-secondary)}, #{blue($kai-secondary)}, 0.4);
+  --login-alert-info-color: #{lighten($kai-secondary, 25%)};
+
+  // Alert warn
+  --login-alert-warn-bg: rgba(#{red($kai-accent)}, #{green($kai-accent)}, #{blue($kai-accent)}, 0.15);
+  --login-alert-warn-border: rgba(#{red($kai-accent)}, #{green($kai-accent)}, #{blue($kai-accent)}, 0.4);
+  --login-alert-warn-color: #{$kai-accent};
+  --login-alert-warn-link: #{lighten($kai-accent, 10%)};
+
+  // Updated
+  --login-updated-bg: #e8f8f0;
+  --login-updated-border: #27ae60;
+
+  // Links
+  --login-nav-link-color: #777;
+  --login-link-color: #{$kai-secondary};
+}
+
+// ─── Dark Mode Overrides (vars only) ───
+@mixin login-dark-vars {
+  --login-form-bg: #0d1117;
+  --login-form-bg-gradient: linear-gradient(180deg, #161b22 0%, #0d1117 100%);
+  --login-form-border: #30363d;
+
+  --login-input-color: #c9d1d9;
+  --login-input-bg: #161b22;
+  --login-input-border: #30363d;
+  --login-input-focus-border: #1a9fc2;
+  --login-input-focus-shadow: rgba(26, 159, 194, 0.3);
+  --login-input-disabled-color: #8b949e;
+  --login-input-disabled-bg: #21262d;
+  --login-placeholder-color: #6e7681;
+
+  --login-label-color: #c9d1d9;
+  --login-rememberme-color: #8b949e;
+
+  --login-submit-bg: #1a9fc2;
+  --login-submit-gradient: linear-gradient(180deg, #22b8d6 0%, #1a9fc2 100%);
+  --login-submit-border: #1a9fc2;
+  --login-submit-hover-bg: #{lighten(#1a9fc2, 5%)};
+  --login-submit-hover-gradient: linear-gradient(180deg, #{lighten(#22b8d6, 5%)} 0%, #{lighten(#1a9fc2, 5%)} 100%);
+  --login-submit-hover-border: #{lighten(#1a9fc2, 5%)};
+
+  --login-alert-danger-bg: rgba(218, 54, 51, 0.15);
+  --login-alert-danger-border: rgba(218, 54, 51, 0.4);
+  --login-alert-danger-color: #f85149;
+
+  --login-message-bg: rgba(46, 160, 67, 0.15);
+  --login-message-border: rgba(46, 160, 67, 0.4);
+  --login-message-color: #3fb950;
+
+  --login-alert-info-bg: rgba(26, 159, 194, 0.15);
+  --login-alert-info-border: rgba(26, 159, 194, 0.4);
+  --login-alert-info-color: #58a6ff;
+
+  --login-alert-warn-bg: rgba(240, 160, 48, 0.15);
+  --login-alert-warn-border: rgba(240, 160, 48, 0.4);
+  --login-alert-warn-color: #e3b341;
+  --login-alert-warn-link: #f0a030;
+
+  --login-updated-bg: #122117;
+  --login-updated-border: #2ea043;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    @include login-dark-vars;
+  }
+}
+
+[data-theme="dark"] {
+  @include login-dark-vars;
+}
+
+// ─── Base Styles ───
 
 body {
   font: 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -32,10 +149,10 @@ html {
 #nav {
   margin: 0 0 0 8px;
   padding: 16px;
-  a { color: #777; }
+  a { color: var(--login-nav-link-color); }
 }
 
-a { text-decoration: none; color: $kai-secondary; }
+a { text-decoration: none; color: var(--login-link-color); }
 
 #logo {
   margin-top: 80px;
@@ -64,9 +181,9 @@ a { text-decoration: none; color: $kai-secondary; }
 .alert-danger {
   margin: 0 0 16px 8px;
   padding: 12px 16px;
-  border: 1px solid rgba(192, 57, 43, 0.4);
-  background-color: rgba(192, 57, 43, 0.15);
-  color: #e74c3c;
+  border: 1px solid var(--login-alert-danger-border);
+  background-color: var(--login-alert-danger-bg);
+  color: var(--login-alert-danger-color);
   border-radius: 6px;
   font-weight: 500;
   font-size: 13px;
@@ -75,9 +192,9 @@ a { text-decoration: none; color: $kai-secondary; }
 .message-message {
   margin: 0 0 16px 8px;
   padding: 12px 16px;
-  border: 1px solid rgba(39, 174, 96, 0.4);
-  background-color: rgba(39, 174, 96, 0.15);
-  color: #2ecc71;
+  border: 1px solid var(--login-message-border);
+  background-color: var(--login-message-bg);
+  color: var(--login-message-color);
   border-radius: 6px;
   font-weight: 500;
   font-size: 13px;
@@ -86,9 +203,9 @@ a { text-decoration: none; color: $kai-secondary; }
 .alert-info {
   margin: 0 0 16px 8px;
   padding: 12px 16px;
-  border: 1px solid rgba($kai-secondary, 0.4);
-  background-color: rgba($kai-secondary, 0.15);
-  color: lighten($kai-secondary, 25%);
+  border: 1px solid var(--login-alert-info-border);
+  background-color: var(--login-alert-info-bg);
+  color: var(--login-alert-info-color);
   border-radius: 6px;
   font-weight: 500;
   font-size: 13px;
@@ -97,13 +214,13 @@ a { text-decoration: none; color: $kai-secondary; }
 .alert-warn {
   margin: 0 0 16px 8px;
   padding: 12px 16px;
-  color: $kai-accent;
-  background-color: rgba($kai-accent, 0.15);
-  border: 1px solid rgba($kai-accent, 0.4);
+  color: var(--login-alert-warn-color);
+  background-color: var(--login-alert-warn-bg);
+  border: 1px solid var(--login-alert-warn-border);
   border-radius: 6px;
   font-weight: 500;
   font-size: 13px;
-  a { color: lighten($kai-accent, 10%); }
+  a { color: var(--login-alert-warn-link); }
 }
 
 form {
@@ -114,15 +231,15 @@ form {
   @include border-radius(8px);
   @include box-shadow(rgba(0, 0, 0, 0.3) 0 8px 32px);
 
-  background: $kai-dark;
-  background: linear-gradient(180deg, lighten($kai-dark, 8%) 0%, $kai-dark 100%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--login-form-bg);
+  background: var(--login-form-bg-gradient);
+  border: 1px solid var(--login-form-border);
 
   .rememberme {
     font-weight: normal;
     float: left;
     margin-bottom: 0;
-    color: $kai-muted;
+    color: var(--login-rememberme-color);
   }
 
   p {
@@ -134,26 +251,26 @@ form {
     display: block;
     text-align: left;
     vertical-align: top;
-    color: #ccc;
+    color: var(--login-label-color);
     font-weight: 500;
   }
 
   input {
-    color: $kai-text;
-    background-color: #f4f7fa;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: var(--login-input-color);
+    background-color: var(--login-input-bg);
+    border: 1px solid var(--login-input-border);
     border-radius: 4px;
     transition: border-color 0.15s ease;
 
     &:focus {
-      border-color: $kai-secondary;
+      border-color: var(--login-input-focus-border);
       outline: none;
-      box-shadow: 0 0 0 2px rgba($kai-secondary, 0.3);
+      box-shadow: 0 0 0 2px var(--login-input-focus-shadow);
     }
 
     &[disabled='disabled'] {
-      color: #999;
-      background-color: #eee;
+      color: var(--login-input-disabled-color);
+      background-color: var(--login-input-disabled-bg);
     }
   }
 
@@ -163,13 +280,13 @@ form {
     input {
       margin-top: -6px;
       padding: 10px 24px;
-      background: $kai-primary;
-      background: linear-gradient(180deg, $kai-secondary 0%, $kai-primary 100%);
+      background: var(--login-submit-bg);
+      background: var(--login-submit-gradient);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
       font-size: 14px;
       font-weight: 600;
       color: white;
-      border: 1px solid darken($kai-primary, 5%);
+      border: 1px solid var(--login-submit-border);
       @include border-radius(6px);
       cursor: pointer;
       display: inline-block;
@@ -180,9 +297,9 @@ form {
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 
       &:hover {
-        background: lighten($kai-primary, 5%);
-        background: linear-gradient(180deg, lighten($kai-secondary, 5%) 0%, lighten($kai-primary, 5%) 100%);
-        border-color: $kai-primary;
+        background: var(--login-submit-hover-bg);
+        background: var(--login-submit-hover-gradient);
+        border-color: var(--login-submit-hover-border);
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
       }
     }
@@ -197,98 +314,14 @@ form {
 }
 
 .updated {
-  background-color: #e8f8f0;
-  border-color: #27ae60;
+  background-color: var(--login-updated-bg);
+  border-color: var(--login-updated-border);
 }
 
 // Placeholder styling
-input::-webkit-input-placeholder { color: #aaa; font-weight: normal; }
-input:-moz-placeholder { color: #aaa; font-weight: normal; }
-input::-moz-placeholder { color: #aaa; font-weight: normal; }
-input:-ms-input-placeholder { color: #aaa; font-weight: normal; }
+input::-webkit-input-placeholder { color: var(--login-placeholder-color); font-weight: normal; }
+input:-moz-placeholder { color: var(--login-placeholder-color); font-weight: normal; }
+input::-moz-placeholder { color: var(--login-placeholder-color); font-weight: normal; }
+input:-ms-input-placeholder { color: var(--login-placeholder-color); font-weight: normal; }
 
 // Wave accent removed — using logo SVG in the view instead
-
-// ─── Dark Mode ───
-@media (prefers-color-scheme: dark) {
-  html {
-    background: transparent;
-  }
-
-  form {
-    background: #0d1117;
-    background: linear-gradient(180deg, #161b22 0%, #0d1117 100%);
-    border-color: #30363d;
-
-    input {
-      color: #c9d1d9;
-      background-color: #161b22;
-      border-color: #30363d;
-
-      &:focus {
-        border-color: #1a9fc2;
-        box-shadow: 0 0 0 2px rgba(26, 159, 194, 0.3);
-      }
-
-      &[disabled='disabled'] {
-        color: #8b949e;
-        background-color: #21262d;
-      }
-    }
-
-    label {
-      color: #c9d1d9;
-    }
-
-    .rememberme {
-      color: #8b949e;
-    }
-
-    .submit input {
-      background: #1a9fc2;
-      background: linear-gradient(180deg, #22b8d6 0%, #1a9fc2 100%);
-      border-color: #1a9fc2;
-      color: white;
-
-      &:hover {
-        background: lighten(#1a9fc2, 5%);
-        background: linear-gradient(180deg, lighten(#22b8d6, 5%) 0%, lighten(#1a9fc2, 5%) 100%);
-      }
-    }
-  }
-
-  .alert-danger {
-    background-color: rgba(218, 54, 51, 0.15);
-    border-color: rgba(218, 54, 51, 0.4);
-    color: #f85149;
-  }
-
-  .message-message {
-    background-color: rgba(46, 160, 67, 0.15);
-    border-color: rgba(46, 160, 67, 0.4);
-    color: #3fb950;
-  }
-
-  .alert-info {
-    background-color: rgba(26, 159, 194, 0.15);
-    border-color: rgba(26, 159, 194, 0.4);
-    color: #58a6ff;
-  }
-
-  .alert-warn {
-    background-color: rgba(240, 160, 48, 0.15);
-    border-color: rgba(240, 160, 48, 0.4);
-    color: #e3b341;
-    a { color: #f0a030; }
-  }
-
-  .updated {
-    background-color: #122117;
-    border-color: #2ea043;
-  }
-
-  input::-webkit-input-placeholder { color: #6e7681; }
-  input:-moz-placeholder { color: #6e7681; }
-  input::-moz-placeholder { color: #6e7681; }
-  input:-ms-input-placeholder { color: #6e7681; }
-}
