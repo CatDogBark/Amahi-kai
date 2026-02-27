@@ -11,6 +11,7 @@ class SetupController < ApplicationController
   skip_before_action :check_setup_completed
   before_action :login_required
   before_action :admin_required
+  before_action :set_no_cache
 
   def welcome
     @memory = detect_memory
@@ -356,6 +357,12 @@ class SetupController < ApplicationController
   end
 
   private
+
+  def set_no_cache
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+  end
 
   def detect_memory
     total_mb = begin
