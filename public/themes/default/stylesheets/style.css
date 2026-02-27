@@ -2249,21 +2249,26 @@ span#setting_dns select {
    Form Controls & Bootstrap Component Var Overrides
    ========================================================================== */
 
-.form-control {
-  background-color: var(--classic-input-bg);
-  color: var(--classic-input-text);
-  border-color: var(--classic-input-border);
+.form-control,
+.form-control:focus,
+input[type="text"].form-control,
+input[type="password"].form-control {
+  background-color: var(--classic-input-bg) !important;
+  color: var(--classic-input-text) !important;
+  border-color: var(--classic-input-border) !important;
 }
 
-.form-control:focus {
-  background-color: var(--classic-input-bg);
-  color: var(--classic-input-text);
-  border-color: var(--classic-primary);
+.form-control:focus,
+input[type="text"].form-control:focus,
+input[type="password"].form-control:focus {
+  border-color: var(--classic-primary) !important;
+  box-shadow: 0 0 0 2px rgba(74, 111, 165, 0.2);
 }
 
-.form-control::placeholder {
-  color: var(--classic-muted);
-  opacity: 1;
+.form-control::placeholder,
+input::placeholder {
+  color: var(--classic-muted) !important;
+  opacity: 1 !important;
 }
 
 select {
