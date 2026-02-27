@@ -26,10 +26,10 @@ nav.navbar.navbar-expand-md.bg-dark.navbar-inverse
             = t('dashboard')
           a.nav-item.nav-link.text-white.text-center.nav_hover href=users_path
             = t('setup')
-          a.nav-item.nav-link.text-white.text-center.nav_hover href="https://amahi-kai.com/wiki/" target='_blank'  
-            = t('help')
           a.nav-item.nav-link.text-white.text-center.nav_hover href=apps_index_path
             = t('apps')
+          a.nav-item.nav-link.text-white.text-center.nav_hover href="https://amahi-kai.com/wiki/" target='_blank'  
+            = t('help')
           a.nav-item.nav-link.text-white.text-center.nav_hover#update-btn href="#" title="System Update" onclick="openInstallTerminal('system-update','#{settings_update_system_stream_path}');return false;"
             | 🔄
           a.nav-item.nav-link.text-white.text-center.nav_hover#advanced-toggle href="#" title="#{t('advanced_settings')}" style="opacity: #{@advanced ? '1' : '0.5'}" onclick="fetch('#{toggle_advanced_path}', {method:'POST', headers:{'X-CSRF-Token':document.querySelector('meta[name=csrf-token]').content}}).then(function(){location.reload()});return false;"
