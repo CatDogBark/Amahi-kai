@@ -81,15 +81,21 @@ module ApplicationHelper
 
   # theme helpers
   def theme_stylesheet_link_tag(a)
+    css_path = File.join('/themes', @theme.path, 'stylesheets', "#{a}.css")
+    full_path = Rails.public_path.join('themes', @theme.path, 'stylesheets', "#{a}.css")
+    mtime = File.exist?(full_path) ? File.mtime(full_path).to_i : AmahiKai::VERSION.tr('.', '')
     tag.link(
-      href: File.join('/themes', @theme.path, 'stylesheets', "#{a}.css"),
+      href: "#{css_path}?v=#{mtime}",
       rel: "stylesheet",
       media: "screen"
     )
   end
 
   def theme_stylesheet_path(a, theme)
-    File.join('/themes', theme, 'stylesheets', "#{a}.css")
+    css_path = File.join('/themes', theme, 'stylesheets', "#{a}.css")
+    full_path = Rails.public_path.join('themes', theme, 'stylesheets', "#{a}.css")
+    mtime = File.exist?(full_path) ? File.mtime(full_path).to_i : AmahiKai::VERSION.tr('.', '')
+    "#{css_path}?v=#{mtime}"
   end
 
   def theme_image_tag(a, options = {})

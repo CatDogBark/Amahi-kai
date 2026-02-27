@@ -8,7 +8,7 @@ form.user.create-form.form-horizontal.p-1[
   data-create-form-target-value="#users-table"
   data-action="submit->create-form#submit"]
   input type="hidden" name="authenticity_token" value=form_authenticity_token
-  fieldset.bg-white
+  fieldset
     legend &nbsp; #{t('create_a_new_user')} &nbsp;
     - if @user&.errors&.any?
       .alert.alert-danger.m-2

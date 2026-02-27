@@ -209,6 +209,7 @@ fieldset {
   border: 1px solid var(--classic-fieldset-border);
   padding: 5px 10px;
   color: var(--classic-text);
+  background: var(--classic-card-bg);
   border-radius: 5px;
 }
 
