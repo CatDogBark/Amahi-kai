@@ -43,7 +43,7 @@ Amahi-kai runs as a systemd service (`amahi-kai.service`) powered by Puma on por
 |------|---------|
 | `/opt/amahi-kai` | Application code |
 | `/etc/amahi-kai/amahi.env` | Production configuration |
-| `/var/hda/files` | Default share root |
+| `/var/lib/amahi-kai/files` | Default share root |
 | `/opt/amahi/apps` | Docker app data |
 | `/etc/samba/smb.conf` | Samba config (auto-generated) |
 | `/etc/dnsmasq.d/` | dnsmasq config directory |

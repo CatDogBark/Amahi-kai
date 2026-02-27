@@ -197,7 +197,7 @@ Each app stores its data under `/opt/amahi/apps/<identifier>/`. For example:
     data/
 ```
 
-Media apps also mount share directories. For instance, Jellyfin mounts `/opt/amahi/media` and FileBrowser mounts `/var/hda/files`.
+Media apps also mount share directories. For instance, Jellyfin mounts `/opt/amahi/media` and FileBrowser mounts `/var/lib/amahi-kai/files`.
 
 ### Backing Up App Data
 

@@ -111,7 +111,7 @@ Amahi-kai follows the principle of least privilege. The `amahi` user cannot run 
 |----------|------------------|
 | User management | `useradd`, `usermod`, `userdel` |
 | Samba | `pdbedit` |
-| File operations | `chmod`, `chown`, `mkdir` scoped to `/var/hda/*` |
+| File operations | `chmod`, `chown`, `mkdir` scoped to `/var/lib/amahi-kai/*` |
 | SSH | `chmod`/`chown` scoped to `/home/*/.ssh` |
 | Config staging | `cp` from staging dirs to `/etc/samba/*`, `/etc/dnsmasq.d/*` |
 | Service management | `systemctl` for specific services only |

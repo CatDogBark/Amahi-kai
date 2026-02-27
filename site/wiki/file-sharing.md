@@ -11,7 +11,7 @@ Amahi-kai manages Samba file shares through its web UI. When you create, modify,
 
 ## Concepts
 
-- **Share** — A named directory under `/var/hda/files/` exposed over SMB/CIFS
+- **Share** — A named directory under `/var/lib/amahi-kai/files/` exposed over SMB/CIFS
 - **Everyone mode** — All users have access (default for new shares)
 - **Per-user access** — When "Everyone" is toggled off, you control read and write access per user
 - **Guest access** — Allow unauthenticated (anonymous) access to a share
@@ -19,7 +19,7 @@ Amahi-kai manages Samba file shares through its web UI. When you create, modify,
 
 ### Default Shares
 
-The seed data creates these shares: **Books**, **Pictures**, **Movies**, **Videos**, **Music**, **Docs**, **Public**, **TV**. All are stored under `/var/hda/files/<name>`.
+Shares are created through the setup wizard or the Shares page. Each share gets a directory under `/var/lib/amahi-kai/files/<name>`.
 
 ---
 
@@ -32,7 +32,7 @@ The seed data creates these shares: **Books**, **Pictures**, **Movies**, **Video
 3. Click **Create**
 
 The app will:
-- Create the directory at `/var/hda/files/<name>` (lowercased)
+- Create the directory at `/var/lib/amahi-kai/files/<name>` (lowercased)
 - Set ownership to the first admin user and the `users` group
 - Add the share to `smb.conf`
 - Reload Samba
@@ -47,7 +47,7 @@ The app will:
 | Guest access | No | Allow anonymous access (when Everyone is off) |
 | Guest writeable | No | Allow anonymous write access |
 | Tags | share name | Comma-separated labels |
-| Path | `/var/hda/files/<name>` | On-disk directory |
+| Path | `/var/lib/amahi-kai/files/<name>` | On-disk directory |
 | Extras | empty | Raw Samba config lines appended to this share's section |
 
 ---
@@ -87,7 +87,7 @@ The `[global]` section is configured with:
 
 ```ini
 workgroup = WORKGROUP
-netbios name = hda
+netbios name = amahi-kai
 security = user
 guest account = nobody
 map to guest = Bad User
@@ -103,7 +103,7 @@ Each share generates a config block like:
 ```ini
 [Movies]
     comment = Movies
-    path = /var/hda/files/movies
+    path = /var/lib/amahi-kai/files/movies
     writeable = yes
     browseable = yes
     create mask = 0775
@@ -140,7 +140,7 @@ Open File Explorer and type in the address bar:
 Or use the netbios name:
 
 ```
-\\hda\ShareName
+\\amahi-kai\ShareName
 ```
 
 ### From macOS

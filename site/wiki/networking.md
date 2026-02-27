@@ -137,7 +137,6 @@ Under **Network > Settings** (Advanced mode), you can choose upstream DNS provid
 
 | Provider | DNS Servers |
 |----------|-------------|
-| OpenDNS | 208.67.222.222, 208.67.220.220 |
 | Google | 8.8.8.8, 8.8.4.4 |
 | Cloudflare | 1.1.1.1, 1.0.0.1 |
 | OpenNIC | (community servers) |

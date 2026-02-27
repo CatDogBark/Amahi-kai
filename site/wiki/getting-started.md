@@ -63,7 +63,7 @@ The installer is **idempotent** — you can run it again safely. It performs the
 4. **Ruby** — Uses system Ruby 3.2 (Ubuntu 24.04 ships it), falls back to rbenv if needed
 5. **System user** — Creates the `amahi` user and group
 6. **Application code** — Deploys to `/opt/amahi-kai`
-7. **Data directories** — Creates `/var/hda/files` (share root), `/var/hda/dbs`, `/var/hda/tmp`
+7. **Data directories** — Creates `/var/lib/amahi-kai/files` (share root), `/var/lib/amahi-kai/dbs`, `/var/lib/amahi-kai/tmp`
 8. **Configuration** — Generates `/etc/amahi-kai/amahi.env` with a random secret key and database password
 9. **MariaDB** — Creates the `amahi_production` database and user
 10. **Sudoers** — Installs a least-privilege allowlist at `/etc/sudoers.d/amahi-kai`
@@ -84,7 +84,7 @@ The installer prints connection details:
 Web UI:  http://<your-server-ip>:3000
 Login:   admin / secretpassword
 Config:  /etc/amahi-kai/amahi.env
-Shares:  /var/hda/files
+Shares:  /var/lib/amahi-kai/files
 Logs:    journalctl -u amahi-kai -f
 ```
 
@@ -120,7 +120,7 @@ Select disk partitions to include in the storage pool. The wizard shows availabl
 
 ### Step 5: Create a Share
 
-Optionally create your first file share. Enter a name (e.g., "Movies"), and the wizard creates the directory at `/var/hda/files/<name>` with Samba configuration.
+Optionally create your first file share. Enter a name (e.g., "Movies"), and the wizard creates the directory at `/var/lib/amahi-kai/files/<name>` with Samba configuration.
 
 ### Step 6: Complete
 
@@ -176,5 +176,5 @@ sudo -u amahi bash -lc "source /etc/amahi-kai/amahi.env && RAILS_ENV=production 
 ```bash
 # Fix file ownership
 sudo chown -R amahi:amahi /opt/amahi-kai
-sudo chown -R amahi:amahi /var/hda/files
+sudo chown -R amahi:amahi /var/lib/amahi-kai/files
 ```
