@@ -27,8 +27,8 @@ class ShareFileSystem
     cmds = []
     cmds << "rmdir #{Shellwords.escape(share.path_was)}" unless share.path_was.blank?
     cmds << "mkdir -p #{Shellwords.escape(share.path)}"
-    cmds << "chown #{Shellwords.escape(admin.login)}:users #{Shellwords.escape(share.path)}"
-    cmds << "chmod g+w #{Shellwords.escape(share.path)}"
+    cmds << "chown amahi:users #{Shellwords.escape(share.path)}"
+    cmds << "chmod 2775 #{Shellwords.escape(share.path)}"
     Shell.run(*cmds)
   end
 

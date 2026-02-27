@@ -55,7 +55,12 @@ class FileBrowserController < ApplicationController
         next
       end
 
-      File.open(dest, 'wb') { |f| f.write(file.read) }
+      # Write to temp file first, then move to destination with proper ownership
+      tmp = File.join('/tmp', "amahi-upload-#{SecureRandom.hex(8)}")
+      File.open(tmp, 'wb') { |f| f.write(file.read) }
+      Shell.run("cp #{Shellwords.escape(tmp)} #{Shellwords.escape(dest)}")
+      Shell.run("chown amahi:users #{Shellwords.escape(dest)}")
+      FileUtils.rm_f(tmp)
       uploaded << filename
     end
 
@@ -77,7 +82,8 @@ class FileBrowserController < ApplicationController
       return render json: { error: "Already exists" }, status: :conflict
     end
 
-    FileUtils.mkdir_p(folder_path)
+    Shell.run("mkdir -p #{Shellwords.escape(folder_path)}")
+    Shell.run("chmod 2775 #{Shellwords.escape(folder_path)}")
     render json: { status: 'ok', name: name }
   rescue StandardError => e
     Rails.logger.error("FileBrowser#new_folder ERROR: #{e.class}: #{e.message}\n#{e.backtrace&.first(5)&.join("\n")}")
