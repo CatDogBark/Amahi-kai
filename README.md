@@ -22,7 +22,7 @@ One command on a dedicated Ubuntu 24.04 or Debian 12+ server:
 curl -fsSL https://amahi-kai.com/install.sh | sudo bash
 ```
 
-That's it. The installer handles Ruby, MariaDB, Samba, dnsmasq, systemd, asset compilation, and firewall rules.
+That's it. The installer handles Ruby, MariaDB, Samba, systemd, asset compilation, and all dependencies.
 
 ### Manual Install
 
@@ -34,22 +34,22 @@ sudo bin/amahi-install
 
 ### After Install
 
-- **Web UI:** `http://<your-server-ip>:3000` (port 3000)
-- **Setup Wizard** runs on first visit — creates your admin account
+- **Web UI:** `http://<your-server-ip>:3000`
+- **Setup Wizard** runs on first login — creates admin account, detects drives, configures storage
 - **Logs:** `journalctl -u amahi-kai -f`
 - **Config:** `/etc/amahi-kai/amahi.env`
-- **Update:** Click the update button in the header, or run `sudo bin/amahi-update`
+- **Update:** `curl -fsSL https://amahi-kai.com/install.sh | sudo bash` (same command, idempotent)
 
 ## Features
 
-- **📁 File Sharing** — Samba shares with Greyhole storage pooling across multiple drives
-- **🐳 Docker Apps** — One-click install for Jellyfin, Nextcloud, FileBrowser, Syncthing, Grafana, Gitea, and more
+- **📁 File Sharing** — Samba shares with built-in file browser, Greyhole storage pooling across multiple drives
+- **🐳 Docker Apps** — One-click install for Jellyfin, Nextcloud, Syncthing, Grafana, Gitea, and more
 - **🌐 Remote Access** — Cloudflare Tunnel integration (no port forwarding needed)
-- **📊 System Dashboard** — Real-time CPU, memory, disk, network, and service monitoring
+- **📊 Dashboard** — Real-time CPU, memory, per-drive storage, services, and app quick-launch
 - **🔒 Security Audit** — Built-in scanner with auto-fix for SSH, firewall, updates
-- **🔧 Setup Wizard** — 6-step guided setup for fresh installs (+ headless mode)
-- **🌙 Dark Mode** — Automatic, based on system preference
-- **🔄 One-Click Updates** — Update from the browser
+- **🔧 Setup Wizard** — 7-step guided setup with drive detection, swap creation, and Greyhole pooling
+- **🌊 Ocean UI** — Animated ambient background, glassmorphism cards, light/dark/system theme toggle
+- **🔄 One-Click Updates** — Update from the browser or re-run the installer
 
 ## Development
 
@@ -62,33 +62,32 @@ bin/rails s
 ### Tests
 
 ```bash
-bundle exec rspec --tag ~js     # Fast — no browser needed
-bundle exec rspec spec/models/  # Model specs only
-bundle exec rspec               # Full suite (needs chromium)
+bundle exec rspec spec/models/    # Model specs
+bundle exec rspec spec/requests/  # Request specs
+bundle exec rspec spec/lib/       # Library specs
+bundle exec rspec                 # Full suite
 ```
 
 ## Architecture
 
-Rails app with a plugin system:
+Monolithic Rails app — clean, no plugins.
 
-| Plugin | Purpose |
-|--------|---------|
-| `010-users` | User management |
-| `020-shares` | Samba file shares |
-| `030-disks` | Disk monitoring |
-| `040-apps` | Application installer |
-| `050-network` | DNS, DHCP, fixed IPs |
-| `080-settings` | System settings, themes |
+| Directory | Purpose |
+|-----------|---------|
+| `app/controllers/` | Users, shares, disks, apps, network, settings, file browser, setup |
+| `app/services/` | ShareFileSystem, SambaService, ShareAccessManager |
+| `lib/` | Shell, DiskManager, Greyhole, CloudflareService, SecurityAudit, DashboardStats |
+| `config/docker_apps/` | Docker app catalog (YAML) |
 
 ## Security
 
+- **bcrypt** password hashing via `has_secure_password`
 - **Rack::Attack** rate limiting on login
 - **Content Security Policy** headers
-- **SCrypt** password hashing (with Sha512 transition)
-- **Shellwords.escape** on all shell commands
+- **Shell module** with automatic sudo and Shellwords escaping
 - **AES-256-GCM** encryption for stored credentials
-- **Parameterized SQL** in database management
-- Direct **systemd** integration (no more hda-ctl daemon)
+- **Parameterized SQL** everywhere
+- **Security audit** with auto-fix (SSH hardening, firewall, unattended upgrades)
 
 ## Credits
 

@@ -1,0 +1,34 @@
+#!/bin/bash
+# screenshot — capture a headless Chromium screenshot
+# Usage: bin/screenshot <url> <output.png> [width] [height]
+#
+# Examples:
+#   bin/screenshot http://localhost:3000 /tmp/dashboard.png
+#   bin/screenshot http://localhost:3000/users /tmp/users.png 1440 900
+
+URL="${1:?Usage: bin/screenshot <url> <output.png> [width] [height]}"
+OUTPUT="${2:?Usage: bin/screenshot <url> <output.png> [width] [height]}"
+WIDTH="${3:-1280}"
+HEIGHT="${4:-900}"
+
+CHROMIUM=$(command -v chromium || command -v chromium-browser || echo "")
+if [[ -z "$CHROMIUM" ]]; then
+  echo "ERROR: chromium not found in PATH" >&2
+  exit 1
+fi
+
+"$CHROMIUM" \
+  --headless \
+  --no-sandbox \
+  --disable-dev-shm-usage \
+  --disable-gpu \
+  --window-size="${WIDTH},${HEIGHT}" \
+  --screenshot="$OUTPUT" \
+  "$URL" 2>/dev/null
+
+if [[ -f "$OUTPUT" ]]; then
+  echo "Screenshot saved: $OUTPUT"
+else
+  echo "ERROR: screenshot failed" >&2
+  exit 1
+fi

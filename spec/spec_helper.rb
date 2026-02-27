@@ -25,6 +25,7 @@ CHROMEDRIVER_AVAILABLE = begin
     require 'selenium-webdriver'
 
     browser_binary = ['/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome'].find { |b| File.exist?(b) }
+    chromedriver_binary = ['/usr/bin/chromedriver', '/usr/bin/chromium-driver'].find { |b| File.exist?(b) }
 
     Capybara.register_driver :headless_chrome do |app|
       options = Selenium::WebDriver::Chrome::Options.new
@@ -35,7 +36,8 @@ CHROMEDRIVER_AVAILABLE = begin
       options.add_argument('--single-process')
       options.add_argument('--window-size=1400,900')
       options.binary = browser_binary
-      Capybara::Selenium::Driver.new(app, browser: :chrome, options: options)
+      service = chromedriver_binary ? Selenium::WebDriver::Service.chrome(path: chromedriver_binary) : nil
+      Capybara::Selenium::Driver.new(app, browser: :chrome, options: options, service: service)
     end
 
     Capybara.javascript_driver = :headless_chrome

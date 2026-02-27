@@ -1,0 +1,37 @@
+#!/bin/bash
+# sandbox-start — boot MariaDB + Rails in the sandbox
+# Idempotent: safe to run multiple times in the same session
+set -e
+
+RAILS_ENV="${RAILS_ENV:-development}"
+
+# ── 1. MariaDB ─────────────────────────────────────────────────────────────
+if mysqladmin --socket=/tmp/mysqld.sock ping --silent 2>/dev/null; then
+  echo "[sandbox-start] MariaDB already running"
+else
+  echo "[sandbox-start] Starting MariaDB..."
+  start-mariadb
+fi
+
+# ── 2. Database (create + migrate if needed) ────────────────────────────────
+echo "[sandbox-start] Running db:prepare..."
+cd /workspace
+RAILS_ENV=$RAILS_ENV bin/rails db:prepare 2>&1 | tail -5
+
+# ── 3. Rails server ─────────────────────────────────────────────────────────
+if curl -s --max-time 2 http://localhost:3000/up >/dev/null 2>&1; then
+  echo "[sandbox-start] Rails already running at http://localhost:3000"
+else
+  echo "[sandbox-start] Starting Rails on :3000..."
+  RAILS_ENV=$RAILS_ENV bin/rails server -b 0.0.0.0 -p 3000 -d \
+    --pid /tmp/rails.pid \
+    --log-file /tmp/rails.log
+  # Wait for it to be ready
+  for i in $(seq 1 20); do
+    if curl -s --max-time 1 http://localhost:3000/up >/dev/null 2>&1; then
+      break
+    fi
+    sleep 0.5
+  done
+  echo "[sandbox-start] Rails ready at http://localhost:3000"
+fi
