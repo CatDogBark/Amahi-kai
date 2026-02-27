@@ -46,7 +46,7 @@ module Shell
     # Logs failures but does not raise.
     def run(*commands)
       commands.flatten.each do |cmd|
-        success, _stdout, _stderr = exec_one(cmd)
+        success, _stdout, _stderr, _exit_code = exec_one(cmd)
         return false unless success
       end
       true
@@ -55,8 +55,8 @@ module Shell
     # Execute one or more commands sequentially. Raises Shell::CommandError on failure.
     def run!(*commands)
       commands.flatten.each do |cmd|
-        success, _stdout, stderr = exec_one(cmd)
-        raise CommandError.new(cmd, stderr, $?.exitstatus) unless success
+        success, _stdout, stderr, exit_code = exec_one(cmd)
+        raise CommandError.new(cmd, stderr, exit_code) unless success
       end
       true
     end
@@ -81,8 +81,13 @@ module Shell
     end
 
     # Allow overriding dummy mode (useful for specific tests)
+    # Pass nil to reset to auto-detection.
     def dummy=(val)
-      @dummy = val
+      if val.nil?
+        remove_instance_variable(:@dummy) if defined?(@dummy)
+      else
+        @dummy = val
+      end
     end
 
     private
@@ -90,7 +95,7 @@ module Shell
     def exec_one(cmd)
       if dummy?
         log_cmd("[DUMMY] #{cmd}")
-        return [true, '', '']
+        return [true, '', '', 0]
       end
 
       actual_cmd = prepare(cmd)
@@ -100,7 +105,7 @@ module Shell
       unless status.success?
         log_warn("Command failed (exit #{status.exitstatus}): #{actual_cmd}\nstderr: #{stderr}")
       end
-      [status.success?, stdout, stderr]
+      [status.success?, stdout, stderr, status.exitstatus]
     end
 
     def prepare(cmd)

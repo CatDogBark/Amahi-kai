@@ -85,7 +85,7 @@ RSpec.describe DockerApp, type: :model do
   describe "#start!" do
     it "raises when docker not available" do
       app.update!(container_name: "amahi-test")
-      allow(app).to receive(:system).and_return(false)
+      allow(Shell).to receive(:run).and_return(false)
       expect { app.start! }.to raise_error(RuntimeError)
       expect(app.reload.status).to eq("error")
     end
