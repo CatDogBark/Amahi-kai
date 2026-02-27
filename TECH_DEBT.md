@@ -9,10 +9,8 @@
 ### ~~Share Model Callbacks~~ ✅ EXTRACTED
 Extracted into 3 service objects: `ShareFileSystem`, `SambaService`, `ShareAccessManager`. Model delegates via thin callbacks. Factory stubs inject null services. 3 new spec files. (`1245870`, 2026-02-26)
 
-### Command Class Inconsistency
-`lib/command.rb` wraps shell execution with sudo. But newer code (SSE streaming controllers, setup wizard) calls `system("sudo ...")` directly. Two patterns for the same thing = confusion about which is "right."
-
-**Fix:** Pick one. Either always use `Command`, or deprecate it and use `system()` with Shellwords everywhere. The SSE streaming pattern doesn't work well with Command since it needs line-by-line output.
+### ~~Command Class Inconsistency~~ ✅ REPLACED
+`lib/command.rb` replaced by `lib/shell.rb` — unified `Shell.run()`, `Shell.run!()`, `Shell.capture()` API. All 113 call sites migrated (33 Command.new + 80 system("sudo ...")). `lib/command.rb` still exists but nothing imports it. (`3a9b0e1`, 2026-02-26)
 
 ---
 
@@ -28,7 +26,7 @@ Replaced with inline nav structure in `_tabs.html.slim`. Tab model, 6 initialize
 Some views are `.html.slim`, others `.html.erb`. Not a bug, just inconsistent. Consolidated plugin views kept their original format. Pick one and migrate over time.
 
 ### Platform Model
-`app/models/platform.rb` — methods like `Platform.reload` that restart services. Some places use it, others call `systemctl` directly via Command. Leaky abstraction.
+`app/models/platform.rb` — methods like `Platform.reload` that restart services. Now uses Shell internally, but some controllers still call `Shell.run("systemctl ...")` directly instead of going through Platform. Minor inconsistency.
 
 ---
 
