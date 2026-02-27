@@ -16,6 +16,7 @@ require 'shell'
 # team at http://www.amahi.org/ under "Contact Us."
 
 class AppsController < ApplicationController
+  include SseStreaming
 
   before_action :admin_required
 
@@ -24,21 +25,8 @@ class AppsController < ApplicationController
   # ─── Docker Engine Installation ───────────────────────────
 
   def install_docker_stream
-    response.headers['Content-Type'] = 'text/event-stream'
-    response.headers['Cache-Control'] = 'no-cache, no-store'
-    response.headers['X-Accel-Buffering'] = 'no'
-    response.headers['Connection'] = 'keep-alive'
-    response.headers['Last-Modified'] = Time.now.httpdate
-
-    self.response_body = Enumerator.new do |yielder|
-      sse_send = ->(data, event = nil) {
-        msg = ""
-        msg += "event: #{event}\n" if event
-        msg += "data: #{data}\n\n"
-        yielder << msg
-      }
-
-      sse_send.call("Starting Docker installation...")
+    stream_sse do |sse|
+      sse.send("Starting Docker installation...")
 
       unless Rails.env.production?
         # Dev/test mode — simulate install
@@ -76,9 +64,9 @@ class AppsController < ApplicationController
         ]
         lines.each do |line|
           sleep(0.3)
-          sse_send.call(line)
+          sse.send(line)
         end
-        sse_send.call("success", "done")
+        sse.done
       else
         # Production — real install with streamed output
         success = true
@@ -107,16 +95,16 @@ class AppsController < ApplicationController
         ]
 
         steps.each do |step|
-          sse_send.call(step[:label])
+          sse.send(step[:label])
           step[:commands].each do |c|
             next unless c[:run]
             IO.popen(c[:cmd]) do |io|
               io.each_line do |line|
-                sse_send.call("  #{line.chomp}")
+                sse.send("  #{line.chomp}")
               end
             end
             unless $?.success?
-              sse_send.call("✗ Command failed: #{c[:cmd]}")
+              sse.send("✗ Command failed: #{c[:cmd]}")
               success = false
               break
             end
@@ -125,13 +113,13 @@ class AppsController < ApplicationController
         end
 
         if success
-          sse_send.call("")
-          sse_send.call("✓ Docker installed successfully!")
-          sse_send.call("success", "done")
+          sse.send("")
+          sse.send("✓ Docker installed successfully!")
+          sse.done
         else
-          sse_send.call("")
-          sse_send.call("✗ Docker installation failed. Check logs above.")
-          sse_send.call("error", "done")
+          sse.send("")
+          sse.send("✗ Docker installation failed. Check logs above.")
+          sse.done("error")
         end
       end
     end
@@ -222,31 +210,18 @@ class AppsController < ApplicationController
     entry = load_catalog.find { |e| e[:identifier] == identifier }
     proxy_base = "#{request.scheme}://#{request.host_with_port}"
 
-    response.headers['Content-Type'] = 'text/event-stream'
-    response.headers['Cache-Control'] = 'no-cache, no-store'
-    response.headers['X-Accel-Buffering'] = 'no'
-    response.headers['Connection'] = 'keep-alive'
-    response.headers['Last-Modified'] = Time.now.httpdate
-
-    self.response_body = Enumerator.new do |yielder|
-      sse_send = ->(data, event = nil) {
-        msg = ""
-        msg += "event: #{event}\n" if event
-        msg += "data: #{data}\n\n"
-        yielder << msg
-      }
-
+    stream_sse do |sse|
       unless entry
-        sse_send.call("App not found in catalog")
-        sse_send.call("error", "done")
+        sse.send("App not found in catalog")
+        sse.done("error")
         next
       end
 
       app_name = entry[:name]
       image = entry[:image]
 
-      sse_send.call("Installing #{app_name}...")
-      sse_send.call("")
+      sse.send("Installing #{app_name}...")
+      sse.send("")
 
       unless Rails.env.production?
         # Dev/test simulation
@@ -267,7 +242,7 @@ class AppsController < ApplicationController
           "✓ #{app_name} installed and running!",
           "  Access at #{proxy_base}/app/#{identifier}"
         ]
-        lines.each { |l| sleep(0.4); sse_send.call(l) }
+        lines.each { |l| sleep(0.4); sse.send(l) }
 
         # Create the DB record
         docker_app = DockerApp.find_or_initialize_by(identifier: identifier)
@@ -280,7 +255,7 @@ class AppsController < ApplicationController
           host_port: entry[:ports].values.first
         )
         docker_app.save!
-        sse_send.call("success", "done")
+        sse.done
       else
         begin
           # Create DB record
@@ -299,7 +274,7 @@ class AppsController < ApplicationController
           (entry[:init_files] || []).each do |init|
             host_path = init[:host] || init['host']
             content = init[:content] || init['content']
-            sse_send.call("Creating config #{host_path}...")
+            sse.send("Creating config #{host_path}...")
             Shell.run("mkdir -p #{Shellwords.escape(File.dirname(host_path))}")
             staged = "/tmp/amahi-staging/#{File.basename(host_path)}"
             FileUtils.mkdir_p('/tmp/amahi-staging')
@@ -312,25 +287,25 @@ class AppsController < ApplicationController
           (entry[:volumes] || []).each do |mapping|
             host_path = mapping.is_a?(String) ? mapping.split(':').first : mapping.values.first
             next if host_path.start_with?('/var/run/') # skip system paths
-            sse_send.call("Creating directory #{host_path}...")
+            sse.send("Creating directory #{host_path}...")
             Shell.run("mkdir -p #{Shellwords.escape(host_path)}")
             Shell.run("chmod -R 777 #{Shellwords.escape(host_path)}")
             # chown to match container user if specified
             if entry[:user].present?
-              sse_send.call("  Setting ownership to UID #{entry[:user]}...")
+              sse.send("  Setting ownership to UID #{entry[:user]}...")
               Shell.run("chown -R #{Shellwords.escape(entry[:user].to_s)}:#{Shellwords.escape(entry[:user].to_s)} #{Shellwords.escape(host_path)}")
             end
           end
 
           # Pull image with progress
-          sse_send.call("Pulling image #{image}...")
+          sse.send("Pulling image #{image}...")
           IO.popen("sudo docker pull #{image} 2>&1") do |io|
-            io.each_line { |line| sse_send.call("  #{line.chomp}") }
+            io.each_line { |line| sse.send("  #{line.chomp}") }
           end
           unless $?.success?
             raise "Failed to pull image #{image}"
           end
-          sse_send.call("  ✓ Pull complete")
+          sse.send("  ✓ Pull complete")
 
           # Remove old container if it exists (from a previous failed install)
           docker_app.update!(status: 'installing')
@@ -375,16 +350,16 @@ class AppsController < ApplicationController
           cmd_parts += ["-l", "amahi.managed=true", "-l", "amahi.app=#{identifier}"]
           cmd_parts << image
 
-          sse_send.call("Creating container #{container_name}...")
+          sse.send("Creating container #{container_name}...")
           create_cmd = cmd_parts.map { |p| Shellwords.escape(p) }.join(' ')
           result = `#{create_cmd} 2>&1`
-          sse_send.call("  #{result.strip}") if result.present?
+          sse.send("  #{result.strip}") if result.present?
 
           unless $?.success?
             raise "Failed to create container"
           end
 
-          sse_send.call("Starting container...")
+          sse.send("Starting container...")
           Shell.run("docker start #{container_name} 2>/dev/null")
 
           first_port = (entry[:ports] || {}).values.first
@@ -394,15 +369,15 @@ class AppsController < ApplicationController
             host_port: first_port
           )
 
-          sse_send.call("")
-          sse_send.call("✓ #{app_name} installed and running!")
-          sse_send.call("  Access at #{proxy_base}/app/#{identifier}") if first_port
-          sse_send.call("success", "done")
+          sse.send("")
+          sse.send("✓ #{app_name} installed and running!")
+          sse.send("  Access at #{proxy_base}/app/#{identifier}") if first_port
+          sse.done
 
         rescue StandardError => e
           docker_app&.update(status: 'error', error_message: e.message)
-          sse_send.call("✗ #{e.message}")
-          sse_send.call("error", "done")
+          sse.send("✗ #{e.message}")
+          sse.done("error")
         end
       end
     end

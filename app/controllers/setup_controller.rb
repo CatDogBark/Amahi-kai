@@ -2,6 +2,8 @@ require 'shell'
 require 'shellwords'
 
 class SetupController < ApplicationController
+  include SseStreaming
+
   layout 'setup'
 
   # Skip the setup redirect for this controller (avoid infinite loop)
@@ -17,46 +19,40 @@ class SetupController < ApplicationController
     size = params[:size].to_s
     size = '2G' unless %w[1G 2G 4G].include?(size)
 
-    response.headers['Content-Type'] = 'text/event-stream'
-    response.headers['Cache-Control'] = 'no-cache'
-    response.headers['X-Accel-Buffering'] = 'no'
-
-    self.response_body = Enumerator.new do |yielder|
-      sse = ->(msg) { yielder << "data: #{msg}\n\n" }
-
-      sse.call("Checking current swap status...")
+    stream_sse do |sse|
+      sse.send("Checking current swap status...")
       existing = `swapon --show --noheadings 2>/dev/null`.strip
       unless existing.empty?
-        sse.call("⚠ Swap already active (#{existing.split.first}). Skipping.")
-        yielder << "event: done\ndata: success\n\n"
+        sse.send("⚠ Swap already active (#{existing.split.first}). Skipping.")
+        sse.done
         next
       end
 
-      sse.call("Creating #{size} swap file...")
+      sse.send("Creating #{size} swap file...")
       result = Shell.run("fallocate -l #{size} /swapfile 2>/dev/null || sudo dd if=/dev/zero of=/swapfile bs=1M count=#{size.to_i * 1024} status=none")
       unless result
-        sse.call("✗ Failed to create swap file. Check disk space.")
-        yielder << "event: done\ndata: error\n\n"
+        sse.send("✗ Failed to create swap file. Check disk space.")
+        sse.done("error")
         next
       end
 
-      sse.call("Setting permissions...")
+      sse.send("Setting permissions...")
       Shell.run("chmod 600 /swapfile")
 
-      sse.call("Setting up swap space...")
+      sse.send("Setting up swap space...")
       Shell.run("mkswap /swapfile > /dev/null 2>&1")
 
-      sse.call("Enabling swap...")
+      sse.send("Enabling swap...")
       Shell.run("swapon /swapfile")
 
-      sse.call("Adding to /etc/fstab for persistence...")
+      sse.send("Adding to /etc/fstab for persistence...")
       fstab = File.read('/etc/fstab') rescue ''
       unless fstab.include?('/swapfile')
         Shell.run("sh -c \"echo '/swapfile none swap sw 0 0' >> /etc/fstab\"")
       end
 
-      sse.call("✓ Swap enabled! #{size} swap file is active and persistent.")
-      yielder << "event: done\ndata: success\n\n"
+      sse.send("✓ Swap enabled! #{size} swap file is active and persistent.")
+      sse.done
     end
   end
 

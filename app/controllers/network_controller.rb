@@ -5,6 +5,8 @@ require 'leases'
 require 'shell'
 
 class NetworkController < ApplicationController
+  include SseStreaming
+
   KIND = Setting::NETWORK
   before_action :admin_required
   before_action :set_page_title
@@ -176,21 +178,8 @@ class NetworkController < ApplicationController
   end
 
   def install_dnsmasq_stream
-    response.headers['Content-Type'] = 'text/event-stream'
-    response.headers['Cache-Control'] = 'no-cache, no-store'
-    response.headers['X-Accel-Buffering'] = 'no'
-    response.headers['Connection'] = 'keep-alive'
-    response.headers['Last-Modified'] = Time.now.httpdate
-
-    self.response_body = Enumerator.new do |yielder|
-      sse_send = ->(data, event = nil) {
-        msg = ""
-        msg += "event: #{event}\n" if event
-        msg += "data: #{data}\n\n"
-        yielder << msg
-      }
-
-      sse_send.call("Installing dnsmasq...")
+    stream_sse do |sse|
+      sse.send("Installing dnsmasq...")
 
       unless Rails.env.production?
         lines = [
@@ -210,9 +199,9 @@ class NetworkController < ApplicationController
         ]
         lines.each do |line|
           sleep 0.3
-          sse_send.call(line)
+          sse.send(line)
         end
-        sse_send.call("success", "done")
+        sse.done
       else
         success = true
 
@@ -222,29 +211,29 @@ class NetworkController < ApplicationController
         ]
 
         steps.each do |step|
-          sse_send.call(step[:label])
+          sse.send(step[:label])
           IO.popen(step[:cmd]) do |io|
-            io.each_line { |line| sse_send.call("  #{line.chomp}") }
+            io.each_line { |line| sse.send("  #{line.chomp}") }
           end
           unless $?.success?
-            sse_send.call("  ✗ Command failed")
+            sse.send("  ✗ Command failed")
             success = false
             break
           end
         end
 
         if success
-          sse_send.call("Stopping dnsmasq (safe until configured)...")
+          sse.send("Stopping dnsmasq (safe until configured)...")
           Shell.run("systemctl stop dnsmasq.service 2>/dev/null")
           Shell.run("systemctl disable dnsmasq.service 2>/dev/null")
-          sse_send.call("  ✓ Stopped and disabled (configure settings, then start)")
+          sse.send("  ✓ Stopped and disabled (configure settings, then start)")
 
-          sse_send.call("")
-          sse_send.call("✓ dnsmasq installed successfully!")
-          sse_send.call("success", "done")
+          sse.send("")
+          sse.send("✓ dnsmasq installed successfully!")
+          sse.done
         else
-          sse_send.call("✗ Installation failed.")
-          sse_send.call("error", "done")
+          sse.send("✗ Installation failed.")
+          sse.done("error")
         end
       end
     end
@@ -349,21 +338,8 @@ class NetworkController < ApplicationController
   end
 
   def install_cloudflared_stream
-    response.headers['Content-Type'] = 'text/event-stream'
-    response.headers['Cache-Control'] = 'no-cache, no-store'
-    response.headers['X-Accel-Buffering'] = 'no'
-    response.headers['Connection'] = 'keep-alive'
-    response.headers['Last-Modified'] = Time.now.httpdate
-
-    self.response_body = Enumerator.new do |yielder|
-      sse_send = ->(data, event = nil) {
-        msg = ""
-        msg += "event: #{event}\n" if event
-        msg += "data: #{data}\n\n"
-        yielder << msg
-      }
-
-      sse_send.call("Starting cloudflared installation...")
+    stream_sse do |sse|
+      sse.send("Starting cloudflared installation...")
 
       unless Rails.env.production?
         lines = [
@@ -384,42 +360,29 @@ class NetworkController < ApplicationController
         ]
         lines.each do |line|
           sleep 0.3
-          sse_send.call(line)
+          sse.send(line)
         end
-        sse_send.call("", "done")
+        sse.send("", event: "done")
         next
       end
 
       begin
         CloudflareService.install!
-        sse_send.call("✓ cloudflared installed successfully!")
+        sse.send("✓ cloudflared installed successfully!")
       rescue StandardError => e
-        sse_send.call("✗ Installation failed: #{e.message}")
+        sse.send("✗ Installation failed: #{e.message}")
       end
-      sse_send.call("", "done")
+      sse.send("", event: "done")
     end
   end
 
   def setup_tunnel_stream
-    response.headers['Content-Type'] = 'text/event-stream'
-    response.headers['Cache-Control'] = 'no-cache, no-store'
-    response.headers['X-Accel-Buffering'] = 'no'
-    response.headers['Connection'] = 'keep-alive'
-    response.headers['Last-Modified'] = Time.now.httpdate
-
     token = params[:token].to_s.strip
 
-    self.response_body = Enumerator.new do |yielder|
-      sse_send = ->(data, event = nil) {
-        msg = ""
-        msg += "event: #{event}\n" if event
-        msg += "data: #{data}\n\n"
-        yielder << msg
-      }
-
+    stream_sse do |sse|
       if token.blank?
-        sse_send.call("✗ No tunnel token provided")
-        sse_send.call("error", "done")
+        sse.send("✗ No tunnel token provided")
+        sse.done("error")
         next
       end
 
@@ -443,38 +406,38 @@ class NetworkController < ApplicationController
         ]
         lines.each do |line|
           sleep 0.3
-          sse_send.call(line)
+          sse.send(line)
         end
-        sse_send.call("success", "done")
+        sse.done
         next
       end
 
       begin
         unless CloudflareService.installed?
-          sse_send.call("Installing cloudflared...")
+          sse.send("Installing cloudflared...")
           CloudflareService.install!
-          sse_send.call("✓ cloudflared installed")
+          sse.send("✓ cloudflared installed")
         else
-          sse_send.call("✓ cloudflared already installed")
+          sse.send("✓ cloudflared already installed")
         end
 
-        sse_send.call("Configuring tunnel service...")
+        sse.send("Configuring tunnel service...")
         CloudflareService.configure!(token)
-        sse_send.call("✓ Tunnel service configured")
+        sse.send("✓ Tunnel service configured")
 
-        sse_send.call("Starting tunnel...")
+        sse.send("Starting tunnel...")
         CloudflareService.start!
         sleep 2
         if CloudflareService.running?
-          sse_send.call("✓ Cloudflare Tunnel is connected!")
+          sse.send("✓ Cloudflare Tunnel is connected!")
         else
-          sse_send.call("⚠ Service started but may take a moment to connect")
+          sse.send("⚠ Service started but may take a moment to connect")
         end
 
-        sse_send.call("success", "done")
+        sse.done
       rescue StandardError => e
-        sse_send.call("✗ Error: #{e.message}")
-        sse_send.call("error", "done")
+        sse.send("✗ Error: #{e.message}")
+        sse.done("error")
       end
     end
   end
@@ -487,22 +450,9 @@ class NetworkController < ApplicationController
   end
 
   def security_audit_stream
-    response.headers['Content-Type'] = 'text/event-stream'
-    response.headers['Cache-Control'] = 'no-cache, no-store'
-    response.headers['X-Accel-Buffering'] = 'no'
-    response.headers['Connection'] = 'keep-alive'
-    response.headers['Last-Modified'] = Time.now.httpdate
-
-    self.response_body = Enumerator.new do |yielder|
-      sse_send = ->(data, event = nil) {
-        msg = ""
-        msg += "event: #{event}\n" if event
-        msg += "data: #{data}\n\n"
-        yielder << msg
-      }
-
-      sse_send.call("Running security audit...")
-      sse_send.call("")
+    stream_sse do |sse|
+      sse.send("Running security audit...")
+      sse.send("")
 
       checks = SecurityAudit.run_all
       passed = 0
@@ -514,42 +464,42 @@ class NetworkController < ApplicationController
         sleep 0.4 unless Rails.env.production?
         sleep 0.15 if Rails.env.production?
 
-        sse_send.call("Checking #{check.description.downcase}...")
+        sse.send("Checking #{check.description.downcase}...")
 
         case check.status
         when :pass
           passed += 1
-          sse_send.call("  ✓ #{check.description}")
+          sse.send("  ✓ #{check.description}")
         when :warn
           warnings += 1
-          sse_send.call("  ⚠ #{check.description} (recommended to fix)")
+          sse.send("  ⚠ #{check.description} (recommended to fix)")
           has_fixable = true if check.fix_command && check.name != 'admin_password'
         when :fail
           if check.severity == :blocker
             blockers += 1
-            sse_send.call("  ✗ #{check.description} (BLOCKER)")
+            sse.send("  ✗ #{check.description} (BLOCKER)")
           else
             warnings += 1
-            sse_send.call("  ✗ #{check.description}")
+            sse.send("  ✗ #{check.description}")
           end
           has_fixable = true if check.fix_command && check.name != 'admin_password' && check.name != 'open_ports'
         end
 
-        sse_send.call("")
+        sse.send("")
       end
 
-      sse_send.call("─── Audit Complete ───")
-      sse_send.call("✓ #{passed} passed")
-      sse_send.call("⚠ #{warnings} warnings") if warnings > 0
-      sse_send.call("✗ #{blockers} blocker#{'s' if blockers != 1}") if blockers > 0
+      sse.send("─── Audit Complete ───")
+      sse.send("✓ #{passed} passed")
+      sse.send("⚠ #{warnings} warnings") if warnings > 0
+      sse.send("✗ #{blockers} blocker#{'s' if blockers != 1}") if blockers > 0
 
       if blockers > 0
-        sse_send.call("")
-        sse_send.call("✗ Blockers must be fixed before enabling remote access.")
+        sse.send("")
+        sse.send("✗ Blockers must be fixed before enabling remote access.")
       end
 
-      sse_send.call(has_fixable.to_s, "has_fixable")
-      sse_send.call("", "done")
+      sse.send(has_fixable.to_s, event: "has_fixable")
+      sse.send("", event: "done")
     end
   end
 
@@ -560,21 +510,8 @@ class NetworkController < ApplicationController
   end
 
   def security_fix_stream
-    response.headers['Content-Type'] = 'text/event-stream'
-    response.headers['Cache-Control'] = 'no-cache, no-store'
-    response.headers['X-Accel-Buffering'] = 'no'
-    response.headers['Connection'] = 'keep-alive'
-    response.headers['Last-Modified'] = Time.now.httpdate
-
-    self.response_body = Enumerator.new do |yielder|
-      sse_send = ->(data, event = nil) {
-        msg = ""
-        msg += "event: #{event}\n" if event
-        msg += "data: #{data}\n\n"
-        yielder << msg
-      }
-
-      sse_send.call("Starting security fixes...")
+    stream_sse do |sse|
+      sse.send("Starting security fixes...")
 
       unless Rails.env.production?
         lines = [
@@ -609,9 +546,9 @@ class NetworkController < ApplicationController
         ]
         lines.each do |line|
           sleep 0.2
-          sse_send.call(line)
+          sse.send(line)
         end
-        sse_send.call("", "done")
+        sse.send("", event: "done")
         next
       end
 
@@ -619,16 +556,16 @@ class NetworkController < ApplicationController
         results = SecurityAudit.fix_all!
         results.each do |r|
           if r[:fixed]
-            sse_send.call("✓ Fixed: #{r[:name]}")
+            sse.send("✓ Fixed: #{r[:name]}")
           else
-            sse_send.call("✗ Failed to fix: #{r[:name]}")
+            sse.send("✗ Failed to fix: #{r[:name]}")
           end
         end
-        sse_send.call("✓ Security fix-all complete!")
+        sse.send("✓ Security fix-all complete!")
       rescue StandardError => e
-        sse_send.call("✗ Error: #{e.message}")
+        sse.send("✗ Error: #{e.message}")
       end
-      sse_send.call("", "done")
+      sse.send("", event: "done")
     end
   end
 

@@ -3,6 +3,8 @@ require 'disk_manager'
 require 'shell'
 
 class DisksController < ApplicationController
+  include SseStreaming
+
   before_action :admin_required
 
   def index
@@ -163,23 +165,8 @@ class DisksController < ApplicationController
   end
 
   def install_greyhole_stream
-    # Disable middleware buffering
-    response.headers['Content-Type'] = 'text/event-stream'
-    response.headers['Cache-Control'] = 'no-cache, no-store'
-    response.headers['X-Accel-Buffering'] = 'no'
-    response.headers['Connection'] = 'keep-alive'
-    response.headers['Last-Modified'] = Time.now.httpdate
-
-    # Use chunked transfer
-    self.response_body = Enumerator.new do |yielder|
-      sse_send = ->(data, event = nil) {
-        msg = ""
-        msg += "event: #{event}\n" if event
-        msg += "data: #{data}\n\n"
-        yielder << msg
-      }
-
-      sse_send.call("Starting Greyhole installation...")
+    stream_sse do |sse|
+      sse.send("Starting Greyhole installation...")
 
       unless Rails.env.production?
         # Dev/test mode — simulate install
@@ -211,9 +198,9 @@ class DisksController < ApplicationController
         ]
         lines.each do |line|
           sleep(0.3)
-          sse_send.call(line)
+          sse.send(line)
         end
-        sse_send.call("success", "done")
+        sse.done
       else
         # Production — real install with streamed output
         success = true
@@ -251,19 +238,19 @@ class DisksController < ApplicationController
         ]
 
         steps.each do |step|
-          sse_send.call(step[:label])
+          sse.send(step[:label])
           step[:commands].each do |c|
             next unless c[:run]
             IO.popen(c[:cmd]) do |io|
               io.each_line do |line|
-                sse_send.call("  #{line.chomp}")
+                sse.send("  #{line.chomp}")
               end
             end
             unless $?.success?
               if step[:nonfatal]
-                sse_send.call("  ⚠ Non-critical step failed (continuing)")
+                sse.send("  ⚠ Non-critical step failed (continuing)")
               else
-                sse_send.call("  ✗ Command failed")
+                sse.send("  ✗ Command failed")
                 success = false
                 break
               end
@@ -273,26 +260,26 @@ class DisksController < ApplicationController
         end
 
         # Try starting greyhole — non-fatal if it fails (needs config first)
-        sse_send.call("Starting Greyhole service...")
+        sse.send("Starting Greyhole service...")
         Shell.run("systemctl start greyhole.service 2>/dev/null")
         if Shell.run("systemctl is-active --quiet greyhole")
-          sse_send.call("  ✓ Greyhole is running")
+          sse.send("  ✓ Greyhole is running")
         else
-          sse_send.call("  ⚠ Service not started — configure storage pool drives first")
+          sse.send("  ⚠ Service not started — configure storage pool drives first")
         end
 
         if success && DiskPoolPartition.any?
-          sse_send.call("Generating Greyhole configuration...")
+          sse.send("Generating Greyhole configuration...")
           Greyhole.configure!
-          sse_send.call("  ✓ Configuration written")
+          sse.send("  ✓ Configuration written")
         end
 
         if success
-          sse_send.call("✓ Greyhole installed successfully!")
-          sse_send.call("success", "done")
+          sse.send("✓ Greyhole installed successfully!")
+          sse.done
         else
-          sse_send.call("✗ Installation failed. Check the output above for errors.")
-          sse_send.call("error", "done")
+          sse.send("✗ Installation failed. Check the output above for errors.")
+          sse.done("error")
         end
       end
     end
