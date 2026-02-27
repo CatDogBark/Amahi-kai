@@ -21,9 +21,6 @@ class ShareFileSystem
     return unless share.path_changed?
     return if share.path.blank?
 
-    admin = User.admins.first
-    return unless admin
-
     cmds = []
     cmds << "rmdir #{Shellwords.escape(share.path_was)}" unless share.path_was.blank?
     cmds << "mkdir -p #{Shellwords.escape(share.path)}"
