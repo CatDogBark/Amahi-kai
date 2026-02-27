@@ -90,7 +90,7 @@ class Greyhole
       # Load schema after install (schema file comes with the package)
       if File.exist?('/usr/share/greyhole/schema-mysql.sql')
         progress.call("Loading database schema...")
-        Shell.run('mysql -u root greyhole < /usr/share/greyhole/schema-mysql.sql 2>/dev/null')
+        system('sudo mysql -u root greyhole < /usr/share/greyhole/schema-mysql.sql')
       end
 
       # Generate full config and enable service
