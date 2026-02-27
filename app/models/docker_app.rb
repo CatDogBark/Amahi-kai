@@ -79,7 +79,7 @@ class DockerApp < ApplicationRecord
     # Determine host port from result or port_mappings
     first_port = port_mappings.values.first
     update!(status: 'running', container_name: effective_container_name, host_port: first_port)
-  rescue => e
+  rescue StandardError => e
     update!(status: 'error', error_message: e.message)
     raise
   end
@@ -111,7 +111,7 @@ class DockerApp < ApplicationRecord
     app_dir = "/opt/amahi/apps/#{identifier}"
     Shell.run("rm -rf #{Shellwords.escape(app_dir)}") if identifier.present? && File.directory?(app_dir)
     update!(status: 'available', container_name: nil, host_port: nil, error_message: nil)
-  rescue => e
+  rescue StandardError => e
     update!(status: 'error', error_message: e.message)
     raise
   end

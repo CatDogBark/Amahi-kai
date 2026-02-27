@@ -10,7 +10,7 @@ class ContainerService
     return true unless production?
     begin
       Docker.ping == 'OK'
-    rescue => e
+    rescue StandardError => e
       false
     end
   end
@@ -37,7 +37,7 @@ class ContainerService
       progress_block&.call(chunk)
     end
     true
-  rescue => e
+  rescue StandardError => e
     raise ContainerError, "Failed to pull image #{image_name}: #{e.message}"
   end
 

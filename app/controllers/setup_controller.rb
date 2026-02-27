@@ -105,7 +105,7 @@ class SetupController < ApplicationController
     require 'disk_manager'
     @devices = begin
       DiskManager.devices
-    rescue => e
+    rescue StandardError => e
       Rails.logger.error("SetupController#storage: #{e.message}")
       []
     end
@@ -118,7 +118,7 @@ class SetupController < ApplicationController
     begin
       preview = DiskManager.preview(device)
       render json: { status: 'ok', device: device, entries: preview[:entries], total_used: preview[:total_used], file_count: preview[:file_count] }
-    rescue => e
+    rescue StandardError => e
       render json: { status: 'error', message: e.message }, status: :unprocessable_entity
     end
   end
@@ -186,7 +186,7 @@ class SetupController < ApplicationController
             session[:standalone_drives] << { name: share_name, path: mount_point, fstype: part[:fstype] }
           end
         end
-      rescue => e
+      rescue StandardError => e
         Rails.logger.error("SetupController#update_storage: #{e.message} for #{device_path}")
         flash[:error] = "Error preparing #{device_path}: #{e.message}"
       end
@@ -221,7 +221,7 @@ class SetupController < ApplicationController
       session[:greyhole_installed] = true
       session[:default_copies] = default_copies
       flash[:notice] = "Greyhole installed successfully!"
-    rescue => e
+    rescue StandardError => e
       Rails.logger.error("SetupController#install_greyhole: #{e.message}")
       flash[:error] = "Greyhole installation failed: #{e.message}"
     end
@@ -261,7 +261,7 @@ class SetupController < ApplicationController
       begin
         require 'greyhole'
         Greyhole.configure! if Greyhole.installed? && pool_copies > 0
-      rescue => e
+      rescue StandardError => e
         Rails.logger.error("SetupController#create_share greyhole: #{e.message}")
       end
     else

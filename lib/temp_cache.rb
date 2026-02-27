@@ -11,7 +11,7 @@ class TempCache
           if File.exist?(f) && File.atime(f) < 3.months.ago
             FileUtils.rm_rf(f)
           end
-        rescue => e
+        rescue SystemCallError => e
           # ignore errors, because it's theoretically possible that
           # there might be files in-flight and the exists? is true
           # yet the atime fails, or even the rm

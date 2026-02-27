@@ -25,7 +25,7 @@ class DiskUtils
         disk[:tempcolor] = temp_color(temp)
       end
       disks
-    rescue => e
+    rescue StandardError => e
       Rails.logger.error("DiskUtils.stats error: #{e.message}") if defined?(Rails)
       []
     end

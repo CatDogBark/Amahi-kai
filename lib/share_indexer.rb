@@ -196,7 +196,7 @@ class ShareIndexer
         unique_by: [:share_id, :relative_path],
         update_only: [:name, :extension, :content_type, :size, :directory, :file_modified_at, :updated_at]
       )
-    rescue => e
+    rescue ActiveRecord::RecordInvalid, StandardError => e
       Rails.logger.error("ShareIndexer: upsert failed: #{e.message}")
       # Fallback: insert one by one
       entries.compact.each do |entry|

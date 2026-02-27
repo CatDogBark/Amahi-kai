@@ -402,7 +402,7 @@ class Share < ApplicationRecord
 
   def push_samba_config
     Share.push_shares
-  rescue => e
+  rescue StandardError => e
     Rails.logger.error("Failed to push Samba config: #{e.message}")
   end
 
@@ -412,7 +412,7 @@ class Share < ApplicationRecord
       begin
         require 'share_indexer'
         ShareIndexer.index_share(self)
-      rescue => e
+      rescue StandardError => e
         Rails.logger.error("Share#index_share_files failed: #{e.message}")
       end
     end

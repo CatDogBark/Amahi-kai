@@ -24,7 +24,7 @@ class PartitionUtils
     @info = []
     begin
       f = File.open('/etc/mtab')
-    rescue => e
+    rescue SystemCallError => e
       return @info
     end
     while f.gets
@@ -63,7 +63,7 @@ class PartitionUtils
     total = stat.block_size * stat.blocks
     free  = stat.block_size * stat.blocks_available
     [total, free]
-  rescue => e
+  rescue StandardError => e
     Rails.logger.error("disk stats error for #{path}: #{e.inspect}")
     [0, 0]
   end

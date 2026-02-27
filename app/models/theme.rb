@@ -30,7 +30,7 @@ class Theme < ApplicationRecord
             begin
               theme = theme_init
               tl << Theme.new(:name => theme[:name], :css => theme_dir)
-            rescue => e
+            rescue StandardError => e
               # there were issues in the theme init file!!
               logger.error("=================== Amahi Theme Error BEGIN ===========================")
               logger.error(e)
@@ -53,7 +53,7 @@ class Theme < ApplicationRecord
           begin
             ti = theme_init
             theme = Theme.new(:name => ti[:name], :css => dir)
-          rescue => e
+          rescue StandardError => e
             # there were issues in the theme init file!!
             raise "There were issues loading file '#{theme_init_file}'"
           end

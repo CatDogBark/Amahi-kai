@@ -49,7 +49,7 @@ module ApplicationHelper
   def formatted_date(date)
     date = date.localtime
     "#{date.to_formatted_s(:short)} (#{time_ago_in_words(date)})"
-  rescue => e
+  rescue StandardError => e
     '-'
   end
 

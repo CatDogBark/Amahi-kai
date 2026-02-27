@@ -137,7 +137,7 @@ class AppProxyController < ApplicationController
       render plain: "Cannot connect to #{@docker_app.name} — is it running?", status: :bad_gateway
     rescue Net::OpenTimeout, Net::ReadTimeout
       render plain: "#{@docker_app.name} is not responding", status: :gateway_timeout
-    rescue => e
+    rescue StandardError => e
       Rails.logger.error("App proxy error: #{e.message}")
       render plain: "Proxy error: #{e.message}", status: :bad_gateway
     end

@@ -142,7 +142,7 @@ class Greyhole
       Shell.run("/usr/bin/cp #{Shellwords.escape(tmp)} #{CONFIG_PATH}")
       # Only restart if Greyhole is currently running; don't crash if it fails
       restart! if running?
-    rescue => e
+    rescue StandardError => e
       Rails.logger.error("Greyhole configure error: #{e.message}")
     end
 

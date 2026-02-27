@@ -27,7 +27,7 @@ class SetTheme
         theme_path = init_file_exists?(path) ? path : self.default
         theme = init(theme_path)
         self.new(theme.merge(:path => theme_path))
-      rescue => e
+      rescue StandardError => e
         Rails.logger.error("THEME: name: #{theme_path};  error: #{e}")
         # Fall back to default theme instead of crashing
         self.new({ name: 'Default', path: self.default })

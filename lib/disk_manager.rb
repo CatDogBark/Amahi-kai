@@ -300,7 +300,7 @@ class DiskManager
         # Not empty or permission denied — skip
       end
     end
-  rescue => e
+  rescue StandardError => e
     Rails.logger.error("[DiskManager] cleanup_stale_mounts! failed: #{e.message}") if defined?(Rails)
   end
 
@@ -343,7 +343,7 @@ class DiskManager
           file_count += 1
         end
       end
-    rescue => e
+    rescue StandardError => e
       Rails.logger.error("DiskManager.read_directory_summary: #{e.message}") if defined?(Rails)
     end
 
