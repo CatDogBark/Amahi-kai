@@ -75,7 +75,7 @@
     <div class="setup-actions">
       <a href="<%= setup_share_path %>" class="btn-skip">Skip — I'll set this up later</a>
       <button type="submit" class="btn-kai" id="install-greyhole-btn"
-              onclick="this.disabled=true; this.innerHTML='<span class=\'spinner-border spinner-border-sm me-1\'></span> Installing...'; this.form.submit();">
+              onclick="var btn=this; setTimeout(function(){ btn.disabled=true; btn.innerHTML='<span class=\'spinner-border spinner-border-sm me-1\'></span> Installing...'; }, 10);">
         Install Greyhole →
       </button>
     </div>
