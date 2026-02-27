@@ -41,12 +41,18 @@ class Greyhole
 
       # Add Greyhole apt repository
       unless File.exist?(KEYRING_PATH)
-        result = Shell.run("sh -c 'curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 10 #{GREYHOLE_REPO_KEY} | gpg --dearmor -o #{KEYRING_PATH}'")
-        raise GreyholeError, 'Failed to add Greyhole signing key' unless result
+        tmpkey = '/tmp/greyhole-debsig.asc'
+        result = Shell.run("curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 10 -o #{tmpkey} #{GREYHOLE_REPO_KEY}")
+        raise GreyholeError, 'Failed to download Greyhole signing key' unless result
+
+        result = Shell.run("bash -c 'gpg --dearmor -o #{KEYRING_PATH} < #{tmpkey}'")
+        raise GreyholeError, 'Failed to dearmor Greyhole signing key' unless result
+
+        FileUtils.rm_f(tmpkey)
       end
 
       unless File.exist?(SOURCES_PATH)
-        result = Shell.run("sh -c \"echo 'deb [signed-by=#{KEYRING_PATH}] #{GREYHOLE_REPO_URL} stable main' > #{SOURCES_PATH}\"")
+        result = Shell.run("bash -c \"echo 'deb [signed-by=#{KEYRING_PATH}] #{GREYHOLE_REPO_URL} stable main' > #{SOURCES_PATH}\"")
         raise GreyholeError, 'Failed to add Greyhole apt source' unless result
       end
 
