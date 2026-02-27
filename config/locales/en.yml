@@ -72,6 +72,7 @@
   movies: Movies
   videos: Videos
   docs: Docs
+  tv: TV
   public: Public
   name_is_not_valid: Name is not valid
   name_looks_good: Name looks good

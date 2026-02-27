@@ -142,7 +142,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_25_000000) do
   end
 
   create_table "share_files", force: :cascade do |t|
-    t.bigint "share_id", null: false
+    t.integer "share_id", null: false
     t.string "name", null: false
     t.string "path", null: false
     t.string "relative_path", null: false
@@ -184,7 +184,6 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_25_000000) do
   create_table "users", force: :cascade do |t|
     t.string "login", null: false
     t.string "name"
-    t.string "password_digest"
     t.integer "login_count", default: 0, null: false
     t.datetime "last_request_at", precision: nil
     t.datetime "last_login_at", precision: nil
@@ -196,6 +195,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_25_000000) do
     t.datetime "created_at", precision: nil
     t.datetime "updated_at", precision: nil
     t.text "pin"
+    t.string "password_digest"
   end
 
   create_table "webapp_aliases", force: :cascade do |t|
