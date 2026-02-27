@@ -1,7 +1,7 @@
 class CreateShareFiles < ActiveRecord::Migration[8.0]
   def change
     create_table :share_files do |t|
-      t.integer :share_id, null: false
+      t.integer :share_id, null: false, limit: 4
       t.string :name, null: false          # filename
       t.string :path, null: false           # full path on disk
       t.string :relative_path, null: false  # path relative to share root
