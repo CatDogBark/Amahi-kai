@@ -1,15 +1,60 @@
 - if @docker_installed
-  .d-flex.align-items-center.justify-content-between.mb-3.p-2.rounded style="background: var(--classic-card-bg, #f8f9fa); border: 1px solid var(--classic-border, #dee2e6);"
-    .d-flex.align-items-center.gap-2
-      span.fw-bold style="color: var(--classic-text, inherit);" Docker Service
+  .d-flex.align-items-center.gap-3.mb-3
+    label.docker-toggle-switch style="position:relative; display:inline-block; width:44px; height:24px; cursor:pointer;"
+      input#docker-toggle type="checkbox" checked=@docker_running style="opacity:0; width:0; height:0;" onchange="toggleDocker(this)"
+      span.docker-slider style="position:absolute; top:0; left:0; right:0; bottom:0; background:#4a5568; border-radius:24px; transition:0.3s;"
+      span.docker-knob style="position:absolute; top:2px; left:#{@docker_running ? '22px' : '2px'}; width:20px; height:20px; background:white; border-radius:50%; transition:0.3s; box-shadow:0 1px 3px rgba(0,0,0,0.3);"
+    span.docker-status style="font-size:13px; color:var(--classic-muted, #a0aec0);"
+      | Docker
       - if @docker_running
-        span.badge.bg-success Running
+        span.ms-1 style="color:var(--classic-success, #68d391);" ● Running
       - else
-        span.badge.bg-secondary Stopped
-    .d-flex.gap-2
-      - if @docker_running
-        = form_tag apps_stop_docker_path, method: :post, class: 'd-inline' do
-          button.btn.btn-sm.btn-outline-danger type="submit" Stop Docker
-      - else
-        = form_tag apps_start_docker_path, method: :post, class: 'd-inline' do
-          button.btn.btn-sm.btn-success type="submit" Start Docker
+        span.ms-1 style="color:var(--classic-muted, #a0aec0);" ○ Stopped
+
+  javascript:
+    function toggleDocker(cb) {
+      var url = cb.checked ? '#{apps_start_docker_path}' : '#{apps_stop_docker_path}';
+      var statusEl = cb.closest('.d-flex').querySelector('.docker-status');
+      var knob = cb.closest('.docker-toggle-switch').querySelector('.docker-knob');
+      var slider = cb.closest('.docker-toggle-switch').querySelector('.docker-slider');
+
+      // Optimistic UI
+      if (cb.checked) {
+        knob.style.left = '22px';
+        slider.style.background = 'var(--classic-success, #68d391)';
+        statusEl.innerHTML = 'Docker <span class="ms-1" style="color:var(--classic-success, #68d391);">● Starting...</span>';
+      } else {
+        knob.style.left = '2px';
+        slider.style.background = '#4a5568';
+        statusEl.innerHTML = 'Docker <span class="ms-1" style="color:var(--classic-muted, #a0aec0);">○ Stopping...</span>';
+      }
+
+      fetch(url, {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content, 'Accept': 'application/json' },
+        credentials: 'same-origin'
+      }).then(function(r) {
+        if (cb.checked) {
+          statusEl.innerHTML = 'Docker <span class="ms-1" style="color:var(--classic-success, #68d391);">● Running</span>';
+        } else {
+          statusEl.innerHTML = 'Docker <span class="ms-1" style="color:var(--classic-muted, #a0aec0);">○ Stopped</span>';
+          slider.style.background = '#4a5568';
+        }
+      }).catch(function() {
+        // Revert on error
+        cb.checked = !cb.checked;
+        knob.style.left = cb.checked ? '22px' : '2px';
+        slider.style.background = cb.checked ? 'var(--classic-success, #68d391)' : '#4a5568';
+        statusEl.innerHTML = cb.checked
+          ? 'Docker <span class="ms-1" style="color:var(--classic-success, #68d391);">● Running</span>'
+          : 'Docker <span class="ms-1" style="color:var(--classic-muted, #a0aec0);">○ Stopped</span>';
+      });
+    }
+
+    // Init slider color
+    (function(){
+      var cb = document.getElementById('docker-toggle');
+      if (cb && cb.checked) {
+        cb.closest('.docker-toggle-switch').querySelector('.docker-slider').style.background = 'var(--classic-success, #68d391)';
+      }
+    })();
