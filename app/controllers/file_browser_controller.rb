@@ -2,6 +2,7 @@ class FileBrowserController < ApplicationController
   before_action :admin_required
   before_action :set_share
   before_action :resolve_path
+  skip_forgery_protection only: [:upload, :new_folder, :rename, :delete]
 
   # GET /files/:share_id/browse/*path
   def browse
