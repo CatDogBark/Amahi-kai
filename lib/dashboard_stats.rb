@@ -50,6 +50,19 @@ class DashboardStats
       end
 
       services.map do |svc|
+        # Greyhole uses an LSB init script — systemd can't track the forked daemon,
+        # so systemctl is-active returns "failed" even when the daemon is running.
+        # Use pgrep to check for the actual process instead.
+        if svc[:unit] == 'greyhole'
+          running = begin
+            require 'greyhole'
+            Greyhole.running?
+          rescue StandardError
+            false
+          end
+          next { name: svc[:name], unit: svc[:unit], running: running, status: running ? 'active' : 'inactive', since: nil }
+        end
+
         status = begin
           `systemctl is-active #{svc[:unit]} 2>/dev/null`.strip
         rescue StandardError

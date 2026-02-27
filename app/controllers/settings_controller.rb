@@ -241,6 +241,17 @@ class SettingsController < ApplicationController
     optional.each { |svc| services << svc if File.exist?(svc[:check]) }
 
     services.map do |svc|
+      # Greyhole uses an LSB init script — systemctl can't track the forked daemon
+      if svc[:unit] == 'greyhole'
+        running = begin
+          require 'greyhole'
+          Greyhole.running?
+        rescue StandardError
+          false
+        end
+        next svc.merge(running: running, detail: running ? 'running' : 'stopped')
+      end
+
       running = false
       detail = 'unknown'
       begin
