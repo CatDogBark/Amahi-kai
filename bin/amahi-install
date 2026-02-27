@@ -223,8 +223,14 @@ fi
 echo "==> Deploying application to $APP_DIR..."
 mkdir -p "$APP_DIR"
 
-if [ -d "$APP_DIR/.git" ] || [ -f "$APP_DIR/Gemfile" ]; then
-  echo "    Existing installation found, using current code..."
+if [ -d "$APP_DIR/.git" ]; then
+  echo "    Existing installation found, pulling latest..."
+  chown -R "$APP_USER:$APP_GROUP" "$APP_DIR"
+  sudo -u "$APP_USER" git config --global --add safe.directory "$APP_DIR" 2>/dev/null || true
+  cd "$APP_DIR"
+  sudo -u "$APP_USER" git pull origin main 2>&1 || echo "    ⚠ Git pull failed — using code on disk"
+elif [ -f "$APP_DIR/Gemfile" ]; then
+  echo "    Existing installation found (no git), using current code..."
   cd "$APP_DIR"
 else
   # If we're running from a git checkout, copy it; otherwise clone
