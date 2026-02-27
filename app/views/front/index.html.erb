@@ -6,7 +6,7 @@
       <div class="d-flex align-items-center justify-content-between">
         <div>
           <h3 class="mb-1" style="font-weight: 600;">
-            🌊 Welcome to <strong><%= @stats[:system][:hostname] %></strong>
+            <%= lucide_icon('waves', size: 16) %> Welcome to <strong><%= @stats[:system][:hostname] %></strong>
           </h3>
           <span class="text-muted">
             Up <%= @stats[:system][:uptime] %> · <%= @stats[:system][:os] %>
@@ -26,7 +26,7 @@
       <div class="card">
         <div class="card-header" style="background: var(--kai-dark); color: white;">
           <div class="d-flex justify-content-between align-items-center">
-            <strong>📂 Shares</strong>
+            <strong><%= lucide_icon('folder', size: 16) %> Shares</strong>
             <a href="/shares" class="text-white text-decoration-none" style="font-size: 12px;">Manage →</a>
           </div>
         </div>
@@ -36,7 +36,7 @@
               <div class="col-6 col-md-4 col-lg-3">
                 <a href="<%= file_browser_path(share) %>" class="d-block text-decoration-none p-2 rounded" style="color: var(--kai-text); transition: background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background=''">
                   <div class="d-flex align-items-center gap-2">
-                    <span style="font-size: 1.5rem;">📁</span>
+                    <span style="font-size: 1.5rem;"><%= lucide_icon('folder', size: 20) %></span>
                     <div>
                       <div class="fw-semibold" style="font-size: 0.9rem;"><%= share.name %></div>
                       <div class="text-muted" style="font-size: 0.75rem;"><%= share.path %></div>
@@ -59,7 +59,7 @@
         <div class="card">
           <div class="card-header" style="background: var(--kai-dark); color: white;">
             <div class="d-flex justify-content-between align-items-center">
-              <strong>🚀 Apps</strong>
+              <strong><%= lucide_icon('package', size: 16) %> Apps</strong>
               <a href="/apps" class="text-white text-decoration-none" style="font-size: 12px;">All Apps →</a>
             </div>
           </div>
@@ -72,7 +72,7 @@
                       <% if app.logo_url.present? %>
                         <img src="<%= app.logo_url %>" alt="<%= app.name %>" style="width: 36px; height: 36px; object-fit: contain;">
                       <% else %>
-                        <span style="font-size: 1.4rem;">📦</span>
+                        <span style="font-size: 1.4rem;"><%= lucide_icon('package', size: 20) %></span>
                       <% end %>
                     </div>
                     <span style="font-size: 0.8rem; font-weight: 500; text-align: center; line-height: 1.2;"><%= app.name %></span>
@@ -91,7 +91,7 @@
     <div class="col-md-8">
       <div class="card h-100">
         <div class="card-header" style="background: var(--kai-dark); color: white;">
-          <strong>📊 System</strong>
+          <strong><%= lucide_icon('bar-chart-3', size: 16) %> System</strong>
         </div>
         <div class="card-body">
           <%# CPU %>
@@ -143,7 +143,7 @@
     <div class="col-md-4">
       <div class="card h-100">
         <div class="card-header" style="background: var(--kai-dark); color: white;">
-          <strong>⚙️ Services</strong>
+          <strong><%= lucide_icon('settings', size: 16) %> Services</strong>
         </div>
         <div class="card-body p-0">
           <table class="table table-sm mb-0" style="color: var(--kai-text);">
@@ -171,12 +171,12 @@
   <div class="row mb-4">
     <div class="col-12">
       <div class="d-flex flex-wrap gap-2">
-        <a href="/users" class="btn btn-sm btn-outline-secondary">👥 <%= @stats[:counts][:users] %> Users</a>
-        <a href="/shares" class="btn btn-sm btn-outline-secondary">📁 <%= @stats[:counts][:shares] %> Shares</a>
-        <a href="/network" class="btn btn-sm btn-outline-secondary">🌐 <%= @stats[:counts][:dns_aliases] %> DNS Aliases</a>
-        <a href="/apps/docker_apps" class="btn btn-sm btn-outline-secondary">📦 <%= @stats[:counts][:docker_apps] %> Running Apps</a>
-        <a href="/disks" class="btn btn-sm btn-outline-secondary">💽 Disks</a>
-        <a href="/settings" class="btn btn-sm btn-outline-secondary">⚙️ Settings</a>
+        <a href="/users" class="btn btn-sm btn-outline-secondary"><%= lucide_icon('users', size: 14) %> <%= @stats[:counts][:users] %> Users</a>
+        <a href="/shares" class="btn btn-sm btn-outline-secondary"><%= lucide_icon('folder', size: 14) %> <%= @stats[:counts][:shares] %> Shares</a>
+        <a href="/network" class="btn btn-sm btn-outline-secondary"><%= lucide_icon('globe', size: 14) %> <%= @stats[:counts][:dns_aliases] %> DNS Aliases</a>
+        <a href="/apps/docker_apps" class="btn btn-sm btn-outline-secondary"><%= lucide_icon('package', size: 14) %> <%= @stats[:counts][:docker_apps] %> Running Apps</a>
+        <a href="/disks" class="btn btn-sm btn-outline-secondary"><%= lucide_icon('hard-drive', size: 14) %> Disks</a>
+        <a href="/settings" class="btn btn-sm btn-outline-secondary"><%= lucide_icon('settings', size: 14) %> Settings</a>
       </div>
     </div>
   </div>

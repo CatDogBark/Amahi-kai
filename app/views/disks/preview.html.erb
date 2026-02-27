@@ -1,7 +1,7 @@
 <div class="settings-table" id="disk-preview">
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0">
-      📂 Drive Preview: <code><%= @device %></code>
+      <%= lucide_icon('folder', size: 16) %> Drive Preview: <code><%= @device %></code>
     </h5>
     <a href="<%= disks_devices_path %>" class="btn btn-sm btn-outline-secondary">← Back to Devices</a>
   </div>
@@ -32,9 +32,9 @@
               <tr>
                 <td>
                   <% if entry[:type] == :directory %>
-                    📁 <strong><%= entry[:name] %></strong>
+                    <%= lucide_icon('folder', size: 16) %> <strong><%= entry[:name] %></strong>
                   <% else %>
-                    📄 <%= entry[:name] %>
+                    <%= lucide_icon('file', size: 16) %> <%= entry[:name] %>
                   <% end %>
                 </td>
                 <td>

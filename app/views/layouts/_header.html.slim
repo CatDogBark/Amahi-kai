@@ -10,14 +10,14 @@ nav.navbar.navbar-expand-md.bg-dark.navbar-inverse
       .theme-track
         .theme-indicator
         button.theme-opt.theme-opt-light onclick="setTheme('light', event)" title="Light"
-          | ☀️
+          = lucide_icon('sun', size: 16)
         button.theme-opt.theme-opt-dark onclick="setTheme('dark', event)" title="Dark"
-          | 🌙
+          = lucide_icon('moon', size: 16)
         button.theme-opt.theme-opt-system onclick="setTheme('system', event)" title="System"
-          | 💻
+          = lucide_icon('monitor', size: 16)
         span style="width: 1px; height: 20px; background: rgba(255,255,255,0.15); margin: 0 2px;"
         button.theme-opt.ocean-toggle onclick="toggleOcean()" title="Toggle ambient effects"
-          | 🌊
+          = lucide_icon('waves', size: 16)
 
     #amahi-nav.collapse.navbar-collapse.justify-content-end    
       - if current_user_is_admin?
@@ -31,9 +31,9 @@ nav.navbar.navbar-expand-md.bg-dark.navbar-inverse
           a.nav-item.nav-link.text-white.text-center.nav_hover href="https://amahi-kai.com/wiki/" target='_blank'  
             = t('help')
           a.nav-item.nav-link.text-white.text-center.nav_hover#update-btn href="#" title="System Update" onclick="openInstallTerminal('system-update','#{settings_update_system_stream_path}');return false;"
-            | 🔄
+            = lucide_icon('refresh-cw', size: 16)
           a.nav-item.nav-link.text-white.text-center.nav_hover#advanced-toggle href="#" title="#{t('advanced_settings')}" style="opacity: #{@advanced ? '1' : '0.5'}" onclick="fetch('#{toggle_advanced_path}', {method:'POST', headers:{'X-CSRF-Token':document.querySelector('meta[name=csrf-token]').content}}).then(function(){location.reload()});return false;"
-            | 🔧
+            = lucide_icon('wrench', size: 16)
       - else
         .navbar-nav
           a.nav-item.nav-link.text-white.text-center.nav_hover href="https://amahi-kai.com/wiki/" target='_blank'  

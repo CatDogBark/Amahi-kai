@@ -1331,3 +1331,10 @@ nav.preftab li ul {
 .settings-actions {
   margin-bottom: 12px;
 }
+
+/* Lucide icons */
+.lucide-icon {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+}

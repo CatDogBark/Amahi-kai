@@ -100,7 +100,7 @@ div.share[id="whole_share_#{share.id}"]
                       | #{preset[:icon]} #{preset[:label]}
                   - if advanced?
                     a.text-muted.ms-2 href="#" onclick="document.getElementById('extras-editor-#{share.id}').style.display = document.getElementById('extras-editor-#{share.id}').style.display === 'none' ? '' : 'none'; return false;" title="Edit raw parameters" style="font-size: 0.9rem;"
-                      | ⚙️
+                      = lucide_icon('settings', size: 14)
                 - if advanced?
                   .extras-editor.mt-2 id="extras-editor-#{share.id}" style="display:none"
                     form action=update_extras_share_path(id: share.id) method="post" onsubmit="submitExtras(#{share.id}, this); return false;"
