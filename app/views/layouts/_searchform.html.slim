@@ -1,7 +1,9 @@
-form.form-inline.my-2 action="/search/files" method="get" id="searchform"
-  input.form-control aria-label="Search" name="query" placeholder="Search" maxlength="45" size="20"  style=("width: auto; height: 25px; font-size: 15px;") type="search" /
-  input.searchbutton.mx-1 id="hdasearchbutton" value="Files" name="button" type="submit"
-  input.searchbutton id="websearchbutton" value="Web" name="button" type="submit"
+form.my-2 action="/search/files" method="get" id="searchform"
+  .d-flex.flex-column.align-items-start
+    input.form-control aria-label="Search" name="query" placeholder="Search" maxlength="45" size="20"  style=("width: auto; height: 25px; font-size: 15px;") type="search" /
+    .d-flex.mt-1.gap-1
+      input.searchbutton id="hdasearchbutton" value="Files" name="button" type="submit"
+      input.searchbutton id="websearchbutton" value="Web" name="button" type="submit"
 
 button.navbar-toggler.navbar-dark data-bs-target="#amahi-nav" data-bs-toggle="collapse" 
   span.navbar-toggler-icon
