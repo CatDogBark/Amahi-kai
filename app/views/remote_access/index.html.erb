@@ -117,9 +117,119 @@
       <% end %>
     </div>
   </div>
+  </div>
+
+  <!-- Tailscale VPN -->
+  <div class="card mb-4">
+    <div class="card-header d-flex align-items-center justify-content-between">
+      <h5 class="mb-0"><%= lucide_icon('shield', size: 18) %> Tailscale VPN</h5>
+      <% if @tailscale_status[:running] %>
+        <span class="badge bg-success">Connected</span>
+      <% elsif @tailscale_status[:installed] %>
+        <span class="badge bg-warning text-dark">Stopped</span>
+      <% else %>
+        <span class="badge bg-secondary">Not Installed</span>
+      <% end %>
+    </div>
+    <div class="card-body">
+      <% if !@tailscale_status[:installed] %>
+        <p class="text-muted mb-3">
+          Tailscale is a mesh VPN — access your NAS from anywhere with <strong>no domain, no port forwarding, and no configuration</strong>.
+          Just install, authenticate with your Tailscale account, and your devices are connected.
+        </p>
+
+        <div class="card bg-light mb-3">
+          <div class="card-body">
+            <h6 class="card-title">How it works</h6>
+            <ol class="mb-0">
+              <li>Create a free account at <a href="https://tailscale.com" target="_blank" rel="noopener">tailscale.com</a></li>
+              <li>Click <strong>Install Tailscale</strong> below — we'll install and start the service</li>
+              <li>Click the authentication link that appears to add this device to your Tailnet</li>
+              <li>Install Tailscale on your phone/laptop — they'll see your NAS automatically</li>
+            </ol>
+          </div>
+        </div>
+
+        <button type="button" class="btn btn-primary" onclick="installTailscale()">
+          <%= lucide_icon('download', size: 16) %> Install Tailscale
+        </button>
+
+      <% elsif @tailscale_status[:running] %>
+        <div class="row g-3 mb-3">
+          <div class="col-md-4">
+            <div class="p-3 border rounded">
+              <small class="text-muted d-block">Status</small>
+              <strong>🟢 Connected</strong>
+            </div>
+          </div>
+          <% if @tailscale_status[:tailscale_ip] %>
+            <div class="col-md-4">
+              <div class="p-3 border rounded">
+                <small class="text-muted d-block">Tailscale IP</small>
+                <strong><code><%= @tailscale_status[:tailscale_ip] %></code></strong>
+              </div>
+            </div>
+          <% end %>
+          <% if @tailscale_status[:magic_dns] %>
+            <div class="col-md-4">
+              <div class="p-3 border rounded">
+                <small class="text-muted d-block">MagicDNS</small>
+                <strong><code><%= @tailscale_status[:magic_dns] %></code></strong>
+              </div>
+            </div>
+          <% end %>
+          <% if @tailscale_status[:peers] && @tailscale_status[:peers] > 0 %>
+            <div class="col-md-4">
+              <div class="p-3 border rounded">
+                <small class="text-muted d-block">Peers</small>
+                <strong><%= @tailscale_status[:peers] %> device<%= @tailscale_status[:peers] == 1 ? '' : 's' %></strong>
+              </div>
+            </div>
+          <% end %>
+        </div>
+
+        <p class="text-muted small mb-3">
+          Access your NAS at <strong>http://<%= @tailscale_status[:tailscale_ip] %>:3000</strong>
+          <% if @tailscale_status[:magic_dns] %>
+            or <strong>http://<%= @tailscale_status[:magic_dns] %>:3000</strong>
+          <% end %>
+          from any device on your Tailnet.
+        </p>
+
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-outline-danger btn-sm" onclick="tailscaleAction('stop')">
+            Disconnect
+          </button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" onclick="if(confirm('This will remove this device from your Tailnet. Continue?')) tailscaleAction('logout')">
+            Logout & Remove
+          </button>
+        </div>
+
+      <% else %>
+        <!-- Installed but not running -->
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <div class="p-3 border rounded">
+              <small class="text-muted d-block">Status</small>
+              <strong>🔴 Disconnected</strong>
+            </div>
+          </div>
+        </div>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-success btn-sm" onclick="startTailscale()">
+            Connect
+          </button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" onclick="if(confirm('This will remove this device from your Tailnet. Continue?')) tailscaleAction('logout')">
+            Logout & Remove
+          </button>
+        </div>
+      <% end %>
+    </div>
+  </div>
 </div>
 
 <%= render 'shared/install_terminal', id: 'tunnel-setup', title: 'Setting up Cloudflare Tunnel', stream_url: '' %>
+<%= render 'shared/install_terminal', id: 'tailscale-install', title: 'Installing Tailscale', stream_url: remote_access_install_tailscale_stream_path %>
 <%= render 'shared/install_terminal', id: 'security-audit', title: 'Security Audit', stream_url: security_audit_stream_path %>
 <%= render 'shared/install_terminal', id: 'security-fix', title: 'Applying Security Fixes', stream_url: security_fix_stream_path %>
 
@@ -191,6 +301,88 @@ function runSecurityAudit() {
     line.textContent = '✗ Connection lost';
     output.appendChild(line);
   };
+}
+
+function installTailscale() {
+  var id = 'tailscale-install';
+  var url = '<%= remote_access_install_tailscale_stream_path %>';
+  var modal = document.getElementById(id + '-install-modal');
+  var output = document.getElementById(id + '-output');
+  var cursor = document.getElementById(id + '-cursor');
+  var footer = document.getElementById(id + '-install-footer');
+  var terminal = document.getElementById(id + '-terminal');
+
+  modal.style.display = 'flex';
+  output.innerHTML = '';
+  cursor.style.display = '';
+  footer.style.display = 'none';
+  footer.innerHTML = '<button type="button" class="btn btn-sm btn-outline-light" onclick="closeInstallTerminal(\'' + id + '\')">Close & Refresh</button>';
+
+  var source = new EventSource(url);
+
+  source.onmessage = function(e) {
+    var line = document.createElement('div');
+    line.className = 'term-line';
+    var text = e.data;
+    if (text.match(/^(Installing|Starting|Downloading)/)) { line.classList.add('step'); }
+    else if (text.match(/✓/)) { line.classList.add('success'); }
+    else if (text.match(/✗/)) { line.classList.add('error'); }
+    else if (text.match(/⚠/)) { line.classList.add('warn'); }
+    line.textContent = text;
+    output.appendChild(line);
+    terminal.scrollTop = terminal.scrollHeight;
+  };
+
+  source.addEventListener('auth_url', function(e) {
+    if (e.data) {
+      var linkDiv = document.createElement('div');
+      linkDiv.className = 'term-line';
+      linkDiv.style.marginTop = '8px';
+      linkDiv.innerHTML = '<a href="' + e.data + '" target="_blank" rel="noopener" style="color:#4fc3f7;text-decoration:underline;font-weight:bold;">→ Click here to authenticate with Tailscale</a>';
+      output.appendChild(linkDiv);
+      terminal.scrollTop = terminal.scrollHeight;
+    }
+  });
+
+  source.addEventListener('done', function(e) {
+    source.close();
+    cursor.style.display = 'none';
+    footer.style.display = 'block';
+  });
+
+  source.onerror = function() {
+    source.close();
+    cursor.style.display = 'none';
+    footer.style.display = 'block';
+  };
+}
+
+function startTailscale() {
+  fetch('<%= remote_access_start_tailscale_path %>', {
+    method: 'POST',
+    headers: {
+      'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content,
+      'Accept': 'application/json'
+    }
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    if (data.auth_url) {
+      window.open(data.auth_url, '_blank');
+      setTimeout(function() { window.location.reload(); }, 5000);
+    } else {
+      window.location.reload();
+    }
+  });
+}
+
+function tailscaleAction(action) {
+  var urls = {
+    stop: '<%= remote_access_stop_tailscale_path %>',
+    logout: '<%= remote_access_logout_tailscale_path %>'
+  };
+  fetch(urls[action], {
+    method: 'POST',
+    headers: { 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content }
+  }).then(function() { window.location.reload(); });
 }
 
 function tunnelAction(action) {

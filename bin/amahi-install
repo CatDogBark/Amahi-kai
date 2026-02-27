@@ -468,6 +468,15 @@ amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable cloudflared
 amahi ALL=(root) NOPASSWD: /usr/bin/mkdir -p /etc/amahi-kai
 amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/lib/amahi-kai/tmp/tunnel.token /etc/amahi-kai/tunnel.token
 amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get install -y cloudflared
+
+# Tailscale VPN
+amahi ALL=(root) NOPASSWD: /usr/bin/tailscale
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start tailscaled
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop tailscaled
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart tailscaled
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable tailscaled
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl disable tailscaled
+amahi ALL=(root) NOPASSWD: /usr/bin/systemctl is-active tailscaled
 amahi ALL=(root) NOPASSWD: /usr/bin/tee /etc/apt/sources.list.d/cloudflared.list
 amahi ALL=(root) NOPASSWD: /usr/bin/gpg --dearmor -o /usr/share/keyrings/cloudflare-archive-keyring.gpg
 

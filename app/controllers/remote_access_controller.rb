@@ -1,7 +1,8 @@
-# Amahi Home Server — Remote Access (Cloudflare Tunnel)
+# Amahi Home Server — Remote Access (Cloudflare Tunnel + Tailscale)
 # Split from NetworkController for maintainability.
 
 require 'shell'
+require 'tailscale_service'
 
 class RemoteAccessController < ApplicationController
   include SseStreaming
@@ -11,8 +12,11 @@ class RemoteAccessController < ApplicationController
   def index
     @page_title = t('network')
     @tunnel_status = CloudflareService.status
+    @tailscale_status = TailscaleService.status
     @security_blockers = SecurityAudit.blockers
   end
+
+  # --- Cloudflare Tunnel ---
 
   def configure_tunnel
     token = params[:tunnel_token].to_s.strip
@@ -142,5 +146,102 @@ class RemoteAccessController < ApplicationController
         sse.done("error")
       end
     end
+  end
+
+  # --- Tailscale VPN ---
+
+  def install_tailscale_stream
+    stream_sse do |sse|
+      sse.send("Installing Tailscale...")
+
+      unless Rails.env.production?
+        lines = [
+          "Downloading Tailscale install script...",
+          "  Adding Tailscale apt repository...",
+          "  Downloading signing key...",
+          "Updating package lists...",
+          "  Hit:1 http://archive.ubuntu.com/ubuntu noble InRelease",
+          "  Get:2 https://pkgs.tailscale.com/stable/ubuntu noble InRelease",
+          "Installing tailscale...",
+          "  Reading package lists...",
+          "  Setting up tailscale (1.78.1) ...",
+          "  Starting tailscaled...",
+          "✓ Tailscale installed successfully!",
+          "",
+          "Starting Tailscale...",
+          "  To authenticate, visit:",
+          "  https://login.tailscale.com/a/abc123example",
+          "",
+          "✓ Open the link above to connect this device to your Tailnet."
+        ]
+        lines.each do |line|
+          sleep 0.3
+          sse.send(line)
+        end
+        sse.send("https://login.tailscale.com/a/abc123example", event: "auth_url")
+        sse.done
+        next
+      end
+
+      begin
+        # Install
+        sse.send("Downloading Tailscale install script...")
+        IO.popen("curl -fsSL https://tailscale.com/install.sh | sh 2>&1") do |io|
+          io.each_line { |line| sse.send("  #{line.chomp}") }
+        end
+        unless $?.success?
+          sse.send("✗ Installation failed")
+          sse.done("error")
+          next
+        end
+        sse.send("✓ Tailscale installed")
+
+        # Start and get auth URL
+        sse.send("")
+        sse.send("Starting Tailscale...")
+        Shell.run("systemctl enable tailscaled 2>/dev/null")
+        Shell.run("systemctl start tailscaled 2>/dev/null")
+
+        # `tailscale up` blocks waiting for auth — run with timeout and capture URL
+        auth_url = nil
+        IO.popen("timeout 10 tailscale up 2>&1") do |io|
+          io.each_line do |line|
+            sse.send("  #{line.chomp}")
+            url = line[/https:\/\/login\.tailscale\.com\/[^\s]+/]
+            auth_url = url if url
+          end
+        end
+
+        if auth_url
+          sse.send("")
+          sse.send("✓ Open the link above to connect this device to your Tailnet.")
+          sse.send(auth_url, event: "auth_url")
+        elsif TailscaleService.running?
+          sse.send("✓ Tailscale is already authenticated and running!")
+        else
+          sse.send("⚠ Tailscale started but may need authentication. Check `tailscale status`.")
+        end
+
+        sse.done
+      rescue StandardError => e
+        sse.send("✗ Error: #{e.message}")
+        sse.done("error")
+      end
+    end
+  end
+
+  def start_tailscale
+    result = TailscaleService.start!
+    render json: { status: result[:success] ? :ok : :error, auth_url: result[:auth_url] }
+  end
+
+  def stop_tailscale
+    TailscaleService.stop!
+    render json: { status: :ok }
+  end
+
+  def logout_tailscale
+    TailscaleService.logout!
+    render json: { status: :ok }
   end
 end

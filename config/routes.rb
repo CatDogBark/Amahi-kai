@@ -48,6 +48,11 @@ Rails.application.routes.draw do
     post 'stop_tunnel', action: 'stop_tunnel'
     get 'install_cloudflared_stream', action: 'install_cloudflared_stream'
     get 'setup_tunnel_stream', action: 'setup_tunnel_stream'
+    # Tailscale VPN
+    get 'install_tailscale_stream', action: 'install_tailscale_stream'
+    post 'start_tailscale', action: 'start_tailscale'
+    post 'stop_tailscale', action: 'stop_tailscale'
+    post 'logout_tailscale', action: 'logout_tailscale'
   end
 
   # Security Audit — split from network
