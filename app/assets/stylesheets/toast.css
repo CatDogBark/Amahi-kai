@@ -2,14 +2,15 @@
 
 #toast-container {
   position: fixed;
-  top: 1rem;
-  right: 1rem;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 1090;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   pointer-events: none;
-  max-width: 420px;
+  max-width: 500px;
   width: calc(100% - 2rem);
 }
 
@@ -24,7 +25,7 @@
   line-height: 1.4;
   pointer-events: auto;
   cursor: default;
-  transform: translateX(calc(100% + 1rem));
+  transform: translateY(-10px);
   opacity: 0;
   transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
               opacity 0.3s ease;
@@ -32,12 +33,12 @@
 }
 
 .amahi-toast-visible {
-  transform: translateX(0);
+  transform: translateY(0);
   opacity: 1;
 }
 
 .amahi-toast-leaving {
-  transform: translateX(calc(100% + 1rem));
+  transform: translateY(-10px);
   opacity: 0;
 }
 
