@@ -22,7 +22,7 @@ module NetworkHelper
   end
 
   def dns_select_options
-    %w(google cloudflare opennic opendns custom).map { |dns_name| [dns_name, t("dns_#{dns_name}")] }
+    %w(cloudflare google custom).map { |dns_name| [dns_name, t("dns_#{dns_name}")] }
   end
 
 end

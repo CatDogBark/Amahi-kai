@@ -69,7 +69,7 @@ class NetworkController < ApplicationController
       redirect_to network_index_path
     else
       @net = Setting.get 'net'
-      @dns = Setting.find_or_create_by(KIND, 'dns', 'opendns')
+      @dns = Setting.find_or_create_by(KIND, 'dns', 'cloudflare')
       @dns_ip_1, @dns_ip_2 = DnsIpSetting.custom_dns_ips
       @dnsmasq_dhcp = Setting.find_or_create_by(KIND, 'dnsmasq_dhcp', '1')
       @dnsmasq_dns = Setting.find_or_create_by(KIND, 'dnsmasq_dns', '1')
@@ -82,7 +82,7 @@ class NetworkController < ApplicationController
 
   def update_dns
     case params[:setting_dns]
-    when 'opendns', 'google', 'opennic', 'cloudflare'
+    when 'cloudflare', 'google', 'custom'
       @saved = Setting.set("dns", params[:setting_dns], KIND)
       Shell.run("systemctl restart dnsmasq.service")
     else
@@ -168,7 +168,7 @@ class NetworkController < ApplicationController
     @dyn_lo = Setting.find_or_create_by(KIND, 'dyn_lo', '100').value
     @dyn_hi = Setting.find_or_create_by(KIND, 'dyn_hi', '254').value
     @lease_time = Setting.get("lease_time") || "14400"
-    @dns = Setting.find_or_create_by(KIND, 'dns', 'opendns')
+    @dns = Setting.find_or_create_by(KIND, 'dns', 'cloudflare')
   end
 
   def install_dnsmasq
