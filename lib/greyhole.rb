@@ -41,7 +41,7 @@ class Greyhole
 
       # Add Greyhole apt repository
       unless File.exist?(KEYRING_PATH)
-        result = Shell.run("sh -c 'curl -s #{GREYHOLE_REPO_KEY} | gpg --dearmor -o #{KEYRING_PATH}'")
+        result = Shell.run("sh -c 'curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 10 #{GREYHOLE_REPO_KEY} | gpg --dearmor -o #{KEYRING_PATH}'")
         raise GreyholeError, 'Failed to add Greyhole signing key' unless result
       end
 
