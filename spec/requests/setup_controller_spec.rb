@@ -119,8 +119,14 @@ describe "Setup Controller", type: :request do
     end
 
     describe "POST /setup/storage" do
+      it "redirects to greyhole step" do
+        post setup_update_storage_path
+        expect(response).to redirect_to(setup_greyhole_path)
+      end
+    end
+
+    describe "GET /setup/prepare_drives_stream" do
       before do
-        # Stub DiskManager so it doesn't try real disk operations
         allow(DiskManager).to receive(:devices).and_return([
           { name: "sdb", path: "/dev/sdb", model: "Test", size: "100G", os_disk: false,
             partitions: [{ path: "/dev/sdb1", status: :mounted, mountpoint: "/mnt/data", fstype: "ext4", size: "100G" }] }
@@ -129,23 +135,20 @@ describe "Setup Controller", type: :request do
         allow(DiskManager).to receive(:mount!).and_return("/mnt/data")
       end
 
-      it "creates pool partitions from selected drives and redirects to greyhole step" do
-        post setup_update_storage_path, params: { drives: ["/dev/sdb1"] }
-        expect(response).to redirect_to(setup_greyhole_path)
+      it "returns SSE content type" do
+        get setup_prepare_drives_stream_path, params: { drives: "/dev/sdb1" }
+        expect(response.headers['Content-Type']).to include('text/event-stream')
+      end
+
+      it "creates pool partitions from selected drives" do
+        get setup_prepare_drives_stream_path, params: { drives: "/dev/sdb1" }
         expect(DiskPoolPartition.pluck(:path)).to include("/mnt/data")
       end
 
-      it "replaces existing pool partitions on resubmit" do
+      it "clears existing pool partitions before adding new ones" do
         DiskPoolPartition.create!(path: "/mnt/old", minimum_free: 10)
-        post setup_update_storage_path, params: { drives: ["/dev/sdb1"] }
+        get setup_prepare_drives_stream_path, params: { drives: "/dev/sdb1" }
         expect(DiskPoolPartition.pluck(:path)).to eq(["/mnt/data"])
-      end
-
-      it "clears all pool partitions when none selected" do
-        DiskPoolPartition.create!(path: "/mnt/data", minimum_free: 10)
-        post setup_update_storage_path, params: {}
-        expect(DiskPoolPartition.count).to eq(0)
-        expect(response).to redirect_to(setup_greyhole_path)
       end
     end
 
