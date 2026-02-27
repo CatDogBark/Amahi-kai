@@ -4,6 +4,7 @@
       <tr>
         <th><%= t('model') %></th>
         <th><%= t('device') %></th>
+        <th><%= t('size', default: 'Size') %></th>
         <th><%= t('temperature') %></th>
       </tr>
     </thead>
@@ -12,6 +13,7 @@
         <tr>
           <td><%= disk[:model] %></td>
           <td><%= disk[:device] %></td>
+          <td><%= disk[:size] %></td>
           <td class="<%= disk[:tempcolor] %>">
             <span class="temp-celsius"><%= disk[:temp_c] %>&deg;C</span>
             <span class="temp-fahrenheit d-none"><%= disk[:temp_f] %>&deg;F</span>
@@ -20,7 +22,7 @@
       <% end %>
       <% if @disks.empty? %>
         <tr>
-          <td colspan="3"><strong><%= t('no_disks_found', default: 'No disks found') %></strong></td>
+          <td colspan="4"><strong><%= t('no_disks_found', default: 'No disks found') %></strong></td>
         </tr>
       <% end %>
     </tbody>

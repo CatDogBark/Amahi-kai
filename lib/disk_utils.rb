@@ -52,15 +52,18 @@ class DiskUtils
 
     def lsblk_disks
       # Use JSON output for reliable parsing (MODEL can be empty on virtual disks)
-      output = `lsblk -dno NAME,MODEL,TYPE -J 2>/dev/null`.strip
+      output = `lsblk -dno NAME,MODEL,SIZE,TYPE -J 2>/dev/null`.strip
       return lsblk_disks_fallback if output.empty?
 
       data = JSON.parse(output) rescue (return lsblk_disks_fallback)
       (data['blockdevices'] || []).filter_map do |dev|
         next unless dev['type'] == 'disk'
+        model = dev['model']&.strip.presence || 'Virtual Disk'
+        size = dev['size']&.strip
         {
           device: "/dev/#{dev['name']}",
-          model: (dev['model']&.strip.presence || 'Virtual Disk')
+          model: model,
+          size: size
         }
       end
     end
