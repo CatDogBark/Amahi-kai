@@ -84,7 +84,7 @@ class NetworkController < ApplicationController
     case params[:setting_dns]
     when 'opendns', 'google', 'opennic', 'cloudflare'
       @saved = Setting.set("dns", params[:setting_dns], KIND)
-      Shell.run("hda-ctl-hup")
+      Shell.run("systemctl restart dnsmasq.service")
     else
       @saved = true
     end
@@ -96,7 +96,7 @@ class NetworkController < ApplicationController
       @ip_1_saved = DnsIpSetting.set("dns_ip_1", params[:dns_ip_1], KIND)
       @ip_2_saved = DnsIpSetting.set("dns_ip_2", params[:dns_ip_2], KIND)
       Setting.set("dns", 'custom', KIND)
-      Shell.run("hda-ctl-hup")
+      Shell.run("systemctl restart dnsmasq.service")
     end
     if @ip_1_saved && @ip_2_saved
       render json: { status: :ok }
@@ -108,7 +108,7 @@ class NetworkController < ApplicationController
   def update_lease_time
     @saved = params[:lease_time].present? && params[:lease_time].to_i > 0 ? Setting.set("lease_time", params[:lease_time], KIND) : false
     render json: { status: @saved ? :ok : :not_acceptable }
-    Shell.run("hda-ctl-hup")
+    Shell.run("systemctl restart dnsmasq.service")
   end
 
   def update_gateway
@@ -127,7 +127,7 @@ class NetworkController < ApplicationController
     s.value = (1 - s.value.to_i).to_s
     if s.save
       render json: { status: 'ok' }
-      Shell.run("hda-ctl-hup")
+      Shell.run("systemctl restart dnsmasq.service")
     else
       render json: { status: 'error' }
     end
@@ -145,7 +145,7 @@ class NetworkController < ApplicationController
     if @saved
       Setting.set("dyn_lo", dyn_lo, KIND)
       Setting.set("dyn_hi", dyn_hi, KIND)
-      Shell.run("hda-ctl-hup")
+      Shell.run("systemctl restart dnsmasq.service")
       render json: { status: :ok }
     else
       render json: { status: :not_acceptable }

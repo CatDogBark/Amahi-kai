@@ -14,6 +14,8 @@
 # License along with this program; if not, write to the Amahi
 # team at http://www.amahi.org/ under "Contact Us."
 
+require 'shell'
+
 class Host < ApplicationRecord
 
   before_save :convert_address
@@ -28,7 +30,7 @@ class Host < ApplicationRecord
   protected
 
   def restart
-    system "hda-ctl-hup"
+    Shell.run("systemctl restart dnsmasq.service")
   end
 
   def convert_address

@@ -149,24 +149,7 @@ class Platform
     end
 
     def platform_versions
-      platform = ""
-      hda_ctl = ""
-      begin
-        result = `dpkg -s hda-platform 2>/dev/null`
-        if result =~ /Version: (.*)/
-          platform = $1
-        end
-        result = `dpkg -s hda-ctl 2>/dev/null`
-        if result =~ /Version: (.*)/
-          hda_ctl = $1
-        end
-      rescue => e
-        platform = "unknown"
-        hda_ctl = "unknown"
-      end
-      platform = "amahi-kai" if platform.blank?
-      hda_ctl = "direct-exec" if hda_ctl.blank?
-      { :platform => platform, :core => hda_ctl }
+      { platform: 'amahi-kai', core: 'shell' }
     end
   end
 
