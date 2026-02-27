@@ -15,7 +15,7 @@
 </p>
 
 <% if @devices.any? { |d| !d[:os_disk] } %>
-  <%= form_tag(setup_update_storage_path, method: :post) do %>
+  <form id="storage-form" onsubmit="prepareDrives(event); return false;">
     <div class="drive-list">
       <% @devices.each do |device| %>
         <% next if device[:os_disk] %>
@@ -79,9 +79,9 @@
 
     <div class="setup-actions">
       <a href="<%= setup_greyhole_path %>" class="btn-skip">Skip</a>
-      <button type="submit" class="btn-kai" onclick="this.disabled=true; this.innerHTML='<span style=\'display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:8px;\'></span>Preparing drives...'; this.form.submit();">Prepare Drives & Continue →</button>
+      <button type="submit" class="btn-kai">Prepare Drives & Continue →</button>
     </div>
-  <% end %>
+  </form>
 <% else %>
   <div class="setup-muted" style="text-align: center; padding: 20px;">
     <p>No additional drives detected beyond your OS disk.</p>
@@ -92,6 +92,8 @@
     <a href="<%= setup_greyhole_path %>" class="btn-kai">Continue →</a>
   </div>
 <% end %>
+
+<%= render 'shared/install_terminal', id: 'prepare-drives', title: 'Preparing Drives', stream_url: '' %>
 
 <!-- Drive Preview Modal -->
 <div id="preview-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); z-index:1000; display:none; align-items:center; justify-content:center;">
@@ -116,6 +118,74 @@
     #preview-modal .preview-size { color: #8b949e !important; }
   }
 </style>
+
+<script>
+function prepareDrives(event) {
+  event.preventDefault();
+
+  var drives = [];
+  var formatDrives = [];
+  document.querySelectorAll('input[name="drives[]"]:checked').forEach(function(cb) {
+    drives.push(cb.value);
+  });
+  document.querySelectorAll('input[name="format_drives[]"]:checked').forEach(function(cb) {
+    formatDrives.push(cb.value);
+  });
+
+  if (drives.length === 0) {
+    window.location.href = '<%= setup_greyhole_path %>';
+    return;
+  }
+
+  var url = '<%= setup_prepare_drives_stream_path %>'
+    + '?drives=' + encodeURIComponent(drives.join(','))
+    + '&format_drives=' + encodeURIComponent(formatDrives.join(','));
+
+  var id = 'prepare-drives';
+  var modal = document.getElementById(id + '-install-modal');
+  var output = document.getElementById(id + '-output');
+  var cursor = document.getElementById(id + '-cursor');
+  var footer = document.getElementById(id + '-install-footer');
+  var terminal = document.getElementById(id + '-terminal');
+
+  modal.style.display = 'flex';
+  output.innerHTML = '';
+  cursor.style.display = '';
+  footer.style.display = 'none';
+  footer.innerHTML = '<a href="<%= setup_greyhole_path %>" class="btn btn-sm btn-outline-light">Continue →</a>';
+
+  var source = new EventSource(url);
+
+  source.onmessage = function(e) {
+    var line = document.createElement('div');
+    line.className = 'term-line';
+    var text = e.data;
+    if (text.match(/^(Formatting|Mounting|Preparing)/)) { line.classList.add('step'); }
+    else if (text.match(/✓/)) { line.classList.add('success'); }
+    else if (text.match(/✗/)) { line.classList.add('error'); }
+    else if (text.match(/⚠/)) { line.classList.add('warn'); }
+    line.textContent = text;
+    output.appendChild(line);
+    terminal.scrollTop = terminal.scrollHeight;
+  };
+
+  source.addEventListener('done', function(e) {
+    source.close();
+    cursor.style.display = 'none';
+    footer.style.display = 'block';
+  });
+
+  source.onerror = function() {
+    source.close();
+    cursor.style.display = 'none';
+    footer.style.display = 'block';
+    var line = document.createElement('div');
+    line.className = 'term-line error';
+    line.textContent = '✗ Connection lost';
+    output.appendChild(line);
+  };
+}
+</script>
 
 <script>
   function previewDrive(device) {

@@ -108,75 +108,98 @@ class SetupController < ApplicationController
   end
 
   def update_storage
+    # Redirect to greyhole step — actual work happens in prepare_drives_stream
+    redirect_to setup_greyhole_path
+  end
+
+  def prepare_drives_stream
     require 'disk_manager'
 
-    # Remove all existing pool partitions first
-    DiskPoolPartition.destroy_all
-
-    selected_drives = params[:drives] || []
-    format_drives = params[:format_drives] || []
+    selected_drives = (params[:drives] || '').split(',')
+    format_drives = (params[:format_drives] || '').split(',')
     supported_fs = %w[ext2 ext3 ext4 xfs btrfs]
 
-    selected_drives.each do |device_path|
-      begin
-        devices = DiskManager.devices
-        part = devices.flat_map { |d| d[:partitions] }.find { |p| p[:path] == device_path }
-        next unless part
-
-        mount_point = part[:mountpoint]
-        will_format = part[:status] == :unformatted || format_drives.include?(device_path)
-
-        # Format if unformatted OR user explicitly chose to format
-        if will_format
-          DiskManager.format_disk!(device_path)
-        end
-
-        # Mount if not already mounted
-        if mount_point.blank?
-          mount_point = DiskManager.mount!(device_path)
-        end
-
-        next unless mount_point.present?
-
-        # Determine if this filesystem supports pooling
-        fs_after = will_format ? 'ext4' : part[:fstype].to_s.downcase
-        can_pool = supported_fs.include?(fs_after)
-
-        if can_pool
-          # Add to Greyhole storage pool
-          DiskPoolPartition.create!(path: mount_point, minimum_free: 10)
-        else
-          # Unsupported fs — create a standalone share instead
-          share_name = File.basename(mount_point).gsub(/[^a-zA-Z0-9\-]/, '')
-          share_name = "drive-#{share_name}" if share_name.blank?
-          unless Share.exists?(path: mount_point)
-            share = Share.new(
-              name: share_name,
-              path: mount_point,
-              visible: true,
-              rdonly: false,
-              everyone: true,
-              tags: "storage",
-              extras: "",
-              disk_pool_copies: 0
-            )
-            # Skip filesystem setup since the directory already exists
-            null_fs = ShareFileSystem.new(share)
-            def null_fs.setup_directory; end
-            def null_fs.update_guest_permissions; end
-            share.instance_variable_set(:@file_system, null_fs)
-            share.save!
-            session[:standalone_drives] ||= []
-            session[:standalone_drives] << { name: share_name, path: mount_point, fstype: part[:fstype] }
-          end
-        end
-      rescue StandardError => e
-        Rails.logger.error("SetupController#update_storage: #{e.message} for #{device_path}")
-        flash[:error] = "Error preparing #{device_path}: #{e.message}"
+    stream_sse do |sse|
+      if selected_drives.empty?
+        sse.send("⚠ No drives selected")
+        sse.done
+        next
       end
-    end
 
-    redirect_to setup_greyhole_path
+      sse.send("Preparing #{selected_drives.size} drive#{'s' if selected_drives.size > 1}...")
+      sse.send("")
+
+      # Remove existing pool partitions
+      DiskPoolPartition.destroy_all
+      success = true
+
+      selected_drives.each do |device_path|
+        begin
+          devices = DiskManager.devices
+          part = devices.flat_map { |d| d[:partitions] }.find { |p| p[:path] == device_path }
+          unless part
+            sse.send("⚠ Device #{device_path} not found, skipping")
+            next
+          end
+
+          mount_point = part[:mountpoint]
+          will_format = part[:status] == :unformatted || format_drives.include?(device_path)
+
+          if will_format
+            sse.send("Formatting #{device_path} as ext4...")
+            DiskManager.format_disk!(device_path)
+            sse.send("  ✓ Format complete")
+          end
+
+          if mount_point.blank?
+            sse.send("Mounting #{device_path}...")
+            mount_point = DiskManager.mount!(device_path)
+            sse.send("  ✓ Mounted at #{mount_point}")
+          else
+            sse.send("#{device_path} already mounted at #{mount_point}")
+          end
+
+          next unless mount_point.present?
+
+          fs_after = will_format ? 'ext4' : part[:fstype].to_s.downcase
+          can_pool = supported_fs.include?(fs_after)
+
+          if can_pool
+            DiskPoolPartition.create!(path: mount_point, minimum_free: 10)
+            sse.send("  ✓ Added to storage pool")
+          else
+            share_name = File.basename(mount_point).gsub(/[^a-zA-Z0-9\-]/, '')
+            share_name = "drive-#{share_name}" if share_name.blank?
+            unless Share.exists?(path: mount_point)
+              share = Share.new(
+                name: share_name, path: mount_point, visible: true, rdonly: false,
+                everyone: true, tags: "storage", extras: "", disk_pool_copies: 0
+              )
+              null_fs = ShareFileSystem.new(share)
+              def null_fs.setup_directory; end
+              def null_fs.update_guest_permissions; end
+              share.instance_variable_set(:@file_system, null_fs)
+              share.save!
+            end
+            sse.send("  ✓ Created standalone share '#{share_name}' (#{part[:fstype]} — not pooled)")
+          end
+
+          sse.send("")
+        rescue StandardError => e
+          sse.send("  ✗ Error: #{e.message}")
+          Rails.logger.error("SetupController#prepare_drives_stream: #{e.message} for #{device_path}")
+          success = false
+        end
+      end
+
+      pool_count = DiskPoolPartition.count
+      if pool_count > 0
+        sse.send("✓ #{pool_count} drive#{'s' if pool_count > 1} ready for storage pooling!")
+      else
+        sse.send("✓ Drives prepared (no poolable drives — standalone shares created)")
+      end
+      sse.done(success ? "success" : "error")
+    end
   end
 
   def greyhole
