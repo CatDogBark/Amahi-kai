@@ -38,8 +38,8 @@ Some views are `.html.slim`, others `.html.erb`. Not a bug, just inconsistent. C
 ### ~~plugins/ directory~~ ✅ DELETED
 All removed 2026-02-26 (474 lines). DB `plugins` table still exists but harmless.
 
-### /var/hda/ Legacy Paths
-Several places use `HDA_TMP_DIR` / `/var/hda/` for staging samba/dns configs. Legacy Amahi convention. Works but not obvious. Migrate to `/var/lib/amahi-kai/` on next fresh install.
+### ~~/var/hda/ Legacy Paths~~ ✅ DONE
+Migrated to `/var/lib/amahi-kai/` across 20 files (2026-02-26). Constants: `AMAHI_DATA_DIR`, `AMAHI_TMP_DIR`.
 
 ### ~~use_sample_data?~~ ✅ DELETED
 Removed along with SampleData class. Controllers now use real system data with rescue fallbacks for CI.

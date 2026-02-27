@@ -63,7 +63,7 @@ systemctl status dnsmasq      # DNS (if enabled)
 
 ### File Shares
 
-Shares are stored under `/var/hda/files/` by default. Create and manage them from the Shares tab in the web UI.
+Shares are stored under `/var/lib/amahi-kai/files/` by default. Create and manage them from the Shares tab in the web UI.
 
 ### Cloudflare Tunnel (Optional)
 

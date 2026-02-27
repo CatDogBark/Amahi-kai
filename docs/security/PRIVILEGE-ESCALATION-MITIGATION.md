@@ -86,16 +86,16 @@ amahi ALL=(root) NOPASSWD: /usr/sbin/userdel
 amahi ALL=(root) NOPASSWD: /usr/bin/pdbedit
 
 # File operations — scoped to share and SSH paths only
-amahi ALL=(root) NOPASSWD: /usr/bin/chmod [0-9]* /var/hda/*
-amahi ALL=(root) NOPASSWD: /usr/bin/chmod -R [a-z]* /var/hda/*
-amahi ALL=(root) NOPASSWD: /usr/bin/chmod [a-z]* /var/hda/*
+amahi ALL=(root) NOPASSWD: /usr/bin/chmod [0-9]* /var/lib/amahi-kai/*
+amahi ALL=(root) NOPASSWD: /usr/bin/chmod -R [a-z]* /var/lib/amahi-kai/*
+amahi ALL=(root) NOPASSWD: /usr/bin/chmod [a-z]* /var/lib/amahi-kai/*
 amahi ALL=(root) NOPASSWD: /usr/bin/chmod u+rwx\,go-rwx /home/*/.ssh
 amahi ALL=(root) NOPASSWD: /usr/bin/chmod u+rw\,go-rwx /home/*/.ssh/authorized_keys
-amahi ALL=(root) NOPASSWD: /usr/bin/chown * /var/hda/*
+amahi ALL=(root) NOPASSWD: /usr/bin/chown * /var/lib/amahi-kai/*
 amahi ALL=(root) NOPASSWD: /usr/bin/chown -R * /home/*/.ssh
 
 # Directory creation for shares
-amahi ALL=(root) NOPASSWD: /usr/bin/mkdir -p /var/hda/*
+amahi ALL=(root) NOPASSWD: /usr/bin/mkdir -p /var/lib/amahi-kai/*
 
 # Config file staging — fixed source path, no wildcards
 amahi ALL=(root) NOPASSWD: /usr/bin/cp /tmp/amahi-staging/* /etc/samba/*

@@ -34,7 +34,7 @@ This fork was created in **February 2026** to modernize the Amahi Platform for c
 - **Bootstrap**: Upgraded from 3/4 → 5.3
 - **Frontend**: Removed jQuery entirely, migrated to Stimulus controllers + Turbo + vanilla JS
 - **Database**: MariaDB (production), native install with systemd service
-- **Authentication**: Migrated to SCrypt password hashing (from Sha512)
+- **Authentication**: Migrated to bcrypt password hashing via has_secure_password
 - **Asset Pipeline**: Converted CoffeeScript to JavaScript, replaced uglifier with terser
 - **Security**: SQL injection fixes, shell injection prevention (Shellwords.escape), CSP headers, CSRF protection, AES-256-GCM credential encryption, security audit system with auto-fix
 - **Docker App System**: 14-app catalog with one-click install, built-in reverse proxy, lifecycle management

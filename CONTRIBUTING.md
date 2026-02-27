@@ -43,20 +43,22 @@ bundle exec rspec spec/features/     # Full feature specs (needs chromium)
 
 ## Architecture
 
-### Plugin System
+### App Structure
 
-The app uses a plugin architecture under `plugins/`:
+Monolithic Rails app — no plugins. All controllers live in `app/controllers/`:
 
-| Plugin | Path | Purpose |
-|--------|------|---------|
-| Users | `010-users` | User management, admin settings |
-| Shares | `020-shares` | Samba file share management |
-| Disks | `030-disks` | Disk monitoring |
-| Apps | `040-apps` | Application installer |
-| Network | `050-network` | DNS, DHCP, fixed IPs |
-| Settings | `080-settings` | System settings, themes, servers |
+| Area | Controller | Routes |
+|------|-----------|--------|
+| Users | `UsersController` | `/users` |
+| Shares | `SharesController` | `/shares` |
+| Disks | `DisksController` | `/disks/*` |
+| Apps | `AppsController` | `/apps/*` |
+| Network | `NetworkController` | `/network/*` |
+| Settings | `SettingsController` | `/settings/*` |
+| File Browser | `FileBrowserController` | `/files/:share_id/*` |
+| Setup | `SetupController` | `/setup/*` |
 
-Each plugin has its own controllers, views, routes, assets, and locale files.
+Service objects in `app/services/`: `ShareFileSystem`, `SambaService`, `ShareAccessManager`.
 
 ### Frontend Stack
 
@@ -70,10 +72,9 @@ Stimulus controllers live in `app/assets/javascripts/controllers/`.
 
 ### Key Classes
 
-- `Command` (lib/command.rb) — Executes system commands in 3 modes: `:dummy` (test/dev), `:direct` (production), `:hdactl` (legacy)
+- `Shell` (lib/shell.rb) — Executes system commands with auto-sudo, dummy mode for test/dev, and logging
 - `Platform` (lib/platform.rb) — OS detection, Ubuntu/Debian only
 - `SetTheme` (lib/set_theme.rb) — Theme loading and switching
-- `Tab` (lib/tab.rb) — Navigation tab system from plugins
 - `ContainerService` (lib/container_service.rb) — Docker app lifecycle management
 - `AppCatalog` (lib/app_catalog.rb) — YAML-based Docker app catalog
 - `AppProxyController` — Reverse proxy for Docker apps at `/app/{identifier}`
@@ -99,7 +100,7 @@ Stimulus controllers live in `app/assets/javascripts/controllers/`.
 - Controllers use `before_action :admin_required` for protected actions
 - Return proper HTTP status codes (422 for validation failures)
 - Views use Slim templates
-- Locales in `config/locales/` and `plugins/*/config/locales/`
+- Locales in `config/locales/`
 
 ## License
 
