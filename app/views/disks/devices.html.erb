@@ -85,7 +85,7 @@
                     <% when :mounted %>
                       <% unless ['/', '/boot', '/boot/efi'].include?(part[:mountpoint]) %>
                         <%= button_to "Unmount",
-                              undisks_mount_disk_path,
+                              disks_unmount_disk_path,
                               params: { device: part[:path] },
                               method: :post,
                               class: "btn btn-sm btn-outline-warning",
