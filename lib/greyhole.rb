@@ -23,7 +23,10 @@ class Greyhole
 
     def running?
       return false unless production?
-      Shell.run('systemctl is-active --quiet greyhole.service')
+      # Greyhole uses an LSB init script — systemctl is-active returns "active"
+      # even when the daemon has exited. Check for the actual process instead.
+      stdout, _stderr, status = Shell.capture('pgrep -f "greyhole --daemon"')
+      status.success? && stdout.strip.present?
     end
 
     def status
