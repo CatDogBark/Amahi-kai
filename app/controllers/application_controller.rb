@@ -51,11 +51,12 @@ class ApplicationController < ActionController::Base
   def check_for_amahi_app
     server = request.env['SERVER_NAME']
     dom = Setting.get_by_name('domain')
-    if server && server != 'hda' && server =~ /\A(.*)\.#{dom}\z/
+    hostname = Setting.get('server-name') || 'amahi-kai'
+    if server && server != hostname && server =~ /\A(.*)\.#{dom}\z/
       server = $1
     end
-    if server && server != 'hda' && DnsAlias.where(:name=>server).first
-      redirect_to "http://hda/hda_app_#{server}"
+    if server && server != hostname && DnsAlias.where(:name=>server).first
+      redirect_to "http://#{hostname}/apps/#{server}"
     end
   end
 

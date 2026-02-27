@@ -19,22 +19,22 @@ RSpec.describe "SearchController extended", type: :request do
 
   describe "GET /search/hda" do
     it "finds files by name" do
-      get search_hda_path, params: { query: "movie" }
+      get search_files_path, params: { query: "movie" }
       expect(response).to have_http_status(:ok)
     end
 
     it "returns results with pagination" do
-      get search_hda_path, params: { query: "movie", page: 1, per_page: 10 }
+      get search_files_path, params: { query: "movie", page: 1, per_page: 10 }
       expect(response).to have_http_status(:ok)
     end
 
     it "handles page beyond results" do
-      get search_hda_path, params: { query: "movie", page: 999 }
+      get search_files_path, params: { query: "movie", page: 999 }
       expect(response).to have_http_status(:ok)
     end
 
     it "handles empty results" do
-      get search_hda_path, params: { query: "nonexistent_file_xyz" }
+      get search_files_path, params: { query: "nonexistent_file_xyz" }
       expect(response).to have_http_status(:ok)
     end
   end
@@ -62,7 +62,7 @@ RSpec.describe "SearchController extended", type: :request do
 
   describe "POST /search/hda" do
     it "accepts POST method" do
-      post search_hda_path, params: { query: "test" }
+      post search_files_path, params: { query: "test" }
       expect(response).to have_http_status(:ok)
     end
   end

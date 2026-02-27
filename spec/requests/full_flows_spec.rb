@@ -92,7 +92,7 @@ RSpec.describe "Full integration flows", type: :request do
                         relative_path: "vacation_photo.jpg",
                         content_type: "image", extension: "jpg")
 
-      get search_hda_path, params: { query: "vacation" }
+      get search_files_path, params: { query: "vacation" }
       expect(response).to have_http_status(:ok)
       expect(response.body).to include("vacation")
     end

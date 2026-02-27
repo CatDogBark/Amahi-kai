@@ -53,14 +53,18 @@ module ApplicationHelper
     '-'
   end
 
+  def netbios_name
+    @netbios_name ||= (Setting.get('server-name') || 'amahi-kai').downcase
+  end
+
   def path2uri(name)
     name = URI.encode_www_form_component(name)
-    is_a_mac? ? "smb://hda/#{name}" : "file://///hda/#{name}"
+    is_a_mac? ? "smb://#{netbios_name}/#{name}" : "file://///#{netbios_name}/#{name}"
   end
 
   def path2location(name)
     fwd = '\\'
-    is_a_mac? ? '&raquo; '.html_safe + h(name.gsub(/\//, ' ▸ ')) : h('\\\\hda\\' + name.gsub(/\//, fwd))
+    is_a_mac? ? '&raquo; '.html_safe + h(name.gsub(/\//, ' ▸ ')) : h("\\\\#{netbios_name}\\" + name.gsub(/\//, fwd))
   end
 
   def is_a_mac?

@@ -1,8 +1,8 @@
 #search-page
   #search-types
     ul#search-menu
-      li[class="#{active 'hda'}"]
-        = action_name == "hda" ? t('files') : link_to(t('files'), :action => :hda, :query => @query, per_page: @rpp)
+      li[class="#{active 'files'}"]
+        = action_name == "files" ? t('files') : link_to(t('files'), :action => :files, :query => @query, per_page: @rpp)
       li[class="#{active 'images'}"]
         = action_name == "images" ? t('images') : link_to(t('images'), :action => :images, :query => @query, per_page: @rpp)
       li[class="#{active 'audio'}"]

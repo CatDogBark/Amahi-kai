@@ -144,7 +144,7 @@ Rails.application.routes.draw do
 
   resources :user_sessions
 
-  match 'search/hda' => 'search#hda', :as => :search_hda, via: [:get,:post]
+  match 'search/files' => 'search#files', :as => :search_files, via: [:get,:post]
   match 'search/images' => 'search#images', :as => :search_images, via: [:get,:post]
   match 'search/audio' => 'search#audio', :as => :search_audio, via: [:get,:post]
   match 'search/video' => 'search#video', :as => :search_video, via: [:get,:post]

@@ -22,9 +22,9 @@ class SearchController < ApplicationController
 
   RESULTS_PER_PAGE = 20
 
-  def hda
+  def files
     @page_title = 'Search Results'
-    @search_value = 'HDA'
+    @search_value = 'Files'
 
     if params[:button] && params[:button] == "Web"
       require 'uri'
@@ -43,7 +43,7 @@ class SearchController < ApplicationController
     @page = (params[:page] && params[:page].to_i.abs) || 1
     @rpp = (params[:per_page] && params[:per_page].to_i.abs) || RESULTS_PER_PAGE
     @results = search_share_files(@query, 'image', @page, @rpp)
-    render 'hda'
+    render 'files'
   end
 
   def audio
@@ -51,7 +51,7 @@ class SearchController < ApplicationController
     @page = (params[:page] && params[:page].to_i.abs) || 1
     @rpp = (params[:per_page] && params[:per_page].to_i.abs) || RESULTS_PER_PAGE
     @results = search_share_files(@query, 'audio', @page, @rpp)
-    render 'hda'
+    render 'files'
   end
 
   def video
@@ -59,7 +59,7 @@ class SearchController < ApplicationController
     @page = (params[:page] && params[:page].to_i.abs) || 1
     @rpp = (params[:per_page] && params[:per_page].to_i.abs) || RESULTS_PER_PAGE
     @results = search_share_files(@query, 'video', @page, @rpp)
-    render 'hda'
+    render 'files'
   end
 
   def web
