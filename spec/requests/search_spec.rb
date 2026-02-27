@@ -2,14 +2,14 @@ require 'spec_helper'
 
 describe "Search", type: :request do
 
-  describe "GET /search/hda (unauthenticated)" do
+  describe "GET /search/files (unauthenticated)" do
     it "redirects to login" do
       get search_files_path, params: { query: "test" }
       expect(response).to redirect_to(new_user_session_path)
     end
   end
 
-  describe "GET /search/hda (authenticated)" do
+  describe "GET /search/files (authenticated)" do
     before { login_as_admin }
 
     it "shows search results page" do

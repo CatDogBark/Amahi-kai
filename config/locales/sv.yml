@@ -18,7 +18,7 @@ sv:
   delete_user: "Radera användare"
   delete_profile: "Radera profil för"
   running: "Igång"
-  start_building_a_new_hda: "Börja bygga en ny HDA!"
+  get_started: "Börja bygga en ny HDA!"
   delete: Radera
   name_is_taken_already: "Namnet är redan taget "
   unleash_the_power_of_your_home_network: "Släpp loss kraften i ditt hemnätverk."
@@ -145,7 +145,7 @@ sv:
     Vill du verkligen fortsätta"
   dns_aliases: DNS Alias
   used_space: "Använt utrymme"
-  static_ip_address_for_your_hda: "Statisk IP-adress för din HDA"
+  static_ip_address: "Statisk IP-adress för din HDA"
   comment: Kommentera
   the_alias_name_you_input_will_be_added: "Namnet du matar in ovan kommer att läggas till DNS-servern som ett alias för IP-adressen nedan."
   root_path: "Rotsökväg"
@@ -205,7 +205,6 @@ sv:
   edit_user: "Ändra användare"
   control_panel: Kontrollpanel
   share_name_cannot_be_blank: "Utdelningsnamn får inte vara tomt"
-  get_started: "Börja!"
   my_account: Mitt Konto
   gallery: Galleri
   transmission_bittorrent_server: Transmission Bittorrent Server
@@ -338,7 +337,6 @@ sv:
   tags: Taggar
   router_firewall_settings: "Router- / Brandväggsinställningar"
   firewall_mac_address_filter_info: "Inlägg i denna tabell används för att begränsa vissa typer av datapaket från ditt lokala nätverk till Internet via en gateway. Användning av sådana filter kan vara till hjälp för att säkra eller begränsa ditt lokala nätverk."
-  static_ip_address: Statisk IP-adress
   are_you_sure_advanced_features: "Är du säker på att du vill aktivera Avancerade Funktioner?"
   dhcp_server: DHCP Server
   app_logs: Applikationsloggar
@@ -375,7 +373,7 @@ sv:
   dynamic_dns: Dynamisk DNS
   the_ip_must_be_1_to_254: "IP måste vara i intervallet 1-254"
   not_a_valid_user_or_password: "Fel: Felaktigt användarnamn eller lösenord"
-  create_your_hda_profile: Skapa din HDA-profil
+  create_your_profile: Skapa din HDA-profil
   your_home_dns_domain: Din DNS Domain
   theme_by: Tema gjort av
   forums: Forum
@@ -554,7 +552,6 @@ sv:
   close: "stäng"
   this_file_was_automatically_generated_on: "# Den här filen genererades automatiskt på %{time} - VARNING - alla manuella ändringar går förlorade!"
   installation_instructions: Installationsanvisningar
-  control_panel_for_your_amahi_hdas: "Kontrollpanelen för ditt Amahi HDAs"
   please_select_the_type_of_rule_you_want: "Välj den typ av regel som du vill lägga till."
   create_a_new_webapp: Skapa en ny webbapplikation
   refresh_status: Uppdateringsstatus

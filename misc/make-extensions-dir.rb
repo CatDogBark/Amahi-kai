@@ -1,11 +1,11 @@
-# for testing the search function in a real hda:
+# for testing the search function in a real server:
 #
 # 	define EXT2ICON
 # 	require 'fileutils'
 # 	make_extensions_test_folder
 # 	sudo updatedb &
 # 	locate extension-test
-# 	rm -rf /var/hda/files/docs/extension-test
+# 	rm -rf /var/lib/amahi-kai/files/docs/extension-test
 #
 def make_extensions_test_folder
 	Dir.chdir(Share.full_path('docs')) do

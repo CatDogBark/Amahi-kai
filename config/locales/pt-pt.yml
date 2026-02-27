@@ -18,7 +18,7 @@ pt-pt:
   delete_user: "Apagar utilizador "
   delete_profile: Apagar perfil de
   running: "Em execução"
-  start_building_a_new_hda: Comece a criar um novo HDA!
+  get_started: Comece a criar um novo HDA!
   delete: Apagar
   name_is_taken_already: "Nome está já a ser usado"
   unleash_the_power_of_your_home_network: "Libere o poder da sua rede doméstica."
@@ -147,7 +147,7 @@ pt-pt:
     Tem a certeza de que pretende continuar?"
   dns_aliases: DNS Aliases
   used_space: "Espaço usado"
-  static_ip_address_for_your_hda: "Endereço IP Fixo para o seu HDA"
+  static_ip_address: "Endereço IP Fixo para o seu HDA"
   comment: "Comentário"
   the_alias_name_you_input_will_be_added: "O nome que você forneceu acima será adicionado ao servidor DNS como um alias para o endereço IP abaixo."
   root_path: Raiz&nbsp;Caminho
@@ -209,7 +209,6 @@ pt-pt:
   edit_user: Editar utilizador
   control_panel: Painel de Controlo
   share_name_cannot_be_blank: "O Nome da Partilha não pode estar em branco"
-  get_started: "Comece Já!"
   my_account: A Minha Conta
   gallery: Galeria
   transmission_bittorrent_server: "Servidor de Transmissão Bittorrent"
@@ -343,7 +342,6 @@ pt-pt:
   tags: Tags
   router_firewall_settings: "Definições do Router/Firewall"
   firewall_mac_address_filter_info: "Entradas nesta tabela são usadas para restringir o envio de certos tipos de pacotes de dados da sua rede local para a Internet através da Gateway. O uso destes filtros pode ser útil para tornar a sua rede local mais segura ou restrita."
-  static_ip_address: "Endereço IP Fixo"
   are_you_sure_advanced_features: "Tem a certeza que pretende activar Recursos Avançados?"
   dhcp_server: Servidor DHCP
   app_logs: "Logs de Aplicação"
@@ -380,7 +378,7 @@ pt-pt:
   dynamic_dns: "DNS Dinâmico"
   the_ip_must_be_1_to_254: O IP deve estar no intervalo 1-254
   not_a_valid_user_or_password: "Erro: nome de utilizador ou senha incorrectos"
-  create_your_hda_profile: Criar o seu perfil HDA
+  create_your_profile: Criar o seu perfil HDA
   your_home_dns_domain: "Seu Domínio DNS Inicial"
   theme_by: Tema por
   forums: "Fóruns"
@@ -546,7 +544,6 @@ pt-pt:
   close: fechar
   this_file_was_automatically_generated_on: "# Este arquivo foi gerado automaticamente em %{time}. ATENÇÃO - quaisquer edições manuais SERÃO perdidas!"
   installation_instructions: "Instruções de instalação"
-  control_panel_for_your_amahi_hdas: Painel de Controlo para os seus HDAs Amahi
   please_select_the_type_of_rule_you_want: Por favor selecione o tipo de regra que deseja adicionar.
   create_a_new_webapp: "Criar Nova Aplicação Web"
   refresh_status: Actualizar estado

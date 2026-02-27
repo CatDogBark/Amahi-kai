@@ -18,7 +18,7 @@ no-NB:
   delete_user: Slett bruker
   delete_profile: Slett profil for
   running: "Kjører"
-  start_building_a_new_hda: "Begynn å bygge en ny HDA!"
+  get_started: "Begynn å bygge en ny HDA!"
   delete: Slette
   name_is_taken_already: Navnet er allere tatt
   unleash_the_power_of_your_home_network: "Slipp løs kraften i hjemmenettverket ditt."
@@ -147,7 +147,7 @@ no-NB:
     Er du sikker på at du vil fortsette?"
   dns_aliases: DNS Aliases
   used_space: Brukt diskplass
-  static_ip_address_for_your_hda: Statisk IP-adresse for HDA
+  static_ip_address: Statisk IP-adresse for HDA
   comment: Kommentar
   the_alias_name_you_input_will_be_added: Navnet du skriver ovenfor vil bli lagt til DNS-serveren som et alias for IP-adressen nedenfor.
   root_path: Root&nbsp;Fil-sti
@@ -207,7 +207,6 @@ no-NB:
   edit_user: Rediger bruker
   control_panel: Kontrollpanel
   share_name_cannot_be_blank: "Delingsnavn kan ikke være blankt"
-  get_started: Kom i gang!
   my_account: Min konto
   gallery: Galleri
   transmission_bittorrent_server: Transmission Bittorrent-tjener
@@ -337,7 +336,6 @@ no-NB:
   tags: Tagger
   router_firewall_settings: Ruter-/brannmur-innstillinger
   firewall_mac_address_filter_info: "Oppføringer i denne tabellen brukes til å begrense visse typer data pakker fra lokalnettet til Internett gjennom Gateway. Bruk av slike filtre kan være nyttig i sikring eller begrense det lokale nettverket."
-  static_ip_address: Statisk IP-adresse
   are_you_sure_advanced_features: "Er du sikker på at du vil aktivere avanserte funksjoner?"
   dhcp_server: DHCP Server
   app_logs: App-logger
@@ -374,7 +372,7 @@ no-NB:
   dynamic_dns: Dynamic DNS
   the_ip_must_be_1_to_254: "IP må være i intervallet 1-254"
   not_a_valid_user_or_password: "Feil: Feil brukernavn eller passord "
-  create_your_hda_profile: Opprett din HDA profil
+  create_your_profile: Opprett din HDA profil
   your_home_dns_domain: Ditt hjemme-DNS-domene
   theme_by: Oppsett av
   forums: Forums
@@ -543,7 +541,6 @@ no-NB:
   close: lukk
   this_file_was_automatically_generated_on: "# Denne filen ble automatisk generert %{time} - ADVARSEL - alle manuelle redigeringer vil gå tapt!"
   installation_instructions: Installasjonsinstruksjoner
-  control_panel_for_your_amahi_hdas: Kontrollpanel for mine Amahi HDAs
   please_select_the_type_of_rule_you_want: Velg hva slags type regel du vil legge til.
   create_a_new_webapp: Opprett en ny Web App
   refresh_status: Oppdater status

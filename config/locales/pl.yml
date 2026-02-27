@@ -18,7 +18,7 @@ pl:
   delete_user: "Usuń użytkownika"
   delete_profile: "Usuń profil dla"
   running: Uruchomione
-  start_building_a_new_hda: "Utwórz nowe HDA!"
+  get_started: "Utwórz nowe HDA!"
   delete: "Usuń"
   name_is_taken_already: "Nazwa jest już zajęta"
   unleash_the_power_of_your_home_network: ""
@@ -146,7 +146,7 @@ pl:
     Na pewno chcesz kontynuować?"
   dns_aliases: Aliasy DNS
   used_space: Wykorzystane
-  static_ip_address_for_your_hda: Statyczne IP dla twojego HDA
+  static_ip_address: Statyczne IP dla twojego HDA
   comment: Komentarz
   the_alias_name_you_input_will_be_added: ""
   root_path: "Ścieżka główna"
@@ -206,7 +206,6 @@ pl:
   edit_user: "Edytuj użytkownika"
   control_panel: Panel sterowania
   share_name_cannot_be_blank: "Nazwa Share nie może być pusta"
-  get_started: Zaczynamy!
   my_account: Moje Konto
   gallery: Galeria
   transmission_bittorrent_server: Server Bittorrent Transmission
@@ -342,7 +341,6 @@ pl:
   tags: Tagi
   router_firewall_settings: Ustawienia Router/Firewall
   firewall_mac_address_filter_info: ""
-  static_ip_address: Statyczne IP
   are_you_sure_advanced_features: "Czy na pewno chcesz włączyć Funkcje Zaawansowane?"
   dhcp_server: Serwer DHCP
   app_logs: Logi aplikacji
@@ -380,7 +378,7 @@ pl:
   dynamic_dns: Dynamiczne DNS
   the_ip_must_be_1_to_254: "IP musi być z zakresu 1-254"
   not_a_valid_user_or_password: "Błąd: niepoprawna nazwa użytkownika lub hasło"
-  create_your_hda_profile: "Stwórz swój Profil HDA"
+  create_your_profile: "Stwórz swój Profil HDA"
   your_home_dns_domain: Twoja domowa domena DNS
   theme_by: Szablon autorstwa
   forums: Fora
@@ -549,7 +547,6 @@ pl:
   close: zamknij
   this_file_was_automatically_generated_on: "# Ten plik został wygenerowany automatycznie %{time} - UWAGA - każda ręczna edycja zostanie utracona!"
   installation_instructions: Instrukje
-  control_panel_for_your_amahi_hdas: Panel sterowania dla Amahi HDAs
   please_select_the_type_of_rule_you_want: "Wybierz typ reguły, którą chcesz dodać."
   create_a_new_webapp: "Stwórz Nową Aplikację Webową"
   refresh_status: "Odśwież status"

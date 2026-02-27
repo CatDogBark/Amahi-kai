@@ -21,7 +21,7 @@ fr:
   delete_user: Supprimer l'utilisateur
   delete_profile: Supprimer profil pour
   running: "Démarré"
-  start_building_a_new_hda: Construisez votre nouveau HDA !
+  get_started: Construisez votre nouveau HDA !
   delete: Supprimer
   name_is_taken_already: "Ce nom est déjà pris"
   unleash_the_power_of_your_home_network: "Libérez la puissance de votre réseau domestique."
@@ -153,7 +153,7 @@ fr:
     Êtes-vous sûr(e) de vouloir continuer ?"
   dns_aliases: Alias DNS
   used_space: "Espace utilisé"
-  static_ip_address_for_your_hda: Adresse IP statique pour votre HDA
+  static_ip_address: Adresse IP statique pour votre HDA
   comment: Commentaire
   the_alias_name_you_input_will_be_added: "Le nom que vous saisissez ci-dessus sera ajouté au serveur DNS comme un alias pour l'adresse IP ci-dessous."
   root_path: "Répertoire racine"
@@ -215,7 +215,6 @@ fr:
   edit_user: Modifier l'utilisateur
   control_panel: "Panneau de contrôle"
   share_name_cannot_be_blank: "Le nom de partage ne peut pas être vide"
-  get_started: Commencez !
   my_account: Mon compte
   gallery: Galerie
   transmission_bittorrent_server: "Serveur de transmission Bittorrent "
@@ -352,7 +351,6 @@ fr:
     types de paquets de votre réseau local vers Internet via la passerelle.\r\n\
     L'utilisation de ces filtres peut être utile pour sécuriser ou restreindre\r\n\
     votre réseau local."
-  static_ip_address: Adresse IP statique
   are_you_sure_advanced_features: "Êtes-vous sûr(e) de vouloir activer les Fonctionnalités Avancées?"
   dhcp_server: Serveur DHCP
   app_logs: Journaux des applications
@@ -391,7 +389,7 @@ fr:
   dynamic_dns: DNS dynamique
   the_ip_must_be_1_to_254: "L'IP doit être dans la plage 1-254"
   not_a_valid_user_or_password: "Erreur : nom d'utilisateur ou mot de passe incorrect"
-  create_your_hda_profile: "Créer votre profil HDA"
+  create_your_profile: "Créer votre profil HDA"
   your_home_dns_domain: Votre domaine DNS domestique
   theme_by: "Thème par"
   forums: Forums
@@ -566,7 +564,6 @@ fr:
   close: fermer
   this_file_was_automatically_generated_on: "# Ce fichier a été automatiquement généré à %{time} - ATTENTION - toute modification manuelle SERA perdue !"
   installation_instructions: Instructions d'installation
-  control_panel_for_your_amahi_hdas: "Panneau de controle pour vos HDA Amahi "
   please_select_the_type_of_rule_you_want: "Sélectionnez le type de règle que vous souhaitez ajouter."
   create_a_new_webapp: "Créer une nouvelle application web"
   refresh_status: "Actualiser l'état"

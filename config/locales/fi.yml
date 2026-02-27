@@ -21,7 +21,7 @@ fi:
   delete_user: "Poista käyttäjä"
   delete_profile: Poista profiili
   running: "Käynnissä"
-  start_building_a_new_hda: Aloita uuden HDA-laitteen rakentaminen!
+  get_started: Aloita uuden HDA-laitteen rakentaminen!
   delete: Poista
   name_is_taken_already: Nimi on varattu
   unleash_the_power_of_your_home_network: Vapauta kotiverkkosi voima.
@@ -156,7 +156,7 @@ fi:
     Haluatko varmasti jatkaa?"
   dns_aliases: DNS-aliakset
   used_space: "Käytetty tila"
-  static_ip_address_for_your_hda: "HDA-laitteesi kiinteä IP-osoite"
+  static_ip_address: "HDA-laitteesi kiinteä IP-osoite"
   comment: Kommentti
   the_alias_name_you_input_will_be_added: "Ylle syöttämäsi nimi lisätään DNS-palvelimeen aliakseksi alla olevalle IP-osoitteelle."
   root_path: Juuripolku
@@ -219,7 +219,6 @@ fi:
   edit_user: "Muokkaa käyttäjää"
   control_panel: Ohjauspaneeli
   share_name_cannot_be_blank: "Jakonimi ei voi olla tyhjä"
-  get_started: "Aloita käyttö!"
   my_account: Oma tilini
   gallery: Galleria
   transmission_bittorrent_server: "Bittorrenttien välityspalvelin"
@@ -379,7 +378,6 @@ fi:
     \t\t\tpääsyä lähiverkostasi reitittimen läpi internetiin.\n\
     \t\t\tTämän tyyppisten suodattimien käyttö parantaa lähiverkkosi tietoturvaa\n\
     \t\t\tja niillä voidaan myös rajoittaa liikennettä."
-  static_ip_address: "Kiinteä IP-osoite"
   are_you_sure_advanced_features: "Haluatko varmasti ottaa lisäasetukset käyttöön?"
   dhcp_server: DHCP-palvelin
   app_logs: Sovelmalokit
@@ -418,7 +416,7 @@ fi:
   dynamic_dns: Dynaaminen DNS
   the_ip_must_be_1_to_254: "IP:n pitää olla väliltä 1-254"
   not_a_valid_user_or_password: "Virhe: Virheellinen käyttäjätunnus tai salasana"
-  create_your_hda_profile: Luo HDA-profiilisi
+  create_your_profile: Luo HDA-profiilisi
   your_home_dns_domain: Koti-DNS -toimialueesi
   theme_by: "Teeman tekijä"
   forums: Foorumit
@@ -590,7 +588,6 @@ fi:
   close: sulje
   this_file_was_automatically_generated_on: "# Tämä tiedosto luotiin automaattisesti %{time} - VAROITUS - kaikki manuaaliset muokkaukset HÄVIÄVÄT!"
   installation_instructions: Asennusohjeet
-  control_panel_for_your_amahi_hdas: Amahi HDA-laitteittesi ohjauspaneeli
   please_select_the_type_of_rule_you_want: "Valitse lisättävän säännön tyyppi."
   create_a_new_webapp: Luo uusi websovelma
   refresh_status: Virkistyksen tila

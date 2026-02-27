@@ -79,7 +79,7 @@ da:
   confirmation_must_match: "Bekræftelse skal matche"
   special_instructions: "Særlige instruktioner"
   firewall_url_filter_message: "Input i denne tabel bruges til at begrænse webadresser via Gateway."
-  create_your_hda_profile: Opret din HDA profil
+  create_your_profile: Opret din HDA profil
   rule_type: Regel Type
   create_alias: Opret Alias
   password_is_too_short: Password er for kort
@@ -247,7 +247,6 @@ da:
     Du skal bruge det til at logge ind på din <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">VPN</a> med <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">Windows-klienten</a> (og en autoriseret bruger og password på dit hjemmenetværk)."
   application_uninstalled: Applikation afinstalleret.
   warning: ADVARSEL
-  start_building_a_new_hda: Begynde at bygge et nyt HDA!
   users: Brugere
   your_domain_info: "Dette er dit hjemmenetværk domæne. Det er <b>kun</b> tilgængeligt i dit hjemmenetværk. For flere detaljer om dette henvises til <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">FAQ'en</a>."
   debug: Debug
@@ -400,7 +399,6 @@ da:
   preparing_to_uninstall: Forbereder afinstallation ...
   alias_looks_good: Alias ser ok ud
   more: mere
-  control_panel_for_your_amahi_hdas: Kontrolpanel til dine Amahi HDAs
   total_space: Samlet plads
   by_signing_up_you_agree_to_the_terms_of_service: "Ved at tilmelde dig, accepterer du, og har læst <a href=\"https://amahi-kai.com\" target=\"_blank\">vores Terms of Service</a>"
   there_are_no_applications_installed: "Der er ingen Apps installeret på dette tidspunkt."
@@ -527,7 +525,6 @@ da:
   new_dns_alias: Ny DNS Alias
   password: Adgangskode
   create_a_new_webapp: Opret en ny Web App
-  static_ip_address_for_your_hda: Statisk IP-adresse til din HDA
   setting_dmz_failed: Indstilling af DMZ mislykkedes. Tjek venligst dine indstillinger.
   community: "Fællesskabet"
   edit_user: Rediger bruger

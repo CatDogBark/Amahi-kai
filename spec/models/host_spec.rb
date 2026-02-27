@@ -6,7 +6,7 @@ describe Host do
     create(:admin)
     create(:setting, name: "net", value: "1")
     create(:setting, name: "self-address", value: "1")
-    # Stub system call to avoid hda-ctl-hup
+    # Stub system call to avoid dnsmasq restart
     allow_any_instance_of(Host).to receive(:restart)
   end
 

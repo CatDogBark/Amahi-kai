@@ -17,7 +17,7 @@ lv:
   delete_profile: "Dzēst profilu"
   delete_user: "Dzēst lietotāju"
   running: Darbojas
-  start_building_a_new_hda: "Sākt būvēt jaunu HDA!"
+  get_started: "Sākt būvēt jaunu HDA!"
   delete: "Dzēst"
   name_is_taken_already: "Vārds jau ir aizņemts"
   are_you_sure_webapp: ""
@@ -146,7 +146,7 @@ lv:
   this_will_reboot: "HDA tiks restartēts.\r\n Vai esat pārliecināts, ka vēlaties turpināt?"
   dns_aliases: ""
   used_space: "Izmantotā vieta"
-  static_ip_address_for_your_hda: "Jūsu HDA statiskā IP adrese"
+  static_ip_address: "Jūsu HDA statiskā IP adrese"
   comment: "Komentārs"
   the_alias_name_you_input_will_be_added: ""
   root_path: "Saknes&nbsp;ceļš"
@@ -207,7 +207,6 @@ lv:
   edit_user: "Rediģēt lietotāju"
   control_panel: "Vadības panelis"
   share_name_cannot_be_blank: ""
-  get_started: ""
   transmission_bittorrent_server: Transmission Bittorrent serveris
   my_account: Mans konts
   gallery: Galerija
@@ -355,7 +354,6 @@ lv:
   tags: Birkas
   router_firewall_settings: "Maršrutētāja/Ugunsmūra iestatījumi"
   firewall_mac_address_filter_info: ""
-  static_ip_address: Statiska IP adrese
   are_you_sure_advanced_features: ""
   dhcp_server: DHCP serveris
   app_logs: ""
@@ -414,7 +412,7 @@ lv:
   dynamic_dns: Dinamiskais DNS
   the_ip_must_be_1_to_254: "IP jābūt diapazonā 1-254"
   not_a_valid_user_or_password: "Kļūda: Nepareizs lietotājvārds vai parole"
-  create_your_hda_profile: "Izveidot jūsu HDA profilu"
+  create_your_profile: "Izveidot jūsu HDA profilu"
   your_home_dns_domain: "Jūsu mājas DNS domēns"
   theme_by: "Tēmas autors"
   forums: Forumi
@@ -583,7 +581,6 @@ lv:
   close: "aizvērt"
   this_file_was_automatically_generated_on: ""
   installation_instructions: "Instalācijas instrukcijas"
-  control_panel_for_your_amahi_hdas: "Jūsu HDA vadības panelis"
   please_select_the_type_of_rule_you_want: ""
   create_a_new_webapp: ""
   refresh_status: ""

@@ -16,7 +16,7 @@ ar:
   setup: "اﻻعدادت"
   start_at_boot_time: "البدء عند وقت تشغيل الجهاز"
   news_about_applications: "اخبار حول التطبيقات التي تعمل على Amahi"
-  start_building_a_new_hda: "قم ببناء HDA جديد!"
+  get_started: "قم ببناء HDA جديد!"
   delete_profile: "حذف الملف الشخصي لـ"
   delete_user: "حذف هذا المستخدم"
   running: "مفعّلة"
@@ -151,7 +151,7 @@ ar:
     هل انت متأكد انك تريد اﻻستمرار ؟"
   dns_aliases: "اﻻسماء المستعارة لـ DNS"
   used_space: "المساحة المستخدمة"
-  static_ip_address_for_your_hda: "عنوان اي بي لـ HDA"
+  static_ip_address: "عنوان اي بي لـ HDA"
   comment: "تعليق"
   the_alias_name_you_input_will_be_added: "سيتم إضافة اسم الذي قمت بإدخاله أعلاه إلى  لخادمDNS كاسم مستعار لعنوان اﻻي بي  أدناه."
   root_path: "Root Path"
@@ -215,7 +215,6 @@ ar:
   edit_user: "تحرير المستخدم"
   control_panel: "لوحة التحكم"
   share_name_cannot_be_blank: "اسم مجلد المشاركة ﻻيمكن ان يكون فارغ"
-  get_started: "إبدء !"
   my_account: "حسابي"
   transmission_bittorrent_server: Transmission Bittorrent Server
   gallery: "المعرض"
@@ -369,7 +368,6 @@ ar:
   router_firewall_settings: "إعدادات التوجيه / جدار الحماية"
   firewall_mac_address_filter_info: "المدخلات في هذا الجدول تستعمل لمنع نقل نوع معين من البيانات من شبكتك المحلية الى اﻻنترنت .\r\n\
     استخدام مثل هذه الفلاتر يكون مفيد في حالة تأمين الشبكة المنزلية او في حالة الرغبة في فرض بعض القيود على الشبكة المنزلية."
-  static_ip_address: "عنوان اي بي ثابت"
   are_you_sure_advanced_features: "هل أنت متأكد أنك تريد تمكين الخيارات المتقدمة؟"
   dhcp_server: "خادم DHCP"
   app_logs: "سجل التطبيقات"
@@ -406,7 +404,7 @@ ar:
   dynamic_dns: Dynamic DNS
   the_ip_must_be_1_to_254: "عنوان الاي بي يجب ان يكون في نطاق 1-254"
   not_a_valid_user_or_password: "خطأ: اسم مستخدم او كلمة مرور غير صحيحة !"
-  create_your_hda_profile: "انشاء الملف الشخصي لـ HDA"
+  create_your_profile: "انشاء الملف الشخصي لـ HDA"
   your_home_dns_domain: Your Home DNS Domain
   theme_by: "صمم بواسطة"
   forums: "المنتديات"
@@ -583,7 +581,6 @@ ar:
   this_file_was_automatically_generated_on: "# هذا الملف تم توليده آلياً في  {{time}}  -- تحذير -- اي تعديل يدوي سيتم تلف الملف"
   close: "إغلاق"
   installation_instructions: "تعليمات التثبيت"
-  control_panel_for_your_amahi_hdas: "لوحة التحكم الخاصة في Amahi HDAs"
   please_select_the_type_of_rule_you_want: "الرجاء اختيار نوع القاعدة التي تود اضافتها"
   create_a_new_webapp: "إنشاء تطبيق ويب جديد"
   refresh_status: "حدّث الحالة"

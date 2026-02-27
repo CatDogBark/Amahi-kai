@@ -8,12 +8,11 @@
   powering_off: Power off in progress ...
   uptime: Uptime
   this_will_power_off: |-
-        This will power off your HDA.
-        You may want to turn on your router DHCP server if your HDA was acting as DHCP server.
+        This will power off your server.
 
         Are you sure you want to proceed?
   this_will_reboot: |-
-        This will reboot your HDA.
+        This will reboot your server.
 
         Are you sure you want to proceed?
 
@@ -380,8 +379,8 @@
   stop_it: Stop it
   stopped: Stopped
   restart: Restart
-  the_boot_option_is_a_critical_setting: The boot option is a CRITICAL setting. Not starting a server process is STRONGLY DISCOURAGED. This is designed to start services in your HDA at every boot. Are you sure you want to not start this process at boot time?
-  the_watchdog_is_a_critical_setting: The watchdog is a CRITICAL setting. Stopping monitoring a server process is STRONGLY DISCOURAGED. This is designed to keep services in your HDA running reliably even in the presence of glitches. Are you sure you want to stop the watchdog in this server?
+  the_boot_option_is_a_critical_setting: The boot option is a CRITICAL setting. Not starting a server process is STRONGLY DISCOURAGED. This is designed to start services at every boot. Are you sure you want to not start this process at boot time?
+  the_watchdog_is_a_critical_setting: The watchdog is a CRITICAL setting. Stopping monitoring a server process is STRONGLY DISCOURAGED. This is designed to keep services in your server running reliably even in the presence of glitches. Are you sure you want to stop the watchdog in this server?
   the_watchdog_is_running_and_will_restart_it_in_a_few_seconds: "NOTE: The watchdog is RUNNING and will restart it in a few seconds."
   this_will_stop_the_server_permanently: This will stop the %{name} PERMANENTLY.
   watchdog: Watchdog
@@ -455,11 +454,10 @@
 ### amahi-kai.com
 
   control_panel: Control Panel
-  control_panel_for_your_amahi_hdas: Control Panel for your Amahi HDAs
   change_your_account_settings: Change your account settings
   nickname: Nickname
   installation_instructions: Installation instructions
-  start_building_a_new_hda: Start building a new HDA!
+  get_started: Get Started!
   configured: Configured
   my_account: My Account
   beta_apps: Beta Apps
@@ -483,14 +481,13 @@
   install_code: Install Code
   automated_install: Automated Install
   your_existing_network_gatweay: Your Existing Network Gateway/Router
-  static_ip_address_for_your_hda: Static IP Address for your HDA
   more: more
   back: Back
   next: Next
   your_home_dns_domain: Your Home DNS Domain
   done_final_check: "Done! Final Check"
-  please_double_check_the_settings: Please <strong>double check these settings</strong>, as they are crucial to getting your HDA running out of the box.
-  create_your_hda_profile: Create Your HDA Profile
+  please_double_check_the_settings: Please <strong>double check these settings</strong>, as they are crucial to getting your server running out of the box.
+  create_your_profile: Create Your Profile
   finalize_settings: Finalize Settings
 
   notifications_from_amahi: Notifications from Amahi
@@ -508,7 +505,7 @@
   delete_profile: Delete profile for
 
   nickname_info: |-
-        The "nickname" is a unique identifier for your HDA.
+        The "nickname" is a unique identifier for your server.
         You will need it to log in to your <a target="_blank" href="https://amahi-kai.com/wiki/\">VPN</a>
         with the <a target="_blank" href="https://amahi-kai.com/wiki/\">Windows client</a> client
         (and an authorized user and password on your home network).
@@ -527,14 +524,13 @@
         This is your home network domain. It is <b>only</b> available inside your home network.
         For more details about this refer to <a target="_blank" href="https://amahi-kai.com/wiki/\">the FAQ</a>.
   install_code_info: |-
-        This install code captures all the settings for your HDA and it's used once as
-        the final step in installing your HDA. You should NOT reuse it for two or more running systems,
-        as that will break the Dynamic DNS and the VPN. Create one profile for each HDA you are running.
+        This install code captures all the settings for your server and it's used once as
+        the final step in installing your server. You should NOT reuse it for two or more running systems,
+        as that will break the Dynamic DNS and the VPN. Create one profile for each server you are running.
   making_home_networking_simple: Making Home Networking Simple
   powerful_simple_home_networking: Powerful, Simple, Home Networking
   unleash_the_power_of_your_home_network: Unleash the power of your home network.
   check_the_features_take_the_tour: Check the features currently available, take the tour, or if you can't wait -
-  get_started: Get Started!
   efficiently_manage_your_network: Efficiently manage the networking and backup of all the computers, game consoles and other devices in your network, and securely access your network from the internet. That's just the start of what you'll be able to do with Amahi.
   email: Email
   start_now: Start Now

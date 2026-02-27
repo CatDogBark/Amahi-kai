@@ -61,12 +61,12 @@ RSpec.describe ApplicationHelper, type: :helper do
   describe "#path2uri" do
     it "returns smb URI for Mac" do
       allow(helper).to receive(:is_a_mac?).and_return(true)
-      expect(helper.path2uri("Movies")).to include("smb://hda/")
+      expect(helper.path2uri("Movies")).to include("smb://amahi-kai/")
     end
 
     it "returns file URI for Windows" do
       allow(helper).to receive(:is_a_mac?).and_return(false)
-      expect(helper.path2uri("Movies")).to include("file://///hda/")
+      expect(helper.path2uri("Movies")).to include("file://///amahi-kai/")
     end
 
     it "encodes special characters" do

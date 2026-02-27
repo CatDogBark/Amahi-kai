@@ -27,7 +27,7 @@ id:
   running: Berjalan
   require_login: Harus login
   warning: PERINGATAN
-  start_building_a_new_hda: Mulai membangun HDA baru!
+  get_started: Mulai membangun HDA baru!
   name_is_taken_already: Nama telah dipakai
   my_apps: Aplikasi saya
   need_help_logging_in: Bantuan untuk log in masuk?
@@ -179,7 +179,7 @@ id:
   audio: Audio
   dashboard: Dashboard
   url_to_filter: URL yang difilter
-  static_ip_address_for_your_hda: Alamat IP Statis untuk HDA anda
+  static_ip_address: Alamat IP Statis untuk HDA anda
   comment: Komentar
   root_path: Root Path
   valid_email_required_for_service: "Alamat email valid diperlukan untuk aktivasi. Kami tidak akan <a href=\"https://amahi-kai.com\" target=\"_blank\">mengirim sampah</a> "
@@ -275,7 +275,6 @@ id:
   avanced_settings_is_for_developers: Mengaktifkan fitur canggih hanya untuk pengguna lanjut/teknis dan pembangun
   pooled: Pooled
   movies: Film
-  get_started: Ayo Mulai!
   stop: Berhenti
   confirmation_matches: Konfirmasi kesesuaian
   device: Perangkat
@@ -368,7 +367,6 @@ id:
   router_ip: IP Router
   general_amahi_news: "Berita Umum Amahi "
   sign_up_here: Daftar di sini
-  static_ip_address: Alamat IP Statis
   port_forwarding: Port Forwarding
   app_logs: Log Apl
   contribute: Kontribusi
@@ -401,7 +399,7 @@ id:
     Mengaktifkan modus debug mungkin akan menciptakan berkas log yang sangat besar.
     Anda yakin hendak mengaktifkan debug Samba?
   not_a_valid_user_or_password: "Error: nama pengguna atau sandi salah"
-  create_your_hda_profile: Buat Profil HDA Anda
+  create_your_profile: Buat Profil HDA Anda
   share: Share
   forums: Forum
   writeable: Dapat ditulis
@@ -597,7 +595,6 @@ id:
   alias_is_taken_already: Alias telah dipakai atau telah dipesan
   storage: Storage
   platform: Platform
-  control_panel_for_your_amahi_hdas: Panel Pengaturan untuk Amahi HDA anda
   these_rules_are_used_to_restrict_ips: |-
     Aturan berikut ini digunakan untuk membatasi paket data dari
     IP pada jaringan lokal anda ke Internet.

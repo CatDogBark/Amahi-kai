@@ -18,7 +18,7 @@ ro:
   delete_user: "Ştergeţi utilizator"
   delete_profile: "Ştergere profilul"
   running: "Se execută"
-  start_building_a_new_hda: "Începe construirea unui nou HDA!"
+  get_started: "Începe construirea unui nou HDA!"
   delete: "Şterge"
   name_is_taken_already: Numele este deja folosit
   unleash_the_power_of_your_home_network: "Dezlănţuie puterea reţelei tale de domiciliu."
@@ -143,7 +143,7 @@ ro:
     Sunteţi sigur că doriţi să continuaţi?"
   dns_aliases: Aliasurile DNS
   used_space: "Spaţiu folosit"
-  static_ip_address_for_your_hda: "Adresă IP statică pentru HDA dumneavoastră"
+  static_ip_address: "Adresă IP statică pentru HDA dumneavoastră"
   comment: Comentariu
   the_alias_name_you_input_will_be_added: "Numele pe care îl introduceţi mai sus va fi adăugat la serverul DNS ca un alias pentru adresa IP de mai jos."
   root_path: Root&nbsp; Cale
@@ -203,7 +203,6 @@ ro:
   edit_user: Editare utilizator
   control_panel: Panoul de control
   share_name_cannot_be_blank: Numele resursei partajate nu poate fi gol
-  get_started: "Începeţi!"
   my_account: Contul meu
   gallery: Galerie
   transmission_bittorrent_server: Transmisie Server de Bittorrent
@@ -340,7 +339,6 @@ ro:
   tags: Etichete
   router_firewall_settings: "Setări pentru Router/Firewall"
   firewall_mac_address_filter_info: "Intrările din acest tabel sunt utilizate pentru a restricţiona anumite tipuri de pachete de date de la nivel reţelei locale la Internet prin Gateway. Utilizarea unor astfel de filtre pot fi de ajutor în asigurarea sau restricţionarea reţelei locale."
-  static_ip_address: "Adresă IP statică"
   are_you_sure_advanced_features: "Sunteţi sigur că doriţi să activaţi caracteristicile avansate?"
   dhcp_server: Server DHCP
   app_logs: "Jurnal aplicaţii"
@@ -377,7 +375,7 @@ ro:
   dynamic_dns: DNS Dinamic
   the_ip_must_be_1_to_254: "Adresa IP trebuie să fie în intervalul 1-254"
   not_a_valid_user_or_password: "Eroare:  Numele de utilizator sau parola sunt greşite"
-  create_your_hda_profile: "Creaţi profilul HDA"
+  create_your_profile: "Creaţi profilul HDA"
   your_home_dns_domain: "Domeniul dumneavoastră. DNS"
   theme_by: "Temă creată de"
   forums: Forumuri
@@ -549,7 +547,6 @@ ro:
   close: "închide"
   this_file_was_automatically_generated_on: "# Acest fişier a fost generat automat la %{time} - ATENŢIE - orice modificărimanuale vor fi pierdute!"
   installation_instructions: "Instrucţiunile de instalare"
-  control_panel_for_your_amahi_hdas: Panoul de control pentru Amahi HDAs
   please_select_the_type_of_rule_you_want: "Vă rugăm să selectaţi tipul de regula pe care doriţi să o adăugaţi."
   create_a_new_webapp: "Creaţi o Aplicaţie Web nouă"
   refresh_status: "Actualizează statusul"

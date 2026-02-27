@@ -11,7 +11,7 @@ module NetworkHelper
     addr = dns_alias.address
     net = Setting.get('net')
     if addr.nil? || addr.blank?
-      # empty -- alias to the HDA
+      # empty -- alias to this server
       net + '.' + Setting.get('self-address')
     elsif addr =~ /\A\d+\z/
       # just a number, same network

@@ -80,7 +80,7 @@ it:
   pictures: Foto
   file_server_samba: File Server (Samba)
   please_select_the_type_of_rule_you_want: Si prega di selezionare il tipo di regola che si desidera aggiungere.
-  create_your_hda_profile: Crea il Tuo Profilo HDA
+  create_your_profile: Crea il Tuo Profilo HDA
   password_is_too_short: "La Password è troppo corta"
   rule_type: Tipo Regola
   create_alias: Crea Pseudonimo
@@ -254,7 +254,6 @@ it:
         separator: .
         delimiter: ","
         precision: 2
-  start_building_a_new_hda: Costruisti un nuovo HDA
   the_url_is_invalid: "L'URL non è valido"
   your_domain_info: "Questo è il dominio della rete domestica. È disponibile <b>solo</b> all'interno della vostra rete domestica.\r\n\
     Per ulteriori informazioni su questo fate riferimento alla <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">FAQ</a>."
@@ -416,7 +415,6 @@ it:
   the_url_looks_good: "L'URL è valido"
   total_space: Spazio totale
   valid_email_required_for_service: Indirizzo email valido richiesto per l'attivazione. Noi <a href="https://amahi-kai.com" target="_blank">non faremo spam</a>
-  control_panel_for_your_amahi_hdas: Pannello di Controllo per il tuo HDA Amahi
   there_are_no_applications_installed: Non ci sono Applicazioni installate al momento
   name_is_not_valid: "Il nome non è valido"
   by_signing_up_you_agree_to_the_terms_of_service: Con la conferma, l'utente accetta e dichiara di aver letto i <a href="https://amahi-kai.com" target="_blank">termini di servizio</a>
@@ -541,7 +539,6 @@ it:
   create_a_new_webapp: Crea una Nuova Web App
   setting_dmz_failed: Impostazione della DMZ fallita. Verifica delle tue impostazioni.
   password: Password
-  static_ip_address_for_your_hda: Indirizzo IP statico del tuo HDA
   community: "Comunità"
   new_dns_alias: Nuovo Alias DNS
   dynamic_dns: Dynamic DNS

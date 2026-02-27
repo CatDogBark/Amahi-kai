@@ -18,7 +18,7 @@ de:
   delete_user: "Benutzer löschen"
   delete_profile: "Folgendes Profil löschen"
   running: Laufend
-  start_building_a_new_hda: Erstellen Sie Ihren neuen HDA!
+  get_started: Erstellen Sie Ihren neuen HDA!
   delete: "Löschen"
   name_is_taken_already: Name ist bereits vergeben
   unleash_the_power_of_your_home_network: "Setzen Sie die Möglichkeiten Ihres Heimnetzwerkes frei."
@@ -148,7 +148,7 @@ de:
   this_will_reboot: "Dies wird Ihren HDA neustarten. Sind Sie sicher, dass Sie fortfahren möchten?"
   dns_aliases: DNS Aliase
   used_space: Belegter Patz
-  static_ip_address_for_your_hda: "Statische IP-Adresse für Ihren HDA"
+  static_ip_address: "Statische IP-Adresse für Ihren HDA"
   comment: Kommentar
   the_alias_name_you_input_will_be_added: "Der Name den Sie oben eingeben wird über den DNS-Server als Alias für unten angegebene IP-Adresse angelegt."
   root_path: Root Pfad
@@ -211,7 +211,6 @@ de:
   edit_user: Benutzer bearbeiten
   control_panel: Kontrollzentrum
   share_name_cannot_be_blank: Freigabename darf nicht leer bleiben
-  get_started: Loslegen!
   my_account: Mein Account
   gallery: Gallerie
   transmission_bittorrent_server: Transmission Bittorrent Server
@@ -354,7 +353,6 @@ de:
   tags: Tags
   router_firewall_settings: Router/Firewall Einstellungen
   firewall_mac_address_filter_info: "Einträge in dieser Tabelle werden dazu verwendet, um zu verhindern, dass Pakete eines bestimmten Datentyps vom lokalen Netzwerk ins Internet gelangen. Die Benutzung dieser Filter kann hilfreich sein, das Netzwerk zu sichern oder zu beschränken."
-  static_ip_address: Feste IP Adresse
   are_you_sure_advanced_features: Sind Sie sicher, dass Sie die erweiterten Einstellungen aktivieren wollen?
   dhcp_server: DHCP Server
   app_logs: Anwendungs-Logs
@@ -393,7 +391,7 @@ de:
   dynamic_dns: Dynamische DNS
   the_ip_must_be_1_to_254: Die IP-Adresse muss sich im Bereich von 1-254 befinden
   not_a_valid_user_or_password: "Fehler: Falscher Benutzername oder Passwort"
-  create_your_hda_profile: HDA Profil erstellen
+  create_your_profile: HDA Profil erstellen
   your_home_dns_domain: Ihre Home DNS Domain
   theme_by: Thema erstellt von
   forums: Foren
@@ -565,7 +563,6 @@ de:
   close: "schließen"
   this_file_was_automatically_generated_on: "# Diese Datei wurde am %{time} automatisch erstellt - ACHTUNG - alle manuellen Änderungen WERDEN überschrieben!"
   installation_instructions: Installations Anleitungen
-  control_panel_for_your_amahi_hdas: "Kontroll Zentrum für Ihre Amahi HDAs"
   please_select_the_type_of_rule_you_want: "Bitte wählen Sie die Art der Regel, die Sie hinzufügen wollen."
   create_a_new_webapp: Eine neue Web App erstellen
   refresh_status: Aktualisierungsstatus

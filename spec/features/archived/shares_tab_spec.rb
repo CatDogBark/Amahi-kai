@@ -23,7 +23,7 @@ feature "Shares tab", js: true, archived: true do
       expect(page).to have_content I18n.translate('share')
       expect(page).to have_content I18n.translate('location')
       expect(page).to have_content "testShare"
-      expect(page).to have_content '\\hda\testShare'
+      expect(page).to have_content '\\amahi-kai\testShare'
     end
 
     scenario "Cannot create a share with no name" do

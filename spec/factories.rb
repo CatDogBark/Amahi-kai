@@ -5,7 +5,7 @@ FactoryBot.define do
     sequence(:name) { |n| "Name #{n}" }
     password { "secretpassword" }
 
-    # Stub system hooks to avoid calling hda-ctl, useradd, etc.
+    # Stub system hooks to avoid calling system hooks (useradd, etc.
     # Using transient + to_create instead of allow() which is not
     # available in FactoryBot 6.x callbacks
     transient do

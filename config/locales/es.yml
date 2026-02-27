@@ -17,7 +17,7 @@ es:
   delete_profile: Eliminar perfil para
   delete_user: Elimina usuario
   running: En marcha
-  start_building_a_new_hda: Empieza a configurar un HDA nuevo!
+  get_started: Empieza a configurar un HDA nuevo!
   name_is_taken_already: "El nombre ya está siendo utilizado"
   delete: Borrar
   are_you_sure_webapp: "Estas seguro que quieres eliminar la aplicación web '%{webapp}'?"
@@ -138,7 +138,7 @@ es:
   this_will_reboot: "Esto reiniciará tu HDA. ¿Estas seguro de que deseas continuar?"
   dns_aliases: Alias DNS
   used_space: Espacio utilizado
-  static_ip_address_for_your_hda: "Dirección IP Estática para su HDA"
+  static_ip_address: "Dirección IP Estática para su HDA"
   comment: Comentario
   the_alias_name_you_input_will_be_added: "El nombre este será añadido al servidor DNS como un alias para la dirección IP de más abajo"
   root_path: "Ruta&nbsp;Raíz"
@@ -200,7 +200,6 @@ es:
   edit_user: Edita usuario
   control_panel: Panel de control
   share_name_cannot_be_blank: El nombre de esta carpeta compartida no puede estar en blanco
-  get_started: "¡Empieza!"
   my_account: Mi Cuenta
   gallery: "Galería"
   transmission_bittorrent_server: Servidor de Bittorrent Transmission
@@ -330,7 +329,6 @@ es:
   tags: Etiquetas
   router_firewall_settings: "Configuración del Router/Cortafuegos"
   firewall_mac_address_filter_info: "Esta tabla se utiliza para restringir ciertos tipos de datos de tu red local a Internet a través del modem. El uso de estos filtros pueden ser útiles para restringir su red local."
-  static_ip_address: "Dirección IP Estática"
   are_you_sure_advanced_features: Estas seguro de que quieres activar Servicios Avanzados?
   dhcp_server: Servidor de DHCP
   app_logs: App Registros
@@ -364,7 +362,7 @@ es:
     Para más detalles diríjase a <a target=\"_blank\" href=\"https://amahi-kai.com/wiki/\">las Preguntas Frecuentes</a>."
   there_are_no_firewall_rules_defined: No hay reglas de firewall definidas en este momento.
   firewall_url_filter_message: "Las entradas en esta tabla se usan para restringir las URLs que pasan através de la Pasarela"
-  create_your_hda_profile: Crea tu perfil HDA
+  create_your_profile: Crea tu perfil HDA
   dhcp_leases: Leases de DHCP
   dynamic_dns: "DNS dinámico"
   the_ip_must_be_1_to_254: La IP debe estar en el rango 1-254
@@ -541,7 +539,6 @@ es:
   close: cerrar
   this_file_was_automatically_generated_on: "# Este archivo fue generado automáticamente a fecha de %{time} - IMPORTANTE - cualquier cambios manual se perderá!"
   installation_instructions: "Instrucciones de Instalación"
-  control_panel_for_your_amahi_hdas: Panel de control para su HDAs Amahi
   please_select_the_type_of_rule_you_want: Por favor selecciona el tipo de regla que quieres agregar.
   create_a_new_webapp: Crear una nueva Web App
   refresh_status: Actualizar estado

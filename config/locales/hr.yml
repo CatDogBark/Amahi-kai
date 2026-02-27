@@ -20,7 +20,7 @@ hr:
   delete_profile: "Obriši profil od "
   delete_user: "Obriši korisnika"
   running: Pokrenuto
-  start_building_a_new_hda: "Započni izradu novog HDA!"
+  get_started: "Započni izradu novog HDA!"
   delete: "Obriši"
   name_is_taken_already: "Naziv je već u upotrebi"
   unleash_the_power_of_your_home_network: "Oslobodite snagu svog kućne mreže."
@@ -151,7 +151,7 @@ hr:
     Želiš nastaviti?"
   dns_aliases: DNS poveznice
   used_space: "Korišten prostor"
-  static_ip_address_for_your_hda: "Statička IP adresa za tvoj HDA"
+  static_ip_address: "Statička IP adresa za tvoj HDA"
   comment: Komentar
   the_alias_name_you_input_will_be_added: "Ime koje uneseš iznad biti će dodano u DNS poslužitelj kao alias za IP adresu."
   root_path: "Root Putanja"
@@ -212,7 +212,6 @@ hr:
   edit_user: Uredi korisnika
   control_panel: "Kontrolna ploča"
   share_name_cannot_be_blank: Mjesto za raznmjenu mora imati ime
-  get_started: Kreni!
   my_account: "Moj korisnički račun"
   gallery: Galerija
   transmission_bittorrent_server: Transmission Bittorrent Server
@@ -348,7 +347,6 @@ hr:
   router_firewall_settings: Postavke routera/vatrozida
   app_logs: App Logovi
   firewall_mac_address_filter_info: "Unosi u ovoj tabeli koriste se za ograničavanje određenih vrsta podatkovnih paketa iz lokalne mreže na Internet preko Gateway-a. Upotreba takvih filtera može biti korisna u osiguravanju ili ograničavanje pristupa vašoj lokalnoj mreži."
-  static_ip_address: "Statička IP Adresa"
   are_you_sure_advanced_features: "Jesi li siguran da želiš omogućiti Napredne postavke?"
   dhcp_server: DHCP server
   contribute: Doprinijeti
@@ -386,7 +384,7 @@ hr:
   dhcp_leases: DHCP najmovi (Leases)
   the_ip_must_be_1_to_254: IP mora biti u rasponu od 1-254
   not_a_valid_user_or_password: "Greška: Neispravno korisničko ime ili lozinka"
-  create_your_hda_profile: Izradi svoj HDA profil
+  create_your_profile: Izradi svoj HDA profil
   your_home_dns_domain: "Tvoja kućna DNS domena"
   theme_by: Theme od
   forums: Forumi
@@ -553,7 +551,6 @@ hr:
   close: zatvori
   this_file_was_automatically_generated_on: "# Ova datoteka automatski je generirana u %{time} - UPOZORENJE -  bilo kakva ručna promjena BITI ĆE izgubljena!"
   installation_instructions: Upute za instalaciju
-  control_panel_for_your_amahi_hdas: "Kontrolna ploča tvojih Amahi HDA-ova"
   please_select_the_type_of_rule_you_want: "Molim odaberi vrstu pravila koju želiš dodati."
   create_a_new_webapp: Dodaj novu web aplikaciju
   refresh_status: "Osvježi status"

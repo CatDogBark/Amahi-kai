@@ -18,7 +18,7 @@ nl:
   delete_user: Verwijder gebruiker
   delete_profile: Verwijder profiel voor
   running: Actief
-  start_building_a_new_hda: Start bouw van een nieuwe HDA!
+  get_started: Start bouw van een nieuwe HDA!
   delete: Verwijderen
   name_is_taken_already: Naam is al in gebruik
   unleash_the_power_of_your_home_network: Bevrijd de kracht van uw thuis netwerk!
@@ -156,7 +156,7 @@ nl:
     Wilt u doorgaan?
   dns_aliases: DNS Aliassen
   used_space: Gebruikte ruimte
-  static_ip_address_for_your_hda: Statisch IP adres voor uw HDA
+  static_ip_address: Statisch IP adres voor uw HDA
   comment: Reactie
   the_alias_name_you_input_will_be_added: De naam die u hierboven invult zal worden toegevoegd aan de DNS-server als een alias voor het IP-adres hieronder.
   root_path: Root Pad
@@ -219,7 +219,6 @@ nl:
   edit_user: Bewerk gebruiker
   control_panel: Configuratiescherm
   share_name_cannot_be_blank: Naam van gedeelde map kan niet leeg zijn
-  get_started: Ga aan de slag!
   my_account: Mijn account
   gallery: Gallerij
   transmission_bittorrent_server: Transmission Bittorrent Server
@@ -352,7 +351,6 @@ nl:
   firewall_mac_address_filter_info: |-
     Regels in deze tabel worden gebruikt om bepaalde soorten gegevens pakketten te beperken van uw lokale netwerk naar internet via de gateway.
     Gebruik van dergelijke filters kunnen nuttig zijn bij het beveiligen of beperken van je lokale netwerk.
-  static_ip_address: Statisch IP adres
   are_you_sure_advanced_features: Bent u er zeker van dat u de geavanceerde instellingen wil inschakelen
   dhcp_server: DHCP server
   app_logs: Toepassings Logbestanden
@@ -393,7 +391,7 @@ nl:
   dynamic_dns: Dynamische DNS
   the_ip_must_be_1_to_254: "Het IP adres moet in de volgende bereik liggen: 1-254"
   not_a_valid_user_or_password: "Fout: Ongeldige gebruikersnaam of ongeldig wachtwoord"
-  create_your_hda_profile: "creëer uw HDA profiel"
+  create_your_profile: "creëer uw HDA profiel"
   your_home_dns_domain: Uw thuis DNS Domein
   theme_by: Thema door
   forums: Forums
@@ -567,7 +565,6 @@ nl:
   close: Sluiten
   this_file_was_automatically_generated_on: "# Dit bestand is automatisch gegenereerd op %{time} - WAARSCHUWING - alle handmatig wijzigingen zullen verloren gaan!"
   installation_instructions: Installatie instructies
-  control_panel_for_your_amahi_hdas: Configuratiescherm voor uw Amahi HDA
   please_select_the_type_of_rule_you_want: Selecteer alstublieft het type regel dat u toe wil voegen.
   create_a_new_webapp: "Creëer een nieuwe web toepassing"
   refresh_status: Vernieuwen status

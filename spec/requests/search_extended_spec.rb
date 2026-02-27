@@ -17,7 +17,7 @@ RSpec.describe "SearchController extended", type: :request do
                       relative_path: "notes.txt", content_type: "document", extension: "txt", size: 100)
   end
 
-  describe "GET /search/hda" do
+  describe "GET /search/files" do
     it "finds files by name" do
       get search_files_path, params: { query: "movie" }
       expect(response).to have_http_status(:ok)
@@ -60,7 +60,7 @@ RSpec.describe "SearchController extended", type: :request do
     end
   end
 
-  describe "POST /search/hda" do
+  describe "POST /search/files" do
     it "accepts POST method" do
       post search_files_path, params: { query: "test" }
       expect(response).to have_http_status(:ok)
