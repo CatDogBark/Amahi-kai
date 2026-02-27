@@ -87,7 +87,6 @@ apt-get install -y --no-install-recommends \
   libmariadb-dev \
   libssl-dev \
   libyaml-dev \
-  libffi-dev \
   zlib1g-dev \
   mariadb-server \
   samba \
@@ -116,6 +115,16 @@ if systemd-detect-virt -q 2>/dev/null; then
 fi
 
 # Greyhole (optional)
+# Disable memory-hungry services not needed on a NAS (~70MB savings)
+for svc in fwupd.service multipathd.service; do
+  if systemctl is-active --quiet "$svc" 2>/dev/null; then
+    echo "==> Disabling $svc (not needed, saves memory)..."
+    systemctl stop "$svc" 2>/dev/null || true
+    systemctl disable "$svc" 2>/dev/null || true
+    systemctl mask "$svc" 2>/dev/null || true
+  fi
+done
+
 if $WITH_GREYHOLE; then
   echo "==> Adding Greyhole apt repository..."
   if [ ! -f /usr/share/keyrings/greyhole-archive-keyring.gpg ]; then
@@ -323,8 +332,6 @@ echo "==> Installing Ruby gems..."
 
 # If using system Ruby, disable rbenv to prevent shim conflicts
 # (rbenv may exist from a previous install with a different Ruby platform)
-# If using system Ruby, disable rbenv to prevent shim conflicts
-# (rbenv may exist from a previous install with a different Ruby platform)
 if [ "$NEED_RBENV" = false ] && [ -f /etc/profile.d/rbenv.sh ]; then
   echo "    Disabling rbenv (using system Ruby instead)..."
   mv /etc/profile.d/rbenv.sh /etc/profile.d/rbenv.sh.disabled 2>/dev/null || true
@@ -424,6 +431,7 @@ amahi ALL=(root) NOPASSWD: /sbin/mkfs.ext4 *
 amahi ALL=(root) NOPASSWD: /bin/mount *
 amahi ALL=(root) NOPASSWD: /bin/umount *
 amahi ALL=(root) NOPASSWD: /usr/bin/mkdir -p /mnt/*
+amahi ALL=(root) NOPASSWD: /usr/bin/rmdir /mnt/*
 amahi ALL=(root) NOPASSWD: /usr/bin/mkdir -p /opt/amahi/*
 amahi ALL=(root) NOPASSWD: /usr/bin/cp /tmp/amahi-staging/* /opt/amahi/*
 amahi ALL=(root) NOPASSWD: /usr/bin/rm -rf /opt/amahi/apps/*
