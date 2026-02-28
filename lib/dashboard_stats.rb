@@ -44,6 +44,7 @@ class DashboardStats
         { name: 'Greyhole', unit: 'greyhole', check: '/usr/bin/greyhole' },
         { name: 'Docker', unit: 'docker', check: '/usr/bin/docker' },
         { name: 'Cloudflare Tunnel', unit: 'cloudflared', check: '/usr/bin/cloudflared' },
+        { name: 'Tailscale VPN', unit: 'tailscaled', check: '/usr/bin/tailscale' },
       ]
 
       optional.each do |svc|
