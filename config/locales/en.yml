@@ -3,6 +3,21 @@
 'en':
   # new items
   reboot: Reboot
+  # Tab labels and UI elements
+  troubleshoot: Troubleshoot
+  authentication: Authentication
+  visibility: Visibility
+  mounts: Mounts
+  storage_pool: Storage Pool
+  leases: Leases
+  hosts: Hosts
+  gateway: Gateway
+  expiration: Expiration
+  mac: Mac
+  ip: IP
+  remote_access: Remote Access
+  security: Security
+  "system status": System Status
   rebooting: Reboot in progress ...
   poweroff: Power off
   powering_off: Power off in progress ...

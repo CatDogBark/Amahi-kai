@@ -24,18 +24,10 @@ div.settings-fields.settings-wrap.bg-white.p-2
       = t 'system_info'
     div.settings-actions
       span#systems-result.increase-font-30
-        = link_to '',
-              settings_poweroff_path,
-              method: :post,
-              class: 'btn-system glyphicon glyphicon-off left-margin-40 float-start',
-              id: 'btn-poweroff',
-              data: {:confirm => t('this_will_power_off')}
-        = link_to '',
-              settings_reboot_path,
-              method: :post,
-              data: {:confirm => t('this_will_reboot')},
-              class: 'btn-system glyphicon glyphicon-repeat float-start',
-              id: 'btn-reboot'
+        = link_to settings_poweroff_path, method: :post, class: 'btn-system left-margin-40 float-start', id: 'btn-poweroff', data: {:confirm => t('this_will_power_off')}
+          = lucide_icon('power', size: 22)
+        = link_to settings_reboot_path, method: :post, class: 'btn-system float-start', id: 'btn-reboot', data: {:confirm => t('this_will_reboot')}
+          = lucide_icon('refresh-cw', size: 22)
     div.settings-fields#info-table
       table
         tr

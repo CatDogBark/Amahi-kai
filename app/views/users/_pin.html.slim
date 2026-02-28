@@ -2,7 +2,7 @@ td.top
   label #{t('pin')}
 td.top
   a.control-action[href="#" id="user-pin-control-action-#{user.id}" onclick="event.preventDefault();var el=this.parentElement.querySelector('.pin-edit');el.style.display=el.style.display==='none'?'':'none';"]
-    i.pin.glyphicon.glyphicon-lock
+    span = lucide_icon('lock', size: 16)
   a.pin-info-wiki[href="https://wiki.amahi.org/index.php/PIN_user_access" id="user-pin-info-wiki-#{user.id}" target="_blank"]
     i.pin-info
   form.update-pin.update-form.form-horizontal.left-margin-20[

@@ -2,7 +2,7 @@ td.top
   label #{t('authentication')}
 td.top
   a.control-action[href="#" id="user-auth-control-action-#{user.id}" title=t('manage_your_public_key') onclick="event.preventDefault();var el=this.parentElement.querySelector('.pubkey-area');el.style.display=el.style.display==='none'?'':'none';"]
-    i.auth.glyphicon.glyphicon-certificate.left-margin-10
+    span.left-margin-10 = lucide_icon('key-round', size: 16)
   = theme_image_tag("ok.png", :class => 'ok', :style => 'display:none')
   = theme_image_tag("warning.png", :class => 'error', :style => 'display:none')
   = spinner

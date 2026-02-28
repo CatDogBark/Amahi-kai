@@ -2,6 +2,6 @@
 
 .permissions data-controller="toggle" data-toggle-url-value=clear_permissions_share_path(share) data-toggle-confirm-value=t('this_will_clear_permissions_wide', share: share.name)
   = spinner
-  a.clear-permissions.remote-btn.glyphicon.glyphicon-wrench href="#" title=t('this_will_clear_permissions_wide', share: share.name) data-action="click->toggle#toggle"
-    span.tools
+  a.clear-permissions.remote-btn href="#" title=t('this_will_clear_permissions_wide', share: share.name) data-action="click->toggle#toggle"
+    = lucide_icon('wrench', size: 16)
   span.messages
