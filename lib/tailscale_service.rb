@@ -71,20 +71,17 @@ module TailscaleService
       Shell.run("systemctl enable tailscaled 2>/dev/null")
       Shell.run("systemctl start tailscaled 2>/dev/null")
 
-      # Check if already logged in — if so, just bring it up
+      # Check status — returns instantly, includes auth URL if logged out
       status_check = `sudo tailscale status 2>&1`.strip
-      needs_login = status_check.include?('Logged out') || status_check.include?('NeedsLogin')
 
-      if needs_login
-        # Request a login URL without blocking
-        # sudo must wrap timeout (not the other way around) so SIGTERM reaches tailscale
-        output = `sudo timeout 15 tailscale login 2>&1`.strip
-        auth_url = output[/https:\/\/login\.tailscale\.com\/[^\s]+/]
+      if status_check.include?('Logged out') || status_check.include?('NeedsLogin')
+        # Auth URL is right in the status output — no need to block on `tailscale login`
+        auth_url = status_check[/https:\/\/login\.tailscale\.com\/[^\s]+/]
         return { success: true, auth_url: auth_url, needs_login: true }
       end
 
-      # Already authenticated — just bring it up
-      `sudo timeout 10 tailscale up 2>&1`
+      # Already authenticated — just bring it up (quick, non-blocking)
+      `sudo timeout 5 tailscale up 2>&1`
       { success: true, auth_url: nil }
     rescue StandardError => e
       { success: false, error: e.message }
