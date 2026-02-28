@@ -60,7 +60,7 @@ describe "Disk Pool Actions", type: :request, integration: true do
 
     it "rejects toggle_disk_pool_enabled" do
       put toggle_disk_pool_enabled_share_path(share)
-      expect(response).to redirect_to(root_path)
+      expect(response).to redirect_to(new_user_session_path)
     end
   end
 end
