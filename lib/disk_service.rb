@@ -194,12 +194,12 @@ module DiskService
 
     # Returns the database password, shell-escaped for safe interpolation into commands.
     def db_password_escaped
-      Shellwords.shellescape(Shellwords.escape(ENV.fetch('DATABASE_PASSWORD', '')))
+      Shellwords.escape(ENV.fetch('DATABASE_PASSWORD', ''))
     end
 
     # Returns the database password with single quotes escaped for SQL strings.
     def db_password_sql
-      Shellwords.escape(ENV.fetch('DATABASE_PASSWORD', '')).gsub("'", "\\\\'")
+      ENV.fetch('DATABASE_PASSWORD', '').gsub("'", "\\\\'")
     end
   end
 end
