@@ -203,7 +203,7 @@ class User < ApplicationRecord
     update_pubkey if public_key_changed?
 
     # Sync role → admin flag for backwards compatibility
-    if role_changed?
+    if has_attribute?(:role) && role_changed?
       self.admin = (role == 'admin')
     elsif admin_changed?
       # Legacy: if admin flag changed directly, sync to role

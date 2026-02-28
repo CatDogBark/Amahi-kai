@@ -26,6 +26,7 @@ admin = User.new(
   password: 'secretpassword',
   password_confirmation: 'secretpassword',
   admin: true,
+  role: 'admin',
   pin: nil
 )
 admin.save!(validate: false)
@@ -33,9 +34,9 @@ admin.save!(validate: false)
 Setting.set('advanced', '1')
 Setting.set('theme', 'amahi-kai')
 Setting.set('guest-dashboard', '0')
-Setting.set('dns', 'opennic')
-Setting.set('dns_ip_1', '173.230.156.28')
-Setting.set('dns_ip_2', '23.90.4.6')
+Setting.set('dns', 'cloudflare')
+Setting.set('dns_ip_1', '1.1.1.1')
+Setting.set('dns_ip_2', '1.0.0.1')
 Setting.set('dnsmasq_dns', '1')
 Setting.set('dnsmasq_dhcp', '1')
 Setting.set('initialized', '1')
