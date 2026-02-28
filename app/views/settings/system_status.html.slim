@@ -6,9 +6,9 @@
   .card.mb-4
     .card-header.bg-dark.text-white.d-flex.justify-content-between.align-items-center
       h5.mb-0
-        i.bi.bi-arrow-repeat.me-2
+        span.me-2 = lucide_icon('refresh-cw', size: 18)
         | System Update
-      button.btn.btn-sm.btn-outline-info onclick="openInstallTerminal('update', '#{settings_update_system_stream_path}')" Check for Updates
+      button.btn.btn-sm.btn-outline-info onclick="if(confirm('Run system update now?')){openInstallTerminal('update', '#{settings_update_system_stream_path}')}" Check for Updates
 
   == render 'shared/install_terminal', id: 'update', title: 'Updating Amahi-kai', stream_url: settings_update_system_stream_path
 
@@ -16,7 +16,7 @@
   .card.mb-4
     .card-header.bg-dark.text-white
       h5.mb-0
-        i.bi.bi-pc-display-horizontal.me-2
+        span.me-2 = lucide_icon('monitor', size: 18)
         | System Overview
     .card-body
       .row
@@ -65,7 +65,7 @@
   .card.mb-4
     .card-header.bg-dark.text-white
       h5.mb-0
-        i.bi.bi-speedometer2.me-2
+        span.me-2 = lucide_icon('bar-chart-3', size: 18)
         | Resource Usage
     .card-body
       .row
@@ -101,7 +101,7 @@
   .card.mb-4
     .card-header.bg-dark.text-white
       h5.mb-0
-        i.bi.bi-gear-wide-connected.me-2
+        span.me-2 = lucide_icon('settings', size: 18)
         | Services
     .card-body
       table.table.table-sm.mb-0
@@ -127,7 +127,7 @@
       .card.mb-4
         .card-header.bg-dark.text-white
           h5.mb-0
-            i.bi.bi-people.me-2
+            span.me-2 = lucide_icon('users', size: 18)
             | Users
             span.badge.bg-secondary.ms-2 = @managed_users.count
         .card-body
@@ -149,7 +149,7 @@
       .card.mb-4
         .card-header.bg-dark.text-white
           h5.mb-0
-            i.bi.bi-folder.me-2
+            span.me-2 = lucide_icon('folder', size: 18)
             | Shares
             span.badge.bg-secondary.ms-2 = @managed_shares.count
         .card-body
@@ -172,7 +172,7 @@
       .card.mb-4
         .card-header.bg-dark.text-white
           h5.mb-0
-            i.bi.bi-signpost-2.me-2
+            span.me-2 = lucide_icon('globe', size: 18)
             | DNS Aliases
             span.badge.bg-secondary.ms-2 = @managed_aliases.count
         .card-body

@@ -31,7 +31,7 @@ class Share < ApplicationRecord
   DEFAULT_SHARES = [ "Books", "Pictures", "Movies", "Videos", "Music", "Docs", "Public", "TV" ].each {|s| I18n.t s }
   PDC_SETTINGS = "/var/lib/amahi-kai/domain-settings"
 
-  default_scope {order("name")}
+  scope :by_name, -> { order(:name) }
 
   has_many :cap_accesses, :dependent => :destroy
   has_many :users_with_share_access, :through => :cap_accesses, :source => :user

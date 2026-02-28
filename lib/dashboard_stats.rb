@@ -82,7 +82,7 @@ class DashboardStats
     end
 
     def storage_summary
-      shares = Share.all rescue []
+      shares = Share.by_name rescue []
       pool_partitions = DiskPoolPartition.all rescue []
       greyhole_installed = Greyhole.installed? rescue false
 

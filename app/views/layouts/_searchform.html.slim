@@ -1,9 +1,8 @@
-form.my-2 action="/search/files" method="get" id="searchform"
-  .d-flex.flex-column.align-items-start
-    input.form-control aria-label="Search" name="query" placeholder="Search" maxlength="45" size="20"  style=("width: auto; height: 25px; font-size: 15px;") type="search" /
-    .d-flex.mt-1.gap-1
-      input.searchbutton id="hdasearchbutton" value="Files" name="button" type="submit"
-      input.searchbutton id="websearchbutton" value="Web" name="button" type="submit"
+form.d-none.d-md-flex.align-items-center.ms-3 action="/search/files" method="get" id="searchform"
+  .input-group.input-group-sm style="width: 200px;"
+    input.form-control.bg-dark.text-white.border-secondary aria-label="Search files" name="query" placeholder="Search files…" maxlength="45" type="search" style="font-size: 13px;"
+    button.btn.btn-outline-secondary type="submit"
+      = lucide_icon('search', size: 14)
 
-button.navbar-toggler.navbar-dark data-bs-target="#amahi-nav" data-bs-toggle="collapse" 
+button.navbar-toggler.navbar-dark data-bs-target="#amahi-nav" data-bs-toggle="collapse"
   span.navbar-toggler-icon

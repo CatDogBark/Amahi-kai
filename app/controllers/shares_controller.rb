@@ -25,7 +25,7 @@ class SharesController < ApplicationController
 
   def index
     @page_title = t('shares')
-    @shares = Share.all
+    @shares = Share.by_name
   end
 
   def create
@@ -36,7 +36,7 @@ class SharesController < ApplicationController
         format.json
       end
     else
-      @shares = Share.all
+      @shares = Share.by_name
       respond_to do |format|
         format.html { render :index, status: :unprocessable_entity }
         format.json
