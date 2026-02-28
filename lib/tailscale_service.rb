@@ -52,9 +52,14 @@ module TailscaleService
     end
 
     def install!
-      # Official Tailscale install script
-      system("curl -fsSL https://tailscale.com/install.sh | sh 2>&1")
-      $?.success?
+      # Official Tailscale install script — download then run with sudo bash
+      script_path = '/tmp/tailscale-install.sh'
+      system("curl -fsSL https://tailscale.com/install.sh -o #{script_path} 2>&1")
+      return false unless $?.success? && File.exist?(script_path)
+
+      success = system("sudo bash #{script_path} 2>&1")
+      FileUtils.rm_f(script_path)
+      success
     end
 
     # Start Tailscale and return the auth URL if not yet authenticated.

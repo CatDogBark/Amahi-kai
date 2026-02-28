@@ -480,6 +480,7 @@ amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/lib/amahi-kai/tmp/tunnel.token /etc/
 amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get install -y cloudflared
 
 # Tailscale VPN
+amahi ALL=(root) NOPASSWD: /usr/bin/bash /tmp/tailscale-install.sh
 amahi ALL=(root) NOPASSWD: /usr/bin/tailscale
 amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start tailscaled
 amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop tailscaled
