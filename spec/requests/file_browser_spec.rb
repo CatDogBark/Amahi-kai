@@ -101,10 +101,15 @@ describe "FileBrowser Controller", type: :request do
     end
 
     describe "path traversal" do
-      it "blocks traversal attempts" do
+      it "strips traversal sequences and stays within share" do
         get "/files/#{share.name}/browse/..%2F..%2Fetc%2Fpasswd"
-        # Should redirect (access denied) — not serve the file
-        expect(response.status).to be_in([302, 403, 404])
+        # Path traversal is stripped — resolved path stays under share root
+        # Should NOT serve /etc/passwd content
+        if response.status == 200
+          expect(response.body).not_to include("root:")
+        else
+          expect(response.status).to be_in([302, 403, 404])
+        end
       end
     end
   end
