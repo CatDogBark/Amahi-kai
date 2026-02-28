@@ -27,6 +27,8 @@ module Shell
     docker
     fallocate dd mkswap swapon swapoff
     mount umount
+    ufw
+    smartctl
     reboot poweroff
   ].freeze
 
