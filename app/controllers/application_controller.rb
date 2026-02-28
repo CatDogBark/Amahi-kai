@@ -85,7 +85,7 @@ class ApplicationController < ActionController::Base
       u = Setting.network.where(:name=>'router_username').first
       p = Setting.network.where(:name=>'router_password').first
       RouterDriver.set_auth(unobfuscate(u.value), unobfuscate(p.value)) if p and u and p.value and u.value
-    rescue NameError, NoMethodError => e
+    rescue StandardError => e
       # shhh. comment out the rescue for debugging
     end
     @router
@@ -157,7 +157,7 @@ class ApplicationController < ActionController::Base
         cookies['locale'] = { :value => default_locale, :expires => 1.year.from_now }
         default_locale
       end
-    rescue I18n::InvalidLocale, NoMethodError => e
+    rescue StandardError => e
       # if something happens (like a locale file renamed!?) go back to the default
       default_locale
     end

@@ -28,7 +28,7 @@ class RemoteAccessController < ApplicationController
       CloudflareService.configure!(token)
       CloudflareService.start!
       render json: { status: :ok }
-    rescue CloudflareService::CloudflareError, Shell::CommandError => e
+    rescue StandardError => e
       render json: { status: :error, error: e.message }
     end
   end

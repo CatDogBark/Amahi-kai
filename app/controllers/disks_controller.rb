@@ -123,7 +123,7 @@ class DisksController < ApplicationController
       flash[:notice] = "Greyhole installed successfully!"
     rescue Greyhole::GreyholeError => e
       flash[:error] = "Failed to install Greyhole: #{e.message}"
-    rescue Shell::CommandError, Errno::ENOENT => e
+    rescue StandardError => e
       flash[:error] = "Installation error: #{e.message}"
     end
     redirect_to disks_storage_pool_path
