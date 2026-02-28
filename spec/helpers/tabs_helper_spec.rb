@@ -1,6 +1,6 @@
 require 'rails_helper'
 
-RSpec.describe TabsHelper, type: :helper do
+RSpec.describe ApplicationHelper, type: :helper do
   describe "#advanced?" do
     it "returns true when advanced setting is 1" do
       Setting.find_or_create_by!(name: "advanced") { |s| s.value = "1"; s.kind = 0 }
