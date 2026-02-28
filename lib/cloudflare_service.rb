@@ -58,12 +58,14 @@ class CloudflareService
       return true unless production?
 
       unless File.exist?(KEYRING_PATH)
-        result = Shell.run("sh -c 'curl -L #{GPG_URL} | gpg --dearmor -o #{KEYRING_PATH}'")
+        # Download key then pipe to sudo gpg (matching sudoers entry exactly)
+        result = system("curl -fsSL #{GPG_URL} | sudo gpg --dearmor -o #{KEYRING_PATH} 2>&1")
         raise CloudflareError, 'Failed to add Cloudflare signing key' unless result
       end
 
       unless File.exist?(SOURCES_PATH)
-        result = Shell.run("sh -c \"echo '#{REPO_LINE}' > #{SOURCES_PATH}\"")
+        # Use tee with sudo (matching sudoers entry)
+        result = system("echo '#{REPO_LINE}' | sudo tee #{SOURCES_PATH} > /dev/null 2>&1")
         raise CloudflareError, 'Failed to add Cloudflare apt source' unless result
       end
 
