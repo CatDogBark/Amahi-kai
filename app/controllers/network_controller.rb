@@ -278,7 +278,7 @@ class NetworkController < ApplicationController
       )
       flash[:notice] = "Configuration saved"
       redirect_to network_gateway_path
-    rescue StandardError => e
+    rescue Errno::ENOENT, Errno::EACCES, Errno::EPERM, IOError, Shell::CommandError => e
       flash[:alert] = "Failed to save: #{e.message}"
       redirect_to network_gateway_path
     end

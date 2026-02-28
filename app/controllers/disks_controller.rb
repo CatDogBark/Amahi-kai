@@ -30,7 +30,7 @@ class DisksController < ApplicationController
       flash[:notice] = "Successfully formatted #{device} as ext4"
     rescue DiskManager::DiskError => e
       flash[:error] = "Format failed: #{e.message}"
-    rescue StandardError => e
+    rescue Shell::CommandError, Errno::ENOENT => e
       flash[:error] = "Unexpected error: #{e.message}"
     end
     redirect_to disks_devices_path
@@ -44,7 +44,7 @@ class DisksController < ApplicationController
       flash[:notice] = "Mounted #{device} at #{mp}"
     rescue DiskManager::DiskError => e
       flash[:error] = "Mount failed: #{e.message}"
-    rescue StandardError => e
+    rescue Shell::CommandError, Errno::ENOENT => e
       flash[:error] = "Unexpected error: #{e.message}"
     end
     redirect_to disks_devices_path
@@ -59,7 +59,7 @@ class DisksController < ApplicationController
     rescue DiskManager::DiskError => e
       flash[:error] = "Preview failed: #{e.message}"
       redirect_to disks_devices_path
-    rescue StandardError => e
+    rescue Shell::CommandError, Errno::ENOENT => e
       flash[:error] = "Unexpected error: #{e.message}"
       redirect_to disks_devices_path
     end
@@ -72,7 +72,7 @@ class DisksController < ApplicationController
       flash[:notice] = "Mounted #{device} at #{result[:mount_point]} and created share '#{result[:share_name]}'"
     rescue DiskManager::DiskError => e
       flash[:error] = "Mount failed: #{e.message}"
-    rescue StandardError => e
+    rescue ActiveRecord::RecordInvalid, Shell::CommandError => e
       flash[:error] = "Error: #{e.message}"
     end
     redirect_to disks_devices_path
@@ -85,7 +85,7 @@ class DisksController < ApplicationController
       flash[:notice] = "Unmounted #{device}"
     rescue DiskManager::DiskError => e
       flash[:error] = "Unmount failed: #{e.message}"
-    rescue StandardError => e
+    rescue Shell::CommandError, Errno::ENOENT => e
       flash[:error] = "Unexpected error: #{e.message}"
     end
     redirect_to disks_devices_path
@@ -107,7 +107,7 @@ class DisksController < ApplicationController
       format.html { redirect_to disks_storage_pool_path }
       format.any { render json: { status: 'ok', checked: result[:checked], path: result[:path] } }
     end
-  rescue StandardError => e
+  rescue ActiveRecord::RecordInvalid, Greyhole::GreyholeError, Shell::CommandError => e
     Rails.logger.error("Toggle disk pool error: #{e.message}\n#{e.backtrace.first(5).join("\n")}")
     render json: { status: 'error', message: e.message }, status: :internal_server_error
   end
@@ -123,7 +123,7 @@ class DisksController < ApplicationController
       flash[:notice] = "Greyhole installed successfully!"
     rescue Greyhole::GreyholeError => e
       flash[:error] = "Failed to install Greyhole: #{e.message}"
-    rescue StandardError => e
+    rescue Shell::CommandError, Errno::ENOENT => e
       flash[:error] = "Installation error: #{e.message}"
     end
     redirect_to disks_storage_pool_path

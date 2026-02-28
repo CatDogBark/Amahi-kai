@@ -137,7 +137,7 @@ class AppProxyController < ApplicationController
       render plain: "Cannot connect to #{@docker_app.name} — is it running?", status: :bad_gateway
     rescue Net::OpenTimeout, Net::ReadTimeout
       render plain: "#{@docker_app.name} is not responding", status: :gateway_timeout
-    rescue StandardError => e
+    rescue SocketError, IOError, Errno::EHOSTUNREACH, Errno::ENETUNREACH => e
       Rails.logger.error("App proxy error: #{e.message}")
       render plain: "Proxy error: #{e.message}", status: :bad_gateway
     end
@@ -206,7 +206,7 @@ class AppProxyController < ApplicationController
     ports = JSON.parse(ports) if ports.is_a?(String)
     ssl_ports = %w[443 9443 8443]
     ports.keys.any? { |k| ssl_ports.include?(k.to_s) }
-  rescue StandardError
+  rescue JSON::ParserError, NoMethodError
     false
   end
 

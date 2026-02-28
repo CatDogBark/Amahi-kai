@@ -14,7 +14,7 @@ class DiskPoolPartition < ApplicationRecord
         free: stat.block_size * stat.blocks_available,
         used: stat.block_size * (stat.blocks - stat.blocks_available)
       }
-    rescue StandardError
+    rescue Errno::ENOENT, Errno::EACCES, Sys::Filesystem::Error
       { total: 0, free: 0, used: 0 }
     end
   end

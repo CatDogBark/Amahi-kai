@@ -125,7 +125,7 @@ class SecurityController < ApplicationController
           end
         end
         sse.send("✓ Security fix-all complete!")
-      rescue StandardError => e
+      rescue Shell::CommandError, Errno::ENOENT, Errno::EACCES, IOError => e
         sse.send("✗ Error: #{e.message}")
       end
       sse.send("", event: "done")

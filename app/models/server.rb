@@ -97,7 +97,7 @@ class Server < ApplicationRecord
           ret = list.map { |pid| File.exist?("/proc/#{pid}") ? pid : nil }.compact
         end
       end
-    rescue StandardError => e
+    rescue Errno::ENOENT, Errno::EACCES, IOError => e
       # something went wrong
     end
     return ret unless ret.empty?
@@ -110,7 +110,7 @@ class Server < ApplicationRecord
       IO.popen("pgrep #{name}") do |p|
         ret = p.readlines.map { |pid| pid.gsub(/\n/, '') }
       end
-    rescue StandardError => e
+    rescue Errno::ENOENT, IOError => e
       []
     end
     ret

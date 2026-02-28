@@ -227,7 +227,7 @@ class SharesController < ApplicationController
     Greyhole.configure! if Greyhole.enabled?
     @share.reload
     render partial: 'shares/disk_pool_share', locals: { share: @share }
-  rescue StandardError => e
+  rescue Greyhole::GreyholeError, Shell::CommandError => e
     Rails.logger.error("Greyhole configure failed: #{e.message}")
     render partial: 'shares/disk_pool_share', locals: { share: @share }
   end
@@ -238,7 +238,7 @@ class SharesController < ApplicationController
     Greyhole.configure! if Greyhole.enabled?
     @share.reload
     render partial: 'shares/disk_pool_share', locals: { share: @share }
-  rescue StandardError => e
+  rescue Greyhole::GreyholeError, Shell::CommandError => e
     Rails.logger.error("Greyhole configure failed: #{e.message}")
     render partial: 'shares/disk_pool_share', locals: { share: @share }
   end
@@ -273,7 +273,7 @@ class SharesController < ApplicationController
       size = std_out
     end
     render json: { status: :ok, size: size, id: @share.id }
-  rescue StandardError => e
+  rescue Errno::ENOENT, Errno::EACCES, IOError => e
     render json: { status: :ok, size: e.to_s, id: @share&.id }
   end
 

@@ -132,7 +132,7 @@ class AppsController < ApplicationController
       format.json { render json: { status: 'ok', running: true } }
       format.html { redirect_to apps_index_path, notice: "Docker service started." }
     end
-  rescue StandardError => e
+  rescue DockerService::DockerError, Shell::CommandError => e
     respond_to do |format|
       format.json { render json: { status: 'error', message: e.message }, status: 500 }
       format.html { redirect_to apps_index_path, alert: "Failed to start Docker: #{e.message}" }
@@ -145,7 +145,7 @@ class AppsController < ApplicationController
       format.json { render json: { status: 'ok', running: false } }
       format.html { redirect_to apps_index_path, notice: "Docker service stopped." }
     end
-  rescue StandardError => e
+  rescue DockerService::DockerError, Shell::CommandError => e
     respond_to do |format|
       format.json { render json: { status: 'error', message: e.message }, status: 500 }
       format.html { redirect_to apps_index_path, alert: "Failed to stop Docker: #{e.message}" }
@@ -189,7 +189,7 @@ class AppsController < ApplicationController
     end
 
     @categories = catalog.map { |e| e[:category] }.compact.uniq.sort
-  rescue StandardError => e
+  rescue JSON::ParserError, Errno::ENOENT, IOError => e
     Rails.logger.error("Docker apps error: #{e.message}")
     @docker_apps = []
     @categories = []
@@ -297,7 +297,7 @@ class AppsController < ApplicationController
           sse.send("  Access at #{proxy_base}/app/#{identifier}") if first_port
           sse.done
 
-        rescue StandardError => e
+        rescue ContainerService::ContainerError, Shell::CommandError, DockerService::DockerError, Errno::ENOENT, IOError => e
           docker_app&.update(status: 'error', error_message: e.message)
           sse.send("✗ #{e.message}")
           sse.done("error")
@@ -310,7 +310,7 @@ class AppsController < ApplicationController
     docker_app = DockerApp.find_by!(identifier: params[:id])
     docker_app.uninstall!
     render json: { status: 'ok', app_status: 'available', name: docker_app.name }
-  rescue StandardError => e
+  rescue ContainerService::ContainerError, Shell::CommandError, ActiveRecord::RecordNotFound => e
     render json: { status: 'error', message: e.message }, status: 500
   end
 
@@ -318,7 +318,7 @@ class AppsController < ApplicationController
     docker_app = DockerApp.find_by!(identifier: params[:id])
     docker_app.start!
     render json: { status: 'ok', app_status: 'running', host_port: docker_app.host_port, name: docker_app.name }
-  rescue StandardError => e
+  rescue ContainerService::ContainerError, Shell::CommandError, ActiveRecord::RecordNotFound => e
     render json: { status: 'error', message: e.message }, status: 500
   end
 
@@ -326,7 +326,7 @@ class AppsController < ApplicationController
     docker_app = DockerApp.find_by!(identifier: params[:id])
     docker_app.stop!
     render json: { status: 'ok', app_status: 'stopped', name: docker_app.name }
-  rescue StandardError => e
+  rescue ContainerService::ContainerError, Shell::CommandError, ActiveRecord::RecordNotFound => e
     render json: { status: 'error', message: e.message }, status: 500
   end
 
@@ -334,7 +334,7 @@ class AppsController < ApplicationController
     docker_app = DockerApp.find_by!(identifier: params[:id])
     docker_app.restart!
     render json: { status: 'ok', app_status: 'running', host_port: docker_app.host_port, name: docker_app.name }
-  rescue StandardError => e
+  rescue ContainerService::ContainerError, Shell::CommandError, ActiveRecord::RecordNotFound => e
     redirect_to '/apps/docker_apps', alert: "Restart failed: #{e.message}"
   end
 

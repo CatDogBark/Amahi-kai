@@ -28,7 +28,7 @@ class RemoteAccessController < ApplicationController
       CloudflareService.configure!(token)
       CloudflareService.start!
       render json: { status: :ok }
-    rescue StandardError => e
+    rescue CloudflareService::CloudflareError, Shell::CommandError => e
       render json: { status: :error, error: e.message }
     end
   end
@@ -75,7 +75,7 @@ class RemoteAccessController < ApplicationController
       begin
         CloudflareService.install!
         sse.send("✓ cloudflared installed successfully!")
-      rescue StandardError => e
+      rescue CloudflareService::CloudflareError, Shell::CommandError => e
         sse.send("✗ Installation failed: #{e.message}")
       end
       sse.send("", event: "done")
@@ -141,7 +141,7 @@ class RemoteAccessController < ApplicationController
         end
 
         sse.done
-      rescue StandardError => e
+      rescue CloudflareService::CloudflareError, Shell::CommandError, Errno::ENOENT => e
         sse.send("✗ Error: #{e.message}")
         sse.done("error")
       end
@@ -233,7 +233,7 @@ class RemoteAccessController < ApplicationController
         end
 
         sse.done
-      rescue StandardError => e
+      rescue Shell::CommandError, Errno::ENOENT, IOError => e
         sse.send("✗ Error: #{e.message}")
         sse.done("error")
       end

@@ -50,7 +50,7 @@ class FileBrowserController < ApplicationController
 
     uploaded = FileBrowserService.upload_files(@full_path, files, overwrite: !!params[:overwrite])
     render json: { status: 'ok', uploaded: uploaded, count: uploaded.size }
-  rescue StandardError => e
+  rescue IOError, Errno::ENOENT, Errno::EACCES, Errno::ENOSPC, Errno::EPERM => e
     Rails.logger.error("FileBrowser#upload ERROR: #{e.class}: #{e.message}\n#{e.backtrace&.first(5)&.join("\n")}")
     render json: { error: e.message }, status: :internal_server_error
   end
@@ -64,7 +64,7 @@ class FileBrowserController < ApplicationController
 
     created_name = FileBrowserService.create_folder(@full_path, name)
     render json: { status: 'ok', name: created_name }
-  rescue StandardError => e
+  rescue IOError, Errno::ENOENT, Errno::EACCES, Errno::ENOSPC, Errno::EPERM, Shell::CommandError => e
     Rails.logger.error("FileBrowser#new_folder ERROR: #{e.class}: #{e.message}\n#{e.backtrace&.first(5)&.join("\n")}")
     render json: { error: e.message }, status: :internal_server_error
   end
@@ -80,13 +80,14 @@ class FileBrowserController < ApplicationController
 
     result = FileBrowserService.rename_entry(@full_path, old_name, new_name)
     render json: { status: 'ok', old_name: result[:old_name], new_name: result[:new_name] }
-  rescue StandardError => e
-    status = case e.message
-             when "Not found" then :not_found
-             when "Name already taken" then :conflict
-             else :internal_server_error
-             end
-    render json: { error: e.message }, status: status
+  rescue Errno::ENOENT, Errno::ENOTDIR => e
+    render json: { error: "Not found" }, status: :not_found
+  rescue Errno::EEXIST => e
+    render json: { error: "Name already taken" }, status: :conflict
+  rescue Errno::EACCES, Errno::EPERM => e
+    render json: { error: "Permission denied" }, status: :forbidden
+  rescue IOError, SystemCallError => e
+    render json: { error: e.message }, status: :internal_server_error
   end
 
   # DELETE /files/:share_id/delete
@@ -159,7 +160,7 @@ class FileBrowserController < ApplicationController
 
   def resolve_path
     @relative_path, @full_path = FileBrowserService.resolve_path(@share.path, params[:path])
-  rescue StandardError
+  rescue Errno::ENOENT, Errno::EACCES, Errno::EPERM, SecurityError
     flash[:error] = "Access denied"
     redirect_to file_browser_path(@share)
   end

@@ -210,7 +210,7 @@ class SettingsController < ApplicationController
         disk_percent = parts[4].to_i  # "42%" -> 42
         disk_detail = "#{parts[2]} used / #{parts[1]} total (#{parts[3]} free)"
       end
-    rescue StandardError
+    rescue Errno::ENOENT, IOError
     end
 
     {
@@ -246,7 +246,7 @@ class SettingsController < ApplicationController
         running = begin
           require 'greyhole'
           Greyhole.running?
-        rescue StandardError
+        rescue LoadError, Greyhole::GreyholeError
           false
         end
         next svc.merge(running: running, detail: running ? 'running' : 'stopped')
@@ -265,7 +265,7 @@ class SettingsController < ApplicationController
         else
           detail = result  # 'inactive', 'failed', etc.
         end
-      rescue StandardError
+      rescue Errno::ENOENT, IOError
         detail = 'cannot check'
       end
       svc.merge(running: running, detail: detail)
