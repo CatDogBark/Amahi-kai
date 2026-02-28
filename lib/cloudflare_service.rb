@@ -19,7 +19,8 @@ class CloudflareService
 
     def running?
       return false unless production?
-      Shell.run('systemctl is-active --quiet cloudflared')
+      # systemctl is-active doesn't need sudo — don't use Shell.run
+      system('systemctl is-active --quiet cloudflared')
     end
 
     def enabled?
