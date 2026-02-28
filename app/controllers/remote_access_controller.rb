@@ -186,9 +186,19 @@ class RemoteAccessController < ApplicationController
       begin
         # Install
         sse.send("Downloading Tailscale install script...")
-        IO.popen("curl -fsSL https://tailscale.com/install.sh | sh 2>&1") do |io|
+        script_path = '/tmp/tailscale-install.sh'
+        system("curl -fsSL https://tailscale.com/install.sh -o #{script_path} 2>&1")
+        unless $?.success? && File.exist?(script_path)
+          sse.send("✗ Failed to download install script")
+          sse.done("error")
+          next
+        end
+
+        sse.send("Installing Tailscale...")
+        IO.popen("sudo bash #{script_path} 2>&1") do |io|
           io.each_line { |line| sse.send("  #{line.chomp}") }
         end
+        FileUtils.rm_f(script_path)
         unless $?.success?
           sse.send("✗ Installation failed")
           sse.done("error")

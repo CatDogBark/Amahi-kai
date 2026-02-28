@@ -57,6 +57,7 @@ module TailscaleService
       system("curl -fsSL https://tailscale.com/install.sh -o #{script_path} 2>&1")
       return false unless $?.success? && File.exist?(script_path)
 
+      # Run as root so the script's internal sudo/apt calls work without a terminal
       success = system("sudo bash #{script_path} 2>&1")
       FileUtils.rm_f(script_path)
       success
