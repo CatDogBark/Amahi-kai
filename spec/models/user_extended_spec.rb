@@ -43,7 +43,7 @@ RSpec.describe User, type: :model do
   describe "#make_admin" do
     it "calls Platform.make_admin" do
       allow(Platform).to receive(:make_admin)
-      user = create(:user, admin: true)
+      user = create(:user, admin: true, role: 'admin')
       user.send(:make_admin)
       expect(Platform).to have_received(:make_admin).with(user.login, true)
     end
@@ -53,7 +53,7 @@ RSpec.describe User, type: :model do
     it "filters admin users" do
       admin = create(:admin)
       regular = create(:user, admin: false)
-      admins = User.where(admin: true)
+      admins = User.admins
       expect(admins).to include(admin)
       expect(admins).not_to include(regular)
     end
