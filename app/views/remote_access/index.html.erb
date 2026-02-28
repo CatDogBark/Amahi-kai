@@ -358,19 +358,29 @@ function installTailscale() {
 }
 
 function startTailscale() {
+  var btn = event.target;
+  btn.disabled = true;
+  btn.textContent = 'Connecting...';
   fetch('<%= remote_access_start_tailscale_path %>', {
     method: 'POST',
     headers: {
       'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content,
       'Accept': 'application/json'
     }
-  }).then(function(r) { return r.json(); }).then(function(data) {
+  }).then(function(r) {
+    if (!r.ok) throw new Error('Server returned ' + r.status);
+    return r.json();
+  }).then(function(data) {
     if (data.auth_url) {
       window.open(data.auth_url, '_blank');
       setTimeout(function() { window.location.reload(); }, 5000);
     } else {
       window.location.reload();
     }
+  }).catch(function(err) {
+    alert('Failed to connect: ' + err.message);
+    btn.disabled = false;
+    btn.textContent = 'Connect';
   });
 }
 
