@@ -12,7 +12,7 @@ module TailscaleService
 
     def running?
       return false unless installed?
-      status = `tailscale status --json 2>/dev/null`.strip
+      status = `sudo tailscale status --json 2>/dev/null`.strip
       return false if status.empty?
       data = JSON.parse(status)
       data['BackendState'] == 'Running'
@@ -23,7 +23,7 @@ module TailscaleService
     def status
       return { installed: false, running: false } unless installed?
 
-      raw = `tailscale status --json 2>/dev/null`.strip
+      raw = `sudo tailscale status --json 2>/dev/null`.strip
       return { installed: true, running: false } if raw.empty?
 
       data = JSON.parse(raw)
@@ -72,18 +72,18 @@ module TailscaleService
       Shell.run("systemctl start tailscaled 2>/dev/null")
 
       # Check if already logged in — if so, just bring it up
-      status_check = `tailscale status 2>&1`.strip
+      status_check = `sudo tailscale status 2>&1`.strip
       needs_login = status_check.include?('Logged out') || status_check.include?('NeedsLogin')
 
       if needs_login
         # Request a login URL without blocking
-        output = `timeout 15 tailscale login 2>&1`.strip
+        output = `timeout 15 sudo tailscale login 2>&1`.strip
         auth_url = output[/https:\/\/login\.tailscale\.com\/[^\s]+/]
         return { success: true, auth_url: auth_url, needs_login: true }
       end
 
       # Already authenticated — just bring it up
-      `timeout 10 tailscale up 2>&1`
+      `timeout 10 sudo tailscale up 2>&1`
       { success: true, auth_url: nil }
     rescue StandardError => e
       { success: false, error: e.message }

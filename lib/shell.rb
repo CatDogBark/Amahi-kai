@@ -29,6 +29,7 @@ module Shell
     mount umount
     ufw
     smartctl
+    tailscale
     reboot poweroff
   ].freeze
 
