@@ -223,10 +223,13 @@ class SecurityAudit
     # --- Fix methods ---
 
     def fix_ufw!
-      Shell.run('ufw --force enable') &&
-        Shell.run('ufw default deny incoming') &&
+      Shell.run('ufw default deny incoming') &&
         Shell.run('ufw allow 22/tcp') &&
-        Shell.run('ufw allow 3000/tcp')
+        Shell.run('ufw allow 3000/tcp') &&
+        Shell.run('ufw allow 443/tcp') &&
+        Shell.run('ufw allow 445/tcp') &&
+        Shell.run('ufw allow 137:139/udp') &&
+        Shell.run('ufw --force enable')
     end
 
     def fix_ssh_root_login!
