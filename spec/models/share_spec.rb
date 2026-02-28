@@ -184,7 +184,7 @@ describe Share do
     it "should order by name" do
       create(:share, name: "Zebra")
       create(:share, name: "Alpha")
-      names = Share.all.map(&:name)
+      names = Share.by_name.map(&:name)
       expect(names).to eq(names.sort)
     end
   end
