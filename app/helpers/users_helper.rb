@@ -31,7 +31,7 @@ module UsersHelper
   def user_formatted_date(date)
     date = date.localtime
     "#{date.to_formatted_s(:short)} (#{time_ago_in_words(date)})"
-  rescue StandardError => e
+  rescue NoMethodError, ArgumentError, RangeError
     '-'
   end
 

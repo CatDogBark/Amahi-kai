@@ -1,6 +1,7 @@
 require 'disk_manager'
 require 'greyhole'
 require 'shell'
+require 'shellwords'
 
 # Service object for disk management operations.
 # Extracted from DisksController — handles disk pool toggling,
@@ -120,21 +121,21 @@ module DiskService
         ]},
         { label: "Pre-configuring Greyhole database...", commands: [
           { cmd: 'sudo mysql -u root -e "CREATE DATABASE IF NOT EXISTS greyhole" 2>&1', run: true },
-          { cmd: %Q(sudo mysql -u root -e "CREATE USER IF NOT EXISTS 'amahi'@'localhost' IDENTIFIED BY '#{ENV.fetch("DATABASE_PASSWORD", "")}'; GRANT ALL PRIVILEGES ON greyhole.* TO 'amahi'@'localhost'; FLUSH PRIVILEGES;" 2>&1), run: true },
+          { cmd: %Q(sudo mysql -u root -e "CREATE USER IF NOT EXISTS 'amahi'@'localhost' IDENTIFIED BY '#{db_password_sql}'; GRANT ALL PRIVILEGES ON greyhole.* TO 'amahi'@'localhost'; FLUSH PRIVILEGES;" 2>&1), run: true },
         ]},
         { label: "Configuring PHP dependencies...", commands: [
           { cmd: "sudo apt-get install -y php8.3-mbstring php8.3-mysql 2>&1", run: true },
           { cmd: "sudo phpenmod mbstring 2>&1", run: true },
         ]},
         { label: "Creating minimal Greyhole config...", commands: [
-          { cmd: "echo 'db_host = localhost\ndb_user = amahi\ndb_pass = #{ENV.fetch('DATABASE_PASSWORD', '')}\ndb_name = greyhole' | sudo tee /etc/greyhole.conf 2>&1", run: !File.exist?('/etc/greyhole.conf') },
+          { cmd: "echo 'db_host = localhost\ndb_user = amahi\ndb_pass = #{db_password_escaped}\ndb_name = greyhole' | sudo tee /etc/greyhole.conf 2>&1", run: !File.exist?('/etc/greyhole.conf') },
         ]},
         { label: "Installing Greyhole package...", commands: [
           { cmd: "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -o Dpkg::Options::=--force-confold greyhole 2>&1", run: true }
         ]},
         { label: "Loading Greyhole database schema...", commands: [
           { cmd: 'sudo mysql -u root -e "CREATE DATABASE IF NOT EXISTS greyhole" 2>&1', run: true },
-          { cmd: %Q(sudo mysql -u root -e "CREATE USER IF NOT EXISTS 'amahi'@'localhost' IDENTIFIED BY '#{ENV.fetch("DATABASE_PASSWORD", "")}'; GRANT ALL PRIVILEGES ON greyhole.* TO 'amahi'@'localhost'; FLUSH PRIVILEGES;" 2>&1), run: true },
+          { cmd: %Q(sudo mysql -u root -e "CREATE USER IF NOT EXISTS 'amahi'@'localhost' IDENTIFIED BY '#{db_password_sql}'; GRANT ALL PRIVILEGES ON greyhole.* TO 'amahi'@'localhost'; FLUSH PRIVILEGES;" 2>&1), run: true },
           { cmd: "sudo mysql -u root greyhole < /usr/share/greyhole/schema-mysql.sql 2>&1", run: File.exist?('/usr/share/greyhole/schema-mysql.sql') }
         ]},
         { label: "Enabling Greyhole service...", commands: [
@@ -187,6 +188,18 @@ module DiskService
         sse.send("✗ Installation failed. Check the output above for errors.")
         sse.done("error")
       end
+    end
+
+    private
+
+    # Returns the database password, shell-escaped for safe interpolation into commands.
+    def db_password_escaped
+      Shellwords.shellescape(Shellwords.escape(ENV.fetch('DATABASE_PASSWORD', '')))
+    end
+
+    # Returns the database password with single quotes escaped for SQL strings.
+    def db_password_sql
+      Shellwords.escape(ENV.fetch('DATABASE_PASSWORD', '')).gsub("'", "\\\\'")
     end
   end
 end
