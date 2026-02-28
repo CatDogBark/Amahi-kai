@@ -77,13 +77,14 @@ module TailscaleService
 
       if needs_login
         # Request a login URL without blocking
-        output = `timeout 15 sudo tailscale login 2>&1`.strip
+        # sudo must wrap timeout (not the other way around) so SIGTERM reaches tailscale
+        output = `sudo timeout 15 tailscale login 2>&1`.strip
         auth_url = output[/https:\/\/login\.tailscale\.com\/[^\s]+/]
         return { success: true, auth_url: auth_url, needs_login: true }
       end
 
       # Already authenticated — just bring it up
-      `timeout 10 sudo tailscale up 2>&1`
+      `sudo timeout 10 tailscale up 2>&1`
       { success: true, auth_url: nil }
     rescue StandardError => e
       { success: false, error: e.message }

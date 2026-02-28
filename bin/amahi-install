@@ -482,6 +482,8 @@ amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get install -y cloudflared
 # Tailscale VPN
 amahi ALL=(root) NOPASSWD: /usr/bin/bash /tmp/tailscale-install.sh
 amahi ALL=(root) NOPASSWD: /usr/bin/tailscale
+amahi ALL=(root) NOPASSWD: /usr/bin/timeout 15 /usr/bin/tailscale login
+amahi ALL=(root) NOPASSWD: /usr/bin/timeout 10 /usr/bin/tailscale up
 amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start tailscaled
 amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop tailscaled
 amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart tailscaled

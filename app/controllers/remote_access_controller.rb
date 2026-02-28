@@ -214,7 +214,7 @@ class RemoteAccessController < ApplicationController
 
         # `tailscale up` blocks waiting for auth — run with timeout and capture URL
         auth_url = nil
-        IO.popen("timeout 10 sudo tailscale up 2>&1") do |io|
+        IO.popen("sudo timeout 10 tailscale up 2>&1") do |io|
           io.each_line do |line|
             sse.send("  #{line.chomp}")
             url = line[/https:\/\/login\.tailscale\.com\/[^\s]+/]
