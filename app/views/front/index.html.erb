@@ -27,7 +27,9 @@
         <div class="card-header" style="background: var(--kai-dark); color: white;">
           <div class="d-flex justify-content-between align-items-center">
             <strong><%= lucide_icon('folder', size: 16) %> Shares</strong>
+            <% if current_user_is_admin? %>
             <a href="/shares" class="text-white text-decoration-none" style="font-size: 12px;">Manage →</a>
+            <% end %>
           </div>
         </div>
         <div class="card-body p-2">
@@ -175,7 +177,9 @@
         <div class="card">
           <div class="card-header d-flex justify-content-between align-items-center" style="background: var(--kai-dark); color: white;">
             <strong><%= lucide_icon('database', size: 16) %> Storage Pool</strong>
+            <% if current_user_is_admin? %>
             <a href="/disks/storage_pool" class="text-muted text-decoration-none" style="font-size: 0.8rem;">Manage →</a>
+            <% end %>
           </div>
           <div class="card-body">
             <%
@@ -206,12 +210,14 @@
   <div class="row mb-4">
     <div class="col-12">
       <div class="d-flex flex-wrap gap-2">
+        <% if current_user_is_admin? %>
         <a href="/users" class="btn btn-sm btn-outline-secondary"><%= lucide_icon('users', size: 14) %> <%= @stats[:counts][:users] %> Users</a>
         <a href="/shares" class="btn btn-sm btn-outline-secondary"><%= lucide_icon('folder', size: 14) %> <%= @stats[:counts][:shares] %> Shares</a>
         <a href="/network" class="btn btn-sm btn-outline-secondary"><%= lucide_icon('globe', size: 14) %> <%= @stats[:counts][:dns_aliases] %> DNS Aliases</a>
         <a href="/apps/docker_apps" class="btn btn-sm btn-outline-secondary"><%= lucide_icon('package', size: 14) %> <%= @stats[:counts][:docker_apps] %> Running Apps</a>
         <a href="/disks" class="btn btn-sm btn-outline-secondary"><%= lucide_icon('hard-drive', size: 14) %> Disks</a>
         <a href="/settings" class="btn btn-sm btn-outline-secondary"><%= lucide_icon('settings', size: 14) %> Settings</a>
+        <% end %>
       </div>
     </div>
   </div>
