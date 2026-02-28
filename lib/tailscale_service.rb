@@ -71,16 +71,20 @@ module TailscaleService
       Shell.run("systemctl enable tailscaled 2>/dev/null")
       Shell.run("systemctl start tailscaled 2>/dev/null")
 
-      # `tailscale up` blocks indefinitely waiting for auth — use timeout
-      auth_url = nil
-      IO.popen("timeout 10 tailscale up 2>&1") do |io|
-        io.each_line do |line|
-          url = line[/https:\/\/login\.tailscale\.com\/[^\s]+/]
-          auth_url = url if url
-        end
+      # Check if already logged in — if so, just bring it up
+      status_check = `tailscale status 2>&1`.strip
+      needs_login = status_check.include?('Logged out') || status_check.include?('NeedsLogin')
+
+      if needs_login
+        # Request a login URL without blocking
+        output = `timeout 15 tailscale login 2>&1`.strip
+        auth_url = output[/https:\/\/login\.tailscale\.com\/[^\s]+/]
+        return { success: true, auth_url: auth_url, needs_login: true }
       end
 
-      { success: true, auth_url: auth_url }
+      # Already authenticated — just bring it up
+      `timeout 10 tailscale up 2>&1`
+      { success: true, auth_url: nil }
     rescue StandardError => e
       { success: false, error: e.message }
     end
