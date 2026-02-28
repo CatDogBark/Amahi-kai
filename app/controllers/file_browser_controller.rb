@@ -4,8 +4,6 @@ class FileBrowserController < ApplicationController
   before_action :check_share_access
   before_action :check_write_access, only: [:upload, :new_folder, :rename, :delete]
   before_action :resolve_path
-  skip_forgery_protection only: [:upload, :new_folder, :rename, :delete]
-
   # GET /files/:share_id/browse/*path
   def browse
     unless File.directory?(@full_path)
