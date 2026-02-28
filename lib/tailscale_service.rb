@@ -71,9 +71,14 @@ module TailscaleService
       Shell.run("systemctl enable tailscaled 2>/dev/null")
       Shell.run("systemctl start tailscaled 2>/dev/null")
 
-      # Run tailscale up and capture auth URL if needed
-      output = `tailscale up 2>&1`
-      auth_url = output[/https:\/\/login\.tailscale\.com\/[^\s]+/]
+      # `tailscale up` blocks indefinitely waiting for auth — use timeout
+      auth_url = nil
+      IO.popen("timeout 10 tailscale up 2>&1") do |io|
+        io.each_line do |line|
+          url = line[/https:\/\/login\.tailscale\.com\/[^\s]+/]
+          auth_url = url if url
+        end
+      end
 
       { success: true, auth_url: auth_url }
     rescue StandardError => e
