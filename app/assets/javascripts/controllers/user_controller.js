@@ -78,6 +78,33 @@
         });
     }
 
+    changeRole(event) {
+      var select = event.currentTarget;
+      var url = select.dataset.url;
+      var role = select.value;
+
+      fetch(url, {
+        method: "PUT",
+        headers: Object.assign({ "Content-Type": "application/json" }, csrfHeaders()),
+        credentials: "same-origin",
+        body: JSON.stringify({ role: role })
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.status !== "ok") {
+            select.value = select.dataset.previousRole || 'user';
+            if (typeof showToast === 'function') showToast('Failed to update role', 'error');
+          } else {
+            select.dataset.previousRole = role;
+            if (typeof showToast === 'function') showToast('Role updated to ' + role, 'success');
+          }
+        })
+        .catch(function(err) {
+          console.error("Role update failed:", err);
+          if (typeof showToast === 'function') showToast('Failed to update role', 'error');
+        });
+    }
+
     // Show name edit form
     editName(event) {
       event.preventDefault();

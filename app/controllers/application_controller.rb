@@ -228,6 +228,16 @@ class ApplicationController < ActionController::Base
     end
   end
 
+  # Requires a user who can browse files (admin or user role, not guest)
+  def browse_required
+    return false if login_required == false
+    unless current_user.can_browse?
+      flash[:info] = t('must_be_admin')
+      redirect_to root_url
+      return false
+    end
+  end
+
   def store_location
     session[:return_to] = request.fullpath
   end

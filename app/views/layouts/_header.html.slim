@@ -3,7 +3,8 @@ nav.navbar.navbar-expand-md.bg-dark.navbar-inverse
     a.nav-item.nav-link.text-white.nav_hover href="/"  
      = t('home')
 
-    = render 'layouts/searchform'    
+    - if current_user&.can_browse?
+      = render 'layouts/searchform'    
 
     /! Theme toggle — absolutely centered in header
     .theme-switcher

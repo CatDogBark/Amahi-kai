@@ -59,18 +59,19 @@ div.user[id="whole_user_#{user.id}" data-controller="user"]
                 = render partial: 'auth', locals: { user: user }
             tr
               td
-                label #{t('admin')}
+                label Role
               td
-                span
-                  input.user_admin_checkbox.action-checkbox.form-check-input[
-                    type="checkbox"
-                    id="user_admin_#{user.id}"
-                    checked=user.admin?
-                    disabled=(!can_i_toggle_admin?(user))
-                    data-action="click->user#toggleAdmin"
-                    data-url=toggle_admin_user_path(id: user.id)]
-                  |  
-                  span.spinner.theme-image style="display:none"
+                - if can_i_toggle_admin?(user)
+                  select.form-select.form-select-sm.d-inline-block[
+                    style="width: auto;"
+                    data-action="change->user#changeRole"
+                    data-url=update_role_user_path(id: user.id)]
+                    option value="admin" selected=(user.admin?) Admin
+                    option value="user" selected=(user.user?) User
+                    option value="guest" selected=(user.guest?) Guest
+                - else
+                  span.badge class=(user.admin? ? 'bg-info' : user.user? ? 'bg-secondary' : 'bg-dark')
+                    = user.role.capitalize
             tr
               = render partial: 'password', locals: { user: user }
             tr

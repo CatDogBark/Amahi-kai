@@ -8,6 +8,7 @@ Rails.application.routes.draw do
   resources :users do
     member do
       put 'toggle_admin'
+      put 'update_role'
       put 'update_password'
       put 'update_name'
       put 'update_pubkey'

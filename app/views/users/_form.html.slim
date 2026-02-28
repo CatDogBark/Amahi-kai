@@ -26,11 +26,18 @@ form.user.create-form.form-horizontal.p-1[
 
       .control-group.form-group
         .controls
-          input.form-control[type="password" name="user[password]" size="16" maxlength="24" placeholder=t('password')]
+          input.form-control[type="password" name="user[password]" size="16" maxlength="128" placeholder=t('password')]
 
       .control-group.form-group
         .controls
-          input.form-control[type="password" name="user[password_confirmation]" size="16" maxlength="24" placeholder=t('confirm')]
+          input.form-control[type="password" name="user[password_confirmation]" size="16" maxlength="128" placeholder=t('confirm')]
+
+      .control-group.form-group
+        .controls
+          select.form-select name="user[role]"
+            option value="user" User — File browser & search
+            option value="admin" Admin — Full system access
+            option value="guest" Guest — Samba only, no web UI
 
       .control-group.create-btn.form-group
         .controls.col-xs-offset-2.col-xs-10

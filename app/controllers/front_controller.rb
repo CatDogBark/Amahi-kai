@@ -23,7 +23,11 @@ class FrontController < ApplicationController
     @no_tabs = true
     @apps = DockerApp.dashboard.running
     @stats = DashboardStats.summary
-    @shares = Share.where(visible: true).order(:name)
+    @shares = if current_user.admin?
+                 Share.where(visible: true).order(:name)
+               else
+                 current_user.accessible_shares.where(visible: true)
+               end
   end
 
   def toggle_advanced

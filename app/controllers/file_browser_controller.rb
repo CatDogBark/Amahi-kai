@@ -1,6 +1,8 @@
 class FileBrowserController < ApplicationController
-  before_action :admin_required
+  before_action :browse_required
   before_action :set_share
+  before_action :check_share_access
+  before_action :check_write_access, only: [:upload, :new_folder, :rename, :delete]
   before_action :resolve_path
   skip_forgery_protection only: [:upload, :new_folder, :rename, :delete]
 
@@ -179,6 +181,19 @@ class FileBrowserController < ApplicationController
   rescue ActiveRecord::RecordNotFound
     flash[:error] = "Share not found"
     redirect_to root_path
+  end
+
+  def check_share_access
+    unless current_user.can_access_share?(@share)
+      flash[:error] = "You don't have access to this share"
+      redirect_to root_path
+    end
+  end
+
+  def check_write_access
+    unless current_user.can_write_share?(@share)
+      render json: { error: "Write access denied" }, status: :forbidden
+    end
   end
 
   def resolve_path

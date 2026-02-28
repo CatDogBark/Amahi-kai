@@ -196,6 +196,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_25_000000) do
     t.datetime "updated_at", precision: nil
     t.text "pin"
     t.string "password_digest"
+    t.string "role", default: "user", null: false
   end
 
   create_table "webapp_aliases", force: :cascade do |t|

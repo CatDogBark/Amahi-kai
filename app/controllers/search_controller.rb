@@ -17,7 +17,7 @@
 
 class SearchController < ApplicationController
 
-  before_action :login_required
+  before_action :browse_required
   before_action -> { @no_tabs = true }
 
   RESULTS_PER_PAGE = 20
@@ -69,6 +69,9 @@ class SearchController < ApplicationController
 
   def search_share_files(query, content_type, page, rpp = RESULTS_PER_PAGE)
     scope = ShareFile.files_only
+    # Filter to only shares this user can access
+    accessible_share_ids = current_user.accessible_shares.pluck(:id)
+    scope = scope.where(share_id: accessible_share_ids)
     scope = scope.search(query) if query.present?
     scope = scope.by_type(content_type) if content_type.present?
     scope = scope.recent

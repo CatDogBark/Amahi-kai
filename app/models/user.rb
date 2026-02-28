@@ -24,7 +24,16 @@ class User < ApplicationRecord
   # Provides: password, password_confirmation, authenticate(password)
   has_secure_password
 
-  scope :admins, ->{ where(:admin => true)}
+  # --- Roles ---
+  # admin  — full web UI access, all shares, system configuration
+  # user   — dashboard, file browser (share-filtered), search
+  # guest  — Samba-only access, no web UI beyond login
+  ROLES = %w[admin user guest].freeze
+
+  validates :role, inclusion: { in: ROLES }
+
+  scope :admins, -> { where(role: 'admin') }
+  scope :non_guests, -> { where.not(role: 'guest') }
 
   validates :login, :presence => true,
   :format => { :with => /\A[A-Za-z][A-Za-z0-9]+\z/ },
@@ -47,6 +56,41 @@ class User < ApplicationRecord
   before_destroy :before_destroy_hook
   after_save :after_save_hook
   after_create :after_create_hook
+
+  # --- Role helpers ---
+
+  def admin?
+    role == 'admin'
+  end
+
+  def user?
+    role == 'user'
+  end
+
+  def guest?
+    role == 'guest'
+  end
+
+  # Can this user access the web file browser / search?
+  def can_browse?
+    admin? || user?
+  end
+
+  # Can this user access a specific share via the web UI?
+  def can_access_share?(share)
+    return true if admin?
+    return false if guest?
+    return true if share.everyone?
+    share.users_with_share_access.include?(self)
+  end
+
+  # Can this user write to a specific share via the web UI?
+  def can_write_share?(share)
+    return true if admin?
+    return false if guest?
+    return !share.rdonly if share.everyone?
+    share.users_with_write_access.include?(self)
+  end
 
   class << self
     def system_find_name_by_username(username)
@@ -98,16 +142,32 @@ class User < ApplicationRecord
 
   def add_or_passwd_change_samba_user
     esc_login = Shellwords.escape(self.login)
-    pwd_option = password_option()
-    Shell.run("usermod #{pwd_option} #{esc_login}")
-    unless self.password.nil? && self.password.blank?
-      esc_pwd = Shellwords.escape(self.password)
-      Shell.run("sh -c '(echo #{esc_pwd}; echo #{esc_pwd}) | pdbedit -d0 -t -a -u #{esc_login}'")
-    end
+    Shell.run("usermod #{esc_login}")
+    sync_samba_password
   end
 
   def needs_auth?
     !password_digest || password_digest.blank?
+  end
+
+  # Accessible shares for this user (for file browser / search filtering)
+  def accessible_shares
+    return Share.by_name if admin?
+    return Share.none if guest?
+
+    everyone_ids = Share.where(everyone: true).pluck(:id)
+    granted_ids = CapAccess.where(user_id: id).pluck(:share_id)
+    Share.where(id: (everyone_ids + granted_ids).uniq).by_name
+  end
+
+  # Writable share IDs for this user
+  def writable_share_ids
+    return Share.pluck(:id) if admin?
+    return [] if guest?
+
+    everyone_writable = Share.where(everyone: true, rdonly: false).pluck(:id)
+    granted_write = CapWriter.where(user_id: id).pluck(:share_id)
+    (everyone_writable + granted_write).uniq
   end
 
   protected
@@ -116,30 +176,39 @@ class User < ApplicationRecord
     new_record? || password.present? || password_confirmation.present?
   end
 
+  # Sync password to Samba's pdbedit database.
+  # Linux accounts are created with --disabled-password (no SSH access).
+  # Web auth uses bcrypt in Rails DB. Samba uses pdbedit. No DES crypt.
+  def sync_samba_password
+    return if password.blank?
+    esc_login = Shellwords.escape(self.login)
+    esc_pwd = Shellwords.escape(self.password)
+    Shell.run("sh -c '(echo #{esc_pwd}; echo #{esc_pwd}) | pdbedit -d0 -t -a -u #{esc_login}'")
+  end
+
   def before_create_hook
     self.login = self.login.downcase
+    # Set role from admin flag if role not explicitly set (backwards compat)
+    self.role ||= 'user'
     return if User.system_user_exists? self.login
     esc_login = Shellwords.escape(self.login)
     esc_name = Shellwords.escape(self.name)
-    pwd_option = password_option()
-    cmds = ["useradd -m -g users -c #{esc_name} #{pwd_option} #{esc_login}"]
-    unless self.password.nil? && self.password.blank?
-      esc_pwd = Shellwords.escape(self.password)
-      cmds << "sh -c '(echo #{esc_pwd}; echo #{esc_pwd}) | pdbedit -d0 -t -a -u #{esc_login}'"
-    end
-    Shell.run(*cmds)
-  end
-
-  def password_option
-    return "" if self.password.nil? || self.password.blank?
-    salt = ('a'..'z').to_a + ('A'..'Z').to_a + ('0'..'9').to_a + ['.', '/']
-    salt = (salt.sort_by{rand}.join)[0,2]
-    sys_crypted_password = password.crypt(salt)
-    "-p #{Shellwords.escape(sys_crypted_password)}"
+    # Create Linux user with disabled password — no SSH access.
+    # Linux account exists only for Samba UID mapping and home directory.
+    Shell.run("useradd --disabled-password -m -g users -c #{esc_name} #{esc_login}")
+    sync_samba_password
   end
 
   def before_save_hook
     update_pubkey if public_key_changed?
+
+    # Sync role → admin flag for backwards compatibility
+    if role_changed?
+      self.admin = (role == 'admin')
+    elsif admin_changed?
+      # Legacy: if admin flag changed directly, sync to role
+      self.role = admin? ? 'admin' : 'user'
+    end
 
     if admin_changed?
       make_admin
@@ -149,13 +218,8 @@ class User < ApplicationRecord
     return unless User.system_user_exists? self.login
     esc_login = Shellwords.escape(self.login)
     esc_name = Shellwords.escape(self.name)
-    pwd_option = password_option()
-    cmds = ["usermod -c #{esc_name} #{pwd_option} #{esc_login}"]
-    if password.present?
-      esc_pwd = Shellwords.escape(password)
-      cmds << "sh -c '(echo #{esc_pwd}; echo #{esc_pwd}) | pdbedit -d0 -t -a -u #{esc_login}'"
-    end
-    Shell.run(*cmds)
+    Shell.run("usermod -c #{esc_name} #{esc_login}")
+    sync_samba_password if password.present?
   end
 
   def after_save_hook

@@ -7,7 +7,7 @@
 
 class UsersController < ApplicationController
   before_action :admin_required
-  before_action :set_user, only: %i[update update_pubkey destroy toggle_admin update_password update_name update_pin]
+  before_action :set_user, only: %i[update update_pubkey destroy toggle_admin update_role update_password update_name update_pin]
 
   helper_method :can_i_toggle_admin?
 
@@ -81,6 +81,16 @@ class UsersController < ApplicationController
     end
   end
 
+  def update_role
+    if can_i_toggle_admin?(@user) && User::ROLES.include?(params[:role])
+      @user.role = params[:role]
+      @user.save!
+      render json: { status: :ok, role: @user.role }
+    else
+      render json: { status: :not_acceptable }, status: :not_acceptable
+    end
+  end
+
   def update_password
     if params[:user][:password].blank? || params[:user][:password_confirmation].blank?
       render json: { status: :not_acceptable, message: t('password_cannot_be_blank') }
@@ -129,7 +139,7 @@ class UsersController < ApplicationController
   end
 
   def params_user_create
-    params.require(:user).permit(:login, :name, :password, :password_confirmation, :pin)
+    params.require(:user).permit(:login, :name, :password, :password_confirmation, :pin, :role)
   end
 
   def params_password_update
