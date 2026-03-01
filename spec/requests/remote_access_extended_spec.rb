@@ -67,7 +67,7 @@ RSpec.describe "RemoteAccess extended", type: :request do
     end
 
     it "returns error on exception" do
-      allow(CloudflareService).to receive(:configure!).and_raise(StandardError.new("config failed"))
+      allow(CloudflareService).to receive(:configure!).and_raise(Shell::CommandError.new("cloudflared", "config failed", 1))
       post '/network/remote_access/configure_tunnel', params: { tunnel_token: 'tok' }, as: :json
       body = response.parsed_body
       expect(body['status']).to eq('error')

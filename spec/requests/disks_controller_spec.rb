@@ -90,7 +90,7 @@ describe "Disks Controller", type: :request do
       end
 
       it "handles generic errors during install" do
-        allow(Greyhole).to receive(:install!).and_raise(RuntimeError, "unexpected")
+        allow(Greyhole).to receive(:install!).and_raise(Shell::CommandError.new("greyhole", "unexpected", 1))
         post "/disks/install_greyhole"
         expect(response).to redirect_to("/disks/storage_pool")
         expect(flash[:error]).to include("unexpected")

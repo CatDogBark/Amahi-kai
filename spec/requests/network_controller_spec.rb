@@ -316,7 +316,7 @@ describe "Network Controller", type: :request do
       end
 
       it "handles configuration errors gracefully" do
-        allow(CloudflareService).to receive(:configure!).and_raise(RuntimeError, "Invalid token format")
+        allow(CloudflareService).to receive(:configure!).and_raise(Shell::CommandError.new("cloudflared", "Invalid token format", 1))
         post "/network/remote_access/configure_tunnel", params: { tunnel_token: "bad-token" }, as: :json
         body = JSON.parse(response.body)
         expect(body["status"]).to eq("error")
