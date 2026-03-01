@@ -85,8 +85,8 @@ class ApplicationController < ActionController::Base
       u = Setting.network.where(:name=>'router_username').first
       p = Setting.network.where(:name=>'router_password').first
       RouterDriver.set_auth(unobfuscate(u.value), unobfuscate(p.value)) if p and u and p.value and u.value
-    rescue StandardError => e
-      # shhh. comment out the rescue for debugging
+    rescue NameError, ActiveRecord::RecordNotFound, ActiveRecord::StatementInvalid => e
+      Rails.logger.debug("Router driver not available: #{e.message}")
     end
     @router
   end
@@ -157,7 +157,7 @@ class ApplicationController < ActionController::Base
         cookies['locale'] = { :value => default_locale, :expires => 1.year.from_now }
         default_locale
       end
-    rescue StandardError => e
+    rescue I18n::InvalidLocale, NoMethodError, ArgumentError => e
       # if something happens (like a locale file renamed!?) go back to the default
       default_locale
     end

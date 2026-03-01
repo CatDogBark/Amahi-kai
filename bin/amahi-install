@@ -352,7 +352,14 @@ if [ "$NEED_RBENV" = false ] && [ -f /etc/profile.d/rbenv.sh ]; then
   hash -r
 fi
 
-sudo -u "$APP_USER" bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && bundle config set --local path 'vendor/bundle' && bundle config set --local without 'development test' && bundle install --jobs 4"
+if ! sudo -u "$APP_USER" bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && bundle config set --local path 'vendor/bundle' && bundle config set --local without 'development test' && bundle install --jobs 4"; then
+  echo ""
+  echo "  ❌ Bundle install failed! Check for missing system libraries."
+  echo "  Try running manually:"
+  echo "    sudo -u $APP_USER bash -lc 'cd $APP_DIR && bundle install'"
+  echo ""
+  exit 1
+fi
 
 # ---------------------------------------------------------------------------
 # 10. Sudoers allowlist (must be before db:seed — User creation runs system commands)
@@ -522,10 +529,24 @@ echo "    Sudoers validated OK"
 # 11. Database migrations
 # ---------------------------------------------------------------------------
 echo "==> Running database migrations..."
-bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && RAILS_ENV=production bin/rails db:migrate"
+if ! bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && RAILS_ENV=production bin/rails db:migrate"; then
+  echo ""
+  echo "  ❌ Database migration failed!"
+  echo "  Try running manually:"
+  echo "    sudo bash -c 'set -a; source $ENV_FILE; set +a; cd $APP_DIR && RAILS_ENV=production bin/rails db:migrate'"
+  echo ""
+  exit 1
+fi
 
 echo "==> Seeding database..."
-bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && RAILS_ENV=production bin/rails db:seed"
+if ! bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && RAILS_ENV=production bin/rails db:seed"; then
+  echo ""
+  echo "  ❌ Database seeding failed!"
+  echo "  Try running manually:"
+  echo "    sudo bash -c 'set -a; source $ENV_FILE; set +a; cd $APP_DIR && RAILS_ENV=production bin/rails db:seed'"
+  echo ""
+  exit 1
+fi
 
 # Detect host IP and patch network settings to match this machine
 HOST_IP=$(hostname -I | awk '{print $1}')
@@ -558,7 +579,14 @@ fi
 echo "==> Precompiling assets..."
 rm -rf "$APP_DIR/tmp/cache/assets"
 chown -R "$APP_USER:$APP_GROUP" "$APP_DIR"
-sudo -u "$APP_USER" bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && RAILS_ENV=production bin/rails assets:precompile"
+if ! sudo -u "$APP_USER" bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && RAILS_ENV=production bin/rails assets:precompile"; then
+  echo ""
+  echo "  ❌ Asset precompilation failed!"
+  echo "  Try running manually:"
+  echo "    sudo -u $APP_USER bash -lc 'cd $APP_DIR && RAILS_ENV=production bin/rails assets:precompile'"
+  echo ""
+  exit 1
+fi
 
 # ---------------------------------------------------------------------------
 # 12. Systemd service (with RAILS_LOG_TO_STDOUT)
