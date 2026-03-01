@@ -47,7 +47,16 @@ jobs:
         run: |
           mkdir -p tmp/cache/tmpfiles tmp/pids log
           bundle exec rails db:schema:load
-      - run: bundle exec rspec spec/requests/ --tag ~integration --format documentation
+      - name: Run request specs
+        run: bundle exec rspec spec/requests/ --tag ~integration --format documentation 2>&1 | tee tmp/rspec-requests.log
+        continue-on-error: true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rspec-requests-output
+          path: tmp/rspec-requests.log
+      - name: Check for failures
+        run: grep -q "0 failures" tmp/rspec-requests.log
 
   lib:
     name: Lib Specs
@@ -68,7 +77,16 @@ jobs:
         run: |
           mkdir -p tmp/cache/tmpfiles tmp/pids log
           bundle exec rails db:schema:load
-      - run: bundle exec rspec spec/lib/ --tag ~integration --format documentation
+      - name: Run lib specs
+        run: bundle exec rspec spec/lib/ --tag ~integration --format documentation 2>&1 | tee tmp/rspec-lib.log
+        continue-on-error: true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rspec-lib-output
+          path: tmp/rspec-lib.log
+      - name: Check for failures
+        run: grep -q "0 failures" tmp/rspec-lib.log
 
   features:
     name: Feature Specs
