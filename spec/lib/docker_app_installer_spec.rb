@@ -68,8 +68,7 @@ RSpec.describe DockerAppInstaller do
 
     it 'pulls docker image' do
       io = StringIO.new("Pulling layer 1\nPulling layer 2\n")
-      allow(IO).to receive(:popen).with(/docker pull myapp:latest/).and_yield(io)
-      allow($?).to receive(:success?).and_return(true)
+      allow(IO).to receive(:popen).with(/docker pull myapp:latest/) { |&blk| blk.call(io); system("true") }
 
       described_class.pull_image('myapp:latest', reporter: reporter)
       expect(reporter).to have_received(:call).with('Pulling image myapp:latest...')
@@ -78,8 +77,7 @@ RSpec.describe DockerAppInstaller do
 
     it 'raises on pull failure' do
       io = StringIO.new("Error\n")
-      allow(IO).to receive(:popen).and_yield(io)
-      allow($?).to receive(:success?).and_return(false)
+      allow(IO).to receive(:popen) { |&blk| blk.call(io); system("false") }
 
       expect { described_class.pull_image('bad:image') }.to raise_error(/Failed to pull/)
     end
@@ -90,8 +88,8 @@ RSpec.describe DockerAppInstaller do
     let(:entry) { { ports: { '80' => '8080' }, volumes: ['/data:/data'], environment: { 'KEY' => 'val' }, docker_args: ['--network=host'] } }
 
     before do
-      allow(described_class).to receive(:`).and_return("container_id\n")
-      allow($?).to receive(:success?).and_return(true)
+      # Stub backtick and set $? via a real command
+      allow(described_class).to receive(:`) { |_cmd| system("true"); "container_id\n" }
     end
 
     it 'builds and runs docker create command' do
@@ -101,7 +99,7 @@ RSpec.describe DockerAppInstaller do
     end
 
     it 'raises on create failure' do
-      allow($?).to receive(:success?).and_return(false)
+      allow(described_class).to receive(:`) { |_cmd| system("false"); "error\n" }
       expect {
         described_class.create_container(identifier: 'myapp', image: 'img', entry: {}, reporter: reporter)
       }.to raise_error('Failed to create container')

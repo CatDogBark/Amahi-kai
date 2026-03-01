@@ -1,4 +1,4 @@
-require 'spec_helper'
+require 'rails_helper'
 
 RSpec.describe "SettingsController more", type: :request do
   before { login_as_admin }
