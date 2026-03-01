@@ -14,6 +14,7 @@ jobs:
       RAILS_ENV: test
       BUNDLE_JOBS: 4
       BUNDLE_WITHOUT: production
+      SIMPLECOV_COMMAND_NAME: models
     steps:
       - uses: actions/checkout@v4
       - name: Install system dependencies
@@ -27,6 +28,11 @@ jobs:
           mkdir -p tmp/cache/tmpfiles tmp/pids log
           bundle exec rails db:schema:load
       - run: bundle exec rspec spec/models/ --tag ~docker --format documentation
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-models
+          path: coverage/.resultset.json
 
   requests:
     name: Request Specs
@@ -35,6 +41,7 @@ jobs:
       RAILS_ENV: test
       BUNDLE_JOBS: 4
       BUNDLE_WITHOUT: production
+      SIMPLECOV_COMMAND_NAME: requests
     steps:
       - uses: actions/checkout@v4
       - name: Install system dependencies
@@ -53,8 +60,8 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: rspec-requests-output
-          path: tmp/rspec-requests.log
+          name: coverage-requests
+          path: coverage/.resultset.json
       - name: Show failures
         if: always()
         run: |
@@ -74,6 +81,7 @@ jobs:
       RAILS_ENV: test
       BUNDLE_JOBS: 4
       BUNDLE_WITHOUT: production
+      SIMPLECOV_COMMAND_NAME: lib
     steps:
       - uses: actions/checkout@v4
       - name: Install system dependencies
@@ -92,8 +100,8 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: rspec-lib-output
-          path: tmp/rspec-lib.log
+          name: coverage-lib
+          path: coverage/.resultset.json
       - name: Show failures
         if: always()
         run: |
@@ -113,6 +121,7 @@ jobs:
       RAILS_ENV: test
       BUNDLE_JOBS: 4
       BUNDLE_WITHOUT: production
+      SIMPLECOV_COMMAND_NAME: features
     steps:
       - uses: actions/checkout@v4
       - name: Install system dependencies
@@ -126,6 +135,98 @@ jobs:
           mkdir -p tmp/cache/tmpfiles tmp/pids log
           bundle exec rails db:schema:load
       - run: bundle exec rspec spec/features/ --tag ~js --tag ~archived --format documentation
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-features
+          path: coverage/.resultset.json
+
+  coverage:
+    name: Coverage Report
+    needs: [models, requests, lib, features]
+    if: always()
+    runs-on: ubuntu-latest
+    env:
+      RAILS_ENV: test
+      BUNDLE_JOBS: 4
+      BUNDLE_WITHOUT: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev libmariadb-dev
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+      - name: Download all coverage results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-*
+          path: coverage-parts/
+      - name: Merge coverage
+        run: |
+          mkdir -p coverage
+          ruby -e '
+            require "simplecov"
+            require "json"
+
+            SimpleCov.coverage_dir "coverage"
+
+            # Collect all .resultset.json files
+            files = Dir["coverage-parts/**/.resultset.json"]
+            puts "Found #{files.length} coverage result files"
+
+            if files.empty?
+              puts "No coverage data found"
+              exit 0
+            end
+
+            # Merge all results
+            merged = {}
+            files.each do |f|
+              data = JSON.parse(File.read(f))
+              merged.merge!(data)
+              puts "  Loaded: #{f} (#{data.keys.join(", ")})"
+            end
+
+            # Write merged results
+            File.write("coverage/.resultset.json", JSON.generate(merged))
+
+            # Generate HTML report
+            SimpleCov.collate(Dir["coverage/.resultset.json"]) do
+              coverage_dir "coverage"
+              formatter SimpleCov::Formatter::HTMLFormatter
+            end
+          '
+      - name: Coverage summary
+        if: always()
+        run: |
+          echo "## 📊 Coverage Report" >> $GITHUB_STEP_SUMMARY
+          ruby -e '
+            require "json"
+            data = JSON.parse(File.read("coverage/.resultset.json"))
+            total_lines = 0
+            covered_lines = 0
+            data.each do |name, result|
+              coverage = result["coverage"] || {}
+              coverage.each do |file, lines|
+                next unless lines.is_a?(Array)
+                relevant = lines.compact
+                total_lines += relevant.length
+                covered_lines += relevant.count { |l| l > 0 }
+              end
+            end
+            pct = total_lines > 0 ? (covered_lines.to_f / total_lines * 100).round(1) : 0
+            puts "**Line Coverage: #{pct}%** (#{covered_lines}/#{total_lines} lines)"
+            puts ""
+            puts "Download the full HTML report from the artifacts below."
+          ' >> $GITHUB_STEP_SUMMARY || echo "Could not parse coverage data" >> $GITHUB_STEP_SUMMARY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 30
 
   lint:
     name: Lint & Security

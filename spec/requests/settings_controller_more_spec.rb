@@ -137,7 +137,7 @@ RSpec.describe "SettingsController more", type: :request do
     end
 
     it "refreshes server status" do
-      post "/settings/servers/#{server.id}/refresh"
+      post "/settings/servers/#{server.id}/refresh", as: :json
       expect(response).to have_http_status(:ok)
     end
 
