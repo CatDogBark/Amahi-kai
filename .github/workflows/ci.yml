@@ -55,8 +55,18 @@ jobs:
         with:
           name: rspec-requests-output
           path: tmp/rspec-requests.log
-      - name: Check for failures
-        run: grep -q "0 failures" tmp/rspec-requests.log
+      - name: Show failures
+        if: always()
+        run: |
+          echo "::group::RSpec Request Failures"
+          grep -B5 "FAILED\|Failure/Error\|expected\|got:\|NoMethodError\|NameError\|undefined method\|uninitialized constant" tmp/rspec-requests.log | head -200 || true
+          echo "::endgroup::"
+          echo "::group::RSpec Request Summary"
+          tail -20 tmp/rspec-requests.log
+          echo "::endgroup::"
+          # Create error annotations for each failure
+          grep -n "FAILED" tmp/rspec-requests.log | while read line; do echo "::error::$line"; done || true
+          grep -q "0 failures" tmp/rspec-requests.log
 
   lib:
     name: Lib Specs
@@ -85,8 +95,17 @@ jobs:
         with:
           name: rspec-lib-output
           path: tmp/rspec-lib.log
-      - name: Check for failures
-        run: grep -q "0 failures" tmp/rspec-lib.log
+      - name: Show failures
+        if: always()
+        run: |
+          echo "::group::RSpec Lib Failures"
+          grep -B5 "FAILED\|Failure/Error\|expected\|got:\|NoMethodError\|NameError\|undefined method\|uninitialized constant" tmp/rspec-lib.log | head -200 || true
+          echo "::endgroup::"
+          echo "::group::RSpec Lib Summary"
+          tail -20 tmp/rspec-lib.log
+          echo "::endgroup::"
+          grep -n "FAILED" tmp/rspec-lib.log | while read line; do echo "::error::$line"; done || true
+          grep -q "0 failures" tmp/rspec-lib.log
 
   features:
     name: Feature Specs
