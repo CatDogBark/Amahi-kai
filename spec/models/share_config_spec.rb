@@ -127,10 +127,10 @@ RSpec.describe Share, 'config generation', type: :model do
 
   describe '.header_workgroup' do
     before do
-      Setting.find_or_create_by!(name: "workgroup", kind: Setting::GENERAL) { |s| s.value = "MYGROUP" }
-      Setting.find_or_create_by!(name: "pdc", kind: Setting::SHARES) { |s| s.value = "0" }
-      Setting.find_or_create_by!(name: "debug", kind: Setting::SHARES) { |s| s.value = "0" }
-      Setting.find_or_create_by!(name: "win98", kind: Setting::SHARES) { |s| s.value = "0" }
+      Setting.find_or_create_by(Setting::GENERAL, "workgroup", "MYGROUP")
+      Setting.find_or_create_by(Setting::SHARES, "pdc", "0")
+      Setting.find_or_create_by(Setting::SHARES, "debug", "0")
+      Setting.find_or_create_by(Setting::SHARES, "win98", "0")
     end
 
     it 'includes workgroup name' do
@@ -150,8 +150,7 @@ RSpec.describe Share, 'config generation', type: :model do
     end
 
     it 'sets debug log level when debug enabled' do
-      Setting.find_or_create_by!(name: "debug", kind: Setting::SHARES) { |s| s.value = "1" }
-      Setting.where(name: "debug", kind: Setting::SHARES).update_all(value: "1")
+      Setting.set_kind(Setting::SHARES, "debug", "1")
       result = Share.header_workgroup("example.local")
       expect(result).to include("log level = 5")
     end
@@ -159,8 +158,8 @@ RSpec.describe Share, 'config generation', type: :model do
 
   describe '.header_pdc' do
     before do
-      Setting.find_or_create_by!(name: "workgroup", kind: Setting::SHARES) { |s| s.value = "MYGROUP" }
-      Setting.find_or_create_by!(name: "debug", kind: Setting::SHARES) { |s| s.value = "0" }
+      Setting.find_or_create_by(Setting::SHARES, "workgroup", "MYGROUP")
+      Setting.find_or_create_by(Setting::SHARES, "debug", "0")
     end
 
     it 'includes domain logons' do
