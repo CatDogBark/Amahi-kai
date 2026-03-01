@@ -3,8 +3,8 @@ require 'rails_helper'
 RSpec.describe Share, 'config generation', type: :model do
   before do
     create(:admin)
-    create(:setting, name: "net", value: "192.168.1")
-    create(:setting, name: "self-address", value: "100")
+    Setting.set('net', '192.168.1')
+    Setting.set('self-address', '100')
     allow(Share).to receive(:push_shares)
   end
 
@@ -127,10 +127,10 @@ RSpec.describe Share, 'config generation', type: :model do
 
   describe '.header_workgroup' do
     before do
-      Setting.find_or_create_by(Setting::GENERAL, "workgroup", "MYGROUP")
-      Setting.find_or_create_by(Setting::SHARES, "pdc", "0")
-      Setting.find_or_create_by(Setting::SHARES, "debug", "0")
-      Setting.find_or_create_by(Setting::SHARES, "win98", "0")
+      Setting.set('workgroup', 'MYGROUP')
+      Setting.set_kind(Setting::SHARES, "pdc", "0")
+      Setting.set_kind(Setting::SHARES, "debug", "0")
+      Setting.set_kind(Setting::SHARES, "win98", "0")
     end
 
     it 'includes workgroup name' do
@@ -158,8 +158,8 @@ RSpec.describe Share, 'config generation', type: :model do
 
   describe '.header_pdc' do
     before do
-      Setting.find_or_create_by(Setting::SHARES, "workgroup", "MYGROUP")
-      Setting.find_or_create_by(Setting::SHARES, "debug", "0")
+      Setting.set_kind(Setting::SHARES, "workgroup", "MYGROUP")
+      Setting.set_kind(Setting::SHARES, "debug", "0")
     end
 
     it 'includes domain logons' do
