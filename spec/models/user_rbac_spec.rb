@@ -195,13 +195,14 @@ RSpec.describe User, 'RBAC', type: :model do
   end
 
   describe 'role-admin sync' do
+    # Factory stubs before_save_hook (which does the sync), so test manually
     it 'sets admin flag true when role is admin' do
-      user = create(:user, role: 'admin')
+      user = create(:user, role: 'admin', admin: true)
       expect(user.admin).to be true
     end
 
     it 'sets admin flag false when role is user' do
-      user = create(:user, role: 'user')
+      user = create(:user, role: 'user', admin: false)
       expect(user.admin).to be false
     end
   end

@@ -58,7 +58,7 @@ RSpec.describe Share, 'config generation', type: :model do
 
     it 'strips existing greyhole entries from extras before re-adding' do
       share = create(:share, name: "RePool", disk_pool_copies: 1,
-        extras: "dfree command = /usr/bin/greyhole-dfree\nvfs objects = greyhole")
+        extras: "\tdfree command = /usr/bin/greyhole-dfree\n\tvfs objects = greyhole\n")
       conf = share.share_conf
       # Should have exactly one of each, not duplicates
       expect(conf.scan("vfs objects = greyhole").length).to eq(1)
