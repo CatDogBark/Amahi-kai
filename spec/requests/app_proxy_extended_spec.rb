@@ -3,7 +3,7 @@ require 'rails_helper'
 RSpec.describe "AppProxy extended", type: :request do
   before { login_as_admin }
 
-  let!(:app) { create(:docker_app, identifier: 'proxytest', status: 'running', host_port: 8080) }
+  let!(:docker_app) { create(:docker_app, identifier: 'proxytest', status: 'running', host_port: 8080) }
 
   describe "proxy request forwarding" do
     before do
