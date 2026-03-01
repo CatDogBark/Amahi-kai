@@ -2,9 +2,9 @@
 ENV["RAILS_ENV"] ||= 'test'
 begin
   require 'simplecov'
-  require 'simplecov_helper'
-rescue LoadError
-  # SimpleCov unavailable (e.g., GLIBC mismatch in sandbox)
+  require_relative 'simplecov_helper'
+rescue LoadError => e
+  warn "SimpleCov not loaded: #{e.message}"
 end
 require File.expand_path("../../config/environment", __FILE__)
 require 'rspec/rails'
