@@ -93,10 +93,13 @@ RSpec.describe TailscaleService do
 
   describe '.install!' do
     it 'downloads and runs install script' do
-      allow(described_class).to receive(:system).with(/curl.*tailscale/).and_return(true)
-      allow($?).to receive(:success?).and_return(true)
+      # Stub system to simulate successful curl + bash
+      allow(described_class).to receive(:system).and_return(true)
+      # After system() is stubbed, $? won't be set naturally.
+      # Fake a successful $? by running a real no-op command first.
+      system("true") # sets $? to success
+      allow(File).to receive(:exist?).and_call_original
       allow(File).to receive(:exist?).with('/tmp/tailscale-install.sh').and_return(true)
-      allow(described_class).to receive(:system).with(/sudo bash/).and_return(true)
       allow(FileUtils).to receive(:rm_f)
 
       expect(described_class.install!).to be true
@@ -104,7 +107,7 @@ RSpec.describe TailscaleService do
 
     it 'returns false if download fails' do
       allow(described_class).to receive(:system).and_return(false)
-      allow($?).to receive(:success?).and_return(false)
+      system("false") # sets $? to failure
       expect(described_class.install!).to be false
     end
   end

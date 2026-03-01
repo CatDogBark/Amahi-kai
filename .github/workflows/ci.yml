@@ -48,7 +48,7 @@ jobs:
           mkdir -p tmp/cache/tmpfiles tmp/pids log
           bundle exec rails db:schema:load
       - name: Run request specs
-        run: bundle exec rspec spec/requests/ --tag ~integration --format documentation 2>&1 | tee tmp/rspec-requests.log
+        run: bundle exec rspec spec/requests/ --tag ~integration --format documentation --format json --out tmp/rspec-requests.json 2>&1 | tee tmp/rspec-requests.log
         continue-on-error: true
       - uses: actions/upload-artifact@v4
         if: always()
@@ -65,7 +65,17 @@ jobs:
           tail -20 tmp/rspec-requests.log
           echo "::endgroup::"
           # Create error annotations for each failure
-          grep -n "FAILED" tmp/rspec-requests.log | while read line; do echo "::error::$line"; done || true
+          # Output failure messages as annotations
+          python3 -c "
+import json, sys
+with open('tmp/rspec-requests.json') as f:
+    data = json.load(f)
+for ex in data.get('examples', []):
+    if ex['status'] == 'failed':
+        msg = ex.get('exception', {}).get('message', 'unknown')
+        desc = ex['full_description']
+        print(f'::error::{desc}: {msg[:200]}')
+" || true
           grep -q "0 failures" tmp/rspec-requests.log
 
   lib:
@@ -88,7 +98,7 @@ jobs:
           mkdir -p tmp/cache/tmpfiles tmp/pids log
           bundle exec rails db:schema:load
       - name: Run lib specs
-        run: bundle exec rspec spec/lib/ --tag ~integration --format documentation 2>&1 | tee tmp/rspec-lib.log
+        run: bundle exec rspec spec/lib/ --tag ~integration --format documentation --format json --out tmp/rspec-lib.json 2>&1 | tee tmp/rspec-lib.log
         continue-on-error: true
       - uses: actions/upload-artifact@v4
         if: always()
@@ -104,7 +114,16 @@ jobs:
           echo "::group::RSpec Lib Summary"
           tail -20 tmp/rspec-lib.log
           echo "::endgroup::"
-          grep -n "FAILED" tmp/rspec-lib.log | while read line; do echo "::error::$line"; done || true
+          python3 -c "
+import json, sys
+with open('tmp/rspec-lib.json') as f:
+    data = json.load(f)
+for ex in data.get('examples', []):
+    if ex['status'] == 'failed':
+        msg = ex.get('exception', {}).get('message', 'unknown')
+        desc = ex['full_description']
+        print(f'::error::{desc}: {msg[:200]}')
+" || true
           grep -q "0 failures" tmp/rspec-lib.log
 
   features:

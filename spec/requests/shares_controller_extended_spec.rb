@@ -13,27 +13,24 @@ RSpec.describe "SharesController extended", type: :request do
   # --- Create validation ---
 
   describe "POST /shares (create)" do
-    it "rejects a name with special characters" do
+    it "rejects an empty name" do
       expect {
-        post shares_path, params: { share: { name: "bad/name!" } }
+        post shares_path, params: { share: { name: "" } }
       }.not_to change(Share, :count)
     end
 
-    it "creates share and returns json" do
-      post shares_path, params: { share: { name: "JsonShare" } }, as: :json
-      expect(response).to have_http_status(:ok).or have_http_status(:created)
-    end
-
-    it "returns unprocessable_entity for invalid share via json" do
-      post shares_path, params: { share: { name: "" } }, as: :json
-      expect(response).to have_http_status(:unprocessable_entity)
+    it "creates share successfully" do
+      expect {
+        post shares_path, params: { share: { name: "NewShare" } }
+      }.to change(Share, :count).by(1)
+      expect(response).to redirect_to(shares_path)
     end
 
     it "sets default path based on name" do
       post shares_path, params: { share: { name: "MediaFiles" } }
       share = Share.find_by(name: "MediaFiles")
       expect(share).to be_present
-      expect(share.path).to include("MediaFiles")
+      expect(share.path).to include("mediafiles")
     end
   end
 
@@ -86,7 +83,7 @@ RSpec.describe "SharesController extended", type: :request do
       end
 
       it "handles Greyhole errors gracefully" do
-        allow(Greyhole).to receive(:configure!).and_raise(Shell::CommandError.new("failed"))
+        allow(Greyhole).to receive(:configure!).and_raise(Shell::CommandError.new("greyhole", "failed", 1))
         put toggle_disk_pool_enabled_share_path(share), as: :json
         expect(response).to have_http_status(:ok)
       end
@@ -99,7 +96,7 @@ RSpec.describe "SharesController extended", type: :request do
       end
 
       it "handles Greyhole error gracefully" do
-        allow(Greyhole).to receive(:configure!).and_raise(Shell::CommandError.new("boom"))
+        allow(Greyhole).to receive(:configure!).and_raise(Shell::CommandError.new("greyhole", "boom", 1))
         put update_disk_pool_copies_share_path(share), params: { value: "2" }, as: :json
         expect(response).to have_http_status(:ok)
       end

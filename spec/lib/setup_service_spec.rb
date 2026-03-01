@@ -98,6 +98,9 @@ RSpec.describe SetupService do
   describe '.create_first_share' do
     before do
       allow(Setting).to receive(:get).with('default_pool_copies').and_return('0')
+      allow(Shell).to receive(:run).and_return(true)
+      allow(Share).to receive(:push_shares)
+      allow(ShareIndexer).to receive(:index_share)
     end
 
     it 'creates a share with the given name' do
