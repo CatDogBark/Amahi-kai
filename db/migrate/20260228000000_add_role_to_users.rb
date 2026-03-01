@@ -1,6 +1,8 @@
 class AddRoleToUsers < ActiveRecord::Migration[8.0]
   def up
-    add_column :users, :role, :string, default: 'user', null: false
+    unless column_exists?(:users, :role)
+      add_column :users, :role, :string, default: 'user', null: false
+    end
 
     # Migrate existing data: admin flag → role
     execute "UPDATE users SET role = 'admin' WHERE admin = TRUE"
