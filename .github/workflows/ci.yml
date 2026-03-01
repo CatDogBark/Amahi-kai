@@ -163,64 +163,92 @@ jobs:
         with:
           pattern: coverage-*
           path: coverage-parts/
-      - name: Merge coverage
+      - name: Merge and report coverage
         run: |
           mkdir -p coverage
           ruby -e '
-            require "simplecov"
             require "json"
 
-            SimpleCov.coverage_dir "coverage"
-
-            # Collect all .resultset.json files
             files = Dir["coverage-parts/**/.resultset.json"]
             puts "Found #{files.length} coverage result files"
+            exit 0 if files.empty?
 
-            if files.empty?
-              puts "No coverage data found"
-              exit 0
-            end
-
-            # Merge all results
-            merged = {}
+            # Merge line coverage across all jobs
+            merged_coverage = {}
             files.each do |f|
               data = JSON.parse(File.read(f))
-              merged.merge!(data)
               puts "  Loaded: #{f} (#{data.keys.join(", ")})"
-            end
-
-            # Write merged results
-            File.write("coverage/.resultset.json", JSON.generate(merged))
-
-            # Generate HTML report
-            SimpleCov.collate(Dir["coverage/.resultset.json"]) do
-              coverage_dir "coverage"
-              formatter SimpleCov::Formatter::HTMLFormatter
-            end
-          '
-      - name: Coverage summary
-        if: always()
-        run: |
-          echo "## 📊 Coverage Report" >> $GITHUB_STEP_SUMMARY
-          ruby -e '
-            require "json"
-            data = JSON.parse(File.read("coverage/.resultset.json"))
-            total_lines = 0
-            covered_lines = 0
-            data.each do |name, result|
-              coverage = result["coverage"] || {}
-              coverage.each do |file, lines|
-                next unless lines.is_a?(Array)
-                relevant = lines.compact
-                total_lines += relevant.length
-                covered_lines += relevant.count { |l| l > 0 }
+              data.each do |_cmd, result|
+                (result["coverage"] || {}).each do |file, file_data|
+                  lines = file_data.is_a?(Hash) ? file_data["lines"] : file_data
+                  next unless lines.is_a?(Array)
+                  if merged_coverage[file]
+                    lines.each_with_index do |val, i|
+                      next if val.nil?
+                      merged_coverage[file][i] = [(merged_coverage[file][i] || 0), val].max
+                    end
+                  else
+                    merged_coverage[file] = lines.dup
+                  end
+                end
               end
             end
-            pct = total_lines > 0 ? (covered_lines.to_f / total_lines * 100).round(1) : 0
-            puts "**Line Coverage: #{pct}%** (#{covered_lines}/#{total_lines} lines)"
-            puts ""
-            puts "Download the full HTML report from the artifacts below."
-          ' >> $GITHUB_STEP_SUMMARY || echo "Could not parse coverage data" >> $GITHUB_STEP_SUMMARY
+
+            # Calculate totals
+            total = 0; covered = 0; missed = 0
+            by_group = Hash.new { |h,k| h[k] = {total: 0, covered: 0} }
+
+            merged_coverage.each do |file, lines|
+              relevant = lines.each_with_index.select { |v, _| !v.nil? }
+              file_total = relevant.length
+              file_covered = relevant.count { |v, _| v > 0 }
+              total += file_total
+              covered += file_covered
+
+              group = case file
+                      when /app\/models/ then "Models"
+                      when /app\/controllers/ then "Controllers"
+                      when /app\/helpers/ then "Helpers"
+                      when /app\/services/ then "Services"
+                      when /lib\// then "Lib"
+                      else "Other"
+                      end
+              by_group[group][:total] += file_total
+              by_group[group][:covered] += file_covered
+            end
+
+            pct = total > 0 ? (covered.to_f / total * 100).round(1) : 0
+
+            # Console output
+            puts "\n#{"=" * 50}"
+            puts "COVERAGE: #{pct}% (#{covered}/#{total} lines)"
+            puts "#{"=" * 50}"
+            by_group.sort_by { |k, _| k }.each do |group, data|
+              g_pct = data[:total] > 0 ? (data[:covered].to_f / data[:total] * 100).round(1) : 0
+              puts "  #{group.ljust(15)} #{g_pct}% (#{data[:covered]}/#{data[:total]})"
+            end
+            puts
+
+            # Step summary for GitHub UI
+            summary = File.open(ENV["GITHUB_STEP_SUMMARY"], "a")
+            summary.puts "## 📊 Coverage Report"
+            summary.puts ""
+            summary.puts "**Overall: #{pct}%** (#{covered}/#{total} lines)"
+            summary.puts ""
+            summary.puts "| Group | Coverage | Lines |"
+            summary.puts "|-------|----------|-------|"
+            by_group.sort_by { |k, _| k }.each do |group, data|
+              g_pct = data[:total] > 0 ? (data[:covered].to_f / data[:total] * 100).round(1) : 0
+              summary.puts "| #{group} | #{g_pct}% | #{data[:covered]}/#{data[:total]} |"
+            end
+            summary.close
+
+            # Write merged data for artifact
+            File.write("coverage/results.json", JSON.pretty_generate({
+              total_lines: total, covered_lines: covered, percentage: pct,
+              groups: by_group, files: merged_coverage.length
+            }))
+          '
       - uses: actions/upload-artifact@v4
         if: always()
         with:
