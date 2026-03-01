@@ -64,18 +64,7 @@ jobs:
           echo "::group::RSpec Request Summary"
           tail -20 tmp/rspec-requests.log
           echo "::endgroup::"
-          # Create error annotations for each failure
-          # Output failure messages as annotations
-          python3 -c "
-import json, sys
-with open('tmp/rspec-requests.json') as f:
-    data = json.load(f)
-for ex in data.get('examples', []):
-    if ex['status'] == 'failed':
-        msg = ex.get('exception', {}).get('message', 'unknown')
-        desc = ex['full_description']
-        print(f'::error::{desc}: {msg[:200]}')
-" || true
+          ruby -rjson -e 'JSON.parse(File.read("tmp/rspec-requests.json"))["examples"].select{|e|e["status"]=="failed"}.each{|e| puts "::error::#{e["full_description"]}: #{e.dig("exception","message").to_s[0,200]}"}' || true
           grep -q "0 failures" tmp/rspec-requests.log
 
   lib:
@@ -114,16 +103,7 @@ for ex in data.get('examples', []):
           echo "::group::RSpec Lib Summary"
           tail -20 tmp/rspec-lib.log
           echo "::endgroup::"
-          python3 -c "
-import json, sys
-with open('tmp/rspec-lib.json') as f:
-    data = json.load(f)
-for ex in data.get('examples', []):
-    if ex['status'] == 'failed':
-        msg = ex.get('exception', {}).get('message', 'unknown')
-        desc = ex['full_description']
-        print(f'::error::{desc}: {msg[:200]}')
-" || true
+          ruby -rjson -e 'JSON.parse(File.read("tmp/rspec-lib.json"))["examples"].select{|e|e["status"]=="failed"}.each{|e| puts "::error::#{e["full_description"]}: #{e.dig("exception","message").to_s[0,200]}"}' || true
           grep -q "0 failures" tmp/rspec-lib.log
 
   features:
