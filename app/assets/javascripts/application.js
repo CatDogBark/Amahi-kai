@@ -14,6 +14,7 @@
 //= require controllers/file_browser_controller
 
 //= require theme
+//= require ocean
 //= require toast
 //= require lib/application
 

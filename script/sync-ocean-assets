@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Copy the ocean background to the website. amahi-kai.com is a separate Jekyll build
+# (GitHub Pages, safe mode: no symlinks), so it carries its own copy of these two files.
+# spec/lib/ocean_assets_spec.rb fails if the copies drift from the originals.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+mkdir -p site/assets
+cp app/assets/javascripts/ocean.js site/assets/ocean.js
+cp app/assets/stylesheets/ocean-bg.css site/assets/ocean.css
+echo "Synced ocean.js and ocean.css into site/assets/"

@@ -59,6 +59,7 @@
     });
 
     document.querySelectorAll('.theme-opt').forEach(function(btn) {
+      if (btn.classList.contains('ocean-toggle')) return;  // opens the ocean panel; not a theme
       var btnTheme = btn.classList.contains('theme-opt-light') ? 'light' :
                      btn.classList.contains('theme-opt-dark') ? 'dark' : 'system';
       if (btnTheme === active) {
@@ -92,31 +93,6 @@
     });
   }
 
-  // 🌊 Ocean ambient toggle
-  window.toggleOcean = function() {
-    var off = document.documentElement.classList.toggle('ocean-off');
-    localStorage.setItem('ocean-off', off ? '1' : '0');
-    updateOceanButton();
-  };
-
-  function updateOceanButton() {
-    var off = document.documentElement.classList.contains('ocean-off');
-    document.querySelectorAll('.ocean-toggle').forEach(function(btn) {
-      if (off) {
-        btn.classList.remove('active');
-      } else {
-        btn.classList.add('active');
-      }
-    });
-  }
-
-  function initOcean() {
-    if (localStorage.getItem('ocean-off') === '1') {
-      document.documentElement.classList.add('ocean-off');
-    }
-    updateOceanButton();
-  }
-
-  document.addEventListener('DOMContentLoaded', function() { initToggle(); initOcean(); });
-  document.addEventListener('turbo:load', function() { initToggle(); initOcean(); });
+  document.addEventListener('DOMContentLoaded', initToggle);
+  document.addEventListener('turbo:load', initToggle);
 })();
