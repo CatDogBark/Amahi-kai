@@ -2,7 +2,7 @@ doctype html
 
 html[dir="#{@locale_direction}" lang="#{I18n.locale}" xml:lang="#{I18n.locale}"]
   script
-    | (function(){var t=localStorage.getItem('theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('ocean-off')==='1')document.documentElement.classList.add('ocean-off');})();
+    | (function(){var t=localStorage.getItem('theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);})();
   head
     meta charset="utf-8"
     meta content="width=device-width, initial-scale=1.0" name="viewport" /
@@ -11,6 +11,7 @@ html[dir="#{@locale_direction}" lang="#{I18n.locale}" xml:lang="#{I18n.locale}"]
     title= @title || "Amahi-kai #{t('log_in')}"
     = stylesheet_link_tag "login"
     = stylesheet_link_tag "ocean-bg"
+    = javascript_include_tag "ocean"
     = csrf_meta_tags
 
   body.login data-turbo="false"

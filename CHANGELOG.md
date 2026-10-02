@@ -15,7 +15,7 @@ All notable changes to Amahi-kai are documented here.
 - **Theme System** — 3-state toggle (light/dark/system). CSS variables, localStorage persistence, smooth transitions.
 - **Toast Notifications** — Fixed-position toasts replace flash banners. No layout shift.
 - **Dashboard Rework** — Per-drive storage bars, CPU/memory stats, services sidebar, share cards with browse buttons, quick action buttons.
-- **Ocean UI** — Breathing gradient background, SVG waves, glassmorphism cards.
+- **Ocean UI** — Living underwater background (`ocean.js`, WebGL + canvas): the surface overhead in perspective, sun and moon following the clock, caustics and light shafts, weather (clear/cloudy/rain/storm with lightning), tides, bubbles in front of and behind the cards, and sea life (fish schools, manta rays, dolphins, sea turtles, night jellyfish). The scene is computed from the clock plus the visitor's settings, so it carries across page loads. A "Water" panel in the header (a floating button on amahi-kai.com) sets time of day, weather, sea life, cycle speed and quality. Half-resolution water, 30 fps cap, 12 fps when idle, automatic quality drop on slow frames, still frames under reduced motion. Glass cards by default. Fixes invisible bubbles on the login and setup pages (their colour came from a theme stylesheet those pages don't load).
 
 ### 🔧 Architecture & Code Quality
 

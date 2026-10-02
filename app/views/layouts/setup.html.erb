@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html dir="<%= @locale_direction %>" lang="<%= I18n.locale %>">
-<script>(function(){var t=localStorage.getItem('theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('ocean-off')==='1')document.documentElement.classList.add('ocean-off');})();</script>
+<script>(function(){var t=localStorage.getItem('theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);})();</script>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,6 +9,7 @@
   <link rel="alternate icon" href="/favicon.ico">
   <%= stylesheet_link_tag "login" %>
   <%= stylesheet_link_tag "ocean-bg" %>
+  <%= javascript_include_tag "ocean" %>
   <%= csrf_meta_tags %>
   <style>
     body.setup {

@@ -126,7 +126,7 @@
   --kai-btn-outline-hover-text: #2c3e50;
 
   /* Card glassmorphism dark override */
-  --kai-card-bg-opaque: rgba(255, 255, 255, 0.88);
+  --kai-card-bg-opaque: rgba(255, 255, 255, 0.6);
 }
 
 /* Dark mode via system preference (default) */
@@ -207,7 +207,7 @@
     --kai-btn-outline-border: #30363d;
     --kai-btn-outline-hover-bg: #30363d;
     --kai-btn-outline-hover-text: #c9d1d9;
-    --kai-card-bg-opaque: rgba(13, 17, 23, 0.85);
+    --kai-card-bg-opaque: rgba(13, 17, 23, 0.58);
   }
 }
 
@@ -288,7 +288,7 @@
   --kai-btn-outline-border: #30363d;
   --kai-btn-outline-hover-bg: #30363d;
   --kai-btn-outline-hover-text: #c9d1d9;
-  --kai-card-bg-opaque: rgba(13, 17, 23, 0.85);
+  --kai-card-bg-opaque: rgba(13, 17, 23, 0.58);
 }
 
 /* Forced light mode — uses :root defaults, just ensure specificity */
@@ -368,7 +368,7 @@
   --kai-btn-outline-border: #dce3eb;
   --kai-btn-outline-hover-bg: #eaeef2;
   --kai-btn-outline-hover-text: #2c3e50;
-  --kai-card-bg-opaque: rgba(255, 255, 255, 0.88);
+  --kai-card-bg-opaque: rgba(255, 255, 255, 0.6);
 }
 
 /* ── View Transition: Ocean Ripple 🌊 ── */
