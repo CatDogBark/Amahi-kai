@@ -68,6 +68,34 @@ RSpec.describe "Link-triggered actions", type: :request do
       expect(response.media_type).to eq("text/event-stream")
     end
 
+    context "over plain HTTP, where browsers send no Sec-Fetch-Site" do
+      # The test environment turns CSRF protection off (and with it the page's token),
+      # so turn it on after logging in.
+      def with_forgery_protection
+        previous = ActionController::Base.allow_forgery_protection
+        ActionController::Base.allow_forgery_protection = true
+        yield
+      ensure
+        ActionController::Base.allow_forgery_protection = previous
+      end
+
+      it "accepts a stream carrying the page's CSRF token" do
+        with_forgery_protection do
+          get settings_index_path
+          token = Nokogiri::HTML(response.body).at('meta[name="csrf-token"]')['content']
+          get "/settings/update_system_stream", params: { authenticity_token: token }
+          expect(response.media_type).to eq("text/event-stream")
+        end
+      end
+
+      it "refuses a stream with a wrong token" do
+        with_forgery_protection do
+          get "/settings/update_system_stream", params: { authenticity_token: "not-the-token" }
+          expect(response).to have_http_status(:forbidden)
+        end
+      end
+    end
+
     it "does not prepare or format drives for a cross-site request" do
       Setting.set('setup_completed', 'false')
       allow(DiskManager).to receive(:format_disk!)

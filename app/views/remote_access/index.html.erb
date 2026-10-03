@@ -255,7 +255,7 @@ function runSecurityAudit() {
   footer.style.display = 'none';
   footer.innerHTML = '<button type="button" class="btn btn-sm btn-outline-light" onclick="closeInstallTerminal(\'security-audit\')">Close & Refresh</button>';
 
-  var source = new EventSource(url);
+  var source = new EventSource(withStreamToken(url));
 
   source.onmessage = function(e) {
     var line = document.createElement('div');
@@ -317,7 +317,7 @@ function installTailscale() {
   footer.style.display = 'none';
   footer.innerHTML = '<button type="button" class="btn btn-sm btn-outline-light" onclick="closeInstallTerminal(\'' + id + '\')">Close & Refresh</button>';
 
-  var source = new EventSource(url);
+  var source = new EventSource(withStreamToken(url));
 
   source.onmessage = function(e) {
     var line = document.createElement('div');

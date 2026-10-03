@@ -53,7 +53,7 @@ function openInstallTerminal(id, url) {
   cursor.style.display = '';
   footer.style.display = 'none';
 
-  var source = new EventSource(url);
+  var source = new EventSource(withStreamToken(url));
 
   source.onmessage = function(e) {
     var line = document.createElement('div');

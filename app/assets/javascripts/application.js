@@ -13,6 +13,7 @@
 //= require controllers/pool_toggle_controller
 //= require controllers/file_browser_controller
 
+//= require stream_token
 //= require theme
 //= require ocean
 //= require toast

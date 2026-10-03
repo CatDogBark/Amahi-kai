@@ -29,11 +29,10 @@ module SseStreaming
   # The block receives an SseSender that responds to #send(data, event: nil).
   #
   # Streams do real work (installs, the system update, drive formatting) and must be
-  # GET for EventSource, so the CSRF token doesn't cover them. Browsers label every
-  # request with Sec-Fetch-Site; only a stream opened by an Amahi page is accepted, so
-  # a link on another site can't start one.
+  # GET for EventSource, so Rails' usual CSRF check doesn't cover them. Only a stream
+  # opened by an Amahi page is accepted, so a link on another site can't start one.
   def stream_sse
-    unless request.headers['Sec-Fetch-Site'] == 'same-origin'
+    unless stream_request_allowed?
       head :forbidden
       return
     end
@@ -48,6 +47,15 @@ module SseStreaming
       sender = SseSender.new(yielder)
       yield sender
     end
+  end
+
+  # The page proves the stream is its own by putting its CSRF token in the URL
+  # (withStreamToken in stream_token.js). Sec-Fetch-Site: same-origin also counts,
+  # but browsers only send that header over HTTPS, so the token is what plain-HTTP
+  # LAN access relies on.
+  def stream_request_allowed?
+    return true if request.headers['Sec-Fetch-Site'] == 'same-origin'
+    valid_authenticity_token?(session, params[:authenticity_token])
   end
 
   # Lightweight wrapper around the Enumerator yielder for cleaner SSE output.
