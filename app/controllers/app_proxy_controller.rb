@@ -73,6 +73,10 @@ class AppProxyController < ApplicationController
         next unless key.start_with?('HTTP_')
         header_name = key.sub('HTTP_', '').tr('_', '-').downcase
         next if skip_headers.include?(header_name)
+        if header_name == 'cookie'
+          value = without_amahi_session(value)
+          next if value.blank?
+        end
         outgoing[header_name] = value
       end
 
@@ -224,6 +228,15 @@ class AppProxyController < ApplicationController
     else
       location
     end
+  end
+
+  # The app gets its own cookies but never the Amahi login cookie: a compromised
+  # or buggy container could replay it to act as the logged-in admin.
+  def without_amahi_session(cookie_header)
+    session_key = Rails.application.config.session_options[:key]
+    cookie_header.split(/;\s*/)
+      .reject { |pair| pair.split('=', 2).first.to_s.strip == session_key }
+      .join('; ')
   end
 
   def rewrite_cookie_path(cookie, app)

@@ -16,6 +16,14 @@
 
 class SetTheme
 
+  # A theme is a plain directory name under public/themes; nothing that could
+  # climb out of it (the setting used to go straight into a `load` path).
+  THEME_NAME = /\A[A-Za-z0-9_-]+\z/
+
+  # init.rb files are loaded one at a time: each defines the same top-level
+  # theme_init method, which init calls straight after loading.
+  LOAD_LOCK = Mutex.new
+
   attr_accessor :name, :headers, :gruff, :author, :author_url, :disable_inheritance, :path
 
   class << self
@@ -23,15 +31,27 @@ class SetTheme
     def find
       begin
         theme_setting = Setting.where(:name => 'theme').first_or_create
-        path = theme_setting.value
-        theme_path = init_file_exists?(path) ? path : self.default
-        theme = init(theme_path)
-        self.new(theme.merge(:path => theme_path))
+        path = theme_setting.value.to_s
+        theme_path = valid_theme?(path) ? path : self.default
+        self.new(info(theme_path).merge(:path => theme_path))
       rescue StandardError => e
         Rails.logger.error("THEME: name: #{theme_path};  error: #{e}")
         # Fall back to default theme instead of crashing
         self.new({ name: 'Default', path: self.default })
       end
+    end
+
+    # Theme metadata from its init.rb, read once per theme and cached.
+    # (It used to be re-loaded on every request.)
+    def info(path)
+      LOAD_LOCK.synchronize do
+        @info ||= {}
+        @info[path] ||= init(path) || {}
+      end
+    end
+
+    def valid_theme?(path)
+      path.to_s.match?(THEME_NAME) && init_file_exists?(path)
     end
 
     def init(path)

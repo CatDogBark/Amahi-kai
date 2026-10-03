@@ -32,6 +32,9 @@ All notable changes to Amahi-kai are documented here.
 - **Actions that change the system can't be triggered by a link.** Reboot, power off, setting toggles, server controls, theme activation, language and logout are POST-only. Progress streams (system update, installs, drive preparation, security fixes) only start when the browser reports the request came from an Amahi page (`Sec-Fetch-Site: same-origin`). The setup wizard is closed once setup is complete.
 - **Power off and Reboot ask for confirmation again** and are aligned buttons with labels. They were link helpers the current JavaScript ignores, so they sent a GET and skipped the prompt.
 - **Remote Access and Security highlight the Network tab.** The tab bar fell back to the first tab with an `index` sub-tab, so those pages lit up Shares and showed its sub-tabs.
+- **Files opened straight from a share can't run code on the Amahi page.** The raw-file endpoint serves HTML, JavaScript and XML as plain text and adds `Content-Security-Policy: sandbox` (except for PDFs). Previews look the same.
+- **Themes:** only installed theme names are accepted, each theme's `init.rb` is loaded once instead of on every request, and the theme list no longer changes the server's working directory.
+- **The app proxy no longer forwards the Amahi login cookie** to Docker apps; their own cookies still pass through.
 - **CI fails on spec failures again.** The gate matched "0 failures" anywhere, including in "10 failures".
 
 ### 🔧 Architecture & Code Quality

@@ -31,6 +31,41 @@ describe "FileBrowser Controller", type: :request do
       end
     end
 
+    describe "GET /files/:share_id/raw" do
+      def raw(name, content)
+        File.write(File.join(tmpdir, name), content)
+        get "/files/#{share.name}/raw/#{name}"
+      end
+
+      it "serves HTML as plain text in a sandbox" do
+        raw("page.html", "<script>document.title='ran'</script>")
+        expect(response.media_type).to eq("text/plain")
+        expect(response.headers["Content-Security-Policy"]).to eq("sandbox")
+      end
+
+      it "serves JavaScript as plain text" do
+        raw("app.js", "alert(1)")
+        expect(response.media_type).to eq("text/plain")
+      end
+
+      it "keeps SVG as an image for previews, sandboxed" do
+        raw("pic.svg", "<svg xmlns='http://www.w3.org/2000/svg'></svg>")
+        expect(response.media_type).to eq("image/svg+xml")
+        expect(response.headers["Content-Security-Policy"]).to eq("sandbox")
+      end
+
+      it "serves images with their own type" do
+        raw("photo.png", "\x89PNG")
+        expect(response.media_type).to eq("image/png")
+      end
+
+      it "leaves PDFs unsandboxed so the browser's viewer can open them" do
+        raw("doc.pdf", "%PDF-1.4")
+        expect(response.media_type).to eq("application/pdf")
+        expect(response.headers["Content-Security-Policy"]).to be_nil
+      end
+    end
+
     describe "GET /files/:share_id/download" do
       it "downloads a file" do
         File.write(File.join(tmpdir, "test.txt"), "hello")

@@ -58,6 +58,15 @@ RSpec.describe "AppProxy extended", type: :request do
       end
     end
 
+    it "forwards the app's own cookies but not the Amahi session cookie" do
+      cookies['app_cookie'] = 'abc'
+      get '/app/proxytest/'
+      expect(@mock_http).to have_received(:request) do |outgoing|
+        expect(outgoing['Cookie']).to include('app_cookie=abc')
+        expect(outgoing['Cookie']).not_to include(Rails.application.config.session_options[:key])
+      end
+    end
+
     it "forwards response headers from upstream" do
       get '/app/proxytest/'
       expect(response.headers['x-custom']).to eq('value')
