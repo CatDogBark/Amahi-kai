@@ -107,6 +107,19 @@ RSpec.describe Shell do
     end
   end
 
+  describe 'sudo preparation' do
+    before { allow(Process).to receive(:uid).and_return(1000) }
+
+    it 'runs listed commands through sudo by full path' do
+      expect(described_class.send(:prepare, 'systemctl restart smbd'))
+        .to match(%r{\Asudo /\S*/systemctl restart smbd\z})
+    end
+
+    it 'leaves other commands alone' do
+      expect(described_class.send(:prepare, 'echo hi')).to eq('echo hi')
+    end
+  end
+
   describe 'SUDO_COMMANDS' do
     it 'includes common privileged commands' do
       expect(Shell::SUDO_COMMANDS).to include('systemctl', 'docker', 'chmod', 'chown')

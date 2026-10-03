@@ -68,7 +68,7 @@ RSpec.describe DockerAppInstaller do
 
     it 'pulls docker image' do
       io = StringIO.new("Pulling layer 1\nPulling layer 2\n")
-      allow(IO).to receive(:popen).with(/docker pull myapp:latest/) { |&blk| blk.call(io); system("true") }
+      allow(IO).to receive(:popen).with(%w[sudo docker pull myapp:latest], err: %i[child out]) { |*, &blk| blk.call(io); system("true") }
 
       described_class.pull_image('myapp:latest', reporter: reporter)
       expect(reporter).to have_received(:call).with('Pulling image myapp:latest...')
@@ -88,18 +88,22 @@ RSpec.describe DockerAppInstaller do
     let(:entry) { { ports: { '80' => '8080' }, volumes: ['/data:/data'], environment: { 'KEY' => 'val' }, docker_args: ['--network=host'] } }
 
     before do
-      # Stub backtick and set $? via a real command
-      allow(described_class).to receive(:`) { |_cmd| system("true"); "container_id\n" }
+      allow(Open3).to receive(:capture2e).and_return(["container_id\n", instance_double(Process::Status, success?: true)])
     end
 
     it 'builds and runs docker create command' do
       result = described_class.create_container(identifier: 'myapp', image: 'myapp:latest', entry: entry, reporter: reporter)
       expect(result).to eq('amahi-myapp')
       expect(Shell).to have_received(:run).with(/docker rm -f.*amahi-myapp/)
+      expect(Open3).to have_received(:capture2e).with(
+        'sudo', 'docker', 'create', '--name', 'amahi-myapp', '--restart', 'unless-stopped',
+        '-p', '8080:80', '-v', '/data:/data', '-e', 'KEY=val', '--network=host',
+        '-l', 'amahi.managed=true', '-l', 'amahi.app=myapp', 'myapp:latest'
+      )
     end
 
     it 'raises on create failure' do
-      allow(described_class).to receive(:`) { |_cmd| system("false"); "error\n" }
+      allow(Open3).to receive(:capture2e).and_return(["error\n", instance_double(Process::Status, success?: false)])
       expect {
         described_class.create_container(identifier: 'myapp', image: 'img', entry: {}, reporter: reporter)
       }.to raise_error('Failed to create container')

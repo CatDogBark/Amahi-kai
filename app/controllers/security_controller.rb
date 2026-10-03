@@ -14,8 +14,8 @@ class SecurityController < ApplicationController
 
   def audit_stream
     stream_sse do |sse|
-      sse.send("Running security audit...")
-      sse.send("")
+      sse.emit("Running security audit...")
+      sse.emit("")
 
       checks = SecurityAudit.run_all
       passed = 0
@@ -27,42 +27,42 @@ class SecurityController < ApplicationController
         sleep 0.4 unless Rails.env.production?
         sleep 0.15 if Rails.env.production?
 
-        sse.send("Checking #{check.description.downcase}...")
+        sse.emit("Checking #{check.description.downcase}...")
 
         case check.status
         when :pass
           passed += 1
-          sse.send("  ✓ #{check.description}")
+          sse.emit("  ✓ #{check.description}")
         when :warn
           warnings += 1
-          sse.send("  ⚠ #{check.description} (recommended to fix)")
+          sse.emit("  ⚠ #{check.description} (recommended to fix)")
           has_fixable = true if check.fix_command && check.name != 'admin_password'
         when :fail
           if check.severity == :blocker
             blockers += 1
-            sse.send("  ✗ #{check.description} (BLOCKER)")
+            sse.emit("  ✗ #{check.description} (BLOCKER)")
           else
             warnings += 1
-            sse.send("  ✗ #{check.description}")
+            sse.emit("  ✗ #{check.description}")
           end
           has_fixable = true if check.fix_command && check.name != 'admin_password' && check.name != 'open_ports'
         end
 
-        sse.send("")
+        sse.emit("")
       end
 
-      sse.send("─── Audit Complete ───")
-      sse.send("✓ #{passed} passed")
-      sse.send("⚠ #{warnings} warnings") if warnings > 0
-      sse.send("✗ #{blockers} blocker#{'s' if blockers != 1}") if blockers > 0
+      sse.emit("─── Audit Complete ───")
+      sse.emit("✓ #{passed} passed")
+      sse.emit("⚠ #{warnings} warnings") if warnings > 0
+      sse.emit("✗ #{blockers} blocker#{'s' if blockers != 1}") if blockers > 0
 
       if blockers > 0
-        sse.send("")
-        sse.send("✗ Blockers must be fixed before enabling remote access.")
+        sse.emit("")
+        sse.emit("✗ Blockers must be fixed before enabling remote access.")
       end
 
-      sse.send(has_fixable.to_s, event: "has_fixable")
-      sse.send("", event: "done")
+      sse.emit(has_fixable.to_s, event: "has_fixable")
+      sse.emit("", event: "done")
     end
   end
 
@@ -74,7 +74,7 @@ class SecurityController < ApplicationController
 
   def fix_stream
     stream_sse do |sse|
-      sse.send("Starting security fixes...")
+      sse.emit("Starting security fixes...")
 
       unless Rails.env.production?
         lines = [
@@ -109,9 +109,9 @@ class SecurityController < ApplicationController
         ]
         lines.each do |line|
           sleep 0.2
-          sse.send(line)
+          sse.emit(line)
         end
-        sse.send("", event: "done")
+        sse.emit("", event: "done")
         next
       end
 
@@ -119,16 +119,16 @@ class SecurityController < ApplicationController
         results = SecurityAudit.fix_all!
         results.each do |r|
           if r[:fixed]
-            sse.send("✓ Fixed: #{r[:name]}")
+            sse.emit("✓ Fixed: #{r[:name]}")
           else
-            sse.send("✗ Failed to fix: #{r[:name]}")
+            sse.emit("✗ Failed to fix: #{r[:name]}")
           end
         end
-        sse.send("✓ Security fix-all complete!")
+        sse.emit("✓ Security fix-all complete!")
       rescue Shell::CommandError, Errno::ENOENT, Errno::EACCES, IOError => e
-        sse.send("✗ Error: #{e.message}")
+        sse.emit("✗ Error: #{e.message}")
       end
-      sse.send("", event: "done")
+      sse.emit("", event: "done")
     end
   end
 end

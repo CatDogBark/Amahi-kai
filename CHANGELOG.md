@@ -49,6 +49,9 @@ All notable changes to Amahi-kai are documented here.
 - **Removed the PIN feature** (never used for login; setting one returned a 500) and its column.
 - **Small fixes:** search paging is clamped (page 0 was a 500); the domain setting is escaped where it's used in a pattern; drive-preview file names are escaped; share indexing runs as an Active Job after commit instead of a bare thread.
 - **CI fails on spec failures again.** The gate matched "0 failures" anywhere, including in "10 failures".
+- **Stopping a Docker app reports the real result.** It checked `$?`, which `Shell.capture` doesn't set, so a stop succeeded or failed depending on whatever command ran before it.
+- **Commands built from names run without a shell:** the dashboard's service status, drive models, server process lookup, Docker image pull and container create, and drive mounting pass argument lists, and the sudo path lookup is done in Ruby instead of a `which` subshell. Removed the unused script runner, archive unpacker and router-driver hook with its credential helpers.
+- **Page HTML helpers escape what they insert** (page title, icon attributes, form error labels, the storage-pool warning).
 
 ### 🔧 Architecture & Code Quality
 
@@ -61,6 +64,7 @@ All notable changes to Amahi-kai are documented here.
 - **Idempotent Migrations** — `column_exists?` guards for MariaDB (no transactional DDL).
 - **Icon System** — 34 vendored Lucide SVGs via `IconHelper`. Zero glyphicons/bootstrap-icons remaining.
 - **CI Pipeline** — 5 parallel jobs (models, requests, lib, features, lint+security). RuboCop + Brakeman. SimpleCov coverage report with group breakdown.
+- **CI lint and security checks block merges.** RuboCop and Brakeman used to run with failures ignored. Tool versions are pinned; existing RuboCop offenses are recorded in `.rubocop_todo.yml` so only new ones fail, and the Brakeman warnings we reviewed are in `config/brakeman.ignore`, each with a note. A new job runs the model, service, helper and request specs on MariaDB, production's database. `bundle-audit` reports gem advisories (blocking after the Rails 8.1 upgrade).
 
 ### 📊 Test Coverage
 

@@ -1,0 +1,112 @@
+{
+  "ignored_warnings": [
+    {
+      "warning_type": "Unmaintained Dependency",
+      "warning_code": 122,
+      "fingerprint": "21ab0fe00fdd5899ffc405cff75aadb91b805ee996a614f7e27b08a287e9062d",
+      "check_name": "EOLRails",
+      "message": "Support for Rails 8.0.4 ends on 2026-11-07",
+      "file": "Gemfile.lock",
+      "line": 209,
+      "link": "https://brakemanscanner.org/docs/warning_types/unmaintained_dependency/",
+      "code": null,
+      "render_path": null,
+      "location": null,
+      "user_input": null,
+      "confidence": "Weak",
+      "cwe_id": [
+        1104
+      ],
+      "note": "Rails 8.0 security support ends 2026-11-07. The Rails 8.1 upgrade is the next Phase 3 PR; delete this entry with it."
+    },
+    {
+      "warning_type": "File Access",
+      "warning_code": 16,
+      "fingerprint": "aa7eb67366c8441999bbc0718993768bd750e2021bf6387526f96e98dba5f0ef",
+      "check_name": "FileAccess",
+      "message": "Parameter value used in file name",
+      "file": "app/controllers/app_proxy_controller.rb",
+      "line": 45,
+      "link": "https://brakemanscanner.org/docs/warning_types/file_access/",
+      "code": "Net::HTTP.new(URI(\"#{(\"https\" or \"http\")}://127.0.0.1:#{DockerApp.find_by(:identifier => params[:app_id]).host_port}#{(((params[:path].to_s or \"/#{params[:path].to_s}\") + \"/\") or \"#{\"/app/#{DockerApp.find_by(:identifier => params[:app_id]).identifier}\"}#{((params[:path].to_s or \"/#{params[:path].to_s}\") + \"/\")}\")}#{(\"?#{request.query_string}\" or \"\")}\").host, URI(\"#{(\"https\" or \"http\")}://127.0.0.1:#{DockerApp.find_by(:identifier => params[:app_id]).host_port}#{(((params[:path].to_s or \"/#{params[:path].to_s}\") + \"/\") or \"#{\"/app/#{DockerApp.find_by(:identifier => params[:app_id]).identifier}\"}#{((params[:path].to_s or \"/#{params[:path].to_s}\") + \"/\")}\")}#{(\"?#{request.query_string}\" or \"\")}\").port)",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "AppProxyController",
+        "method": "proxy"
+      },
+      "user_input": "params[:path].to_s",
+      "confidence": "Weak",
+      "cwe_id": [
+        22
+      ],
+      "note": "Not a file: Net::HTTP to 127.0.0.1 on the app's own port, and params[:path] is only the URL path. Phase 4 retires the /app proxy."
+    },
+    {
+      "warning_type": "Mass Assignment",
+      "warning_code": 105,
+      "fingerprint": "ab67ca9943dbb138f266e312eb51ba18dbe4332f1b4f95e3bc50d09b9323d149",
+      "check_name": "PermitAttributes",
+      "message": "Potentially dangerous key allowed for mass assignment",
+      "file": "app/controllers/users_controller.rb",
+      "line": 128,
+      "link": "https://brakemanscanner.org/docs/warning_types/mass_assignment/",
+      "code": "params.require(:user).permit(:login, :name, :password, :password_confirmation, :role)",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "UsersController",
+        "method": "params_user_create"
+      },
+      "user_input": ":role",
+      "confidence": "Medium",
+      "cwe_id": [
+        915
+      ],
+      "note": "UsersController is admin-only (before_action :admin_required) and choosing a role is what the form is for; User validates role against ROLES."
+    },
+    {
+      "warning_type": "Unmaintained Dependency",
+      "warning_code": 121,
+      "fingerprint": "edf687f759ec9765bd5db185dbc615c80af77d6e7e19386fc42934e7a80307af",
+      "check_name": "EOLRuby",
+      "message": "Support for Ruby 3.2.10 ended on 2026-03-31",
+      "file": ".ruby-version",
+      "line": 1,
+      "link": "https://brakemanscanner.org/docs/warning_types/unmaintained_dependency/",
+      "code": null,
+      "render_path": null,
+      "location": null,
+      "user_input": null,
+      "confidence": "High",
+      "cwe_id": [
+        1104
+      ],
+      "note": "Production runs Ubuntu 24.04 ruby3.2, which Ubuntu keeps patching for the life of the release; .ruby-version only sets the CI Ruby. Decided in Phase 3 planning (2026-10-03)."
+    },
+    {
+      "warning_type": "SSL Verification Bypass",
+      "warning_code": 71,
+      "fingerprint": "f5478439b581d3b48a27ed580e0c86bc0d93541da7b32da3a94f8fb43bb3fc3b",
+      "check_name": "SSLVerify",
+      "message": "SSL certificate verification was bypassed",
+      "file": "app/controllers/app_proxy_controller.rb",
+      "line": 48,
+      "link": "https://brakemanscanner.org/docs/warning_types/ssl_verification_bypass/",
+      "code": "Net::HTTP.new(URI(\"#{(\"https\" or \"http\")}://127.0.0.1:#{DockerApp.find_by(:identifier => params[:app_id]).host_port}#{(((params[:path].to_s or \"/#{params[:path].to_s}\") + \"/\") or \"#{\"/app/#{DockerApp.find_by(:identifier => params[:app_id]).identifier}\"}#{((params[:path].to_s or \"/#{params[:path].to_s}\") + \"/\")}\")}#{(\"?#{request.query_string}\" or \"\")}\").host, URI(\"#{(\"https\" or \"http\")}://127.0.0.1:#{DockerApp.find_by(:identifier => params[:app_id]).host_port}#{(((params[:path].to_s or \"/#{params[:path].to_s}\") + \"/\") or \"#{\"/app/#{DockerApp.find_by(:identifier => params[:app_id]).identifier}\"}#{((params[:path].to_s or \"/#{params[:path].to_s}\") + \"/\")}\")}#{(\"?#{request.query_string}\" or \"\")}\").port).verify_mode = OpenSSL::SSL::VERIFY_NONE",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "AppProxyController",
+        "method": "proxy"
+      },
+      "user_input": null,
+      "confidence": "High",
+      "cwe_id": [
+        295
+      ],
+      "note": "The app proxy only connects to 127.0.0.1, a container on this machine with a self-signed certificate, so there is nothing to verify. Phase 4 retires the /app proxy."
+    }
+  ],
+  "brakeman_version": "8.1.0"
+}

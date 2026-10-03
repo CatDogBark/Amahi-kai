@@ -29,7 +29,7 @@ class Theme < ApplicationRecord
       begin
         theme = SetTheme.info(theme_dir)
         tl << Theme.new(:name => theme[:name], :css => theme_dir) if theme[:name]
-      rescue LoadError, NoMethodError, NameError => e
+      rescue LoadError, NameError => e # NameError includes NoMethodError
         # there were issues in the theme init file!!
         logger.error("=================== Amahi Theme Error BEGIN ===========================")
         logger.error(e)
@@ -54,7 +54,7 @@ class Theme < ApplicationRecord
           begin
             ti = theme_init
             theme = Theme.new(:name => ti[:name], :css => dir)
-          rescue LoadError, NoMethodError, NameError => e
+          rescue LoadError, NameError => e # NameError includes NoMethodError
             # there were issues in the theme init file!!
             raise "There were issues loading file '#{theme_init_file}'"
           end

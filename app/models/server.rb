@@ -103,11 +103,11 @@ class Server < ApplicationRecord
     return ret unless ret.empty?
 
     begin
-      IO.popen("pgrep #{Platform.service_name name}") do |p|
+      IO.popen(['pgrep', Platform.service_name(name)]) do |p|
         ret = p.readlines.map { |pid| pid.gsub(/\n/, '') }
       end
       return ret unless ret.empty?
-      IO.popen("pgrep #{name}") do |p|
+      IO.popen(['pgrep', name]) do |p|
         ret = p.readlines.map { |pid| pid.gsub(/\n/, '') }
       end
     rescue Errno::ENOENT, IOError => e

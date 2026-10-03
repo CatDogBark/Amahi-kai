@@ -15,7 +15,7 @@ module SharesHelper
     if title and wiki_path
       danger_image = theme_image_tag('danger.png', :class => 'theme-image')
       link_to_wiki = link_to(theme_image_tag('more.png', :title => title, :class => 'theme-image'), "https://amahi-kai.com/wiki/storage-pooling")
-      "<span style='float:right;'>#{danger_image} &raquo; #{link_to_wiki}</span>".html_safe
+      content_tag(:span, safe_join([danger_image, " » ", link_to_wiki]), style: 'float:right;')
     else
       ''
     end

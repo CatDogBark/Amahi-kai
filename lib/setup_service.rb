@@ -42,13 +42,13 @@ module SetupService
       supported_fs = %w[ext2 ext3 ext4 xfs btrfs]
 
       if selected_drives.empty?
-        sse.send("⚠ No drives selected")
+        sse.emit("⚠ No drives selected")
         sse.done
         return
       end
 
-      sse.send("Preparing #{selected_drives.size} drive#{'s' if selected_drives.size > 1}...")
-      sse.send("")
+      sse.emit("Preparing #{selected_drives.size} drive#{'s' if selected_drives.size > 1}...")
+      sse.emit("")
 
       # Remove existing pool partitions
       DiskPoolPartition.destroy_all
@@ -59,7 +59,7 @@ module SetupService
           devices = DiskManager.devices
           part = devices.flat_map { |d| d[:partitions] }.find { |p| p[:path] == device_path }
           unless part
-            sse.send("⚠ Device #{device_path} not found, skipping")
+            sse.emit("⚠ Device #{device_path} not found, skipping")
             next
           end
 
@@ -67,17 +67,17 @@ module SetupService
           will_format = part[:status] == :unformatted || format_drives.include?(device_path)
 
           if will_format
-            sse.send("Formatting #{device_path} as ext4...")
+            sse.emit("Formatting #{device_path} as ext4...")
             DiskManager.format_disk!(device_path)
-            sse.send("  ✓ Format complete")
+            sse.emit("  ✓ Format complete")
           end
 
           if mount_point.blank?
-            sse.send("Mounting #{device_path}...")
+            sse.emit("Mounting #{device_path}...")
             mount_point = DiskManager.mount!(device_path)
-            sse.send("  ✓ Mounted at #{mount_point}")
+            sse.emit("  ✓ Mounted at #{mount_point}")
           else
-            sse.send("#{device_path} already mounted at #{mount_point}")
+            sse.emit("#{device_path} already mounted at #{mount_point}")
           end
 
           next unless mount_point.present?
@@ -87,14 +87,14 @@ module SetupService
 
           if can_pool
             DiskPoolPartition.create!(path: mount_point, minimum_free: 10)
-            sse.send("  ✓ Added to storage pool")
+            sse.emit("  ✓ Added to storage pool")
           else
             create_standalone_share(mount_point, part[:fstype], sse)
           end
 
-          sse.send("")
+          sse.emit("")
         rescue StandardError => e
-          sse.send("  ✗ Error: #{e.message}")
+          sse.emit("  ✗ Error: #{e.message}")
           Rails.logger.error("SetupService#stream_prepare_drives: #{e.message} for #{device_path}")
           success = false
         end
@@ -102,9 +102,9 @@ module SetupService
 
       pool_count = DiskPoolPartition.count
       if pool_count > 0
-        sse.send("✓ #{pool_count} drive#{'s' if pool_count > 1} ready for storage pooling!")
+        sse.emit("✓ #{pool_count} drive#{'s' if pool_count > 1} ready for storage pooling!")
       else
-        sse.send("✓ Drives prepared (no poolable drives — standalone shares created)")
+        sse.emit("✓ Drives prepared (no poolable drives — standalone shares created)")
       end
       sse.done(success ? "success" : "error")
     end
@@ -168,7 +168,7 @@ module SetupService
         share.instance_variable_set(:@file_system, null_fs)
         share.save!
       end
-      sse.send("  ✓ Created standalone share '#{share_name}' (#{fstype} — not pooled)")
+      sse.emit("  ✓ Created standalone share '#{share_name}' (#{fstype} — not pooled)")
     end
 
     def stream_greyhole_install_dev(default_copies, sse)
@@ -195,7 +195,7 @@ module SetupService
       ]
       lines.each do |line|
         sleep 0.3
-        sse.send(line)
+        sse.emit(line)
       end
       sse.done
     end
@@ -203,27 +203,27 @@ module SetupService
     def stream_greyhole_install_production(default_copies, sse)
       require 'greyhole'
 
-      Greyhole.install! { |msg| sse.send(msg) }
+      Greyhole.install! { |msg| sse.emit(msg) }
 
-      sse.send("")
-      sse.send("Generating configuration...")
+      sse.emit("")
+      sse.emit("Generating configuration...")
       Greyhole.configure!
-      sse.send("  #{DiskPoolPartition.count} pool drives configured")
-      sse.send("  Default copies: #{default_copies}")
-      sse.send("✓ Configuration written")
+      sse.emit("  #{DiskPoolPartition.count} pool drives configured")
+      sse.emit("  Default copies: #{default_copies}")
+      sse.emit("✓ Configuration written")
 
-      sse.send("")
-      sse.send("Starting Greyhole service...")
+      sse.emit("")
+      sse.emit("Starting Greyhole service...")
       Greyhole.start!
       if Greyhole.running?
-        sse.send("✓ Greyhole is running!")
+        sse.emit("✓ Greyhole is running!")
       else
-        sse.send("⚠ Service started but may take a moment to initialize")
+        sse.emit("⚠ Service started but may take a moment to initialize")
       end
 
       sse.done
     rescue StandardError => e
-      sse.send("✗ Error: #{e.message}")
+      sse.emit("✗ Error: #{e.message}")
       Rails.logger.error("SetupService#stream_greyhole_install: #{e.message}")
       sse.done("error")
     end

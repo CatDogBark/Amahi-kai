@@ -77,23 +77,6 @@ class ApplicationController < ActionController::Base
     Helper.instance
   end
 
-  def setup_router
-    @router = nil
-    r = Setting.get_kind('network', 'router_model')
-    return @router unless r
-    begin
-      rd = RouterDriver.current_router = (r ? r.value : "")
-      # return the class proper if valid
-      @router = Kernel.const_get(rd) unless rd.blank?
-      u = Setting.network.where(:name=>'router_username').first
-      p = Setting.network.where(:name=>'router_password').first
-      RouterDriver.set_auth(unobfuscate(u.value), unobfuscate(p.value)) if p and u and p.value and u.value
-    rescue NameError, ActiveRecord::RecordNotFound, ActiveRecord::StatementInvalid => e
-      Rails.logger.debug("Router driver not available: #{e.message}")
-    end
-    @router
-  end
-
   def locales_implemented
     Yetting.locales_implemented
   end
@@ -160,7 +143,7 @@ class ApplicationController < ActionController::Base
         cookies['locale'] = { :value => default_locale, :expires => 1.year.from_now }
         default_locale
       end
-    rescue I18n::InvalidLocale, NoMethodError, ArgumentError => e
+    rescue NoMethodError, ArgumentError => e # ArgumentError includes I18n::InvalidLocale
       # if something happens (like a locale file renamed!?) go back to the default
       default_locale
     end
@@ -169,33 +152,6 @@ class ApplicationController < ActionController::Base
   def set_direction
     # right to left language support
     @locale_direction = Yetting.rtl_locales.include?(I18n.locale) ? 'rtl' : 'ltr'
-  end
-
-  # Credential encryption using Rails' MessageEncryptor.
-  # Falls back to legacy ROT13 decoding for pre-existing values.
-  CREDENTIAL_ENCRYPT_PREFIX = "enc:".freeze
-
-  def obfuscate(s)
-    return s if s.blank?
-    CREDENTIAL_ENCRYPT_PREFIX + credential_encryptor.encrypt_and_sign(s)
-  end
-
-  def unobfuscate(s)
-    return s if s.blank?
-    if s.start_with?(CREDENTIAL_ENCRYPT_PREFIX)
-      credential_encryptor.decrypt_and_verify(s.delete_prefix(CREDENTIAL_ENCRYPT_PREFIX))
-    else
-      # Legacy ROT13 fallback for pre-existing values
-      s.tr("N-Zn-zA-Ma-m", "A-Ma-mN-Zn-z")
-    end
-  rescue ActiveSupport::MessageEncryptor::InvalidMessage
-    # If decryption fails, return empty string rather than crash
-    ""
-  end
-
-  def credential_encryptor
-    key = Rails.application.secret_key_base[0..31]
-    ActiveSupport::MessageEncryptor.new(key)
   end
 
   def set_user_session_controller

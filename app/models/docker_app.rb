@@ -131,16 +131,19 @@ class DockerApp < ApplicationRecord
   # Stop the container
   def stop!
     cname = Shellwords.escape(effective_container_name)
-    output, _stderr, _status = Shell.capture("docker stop -t 30 #{cname}")
-    if $?.success?
+    output, stderr, status = Shell.capture("docker stop -t 30 #{cname}")
+    # Use the status Shell.capture returns: it runs through Open3, which leaves $?
+    # holding whatever command ran before, so stop used to succeed or fail at random.
+    if status.success?
       update!(status: 'stopped')
     else
-      # If container doesn't exist, force cleanup the DB record
-      if output.include?('No such container') || output.include?('not found')
+      # If container doesn't exist, force cleanup the DB record (docker says so on stderr)
+      message = "#{output}\n#{stderr}"
+      if message.include?('No such container') || message.include?('not found')
         update!(status: 'stopped')
       else
-        update!(status: 'error', error_message: "Stop failed: #{output.strip}")
-        raise "Failed to stop container #{effective_container_name}: #{output.strip}"
+        update!(status: 'error', error_message: "Stop failed: #{message.strip}")
+        raise "Failed to stop container #{effective_container_name}: #{message.strip}"
       end
     end
   end

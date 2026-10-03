@@ -45,7 +45,7 @@ class RemoteAccessController < ApplicationController
 
   def install_cloudflared_stream
     stream_sse do |sse|
-      sse.send("Starting cloudflared installation...")
+      sse.emit("Starting cloudflared installation...")
 
       unless Rails.env.production?
         lines = [
@@ -66,19 +66,19 @@ class RemoteAccessController < ApplicationController
         ]
         lines.each do |line|
           sleep 0.3
-          sse.send(line)
+          sse.emit(line)
         end
-        sse.send("", event: "done")
+        sse.emit("", event: "done")
         next
       end
 
       begin
         CloudflareService.install!
-        sse.send("✓ cloudflared installed successfully!")
+        sse.emit("✓ cloudflared installed successfully!")
       rescue CloudflareService::CloudflareError, Shell::CommandError => e
-        sse.send("✗ Installation failed: #{e.message}")
+        sse.emit("✗ Installation failed: #{e.message}")
       end
-      sse.send("", event: "done")
+      sse.emit("", event: "done")
     end
   end
 
@@ -98,7 +98,7 @@ class RemoteAccessController < ApplicationController
 
     stream_sse do |sse|
       if token.blank?
-        sse.send("✗ No tunnel token provided")
+        sse.emit("✗ No tunnel token provided")
         sse.done("error")
         next
       end
@@ -123,7 +123,7 @@ class RemoteAccessController < ApplicationController
         ]
         lines.each do |line|
           sleep 0.3
-          sse.send(line)
+          sse.emit(line)
         end
         sse.done
         next
@@ -131,29 +131,29 @@ class RemoteAccessController < ApplicationController
 
       begin
         unless CloudflareService.installed?
-          sse.send("Installing cloudflared...")
+          sse.emit("Installing cloudflared...")
           CloudflareService.install!
-          sse.send("✓ cloudflared installed")
+          sse.emit("✓ cloudflared installed")
         else
-          sse.send("✓ cloudflared already installed")
+          sse.emit("✓ cloudflared already installed")
         end
 
-        sse.send("Configuring tunnel service...")
+        sse.emit("Configuring tunnel service...")
         CloudflareService.configure!(token)
-        sse.send("✓ Tunnel service configured")
+        sse.emit("✓ Tunnel service configured")
 
-        sse.send("Starting tunnel...")
+        sse.emit("Starting tunnel...")
         CloudflareService.start!
         sleep 2
         if CloudflareService.running?
-          sse.send("✓ Cloudflare Tunnel is connected!")
+          sse.emit("✓ Cloudflare Tunnel is connected!")
         else
-          sse.send("⚠ Service started but may take a moment to connect")
+          sse.emit("⚠ Service started but may take a moment to connect")
         end
 
         sse.done
       rescue CloudflareService::CloudflareError, Shell::CommandError, Errno::ENOENT => e
-        sse.send("✗ Error: #{e.message}")
+        sse.emit("✗ Error: #{e.message}")
         sse.done("error")
       end
     end
@@ -163,7 +163,7 @@ class RemoteAccessController < ApplicationController
 
   def install_tailscale_stream
     stream_sse do |sse|
-      sse.send("Installing Tailscale...")
+      sse.emit("Installing Tailscale...")
 
       unless Rails.env.production?
         lines = [
@@ -187,39 +187,39 @@ class RemoteAccessController < ApplicationController
         ]
         lines.each do |line|
           sleep 0.3
-          sse.send(line)
+          sse.emit(line)
         end
-        sse.send("https://login.tailscale.com/a/abc123example", event: "auth_url")
+        sse.emit("https://login.tailscale.com/a/abc123example", event: "auth_url")
         sse.done
         next
       end
 
       begin
         # Install
-        sse.send("Downloading Tailscale install script...")
+        sse.emit("Downloading Tailscale install script...")
         script_path = '/tmp/tailscale-install.sh'
         system("curl -fsSL https://tailscale.com/install.sh -o #{script_path} 2>&1")
         unless $?.success? && File.exist?(script_path)
-          sse.send("✗ Failed to download install script")
+          sse.emit("✗ Failed to download install script")
           sse.done("error")
           next
         end
 
-        sse.send("Installing Tailscale...")
+        sse.emit("Installing Tailscale...")
         IO.popen("sudo bash #{script_path} 2>&1") do |io|
-          io.each_line { |line| sse.send("  #{line.chomp}") }
+          io.each_line { |line| sse.emit("  #{line.chomp}") }
         end
         FileUtils.rm_f(script_path)
         unless $?.success?
-          sse.send("✗ Installation failed")
+          sse.emit("✗ Installation failed")
           sse.done("error")
           next
         end
-        sse.send("✓ Tailscale installed")
+        sse.emit("✓ Tailscale installed")
 
         # Start and get auth URL
-        sse.send("")
-        sse.send("Starting Tailscale...")
+        sse.emit("")
+        sse.emit("Starting Tailscale...")
         Shell.run("systemctl enable tailscaled 2>/dev/null")
         Shell.run("systemctl start tailscaled 2>/dev/null")
 
@@ -227,25 +227,25 @@ class RemoteAccessController < ApplicationController
         auth_url = nil
         IO.popen("sudo timeout 10 tailscale up 2>&1") do |io|
           io.each_line do |line|
-            sse.send("  #{line.chomp}")
+            sse.emit("  #{line.chomp}")
             url = line[/https:\/\/login\.tailscale\.com\/[^\s]+/]
             auth_url = url if url
           end
         end
 
         if auth_url
-          sse.send("")
-          sse.send("✓ Open the link above to connect this device to your Tailnet.")
-          sse.send(auth_url, event: "auth_url")
+          sse.emit("")
+          sse.emit("✓ Open the link above to connect this device to your Tailnet.")
+          sse.emit(auth_url, event: "auth_url")
         elsif TailscaleService.running?
-          sse.send("✓ Tailscale is already authenticated and running!")
+          sse.emit("✓ Tailscale is already authenticated and running!")
         else
-          sse.send("⚠ Tailscale started but may need authentication. Check `tailscale status`.")
+          sse.emit("⚠ Tailscale started but may need authentication. Check `tailscale status`.")
         end
 
         sse.done
       rescue Shell::CommandError, Errno::ENOENT, IOError => e
-        sse.send("✗ Error: #{e.message}")
+        sse.emit("✗ Error: #{e.message}")
         sse.done("error")
       end
     end

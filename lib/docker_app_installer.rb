@@ -4,6 +4,7 @@
 require 'shell'
 require 'shellwords'
 require 'fileutils'
+require 'open3'
 
 module DockerAppInstaller
   STAGING_DIR = '/tmp/amahi-staging'
@@ -42,7 +43,8 @@ module DockerAppInstaller
     # Pull a Docker image, streaming output via reporter.
     def pull_image(image, reporter: nil)
       reporter&.call("Pulling image #{image}...")
-      IO.popen("sudo docker pull #{image} 2>&1") do |io|
+      # Argument list, not a string: no shell, so the image name can't add commands.
+      IO.popen(["sudo", "docker", "pull", image], err: %i[child out]) do |io|
         io.each_line { |line| reporter&.call("  #{line.chomp}") }
       end
       # ContainerError is what the install stream rescues; a RuntimeError left the
@@ -92,10 +94,9 @@ module DockerAppInstaller
       cmd_parts << image
 
       reporter&.call("Creating container #{container_name}...")
-      create_cmd = cmd_parts.map { |p| Shellwords.escape(p) }.join(' ')
-      result = `#{create_cmd} 2>&1`
+      result, status = Open3.capture2e(*cmd_parts)
       reporter&.call("  #{result.strip}") if result.present?
-      raise ContainerService::ContainerError, "Failed to create container" unless $?.success?
+      raise ContainerService::ContainerError, "Failed to create container" unless status.success?
 
       container_name
     end

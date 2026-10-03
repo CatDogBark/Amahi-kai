@@ -39,7 +39,7 @@ module ApplicationHelper
   end
 
   def full_page_title
-    page_title ? "Amahi-kai &rsaquo; #{page_title}".html_safe : "Amahi-kai Home Server"
+    page_title ? "Amahi-kai › #{page_title}" : "Amahi-kai Home Server"
   end
 
   def spinner(css_class = '')

@@ -133,7 +133,7 @@ class SettingsController < ApplicationController
 
   def update_system_stream
     stream_sse do |sse|
-      sse.send("Starting system update...")
+      sse.emit("Starting system update...")
 
       unless Rails.env.production?
         ["Pulling latest code...", "  Already up to date.",
@@ -143,7 +143,7 @@ class SettingsController < ApplicationController
          "Fixing file ownership...", "Restarting Amahi-kai...",
          "✓ Amahi-kai updated and running!"].each do |line|
           sleep(0.3)
-          sse.send(line)
+          sse.emit(line)
         end
         sse.done
       else
