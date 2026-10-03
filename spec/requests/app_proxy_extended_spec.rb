@@ -73,7 +73,9 @@ RSpec.describe "AppProxy extended", type: :request do
         .and_return(['session=abc; Path=/; HttpOnly', 'theme=dark; Path=/'])
       get '/app/proxytest/'
       cookies = Array(response.headers['set-cookie']).flat_map { |c| c.split("\n") }
-      expect(cookies).to contain_exactly('session=abc; Path=/app/proxytest/; HttpOnly', 'theme=dark; Path=/app/proxytest/')
+      # Amahi refreshes its own session cookie on every response; look at the app's.
+      app_cookies = cookies.reject { |c| c.start_with?("#{Rails.application.config.session_options[:key]}=") }
+      expect(app_cookies).to contain_exactly('session=abc; Path=/app/proxytest/; HttpOnly', 'theme=dark; Path=/app/proxytest/')
     end
 
     it "forwards response headers from upstream" do
