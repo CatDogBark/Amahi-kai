@@ -26,6 +26,7 @@ All notable changes to Amahi-kai are documented here.
 - **Settings → Servers buttons work again.** The status template used `self.formats = ['html']`, which current Rails rejects, so refresh, start, stop and restart returned 500.
 - **Share pool-copies buttons save the chosen number.** The controller read the wrong parameter, saved 0 copies, then failed rendering a stale partial.
 - **Deleting a user removes their Linux account even if they had no Samba entry**, and only removes accounts the app created, so deleting a web user can't remove a pre-existing login such as the install user.
+- **Glass panels on every page.** Tables, settings panels and `.bg-white` panels use the dashboard cards' translucent background; nested panels stay clear so they don't stack into an opaque block. The dashboard banner says "Amahi-kai" instead of the lowercase hostname, and shows the hostname only when the server has its own name.
 - **CI fails on spec failures again.** The gate matched "0 failures" anywhere, including in "10 failures".
 
 ### 🔧 Architecture & Code Quality
