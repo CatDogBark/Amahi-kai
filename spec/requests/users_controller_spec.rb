@@ -26,6 +26,14 @@ describe "Users Controller", type: :request do
         get '/users'
         expect(response).to have_http_status(:ok)
       end
+
+      it "keeps the password message outside the part that closes on success" do
+        get '/users'
+        page = Nokogiri::HTML(response.body)
+        message = page.at('form.update-password [data-user-target="passwordMessage"]')
+        expect(message).to be_present
+        expect(message.ancestors('.password-edit')).to be_empty
+      end
     end
 
     describe "POST /users" do
