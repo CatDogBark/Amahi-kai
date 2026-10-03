@@ -158,4 +158,26 @@ describe User do
       expect(user.needs_auth?).to be false
     end
   end
+
+  describe "system account commands" do
+    let(:user) { User.new(login: "newperson", name: "New Person", password: "longenough1") }
+
+    before do
+      allow(User).to receive(:system_user_exists?).and_return(false)
+      allow(Shell).to receive(:run).and_return(true)
+      allow(Shell).to receive(:run_with_input).and_return(true)
+    end
+
+    it "creates the Linux account with options useradd accepts" do
+      user.send(:before_create_hook)
+      expect(Shell).to have_received(:run).with("useradd -m -g users -c New\\ Person newperson")
+    end
+
+    it "sends the Samba password on stdin, not in the command" do
+      user.send(:sync_samba_password)
+      expect(Shell).to have_received(:run_with_input)
+        .with("pdbedit -d0 -t -a -u newperson", "longenough1\nlongenough1\n")
+      expect(Shell).not_to have_received(:run).with(/longenough1/)
+    end
+  end
 end

@@ -122,8 +122,6 @@ Rails.application.routes.draw do
 
   match 'login' => 'user_sessions#new', :as => :login, via: [:get]
   match 'logout' => 'user_sessions#destroy', :as => :logout, via: [:get]
-  match 'start' => 'user_sessions#start', :as => :start, via: [:get]
-  match 'user_sessions/initialize_system' => 'user_sessions#initialize_system', :as => :initialize_system, via: [:get,:post]
 
   get '/tab/debug'=>'debug#index'
   post '/tab/debug'=>'debug#submit'
@@ -157,7 +155,7 @@ Rails.application.routes.draw do
     end
   end
 
-  resources :user_sessions
+  resources :user_sessions, only: %i[new create destroy]
 
   match 'search/files' => 'search#files', :as => :search_files, via: [:get,:post]
   match 'search/images' => 'search#images', :as => :search_images, via: [:get,:post]

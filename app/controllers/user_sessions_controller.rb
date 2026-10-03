@@ -15,28 +15,14 @@
 # team at http://www.amahi.org/ under "Contact Us."
 
 class UserSessionsController < ApplicationController
-  before_action :login_required, :except => ['new', 'create', 'start', 'initialize_system']
+  before_action :login_required, :except => ['new', 'create']
   layout 'login'
 
+  # The first admin comes from db/seeds.rb and the setup wizard (SetupController).
+  # The legacy unauthenticated first-run flow (/start, initialize_system) was removed:
+  # it never checked whether the system was already initialized.
   def new
-    if initialized?
-      @user_session = UserSession.new
-    else
-      # if the system is not initialized, start by doing that
-      redirect_to start_path
-    end
-  end
-
-  def start
-    if initialized?
-      # if the system is initialized already, go to login
-      redirect_to login_path
-    else
-      # initial system initialization
-      @user = User.new
-      flash[:info] = t("amahi_initialization")
-      @title = t("amahi_initialization")
-    end
+    @user_session = UserSession.new
   end
 
   def create
@@ -59,101 +45,6 @@ class UserSessionsController < ApplicationController
     @user_session&.destroy
     flash[:info] = t('you_have_been_logged_out')
     redirect_to root_path
-  end
-
-  # initialize the system all in one shot
-  def initialize_system
-    username = params[:username]
-    pwd = params[:password]
-    conf = params[:password_confirmation]
-    unless valid_admin_password?(pwd, conf)
-      flash[:danger] = t 'not_a_valid_user_or_password'
-      @user = User.new
-      sleep 1
-      render :action => 'start'
-      return
-    end
-
-    # here we have a possible user: new in the system (truly new or the user may have
-    # mistyped a username?), or an old user
-    (name, uid, systemusername) = User.system_find_name_by_username(username)
-    # Linux convention: regular users have uid >= 1000
-    unless name and uid and uid >= 1000
-      # not a system user. should we create one?
-      flash[:danger] = t 'not_a_valid_user_or_password'
-      @user = User.new
-      render :action => 'start'
-      return
-    end
-    # the user exists in the system .. does it exist in the database?
-    u = User.where(:login=>systemusername).first
-    if u
-      @user = u
-    else
-      @user = User.new(:login => systemusername, :name => name, :admin => true)
-      @user.password = pwd
-      @user.save(:validate => false)
-      @user.add_to_users_group
-      @user.add_or_passwd_change_samba_user
-    end
-    # ok we have a user, it's in the system ... start a session for it
-    @user_session = UserSession.new(:login => username, :password => pwd)
-    if @user_session.save
-      # create the initial server structures
-      initialize_default_settings
-      redirect_to root_url
-    else
-      flash[:danger] = t 'not_a_valid_user_or_password'
-      render :action => 'start'
-    end
-  end
-
-
-private
-
-  # initialize various one-time default settings
-  def initialize_default_settings
-    return if initialized?
-    # general settings
-    Setting.set('advanced', '0')
-    Server.create_default_servers if Server.count < 4
-    Setting.set('guest-dashboard', '0')
-    Setting.set('theme', 'amahi-kai')
-    # network settings
-    network = Setting::NETWORK
-    Setting.find_or_create_by(network, 'dns', 'opennic')
-    Setting.find_or_create_by(network, 'dns_ip_1', '173.230.156.28')
-    Setting.find_or_create_by(network, 'dns_ip_2', '23.90.4.6')
-    Setting.find_or_create_by(network, 'dnsmasq_dhcp', '1')
-    Setting.find_or_create_by(network, 'dnsmasq_dns', '1')
-    Setting.find_or_create_by(network, 'lease_time', '14400')
-    Share.create_default_shares if Rails.env == "production"
-    # set it to initialized and go!
-    Setting.set('initialized', '1')
-  end
-
-  def allow_root_access?
-    User.all.each do |u|
-      return false if u.password_digest.present?
-    end
-    true
-  end
-
-  # NOTE: PAM auth only works for the calling process user (e.g. www-data).
-  # Full PAM auth would require a privileged helper or switching to DB-only auth.
-  def valid_system_credentials?(user, password)
-    User.valid_pam_auth?(user, password)
-  end
-
-  # Admin password: minimum 8 chars, must match confirmation
-  def valid_admin_password?(pwd, conf)
-    return false if pwd.blank? || conf.blank?
-    return false unless pwd == conf
-    pwd.length >= 8
-  end
-
-  def initialized?
-    Setting.get('initialized') && Setting.get('initialized') == '1'
   end
 
 end

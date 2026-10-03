@@ -60,6 +60,24 @@ RSpec.describe Shell do
     end
   end
 
+  describe '.run_with_input' do
+    it 'feeds the input on stdin and returns true on success' do
+      expect(described_class.run_with_input("grep -qx hello", "hello\n")).to eq(true)
+    end
+
+    it 'returns false on failure' do
+      expect(described_class.run_with_input("grep -qx hello", "goodbye\n")).to eq(false)
+    end
+
+    it 'never logs the input' do
+      logged = []
+      allow(Rails.logger).to receive(:info) { |msg| logged << msg }
+      allow(Rails.logger).to receive(:warn) { |msg| logged << msg }
+      described_class.run_with_input("grep -qx nomatch", "s3cret-value\n")
+      expect(logged.join("\n")).not_to include("s3cret-value")
+    end
+  end
+
   describe '.dummy?' do
     it 'can be explicitly set' do
       described_class.dummy = true
