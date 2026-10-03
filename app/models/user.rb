@@ -186,17 +186,21 @@ class User < ApplicationRecord
     Shell.run_with_input("pdbedit -d0 -t -a -u #{esc_login}", "#{password}\n#{password}\n")
   end
 
+  # Create the Linux user. useradd leaves the password locked, so there is no
+  # SSH password login; the account exists for Samba UID mapping and a home directory.
+  # (--disabled-password is an adduser option; useradd rejects it.)
+  def create_system_account
+    esc_login = Shellwords.escape(self.login)
+    esc_name = Shellwords.escape(self.name)
+    Shell.run("useradd -m -g users -c #{esc_name} #{esc_login}")
+  end
+
   def before_create_hook
     self.login = self.login.downcase
     # Set role from admin flag if role not explicitly set (backwards compat)
     self.role ||= 'user'
     return if User.system_user_exists? self.login
-    esc_login = Shellwords.escape(self.login)
-    esc_name = Shellwords.escape(self.name)
-    # Create the Linux user. useradd leaves the password locked, so there is no
-    # SSH password login; the account exists for Samba UID mapping and a home directory.
-    # (--disabled-password is an adduser option; useradd rejects it.)
-    Shell.run("useradd -m -g users -c #{esc_name} #{esc_login}")
+    create_system_account
     sync_samba_password
   end
 
@@ -215,6 +219,10 @@ class User < ApplicationRecord
       make_admin
       Share.push_shares
     end
+
+    # Users created while account creation was broken have no Linux account.
+    # Setting their password creates it, so the Samba sync below can add them.
+    create_system_account if persisted? && password.present? && !User.system_user_exists?(login)
 
     return unless User.system_user_exists? self.login
     esc_login = Shellwords.escape(self.login)

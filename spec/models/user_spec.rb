@@ -179,5 +179,25 @@ describe User do
         .with("pdbedit -d0 -t -a -u newperson", "longenough1\nlongenough1\n")
       expect(Shell).not_to have_received(:run).with(/longenough1/)
     end
+
+    it "creates a missing Linux account when an existing user's password is set" do
+      existing = User.find(create(:user, login: "olduser", name: "Old User").id)
+      allow(User).to receive(:system_user_exists?).and_return(false, true)
+      existing.password = existing.password_confirmation = "newpassword1"
+      existing.save!
+      expect(Shell).to have_received(:run).with("useradd -m -g users -c Old\\ User olduser")
+      expect(Shell).to have_received(:run_with_input)
+        .with("pdbedit -d0 -t -a -u olduser", "newpassword1\nnewpassword1\n")
+    end
+
+    it "leaves an existing Linux account alone when the password changes" do
+      existing = User.find(create(:user, login: "hasaccount", name: "Has Account").id)
+      allow(User).to receive(:system_user_exists?).and_return(true)
+      existing.password = existing.password_confirmation = "newpassword1"
+      existing.save!
+      expect(Shell).not_to have_received(:run).with(/\Auseradd/)
+      expect(Shell).to have_received(:run_with_input)
+        .with("pdbedit -d0 -t -a -u hasaccount", "newpassword1\nnewpassword1\n")
+    end
   end
 end
