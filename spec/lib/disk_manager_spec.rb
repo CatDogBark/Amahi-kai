@@ -92,6 +92,78 @@ RSpec.describe DiskManager do
     end
   end
 
+  describe '.base_device' do
+    it 'strips the partition number from SATA and NVMe names' do
+      expect(DiskManager.base_device('/dev/sda1')).to eq('/dev/sda')
+      expect(DiskManager.base_device('/dev/nvme0n1p2')).to eq('/dev/nvme0n1')
+      expect(DiskManager.base_device('/dev/nvme0n1')).to eq('/dev/nvme0n1')
+    end
+  end
+
+  describe '.os_disk? with an NVMe boot disk' do
+    it 'protects every partition on it' do
+      allow(DiskManager).to receive(:devices).and_return([
+        { name: 'nvme0n1', path: '/dev/nvme0n1', os_disk: true, partitions: [] },
+        { name: 'sda', path: '/dev/sda', os_disk: false, partitions: [] }
+      ])
+      expect(DiskManager.os_disk?('/dev/nvme0n1p3')).to be true
+      expect(DiskManager.os_disk?('/dev/sda1')).to be false
+    end
+  end
+
+  describe 'OS disk detection' do
+    # Ubuntu Server's default layout: / on LVM inside a partition, no separate /boot.
+    let(:lsblk) do
+      { "blockdevices" => [
+        { "name" => "sda", "type" => "disk", "children" => [
+          { "name" => "sda1", "type" => "part", "fstype" => "vfat", "mountpoint" => nil },
+          { "name" => "sda2", "type" => "part", "fstype" => "LVM2_member", "mountpoint" => nil, "children" => [
+            { "name" => "ubuntu--vg-ubuntu--lv", "type" => "lvm", "fstype" => "ext4", "mountpoint" => "/" }
+          ] }
+        ] },
+        { "name" => "sdb", "type" => "disk", "fstype" => nil, "mountpoint" => nil }
+      ] }.to_json
+    end
+
+    it 'finds / on an LVM volume inside a partition' do
+      allow(DiskManager).to receive(:execute_command).with(/\Alsblk -J/).and_return(lsblk)
+      devices = DiskManager.devices
+      expect(devices.find { |d| d[:path] == '/dev/sda' }[:os_disk]).to be true
+      expect(devices.find { |d| d[:path] == '/dev/sdb' }[:os_disk]).to be false
+    end
+  end
+
+  describe '.fstab_entry' do
+    it 'marks data drives nofail so a missing one cannot block boot' do
+      line = DiskManager.fstab_entry('abcd-1234', '/mnt/storage-1', 'ext4')
+      expect(line).to eq('UUID=abcd-1234 /mnt/storage-1 ext4 defaults,nofail,x-systemd.device-timeout=10s 0 2')
+    end
+
+    it 'mounts NTFS with ntfs-3g' do
+      expect(DiskManager.fstab_entry('A1B2', '/mnt/storage-2', 'ntfs')).to include(' ntfs-3g defaults,nofail')
+    end
+  end
+
+  describe '.auto_mount_point' do
+    before do
+      allow(File).to receive(:read).and_call_original
+      allow(Dir).to receive(:exist?).and_call_original
+      allow(Dir).to receive(:exist?).with(%r{\A/mnt/storage-\d+\z}).and_return(false)
+    end
+
+    it 'skips a slot fstab still claims for an unplugged drive' do
+      allow(File).to receive(:read).with('/etc/fstab')
+        .and_return("UUID=gone /mnt/storage-1 ext4 defaults,nofail 0 2\n")
+      expect(DiskManager.auto_mount_point).to eq('/mnt/storage-2')
+    end
+
+    it 'never rewrites fstab' do
+      allow(File).to receive(:read).with('/etc/fstab').and_return("")
+      DiskManager.auto_mount_point
+      expect(DiskManager).not_to have_received(:execute_command).with(%r{/etc/fstab})
+    end
+  end
+
   describe '.sample_devices' do
     it 'returns three sample devices' do
       samples = DiskManager.send(:sample_devices)

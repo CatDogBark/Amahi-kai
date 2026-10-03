@@ -58,7 +58,7 @@ class DiskManager
         model: dev["model"] || "Unknown",
         size: dev["size"],
         serial: dev["serial"],
-        os_disk: os_disk_from_partitions?(partitions),
+        os_disk: (mountpoints_in(dev) & OS_MOUNTPOINTS).any?,
         partitions: partitions
       }
     end
@@ -110,8 +110,7 @@ class DiskManager
 
       # Add to fstab using UUID for persistence
       if uuid.present?
-        fstab_type = (fstype&.downcase == "ntfs") ? "ntfs-3g" : (fstype.presence || "ext4")
-        fstab_line = "UUID=#{uuid} #{mount_point} #{fstab_type} defaults 0 2"
+        fstab_line = fstab_entry(uuid, mount_point, fstype)
         # Check if already in fstab
         fstab = File.read("/etc/fstab") rescue ""
         unless fstab.include?(uuid)
@@ -195,8 +194,9 @@ class DiskManager
 
   # Check if a device is the OS disk
   def self.os_disk?(device)
-    # Strip partition number to get base device
-    base = device.gsub(/\d+$/, '')
+    # Stripping trailing digits turned /dev/nvme0n1p2 into /dev/nvme0n1p, which
+    # matched no disk, so NVMe partitions on the OS disk passed this check.
+    base = base_device(device)
     all = devices
     dev = all.find { |d| d[:path] == base || d[:path] == device }
     return false unless dev
@@ -205,8 +205,24 @@ class DiskManager
 
   private
 
-  def self.os_disk_from_partitions?(partitions)
-    partitions.any? { |p| p[:mountpoint].present? && ['/', '/boot', '/boot/efi'].include?(p[:mountpoint]) }
+  OS_MOUNTPOINTS = ['/', '/boot', '/boot/efi'].freeze
+
+  # Mount points of a block device and everything under it: partitions, and the
+  # LVM or RAID volumes inside them (Ubuntu's default install puts / on LVM).
+  def self.mountpoints_in(node)
+    [node["mountpoint"], *(node["children"] || []).flat_map { |c| mountpoints_in(c) }].compact
+  end
+
+  # nofail: a dead or unplugged data drive mustn't stop the NAS from booting
+  # (without it systemd drops a headless box into emergency mode).
+  def self.fstab_entry(uuid, mount_point, fstype)
+    fstab_type = (fstype&.downcase == "ntfs") ? "ntfs-3g" : (fstype.presence || "ext4")
+    "UUID=#{uuid} #{mount_point} #{fstab_type} defaults,nofail,x-systemd.device-timeout=10s 0 2"
+  end
+
+  # The whole disk a device belongs to: /dev/sda1 -> /dev/sda, /dev/nvme0n1p2 -> /dev/nvme0n1.
+  def self.base_device(device)
+    device.match?(VALID_NVME_PATTERN) ? device.sub(/p\d+\z/, '') : device.sub(/\d+\z/, '')
   end
 
   def self.partition_status(part)
@@ -241,70 +257,26 @@ class DiskManager
   end
 
   def self.auto_mount_point
-    # Clean up stale fstab entries and empty dirs before picking a number
-    cleanup_stale_mounts! if production?
-
-    # Find the lowest available storage number (reuse gaps from unmounted drives)
+    # Lowest free /mnt/storage-N. A slot listed in /etc/fstab stays taken even when its
+    # drive is unplugged, so a new drive never collides with one that comes back.
+    claimed = fstab_mount_points
     num = 1
     loop do
       candidate = "/mnt/storage-#{num}"
-      # Available if the directory doesn't exist, or exists but is empty and not a mount point
-      if !Dir.exist?(candidate)
-        return candidate
-      elsif Dir.empty?(candidate) && !mount_point_active?(candidate)
-        return candidate
+      unless claimed.include?(candidate)
+        # Free if the directory doesn't exist, or exists but is empty and not a mount point
+        return candidate if !Dir.exist?(candidate)
+        return candidate if Dir.empty?(candidate) && !mount_point_active?(candidate)
       end
       num += 1
     end
   end
 
-  # Remove fstab entries whose UUIDs no longer exist on any attached device,
-  # and clean up orphaned /mnt/storage-* directories
-  def self.cleanup_stale_mounts!
-    return unless production?
-
-    # Get all UUIDs currently present on the system
-    output, _stderr, _status = Shell.capture("/sbin/blkid -s UUID -o value 2>/dev/null")
-    live_uuids = output.strip.lines.map(&:strip).reject(&:empty?)
-
-    # Read fstab and find stale /mnt/storage-* entries
+  # Mount points named in /etc/fstab. (This replaces a cleanup that deleted fstab lines
+  # whose UUID unprivileged blkid couldn't see, which could drop a working drive.)
+  def self.fstab_mount_points
     fstab = File.read("/etc/fstab") rescue ""
-    stale_found = false
-    new_lines = fstab.lines.map do |line|
-      next line if line.strip.start_with?("#") || line.strip.empty?
-      next line unless line.include?("/mnt/storage-")
-      # Extract UUID from fstab line
-      if line =~ /UUID=([^\s]+)/
-        uuid = $1
-        if live_uuids.include?(uuid)
-          line  # UUID still exists, keep it
-        else
-          stale_found = true
-          Rails.logger.info("[DiskManager] Removing stale fstab entry: #{line.strip}") if defined?(Rails)
-          nil   # UUID gone, remove the line
-        end
-      else
-        line
-      end
-    end.compact
-
-    if stale_found
-      File.write("/tmp/fstab.new", new_lines.join)
-      execute_command("sudo /usr/bin/cp /tmp/fstab.new /etc/fstab")
-    end
-
-    # Remove empty, unmounted /mnt/storage-* directories
-    Dir.glob("/mnt/storage-*").each do |dir|
-      next unless File.directory?(dir)
-      next if mount_point_active?(dir)
-      begin
-        Dir.rmdir(dir) if Dir.empty?(dir)
-      rescue SystemCallError
-        # Not empty or permission denied — skip
-      end
-    end
-  rescue StandardError => e
-    Rails.logger.error("[DiskManager] cleanup_stale_mounts! failed: #{e.message}") if defined?(Rails)
+    fstab.lines.map(&:split).reject { |f| f.empty? || f[0].start_with?("#") }.map { |f| f[1] }.compact
   end
 
   def self.mount_point_active?(path)
