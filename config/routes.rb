@@ -67,19 +67,20 @@ Rails.application.routes.draw do
   # Settings (consolidated from plugin)
   scope '/settings', controller: 'settings', as: 'settings' do
     get '/', action: 'index', as: 'index'
-    match 'change_language', action: 'change_language', via: %i[get post]
-    match 'toggle_setting', action: 'toggle_setting', via: %i[get post]
-    match 'reboot', action: 'reboot', via: %i[get post]
-    match 'poweroff', action: 'poweroff', via: %i[get post]
-    match 'servers', action: 'servers', via: %i[get post]
-    match 'servers/:id/refresh', action: 'refresh', as: 'refresh', via: %i[get post]
-    match 'servers/:id/start', action: 'start', as: 'start', via: %i[get post]
-    match 'servers/:id/stop', action: 'stop', as: 'stop', via: %i[get post]
-    match 'servers/:id/restart', action: 'restart', as: 'restart', via: %i[get post]
+    # Actions that change something are POST-only, so a link can't trigger them.
+    post 'change_language', action: 'change_language'
+    post 'toggle_setting', action: 'toggle_setting'
+    post 'reboot', action: 'reboot'
+    post 'poweroff', action: 'poweroff'
+    get 'servers', action: 'servers'
+    post 'servers/:id/refresh', action: 'refresh', as: 'refresh'
+    post 'servers/:id/start', action: 'start', as: 'start'
+    post 'servers/:id/stop', action: 'stop', as: 'stop'
+    post 'servers/:id/restart', action: 'restart', as: 'restart'
     # monit monitoring removed — toggle_monitored route deleted
-    match 'servers/:id/toggle_start_at_boot', action: 'toggle_start_at_boot', as: 'toggle_start_at_boot', via: %i[get post put]
-    match 'themes', action: 'themes', via: %i[get post]
-    match 'activate_theme', action: 'activate_theme', via: %i[get post]
+    match 'servers/:id/toggle_start_at_boot', action: 'toggle_start_at_boot', as: 'toggle_start_at_boot', via: %i[post put]
+    get 'themes', action: 'themes'
+    post 'activate_theme', action: 'activate_theme'
     put 'revoke_app', action: 'revoke_app'
     get 'system_status', action: 'system_status'
     post 'update_system', action: 'update_system'
@@ -121,7 +122,7 @@ Rails.application.routes.draw do
   end
 
   match 'login' => 'user_sessions#new', :as => :login, via: [:get]
-  match 'logout' => 'user_sessions#destroy', :as => :logout, via: [:get]
+  delete 'logout' => 'user_sessions#destroy', :as => :logout
 
   get '/tab/debug'=>'debug#index'
   post '/tab/debug'=>'debug#submit'

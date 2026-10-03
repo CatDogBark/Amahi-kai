@@ -95,19 +95,19 @@ RSpec.describe "RemoteAccess extended", type: :request do
 
   describe "GET install_cloudflared_stream" do
     it "returns SSE content type" do
-      get '/network/remote_access/install_cloudflared_stream'
+      get '/network/remote_access/install_cloudflared_stream', headers: same_origin
       expect(response.content_type).to include('text/event-stream')
     end
   end
 
   describe "GET setup_tunnel_stream" do
     it "returns SSE content type" do
-      get '/network/remote_access/setup_tunnel_stream', params: { token: 'test-token' }
+      get '/network/remote_access/setup_tunnel_stream', params: { token: 'test-token' }, headers: same_origin
       expect(response.content_type).to include('text/event-stream')
     end
 
     it "streams error when token is blank" do
-      get '/network/remote_access/setup_tunnel_stream', params: { token: '' }
+      get '/network/remote_access/setup_tunnel_stream', params: { token: '' }, headers: same_origin
       expect(response.content_type).to include('text/event-stream')
       expect(response.body).to include('No tunnel token')
     end
@@ -115,7 +115,7 @@ RSpec.describe "RemoteAccess extended", type: :request do
 
   describe "GET install_tailscale_stream" do
     it "returns SSE content type" do
-      get '/network/remote_access/install_tailscale_stream'
+      get '/network/remote_access/install_tailscale_stream', headers: same_origin
       expect(response.content_type).to include('text/event-stream')
     end
   end

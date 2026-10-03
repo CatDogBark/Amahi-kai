@@ -1003,6 +1003,19 @@ select:focus, input[type="text"]:focus, input[type="password"]:focus {
 #footer a:hover {
   color: var(--kai-primary);
 }
+/* Logout is a button (it must POST), styled like the footer's links */
+#footer .footer-link {
+  padding: 0;
+  border: 0;
+  font-size: inherit;
+  line-height: inherit;
+  vertical-align: baseline;
+  text-decoration: none;
+  color: var(--kai-text);
+}
+#footer .footer-link:hover {
+  color: var(--kai-primary);
+}
 /* Room under the page content so the fixed footer never covers it */
 body:has(> #footer) {
   padding-bottom: 56px;

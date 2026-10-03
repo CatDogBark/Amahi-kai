@@ -99,7 +99,7 @@ describe "Disks Controller", type: :request do
 
     describe "GET /disks/install_greyhole_stream" do
       it "returns SSE content type" do
-        get "/disks/install_greyhole_stream"
+        get "/disks/install_greyhole_stream", headers: same_origin
         expect(response.headers['Content-Type']).to include('text/event-stream')
       end
     end

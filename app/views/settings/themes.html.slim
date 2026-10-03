@@ -60,5 +60,4 @@ css:
               span.badge.bg-success
                 | ✓ Active
             - else
-              = link_to settings_activate_theme_path(id: theme.css), class: 'btn btn-sm btn-outline-primary' do
-                | Activate
+              = button_to 'Activate', settings_activate_theme_path(id: theme.css), class: 'btn btn-sm btn-outline-primary', form: { class: 'd-inline' }

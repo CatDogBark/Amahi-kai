@@ -136,18 +136,18 @@ describe "Setup Controller", type: :request do
       end
 
       it "returns SSE content type" do
-        get setup_prepare_drives_stream_path, params: { drives: "/dev/sdb1" }
+        get setup_prepare_drives_stream_path, params: { drives: "/dev/sdb1" }, headers: same_origin
         expect(response.headers['Content-Type']).to include('text/event-stream')
       end
 
       it "creates pool partitions from selected drives" do
-        get setup_prepare_drives_stream_path, params: { drives: "/dev/sdb1" }
+        get setup_prepare_drives_stream_path, params: { drives: "/dev/sdb1" }, headers: same_origin
         expect(DiskPoolPartition.pluck(:path)).to include("/mnt/data")
       end
 
       it "clears existing pool partitions before adding new ones" do
         DiskPoolPartition.create!(path: "/mnt/old", minimum_free: 10)
-        get setup_prepare_drives_stream_path, params: { drives: "/dev/sdb1" }
+        get setup_prepare_drives_stream_path, params: { drives: "/dev/sdb1" }, headers: same_origin
         expect(DiskPoolPartition.pluck(:path)).to eq(["/mnt/data"])
       end
     end

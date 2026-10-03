@@ -45,7 +45,7 @@ describe "Security Controller", type: :request do
 
     describe "GET /network/security/audit_stream" do
       it "returns an SSE stream" do
-        get '/network/security/audit_stream'
+        get '/network/security/audit_stream', headers: same_origin
         expect(response).to have_http_status(:ok)
         expect(response.content_type).to include('text/event-stream')
       end
@@ -53,7 +53,7 @@ describe "Security Controller", type: :request do
 
     describe "GET /network/security/fix_stream" do
       it "returns an SSE stream" do
-        get '/network/security/fix_stream'
+        get '/network/security/fix_stream', headers: same_origin
         expect(response).to have_http_status(:ok)
         expect(response.content_type).to include('text/event-stream')
       end
