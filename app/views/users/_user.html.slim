@@ -74,5 +74,3 @@ div.user[id="whole_user_#{user.id}" data-controller="user"]
                     = user.role.capitalize
             tr
               = render partial: 'password', locals: { user: user }
-            tr
-              = render partial: 'pin', locals: { user: user }

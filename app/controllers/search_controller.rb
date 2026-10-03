@@ -21,6 +21,7 @@ class SearchController < ApplicationController
   before_action -> { @no_tabs = true }
 
   RESULTS_PER_PAGE = 20
+  MAX_PER_PAGE = 100
 
   def files
     @page_title = 'Search Results'
@@ -31,8 +32,7 @@ class SearchController < ApplicationController
       redirect_to "http://www.google.com/search?q=#{URI.encode_www_form_component(params[:query])}", allow_other_host: true
     else
       @query = params[:query]
-      @page = (params[:page] && params[:page].to_i.abs) || 1
-      @rpp = (params[:per_page] && params[:per_page].to_i.abs) || RESULTS_PER_PAGE
+      set_paging
 
       @results = search_share_files(@query, nil, @page, @rpp)
     end
@@ -40,24 +40,21 @@ class SearchController < ApplicationController
 
   def images
     @query = params[:query]
-    @page = (params[:page] && params[:page].to_i.abs) || 1
-    @rpp = (params[:per_page] && params[:per_page].to_i.abs) || RESULTS_PER_PAGE
+    set_paging
     @results = search_share_files(@query, 'image', @page, @rpp)
     render 'files'
   end
 
   def audio
     @query = params[:query]
-    @page = (params[:page] && params[:page].to_i.abs) || 1
-    @rpp = (params[:per_page] && params[:per_page].to_i.abs) || RESULTS_PER_PAGE
+    set_paging
     @results = search_share_files(@query, 'audio', @page, @rpp)
     render 'files'
   end
 
   def video
     @query = params[:query]
-    @page = (params[:page] && params[:page].to_i.abs) || 1
-    @rpp = (params[:per_page] && params[:per_page].to_i.abs) || RESULTS_PER_PAGE
+    set_paging
     @results = search_share_files(@query, 'video', @page, @rpp)
     render 'files'
   end
@@ -66,6 +63,13 @@ class SearchController < ApplicationController
   end
 
   protected
+
+  # Page 1 or later (page 0 made a negative OFFSET, a 500), and at most MAX_PER_PAGE results.
+  def set_paging
+    @page = [params[:page].to_i, 1].max
+    per_page = params[:per_page].to_i
+    @rpp = per_page.positive? ? [per_page, MAX_PER_PAGE].min : RESULTS_PER_PAGE
+  end
 
   def search_share_files(query, content_type, page, rpp = RESULTS_PER_PAGE)
     scope = ShareFile.files_only

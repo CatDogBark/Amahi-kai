@@ -71,47 +71,6 @@ describe User do
     end
   end
 
-  describe "pin validations" do
-    it "should allow nil pin" do
-      user = create(:user)
-      user.pin = nil
-      expect(user).to be_valid
-    end
-
-    it "should require pin to be between 3 and 5 characters" do
-      user = create(:user)
-      user.pin = "ab"
-      expect(user).not_to be_valid
-
-      user.pin = "abc"
-      expect(user).to be_valid
-
-      user.pin = "abcde"
-      expect(user).to be_valid
-
-      user.pin = "abcdef"
-      expect(user).not_to be_valid
-    end
-
-    it "should only allow alphanumeric pins" do
-      user = create(:user)
-      user.pin = "ab!"
-      expect(user).not_to be_valid
-
-      user.pin = "abc"
-      expect(user).to be_valid
-    end
-
-    it "should require unique pins" do
-      user1 = create(:user)
-      user1.update!(pin: "abc")
-
-      user2 = create(:user)
-      user2.pin = "abc"
-      expect(user2).not_to be_valid
-    end
-  end
-
   describe "public_key validations" do
     it "should allow nil public_key" do
       expect(create(:user, public_key: nil)).to be_valid
@@ -188,6 +147,23 @@ describe User do
       expect(Shell).to have_received(:run).with("useradd -m -g users -c Old\\ User olduser")
       expect(Shell).to have_received(:run_with_input)
         .with("pdbedit -d0 -t -a -u olduser", "newpassword1\nnewpassword1\n")
+    end
+
+    it "refuses to create a user whose Linux account can't be made" do
+      allow(Shell).to receive(:run).with(/\Auseradd/).and_return(false)
+      expect(user.save).to be false
+      expect(user).not_to be_persisted
+      expect(user.errors.full_messages.join).to include("Couldn't create the Linux account")
+    end
+
+    it "keeps the old password when Samba refuses the new one" do
+      existing = User.find(create(:user, login: "sambafail", name: "Samba Fail").id)
+      allow(User).to receive(:system_user_exists?).and_return(true)
+      allow(Shell).to receive(:run_with_input).and_return(false)
+      existing.password = existing.password_confirmation = "newpassword1"
+      expect(existing.save).to be false
+      expect(existing.errors.full_messages.join).to include("Couldn't update the Samba password")
+      expect(User.find(existing.id).authenticate("secretpassword")).to be_truthy
     end
 
     it "leaves an existing Linux account alone when the password changes" do

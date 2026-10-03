@@ -44,6 +44,10 @@ All notable changes to Amahi-kai are documented here.
 - **The database password stays off command lines** during the Greyhole install (stdin and a private file instead), `/etc/greyhole.conf` becomes `root:amahi 640`, and Shell masks secret-shaped text in its log.
 - **Sessions:** a login unused for 7 days ends (checked on the server), and changing a password signs out that user's other browsers.
 - **System Update runs the steps it just pulled.** bash keeps executing the copy of `amahi-update` it opened, so a step added by an update only ran on the following update; the script now restarts itself as the new copy after pulling. Drives are re-mounted before the app restart, since restarting the app from the web UI also ends the script.
+- **Failures are reported instead of ignored:** creating a user stops with an error when the Linux account can't be made; a password change is refused (and the old password kept) when Samba won't take it; a share whose folder can't be created isn't saved; a failed Docker pull or create ends the install with an error instead of hanging. Changing a share's path no longer skips creating the new folder when the old one has files in it.
+- **The app proxy passes each Set-Cookie header separately**, so apps that set several cookies keep them.
+- **Removed the PIN feature** (never used for login; setting one returned a 500) and its column.
+- **Small fixes:** search paging is clamped (page 0 was a 500); the domain setting is escaped where it's used in a pattern; drive-preview file names are escaped; share indexing runs as an Active Job after commit instead of a bare thread.
 - **CI fails on spec failures again.** The gate matched "0 failures" anywhere, including in "10 failures".
 
 ### 🔧 Architecture & Code Quality

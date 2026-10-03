@@ -205,7 +205,7 @@ function prepareDrives(event) {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data.status === 'error') {
-        body.innerHTML = '<div style="color:#ef4444;padding:10px;">' + data.message + '</div>';
+        body.innerHTML = '<div style="color:#ef4444;padding:10px;">' + escapeHtml(data.message) + '</div>';
         return;
       }
       var html = '<div style="margin-bottom:12px;font-size:13px;color:#7f8c9b;">' +
@@ -216,7 +216,8 @@ function prepareDrives(event) {
       } else {
         data.entries.forEach(function(e) {
           var icon = e.type === 'directory' ? '📁' : '📄';
-          var name = e.type === 'directory' ? '<strong>' + e.name + '</strong>' : e.name;
+          // Names come from the drive itself, so they're escaped before going into the page.
+          var name = e.type === 'directory' ? '<strong>' + escapeHtml(e.name) + '</strong>' : escapeHtml(e.name);
           var info = formatSize(e.size);
           if (e.type === 'directory' && e.file_count !== undefined) info += ' · ' + e.file_count + ' files';
           html += '<div class="preview-entry" style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f1f5f9;font-size:14px;">' +
@@ -227,12 +228,18 @@ function prepareDrives(event) {
       body.innerHTML = html;
     })
     .catch(function(err) {
-      body.innerHTML = '<div style="color:#ef4444;padding:10px;">Failed to preview drive: ' + err.message + '</div>';
+      body.innerHTML = '<div style="color:#ef4444;padding:10px;">Failed to preview drive: ' + escapeHtml(err.message) + '</div>';
     });
   }
 
   function closePreview() {
     document.getElementById('preview-modal').style.display = 'none';
+  }
+
+  function escapeHtml(text) {
+    var div = document.createElement('div');
+    div.textContent = text == null ? '' : String(text);
+    return div.innerHTML;
   }
 
   function formatSize(bytes) {

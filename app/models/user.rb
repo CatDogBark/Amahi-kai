@@ -47,9 +47,6 @@ class User < ApplicationRecord
 
   validates :name, :presence => true
 
-  validates_uniqueness_of :pin, :allow_nil => true
-  validate :validate_pin,  unless: Proc.new { |user| user.pin.blank? }
-
   validates :password, :length => { :minimum => 8 }, :if => :require_password?
 
   before_create :before_create_hook
@@ -207,8 +204,14 @@ class User < ApplicationRecord
     # Set role from admin flag if role not explicitly set (backwards compat)
     self.role ||= 'user'
     return if User.system_user_exists? self.login
-    create_system_account
-    sync_samba_password
+    unless create_system_account
+      # Without a Linux account the user couldn't use Samba; don't create a half user.
+      errors.add(:base, "Couldn't create the Linux account for #{login}")
+      throw :abort
+    end
+    # The account exists now, so a Samba failure here is logged rather than undone;
+    # setting the password again retries it.
+    Rails.logger.error("Couldn't set the Samba password for #{login}") unless sync_samba_password
   end
 
   def before_save_hook
@@ -235,7 +238,11 @@ class User < ApplicationRecord
     esc_login = Shellwords.escape(self.login)
     esc_name = Shellwords.escape(self.name)
     Shell.run("usermod -c #{esc_name} #{esc_login}")
-    sync_samba_password if password.present?
+    # Keep web and Samba passwords in step: if Samba refuses the new one, keep the old.
+    if password.present? && !sync_samba_password
+      errors.add(:base, "Couldn't update the Samba password for #{login}")
+      throw :abort
+    end
   end
 
   def after_save_hook
@@ -270,10 +277,5 @@ class User < ApplicationRecord
 
   def make_admin
     Platform.make_admin(login, admin?)
-  end
-
-  def validate_pin
-    errors.add(:base, "PIN length must be between 3 to 5") if self.pin.length < 3 || self.pin.length > 5
-    errors.add(:base, "PIN format does not match") unless self.pin =~ /\A[A-Za-z0-9]+\z/
   end
 end
