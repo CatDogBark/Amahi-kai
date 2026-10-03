@@ -53,6 +53,8 @@ class User < ApplicationRecord
   validates :password, :length => { :minimum => 8 }, :if => :require_password?
 
   before_create :before_create_hook
+  # A new password gets a new session token, which signs out every other session.
+  before_save :rotate_session_token, if: :will_save_change_to_password_digest?
   before_save :before_save_hook
   before_destroy :before_destroy_hook
   after_save :after_save_hook
@@ -145,6 +147,10 @@ class User < ApplicationRecord
     esc_login = Shellwords.escape(self.login)
     Shell.run("usermod #{esc_login}")
     sync_samba_password
+  end
+
+  def rotate_session_token
+    self.session_token = SecureRandom.hex(20)
   end
 
   def needs_auth?

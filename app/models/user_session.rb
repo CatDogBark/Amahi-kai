@@ -2,6 +2,9 @@
 # Uses Rails session store + bcrypt (has_secure_password) for authentication.
 
 class UserSession
+  # A login unused for this long ends, checked here rather than left to the cookie.
+  IDLE_TIMEOUT = 7.days
+
   include ActiveModel::Model
   include ActiveModel::Conversion
   extend ActiveModel::Naming
@@ -30,6 +33,8 @@ class UserSession
       # Start a fresh session, so a session id issued before login can't be reused after it.
       self.class.controller.reset_session
       self.class.controller.session[:user_id] = user.id
+      self.class.controller.session[:session_token] = user.session_token
+      self.class.controller.session[:seen_at] = Time.current.to_i
 
       # Update login tracking columns
       now = Time.current
@@ -51,9 +56,18 @@ class UserSession
 
   # Find the current session from the Rails session store.
   def self.find
-    return nil unless controller&.session&.[](:user_id)
-    user = User.find_by(id: controller.session[:user_id])
+    store = controller&.session
+    return nil unless store&.[](:user_id)
+    user = User.find_by(id: store[:user_id])
     return nil unless user
+
+    # A password change gives the user a new token; sessions holding the old one end.
+    # (Sessions from before tokens existed carry none and match a user who has none.)
+    return expire(store) if user.session_token.present? && store[:session_token] != user.session_token
+
+    seen = store[:seen_at].to_i
+    return expire(store) if seen.positive? && Time.at(seen) < IDLE_TIMEOUT.ago
+    store[:seen_at] = Time.current.to_i if seen.zero? || Time.at(seen) < 5.minutes.ago
 
     # Update last_request_at for activity tracking
     user.update_column(:last_request_at, Time.current) if user.last_request_at.nil? || user.last_request_at < 5.minutes.ago
@@ -62,6 +76,12 @@ class UserSession
     session.instance_variable_set(:@record, user)
     session
   end
+
+  def self.expire(_store)
+    controller.reset_session
+    nil
+  end
+  private_class_method :expire
 
   # Destroy the current session.
   def destroy

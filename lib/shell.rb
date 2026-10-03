@@ -33,6 +33,14 @@ module Shell
     reboot poweroff
   ].freeze
 
+  # A last line of defence for the log: secrets belong on stdin or in private files
+  # (see run_with_input), but anything secret-shaped that reaches a command is masked.
+  REDACTIONS = [
+    [/(IDENTIFIED\s+BY\s+)'[^']*'/i, "\\1'[FILTERED]'"],
+    [/(--token\s+)\S+/, '\1[FILTERED]'],
+    [/((?:password|passwd|db_pass|secret|token)\s*[=:]\s*)\S+/i, '\1[FILTERED]']
+  ].freeze
+
   class CommandError < StandardError
     attr_reader :command, :stderr, :exit_code
 
@@ -88,6 +96,11 @@ module Shell
       actual_cmd = prepare(cmd)
       log_cmd(actual_cmd)
       Open3.capture3(actual_cmd)
+    end
+
+    # +text+ with anything secret-shaped masked (REDACTIONS).
+    def redact(text)
+      REDACTIONS.reduce(text.to_s) { |out, (pattern, replacement)| out.gsub(pattern, replacement) }
     end
 
     # Check if we're in dummy mode (dev/test without real system access)
@@ -146,11 +159,11 @@ module Shell
     end
 
     def log_cmd(cmd)
-      Rails.logger.info("Shell: #{cmd}") if defined?(Rails) && Rails.logger
+      Rails.logger.info("Shell: #{redact(cmd)}") if defined?(Rails) && Rails.logger
     end
 
     def log_warn(msg)
-      Rails.logger.warn("Shell: #{msg}") if defined?(Rails) && Rails.logger
+      Rails.logger.warn("Shell: #{redact(msg)}") if defined?(Rails) && Rails.logger
     end
   end
 end

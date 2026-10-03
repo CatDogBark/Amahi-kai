@@ -160,8 +160,12 @@ class Greyhole
       config = generate_config
       tmp = File.join(AMAHI_TMP_DIR, 'greyhole.conf')
       FileUtils.mkdir_p(File.dirname(tmp))
-      File.write(tmp, config)
+      # The config holds the app's database password: keep the staging copy private
+      # and remove it once copied (it used to stay behind, world-readable).
+      FileUtils.rm_f(tmp)
+      File.write(tmp, config, perm: 0640)
       Shell.run("/usr/bin/cp #{Shellwords.escape(tmp)} #{CONFIG_PATH}")
+      FileUtils.rm_f(tmp)
       # Only restart if Greyhole is currently running; don't crash if it fails
       restart! if running?
     rescue StandardError => e

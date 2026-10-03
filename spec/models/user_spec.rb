@@ -234,4 +234,18 @@ describe User do
       expect(Shell).not_to have_received(:run).with(/userdel/)
     end
   end
+  describe "session token" do
+    it "changes when the password changes" do
+      user = User.find(create(:user).id)
+      before = user.session_token
+      user.update!(password: 'brandnew123', password_confirmation: 'brandnew123')
+      expect(user.session_token).to be_present
+      expect(user.session_token).not_to eq(before)
+    end
+
+    it "stays the same for other changes" do
+      user = User.find(create(:user).id)
+      expect { user.update!(name: 'Someone Else') }.not_to change { user.reload.session_token }
+    end
+  end
 end

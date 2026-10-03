@@ -100,16 +100,31 @@ RSpec.describe "RemoteAccess extended", type: :request do
     end
   end
 
-  describe "GET setup_tunnel_stream" do
-    it "returns SSE content type" do
-      get '/network/remote_access/setup_tunnel_stream', params: { token: 'test-token' }, headers: same_origin
+  describe "setting up a tunnel" do
+    after { FileUtils.rm_f(CloudflareService.staged_token_path) }
+
+    it "takes the token by POST, then streams setup without it in the URL" do
+      post '/network/remote_access/stage_tunnel_token', params: { token: 'test-token' }
+      expect(response).to have_http_status(:ok)
+      get '/network/remote_access/setup_tunnel_stream', headers: same_origin
       expect(response.content_type).to include('text/event-stream')
+      expect(response.body).not_to include('No tunnel token')
+      expect(File.exist?(CloudflareService.staged_token_path)).to be false
     end
 
-    it "streams error when token is blank" do
-      get '/network/remote_access/setup_tunnel_stream', params: { token: '' }, headers: same_origin
-      expect(response.content_type).to include('text/event-stream')
+    it "streams an error when no token was staged" do
+      get '/network/remote_access/setup_tunnel_stream', headers: same_origin
       expect(response.body).to include('No tunnel token')
+    end
+
+    it "ignores a token put in the stream URL" do
+      get '/network/remote_access/setup_tunnel_stream', params: { token: 'test-token' }, headers: same_origin
+      expect(response.body).to include('No tunnel token')
+    end
+
+    it "requires a token to stage" do
+      post '/network/remote_access/stage_tunnel_token', params: { token: '' }
+      expect(response).to have_http_status(:unprocessable_entity)
     end
   end
 

@@ -82,8 +82,19 @@ class RemoteAccessController < ApplicationController
     end
   end
 
-  def setup_tunnel_stream
+  # POST: the page sends the token here first, then opens setup_tunnel_stream.
+  def stage_tunnel_token
     token = params[:token].to_s.strip
+    if token.blank?
+      render json: { status: :not_acceptable, error: 'Token is required' }, status: :unprocessable_entity
+      return
+    end
+    CloudflareService.stage_token(token)
+    render json: { status: :ok }
+  end
+
+  def setup_tunnel_stream
+    token = CloudflareService.take_staged_token.to_s
 
     stream_sse do |sse|
       if token.blank?

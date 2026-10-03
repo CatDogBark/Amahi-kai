@@ -78,13 +78,37 @@ class CloudflareService
       true
     end
 
+    # Hold a token entered on the Remote Access page until the setup stream picks it up,
+    # so it travels in a POST body rather than the stream's URL (and the logs).
+    def stage_token(token)
+      path = staged_token_path
+      FileUtils.rm_f(path)
+      File.write(path, token.to_s.strip, perm: 0600)
+    end
+
+    # The staged token, removed as it's read; nil if none was staged.
+    def take_staged_token
+      path = staged_token_path
+      return nil unless File.exist?(path)
+      File.read(path).strip.presence
+    ensure
+      FileUtils.rm_f(path) if path
+    end
+
+    def staged_token_path
+      File.join(AMAHI_TMP_DIR, 'pending-tunnel.token')
+    end
+
     def configure!(token)
       return true unless production?
 
-      # Write token to temp, then copy to secure location
+      # The token only lives in TOKEN_FILE, readable by root alone; cloudflared reads it
+      # with --token-file. It used to sit in the world-readable unit file and on
+      # cloudflared's command line, where any account on the NAS could see it.
       tmp_path = File.join(AMAHI_TMP_DIR, 'tunnel.token')
       FileUtils.mkdir_p(File.dirname(tmp_path))
-      File.write(tmp_path, token.strip)
+      FileUtils.rm_f(tmp_path)
+      File.write(tmp_path, token.strip, perm: 0600)
       Shell.run("mkdir -p #{File.dirname(TOKEN_FILE)}")
       Shell.run("cp #{tmp_path} #{TOKEN_FILE}")
       FileUtils.rm_f(tmp_path)
@@ -98,7 +122,7 @@ class CloudflareService
 
         [Service]
         Type=notify
-        ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate run --token #{token.strip}
+        ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate run --token-file #{TOKEN_FILE}
         Restart=on-failure
         RestartSec=5s
         TimeoutStartSec=0

@@ -97,6 +97,32 @@ fi
 # 3c. The app writes uploads into share folders that Samba users own (group users)
 id -nG "$APP_USER" | grep -qw users || usermod -aG users "$APP_USER"
 
+# 3d. Keep secrets root-only. cloudflared reads the tunnel token from TOKEN_FILE
+#     (--token-file); older installs had it in the world-readable unit file and on
+#     cloudflared's command line. Switch only when the file holds the same token the
+#     unit uses, so a tunnel set up by hand is left alone. Nothing is printed.
+TOKEN_FILE=/etc/amahi-kai/tunnel.token
+UNIT_FILE=/etc/systemd/system/cloudflared.service
+if [[ -f "$TOKEN_FILE" ]]; then
+  chown root:root "$TOKEN_FILE"
+  chmod 600 "$TOKEN_FILE"
+  if [[ -f "$UNIT_FILE" ]] && grep -q -- 'run --token ' "$UNIT_FILE"; then
+    unit_token=$(grep -oP -- 'run --token \K\S+' "$UNIT_FILE" || true)
+    if [[ -n "$unit_token" && "$unit_token" == "$(cat "$TOKEN_FILE")" ]]; then
+      log "Moving the Cloudflare Tunnel token out of the service file..."
+      sed -i -E "s#run --token [^[:space:]]+#run --token-file $TOKEN_FILE#" "$UNIT_FILE"
+      systemctl daemon-reload
+      systemctl restart cloudflared 2>&1 || log "⚠ cloudflared restart failed"
+    fi
+    unset unit_token
+  fi
+fi
+# Greyhole's config holds the app's database password; the app user reads it for status.
+if [[ -f /etc/greyhole.conf ]]; then
+  chown root:"$APP_GROUP" /etc/greyhole.conf
+  chmod 640 /etc/greyhole.conf
+fi
+
 # 4. Clear cache and precompile assets
 log "Clearing caches..."
 rm -rf "$APP_DIR/tmp/cache" "$APP_DIR/public/assets"
