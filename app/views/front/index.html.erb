@@ -6,10 +6,12 @@
       <div class="d-flex align-items-center justify-content-between">
         <div>
           <h3 class="mb-1" style="font-weight: 600;">
-            <%= lucide_icon('waves', size: 16) %> Welcome to <strong><%= @stats[:system][:hostname] %></strong>
+            <%= lucide_icon('waves', size: 16) %> Welcome to <strong>Amahi-kai</strong>
           </h3>
+          <%# Show the hostname only when the server was given its own name %>
+          <% hostname = @stats[:system][:hostname].to_s %>
           <span class="text-muted">
-            Up <%= @stats[:system][:uptime] %> · <%= @stats[:system][:os] %>
+            <% unless hostname.blank? || hostname.casecmp?('amahi-kai') %><%= hostname %> · <% end %>Up <%= @stats[:system][:uptime] %> · <%= @stats[:system][:os] %>
           </span>
         </div>
         <div class="d-none d-md-block text-muted" style="font-size: 12px;">

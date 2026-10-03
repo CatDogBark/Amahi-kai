@@ -103,7 +103,7 @@
   --kai-bg-white: #fff;
 
   /* Table */
-  --kai-table-striped-bg: #f8f9fa;
+  --kai-table-striped-bg: rgba(0, 0, 0, 0.035);
   --kai-table-hover-bg: #f8f9fa;
 
   /* Nav tabs */
@@ -194,7 +194,7 @@
     --kai-progress-bg: #30363d;
     --kai-bg-light: #161b22;
     --kai-bg-white: #0d1117;
-    --kai-table-striped-bg: #1c2128;
+    --kai-table-striped-bg: rgba(255, 255, 255, 0.04);
     --kai-table-hover-bg: #1c2128;
     --kai-nav-tab-border: #30363d;
     --kai-nav-tab-text: #8b949e;
@@ -275,7 +275,7 @@
   --kai-progress-bg: #30363d;
   --kai-bg-light: #161b22;
   --kai-bg-white: #0d1117;
-  --kai-table-striped-bg: #1c2128;
+  --kai-table-striped-bg: rgba(255, 255, 255, 0.04);
   --kai-table-hover-bg: #1c2128;
   --kai-nav-tab-border: #30363d;
   --kai-nav-tab-text: #8b949e;
@@ -355,7 +355,7 @@
   --kai-progress-bg: #e9ecef;
   --kai-bg-light: #f4f7fa;
   --kai-bg-white: #fff;
-  --kai-table-striped-bg: #f8f9fa;
+  --kai-table-striped-bg: rgba(0, 0, 0, 0.035);
   --kai-table-hover-bg: #f8f9fa;
   --kai-nav-tab-border: #dce3eb;
   --kai-nav-tab-text: #7f8c9b;
@@ -573,10 +573,19 @@ fieldset {
   border: 1px solid var(--kai-border);
   padding: 5px 10px;
   color: var(--kai-text);
-  background: var(--kai-card-bg);
+  background: var(--kai-card-bg-opaque);
   border-radius: 6px;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Glass panels inside another glass panel stay clear, so the layers don't stack
+   into an opaque block. */
+.card fieldset, .settings-table fieldset, .settings-wrap fieldset, fieldset fieldset,
+.card .bg-white, .settings-table .bg-white, .settings-wrap .bg-white, fieldset .bg-white {
+  background: transparent !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .access fieldset {
@@ -798,7 +807,9 @@ legend {
 
 /* ─── Settings Tables ─── */
 .settings-table {
-  background: var(--kai-card-bg);
+  background: var(--kai-card-bg-opaque);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-radius: 6px;
   overflow: hidden;
   box-shadow: 0 1px 3px var(--kai-shadow);
@@ -991,7 +1002,9 @@ select:focus, input[type="text"]:focus, input[type="password"]:focus {
 
 /* ─── Misc ─── */
 .settings-wrap {
-  background: var(--kai-card-bg);
+  background: var(--kai-card-bg-opaque);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-radius: 6px;
   box-shadow: 0 1px 3px var(--kai-shadow);
 }
@@ -1288,7 +1301,9 @@ nav.preftab li ul {
   background-color: var(--kai-bg-light) !important;
 }
 .bg-white {
-  background-color: var(--kai-bg-white) !important;
+  background-color: var(--kai-card-bg-opaque) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 .text-muted, small.text-muted {
   color: var(--kai-muted) !important;
