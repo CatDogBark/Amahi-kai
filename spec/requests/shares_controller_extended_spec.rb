@@ -90,6 +90,13 @@ RSpec.describe "SharesController extended", type: :request do
     end
 
     describe "PUT update_disk_pool_copies" do
+      it "accepts the copies param the shares page sends and returns JSON" do
+        put update_disk_pool_copies_share_path(share), params: { copies: "2" }
+        expect(response).to have_http_status(:ok)
+        expect(response.parsed_body["disk_pool_copies"]).to eq(2)
+        expect(share.reload.disk_pool_copies).to eq(2)
+      end
+
       it "sets the number of copies" do
         put update_disk_pool_copies_share_path(share), params: { value: "5" }, as: :json
         expect(share.reload.disk_pool_copies).to eq(5)
