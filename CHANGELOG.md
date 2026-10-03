@@ -40,6 +40,9 @@ All notable changes to Amahi-kai are documented here.
 - **Disk safety:** new fstab entries are `nofail` so a missing data drive can't stop the NAS booting; the OS-disk guard recognises NVMe partitions and `/` on LVM; new mount points skip slots fstab still claims; and fstab entries are no longer deleted automatically.
 - **Samba only answers the NAS itself, the LAN and Tailscale.** The generated `smb.conf` adds `hosts allow` (Docker's ranges are refused; apps get share folders as volumes) and binds to the LAN interface plus `tailscale0`. It keeps Greyhole's `wide links` settings when Greyhole is installed, gives the guest account no home share, and is checked with `testparm` before it's installed. `amahi-update` regenerates it and restarts Samba, and the security audit's fix regenerates it instead of editing it.
 - **File browser:** uploads stream straight into the share (they went through a `sudo cp` the allowlist didn't permit); names such as `..` or ones with a slash are refused with a clear error instead of being rewritten, so `a..b.txt` is never mistaken for `ab.txt`; the share-boundary check compares whole path segments.
+- **The tunnel token is root-only.** cloudflared reads it with `--token-file`; it was in the world-readable unit file and on cloudflared's command line. `amahi-update` migrates existing installs. Remote Access sends the token by POST instead of in the stream URL, and token-, secret- and key-like parameters are filtered from the logs.
+- **The database password stays off command lines** during the Greyhole install (stdin and a private file instead), `/etc/greyhole.conf` becomes `root:amahi 640`, and Shell masks secret-shaped text in its log.
+- **Sessions:** a login unused for 7 days ends (checked on the server), and changing a password signs out that user's other browsers.
 - **CI fails on spec failures again.** The gate matched "0 failures" anywhere, including in "10 failures".
 
 ### 🔧 Architecture & Code Quality

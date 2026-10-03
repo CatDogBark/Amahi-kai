@@ -209,6 +209,12 @@ class ApplicationController < ActionController::Base
     @current_user = current_user_session && current_user_session.record
   end
 
+  # After a user changes their own password, keep this browser signed in. Their other
+  # sessions end: they still hold the old session token.
+  def keep_signed_in_after_password_change(user)
+    session[:session_token] = user.session_token if user == current_user
+  end
+
   def login_required
     unless current_user
       store_location

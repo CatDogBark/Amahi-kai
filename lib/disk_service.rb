@@ -111,6 +111,14 @@ module DiskService
 
     def stream_greyhole_install_production(sse)
       success = true
+      # The database password never goes on a command line, where any account can see it
+      # in the process list: MySQL gets it on stdin, and greyhole.conf is copied from a
+      # private file instead of echoed through a shell.
+      conf_tmp = File.join(AMAHI_TMP_DIR, 'greyhole.conf')
+      unless File.exist?('/etc/greyhole.conf')
+        FileUtils.rm_f(conf_tmp)
+        File.write(conf_tmp, "db_host = localhost\ndb_user = amahi\ndb_pass = #{ENV.fetch('DATABASE_PASSWORD', '')}\ndb_name = greyhole\n", perm: 0640)
+      end
       steps = [
         { label: "Adding Greyhole apt repository...", commands: [
           { cmd: "curl -s #{Greyhole::GREYHOLE_REPO_KEY} | sudo gpg --dearmor -o #{Greyhole::KEYRING_PATH} 2>&1", run: !File.exist?(Greyhole::KEYRING_PATH) },
@@ -121,21 +129,21 @@ module DiskService
         ]},
         { label: "Pre-configuring Greyhole database...", commands: [
           { cmd: 'sudo mysql -u root -e "CREATE DATABASE IF NOT EXISTS greyhole" 2>&1', run: true },
-          { cmd: %Q(sudo mysql -u root -e "CREATE USER IF NOT EXISTS 'amahi'@'localhost' IDENTIFIED BY '#{db_password_sql}'; GRANT ALL PRIVILEGES ON greyhole.* TO 'amahi'@'localhost'; FLUSH PRIVILEGES;" 2>&1), run: true },
+          { cmd: "sudo mysql -u root --batch 2>&1", input: greyhole_user_sql, run: true },
         ]},
         { label: "Configuring PHP dependencies...", commands: [
           { cmd: "sudo apt-get install -y php8.3-mbstring php8.3-mysql 2>&1", run: true },
           { cmd: "sudo phpenmod mbstring 2>&1", run: true },
         ]},
         { label: "Creating minimal Greyhole config...", commands: [
-          { cmd: "echo 'db_host = localhost\ndb_user = amahi\ndb_pass = #{db_password_escaped}\ndb_name = greyhole' | sudo tee /etc/greyhole.conf 2>&1", run: !File.exist?('/etc/greyhole.conf') },
+          { cmd: "sudo /usr/bin/cp #{conf_tmp} /etc/greyhole.conf 2>&1", run: !File.exist?('/etc/greyhole.conf') },
         ]},
         { label: "Installing Greyhole package...", commands: [
           { cmd: "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -o Dpkg::Options::=--force-confold greyhole 2>&1", run: true }
         ]},
         { label: "Loading Greyhole database schema...", commands: [
           { cmd: 'sudo mysql -u root -e "CREATE DATABASE IF NOT EXISTS greyhole" 2>&1', run: true },
-          { cmd: %Q(sudo mysql -u root -e "CREATE USER IF NOT EXISTS 'amahi'@'localhost' IDENTIFIED BY '#{db_password_sql}'; GRANT ALL PRIVILEGES ON greyhole.* TO 'amahi'@'localhost'; FLUSH PRIVILEGES;" 2>&1), run: true },
+          { cmd: "sudo mysql -u root --batch 2>&1", input: greyhole_user_sql, run: true },
           { cmd: "sudo mysql -u root greyhole < /usr/share/greyhole/schema-mysql.sql 2>&1", run: File.exist?('/usr/share/greyhole/schema-mysql.sql') }
         ]},
         { label: "Enabling Greyhole service...", commands: [
@@ -148,7 +156,9 @@ module DiskService
         sse.send(step[:label])
         step[:commands].each do |c|
           next unless c[:run]
-          IO.popen(c[:cmd]) do |io|
+          IO.popen(c[:cmd], "r+") do |io|
+            io.write(c[:input]) if c[:input]
+            io.close_write
             io.each_line do |line|
               sse.send("  #{line.chomp}")
             end
@@ -165,6 +175,8 @@ module DiskService
         end
         break unless success
       end
+
+      FileUtils.rm_f(conf_tmp)
 
       # Try starting greyhole — non-fatal if it fails (needs config first)
       sse.send("Starting Greyhole service...")
@@ -192,9 +204,10 @@ module DiskService
 
     private
 
-    # Returns the database password, shell-escaped for safe interpolation into commands.
-    def db_password_escaped
-      Shellwords.escape(ENV.fetch('DATABASE_PASSWORD', ''))
+    # SQL that creates Greyhole's database user, sent to mysql on stdin.
+    def greyhole_user_sql
+      "CREATE USER IF NOT EXISTS 'amahi'@'localhost' IDENTIFIED BY '#{db_password_sql}'; " \
+        "GRANT ALL PRIVILEGES ON greyhole.* TO 'amahi'@'localhost'; FLUSH PRIVILEGES;\n"
     end
 
     # Returns the database password with single quotes escaped for SQL strings.

@@ -236,8 +236,16 @@
 function setupTunnel() {
   var token = document.getElementById('tunnel-token-field').value.trim();
   if (!token) { alert('Please paste your tunnel token first.'); return; }
-  var url = '<%= remote_access_setup_tunnel_stream_path %>' + '?token=' + encodeURIComponent(token);
-  openInstallTerminal('tunnel-setup', url);
+  // The token goes in a POST body; putting it in the stream URL logged it.
+  var body = new URLSearchParams({ token: token });
+  fetch('<%= remote_access_stage_tunnel_token_path %>', {
+    method: 'POST', headers: csrfHeaders(), credentials: 'same-origin', body: body
+  }).then(function(r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    openInstallTerminal('tunnel-setup', '<%= remote_access_setup_tunnel_stream_path %>');
+  }).catch(function(err) {
+    alert('Could not send the tunnel token: ' + err.message);
+  });
 }
 
 function runSecurityAudit() {

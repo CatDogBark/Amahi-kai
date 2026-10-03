@@ -45,6 +45,45 @@ RSpec.describe CloudflareService do
     it 'returns true in non-production' do
       expect(CloudflareService.configure!('test-token')).to eq(true)
     end
+
+    context 'in production' do
+      before do
+        allow(CloudflareService).to receive(:production?).and_return(true)
+        allow(Shell).to receive(:run).and_return(true)
+        allow(File).to receive(:write).and_call_original
+      end
+
+      it 'points cloudflared at the token file and keeps the token out of the unit' do
+        CloudflareService.configure!('eyJsecret-token')
+        expect(File).to have_received(:write).with(end_with('cloudflared.service'), satisfy { |unit|
+          unit.include?("--token-file #{CloudflareService::TOKEN_FILE}") && !unit.include?('eyJsecret-token')
+        })
+      end
+
+      it 'stages the token in a file only its owner can read' do
+        CloudflareService.configure!('eyJsecret-token')
+        expect(File).to have_received(:write).with(end_with('tunnel.token'), 'eyJsecret-token', perm: 0600)
+      end
+    end
+  end
+
+  describe 'token staging' do
+    after { FileUtils.rm_f(CloudflareService.staged_token_path) }
+
+    it 'hands the staged token over once, then forgets it' do
+      CloudflareService.stage_token(" eyJabc \n")
+      expect(File.stat(CloudflareService.staged_token_path).mode & 0o777).to eq(0o600)
+      expect(CloudflareService.take_staged_token).to eq('eyJabc')
+      expect(CloudflareService.take_staged_token).to be_nil
+    end
+  end
+
+  describe 'log filtering' do
+    it 'filters the tunnel token and similar parameters' do
+      filter = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters)
+      filtered = filter.filter('token' => 'a', 'tunnel_token' => 'b', 'api_key' => 'c', 'name' => 'd')
+      expect(filtered).to eq('token' => '[FILTERED]', 'tunnel_token' => '[FILTERED]', 'api_key' => '[FILTERED]', 'name' => 'd')
+    end
   end
 
   describe '.start!' do

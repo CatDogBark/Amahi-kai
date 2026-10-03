@@ -30,6 +30,24 @@ describe "User Sessions", type: :request do
       expect(session[:user_id]).to eq(user.id)
     end
 
+    it "signs out other browsers when the password changes, but not this one" do
+      ensure_setup_completed!
+      user = create(:admin)
+      other_browser = open_session
+      other_browser.post user_sessions_path, params: { username: user.login, password: "secretpassword" }
+
+      login_as(user)
+      put "/users/#{user.id}/update_password",
+        params: { user: { password: "newpassword1", password_confirmation: "newpassword1" } }
+      expect(response.parsed_body["status"]).to eq("ok")
+
+      get root_path
+      expect(response).to have_http_status(:ok)
+      other_browser.get root_path
+      expect(other_browser.response).to have_http_status(:redirect)
+      expect(other_browser.response.location).to include(new_user_session_path)
+    end
+
     it "rejects invalid credentials" do
       user = create(:user)
       post user_sessions_path, params: { username: user.login, password: "wrongpassword" }

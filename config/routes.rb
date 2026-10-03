@@ -45,6 +45,7 @@ Rails.application.routes.draw do
   scope '/network/remote_access', controller: 'remote_access', as: 'remote_access' do
     get '/', action: 'index', as: 'index'
     post 'configure_tunnel', action: 'configure_tunnel'
+    post 'stage_tunnel_token', action: 'stage_tunnel_token'
     post 'start_tunnel', action: 'start_tunnel'
     post 'stop_tunnel', action: 'stop_tunnel'
     get 'install_cloudflared_stream', action: 'install_cloudflared_stream'

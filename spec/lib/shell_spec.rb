@@ -78,6 +78,19 @@ RSpec.describe Shell do
     end
   end
 
+  describe '.redact' do
+    it 'masks secret-shaped text before it reaches the log' do
+      expect(described_class.redact("mysql -e \"CREATE USER x IDENTIFIED BY 'hunter2'\""))
+        .to eq("mysql -e \"CREATE USER x IDENTIFIED BY '[FILTERED]'\"")
+      expect(described_class.redact("cloudflared tunnel run --token eyJabc")).to eq("cloudflared tunnel run --token [FILTERED]")
+      expect(described_class.redact("db_pass = s3cret")).to eq("db_pass = [FILTERED]")
+    end
+
+    it 'leaves ordinary commands alone' do
+      expect(described_class.redact("systemctl restart smbd.service")).to eq("systemctl restart smbd.service")
+    end
+  end
+
   describe '.dummy?' do
     it 'can be explicitly set' do
       described_class.dummy = true

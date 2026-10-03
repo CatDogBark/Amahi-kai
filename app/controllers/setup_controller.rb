@@ -64,6 +64,7 @@ class SetupController < ApplicationController
     user.password = params[:password]
     user.password_confirmation = params[:password_confirmation]
     if user.save
+      keep_signed_in_after_password_change(user)
       session[:admin_password_changed] = true
       redirect_to setup_network_path
     else

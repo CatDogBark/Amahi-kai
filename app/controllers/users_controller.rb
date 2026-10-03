@@ -99,6 +99,7 @@ class UsersController < ApplicationController
       if @user.errors.any?
         render json: { status: :not_acceptable, message: @user.errors.full_messages.join(', ') }
       else
+        keep_signed_in_after_password_change(@user)
         render json: { status: :ok, message: t('password_changed_successfully') }
       end
     end
