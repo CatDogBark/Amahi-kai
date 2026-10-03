@@ -35,7 +35,7 @@ All notable changes to Amahi-kai are documented here.
 - **Files opened straight from a share can't run code on the Amahi page.** The raw-file endpoint serves HTML, JavaScript and XML as plain text and adds `Content-Security-Policy: sandbox` (except for PDFs). Previews look the same.
 - **Themes:** only installed theme names are accepted, each theme's `init.rb` is loaded once instead of on every request, and the theme list no longer changes the server's working directory.
 - **The app proxy no longer forwards the Amahi login cookie** to Docker apps; their own cookies still pass through.
-- **Production only answers to known host names** (DNS-rebinding protection): any IP address, `localhost`, the machine's hostname and `hostname.local`, plus the comma-separated `RAILS_ALLOWED_HOSTS` in `/etc/amahi-kai/amahi.env` (add the Cloudflare Tunnel hostname there). The old `RAILS_ALLOWED_HOST` line only worked in development.
+- **Production only answers to known host names** (DNS-rebinding protection): any IP address, `localhost`, the machine's hostname and `hostname.local`, the NAS's Tailscale name, and the comma-separated `RAILS_ALLOWED_HOSTS` in `/etc/amahi-kai/amahi.env`. Requests from the NAS itself skip the check, so a Cloudflare Tunnel works with no setup. A refused request gets a plain-text explanation instead of a blank 403. The old `RAILS_ALLOWED_HOST` line only worked in development.
 - **CI fails on spec failures again.** The gate matched "0 failures" anywhere, including in "10 failures".
 
 ### 🔧 Architecture & Code Quality
