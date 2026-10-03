@@ -84,6 +84,19 @@ sudo -u "$APP_USER" bash -lc "cd $APP_DIR && bundle config set --local path 'ven
 log "Running database migrations..."
 RAILS_ENV=production bin/rails db:migrate 2>&1
 
+# 3b. Regenerate smb.conf from the app's settings so changes to the generated config
+#     (network binding, Greyhole settings) take effect on update, then restart Samba:
+#     a new binding only applies after a restart. An invalid config is never installed.
+log "Updating Samba configuration..."
+if RAILS_ENV=production bin/rails runner 'exit(SambaService.push_config ? 0 : 1)' 2>&1; then
+  systemctl restart smbd nmbd 2>&1 || log "⚠ Samba restart failed"
+else
+  log "⚠ Samba config not regenerated; keeping the current one"
+fi
+
+# 3c. The app writes uploads into share folders that Samba users own (group users)
+id -nG "$APP_USER" | grep -qw users || usermod -aG users "$APP_USER"
+
 # 4. Clear cache and precompile assets
 log "Clearing caches..."
 rm -rf "$APP_DIR/tmp/cache" "$APP_DIR/public/assets"

@@ -3,8 +3,9 @@ require 'rails_helper'
 RSpec.describe NetworkHelper, type: :helper do
   describe '#alias_ip' do
     before do
-      Setting.find_or_create_by!(name: 'net', kind: Setting::NETWORK).update!(value: '192.168.1')
-      Setting.find_or_create_by!(name: 'self-address', kind: Setting::NETWORK).update!(value: '100')
+      # Update the rows the seeds created; a second row of another kind is never read.
+      Setting.set('net', '192.168.1')
+      Setting.set('self-address', '100')
     end
 
     it 'returns server IP for blank address' do

@@ -264,24 +264,11 @@ class SecurityAudit
         Shell.run('dpkg-reconfigure -plow unattended-upgrades')
     end
 
+    # smb.conf is generated (Share.samba_network_lines binds Samba to the LAN and
+    # Tailscale), so regenerate it rather than editing it: the next share change
+    # regenerated the file and undid the old edit.
     def fix_samba_lan_binding!
-      return false unless File.exist?('/etc/samba/smb.conf')
-      tmp_path = File.join(AMAHI_TMP_DIR, 'smb.conf')
-      content = File.read('/etc/samba/smb.conf')
-
-      unless content.match?(/^\s*interfaces\s*=/i)
-        # Detect primary network interface (eth0 is legacy — Ubuntu 24.04 uses predictive names)
-        primary_iface = `ip -4 route show default 2>/dev/null`.match(/dev\s+(\S+)/)&.captures&.first || 'eth0'
-        content.sub!(/\[global\]/i, "[global]\n   interfaces = lo #{primary_iface}\n   bind interfaces only = yes")
-      end
-
-      unless content.match?(/^\s*bind interfaces only\s*=\s*yes/i)
-        content.sub!(/\[global\]/i, "[global]\n   bind interfaces only = yes")
-      end
-
-      File.write(tmp_path, content)
-      Shell.run("cp #{tmp_path} /etc/samba/smb.conf") &&
-        Shell.run('systemctl restart smbd.service')
+      SambaService.push_config && Shell.run('systemctl restart smbd.service')
     end
 
     def simulated_fix(check_name)

@@ -6,6 +6,11 @@ class FileBrowserController < ApplicationController
   before_action :check_share_access
   before_action :check_write_access, only: [:upload, :new_folder, :rename, :delete]
   before_action :resolve_path
+
+  # A name or path the service refuses gets a clear error, not a 500. (Handlers are
+  # matched last-declared first, so InvalidName, a SecurityError, is checked first.)
+  rescue_from SecurityError, with: :access_denied
+  rescue_from FileBrowserService::InvalidName, with: :invalid_name
   # CSRF tokens sent via csrfHeaders() in file_browser_controller.js
 
   # GET /files/:share_id/browse/*path
@@ -147,6 +152,14 @@ class FileBrowserController < ApplicationController
   end
 
   private
+
+  def invalid_name(error)
+    render json: { error: error.message }, status: :unprocessable_entity
+  end
+
+  def access_denied(_error)
+    render json: { error: "Access denied" }, status: :forbidden
+  end
 
   def set_share
     @share = Share.find_by!(name: params[:share_id])

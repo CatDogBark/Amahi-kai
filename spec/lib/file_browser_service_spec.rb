@@ -58,12 +58,20 @@ RSpec.describe FileBrowserService do
     let(:dir) { Dir.mktmpdir }
     after { FileUtils.rm_rf(dir) }
 
-    before { allow(Shell).to receive(:run).and_return(true) }
-
-    it 'uploads files with sanitized names' do
+    it 'writes the upload into the folder' do
       file = double('upload', original_filename: 'test file.txt', read: 'content')
       result = described_class.upload_files(dir, [file])
       expect(result).to eq(['test file.txt'])
+      expect(File.read(File.join(dir, 'test file.txt'))).to eq('content')
+    end
+
+    it 'streams from the uploaded tempfile and keeps only the file name' do
+      tempfile = Tempfile.new('upload').tap { |f| f.write('big data'); f.flush }
+      file = double('upload', original_filename: 'C:\\Users\\troy\\report.pdf', tempfile: tempfile)
+      expect(described_class.upload_files(dir, [file])).to eq(['report.pdf'])
+      expect(File.read(File.join(dir, 'report.pdf'))).to eq('big data')
+    ensure
+      tempfile&.close!
     end
 
     it 'skips objects without original_filename' do
@@ -90,11 +98,14 @@ RSpec.describe FileBrowserService do
     let(:dir) { Dir.mktmpdir }
     after { FileUtils.rm_rf(dir) }
 
-    before { allow(Shell).to receive(:run).and_return(true) }
-
-    it 'creates folder and returns sanitized name' do
+    it 'creates the folder' do
       result = described_class.create_folder(dir, 'New Folder')
       expect(result).to eq('New Folder')
+      expect(File.directory?(File.join(dir, 'New Folder'))).to be true
+    end
+
+    it 'refuses a folder named ..' do
+      expect { described_class.create_folder(dir, '..') }.to raise_error(FileBrowserService::InvalidName)
     end
 
     it 'raises if folder already exists' do
@@ -117,6 +128,13 @@ RSpec.describe FileBrowserService do
 
     it 'raises if source not found' do
       expect { described_class.rename_entry(dir, 'missing.txt', 'new.txt') }.to raise_error('Not found')
+    end
+
+    it 'renames a file whose name contains two dots, not a different one' do
+      FileUtils.touch([File.join(dir, 'a..b.txt'), File.join(dir, 'ab.txt')])
+      described_class.rename_entry(dir, 'a..b.txt', 'renamed.txt')
+      expect(File.exist?(File.join(dir, 'ab.txt'))).to be true
+      expect(File.exist?(File.join(dir, 'renamed.txt'))).to be true
     end
 
     it 'raises if target exists' do
@@ -188,13 +206,16 @@ RSpec.describe FileBrowserService do
     end
   end
 
-  describe '.sanitize_filename' do
-    it 'removes path separators and null bytes' do
-      expect(described_class.sanitize_filename("test/file\x00.txt")).to eq('testfile.txt')
+  describe '.check_name!' do
+    it 'accepts ordinary names, including ones with dots' do
+      expect(described_class.check_name!('a..b.txt')).to eq('a..b.txt')
+      expect(described_class.check_name!(' notes 12:30.txt ')).to eq('notes 12:30.txt')
     end
 
-    it 'removes directory traversal' do
-      expect(described_class.sanitize_filename('..secret.txt')).to eq('secret.txt')
+    it 'refuses names it would otherwise have to rewrite' do
+      ['..', '.', '', 'a/b', 'a\\b', "nul\x00.txt", 'x' * 256].each do |name|
+        expect { described_class.check_name!(name) }.to raise_error(FileBrowserService::InvalidName), name.inspect
+      end
     end
   end
 
@@ -205,6 +226,13 @@ RSpec.describe FileBrowserService do
     it 'joins paths safely' do
       FileUtils.touch(File.join(dir, 'file.txt'))
       expect(described_class.safe_join(dir, 'file.txt')).to eq(File.join(dir, 'file.txt'))
+    end
+
+    it 'refuses a symlink to a sibling folder whose name starts the same' do
+      share = File.join(dir, 'movies')
+      FileUtils.mkdir_p([share, File.join(dir, 'movies-private')])
+      File.symlink(File.join(dir, 'movies-private'), File.join(share, 'peek'))
+      expect { described_class.safe_join(share, 'peek') }.to raise_error(SecurityError)
     end
   end
 
@@ -218,9 +246,13 @@ RSpec.describe FileBrowserService do
       expect(full).to eq(File.join(dir, 'subdir'))
     end
 
-    it 'strips directory traversal' do
-      relative, _ = described_class.resolve_path(dir, '../../etc/passwd')
-      expect(relative).not_to include('..')
+    it 'refuses directory traversal' do
+      expect { described_class.resolve_path(dir, '../../etc/passwd') }.to raise_error(FileBrowserService::InvalidName)
+    end
+
+    it 'keeps folder names that contain two dots' do
+      relative, _ = described_class.resolve_path(dir, 'v1..2/notes')
+      expect(relative).to eq('v1..2/notes')
     end
 
     it 'collapses multiple slashes' do

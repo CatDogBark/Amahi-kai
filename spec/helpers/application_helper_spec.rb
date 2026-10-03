@@ -106,7 +106,8 @@ RSpec.describe ApplicationHelper, type: :helper do
   describe "#theme_stylesheet_path" do
     it "returns correct path" do
       path = helper.theme_stylesheet_path("style", "amahi-kai")
-      expect(path).to eq("/themes/amahi-kai/stylesheets/style.css")
+      # The ?v= cache-buster changes with the file, so match the path before it.
+      expect(path).to match(%r{\A/themes/amahi-kai/stylesheets/style\.css(\?v=\d+)?\z})
     end
   end
 

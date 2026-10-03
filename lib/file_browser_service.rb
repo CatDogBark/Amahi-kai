@@ -5,6 +5,9 @@ require 'shellwords'
 # Extracted from FileBrowserController — handles all file system
 # operations so the controller only deals with HTTP concerns.
 module FileBrowserService
+  # A file or folder name that can't be used as given ("..", one with a slash, and so on).
+  # It's a SecurityError so the path checks that rescue SecurityError catch it too.
+  class InvalidName < SecurityError; end
   MIME_TYPES = {
     # Images
     '.jpg' => 'image/jpeg', '.jpeg' => 'image/jpeg', '.png' => 'image/png',
@@ -90,7 +93,8 @@ module FileBrowserService
       uploaded = []
       files.each do |file|
         next unless file.respond_to?(:original_filename)
-        filename = sanitize_filename(file.original_filename)
+        # Some browsers send a full client-side path; keep only the file name.
+        filename = check_name!(File.basename(file.original_filename.to_s.tr("\\", "/")))
         dest = File.join(full_path, filename)
 
         # Don't overwrite without flag
@@ -98,29 +102,30 @@ module FileBrowserService
           next
         end
 
-        # Write to temp file first, then move to destination with proper ownership
-        tmp = File.join('/tmp', "amahi-upload-#{SecureRandom.hex(8)}")
-        File.open(tmp, 'wb') { |f| f.write(file.read) }
-        Shell.run("cp #{Shellwords.escape(tmp)} #{Shellwords.escape(dest)}")
-        Shell.run("chown amahi:users #{Shellwords.escape(dest)}")
-        FileUtils.rm_f(tmp)
+        # Write straight into the share; the app user can write share folders. (This used
+        # to copy from /tmp with `sudo cp`, which the sudoers allowlist doesn't permit,
+        # so the copy failed silently and the file was still reported as uploaded.)
+        source = file.respond_to?(:tempfile) ? file.tempfile : StringIO.new(file.read.to_s)
+        source.rewind if source.respond_to?(:rewind)
+        File.open(dest, 'wb') { |out| IO.copy_stream(source, out) }
+        File.chmod(0664, dest)
         uploaded << filename
       end
       uploaded
     end
 
     def create_folder(full_path, name)
-      name = sanitize_filename(name)
+      name = check_name!(name)
       folder_path = File.join(full_path, name)
       raise "Already exists" if File.exist?(folder_path)
 
-      Shell.run("mkdir -p #{Shellwords.escape(folder_path)}")
-      Shell.run("chmod 2775 #{Shellwords.escape(folder_path)}")
+      FileUtils.mkdir(folder_path)
+      File.chmod(02775, folder_path)
       name
     end
 
     def rename_entry(full_path, old_name, new_name)
-      new_name = sanitize_filename(new_name)
+      new_name = check_name!(new_name)
       old_path = safe_join(full_path, old_name)
       new_path = File.join(full_path, new_name)
 
@@ -189,36 +194,41 @@ module FileBrowserService
       FILE_ICONS[ext] || '📄'
     end
 
-    def sanitize_filename(name)
-      name.gsub(%r{[/\\:\x00]}, '').gsub('..', '').strip.truncate(255)
+    # +name+ if it works as a single file or folder name. Names are refused, not
+    # rewritten: stripping ".." turned "a..b.txt" into "ab.txt", so a rename or delete
+    # could hit a different file.
+    def check_name!(name)
+      name = name.to_s.strip
+      if name.empty? || name == "." || name == ".." || name.match?(%r{[/\\\x00]}) || name.bytesize > 255
+        raise InvalidName, "Invalid name: #{name.inspect}"
+      end
+      name
     end
 
     def safe_join(base, name)
-      sanitized = sanitize_filename(name)
-      path = File.join(base, sanitized)
-      real_base = File.realpath(base) rescue base
-      real_path = File.realpath(path) rescue path
-      raise "Access denied" unless real_path.start_with?(real_base)
+      path = File.join(base, check_name!(name))
+      raise SecurityError, "Access denied" unless inside?(base, path)
       path
     end
 
     def resolve_path(share_path, raw_path)
-      relative_path = (raw_path || '').to_s
-        .gsub(/\.\./, '')     # Strip directory traversal
-        .gsub(%r{//+}, '/')   # Collapse multiple slashes
-        .gsub(%r{^/|/$}, '')  # Strip leading/trailing slashes
-
+      segments = (raw_path || '').to_s.split('/').reject(&:empty?)
+      raise InvalidName, "Invalid path" if segments.any? { |s| s == '.' || s == '..' }
+      relative_path = segments.join('/')
       full_path = File.join(share_path, relative_path)
 
-      # Final security check: resolved path must be under the share root
-      real_share = File.realpath(share_path) rescue share_path
-      real_full = File.realpath(full_path) rescue full_path
-
-      unless real_full.start_with?(real_share)
-        raise "Access denied"
-      end
+      # Final security check: the resolved path (symlinks followed) must be in the share
+      raise SecurityError, "Access denied" unless inside?(share_path, full_path)
 
       [relative_path, full_path]
+    end
+
+    # Is +path+ (after following symlinks) +base+ itself or inside it? Compares whole
+    # path segments: a plain prefix match let /files/movies reach /files/movies-private.
+    def inside?(base, path)
+      real_base = File.realpath(base) rescue base
+      real_path = File.realpath(path) rescue path
+      real_path == real_base || real_path.start_with?(real_base.chomp('/') + '/')
     end
   end
 end

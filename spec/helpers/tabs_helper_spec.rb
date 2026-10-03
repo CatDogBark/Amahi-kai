@@ -20,23 +20,5 @@ RSpec.describe ApplicationHelper, type: :helper do
     end
   end
 
-  describe "#debug?" do
-    it "returns false" do
-      expect(helper.debug?).to be false
-    end
-  end
-
-  describe "#debug_tab?" do
-    it "returns true when advanced" do
-      Setting.find_or_create_by!(name: "advanced") { |s| s.value = "1"; s.kind = 0 }
-      Setting.find_by(name: "advanced").update!(value: "1")
-      expect(helper.debug_tab?).to be true
-    end
-
-    it "returns false when not advanced" do
-      Setting.find_or_create_by!(name: "advanced") { |s| s.value = "0"; s.kind = 0 }
-      Setting.find_by(name: "advanced").update!(value: "0")
-      expect(helper.debug_tab?).to be false
-    end
-  end
+  # (#debug? and #debug_tab? were removed with the plugin system; their specs went too.)
 end

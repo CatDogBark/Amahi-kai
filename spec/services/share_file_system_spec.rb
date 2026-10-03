@@ -22,8 +22,8 @@ RSpec.describe ShareFileSystem do
       expect(Shell).to have_received(:run).with(
         /rmdir.*old/,
         /mkdir -p.*movies/,
-        /chown.*#{admin.login}:users.*movies/,
-        /chmod g\+w.*movies/
+        /chown amahi:users .*movies/,
+        /chmod 2775 .*movies/
       )
     end
 

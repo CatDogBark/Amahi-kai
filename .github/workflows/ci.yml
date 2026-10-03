@@ -27,7 +27,8 @@ jobs:
         run: |
           mkdir -p tmp/cache/tmpfiles tmp/pids log
           bundle exec rails db:schema:load
-      - run: bundle exec rspec spec/models/ --tag ~docker --format documentation
+      # spec/services and spec/helpers had no job, so they never ran
+      - run: bundle exec rspec spec/models/ spec/services/ spec/helpers/ --tag ~docker --format documentation
       - uses: actions/upload-artifact@v4
         if: always()
         with:
