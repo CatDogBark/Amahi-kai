@@ -14,11 +14,9 @@ RSpec.describe "Link-triggered actions", type: :request do
       /settings/toggle_setting
       /settings/change_language
       /settings/activate_theme
-      /settings/servers/1/refresh
-      /settings/servers/1/start
-      /settings/servers/1/stop
-      /settings/servers/1/restart
-      /settings/servers/1/toggle_start_at_boot
+      /settings/servers/smbd/start
+      /settings/servers/smbd/stop
+      /settings/servers/smbd/restart
       /logout
     ].each do |path|
       it "has no GET route for #{path}" do

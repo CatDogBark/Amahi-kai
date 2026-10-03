@@ -1,8 +1,6 @@
 # DashboardStats — lightweight system info for the home dashboard
 # Heavier details live in SettingsController#system_status
 
-require 'open3'
-
 class DashboardStats
   class << self
     def summary
@@ -32,62 +30,11 @@ class DashboardStats
       { cpu: cpu, memory: mem, disk: disk }
     end
 
+    # Amahi-kai itself is left out: you're looking at it.
     def service_status
-      # Core services (always shown)
-      services = [
-        { name: 'Samba', unit: 'smbd' },
-        { name: 'Samba (nmbd)', unit: 'nmbd' },
-        { name: 'MariaDB', unit: 'mariadb' },
-      ]
-
-      # Optional services (only shown if installed)
-      optional = [
-        { name: 'dnsmasq', unit: 'dnsmasq', check: '/usr/sbin/dnsmasq' },
-        { name: 'Greyhole', unit: 'greyhole', check: '/usr/bin/greyhole' },
-        { name: 'Docker', unit: 'docker', check: '/usr/bin/docker' },
-        { name: 'Cloudflare Tunnel', unit: 'cloudflared', check: '/usr/bin/cloudflared' },
-        { name: 'Tailscale VPN', unit: 'tailscaled', check: '/usr/bin/tailscale' },
-      ]
-
-      optional.each do |svc|
-        services << svc if File.exist?(svc[:check])
+      SystemServices.all.reject { |svc| svc.key == 'amahi-kai' }.map do |svc|
+        { name: svc.name, unit: svc.unit, running: svc.running?, status: svc.state, since: svc.since }
       end
-
-      services.map do |svc|
-        # Greyhole uses an LSB init script — systemd can't track the forked daemon,
-        # so systemctl is-active returns "failed" even when the daemon is running.
-        # Use pgrep to check for the actual process instead.
-        if svc[:unit] == 'greyhole'
-          running = begin
-            require 'greyhole'
-            Greyhole.running?
-          rescue StandardError
-            false
-          end
-          next { name: svc[:name], unit: svc[:unit], running: running, status: running ? 'active' : 'inactive', since: nil }
-        end
-
-        status = begin
-          systemctl_output('is-active', svc[:unit])
-        rescue StandardError
-          'unknown'
-        end
-        since = if status == 'active'
-          begin
-            systemctl_output('show', svc[:unit], '--property=ActiveEnterTimestamp')
-              .sub('ActiveEnterTimestamp=', '')
-          rescue StandardError
-            nil
-          end
-        end
-        { name: svc[:name], unit: svc[:unit], running: status == 'active', status: status, since: since }
-      end
-    end
-
-    # systemctl's stdout, run without a shell so a unit name can't add commands.
-    def systemctl_output(*args)
-      stdout, _stderr, _status = Open3.capture3('systemctl', *args)
-      stdout.strip
     end
 
     def storage_summary

@@ -62,9 +62,22 @@ describe "Settings Controller", type: :request do
         Setting.create!(name: "advanced", value: "1", kind: 0)
       end
 
-      it "shows the servers page" do
+      it "shows each service with its details" do
+        entry = SystemServices::CATALOG.find { |e| e[:key] == 'smbd' }
+        samba = SystemServices::Service.new(
+          entry,
+          { 'ActiveState' => 'active', 'SubState' => 'running', 'Description' => 'Samba SMB Daemon',
+            'ActiveEnterTimestamp' => "@#{(Time.now - 90_000).to_i}", 'MainPID' => '4242',
+            'MemoryCurrent' => '8003584', 'UnitFileState' => 'enabled' },
+          version: '4.19.5', version_detail: '2:4.19.5+dfsg-4ubuntu9.7'
+        )
+        allow(SystemServices).to receive(:all).with(versions: true).and_return([samba])
+
         get "/settings/servers"
         expect(response).to have_http_status(:ok)
+        body = response.body
+        expect(body).to include('Samba SMB Daemon', '4.19.5', '1 day, 1 hour', '4242', '7.63 MB')
+        expect(body).to include('/settings/servers/smbd/restart', '/settings/servers/smbd/stop')
       end
 
       it "redirects if not advanced" do
