@@ -54,14 +54,14 @@ describe Greyhole do
     it 'generates config with share settings' do
       share = Share.create!(name: 'Movies', path: '/var/lib/amahi-kai/files/movies', disk_pool_copies: 2)
       config = Greyhole.generate_config
-      expect(config).to include('[Movies]')
-      expect(config).to include('num_copies = 2')
+      # Greyhole's per-share form: num_copies[share name] = N
+      expect(config).to include('num_copies[Movies] = 2')
     end
 
     it 'uses max for copies >= 99' do
       Share.create!(name: 'Important', path: '/var/lib/amahi-kai/files/important', disk_pool_copies: 99)
       config = Greyhole.generate_config
-      expect(config).to include('num_copies = max')
+      expect(config).to include('num_copies[Important] = max')
     end
   end
 
