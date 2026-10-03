@@ -216,6 +216,8 @@ if ! id "$APP_USER" &>/dev/null; then
 else
   echo "==> User '$APP_USER' already exists (skipping)"
 fi
+# The app writes uploads into share folders that Samba users own (group users)
+usermod -aG users "$APP_USER"
 
 # ---------------------------------------------------------------------------
 # 4. Deploy application code

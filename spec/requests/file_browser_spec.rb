@@ -92,6 +92,35 @@ describe "FileBrowser Controller", type: :request do
         post "/files/#{share.name}/upload", params: {}
         expect(response).to have_http_status(:unprocessable_entity)
       end
+
+      it "puts the uploaded file in the share" do
+        file = Rack::Test::UploadedFile.new(StringIO.new("data"), "text/plain", false, original_filename: "upload.txt")
+        post "/files/#{share.name}/upload", params: { files: [file] }
+        expect(File.read(File.join(tmpdir, "upload.txt"))).to eq("data")
+      end
+    end
+
+    describe "names that can't be used as given" do
+      it "refuses to rename to .. with a clear error" do
+        File.write(File.join(tmpdir, "old.txt"), "x")
+        put "/files/#{share.name}/rename", params: { old_name: "old.txt", new_name: ".." }
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.parsed_body["error"]).to include("Invalid name")
+        expect(File.exist?(File.join(tmpdir, "old.txt"))).to be true
+      end
+
+      it "refuses a delete name with a slash" do
+        delete "/files/#{share.name}/delete", params: { names: ["../outside.txt"] }
+        expect(response).to have_http_status(:unprocessable_entity)
+      end
+
+      it "deletes the file with two dots in its name, not another one" do
+        File.write(File.join(tmpdir, "a..b.txt"), "x")
+        File.write(File.join(tmpdir, "ab.txt"), "keep")
+        delete "/files/#{share.name}/delete", params: { names: ["a..b.txt"] }
+        expect(File.exist?(File.join(tmpdir, "a..b.txt"))).to be false
+        expect(File.read(File.join(tmpdir, "ab.txt"))).to eq("keep")
+      end
     end
 
     describe "POST /files/:share_id/new_folder" do

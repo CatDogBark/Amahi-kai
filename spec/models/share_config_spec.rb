@@ -154,6 +154,52 @@ RSpec.describe Share, 'config generation', type: :model do
       result = Share.header_workgroup("example.local")
       expect(result).to include("log level = 5")
     end
+
+    describe 'network access' do
+      before do
+        Setting.set('net', '192.168.1')
+        allow(Share).to receive(:primary_interface).and_return('ens18')
+        allow(Share).to receive(:lan_ipv6_prefixes).and_return(['2603:800c:400:84f3::/64'])
+        allow(File).to receive(:exist?).and_call_original
+        allow(File).to receive(:exist?).with('/sys/class/net/tailscale0').and_return(false)
+      end
+
+      it 'allows the NAS itself, the LAN and Tailscale, and nothing else' do
+        result = Share.header_workgroup("example.local")
+        expect(result).to include("hosts allow = 127.0.0.1 ::1 192.168.1. fe80::/10 2603:800c:400:84f3::/64 100.64.0.0/10 fd7a:115c:a1e0::/48")
+        expect(result).not_to match(/hosts allow.*172\./)
+      end
+
+      it 'binds Samba to loopback and the LAN interface' do
+        result = Share.header_workgroup("example.local")
+        expect(result).to include("interfaces = lo ens18", "bind interfaces only = yes")
+      end
+
+      it 'adds the Tailscale interface when it exists' do
+        allow(File).to receive(:exist?).with('/sys/class/net/tailscale0').and_return(true)
+        expect(Share.header_workgroup("example.local")).to include("interfaces = lo ens18 tailscale0")
+      end
+
+      it 'leaves the allow list off when the LAN prefix is unknown, rather than lock the LAN out' do
+        Setting.set('net', '')
+        expect(Share.header_workgroup("example.local")).not_to include("hosts allow")
+      end
+    end
+
+    it 'keeps the settings Greyhole needs when Greyhole is installed' do
+      allow(Greyhole).to receive(:installed?).and_return(true)
+      result = Share.header_workgroup("example.local")
+      expect(result).to include("wide links = yes", "follow symlinks = yes", "allow insecure wide links = yes")
+    end
+
+    it 'leaves them out without Greyhole' do
+      allow(Greyhole).to receive(:installed?).and_return(false)
+      expect(Share.header_workgroup("example.local")).not_to include("wide links")
+    end
+
+    it 'gives the guest account no home share' do
+      expect(Share.header_workgroup("example.local")).to include("invalid users = nobody")
+    end
   end
 
   describe '.header_pdc' do

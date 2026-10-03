@@ -51,6 +51,24 @@ RSpec.describe SambaService do
     end
   end
 
+  describe 'config validation' do
+    it 'keeps the current smb.conf when testparm rejects the new one' do
+      allow(File).to receive(:executable?).and_call_original
+      allow(File).to receive(:executable?).with('/usr/bin/testparm').and_return(true)
+      allow(Open3).to receive(:capture3).with('/usr/bin/testparm', '-s', anything)
+        .and_return(['', 'error', double(success?: false)])
+
+      expect(described_class.write_smb_conf('broken')).to be false
+      expect(Shell).not_to have_received(:run).with(%r{/etc/samba/smb.conf}, anything)
+    end
+
+    it 'reloads smbd as well as nmbd after writing a new config' do
+      allow(described_class).to receive(:config_valid?).and_return(true)
+      described_class.push_config
+      expect(Platform).to have_received(:reload).with(:smb)
+    end
+  end
+
   describe '.write_lmhosts' do
     it 'writes content and copies to /etc/samba/lmhosts' do
       described_class.write_lmhosts('test content')

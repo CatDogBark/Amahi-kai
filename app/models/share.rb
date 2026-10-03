@@ -18,6 +18,7 @@ require 'shell'
 require 'platform'
 require 'temp_cache'
 require 'shellwords'
+require 'ipaddr'
 
 class Share < ApplicationRecord
 
@@ -258,15 +259,69 @@ class Share < ApplicationRecord
       "\tmap to guest = Bad User",
       "\twins support = yes",
       win98 ? "client lanman auth = yes" : "",
+      *samba_network_lines,
+      *greyhole_samba_lines,
       "",
       "[homes]",
       "\tcomment = Home Directories",
       "\tvalid users = %%S",
+      # The guest account has no home; without this, anonymous browsing showed a "nobody" share.
+      "\tinvalid users = nobody",
       "\tbrowseable = no",
       "\twritable = yes",
       "\tcreate mask = 0644",
     "\tdirectory mask = 0755"].join "\n"
     ret % [short_domain, domain]
+  end
+
+  # Tailscale's address ranges (IPv4 CGNAT block and its IPv6 ULA prefix).
+  TAILSCALE_RANGES = %w[100.64.0.0/10 fd7a:115c:a1e0::/48].freeze
+
+  # Samba answers only the NAS itself, the LAN and Tailscale. Anything else, including
+  # Docker containers' private ranges, is refused: Docker apps get share folders as
+  # mounted volumes, not over SMB. Binding to interfaces alone wouldn't do it, since a
+  # container can still reach the LAN address; `hosts allow` filters by source.
+  def self.samba_network_lines
+    lines = []
+    net = Setting.value_by_name('net').to_s.strip
+    iface = primary_interface
+    # Without the LAN prefix the allow list would lock out the LAN, so leave it off.
+    if net.match?(/\A\d{1,3}(\.\d{1,3}){2}\z/)
+      allow = ["127.0.0.1", "::1", "#{net}.", "fe80::/10", *lan_ipv6_prefixes(iface), *TAILSCALE_RANGES]
+      lines << "\thosts allow = #{allow.join(' ')}"
+    end
+    if iface.present?
+      ifaces = ["lo", iface]
+      ifaces << "tailscale0" if File.exist?("/sys/class/net/tailscale0")
+      lines << "\tinterfaces = #{ifaces.join(' ')}" << "\tbind interfaces only = yes"
+    end
+    lines
+  end
+
+  # The interface of the default route, such as ens18.
+  def self.primary_interface
+    `ip -4 route show default 2>/dev/null`[/\bdev\s+(\S+)/, 1]
+  end
+
+  # Global IPv6 prefixes on the LAN interface, so IPv6 clients on the LAN are allowed too.
+  def self.lan_ipv6_prefixes(iface)
+    return [] if iface.blank?
+    out = `ip -6 -o addr show dev #{Shellwords.escape(iface)} scope global 2>/dev/null`
+    out.scan(%r{inet6\s+([0-9a-f:]+)/(\d+)}).map { |addr, len| "#{IPAddr.new(addr).mask(len.to_i)}/#{len}" }.uniq
+  rescue IPAddr::InvalidAddressError
+    []
+  end
+
+  # Greyhole leaves pooled files as symlinks to the pool drives, so Samba has to follow
+  # them. These used to be added only at Greyhole install time and were lost the next
+  # time smb.conf was generated.
+  GREYHOLE_SAMBA_LINES = ["\twide links = yes", "\tfollow symlinks = yes", "\tallow insecure wide links = yes"].freeze
+
+  def self.greyhole_samba_lines
+    require 'greyhole'
+    Greyhole.installed? ? GREYHOLE_SAMBA_LINES : []
+  rescue LoadError
+    []
   end
 
   def self.header_pdc(domain)
