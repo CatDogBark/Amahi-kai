@@ -133,49 +133,50 @@ RSpec.describe "SettingsController more", type: :request do
     end
   end
 
-  # --- Server actions ---
+  # --- Service actions (Settings → Servers) ---
 
-  describe "server management" do
-    let!(:server) do
-      Server.create!(name: 'test-server', comment: 'Test', start_at_boot: false, pidfile: '/tmp/test.pid')
-    end
+  describe "POST /settings/servers/:key/:verb" do
+    let(:entry) { SystemServices::CATALOG.find { |e| e[:key] == 'smbd' } }
+    let(:samba) { SystemServices::Service.new(entry, { 'ActiveState' => 'active' }) }
 
     before do
-      allow_any_instance_of(Server).to receive(:do_start)
-      allow_any_instance_of(Server).to receive(:do_stop)
-      allow_any_instance_of(Server).to receive(:do_restart)
+      allow(SystemServices).to receive(:find).and_return(nil)
+      allow(SystemServices).to receive(:find).with('smbd').and_return(samba)
+      allow(Shell).to receive(:run).and_return(true)
     end
 
-    it "refreshes server status" do
-      post "/settings/servers/#{server.id}/refresh", as: :json
-      expect(response).to have_http_status(:ok)
-      expect(response.parsed_body["content"]).to include("server_wrap_#{server.id}")
+    %w[start stop restart].each do |verb|
+      it "runs systemctl #{verb} through sudo's exact unit name" do
+        post "/settings/servers/smbd/#{verb}"
+        expect(Shell).to have_received(:run).with("systemctl #{verb} smbd.service")
+        expect(response).to redirect_to('/settings/servers')
+        expect(flash[:notice]).to include('Samba')
+      end
     end
 
-    it "returns JSON to the page's fetch, which sends no Accept header" do
-      post "/settings/servers/#{server.id}/start"
-      expect(response.media_type).to eq("application/json")
-      expect(response.parsed_body["status"]).to eq("ok")
+    it "reports a failed command" do
+      allow(Shell).to receive(:run).and_return(false)
+      post "/settings/servers/smbd/restart"
+      expect(flash[:error]).to include('failed')
     end
 
-    it "starts a server" do
-      post "/settings/servers/#{server.id}/start"
-      expect(response).to have_http_status(:ok)
+    it "refuses services without controls" do
+      mariadb = SystemServices::Service.new(SystemServices::CATALOG.find { |e| e[:key] == 'mariadb' }, {})
+      allow(SystemServices).to receive(:find).with('mariadb').and_return(mariadb)
+      post "/settings/servers/mariadb/stop"
+      expect(response).to have_http_status(:not_found)
+      expect(Shell).not_to have_received(:run)
     end
 
-    it "stops a server" do
-      post "/settings/servers/#{server.id}/stop"
-      expect(response).to have_http_status(:ok)
+    it "refuses unknown services" do
+      post "/settings/servers/sshd/stop"
+      expect(response).to have_http_status(:not_found)
+      expect(Shell).not_to have_received(:run)
     end
 
-    it "restarts a server" do
-      post "/settings/servers/#{server.id}/restart"
-      expect(response).to have_http_status(:ok)
-    end
-
-    it "toggles start_at_boot" do
-      post "/settings/servers/#{server.id}/toggle_start_at_boot"
-      expect(server.reload.start_at_boot).to eq(true)
+    it "has no route for other verbs" do
+      expect { Rails.application.routes.recognize_path('/settings/servers/smbd/enable', method: :post) }
+        .to raise_error(ActionController::RoutingError)
     end
   end
 

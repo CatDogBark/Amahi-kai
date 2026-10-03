@@ -52,6 +52,7 @@ All notable changes to Amahi-kai are documented here.
 - **Stopping a Docker app reports the real result.** It checked `$?`, which `Shell.capture` doesn't set, so a stop succeeded or failed depending on whatever command ran before it.
 - **Commands built from names run without a shell:** the dashboard's service status, drive models, server process lookup, Docker image pull and container create, and drive mounting pass argument lists, and the sudo path lookup is done in Ruby instead of a `which` subshell. Removed the unused script runner, archive unpacker and router-driver hook with its credential helpers.
 - **Page HTML helpers escape what they insert** (page title, icon attributes, form error labels, the storage-pool warning).
+- **Settings → Servers shows the NAS's services again**, live from systemd: status, installed version, uptime since the last start, memory, PID and whether each starts at boot, with Start, Stop and Restart for Samba, dnsmasq, Greyhole and Docker. It used to list a database table that nothing filled, so it was always empty. The dashboard, System Status and Servers now share one service list.
 
 ### 🔧 Architecture & Code Quality
 

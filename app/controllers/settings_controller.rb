@@ -44,7 +44,7 @@ class SettingsController < ApplicationController
     unless @advanced
       redirect_to settings_index_path
     else
-      @servers = Server.all rescue []
+      @services = SystemServices.all(versions: true)
     end
   end
 
@@ -79,33 +79,19 @@ class SettingsController < ApplicationController
     render plain: t('powering_off')
   end
 
-  def refresh
-    @server = Server.find(params[:id])
-    render 'server_status', formats: [:json]
-  end
+  # Start, stop or restart a service on Settings → Servers. Only the actions
+  # SystemServices lists for that service are accepted.
+  def service_action
+    service = SystemServices.find(params[:key])
+    verb = params[:verb]
+    return head(:not_found) unless service&.actions&.include?(verb)
 
-  def start
-    @server = Server.find(params[:id])
-    @server.do_start
-    render 'server_status', formats: [:json]
-  end
-
-  def stop
-    @server = Server.find(params[:id])
-    @server.do_stop
-    render 'server_status', formats: [:json]
-  end
-
-  def restart
-    @server = Server.find(params[:id])
-    @server.do_restart
-    render 'server_status', formats: [:json]
-  end
-
-  def toggle_start_at_boot
-    @server = Server.find(params[:id])
-    @server.toggle!(:start_at_boot)
-    render 'server_status', formats: [:json]
+    if service.perform(verb)
+      flash[:notice] = "#{service.name}: #{verb} done"
+    else
+      flash[:error] = "#{service.name}: #{verb} failed (details in the Amahi-kai log)"
+    end
+    redirect_to settings_servers_path
   end
 
   # index of all themes
@@ -229,51 +215,9 @@ class SettingsController < ApplicationController
   end
 
   def gather_services
-    services = [
-      { name: 'Amahi-kai (Puma)', unit: 'amahi-kai' },
-      { name: 'MariaDB', unit: 'mariadb' },
-      { name: 'Samba (smbd)', unit: 'smbd' },
-      { name: 'Samba (nmbd)', unit: 'nmbd' },
-    ]
-
-    # Optional services — only show if installed
-    optional = [
-      { name: 'dnsmasq', unit: 'dnsmasq', check: '/usr/sbin/dnsmasq' },
-      { name: 'Greyhole', unit: 'greyhole', check: '/usr/bin/greyhole' },
-      { name: 'Docker', unit: 'docker', check: '/usr/bin/docker' },
-      { name: 'Cloudflare Tunnel', unit: 'cloudflared', check: '/usr/bin/cloudflared' },
-    ]
-    optional.each { |svc| services << svc if File.exist?(svc[:check]) }
-
-    services.map do |svc|
-      # Greyhole uses an LSB init script — systemctl can't track the forked daemon
-      if svc[:unit] == 'greyhole'
-        running = begin
-          require 'greyhole'
-          Greyhole.running?
-        rescue LoadError, Greyhole::GreyholeError
-          false
-        end
-        next svc.merge(running: running, detail: running ? 'running' : 'stopped')
-      end
-
-      running = false
-      detail = 'unknown'
-      begin
-        result = `systemctl is-active #{Shellwords.escape(svc[:unit])} 2>/dev/null`.strip
-        running = result == 'active'
-        if running
-          # Get brief status
-          status = `systemctl show #{Shellwords.escape(svc[:unit])} --property=ActiveEnterTimestamp --no-pager 2>/dev/null`.strip
-          timestamp = status.split('=', 2).last
-          detail = "since #{timestamp}" if timestamp.present?
-        else
-          detail = result  # 'inactive', 'failed', etc.
-        end
-      rescue Errno::ENOENT, IOError
-        detail = 'cannot check'
-      end
-      svc.merge(running: running, detail: detail)
+    SystemServices.all.map do |svc|
+      detail = svc.running? && svc.since ? "since #{l(svc.since, format: :long)}" : svc.state
+      { name: svc.name, unit: svc.unit, running: svc.running?, detail: detail }
     end
   end
 

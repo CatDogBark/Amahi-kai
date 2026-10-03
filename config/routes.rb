@@ -73,12 +73,8 @@ Rails.application.routes.draw do
     post 'reboot', action: 'reboot'
     post 'poweroff', action: 'poweroff'
     get 'servers', action: 'servers'
-    post 'servers/:id/refresh', action: 'refresh', as: 'refresh'
-    post 'servers/:id/start', action: 'start', as: 'start'
-    post 'servers/:id/stop', action: 'stop', as: 'stop'
-    post 'servers/:id/restart', action: 'restart', as: 'restart'
-    # monit monitoring removed — toggle_monitored route deleted
-    match 'servers/:id/toggle_start_at_boot', action: 'toggle_start_at_boot', as: 'toggle_start_at_boot', via: %i[post put]
+    post 'servers/:key/:verb', action: 'service_action', as: 'service_action',
+         constraints: { verb: /start|stop|restart/ }
     get 'themes', action: 'themes'
     post 'activate_theme', action: 'activate_theme'
     put 'revoke_app', action: 'revoke_app'

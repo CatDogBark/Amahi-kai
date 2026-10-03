@@ -1,23 +1,61 @@
-- if @servers.length < 1
-    h2
-      = t 'there_are_no_servers_available'
-- else
-  - if @message
-      h2
-        = @message
-  div.settings-table.server-page
-    table.settings
-      thead
-        tr
-          th scope="col" class="settings-col1 servers-col1"
-            = t 'servers'
-          th scope="col" class="settings-col2 servers-col2" style="padding-left: 42px;"
-            = t 'state'
-      tbody style="display: none"
-        tr
-          td
-          td
-
-    = render partial: 'server', collection: @servers
-
-= javascript_include_tag 'settings'
+.card.mb-4
+  .card-header.bg-dark.text-white
+    h5.mb-0
+      span.me-2 = lucide_icon('server', size: 18)
+      = t 'servers'
+  .card-body
+    p.text-muted.small.mb-3
+      | Live from systemd. Uptime counts from each service's last start; versions are the installed packages.
+    .table-responsive
+      table.table.table-sm.align-middle.mb-0.servers-table
+        thead
+          tr
+            th Service
+            th Status
+            th Version
+            th Uptime
+            th Memory
+            th PID
+            th Starts at boot
+            th
+        tbody
+          - @services.each do |svc|
+            tr id="service-#{svc.key}"
+              td
+                .fw-bold = svc.name
+                .small.text-muted = svc.description || "#{svc.unit}.service"
+              td = service_state_badge(svc)
+              td
+                - if svc.version
+                  span title=svc.version_detail = svc.version
+                  - if svc.key == 'amahi-kai'
+                    .small.text-muted = svc.version_detail
+                - else
+                  span.text-muted &mdash;
+              td
+                - if svc.uptime
+                  span title="Since #{l(svc.since, format: :long)}" = duration_words(svc.uptime)
+                - else
+                  span.text-muted &mdash;
+              td = svc.memory ? number_to_human_size(svc.memory) : content_tag(:span, '—', class: 'text-muted')
+              td = svc.pid || content_tag(:span, '—', class: 'text-muted')
+              td
+                - if svc.boot
+                  = svc.starts_at_boot? ? 'Yes' : 'No'
+                - else
+                  span.text-muted &mdash;
+              td.text-end.text-nowrap
+                - if svc.actions.any? && svc.installed?
+                  - if svc.running?
+                    = button_to settings_service_action_path(svc.key, 'restart'), class: 'btn btn-sm btn-outline-primary me-1', form_class: 'd-inline', form: { onsubmit: "return confirm(#{"Restart #{svc.name}?".to_json})" } do
+                      = lucide_icon('refresh-cw', size: 14)
+                      |  Restart
+                    = button_to settings_service_action_path(svc.key, 'stop'), class: 'btn btn-sm btn-outline-danger', form_class: 'd-inline', form: { onsubmit: "return confirm(#{"Stop #{svc.name}?".to_json})" } do
+                      = lucide_icon('square', size: 14)
+                      |  Stop
+                  - else
+                    = button_to settings_service_action_path(svc.key, 'start'), class: 'btn btn-sm btn-outline-success', form_class: 'd-inline' do
+                      = lucide_icon('play', size: 14)
+                      |  Start
+                - elsif svc.note
+                  span.small.text-muted = svc.note
