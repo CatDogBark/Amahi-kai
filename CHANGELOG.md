@@ -31,6 +31,7 @@ All notable changes to Amahi-kai are documented here.
 - **The footer is a glass bar pinned to the bottom of the window** instead of an opaque bar that moved with the page height.
 - **Actions that change the system can't be triggered by a link.** Reboot, power off, setting toggles, server controls, theme activation, language and logout are POST-only. Progress streams (system update, installs, drive preparation, security fixes) only start when the browser reports the request came from an Amahi page (`Sec-Fetch-Site: same-origin`). The setup wizard is closed once setup is complete.
 - **Power off and Reboot ask for confirmation again** and are aligned buttons with labels. They were link helpers the current JavaScript ignores, so they sent a GET and skipped the prompt.
+- **Remote Access and Security highlight the Network tab.** The tab bar fell back to the first tab with an `index` sub-tab, so those pages lit up Shares and showed its sub-tabs.
 - **CI fails on spec failures again.** The gate matched "0 failures" anywhere, including in "10 failures".
 
 ### 🔧 Architecture & Code Quality
