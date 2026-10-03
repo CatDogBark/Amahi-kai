@@ -15,13 +15,13 @@ RSpec.describe "AppProxy extended", type: :request do
       allow(@mock_response).to receive(:[]).with('content-type').and_return('text/html')
       allow(@mock_response).to receive(:each_header).and_yield('x-custom', 'value')
 
-      mock_http = instance_double(Net::HTTP)
-      allow(mock_http).to receive(:open_timeout=)
-      allow(mock_http).to receive(:read_timeout=)
-      allow(mock_http).to receive(:use_ssl=)
-      allow(mock_http).to receive(:verify_mode=)
-      allow(mock_http).to receive(:request).and_return(@mock_response)
-      allow(Net::HTTP).to receive(:new).and_return(mock_http)
+      @mock_http = instance_double(Net::HTTP)
+      allow(@mock_http).to receive(:open_timeout=)
+      allow(@mock_http).to receive(:read_timeout=)
+      allow(@mock_http).to receive(:use_ssl=)
+      allow(@mock_http).to receive(:verify_mode=)
+      allow(@mock_http).to receive(:request).and_return(@mock_response)
+      allow(Net::HTTP).to receive(:new).and_return(@mock_http)
     end
 
     it "proxies GET requests to the app" do
@@ -51,9 +51,11 @@ RSpec.describe "AppProxy extended", type: :request do
     end
 
     it "sets X-Forwarded headers" do
-      expect_any_instance_of(Net::HTTP::Get).to receive(:[]=).with('X-Forwarded-For', anything).and_call_original
-      expect_any_instance_of(Net::HTTP::Get).to receive(:[]=).with('X-Forwarded-Proto', anything).and_call_original
       get '/app/proxytest/'
+      expect(@mock_http).to have_received(:request) do |outgoing|
+        expect(outgoing['X-Forwarded-For']).to be_present
+        expect(outgoing['X-Forwarded-Proto']).to eq('http')
+      end
     end
 
     it "forwards response headers from upstream" do
@@ -64,13 +66,13 @@ RSpec.describe "AppProxy extended", type: :request do
 
   describe "error handling" do
     it "returns 503 when app is stopped" do
-      app.update_column(:status, 'stopped')
+      docker_app.update_column(:status, 'stopped')
       get '/app/proxytest/'
       expect(response).to have_http_status(:service_unavailable)
     end
 
     it "returns 503 when host_port is nil" do
-      app.update_column(:host_port, nil)
+      docker_app.update_column(:host_port, nil)
       get '/app/proxytest/'
       expect(response).to have_http_status(:service_unavailable)
     end

@@ -218,29 +218,14 @@ class SharesController < ApplicationController
   end
 
   def toggle_disk_pool_enabled
-    if @share.disk_pool_copies > 0
-      @share.disk_pool_copies = 0
-    else
-      @share.disk_pool_copies = 1
-    end
-    @share.save
-    Greyhole.configure! if Greyhole.enabled?
-    @share.reload
-    render partial: 'shares/disk_pool_share', locals: { share: @share }
-  rescue Greyhole::GreyholeError, Shell::CommandError => e
-    Rails.logger.error("Greyhole configure failed: #{e.message}")
-    render partial: 'shares/disk_pool_share', locals: { share: @share }
+    @share.disk_pool_copies = @share.disk_pool_copies > 0 ? 0 : 1
+    save_disk_pool_copies
   end
 
+  # The shares page sends `copies` and expects JSON back (shares.js updatePoolCopies).
   def update_disk_pool_copies
-    @share.disk_pool_copies = params[:value].to_i
-    @share.save
-    Greyhole.configure! if Greyhole.enabled?
-    @share.reload
-    render partial: 'shares/disk_pool_share', locals: { share: @share }
-  rescue Greyhole::GreyholeError, Shell::CommandError => e
-    Rails.logger.error("Greyhole configure failed: #{e.message}")
-    render partial: 'shares/disk_pool_share', locals: { share: @share }
+    @share.disk_pool_copies = [(params[:copies] || params[:value]).to_i, 0].max
+    save_disk_pool_copies
   end
 
   def toggle_disk_pool_partition
@@ -278,6 +263,16 @@ class SharesController < ApplicationController
   end
 
   private
+
+  def save_disk_pool_copies
+    @share.save
+    begin
+      Greyhole.configure! if Greyhole.enabled?
+    rescue Greyhole::GreyholeError, Shell::CommandError => e
+      Rails.logger.error("Greyhole configure failed: #{e.message}")
+    end
+    render json: { status: :ok, disk_pool_copies: @share.reload.disk_pool_copies }
+  end
 
   def find_share
     return unless params[:id]

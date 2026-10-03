@@ -81,31 +81,31 @@ class SettingsController < ApplicationController
 
   def refresh
     @server = Server.find(params[:id])
-    render 'server_status'
+    render 'server_status', formats: [:json]
   end
 
   def start
     @server = Server.find(params[:id])
     @server.do_start
-    render 'server_status'
+    render 'server_status', formats: [:json]
   end
 
   def stop
     @server = Server.find(params[:id])
     @server.do_stop
-    render 'server_status'
+    render 'server_status', formats: [:json]
   end
 
   def restart
     @server = Server.find(params[:id])
     @server.do_restart
-    render 'server_status'
+    render 'server_status', formats: [:json]
   end
 
   def toggle_start_at_boot
     @server = Server.find(params[:id])
     @server.toggle!(:start_at_boot)
-    render 'server_status'
+    render 'server_status', formats: [:json]
   end
 
   # index of all themes

@@ -1,6 +1,10 @@
 require 'rails_helper'
 
 RSpec.describe DiskManager do
+  # Use the built-in sample devices, not the disks of whatever machine runs the
+  # specs: lsblk on a CI runner varies between runs, which made these flaky.
+  before { allow(DiskManager).to receive(:execute_command).and_return("") }
+
   describe '.devices' do
     it 'returns an array of device hashes' do
       devices = DiskManager.devices

@@ -95,6 +95,7 @@ RSpec.describe "SettingsController more", type: :request do
   describe "POST /settings/toggle_setting" do
     it "toggles a setting value" do
       setting = Setting.find_or_create_by!(name: 'advanced') { |s| s.value = '0'; s.kind = Setting::GENERAL }
+      setting.update!(value: '0')
       post "/settings/toggle_setting", params: { id: setting.id }, as: :json
       expect(response).to have_http_status(:ok)
       expect(setting.reload.value).to eq('1')
@@ -139,6 +140,13 @@ RSpec.describe "SettingsController more", type: :request do
     it "refreshes server status" do
       post "/settings/servers/#{server.id}/refresh", as: :json
       expect(response).to have_http_status(:ok)
+      expect(response.parsed_body["content"]).to include("server_wrap_#{server.id}")
+    end
+
+    it "returns JSON to the page's fetch, which sends no Accept header" do
+      post "/settings/servers/#{server.id}/start"
+      expect(response.media_type).to eq("application/json")
+      expect(response.parsed_body["status"]).to eq("ok")
     end
 
     it "starts a server" do
