@@ -12,6 +12,7 @@ class SetupController < ApplicationController
   skip_before_action :check_setup_completed
   before_action :login_required
   before_action :admin_required
+  before_action :redirect_if_setup_completed
   before_action :set_no_cache
 
   def welcome
@@ -195,6 +196,11 @@ class SetupController < ApplicationController
   end
 
   private
+
+  # The wizard formats drives and resets the storage pool; once setup is done it stays closed.
+  def redirect_if_setup_completed
+    redirect_to root_path if setup_completed?
+  end
 
   def set_no_cache
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'

@@ -344,7 +344,7 @@ describe "Network Controller", type: :request do
 
     describe "GET /network/install_cloudflared_stream" do
       it "returns SSE content type" do
-        get "/network/remote_access/install_cloudflared_stream"
+        get "/network/remote_access/install_cloudflared_stream", headers: same_origin
         expect(response.headers['Content-Type']).to include('text/event-stream')
       end
     end
@@ -370,14 +370,14 @@ describe "Network Controller", type: :request do
     describe "GET /network/security/audit_stream" do
       it "returns SSE content type" do
         allow(SecurityAudit).to receive(:run_all).and_return([])
-        get "/network/security/audit_stream"
+        get "/network/security/audit_stream", headers: same_origin
         expect(response.headers['Content-Type']).to include('text/event-stream')
       end
     end
 
     describe "GET /network/security/fix_stream" do
       it "returns SSE content type" do
-        get "/network/security/fix_stream"
+        get "/network/security/fix_stream", headers: same_origin
         expect(response.headers['Content-Type']).to include('text/event-stream')
       end
     end

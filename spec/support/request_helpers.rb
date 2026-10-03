@@ -16,6 +16,11 @@ module RequestHelpers
     user
   end
 
+  # Browsers send this on requests an Amahi page makes itself; streams require it.
+  def same_origin
+    { 'Sec-Fetch-Site' => 'same-origin' }
+  end
+
   def ensure_setup_completed!
     Setting.set('setup_completed', 'true')
   rescue => e

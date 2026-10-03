@@ -23,7 +23,7 @@ RSpec.describe "SettingsController more", type: :request do
 
   describe "GET /settings/update_system_stream" do
     it "returns SSE content type" do
-      get '/settings/update_system_stream'
+      get '/settings/update_system_stream', headers: same_origin
       expect(response.content_type).to include('text/event-stream')
     end
   end

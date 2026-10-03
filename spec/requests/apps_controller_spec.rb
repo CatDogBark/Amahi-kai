@@ -35,7 +35,7 @@ describe "Apps Controller", type: :request, integration: true do
 
     describe "GET /apps/install_docker_stream" do
       it "returns SSE content type" do
-        get "/apps/install_docker_stream"
+        get "/apps/install_docker_stream", headers: same_origin
         expect(response.headers['Content-Type']).to include('text/event-stream')
       end
     end

@@ -27,7 +27,17 @@ module SseStreaming
 
   # Set up SSE headers and yield an SseSender for writing events.
   # The block receives an SseSender that responds to #send(data, event: nil).
+  #
+  # Streams do real work (installs, the system update, drive formatting) and must be
+  # GET for EventSource, so the CSRF token doesn't cover them. Browsers label every
+  # request with Sec-Fetch-Site; only a stream opened by an Amahi page is accepted, so
+  # a link on another site can't start one.
   def stream_sse
+    unless request.headers['Sec-Fetch-Site'] == 'same-origin'
+      head :forbidden
+      return
+    end
+
     response.headers['Content-Type'] = 'text/event-stream'
     response.headers['Cache-Control'] = 'no-cache, no-store'
     response.headers['X-Accel-Buffering'] = 'no'
