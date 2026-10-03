@@ -177,13 +177,13 @@ class User < ApplicationRecord
   end
 
   # Sync password to Samba's pdbedit database.
-  # Linux accounts are created with --disabled-password (no SSH access).
+  # Linux accounts are created with a locked password (no SSH password login).
   # Web auth uses bcrypt in Rails DB. Samba uses pdbedit. No DES crypt.
+  # The password goes to pdbedit on stdin (-t reads it twice), never in argv or the log.
   def sync_samba_password
     return if password.blank?
     esc_login = Shellwords.escape(self.login)
-    esc_pwd = Shellwords.escape(self.password)
-    Shell.run("sh -c '(echo #{esc_pwd}; echo #{esc_pwd}) | pdbedit -d0 -t -a -u #{esc_login}'")
+    Shell.run_with_input("pdbedit -d0 -t -a -u #{esc_login}", "#{password}\n#{password}\n")
   end
 
   def before_create_hook
@@ -193,9 +193,10 @@ class User < ApplicationRecord
     return if User.system_user_exists? self.login
     esc_login = Shellwords.escape(self.login)
     esc_name = Shellwords.escape(self.name)
-    # Create Linux user with disabled password — no SSH access.
-    # Linux account exists only for Samba UID mapping and home directory.
-    Shell.run("useradd --disabled-password -m -g users -c #{esc_name} #{esc_login}")
+    # Create the Linux user. useradd leaves the password locked, so there is no
+    # SSH password login; the account exists for Samba UID mapping and a home directory.
+    # (--disabled-password is an adduser option; useradd rejects it.)
+    Shell.run("useradd -m -g users -c #{esc_name} #{esc_login}")
     sync_samba_password
   end
 

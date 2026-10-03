@@ -43,16 +43,31 @@ describe "User Sessions", type: :request do
     end
   end
 
-  describe "GET /start" do
-    it "redirects to login if system is initialized" do
-      Setting.set('initialized', '1')
-      get start_path
-      expect(response).to redirect_to(login_path)
+  # The legacy first-run flow created an admin without logging in and never
+  # checked whether the system was already initialized. It must stay removed.
+  describe "legacy first-run endpoints" do
+    it "does not route POST /user_sessions/initialize_system" do
+      allow(User).to receive(:system_find_name_by_username).and_return(["nobody", 65534, "nobody"])
+      expect {
+        post "/user_sessions/initialize_system",
+          params: { username: "nobody", password: "longenough1", password_confirmation: "longenough1" }
+      }.to raise_error(ActionController::RoutingError)
+      expect(User.where(login: "nobody")).to be_empty
     end
 
-    it "redirects to login when initialized (seeds set initialized=1)" do
-      get start_path
-      expect(response).to redirect_to(login_path)
+    it "does not route GET /user_sessions/initialize_system" do
+      expect { get "/user_sessions/initialize_system" }.to raise_error(ActionController::RoutingError)
+    end
+
+    it "does not route GET /start" do
+      expect { get "/start" }.to raise_error(ActionController::RoutingError)
+    end
+
+    it "still serves the login page" do
+      Setting.where(name: 'initialized').destroy_all
+      get login_path
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("Log In")
     end
   end
 end

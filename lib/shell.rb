@@ -64,6 +64,24 @@ module Shell
       true
     end
 
+    # Execute a single command, feeding +input+ on stdin. Returns true on success.
+    # Use this for secrets such as passwords, so they never appear in argv or the log.
+    def run_with_input(cmd, input)
+      if dummy?
+        log_cmd("[DUMMY] #{cmd} (stdin withheld)")
+        return true
+      end
+
+      actual_cmd = prepare(cmd)
+      log_cmd("#{actual_cmd} (stdin withheld)")
+
+      _stdout, stderr, status = Open3.capture3(actual_cmd, stdin_data: input)
+      unless status.success?
+        log_warn("Command failed (exit #{status.exitstatus}): #{actual_cmd}\nstderr: #{stderr}")
+      end
+      status.success?
+    end
+
     # Execute a single command and return [stdout, stderr, status].
     # For cases where you need the output.
     def capture(cmd)

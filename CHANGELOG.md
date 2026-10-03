@@ -17,10 +17,16 @@ All notable changes to Amahi-kai are documented here.
 - **Dashboard Rework** — Per-drive storage bars, CPU/memory stats, services sidebar, share cards with browse buttons, quick action buttons.
 - **Ocean UI** — Living underwater background (`ocean.js`, WebGL + canvas): the surface overhead in perspective, sun and moon following the clock, caustics and light shafts, weather (clear/cloudy/rain/storm with lightning), tides, bubbles in front of and behind the cards, and sea life (fish schools, manta rays, dolphins, sea turtles, night jellyfish). The scene is computed from the clock plus the visitor's settings, so it carries across page loads. A "Water" panel in the header (a floating button on amahi-kai.com) sets time of day, weather, sea life, cycle speed and quality. Half-resolution water, 30 fps cap, 12 fps when idle, automatic quality drop on slow frames, still frames under reduced motion. Glass cards by default. Fixes invisible bubbles on the login and setup pages (their colour came from a theme stylesheet those pages don't load).
 
+### 🔒 Security & Fixes
+
+- **Removed the legacy first-run endpoints** (`/start`, `/user_sessions/initialize_system`). They created an admin account without logging in and never checked whether the system was already set up. The first admin comes from the seeds and the setup wizard.
+- **Linux accounts for web users are created again.** `useradd` was called with `--disabled-password`, an `adduser` option it rejects, so no Linux or Samba account was made. The password stays locked by default.
+- **Samba passwords reach pdbedit on stdin.** The sync used `sudo sh -c`, which the sudoers allowlist doesn't permit, and put the password in the command line and the log.
+
 ### 🔧 Architecture & Code Quality
 
 - **Plugin Consolidation** — All 6 plugin engines (Users, Shares, Network, Disks, Apps, Settings) merged into main app. Single layout, unified routing.
-- **Auth Modernization** — Authlogic → `has_secure_password` (bcrypt). Removed DES crypt (was truncating to 8 chars!). Linux users created with `--disabled-password`. Two stores: bcrypt (web) + pdbedit (Samba).
+- **Auth Modernization** — Authlogic → `has_secure_password` (bcrypt). Removed DES crypt (was truncating to 8 chars!). Linux users created with a locked password. Two stores: bcrypt (web) + pdbedit (Samba).
 - **Login Rate Limiting** — rack-attack throttling on login attempts.
 - **12 Service Objects** — SetupService, DiskService, FileBrowserService, ContainerService, CloudflareService, DockerService, TailscaleService, ShareAccessManager, ShareFileSystem, SambaService, DnsmasqService, SwapService.
 - **Security Hardening** — SQL injection, shell injection, XSS, CSRF protection. CSP headers. Narrowed rescue clauses from `StandardError` to specific exceptions.
