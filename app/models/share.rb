@@ -466,6 +466,4 @@ class Share < ApplicationRecord
   def index_share_files
     ShareIndexJob.perform_later(id)
   end
-    end
-  end
 end
