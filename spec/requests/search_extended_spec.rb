@@ -23,6 +23,16 @@ RSpec.describe "SearchController extended", type: :request do
       expect(response).to have_http_status(:ok)
     end
 
+    it "shows no page numbers when everything fits on one page" do
+      get search_files_path, params: { query: "nothing-matches-this" }
+      expect(response.body).not_to include("search-pagination")
+    end
+
+    it "shows page numbers past page 1" do
+      get search_files_path, params: { query: "o", page: 2 }
+      expect(response.body).to include("search-pagination")
+    end
+
     it "caps the page size" do
       get search_files_path, params: { query: "o", per_page: 100_000 }
       expect(response).to have_http_status(:ok)
