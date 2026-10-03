@@ -200,4 +200,38 @@ describe User do
         .with("pdbedit -d0 -t -a -u hasaccount", "newpassword1\nnewpassword1\n")
     end
   end
+
+  describe "system account cleanup on delete" do
+    let(:user) { User.new(login: "leaving", name: "Leaving User") }
+    let(:users_group) { Struct.new(:gid).new(100) }
+
+    before do
+      allow(Etc).to receive(:getpwnam).and_call_original
+      allow(Etc).to receive(:getgrnam).and_call_original
+      allow(Etc).to receive(:getgrnam).with("users").and_return(users_group)
+    end
+
+    it "removes an app-created Linux account even when it has no Samba entry" do
+      allow(Etc).to receive(:getpwnam).with("leaving").and_return(Struct.new(:uid, :gid).new(1002, 100))
+      allow(Shell).to receive(:run).with("pdbedit -d0 -x -u leaving").and_return(false)
+      allow(Shell).to receive(:run).with("userdel -r leaving").and_return(true)
+      user.send(:before_destroy_hook)
+      expect(Shell).to have_received(:run).with("userdel -r leaving")
+    end
+
+    it "leaves a Linux account the app didn't create alone" do
+      allow(Etc).to receive(:getpwnam).with("leaving").and_return(Struct.new(:uid, :gid).new(1000, 1000))
+      allow(Shell).to receive(:run).and_return(true)
+      user.send(:before_destroy_hook)
+      expect(Shell).to have_received(:run).with("pdbedit -d0 -x -u leaving")
+      expect(Shell).not_to have_received(:run).with(/userdel/)
+    end
+
+    it "skips userdel when there is no Linux account" do
+      allow(Etc).to receive(:getpwnam).with("leaving").and_raise(ArgumentError)
+      allow(Shell).to receive(:run).and_return(true)
+      user.send(:before_destroy_hook)
+      expect(Shell).not_to have_received(:run).with(/userdel/)
+    end
+  end
 end

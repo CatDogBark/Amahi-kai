@@ -25,6 +25,7 @@ All notable changes to Amahi-kai are documented here.
 - **Existing users get their missing Linux account** the next time their password is set, so users created while `useradd` was failing (including the seeded admin) can be added to Samba.
 - **Settings → Servers buttons work again.** The status template used `self.formats = ['html']`, which current Rails rejects, so refresh, start, stop and restart returned 500.
 - **Share pool-copies buttons save the chosen number.** The controller read the wrong parameter, saved 0 copies, then failed rendering a stale partial.
+- **Deleting a user removes their Linux account even if they had no Samba entry**, and only removes accounts the app created, so deleting a web user can't remove a pre-existing login such as the install user.
 - **CI fails on spec failures again.** The gate matched "0 failures" anywhere, including in "10 failures".
 
 ### 🔧 Architecture & Code Quality
