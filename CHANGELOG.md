@@ -22,6 +22,10 @@ All notable changes to Amahi-kai are documented here.
 - **Removed the legacy first-run endpoints** (`/start`, `/user_sessions/initialize_system`). They created an admin account without logging in and never checked whether the system was already set up. The first admin comes from the seeds and the setup wizard.
 - **Linux accounts for web users are created again.** `useradd` was called with `--disabled-password`, an `adduser` option it rejects, so no Linux or Samba account was made. The password stays locked by default.
 - **Samba passwords reach pdbedit on stdin.** The sync used `sudo sh -c`, which the sudoers allowlist doesn't permit, and put the password in the command line and the log.
+- **Existing users get their missing Linux account** the next time their password is set, so users created while `useradd` was failing (including the seeded admin) can be added to Samba.
+- **Settings → Servers buttons work again.** The status template used `self.formats = ['html']`, which current Rails rejects, so refresh, start, stop and restart returned 500.
+- **Share pool-copies buttons save the chosen number.** The controller read the wrong parameter, saved 0 copies, then failed rendering a stale partial.
+- **CI fails on spec failures again.** The gate matched "0 failures" anywhere, including in "10 failures".
 
 ### 🔧 Architecture & Code Quality
 
