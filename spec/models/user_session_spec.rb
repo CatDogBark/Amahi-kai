@@ -19,6 +19,12 @@ RSpec.describe UserSession, type: :model do
     UserSession.controller = mock_controller
   end
 
+  # What a real login leaves in the session (UserSession#save).
+  def signed_in_as(user)
+    mock_controller.session[:user_id] = user.id
+    mock_controller.session[:session_token] = user.session_token
+  end
+
   describe '#initialize' do
     it 'accepts login and password' do
       session = UserSession.new(login: 'testuser', password: 'secret')
@@ -83,7 +89,7 @@ RSpec.describe UserSession, type: :model do
     end
 
     it 'returns session when user_id is in session' do
-      mock_controller.session[:user_id] = user.id
+      signed_in_as(user)
       found = UserSession.find
       expect(found).not_to be_nil
       expect(found.record).to eq(user)
@@ -97,14 +103,14 @@ RSpec.describe UserSession, type: :model do
 
   describe '#destroy' do
     it 'clears the session' do
-      mock_controller.session[:user_id] = user.id
+      signed_in_as(user)
       session = UserSession.find
       session.destroy
       expect(mock_controller.session[:user_id]).to be_nil
     end
 
     it 'calls reset_session' do
-      mock_controller.session[:user_id] = user.id
+      signed_in_as(user)
       session = UserSession.find
       expect(mock_controller).to receive(:reset_session)
       session.destroy
