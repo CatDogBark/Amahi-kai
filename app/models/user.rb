@@ -17,6 +17,7 @@
 require 'strscan'
 require 'shell'
 require 'shellwords'
+require 'etc'
 
 class User < ApplicationRecord
 
@@ -239,12 +240,22 @@ class User < ApplicationRecord
     Share.create_logon_script(self.login)
   end
 
+  # Run each step on its own: a user can have a Linux account but no Samba entry,
+  # and a failed pdbedit used to stop the Linux account from being removed.
   def before_destroy_hook
     esc_login = Shellwords.escape(self.login)
-    Shell.run(
-      "pdbedit -d0 -x -u #{esc_login}",
-      "userdel -r #{esc_login}"
-    )
+    Shell.run("pdbedit -d0 -x -u #{esc_login}")
+    Shell.run("userdel -r #{esc_login}") if app_created_system_account?
+  end
+
+  # Only remove Linux accounts this app made: create_system_account gives them the
+  # `users` group as their primary group. An account that existed before, such as
+  # the install user, is left alone along with its home directory.
+  def app_created_system_account?
+    pw = Etc.getpwnam(login)
+    pw.uid >= 1000 && pw.gid == Etc.getgrnam(Platform::DEFAULT_GROUP).gid
+  rescue ArgumentError
+    false
   end
 
   def update_pubkey
