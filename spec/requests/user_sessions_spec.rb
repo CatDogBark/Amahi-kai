@@ -46,21 +46,21 @@ describe "User Sessions", type: :request do
   # The legacy first-run flow created an admin without logging in and never
   # checked whether the system was already initialized. It must stay removed.
   describe "legacy first-run endpoints" do
-    it "does not route POST /user_sessions/initialize_system" do
+    it "has no route for the legacy endpoints" do
+      [["/user_sessions/initialize_system", :post],
+       ["/user_sessions/initialize_system", :get],
+       ["/start", :get]].each do |path, verb|
+        expect { Rails.application.routes.recognize_path(path, method: verb) }
+          .to raise_error(ActionController::RoutingError), "#{verb.upcase} #{path} is still routed"
+      end
+    end
+
+    it "returns 404 and creates no user for POST /user_sessions/initialize_system" do
       allow(User).to receive(:system_find_name_by_username).and_return(["nobody", 65534, "nobody"])
-      expect {
-        post "/user_sessions/initialize_system",
-          params: { username: "nobody", password: "longenough1", password_confirmation: "longenough1" }
-      }.to raise_error(ActionController::RoutingError)
+      post "/user_sessions/initialize_system",
+        params: { username: "nobody", password: "longenough1", password_confirmation: "longenough1" }
+      expect(response).to have_http_status(:not_found)
       expect(User.where(login: "nobody")).to be_empty
-    end
-
-    it "does not route GET /user_sessions/initialize_system" do
-      expect { get "/user_sessions/initialize_system" }.to raise_error(ActionController::RoutingError)
-    end
-
-    it "does not route GET /start" do
-      expect { get "/start" }.to raise_error(ActionController::RoutingError)
     end
 
     it "still serves the login page" do
