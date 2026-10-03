@@ -76,7 +76,11 @@ jobs:
           tail -20 tmp/rspec-requests.log
           echo "::endgroup::"
           ruby -rjson -e 'JSON.parse(File.read("tmp/rspec-requests.json"))["examples"].select{|e|e["status"]=="failed"}.each{|e| puts "::error::#{e["full_description"]}: #{e.dig("exception","message").to_s[0,200]}"}' || true
-          grep -q "0 failures" tmp/rspec-requests.log
+          echo "::group::Exceptions from log/test.log"
+          grep -E -A8 "^[A-Z][A-Za-z0-9:]*(Error|Exception) \\(" log/test.log | head -150 || true
+          echo "::endgroup::"
+          # Match ", 0 failures" exactly: a bare "0 failures" also matches "10 failures".
+          grep -qE "[0-9]+ examples?, 0 failures" tmp/rspec-requests.log
 
   lib:
     name: Lib Specs
@@ -118,7 +122,11 @@ jobs:
           tail -20 tmp/rspec-lib.log
           echo "::endgroup::"
           ruby -rjson -e 'JSON.parse(File.read("tmp/rspec-lib.json"))["examples"].select{|e|e["status"]=="failed"}.each{|e| puts "::error::#{e["full_description"]}: #{e.dig("exception","message").to_s[0,200]}"}' || true
-          grep -q "0 failures" tmp/rspec-lib.log
+          echo "::group::Exceptions from log/test.log"
+          grep -E -A8 "^[A-Z][A-Za-z0-9:]*(Error|Exception) \\(" log/test.log | head -150 || true
+          echo "::endgroup::"
+          # Match ", 0 failures" exactly: a bare "0 failures" also matches "10 failures".
+          grep -qE "[0-9]+ examples?, 0 failures" tmp/rspec-lib.log
 
   features:
     name: Feature Specs
