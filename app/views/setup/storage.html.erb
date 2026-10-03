@@ -154,7 +154,7 @@ function prepareDrives(event) {
   footer.style.display = 'none';
   footer.innerHTML = '<a href="<%= setup_greyhole_path %>" class="btn btn-sm btn-outline-light">Continue →</a>';
 
-  var source = new EventSource(url);
+  var source = new EventSource(withStreamToken(url));
 
   source.onmessage = function(e) {
     var line = document.createElement('div');
