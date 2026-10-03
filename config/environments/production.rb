@@ -51,9 +51,14 @@ Rails.application.configure do
   # config.action_cable.allowed_request_origins = [ 'http://example.com', /http:\/\/example.*/ ]
 
   # Only answer to known host names (DNS-rebinding protection); see lib/allowed_hosts.rb.
-  # Add the Cloudflare Tunnel hostname to RAILS_ALLOWED_HOSTS in /etc/amahi-kai/amahi.env.
+  # IPs, the machine's names, its Tailscale name and the Cloudflare Tunnel work without
+  # setup; other names go in RAILS_ALLOWED_HOSTS in /etc/amahi-kai/amahi.env.
   require_relative "../../lib/allowed_hosts"
   config.hosts = AllowedHosts.list
+  config.host_authorization = {
+    exclude: ->(request) { AllowedHosts.local_request?(request) },
+    response_app: ->(env) { AllowedHosts.blocked_response(env) }
+  }
 
   # Do NOT use force_ssl or assume_ssl — LAN users access via plain HTTP.
   # Cloudflare Tunnel handles HTTPS on the edge for remote access.

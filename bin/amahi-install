@@ -287,9 +287,10 @@ DATABASE_USER=amahi
 DATABASE_PASSWORD=$DB_PASS
 AMAHI_DUMMY_MODE=false
 
-# Host names the web UI answers to, besides IP addresses, localhost and this
-# machine's hostname. Add your Cloudflare Tunnel hostname (comma-separated list).
-# RAILS_ALLOWED_HOSTS=nas.example.com
+# Extra host names the web UI answers to (comma-separated). Not needed for IP
+# addresses, localhost, this machine's hostname, its Tailscale name or a
+# Cloudflare Tunnel; add other DNS names that point at this server.
+# RAILS_ALLOWED_HOSTS=nas.example.lan
 
 # Share root (default: /var/lib/amahi-kai/files)
 # AMAHI_SHARE_ROOT=/var/lib/amahi-kai/files
