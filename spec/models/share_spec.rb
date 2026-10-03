@@ -30,9 +30,8 @@ describe Share do
       Share.create_default_shares
 
       Share::DEFAULT_SHARES.each do |share_name|
-        share_id = Share::DEFAULT_SHARES.index(share_name) + 1
-
-        share = Share.find(share_id)
+        # By name: ids depend on the database (MariaDB doesn't restart them at 1).
+        share = Share.find_by!(name: share_name)
         expect(share.name).to             eq(share_name)
         expect(share.path).to             eq("#{Share::DEFAULT_SHARES_ROOT}/#{share_name.downcase}")
         expect(share.rdonly).to           eq(false)
