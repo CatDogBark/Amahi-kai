@@ -18,29 +18,30 @@ class Theme < ApplicationRecord
 
   before_destroy :before_destroy_hook
 
+  # Themes installed under public/themes. Uses full paths rather than Dir.chdir,
+  # which changes the working directory for every thread in the server.
   def self.available
     tl = all.to_a
-    Dir.chdir(File.join(Rails.root, THEME_ROOT)) do
-      Dir.glob("*").sort.each do |theme_dir|
-        next if where(:css=>theme_dir).first
-        theme_init_file = File.join(theme_dir, "init.rb")
-        if File.exist? theme_init_file
-          load theme_init_file
-          if defined?(theme_init) == "method"
-            begin
-              theme = theme_init
-              tl << Theme.new(:name => theme[:name], :css => theme_dir)
-            rescue LoadError, NoMethodError, NameError => e
-              # there were issues in the theme init file!!
-              logger.error("=================== Amahi Theme Error BEGIN ===========================")
-              logger.error(e)
-              logger.error("=================== Amahi Theme Error END   ===========================")
-            end
-          end
-        end
+    Dir.glob(File.join(Rails.root, THEME_ROOT, "*")).sort.each do |dir|
+      theme_dir = File.basename(dir)
+      next if where(:css=>theme_dir).first
+      next unless SetTheme.valid_theme?(theme_dir)
+      begin
+        theme = SetTheme.info(theme_dir)
+        tl << Theme.new(:name => theme[:name], :css => theme_dir) if theme[:name]
+      rescue LoadError, NoMethodError, NameError => e
+        # there were issues in the theme init file!!
+        logger.error("=================== Amahi Theme Error BEGIN ===========================")
+        logger.error(e)
+        logger.error("=================== Amahi Theme Error END   ===========================")
       end
     end
     tl
+  end
+
+  # Is +name+ one of the installed themes?
+  def self.installed?(name)
+    available.any? { |t| t.css == name.to_s }
   end
 
   def self.dir2theme(dir)

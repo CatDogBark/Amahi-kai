@@ -115,7 +115,12 @@ class SettingsController < ApplicationController
   end
 
   def activate_theme
-    s = Setting.where(:name=> "theme").first
+    unless Theme.installed?(params[:id])
+      flash[:error] = "Unknown theme"
+      redirect_to settings_themes_path
+      return
+    end
+    s = Setting.where(:name=> "theme").first_or_create
     s.value = params[:id]
     s.save!
     # redirect rather than render, so that it re-displays with the new theme

@@ -123,6 +123,11 @@ class FileBrowserController < ApplicationController
     # Otherwise renders preview.html.erb
   end
 
+  # Types a browser would run as a page on the Amahi origin if the raw URL were
+  # opened directly. They are served as plain text, so the browser shows the source.
+  ACTIVE_TYPES = %w[text/html application/xhtml+xml text/javascript application/javascript
+                    application/xml text/xml].freeze
+
   # GET /files/:share_id/raw/*path — serves file content for preview embeds
   def raw
     unless File.file?(@full_path)
@@ -130,6 +135,11 @@ class FileBrowserController < ApplicationController
     end
 
     mime = FileBrowserService.detect_mime_type(@full_path)
+    mime = 'text/plain' if ACTIVE_TYPES.include?(mime)
+    # Files from a share open in a sandbox: no scripts, and no access to the Amahi
+    # origin, so an SVG (still served as an image for previews) can't run code either.
+    # PDFs are left out because browsers' built-in PDF viewers won't load sandboxed.
+    response.headers['Content-Security-Policy'] = 'sandbox' unless mime == 'application/pdf'
     send_file @full_path,
       type: mime,
       disposition: 'inline',
