@@ -131,7 +131,7 @@ class DisksController < ApplicationController
 
   def install_greyhole_stream
     stream_sse do |sse|
-      sse.send("Starting Greyhole installation...")
+      sse.emit("Starting Greyhole installation...")
       DiskService.stream_greyhole_install(sse)
     end
   end

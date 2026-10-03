@@ -116,14 +116,14 @@ RSpec.describe DiskService do
   end
 
   describe '.stream_greyhole_install' do
-    let(:sse) { double('sse', send: nil, done: nil) }
+    let(:sse) { double('sse', emit: nil, done: nil) }
 
     context 'in non-production' do
       before { allow(Rails.env).to receive(:production?).and_return(false) }
 
       it 'streams dev messages and calls done' do
         described_class.stream_greyhole_install(sse)
-        expect(sse).to have_received(:send).at_least(:once)
+        expect(sse).to have_received(:emit).at_least(:once)
         expect(sse).to have_received(:done).with(no_args)
       end
     end

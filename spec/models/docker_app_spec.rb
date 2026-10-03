@@ -137,11 +137,33 @@ describe DockerApp do
   end
 
   describe "#stop!" do
+    def docker_stop_returns(stdout: "", stderr: "", success:)
+      allow(Shell).to receive(:capture).with(/\Adocker stop/)
+        .and_return([stdout, stderr, double(success?: success)])
+    end
+
     it "stops and sets status to stopped" do
+      docker_stop_returns(stdout: "amahi-test-app\n", success: true)
       app = build_app(status: "running", container_name: "amahi-test-app")
       app.save!
       app.stop!
       expect(app.reload.status).to eq("stopped")
+    end
+
+    it "treats a container that's already gone as stopped" do
+      docker_stop_returns(stderr: "Error response from daemon: No such container: amahi-test-app", success: false)
+      app = build_app(status: "running", container_name: "amahi-test-app")
+      app.save!
+      app.stop!
+      expect(app.reload.status).to eq("stopped")
+    end
+
+    it "records the error when docker can't stop it" do
+      docker_stop_returns(stderr: "permission denied", success: false)
+      app = build_app(status: "running", container_name: "amahi-test-app")
+      app.save!
+      expect { app.stop! }.to raise_error(/permission denied/)
+      expect(app.reload.status).to eq("error")
     end
   end
 end

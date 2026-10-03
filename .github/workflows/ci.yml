@@ -273,20 +273,64 @@ jobs:
           path: coverage/
           retention-days: 30
 
+  mariadb:
+    # Production runs on MariaDB; the other jobs use SQLite. This catches SQL that
+    # only one of them accepts. DATABASE_URL replaces the test database settings.
+    name: Specs on MariaDB
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:10.11  # what Ubuntu 24.04 ships
+        env:
+          MARIADB_ROOT_PASSWORD: ci-only
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      RAILS_ENV: test
+      BUNDLE_JOBS: 4
+      BUNDLE_WITHOUT: production
+      DATABASE_URL: mysql2://root:ci-only@127.0.0.1:3306/amahi_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev libmariadb-dev
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+      - name: Prepare DB
+        run: |
+          mkdir -p tmp/cache/tmpfiles tmp/pids log
+          bundle exec rails db:create db:schema:load
+      - name: Model, service and helper specs
+        run: bundle exec rspec spec/models/ spec/services/ spec/helpers/ --tag ~docker
+      - name: Request specs
+        run: bundle exec rspec spec/requests/ --tag ~integration
+
   lint:
     name: Lint & Security
-    needs: [models, requests, lib, features]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
+      # Pinned so a new cop or check can't fail CI without a code change.
+      # Bump them on purpose, then fix or record what they find.
       - name: Install lint tools
-        run: gem install rubocop rubocop-rails rubocop-rspec brakeman --no-document
+        run: |
+          gem install --no-document rubocop:1.91.0 rubocop-rails:2.38.0 rubocop-rspec:3.10.2
+          gem install --no-document brakeman:8.1.0 bundler-audit:0.9.3
+      # Fails on new offenses; existing ones are listed in .rubocop_todo.yml.
       - name: RuboCop
         run: rubocop --parallel --format github
-        continue-on-error: true
+      # Fails on any warning not in config/brakeman.ignore (each entry there has a note).
       - name: Brakeman
-        run: brakeman --no-pager -q -w2
+        run: brakeman --no-pager -q
+      # Reports only for now: the Rails 8.1 upgrade clears the current advisories,
+      # and makes this blocking.
+      - name: Gem advisories
+        run: bundle-audit check --update
         continue-on-error: true

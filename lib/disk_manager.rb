@@ -1,4 +1,5 @@
 require 'json'
+require 'open3'
 require 'shellwords'
 require 'shell'
 
@@ -95,11 +96,11 @@ class DiskManager
       execute_command("sudo /usr/bin/mkdir -p #{Shellwords.escape(mount_point)}")
 
       # Use appropriate mount type for the filesystem
-      mount_cmd = "sudo /bin/mount"
-      mount_cmd += " -t ntfs-3g" if fstype&.downcase == "ntfs"
-      mount_cmd += " #{Shellwords.escape(device)} #{Shellwords.escape(mount_point)}"
-      mount_output = `#{mount_cmd} 2>&1`
-      mount_status = $?.exitstatus
+      mount_args = ["sudo", "/bin/mount"]
+      mount_args += ["-t", "ntfs-3g"] if fstype&.downcase == "ntfs"
+      mount_args += [device.to_s, mount_point.to_s]
+      mount_output, status = Open3.capture2e(*mount_args)
+      mount_status = status.exitstatus
 
       # Verify mount actually worked
       unless mount_status == 0 && mount_point_active?(mount_point)

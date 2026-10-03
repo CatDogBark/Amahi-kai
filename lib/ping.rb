@@ -26,7 +26,7 @@ class Ping
       }
     rescue Errno::ECONNREFUSED
       return true
-    rescue   Timeout::Error, StandardError
+    rescue StandardError # includes Timeout::Error
       return false
     end
     return true

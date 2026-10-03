@@ -16,6 +16,9 @@ RSpec.describe SambaService do
     allow(File).to receive(:open).and_call_original
     allow(File).to receive(:open).with('/tmp/test_samba_conf', 'w').and_yield(StringIO.new)
     allow(Share).to receive(:push_shares)
+    # testparm only exists where Samba is installed (not on CI's runner); the
+    # validation example below exercises it explicitly.
+    allow(described_class).to receive(:config_valid?).and_return(true)
   end
 
   describe '.push_config' do
@@ -53,6 +56,7 @@ RSpec.describe SambaService do
 
   describe 'config validation' do
     it 'keeps the current smb.conf when testparm rejects the new one' do
+      allow(described_class).to receive(:config_valid?).and_call_original
       allow(File).to receive(:executable?).and_call_original
       allow(File).to receive(:executable?).with('/usr/bin/testparm').and_return(true)
       allow(Open3).to receive(:capture3).with('/usr/bin/testparm', '-s', anything)
@@ -63,7 +67,6 @@ RSpec.describe SambaService do
     end
 
     it 'reloads smbd as well as nmbd after writing a new config' do
-      allow(described_class).to receive(:config_valid?).and_return(true)
       described_class.push_config
       expect(Platform).to have_received(:reload).with(:smb)
     end

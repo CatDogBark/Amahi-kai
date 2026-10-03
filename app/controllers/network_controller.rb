@@ -180,7 +180,7 @@ class NetworkController < ApplicationController
 
   def install_dnsmasq_stream
     stream_sse do |sse|
-      sse.send("Installing dnsmasq...")
+      sse.emit("Installing dnsmasq...")
 
       unless Rails.env.production?
         lines = [
@@ -200,7 +200,7 @@ class NetworkController < ApplicationController
         ]
         lines.each do |line|
           sleep 0.3
-          sse.send(line)
+          sse.emit(line)
         end
         sse.done
       else
@@ -212,27 +212,27 @@ class NetworkController < ApplicationController
         ]
 
         steps.each do |step|
-          sse.send(step[:label])
+          sse.emit(step[:label])
           IO.popen(step[:cmd]) do |io|
-            io.each_line { |line| sse.send("  #{line.chomp}") }
+            io.each_line { |line| sse.emit("  #{line.chomp}") }
           end
           unless $?.success?
-            sse.send("  ✗ Command failed")
+            sse.emit("  ✗ Command failed")
             success = false
             break
           end
         end
 
         if success
-          sse.send("Stopping dnsmasq (safe until configured)...")
+          sse.emit("Stopping dnsmasq (safe until configured)...")
           DnsmasqService.stop!
-          sse.send("  ✓ Stopped and disabled (configure settings, then start)")
+          sse.emit("  ✓ Stopped and disabled (configure settings, then start)")
 
-          sse.send("")
-          sse.send("✓ dnsmasq installed successfully!")
+          sse.emit("")
+          sse.emit("✓ dnsmasq installed successfully!")
           sse.done
         else
-          sse.send("✗ Installation failed.")
+          sse.emit("✗ Installation failed.")
           sse.done("error")
         end
       end

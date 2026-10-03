@@ -24,22 +24,22 @@ class SetupController < ApplicationController
     size = '2G' unless %w[1G 2G 4G].include?(size)
 
     stream_sse do |sse|
-      sse.send("Checking current swap status...")
+      sse.emit("Checking current swap status...")
       existing = `swapon --show --noheadings 2>/dev/null`.strip
       unless existing.empty?
-        sse.send("⚠ Swap already active (#{existing.split.first}). Skipping.")
+        sse.emit("⚠ Swap already active (#{existing.split.first}). Skipping.")
         sse.done
         next
       end
 
-      success = SwapService.create!(size) { |msg| sse.send(msg) }
+      success = SwapService.create!(size) { |msg| sse.emit(msg) }
       unless success
-        sse.send("✗ Failed to create swap file. Check disk space.")
+        sse.emit("✗ Failed to create swap file. Check disk space.")
         sse.done("error")
         next
       end
 
-      sse.send("✓ Swap enabled! #{size} swap file is active and persistent.")
+      sse.emit("✓ Swap enabled! #{size} swap file is active and persistent.")
       sse.done
     end
   end
@@ -145,8 +145,8 @@ class SetupController < ApplicationController
     default_copies = 2 if default_copies < 1
 
     stream_sse do |sse|
-      sse.send("Installing Greyhole...")
-      sse.send("")
+      sse.emit("Installing Greyhole...")
+      sse.emit("")
       SetupService.stream_greyhole_install(default_copies, sse)
     end
   end

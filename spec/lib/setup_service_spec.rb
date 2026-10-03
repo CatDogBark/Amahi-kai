@@ -55,11 +55,11 @@ RSpec.describe SetupService do
   end
 
   describe '.stream_prepare_drives' do
-    let(:sse) { double('sse', send: nil, done: nil) }
+    let(:sse) { double('sse', emit: nil, done: nil) }
 
     it 'handles empty drive selection' do
       described_class.stream_prepare_drives([], [], sse)
-      expect(sse).to have_received(:send).with('⚠ No drives selected')
+      expect(sse).to have_received(:emit).with('⚠ No drives selected')
       expect(sse).to have_received(:done)
     end
 
@@ -90,7 +90,7 @@ RSpec.describe SetupService do
 
       it 'skips unknown devices' do
         described_class.stream_prepare_drives(['/dev/sdz1'], [], sse)
-        expect(sse).to have_received(:send).with(/not found/)
+        expect(sse).to have_received(:emit).with(/not found/)
       end
     end
   end
@@ -117,7 +117,7 @@ RSpec.describe SetupService do
   end
 
   describe '.stream_greyhole_install' do
-    let(:sse) { double('sse', send: nil, done: nil) }
+    let(:sse) { double('sse', emit: nil, done: nil) }
 
     before do
       allow(Setting).to receive(:set)
@@ -131,7 +131,7 @@ RSpec.describe SetupService do
 
     it 'streams messages in dev mode' do
       described_class.stream_greyhole_install(1, sse)
-      expect(sse).to have_received(:send).at_least(:once)
+      expect(sse).to have_received(:emit).at_least(:once)
       expect(sse).to have_received(:done)
     end
   end

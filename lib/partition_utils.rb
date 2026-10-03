@@ -25,7 +25,7 @@ class PartitionUtils
     begin
       f = File.open('/etc/mtab')
     rescue SystemCallError => e
-      return @info
+      return
     end
     while f.gets
       if ($_.match(/^\/dev/))

@@ -13,9 +13,9 @@
 #
 #     def install_stream
 #       stream_sse do |sse|
-#         sse.send("Starting installation...")
-#         sse.send("Step 1 complete")
-#         sse.send("success", event: "done")
+#         sse.emit("Starting installation...")
+#         sse.emit("Step 1 complete")
+#         sse.emit("success", event: "done")
 #       end
 #     end
 #   end
@@ -26,7 +26,7 @@ module SseStreaming
   private
 
   # Set up SSE headers and yield an SseSender for writing events.
-  # The block receives an SseSender that responds to #send(data, event: nil).
+  # The block receives an SseSender that responds to #emit(data, event: nil).
   #
   # Streams do real work (installs, the system update, drive formatting) and must be
   # GET for EventSource, so Rails' usual CSRF check doesn't cover them. Only a stream
@@ -65,9 +65,10 @@ module SseStreaming
     end
 
     # Send an SSE message.
-    #   send("Installing...") → data: Installing...\n\n
-    #   send("success", event: "done") → event: done\ndata: success\n\n
-    def send(data, event: nil)
+    #   emit("Installing...") → data: Installing...\n\n
+    #   emit("success", event: "done") → event: done\ndata: success\n\n
+    # (Named emit, not send: send overrode Object#send, which Brakeman flagged.)
+    def emit(data, event: nil)
       msg = ""
       msg += "event: #{event}\n" if event
       msg += "data: #{data}\n\n"
@@ -76,30 +77,30 @@ module SseStreaming
 
     # Convenience: send a "done" event with success/error status.
     def done(status = "success")
-      send(status, event: "done")
+      emit(status, event: "done")
       # Send padding to flush any buffering proxies/middleware
       @yielder << "\n"
     end
 
     # Convenience: send a step line (blue in terminal UI).
     def step(text)
-      send(text)
+      emit(text)
     end
 
     # Convenience: send a success line.
     def success(text)
-      send(text)
+      emit(text)
     end
 
     # Convenience: send an error line.
     def error(text)
-      send(text)
+      emit(text)
     end
 
     # Stream output from a shell command line by line.
     def stream_command(cmd)
       IO.popen(cmd) do |io|
-        io.each_line { |line| send("  #{line.chomp}") }
+        io.each_line { |line| emit("  #{line.chomp}") }
       end
       $?.success?
     end

@@ -14,6 +14,8 @@
 # License along with this program; if not, write to the Amahi
 # team at http://www.amahi.org/ under "Contact Us."
 
+require 'open3'
+
 class DiskUtils
   class << self
     def stats
@@ -75,7 +77,8 @@ class DiskUtils
       output.split("\n").filter_map do |line|
         name, type = line.split(/\s+/)
         next unless type == 'disk'
-        model = `lsblk -dno MODEL /dev/#{name} 2>/dev/null`.strip
+        model, _err, _status = Open3.capture3('lsblk', '-dno', 'MODEL', "/dev/#{name}")
+        model = model.strip
         {
           device: "/dev/#{name}",
           model: model.presence || 'Virtual Disk'

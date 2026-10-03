@@ -16,7 +16,7 @@ module TailscaleService
       return false if status.empty?
       data = JSON.parse(status)
       data['BackendState'] == 'Running'
-    rescue JSON::ParserError, StandardError
+    rescue StandardError # includes JSON::ParserError
       false
     end
 
@@ -47,7 +47,7 @@ module TailscaleService
       end
 
       result
-    rescue JSON::ParserError, StandardError => e
+    rescue StandardError => e # includes JSON::ParserError
       { installed: true, running: false, error: e.message }
     end
 

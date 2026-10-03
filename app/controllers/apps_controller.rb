@@ -27,7 +27,7 @@ class AppsController < ApplicationController
 
   def install_docker_stream
     stream_sse do |sse|
-      sse.send("Starting Docker installation...")
+      sse.emit("Starting Docker installation...")
 
       unless Rails.env.production?
         # Dev/test mode — simulate install
@@ -65,7 +65,7 @@ class AppsController < ApplicationController
         ]
         lines.each do |line|
           sleep(0.3)
-          sse.send(line)
+          sse.emit(line)
         end
         sse.done
       else
@@ -96,16 +96,16 @@ class AppsController < ApplicationController
         ]
 
         steps.each do |step|
-          sse.send(step[:label])
+          sse.emit(step[:label])
           step[:commands].each do |c|
             next unless c[:run]
             IO.popen(c[:cmd]) do |io|
               io.each_line do |line|
-                sse.send("  #{line.chomp}")
+                sse.emit("  #{line.chomp}")
               end
             end
             unless $?.success?
-              sse.send("✗ Command failed: #{c[:cmd]}")
+              sse.emit("✗ Command failed: #{c[:cmd]}")
               success = false
               break
             end
@@ -114,12 +114,12 @@ class AppsController < ApplicationController
         end
 
         if success
-          sse.send("")
-          sse.send("✓ Docker installed successfully!")
+          sse.emit("")
+          sse.emit("✓ Docker installed successfully!")
           sse.done
         else
-          sse.send("")
-          sse.send("✗ Docker installation failed. Check logs above.")
+          sse.emit("")
+          sse.emit("✗ Docker installation failed. Check logs above.")
           sse.done("error")
         end
       end
@@ -213,7 +213,7 @@ class AppsController < ApplicationController
 
     stream_sse do |sse|
       unless entry
-        sse.send("App not found in catalog")
+        sse.emit("App not found in catalog")
         sse.done("error")
         next
       end
@@ -221,8 +221,8 @@ class AppsController < ApplicationController
       app_name = entry[:name]
       image = entry[:image]
 
-      sse.send("Installing #{app_name}...")
-      sse.send("")
+      sse.emit("Installing #{app_name}...")
+      sse.emit("")
 
       unless Rails.env.production?
         # Dev/test simulation
@@ -243,7 +243,7 @@ class AppsController < ApplicationController
           "✓ #{app_name} installed and running!",
           "  Access at #{proxy_base}/app/#{identifier}"
         ]
-        lines.each { |l| sleep(0.4); sse.send(l) }
+        lines.each { |l| sleep(0.4); sse.emit(l) }
 
         # Create the DB record
         docker_app = DockerApp.find_or_initialize_by(identifier: identifier)
@@ -270,7 +270,7 @@ class AppsController < ApplicationController
           )
           docker_app.save!
 
-          reporter = ->(msg) { sse.send(msg) }
+          reporter = ->(msg) { sse.emit(msg) }
 
           DockerAppInstaller.create_init_files(entry[:init_files], reporter: reporter)
           DockerAppInstaller.create_volumes(entry[:volumes], user: entry[:user], reporter: reporter)
@@ -292,14 +292,14 @@ class AppsController < ApplicationController
             host_port: first_port
           )
 
-          sse.send("")
-          sse.send("✓ #{app_name} installed and running!")
-          sse.send("  Access at #{proxy_base}/app/#{identifier}") if first_port
+          sse.emit("")
+          sse.emit("✓ #{app_name} installed and running!")
+          sse.emit("  Access at #{proxy_base}/app/#{identifier}") if first_port
           sse.done
 
         rescue ContainerService::ContainerError, Shell::CommandError, DockerService::DockerError, Errno::ENOENT, IOError => e
           docker_app&.update(status: 'error', error_message: e.message)
-          sse.send("✗ #{e.message}")
+          sse.emit("✗ #{e.message}")
           sse.done("error")
         end
       end

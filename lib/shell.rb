@@ -153,9 +153,20 @@ module Shell
       return cmd unless SUDO_COMMANDS.include?(cmd_name)
 
       # Resolve to full path for sudoers NOPASSWD matching
-      full_path = `which #{parts[cmd_idx]} 2>/dev/null`.strip
-      parts[cmd_idx] = full_path unless full_path.empty?
+      full_path = which(parts[cmd_idx])
+      parts[cmd_idx] = full_path if full_path
       "sudo #{parts.join(' ')}"
+    end
+
+    # The full path of +name+ on PATH, or nil. Looked up in Ruby, not by running
+    # `which` through a shell.
+    def which(name)
+      return name if name.include?('/')
+      ENV.fetch('PATH', '').split(File::PATH_SEPARATOR).each do |dir|
+        path = File.join(dir, name)
+        return path if File.file?(path) && File.executable?(path)
+      end
+      nil
     end
 
     def log_cmd(cmd)

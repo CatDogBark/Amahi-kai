@@ -104,7 +104,7 @@ module DiskService
       ]
       lines.each do |line|
         sleep(0.3)
-        sse.send(line)
+        sse.emit(line)
       end
       sse.done
     end
@@ -153,21 +153,21 @@ module DiskService
       ]
 
       steps.each do |step|
-        sse.send(step[:label])
+        sse.emit(step[:label])
         step[:commands].each do |c|
           next unless c[:run]
           IO.popen(c[:cmd], "r+") do |io|
             io.write(c[:input]) if c[:input]
             io.close_write
             io.each_line do |line|
-              sse.send("  #{line.chomp}")
+              sse.emit("  #{line.chomp}")
             end
           end
           unless $?.success?
             if step[:nonfatal]
-              sse.send("  ⚠ Non-critical step failed (continuing)")
+              sse.emit("  ⚠ Non-critical step failed (continuing)")
             else
-              sse.send("  ✗ Command failed")
+              sse.emit("  ✗ Command failed")
               success = false
               break
             end
@@ -179,25 +179,25 @@ module DiskService
       FileUtils.rm_f(conf_tmp)
 
       # Try starting greyhole — non-fatal if it fails (needs config first)
-      sse.send("Starting Greyhole service...")
+      sse.emit("Starting Greyhole service...")
       Greyhole.start!
       if Greyhole.running?
-        sse.send("  ✓ Greyhole is running")
+        sse.emit("  ✓ Greyhole is running")
       else
-        sse.send("  ⚠ Service not started — configure storage pool drives first")
+        sse.emit("  ⚠ Service not started — configure storage pool drives first")
       end
 
       if success && DiskPoolPartition.any?
-        sse.send("Generating Greyhole configuration...")
+        sse.emit("Generating Greyhole configuration...")
         Greyhole.configure!
-        sse.send("  ✓ Configuration written")
+        sse.emit("  ✓ Configuration written")
       end
 
       if success
-        sse.send("✓ Greyhole installed successfully!")
+        sse.emit("✓ Greyhole installed successfully!")
         sse.done
       else
-        sse.send("✗ Installation failed. Check the output above for errors.")
+        sse.emit("✗ Installation failed. Check the output above for errors.")
         sse.done("error")
       end
     end

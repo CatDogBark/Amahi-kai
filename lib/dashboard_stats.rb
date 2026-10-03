@@ -1,6 +1,8 @@
 # DashboardStats — lightweight system info for the home dashboard
 # Heavier details live in SettingsController#system_status
 
+require 'open3'
+
 class DashboardStats
   class << self
     def summary
@@ -66,20 +68,26 @@ class DashboardStats
         end
 
         status = begin
-          `systemctl is-active #{svc[:unit]} 2>/dev/null`.strip
+          systemctl_output('is-active', svc[:unit])
         rescue StandardError
           'unknown'
         end
         since = if status == 'active'
           begin
-            `systemctl show #{svc[:unit]} --property=ActiveEnterTimestamp 2>/dev/null`
-              .strip.sub('ActiveEnterTimestamp=', '')
+            systemctl_output('show', svc[:unit], '--property=ActiveEnterTimestamp')
+              .sub('ActiveEnterTimestamp=', '')
           rescue StandardError
             nil
           end
         end
         { name: svc[:name], unit: svc[:unit], running: status == 'active', status: status, since: since }
       end
+    end
+
+    # systemctl's stdout, run without a shell so a unit name can't add commands.
+    def systemctl_output(*args)
+      stdout, _stderr, _status = Open3.capture3('systemctl', *args)
+      stdout.strip
     end
 
     def storage_summary
