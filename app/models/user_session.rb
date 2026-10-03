@@ -27,6 +27,8 @@ class UserSession
     user = User.find_by("LOWER(login) = ?", @login.to_s.downcase)
     if user&.authenticate(@password)
       @record = user
+      # Start a fresh session, so a session id issued before login can't be reused after it.
+      self.class.controller.reset_session
       self.class.controller.session[:user_id] = user.id
 
       # Update login tracking columns
@@ -67,8 +69,16 @@ class UserSession
     self.class.controller.reset_session
   end
 
-  # Controller accessor — set by ApplicationController before_action.
+  # The controller handling this request, set by an ApplicationController before_action.
+  # It lives in Current rather than a class variable: Puma serves requests on several
+  # threads, and one shared variable let a request read or write another request's session.
   class << self
-    attr_accessor :controller
+    def controller
+      Current.controller
+    end
+
+    def controller=(controller)
+      Current.controller = controller
+    end
   end
 end

@@ -20,6 +20,16 @@ describe "User Sessions", type: :request do
       expect(response.body).to include("Dashboard")
     end
 
+    it "starts a fresh session at login" do
+      ensure_setup_completed!
+      user = create(:user)
+      get "/users"  # protected page: stores the return location in the session
+      expect(session[:return_to]).to eq("/users")
+      post user_sessions_path, params: { username: user.login, password: "secretpassword" }
+      expect(session[:return_to]).to be_nil
+      expect(session[:user_id]).to eq(user.id)
+    end
+
     it "rejects invalid credentials" do
       user = create(:user)
       post user_sessions_path, params: { username: user.login, password: "wrongpassword" }

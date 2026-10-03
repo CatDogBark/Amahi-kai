@@ -110,4 +110,36 @@ RSpec.describe UserSession, type: :model do
       session.destroy
     end
   end
+
+  describe '.controller' do
+    it 'keeps each thread\'s controller separate' do
+      controller_a = double('controller A')
+      controller_b = double('controller B')
+      ready = Queue.new
+      go = Queue.new
+      seen = {}
+
+      threads = { a: controller_a, b: controller_b }.map do |key, controller|
+        Thread.new do
+          UserSession.controller = controller
+          ready << true
+          go.pop
+          seen[key] = UserSession.controller
+        end
+      end
+      2.times { ready.pop }  # both threads have set their controller
+      2.times { go << true }
+      threads.each(&:join)
+
+      expect(seen).to eq(a: controller_a, b: controller_b)
+    end
+  end
+
+  describe '#save session reset' do
+    it 'resets the session before storing the user' do
+      session = UserSession.new(login: user.login, password: 'secretpassword')
+      session.save
+      expect(mock_controller).to have_received(:reset_session)
+    end
+  end
 end

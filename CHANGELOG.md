@@ -27,6 +27,8 @@ All notable changes to Amahi-kai are documented here.
 - **Share pool-copies buttons save the chosen number.** The controller read the wrong parameter, saved 0 copies, then failed rendering a stale partial.
 - **Deleting a user removes their Linux account even if they had no Samba entry**, and only removes accounts the app created, so deleting a web user can't remove a pre-existing login such as the install user.
 - **Glass panels on every page.** Tables, settings panels and `.bg-white` panels use the dashboard cards' translucent background; nested panels stay clear so they don't stack into an opaque block. The dashboard banner says "Amahi-kai" instead of the lowercase hostname, and shows the hostname only when the server has its own name.
+- **Sessions can't cross between requests.** `UserSession` kept the current controller in one class-level variable shared by Puma's threads, so a concurrent request could read or write another request's session. It now lives in per-request `Current` attributes. Login also starts a fresh session.
+- **The footer is a glass bar pinned to the bottom of the window** instead of an opaque bar that moved with the page height.
 - **CI fails on spec failures again.** The gate matched "0 failures" anywhere, including in "10 failures".
 
 ### 🔧 Architecture & Code Quality

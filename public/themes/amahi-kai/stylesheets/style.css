@@ -982,17 +982,35 @@ select:focus, input[type="text"]:focus, input[type="password"]:focus {
   border-color: var(--kai-primary);
 }
 
-/* ─── Footer ─── */
+/* ─── Footer: a glass bar pinned to the bottom of the window, so it stays put
+   when the page height changes ─── */
 #footer, .footer-area {
-  background: var(--kai-dark);
-  color: rgba(255,255,255,0.5);
-  font-size: 11px;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1020;
+  background: var(--kai-card-bg-opaque);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid var(--kai-border);
+  color: var(--kai-muted);
+  font-size: 12px;
 }
 #footer a {
-  color: rgba(255,255,255,0.7);
+  color: var(--kai-text);
 }
 #footer a:hover {
-  color: white;
+  color: var(--kai-primary);
+}
+/* Room under the page content so the fixed footer never covers it */
+body:has(> #footer) {
+  padding-bottom: 56px;
+}
+@media (max-width: 767.98px) {
+  body:has(> #footer) {
+    padding-bottom: 84px;
+  }
 }
 
 /* ─── Login page ─── */
