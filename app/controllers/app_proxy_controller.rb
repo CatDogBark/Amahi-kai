@@ -104,7 +104,7 @@ class AppProxyController < ApplicationController
       status_code = upstream.code.to_i
 
       # Build response headers
-      skip_response = %w[transfer-encoding connection keep-alive content-length content-type]
+      skip_response = %w[transfer-encoding connection keep-alive content-length content-type set-cookie]
       upstream.each_header do |name, value|
         next if skip_response.include?(name.downcase)
 
@@ -112,12 +112,13 @@ class AppProxyController < ApplicationController
           value = rewrite_location(value, @docker_app)
         end
 
-        if name.downcase == 'set-cookie'
-          value = rewrite_cookie_path(value, @docker_app)
-        end
-
         response.headers[name] = value
       end
+
+      # each_header joins repeated headers with ", ", which breaks Set-Cookie (browsers
+      # don't split it, so an app setting two cookies lost them). Pass each one on.
+      cookies = Array(upstream.get_fields('set-cookie'))
+      response.headers['set-cookie'] = cookies.map { |c| rewrite_cookie_path(c, @docker_app) } if cookies.any?
 
       content_type = upstream['content-type'].to_s
       body = upstream.body || ''

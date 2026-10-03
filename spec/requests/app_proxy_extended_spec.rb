@@ -14,6 +14,7 @@ RSpec.describe "AppProxy extended", type: :request do
       )
       allow(@mock_response).to receive(:[]).with('content-type').and_return('text/html')
       allow(@mock_response).to receive(:each_header).and_yield('x-custom', 'value')
+      allow(@mock_response).to receive(:get_fields).with('set-cookie').and_return(nil)
 
       @mock_http = instance_double(Net::HTTP)
       allow(@mock_http).to receive(:open_timeout=)
@@ -65,6 +66,16 @@ RSpec.describe "AppProxy extended", type: :request do
         expect(outgoing['Cookie']).to include('app_cookie=abc')
         expect(outgoing['Cookie']).not_to include(Rails.application.config.session_options[:key])
       end
+    end
+
+    it "passes each of the app's cookies through separately, under the app's path" do
+      allow(@mock_response).to receive(:get_fields).with('set-cookie')
+        .and_return(['session=abc; Path=/; HttpOnly', 'theme=dark; Path=/'])
+      get '/app/proxytest/'
+      cookies = Array(response.headers['set-cookie']).flat_map { |c| c.split("\n") }
+      # Amahi refreshes its own session cookie on every response; look at the app's.
+      app_cookies = cookies.reject { |c| c.start_with?("#{Rails.application.config.session_options[:key]}=") }
+      expect(app_cookies).to contain_exactly('session=abc; Path=/app/proxytest/; HttpOnly', 'theme=dark; Path=/app/proxytest/')
     end
 
     it "forwards response headers from upstream" do
@@ -137,6 +148,7 @@ RSpec.describe "AppProxy extended", type: :request do
       mock_response = instance_double(Net::HTTPOK, code: '200', body: html)
       allow(mock_response).to receive(:[]).with('content-type').and_return('text/html')
       allow(mock_response).to receive(:each_header)
+      allow(mock_response).to receive(:get_fields).with('set-cookie').and_return(nil)
 
       mock_http = instance_double(Net::HTTP)
       allow(mock_http).to receive(:open_timeout=)

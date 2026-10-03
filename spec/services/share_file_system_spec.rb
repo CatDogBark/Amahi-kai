@@ -20,11 +20,38 @@ RSpec.describe ShareFileSystem do
       fs.setup_directory
 
       expect(Shell).to have_received(:run).with(
-        /rmdir.*old/,
         /mkdir -p.*movies/,
         /chown amahi:users .*movies/,
         /chmod 2775 .*movies/
       )
+    end
+
+    it 'still creates the new folder when the old one has files in it' do
+      Dir.mktmpdir do |dir|
+        old_dir = File.join(dir, 'old')
+        FileUtils.mkdir_p(old_dir)
+        File.write(File.join(old_dir, 'keep.txt'), 'x')
+        share = create(:share, path: old_dir)
+        share.path = File.join(dir, 'movies')
+        allow(share).to receive(:path_changed?).and_return(true)
+        allow(share).to receive(:path_was).and_return(old_dir)
+
+        described_class.new(share).setup_directory
+
+        expect(Dir.exist?(old_dir)).to be true
+        expect(Shell).to have_received(:run).with(/mkdir -p.*movies/, anything, anything)
+      end
+    end
+
+    it 'stops the save with an error when the folder cannot be created' do
+      share = create(:share)
+      share.path = '/var/lib/amahi-kai/files/cannot'
+      allow(share).to receive(:path_changed?).and_return(true)
+      allow(share).to receive(:path_was).and_return('')
+      allow(Shell).to receive(:run).and_return(false)
+
+      expect { described_class.new(share).setup_directory }.to throw_symbol(:abort)
+      expect(share.errors[:path].join).to include("couldn't be created")
     end
 
     it 'skips rmdir when path_was is blank (new share)' do

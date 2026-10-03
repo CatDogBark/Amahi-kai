@@ -21,12 +21,24 @@ class ShareFileSystem
     return unless share.path_changed?
     return if share.path.blank?
 
-    cmds = []
-    cmds << "rmdir #{Shellwords.escape(share.path_was)}" unless share.path_was.blank?
-    cmds << "mkdir -p #{Shellwords.escape(share.path)}"
-    cmds << "chown amahi:users #{Shellwords.escape(share.path)}"
-    cmds << "chmod 2775 #{Shellwords.escape(share.path)}"
-    Shell.run(*cmds)
+    # Remove the old folder only if it's empty. This used to be the first step of
+    # one command chain, so an old folder with files in it stopped the new one
+    # from being created.
+    remove_empty_directory(share.path_was) unless share.path_was.blank?
+
+    path = Shellwords.escape(share.path)
+    created = Shell.run("mkdir -p #{path}", "chown amahi:users #{path}", "chmod 2775 #{path}")
+    return if created
+
+    # Say so instead of saving a share whose folder doesn't exist.
+    share.errors.add(:path, "#{share.path} couldn't be created")
+    throw :abort
+  end
+
+  def remove_empty_directory(path)
+    Dir.rmdir(path) if Dir.exist?(path) && Dir.empty?(path)
+  rescue SystemCallError
+    Shell.run("rmdir --ignore-fail-on-non-empty #{Shellwords.escape(path)}")
   end
 
   # Called before save when guest_writeable changes

@@ -7,7 +7,7 @@
 
 class UsersController < ApplicationController
   before_action :admin_required
-  before_action :set_user, only: %i[update update_pubkey destroy toggle_admin update_role update_password update_name update_pin]
+  before_action :set_user, only: %i[update update_pubkey destroy toggle_admin update_role update_password update_name]
 
   helper_method :can_i_toggle_admin?
 
@@ -110,21 +110,6 @@ class UsersController < ApplicationController
     render json: { status: @user.errors.any? ? :not_acceptable : :ok }
   end
 
-  def update_pin
-    if params[:user][:pin].blank? || params[:user][:pin_confirmation].blank?
-      render json: { status: :not_acceptable, message: t('pin_cannot_be_blank') }
-    elsif params[:user][:pin] != params[:user][:pin_confirmation]
-      render json: { status: :not_acceptable, message: t('pins_do_not_match') }
-    else
-      @user.update(params_pin_update)
-      if @user.errors.any?
-        render json: { status: :not_acceptable, message: @user.errors.full_messages.join(', ') }
-      else
-        render json: { status: :ok, message: t('pin_changed_successfully') }
-      end
-    end
-  end
-
   private
 
   def set_user
@@ -140,7 +125,7 @@ class UsersController < ApplicationController
   end
 
   def params_user_create
-    params.require(:user).permit(:login, :name, :password, :password_confirmation, :pin, :role)
+    params.require(:user).permit(:login, :name, :password, :password_confirmation, :role)
   end
 
   def params_password_update
@@ -149,9 +134,5 @@ class UsersController < ApplicationController
 
   def params_name_update
     params.require(:user).permit(:name)
-  end
-
-  def params_pin_update
-    params.require(:user).permit(:pin, :pin_confirmation)
   end
 end

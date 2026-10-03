@@ -17,6 +17,19 @@ RSpec.describe "SearchController extended", type: :request do
                       relative_path: "notes.txt", content_type: "document", extension: "txt", size: 100)
   end
 
+  describe "paging" do
+    it "treats page 0 as page 1 instead of failing" do
+      get search_files_path, params: { query: "movie", page: 0 }
+      expect(response).to have_http_status(:ok)
+    end
+
+    it "caps the page size" do
+      get search_files_path, params: { query: "o", per_page: 100_000 }
+      expect(response).to have_http_status(:ok)
+      expect(controller.instance_variable_get(:@rpp)).to eq(SearchController::MAX_PER_PAGE)
+    end
+  end
+
   describe "GET /search/files" do
     it "finds files by name" do
       get search_files_path, params: { query: "movie" }

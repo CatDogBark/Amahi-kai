@@ -50,9 +50,12 @@ class ApplicationController < ActionController::Base
 
   def check_for_amahi_app
     server = request.env['SERVER_NAME']
-    dom = Setting.get_by_name('domain')
+    # The value, not the record: the record interpolated as "#<Setting...>", so the
+    # domain match below never matched anything.
+    dom = Setting.value_by_name('domain')
     hostname = Setting.get('server-name') || 'amahi-kai'
-    if server && server != hostname && server =~ /\A(.*)\.#{dom}\z/
+    # The domain is a setting, so escape it: its dots would match any character.
+    if server && dom.present? && server != hostname && server =~ /\A(.*)\.#{Regexp.escape(dom)}\z/
       server = $1
     end
     if server && server != hostname && DnsAlias.where(:name=>server).first

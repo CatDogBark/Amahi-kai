@@ -47,7 +47,7 @@ class Share < ApplicationRecord
   before_save -> { file_system.update_guest_permissions }
   before_save -> { file_system.setup_directory }
   before_destroy -> { file_system.cleanup_directory }
-  after_create :index_share_files
+  after_create_commit :index_share_files
   after_save -> { access_manager.sync_everyone_access }
   after_commit :push_samba_config, on: [:create, :update, :destroy]
 
@@ -461,15 +461,9 @@ class Share < ApplicationRecord
     Rails.logger.error("Failed to push Samba config: #{e.message}")
   end
 
-  # Index files in this share after creation
+  # Index files in this share once it's committed, so the job can find the row.
+  # (An after_create Thread.new ran before commit and outside the connection pool.)
   def index_share_files
-    Thread.new do
-      begin
-        require 'share_indexer'
-        ShareIndexer.index_share(self)
-      rescue Errno::ENOENT, Errno::EACCES, IOError => e
-        Rails.logger.error("Share#index_share_files failed: #{e.message}")
-      end
-    end
+    ShareIndexJob.perform_later(id)
   end
 end

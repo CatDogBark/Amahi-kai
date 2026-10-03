@@ -1,7 +1,7 @@
 // User Controller
 //
 // Handles user-specific interactions: delete, toggle admin,
-// edit name, update password, update pin.
+// edit name, update password.
 //
 // Mounted on each .user element (whole_user_N)
 
@@ -10,7 +10,7 @@
     static get targets() {
       return ["deleteArea", "adminCheckbox", "userIcons", "nameDisplay",
               "nameForm", "nameInput", "message", "passwordForm",
-              "passwordMessage", "pinForm", "pinMessage"];
+              "passwordMessage"];
     }
 
     // Delete user
@@ -175,33 +175,6 @@
           }
         })
         .catch(function(err) { console.error("Password update failed:", err); });
-    }
-
-    // Submit pin form
-    submitPin(event) {
-      event.preventDefault();
-      var _this = this;
-      var form = event.currentTarget;
-      var url = form.action;
-      var headers = csrfHeaders();
-      headers["Content-Type"] = "application/x-www-form-urlencoded; charset=utf-8";
-      var body = new URLSearchParams(new FormData(form)).toString();
-
-      fetch(url, { method: "PUT", headers: headers, body: body, credentials: "same-origin" })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-          _this.showMessage(_this.pinMessageTarget, data.message);
-          if (data.status === "ok") {
-            form.querySelectorAll("input[type=password]").forEach(function(i) { i.value = ""; });
-            var edit = form.querySelector('.pin-edit');
-            if (edit) {
-              edit.style.transition = "opacity 0.3s";
-              edit.style.opacity = "0";
-              setTimeout(function() { edit.style.display = "none"; edit.style.opacity = "1"; }, 300);
-            }
-          }
-        })
-        .catch(function(err) { console.error("Pin update failed:", err); });
     }
 
     // Helper: show a temporary message

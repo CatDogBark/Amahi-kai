@@ -97,20 +97,6 @@ describe "Users Controller", type: :request do
       end
     end
 
-    describe "PUT /users/:id/update_pin" do
-      it "rejects blank pin" do
-        user = create(:user)
-        put "/users/#{user.id}/update_pin", params: { user: { pin: "", pin_confirmation: "" } }, as: :json
-        expect(response.parsed_body['status']).to eq('not_acceptable')
-      end
-
-      it "rejects mismatched pins" do
-        user = create(:user)
-        put "/users/#{user.id}/update_pin", params: { user: { pin: "12345", pin_confirmation: "54321" } }, as: :json
-        expect(response.parsed_body['message']).to include('match').or include('do not match')
-      end
-    end
-
     describe "PUT /users/:id/update_pubkey" do
       it "updates a user's public key" do
         user = create(:user)

@@ -45,7 +45,9 @@ module DockerAppInstaller
       IO.popen("sudo docker pull #{image} 2>&1") do |io|
         io.each_line { |line| reporter&.call("  #{line.chomp}") }
       end
-      raise "Failed to pull image #{image}" unless $?.success?
+      # ContainerError is what the install stream rescues; a RuntimeError left the
+      # stream dead and the app stuck in "pulling".
+      raise ContainerService::ContainerError, "Failed to pull image #{image}" unless $?.success?
       reporter&.call("  ✓ Pull complete")
     end
 
@@ -93,7 +95,7 @@ module DockerAppInstaller
       create_cmd = cmd_parts.map { |p| Shellwords.escape(p) }.join(' ')
       result = `#{create_cmd} 2>&1`
       reporter&.call("  #{result.strip}") if result.present?
-      raise "Failed to create container" unless $?.success?
+      raise ContainerService::ContainerError, "Failed to create container" unless $?.success?
 
       container_name
     end
