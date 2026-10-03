@@ -43,6 +43,7 @@ All notable changes to Amahi-kai are documented here.
 - **The tunnel token is root-only.** cloudflared reads it with `--token-file`; it was in the world-readable unit file and on cloudflared's command line. `amahi-update` migrates existing installs. Remote Access sends the token by POST instead of in the stream URL, and token-, secret- and key-like parameters are filtered from the logs.
 - **The database password stays off command lines** during the Greyhole install (stdin and a private file instead), `/etc/greyhole.conf` becomes `root:amahi 640`, and Shell masks secret-shaped text in its log.
 - **Sessions:** a login unused for 7 days ends (checked on the server), and changing a password signs out that user's other browsers.
+- **System Update runs the steps it just pulled.** bash keeps executing the copy of `amahi-update` it opened, so a step added by an update only ran on the following update; the script now restarts itself as the new copy after pulling. Drives are re-mounted before the app restart, since restarting the app from the web UI also ends the script.
 - **CI fails on spec failures again.** The gate matched "0 failures" anywhere, including in "10 failures".
 
 ### 🔧 Architecture & Code Quality

@@ -12,6 +12,7 @@ ENV_FILE="${ENV_FILE:-/etc/amahi-kai/amahi.env}"
 APP_USER="${APP_USER:-amahi}"
 APP_GROUP="${APP_GROUP:-amahi}"
 STREAM=false
+ORIG_ARGS=("$@")
 
 if [[ "${1:-}" == "--stream" ]]; then
   STREAM=true
@@ -53,6 +54,7 @@ fi
 
 # 1. Pull latest code
 log "Pulling latest code..."
+SCRIPT_SUM_BEFORE=$(sha256sum < "$APP_DIR/bin/amahi-update")
 REPO_URL="https://github.com/CatDogBark/Amahi-kai.git"
 
 # Ensure amahi trusts the app directory for git
@@ -74,6 +76,13 @@ else
     log "⚠ Git clone failed — using files on disk"
   fi
   rm -rf "$TMPDIR"
+fi
+
+# bash keeps running the copy of this script it opened, so after the pull a step added
+# by this update wouldn't run until the next update. Carry on with the new copy instead.
+if [[ -z "${AMAHI_UPDATE_REEXEC:-}" && "$(sha256sum < "$APP_DIR/bin/amahi-update")" != "$SCRIPT_SUM_BEFORE" ]]; then
+  log "Update script changed; continuing with the new version..."
+  exec env AMAHI_UPDATE_REEXEC=1 "$APP_DIR/bin/amahi-update" "${ORIG_ARGS[@]}"
 fi
 
 # 2. Install dependencies
@@ -133,15 +142,16 @@ RAILS_ENV=production bin/rails assets:precompile 2>&1
 log "Fixing file ownership..."
 chown -R "$APP_USER:$APP_GROUP" "$APP_DIR"
 
-# 6. Restart service
-log "Restarting Amahi-kai..."
-systemctl restart amahi-kai 2>&1 || error "Failed to restart service"
-
-# 7. Ensure all fstab mounts are active (FUSE mounts like ntfs-3g can get lost)
+# 6. Ensure all fstab mounts are active (FUSE mounts like ntfs-3g can get lost)
 log "Restoring mounts..."
 mount -a 2>&1 || log "⚠ Some mounts may have failed — check 'mount -a' manually"
 
-# Verify it's running
+# 7. Restart service. This is last on purpose: run from the web UI, this script is part
+#    of the amahi-kai service, so restarting the service ends the script as well.
+log "Restarting Amahi-kai..."
+systemctl restart amahi-kai 2>&1 || error "Failed to restart service"
+
+# Verify it's running (reached when run from a terminal)
 sleep 2
 if systemctl is-active --quiet amahi-kai; then
   log "✓ Amahi-kai updated and running!"
