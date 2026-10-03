@@ -1,24 +1,17 @@
-# This file should contain all the record creation needed to seed the database with its default values.
-# The data can then be loaded with the rake db:seed (or created alongside the db with db:setup).
-
-# reset the whole app and initialize basic settings
-
-[CapAccess,
-CapWriter,
-Db,
-DnsAlias,
-DockerApp,
-Host,
-Server,
-Share,
-Theme,
-User,
-Setting].map {|c| c.destroy_all}
+# Minimum data for a new install: the admin account and default settings.
+#
+# Seeds only run on an empty database. bin/amahi-install runs db:seed on every
+# install, including a re-run on a live system, and this file used to start by
+# calling destroy_all on users, shares, apps and settings; User.destroy_all also
+# ran `userdel -r` for every user. Nothing here deletes data any more.
+if User.exists?
+  puts "Database already has users; not seeding." unless Rails.env.test?
+  return
+end
 
 Setting.set('net', '192.168.1')
 Setting.set('self-address', '10')
 Setting.set('domain', 'amahi.net')
-Setting.set('api-key', '1b6727c9170b11d6f80437eac13d7a2e143fd895')
 
 admin = User.new(
   login: 'admin',
@@ -26,8 +19,7 @@ admin = User.new(
   password: 'secretpassword',
   password_confirmation: 'secretpassword',
   admin: true,
-  role: 'admin',
-  pin: nil
+  role: 'admin'
 )
 admin.save!(validate: false)
 

@@ -540,7 +540,7 @@ if ! bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && RAILS_ENV=
   exit 1
 fi
 
-echo "==> Seeding database..."
+echo "==> Seeding database (skipped when it already has users)..."
 if ! bash -lc "set -a && source $ENV_FILE && set +a && cd $APP_DIR && RAILS_ENV=production bin/rails db:seed"; then
   echo ""
   echo "  ❌ Database seeding failed!"

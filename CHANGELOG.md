@@ -36,6 +36,8 @@ All notable changes to Amahi-kai are documented here.
 - **Themes:** only installed theme names are accepted, each theme's `init.rb` is loaded once instead of on every request, and the theme list no longer changes the server's working directory.
 - **The app proxy no longer forwards the Amahi login cookie** to Docker apps; their own cookies still pass through.
 - **Production only answers to known host names** (DNS-rebinding protection): any IP address, `localhost`, the machine's hostname and `hostname.local`, the NAS's Tailscale name, and the comma-separated `RAILS_ALLOWED_HOSTS` in `/etc/amahi-kai/amahi.env`. Requests from the NAS itself skip the check, so a Cloudflare Tunnel works with no setup. A refused request gets a plain-text explanation instead of a blank 403. The old `RAILS_ALLOWED_HOST` line only worked in development.
+- **Re-running the installer no longer wipes the system.** `db/seeds.rb` started with `destroy_all` on users, shares, apps and settings (and `userdel -r` for every user); it now does nothing when the database already has users.
+- **Disk safety:** new fstab entries are `nofail` so a missing data drive can't stop the NAS booting; the OS-disk guard recognises NVMe partitions and `/` on LVM; new mount points skip slots fstab still claims; and fstab entries are no longer deleted automatically.
 - **CI fails on spec failures again.** The gate matched "0 failures" anywhere, including in "10 failures".
 
 ### 🔧 Architecture & Code Quality
