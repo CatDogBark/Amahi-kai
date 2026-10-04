@@ -5,7 +5,7 @@
 - **OS:** Ubuntu 24.04 or Debian 12+
 - **RAM:** 2GB minimum (4GB recommended)
 - **Disk:** 10GB+ for OS + app; additional storage for file shares
-- **Network:** Static IP recommended (the server manages DNS/DHCP for your LAN)
+- **Network:** Static IP recommended. Amahi-kai can also run DNS and DHCP for your LAN (optional, Network → Gateway)
 
 ## Install
 
@@ -20,7 +20,7 @@ The installer is idempotent — run it again to update or repair.
 ## What It Does
 
 1. Installs system packages (build tools, MariaDB, Samba, dnsmasq)
-2. Installs Ruby 3.2 via rbenv (system-wide)
+2. Installs Ruby 3.2 (the system package where there is one, else built with rbenv)
 3. Creates the `amahi` system user
 4. Deploys application to `/opt/amahi-kai`
 5. Configures MariaDB (database + user)
@@ -39,7 +39,7 @@ Edit `/etc/amahi-kai/amahi.env` for:
 
 - `SECRET_KEY_BASE` — auto-generated, don't change unless rotating
 - `DATABASE_*` — MariaDB connection details
-- `RAILS_ALLOWED_HOST` — set this if accessing via a domain/tunnel
+- `RAILS_ALLOWED_HOSTS` — extra host names (comma-separated) the web UI answers to, for a domain that isn't the NAS's own name. Not needed for the Cloudflare Tunnel or Tailscale
 - `AMAHI_DUMMY_MODE` — `true` to stub out system commands (for testing)
 
 ### Service Management
@@ -59,7 +59,7 @@ systemctl status dnsmasq      # DNS (if enabled)
 - **Username:** `admin`
 - **Password:** `secretpassword`
 
-**Change this immediately** after first login.
+The setup wizard won't finish until you change it.
 
 ### File Shares
 
@@ -69,17 +69,18 @@ User accounts, Samba's config and share folders are changed by the root helper, 
 
 ### Cloudflare Tunnel (Optional)
 
-To access your server remotely via a domain, set up a [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) pointing to `http://localhost:3000` and add your domain to `RAILS_ALLOWED_HOST` in the env file.
+To reach your server from anywhere, set up a [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) from Network → Remote Access. It points to `http://localhost:3000`; requests through it come from the NAS itself, so no host setting is needed.
 
 ## Updating
 
-Use **Settings → System Status → Check for Updates** in the web UI, or over SSH:
+Amahi-kai checks for updates every 6 hours. **Settings → System Status** shows what's new (each change linked to its pull request) with **Update now**, or **Repair** when you're up to date. Over SSH:
 
 ```bash
-sudo /opt/amahi-kai/bin/amahi-update
+sudo /opt/amahi-kai/bin/amahi-update            # update
+sudo /opt/amahi-kai/bin/amahi-update --repair   # run every step again on the current version
 ```
 
-It pulls the code, installs gems, runs migrations, installs the root helper and sudoers rules, regenerates the Samba config and restarts the app. (A bare `git pull` and restart skips the helper and sudoers steps.)
+An update pulls the code, installs gems, backs up the database, runs migrations, installs the root helper and sudoers rules, regenerates the Samba config and restarts the app; if a step or the restarted app fails, it rolls back to the version that was running. With nothing new it stops after the pull. (A bare `git pull` and restart skips the helper and sudoers steps.)
 
 Or re-run the installer:
 

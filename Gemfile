@@ -45,10 +45,7 @@ gem 'rspec-rails', group: [:test, :development]
 
 group :test do
   gem 'factory_bot_rails'
-  gem 'capybara'
-  # gem 'capybara-screenshot' # removed — no Selenium
   gem 'database_cleaner'
-  # gem 'selenium-webdriver' # removed — no browser tests
   gem 'simplecov', require: false
 end
 

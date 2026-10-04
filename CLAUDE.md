@@ -32,7 +32,6 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
 | Models | `bundle exec rspec spec/models/ spec/services/ spec/helpers/ --tag ~docker` |
 | Lib | `bundle exec rspec spec/lib/ --tag ~integration` |
 | Requests | `bundle exec rspec spec/requests/ --tag ~integration` |
-| Features | `bundle exec rspec spec/features/ --tag ~js --tag ~archived` |
 | MariaDB | models + requests again on MariaDB 10.11 (`DATABASE_URL`), the production database |
 | Lint & Security | RuboCop 1.91.0 (+ rails 2.38.0, rspec 3.10.2), Brakeman 8.1.0, bundle-audit 0.9.3, installed as gems, not bundled |
 

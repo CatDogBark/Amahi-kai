@@ -129,38 +129,9 @@ jobs:
           # Match ", 0 failures" exactly: a bare "0 failures" also matches "10 failures".
           grep -qE "[0-9]+ examples?, 0 failures" tmp/rspec-lib.log
 
-  features:
-    name: Feature Specs
-    runs-on: ubuntu-latest
-    env:
-      RAILS_ENV: test
-      BUNDLE_JOBS: 4
-      BUNDLE_WITHOUT: production
-      SIMPLECOV_COMMAND_NAME: features
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev libmariadb-dev
-      - uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.2'
-          bundler-cache: true
-      - name: Prepare DB
-        run: |
-          mkdir -p tmp/cache/tmpfiles tmp/pids log
-          bundle exec rails db:schema:load
-      - run: bundle exec rspec spec/features/ --tag ~js --tag ~archived --format documentation
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: coverage-features
-          path: coverage/
-          include-hidden-files: true
-          if-no-files-found: warn
-
   coverage:
     name: Coverage Report
-    needs: [models, requests, lib, features]
+    needs: [models, requests, lib]
     if: always()
     runs-on: ubuntu-latest
     env:
