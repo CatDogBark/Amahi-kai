@@ -22,6 +22,7 @@ so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 | 3. M1. Privileged helper, part 2a | Settings → Servers, reboot/power off, hostname, dnsmasq and DNS aliases, swap through the helper; 24 sudo rules gone | #26 |
 | 3. M2. Privileged helper, part 2b | Data drives (format, mount, fstab, preview) and Greyhole (config, database, one install path, pinned key) through the helper; 26 sudo rules gone | #27 |
 | 3. M3 + P. Privileged helper, part 2c | Package installs (pinned apt repositories, fixed list), Cloudflare Tunnel, Tailscale, Docker's install and the security audit's fixes through the helper; audit reads `sshd -T`, server-side tunnel gate; 42 sudo rules gone, 10 left | #28 |
+| 3. N. Root-owned install | `/opt/amahi-kai` is root's except the app's own folders; installer and updater run every Rails and bundle step as `amahi`; privilege model doc rewritten | #30 |
 
 ## Next: Phase 3
 
@@ -39,13 +40,19 @@ becomes root-owned (in N); Docker app work moves to Phase 4.
     Tunnel, Tailscale (its apt repository instead of a downloaded install script run as root),
     Docker's install, and the security audit's fixes with P below; 42 sudo rules gone, leaving
     the helper, the updater and Docker (#28).
-- [ ] **N. Root-owned install**: `/opt/amahi-kai` owned by root (`bin/amahi-set-ownership`; the
+- [x] **N. Root-owned install**: `/opt/amahi-kai` owned by root (`bin/amahi-set-ownership`; the
   `amahi` user keeps `tmp/`, `log/`, `public/assets/`, `vendor/bundle/`); the installer and
   `amahi-update` run every Rails and bundle step as `amahi`; root's `git pull` runs without hooks;
   `production.log` is rotated as `amahi`; `docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`
-  rewritten to describe the helper and this model. Built; waiting for the NAS check.
-- [ ] **O. Update rollback**: keep the previous release; if migrations, the asset build or the
-  health check fail, switch back and restart.
+  rewritten to describe the helper and this model (#30).
+- [ ] **O. Update rollback** (designed with Troy, 2026-10-04: in place, database backups, its own
+  job): System Update runs as `amahi-kai-update.service` (started by the helper's
+  `system.update`; the page follows `/var/log/amahi-kai/update.log` and reconnects through the
+  restart). It remembers the running commit and its compiled assets, dumps the database before
+  migrating (the last 3 kept), and if gems, migrations, the asset build or the restarted app
+  fail, puts the previous commit back and says so. The database isn't rolled back, so
+  migrations must work with the previous version's code. The updater's 4 sudo rules are gone.
+  Built; waiting for the NAS check.
 - [x] **P. Security audit fixes** (in M3, #28; `lib/security_audit.rb`): read effective SSH settings with
   `sshd -T` (drop-ins in `sshd_config.d` win over `sshd_config`); warn that Docker-published ports
   bypass UFW; make the "tunnel blocked until the audit passes" rule a server-side check, not just

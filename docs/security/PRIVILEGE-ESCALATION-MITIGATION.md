@@ -1,16 +1,18 @@
 # Privilege model
 
 How Amahi-kai gets root access on a NAS, and what keeps the web app from turning a bug into
-root. Last updated 2026-10-04 (PR N). Design and history: [`docs/plans/privileged-helper.md`](../plans/privileged-helper.md).
+root. Last updated 2026-10-04 (PR O). Design and history: [`docs/plans/privileged-helper.md`](../plans/privileged-helper.md).
 
 ## Summary
 
-The web app runs as the unprivileged `amahi` user. It reaches root in three ways only:
+The web app runs as the unprivileged `amahi` user. It reaches root in two ways only:
 
 1. **The root helper**, `/usr/local/sbin/amahi-helper` (from `libexec/amahi-helper`). It runs a
-   fixed list of operations, checks every request, and logs every call.
-2. **System Update**, `/opt/amahi-kai/bin/amahi-update`, which pulls the code and redeploys.
-3. **Docker**: the app runs `docker` through sudo and its user is in the `docker` group. Either
+   fixed list of operations, checks every request, and logs every call. One of them,
+   `system.update`, starts **System Update**: `bin/amahi-update` as its own systemd job
+   (`amahi-kai-update.service`), which pulls the code and redeploys, and rolls back if that
+   fails. The page follows its log, `/var/log/amahi-kai/update.log`.
+2. **Docker**: the app runs `docker` through sudo and its user is in the `docker` group. Either
    is full control of the NAS. Phase 4 narrows this.
 
 Root never runs code the `amahi` user can change: the code is root's, and the installer and the
@@ -28,6 +30,8 @@ updater run everything that loads the app or its gems as `amahi`.
 | `/etc/amahi-kai/tunnel.token` | root:root 0600 | Only `cloudflared` (as root) reads it |
 | `/etc/greyhole.conf` | root:amahi 0640 | Holds the database password |
 | `/var/log/amahi-kai/helper.log` | root:amahi 0640 | The helper's audit log; the app can read it, not write it |
+| `/var/log/amahi-kai/update.log` | root, in a root:amahi 0750 folder | The last System Update's output; the update page reads it |
+| `/var/lib/amahi-kai/backups/` | root:root 0700 | Database dumps taken before each update's migrations (the last 3) |
 
 `bin/amahi-set-ownership` sets this up. The installer runs it, and System Update runs it at the
 start of every update, so the first update after PR N takes the checkout back from the `amahi`
@@ -57,12 +61,11 @@ In Rails, `Privileged.call('users.create', login: 'ann', name: 'Ann')` runs an o
 
 ## Sudoers
 
-`config/sudoers/amahi-kai`, 10 rules:
+`config/sudoers/amahi-kai`, 6 rules:
 
 | Rule | For |
 | --- | --- |
-| `/usr/local/sbin/amahi-helper` | Everything above |
-| `/opt/amahi-kai/bin/amahi-update`, `… --stream`, `systemctl restart amahi-kai`, `systemctl status amahi-kai` | System Update |
+| `/usr/local/sbin/amahi-helper` | Everything above, System Update included |
 | `/usr/bin/docker`, `mkdir -p /opt/amahi/*`, `cp /tmp/amahi-staging/* /opt/amahi/*`, `rm -rf /opt/amahi/apps/*` | Docker apps (Phase 4) |
 | `/usr/sbin/smartctl` | Drive health on the Disks page |
 
@@ -72,13 +75,14 @@ In Rails, `Privileged.call('users.create', login: 'ann', name: 'Ann')` runs an o
   with a design for Docker apps (per-app access, no Docker socket for the web app).
 - **`smartctl`** takes any arguments. It reads drive health; it should become a helper
   operation.
-- **Updates aren't rolled back** if a step fails (PR O): the old app keeps running and the update
-  says where it stopped.
+- **The database isn't rolled back** with the code: migrations must keep working with the
+  previous version's code. System Update dumps the database first (`/var/lib/amahi-kai/backups`,
+  root-only, the last 3); restoring one is a manual step.
 
 ## Checking a NAS
 
 ```
-sudo -l -U amahi                                   # the 10 rules above
+sudo -l -U amahi                                   # the 6 rules above
 sudo /usr/local/sbin/amahi-helper --self-test      # ok: N operations
 sudo tail -5 /var/log/amahi-kai/helper.log         # recent root actions
 sudo find /opt/amahi-kai -xdev \( -path /opt/amahi-kai/tmp -o -path /opt/amahi-kai/log \
