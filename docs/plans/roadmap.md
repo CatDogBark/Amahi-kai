@@ -32,6 +32,7 @@ so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 | 3. Update check | The helper checks for an update every 6 hours (timer) and on Check now; System Status shows it, with Update now or Repair; an update with nothing new stops after the pull | #37 |
 | 3. Small fixes | Login throttle by the real client address; static DHCP hosts written to dnsmasq; Gateway checkboxes saved; setup storage step keeps the pool; Users JSON create; Apps page survives a failed Docker check | #38 |
 | 3. Repo cleanup | Unused files, scripts, initializers, classes, partials, images and archived browser tests removed (with Capybara and the Feature Specs job); README, install guide and CONTRIBUTING refreshed | #39 |
+| 3. English only | 25 translations, the language picker, the language cookie and right-to-left styling removed (Troy's decision) | #40 |
 
 ## Next: Phase 3
 
@@ -90,7 +91,6 @@ touches the same code.
 - Long jobs (package installs, docker pull) run inside web requests and hold Puma threads.
   System Update moved to its own job in #31; the others could follow the same way (a systemd
   unit started by the helper, with its log streamed to the page).
-- 26 locale files, but newer screens hardcode English. Troy to decide whether i18n stays a goal.
 - Anonymous SMB browsing shows a `nobody` home folder (cosmetic; needs a guest account with no home
   directory).
 - Not yet tried in the UI because no shares or apps exist: file upload, raw preview, the app proxy.

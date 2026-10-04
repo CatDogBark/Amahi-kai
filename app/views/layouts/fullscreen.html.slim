@@ -1,5 +1,5 @@
 doctype 5
-html[dir="#{@locale_direction}" lang="#{I18n.locale}" xml:lang="#{I18n.locale}"]
+html[lang="en"]
   script
     | (function(){var t=localStorage.getItem('theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);})();
   head
@@ -10,10 +10,8 @@ html[dir="#{@locale_direction}" lang="#{I18n.locale}" xml:lang="#{I18n.locale}"]
 
     - if theme.name != "default" and theme.disable_inheritance == false
       = stylesheet_link_tag(theme_stylesheet_path('style', theme.default))
-      = stylesheet_link_tag(theme_stylesheet_path('rtl', theme.default)) if rtl?
 
     = theme_stylesheet_link_tag 'style'
-    = theme_stylesheet_link_tag('rtl') if rtl?
 
 
     = javascript_tag {render 'shared/js_vars'}

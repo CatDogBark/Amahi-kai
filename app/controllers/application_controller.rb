@@ -40,8 +40,6 @@ class ApplicationController < ActionController::Base
   end
 
   def before_action_hook
-    set_locale
-    set_direction
     prepare_theme
     adv = Setting.where(:name=>'advanced').first
     @advanced = adv && adv.value == '1'
@@ -59,10 +57,6 @@ class ApplicationController < ActionController::Base
 
   def number_helpers
     Helper.instance
-  end
-
-  def locales_implemented
-    Yetting.locales_implemented
   end
 
   # Sanitizes the String or a Hash by removing the
@@ -100,43 +94,6 @@ class ApplicationController < ActionController::Base
     val == 'true' || val == '1'
   end
   helper_method :setup_completed?
-
-  def set_locale
-
-    preferred_locales = request.headers['HTTP_ACCEPT_LANGUAGE'].split(',').map { |locale| locale.split(';').first } rescue nil
-    available_locales = I18n.available_locales
-    default_locale = I18n.default_locale
-    locale_from_params = params[:locale]
-
-    I18n.locale = begin
-      locale = preferred_locales.select { |locale| available_locales.include?(locale.to_sym) }
-      default_locale = locale.empty? ? default_locale : locale.first
-
-      # Allow a URL param to override everything else, for devel
-      if locale_from_params
-        if available_locales.include?(locale_from_params.to_sym)
-          cookies['locale'] = { :value => locale_from_params, :expires => 1.year.from_now }
-          locale_from_params.to_sym
-        else
-          cookies.delete 'locale'
-          default_locale
-        end
-      elsif cookies['locale'] && available_locales.include?(cookies['locale'].to_sym)
-        cookies['locale'].to_sym
-      else
-        cookies['locale'] = { :value => default_locale, :expires => 1.year.from_now }
-        default_locale
-      end
-    rescue NoMethodError, ArgumentError => e # ArgumentError includes I18n::InvalidLocale
-      # if something happens (like a locale file renamed!?) go back to the default
-      default_locale
-    end
-  end
-
-  def set_direction
-    # right to left language support
-    @locale_direction = Yetting.rtl_locales.include?(I18n.locale) ? 'rtl' : 'ltr'
-  end
 
   def set_user_session_controller
     UserSession.controller = self

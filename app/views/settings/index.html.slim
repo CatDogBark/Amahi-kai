@@ -5,15 +5,6 @@ div.settings-fields.settings-wrap.bg-white.p-2.mb-2
     table
       tr
         td.pe-3
-          label = t 'language'
-        td
-          = select_tag 'locale', options_for_select(@available_locales, I18n.locale.to_s),
-            data: { controller: 'locale', action: 'change->locale#update',
-                    locale_url_value: settings_change_language_path },
-            class: 'form-control f-size13'
-          = spinner
-      tr
-        td.pe-3
           label = t 'advanced_settings'
         td
           input.form-check-input type="checkbox" id="advanced" checked=@advanced_settings.set? onclick="fetch('/toggle_advanced', {method:'POST', headers:{'X-CSRF-Token':document.querySelector('meta[name=csrf-token]').content}}).then(function(){location.reload()});"
