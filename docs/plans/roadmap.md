@@ -31,6 +31,7 @@ so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 | 3. Fix | Update and install windows keep their size: a status bar with a timer and the result; System Update's button just reloads | #36 |
 | 3. Update check | The helper checks for an update every 6 hours (timer) and on Check now; System Status shows it, with Update now or Repair; an update with nothing new stops after the pull | #37 |
 | 3. Small fixes | Login throttle by the real client address; static DHCP hosts written to dnsmasq; Gateway checkboxes saved; setup storage step keeps the pool; Users JSON create; Apps page survives a failed Docker check | #38 |
+| 3. Repo cleanup | Unused files, scripts, initializers, classes, partials, images and archived browser tests removed (with Capybara and the Feature Specs job); README, install guide and CONTRIBUTING refreshed | #39 |
 
 ## Next: Phase 3
 

@@ -19,7 +19,6 @@ AllCops:
     - 'tmp/**/*'
     - 'public/**/*'
     - 'plugins/*/vendor/**/*'
-    - 'spec/features/archived/**/*'
 
 # ════════════════════════════════════════════════════════════
 # STRATEGY: Disable all style/layout cops by default.

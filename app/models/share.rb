@@ -16,7 +16,6 @@
 
 require 'shell'
 require 'platform'
-require 'temp_cache'
 require 'shellwords'
 require 'ipaddr'
 
