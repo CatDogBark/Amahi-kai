@@ -1,21 +1,28 @@
-require 'shellwords'
-require 'shell'
+require 'open3'
 
+# The security audit on Network → Security. What needs root to read (UFW's state, sshd's
+# effective settings) comes from the root helper's security.report; the fixes are helper
+# operations too (security.*, packages.install). Blockers keep the Cloudflare Tunnel
+# from being set up or started (RemoteAccessController checks them).
 class SecurityAudit
   Check = Struct.new(:name, :description, :status, :severity, :fix_command, keyword_init: true)
   # status: :pass, :warn, :fail
   # severity: :blocker, :warning, :info
 
+  AUTO_UPGRADES = '/etc/apt/apt.conf.d/20auto-upgrades'
+
   class << self
     def run_all
+      report = system_report
       [
         admin_password_check,
-        ufw_check,
-        ssh_root_login_check,
-        ssh_password_auth_check,
+        ufw_check(report),
+        ssh_root_login_check(report),
+        ssh_password_auth_check(report),
         fail2ban_check,
         unattended_upgrades_check,
         samba_lan_binding_check,
+        docker_ports_check,
         open_ports_check
       ]
     end
@@ -28,20 +35,23 @@ class SecurityAudit
       blockers.any?
     end
 
+    # Applies one fix; true if it worked. Why it didn't is logged and kept in last_error
+    # (the helper refuses to turn off SSH password login while no account has a key).
     def fix!(check_name)
+      @last_error = nil
       return simulated_fix(check_name) unless production?
 
       case check_name.to_s
       when 'ufw_firewall'
-        fix_ufw!
+        privileged('security.enable_firewall')
       when 'ssh_root_login'
-        fix_ssh_root_login!
+        privileged('security.harden_ssh', setting: 'root_login')
       when 'ssh_password_auth'
-        fix_ssh_password_auth!
+        privileged('security.harden_ssh', setting: 'password_login')
       when 'fail2ban'
-        fix_fail2ban!
+        privileged('packages.install', packages: ['fail2ban'])
       when 'unattended_upgrades'
-        fix_unattended_upgrades!
+        privileged('packages.install', packages: ['unattended-upgrades']) && privileged('security.enable_auto_updates')
       when 'samba_lan_binding'
         fix_samba_lan_binding!
       else
@@ -49,19 +59,40 @@ class SecurityAudit
       end
     end
 
+    attr_reader :last_error
+
+    # Fixes every failing check that has a fix: [{ name:, fixed:, error: }].
     def fix_all!
-      results = []
-      run_all.each do |check|
-        next if check.status == :pass || check.name == 'admin_password' || check.name == 'open_ports'
-        results << { name: check.name, fixed: fix!(check.name) }
+      run_all.filter_map do |check|
+        next if check.status == :pass || check.fix_command.nil?
+        fixed = fix!(check.name)
+        { name: check.name, fixed: fixed, error: (last_error unless fixed) }.compact
       end
-      results
     end
 
     private
 
     def production?
       defined?(Rails) && Rails.env.production?
+    end
+
+    # UFW's state and sshd's effective settings, from the root helper. Outside production
+    # (and if the helper fails) it describes a hardened system with UFW off.
+    def system_report
+      return { 'firewall' => 'inactive', 'ssh' => {} } unless production?
+      Privileged.call('security.report')
+    rescue Privileged::Error => e
+      Rails.logger.error("SecurityAudit: security.report failed: #{e.message}")
+      { 'firewall' => 'unknown', 'ssh' => {} }
+    end
+
+    def privileged(operation, **args)
+      Privileged.call(operation, **args)
+      true
+    rescue Privileged::Error => e
+      Rails.logger.error("SecurityAudit: #{operation} failed: #{e.message}")
+      @last_error = e.message
+      false
     end
 
     # --- Individual checks ---
@@ -87,68 +118,54 @@ class SecurityAudit
       true # If we can't check, assume it's fine
     end
 
-    def ufw_check
-      active = ufw_enabled?
+    # The fix lets in SSH, the web UI (3000), HTTPS and Samba, plus DNS and DHCP once
+    # Amahi-kai has configured dnsmasq.
+    def ufw_check(report)
       Check.new(
         name: 'ufw_firewall',
         description: 'UFW firewall is active',
-        status: active ? :pass : :fail,
+        status: report['firewall'] == 'active' ? :pass : :fail,
         severity: :blocker,
-        fix_command: 'sudo ufw --force enable && sudo ufw default deny incoming && sudo ufw allow 22/tcp && sudo ufw allow 3000/tcp'
+        fix_command: 'Enable UFW with Amahi-kai\'s rules'
       )
     end
 
-    def ufw_enabled?
-      return false unless production?
-      output, _stderr, _status = Shell.capture("/usr/sbin/ufw status 2>/dev/null")
-      output = output.strip
-      output.include?('Status: active')
-    end
-
-    def ssh_root_login_check
-      hardened = ssh_root_login_disabled?
+    # sshd's effective settings: a drop-in in sshd_config.d can override sshd_config.
+    # With no SSH server installed there is nothing to harden.
+    def ssh_root_login_check(report)
+      ssh = report['ssh'] || {}
       Check.new(
         name: 'ssh_root_login',
         description: 'SSH root login disabled',
-        status: hardened ? :pass : :warn,
+        status: ssh.empty? || ssh['permitrootlogin'] == 'no' ? :pass : :warn,
         severity: :warning,
         fix_command: 'Harden SSH configuration'
       )
     end
 
-    def ssh_root_login_disabled?
-      return true unless production?
-      return false unless File.exist?('/etc/ssh/sshd_config')
-      content = File.read('/etc/ssh/sshd_config')
-      content.match?(/^\s*PermitRootLogin\s+no/i)
-    end
-
-    def ssh_password_auth_check
-      disabled = ssh_password_auth_disabled?
+    # Password login is off when both password and keyboard-interactive logins are. The
+    # fix is refused while no account that can log in has an SSH key.
+    def ssh_password_auth_check(report)
+      ssh = report['ssh'] || {}
+      off = ssh['passwordauthentication'] == 'no' && ssh['kbdinteractiveauthentication'] == 'no'
       Check.new(
         name: 'ssh_password_auth',
         description: 'SSH password authentication disabled',
-        status: disabled ? :pass : :warn,
+        status: ssh.empty? || off ? :pass : :warn,
         severity: :warning,
-        fix_command: 'Harden SSH configuration'
+        fix_command: 'Harden SSH configuration (needs an SSH key on your account first)'
       )
     end
 
-    def ssh_password_auth_disabled?
-      return true unless production?
-      return false unless File.exist?('/etc/ssh/sshd_config')
-      content = File.read('/etc/ssh/sshd_config')
-      content.match?(/^\s*PasswordAuthentication\s+no/i)
-    end
-
+    # Ubuntu's fail2ban package turns on its SSH jail only.
     def fail2ban_check
       installed = fail2ban_installed?
       Check.new(
         name: 'fail2ban',
-        description: 'Fail2ban intrusion prevention installed',
+        description: 'Fail2ban blocks repeated failed SSH logins',
         status: installed ? :pass : :warn,
         severity: :warning,
-        fix_command: 'sudo apt-get install -y fail2ban'
+        fix_command: 'Install fail2ban'
       )
     end
 
@@ -159,20 +176,24 @@ class SecurityAudit
     end
 
     def unattended_upgrades_check
-      installed = unattended_upgrades_installed?
+      enabled = unattended_upgrades_enabled?
       Check.new(
         name: 'unattended_upgrades',
         description: 'Automatic security updates enabled',
-        status: installed ? :pass : :warn,
+        status: enabled ? :pass : :warn,
         severity: :warning,
-        fix_command: 'sudo apt-get install -y unattended-upgrades && sudo dpkg-reconfigure -plow unattended-upgrades'
+        fix_command: 'Install and turn on unattended-upgrades'
       )
     end
 
-    def unattended_upgrades_installed?
+    # Installed, and turned on in 20auto-upgrades.
+    def unattended_upgrades_enabled?
       return false unless production?
       output = `dpkg-query -W -f='${Status}' unattended-upgrades 2>/dev/null`.strip
-      output == 'install ok installed'
+      return false unless output == 'install ok installed'
+      File.read(AUTO_UPGRADES).match?(/^\s*APT::Periodic::Unattended-Upgrade\s+"1"/)
+    rescue SystemCallError
+      false
     end
 
     def samba_lan_binding_check
@@ -192,6 +213,35 @@ class SecurityAudit
       content = File.read('/etc/samba/smb.conf')
       content.match?(/^\s*bind interfaces only\s*=\s*yes/i) &&
         content.match?(/^\s*interfaces\s*=/i)
+    end
+
+    # Docker writes its own iptables rules for published ports, ahead of UFW's, so UFW
+    # doesn't filter them. Ports published on 127.0.0.1 stay local.
+    def docker_ports_check
+      ports = docker_published_ports
+      Check.new(
+        name: 'docker_ports',
+        description: if ports.empty?
+                       'No Docker ports published past the firewall'
+                     else
+                       "Docker publishes #{ports.join(', ')}, which UFW doesn't filter"
+                     end,
+        status: ports.empty? ? :pass : :warn,
+        severity: :warning,
+        fix_command: nil
+      )
+    end
+
+    def docker_published_ports
+      return [] unless production? && File.executable?('/usr/bin/docker')
+      out, _err, status = Open3.capture3('sudo', '-n', '/usr/bin/docker', 'ps', '--format', '{{.Ports}}')
+      return [] unless status.success?
+      out.split(/[,\n]/).filter_map do |mapping|
+        host, port, proto = mapping.strip.match(%r{\A(.*):(\d+)(?:-\d+)?->[\d-]+/(tcp|udp)\z})&.captures
+        "#{port}/#{proto}" if port && !host.start_with?('127.', '[::1]', '::1')
+      end.uniq
+    rescue SystemCallError
+      []
     end
 
     def open_ports_check
@@ -221,48 +271,6 @@ class SecurityAudit
     end
 
     # --- Fix methods ---
-
-    def fix_ufw!
-      Shell.run('ufw default deny incoming') &&
-        Shell.run('ufw allow 22/tcp') &&
-        Shell.run('ufw allow 3000/tcp') &&
-        Shell.run('ufw allow 443/tcp') &&
-        Shell.run('ufw allow 445/tcp') &&
-        Shell.run('ufw allow 137:139/udp') &&
-        Shell.run('ufw --force enable')
-    end
-
-    def fix_ssh_root_login!
-      fix_sshd_setting!('PermitRootLogin', 'no')
-    end
-
-    def fix_ssh_password_auth!
-      fix_sshd_setting!('PasswordAuthentication', 'no')
-    end
-
-    def fix_sshd_setting!(key, value)
-      tmp_path = File.join(AMAHI_TMP_DIR, 'sshd_config')
-      content = File.exist?('/etc/ssh/sshd_config') ? File.read('/etc/ssh/sshd_config') : ''
-
-      if content.match?(/^\s*#?\s*#{key}/)
-        content.gsub!(/^\s*#?\s*#{key}\s+.*/, "#{key} #{value}")
-      else
-        content += "\n#{key} #{value}\n"
-      end
-
-      File.write(tmp_path, content)
-      Shell.run("cp #{tmp_path} /etc/ssh/sshd_config") &&
-        (Shell.run('systemctl restart sshd') || Shell.run('systemctl restart ssh'))
-    end
-
-    def fix_fail2ban!
-      Shell.run('DEBIAN_FRONTEND=noninteractive apt-get install -y fail2ban')
-    end
-
-    def fix_unattended_upgrades!
-      Shell.run('DEBIAN_FRONTEND=noninteractive apt-get install -y unattended-upgrades') &&
-        Shell.run('dpkg-reconfigure -plow unattended-upgrades')
-    end
 
     # smb.conf is generated (Share.samba_network_lines binds Samba to the LAN and
     # Tailscale), so regenerate it rather than editing it: the next share change

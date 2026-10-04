@@ -111,8 +111,8 @@ RSpec.describe Shell do
     before { allow(Process).to receive(:uid).and_return(1000) }
 
     it 'runs listed commands through sudo by full path' do
-      expect(described_class.send(:prepare, 'systemctl restart smbd'))
-        .to match(%r{\Asudo /\S*/systemctl restart smbd\z})
+      expect(described_class.send(:prepare, 'mkdir -p /opt/amahi/apps/x'))
+        .to match(%r{\Asudo /\S*/mkdir -p /opt/amahi/apps/x\z})
     end
 
     it 'leaves other commands alone' do
@@ -122,7 +122,11 @@ RSpec.describe Shell do
 
   describe 'SUDO_COMMANDS' do
     it 'includes common privileged commands' do
-      expect(Shell::SUDO_COMMANDS).to include('systemctl', 'docker', 'chmod', 'chown')
+      expect(Shell::SUDO_COMMANDS).to include('docker', 'chmod', 'chown')
+    end
+
+    it 'leaves out what the root helper does' do
+      expect(Shell::SUDO_COMMANDS).not_to include('systemctl', 'apt-get', 'ufw', 'tailscale', 'usermod', 'sh', 'bash')
     end
 
     it 'does not include unprivileged commands' do

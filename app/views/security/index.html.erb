@@ -160,7 +160,7 @@ function fixCheck(name, btn) {
     if (data.status === 'ok') {
       window.location.reload();
     } else {
-      alert('Fix failed for: ' + name);
+      alert('Fix failed for: ' + name + (data.error ? '\n\n' + data.error : ''));
       btn.disabled = false;
       btn.innerHTML = 'Fix';
     }

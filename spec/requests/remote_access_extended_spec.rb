@@ -5,7 +5,7 @@ RSpec.describe "RemoteAccess extended", type: :request do
     login_as_admin
     allow(CloudflareService).to receive_messages(
       status: { installed: true, running: false },
-      start!: true, stop!: true, configure!: true,
+      start!: true, stop!: true, restart!: true, configure!: true,
       installed?: true, install!: true, running?: true
     )
     allow(TailscaleService).to receive_messages(
@@ -58,7 +58,6 @@ RSpec.describe "RemoteAccess extended", type: :request do
       post '/network/remote_access/configure_tunnel', params: { tunnel_token: 'valid-token' }, as: :json
       expect(response.parsed_body['status']).to eq('ok')
       expect(CloudflareService).to have_received(:configure!).with('valid-token')
-      expect(CloudflareService).to have_received(:start!)
     end
 
     it "rejects blank token" do
@@ -66,12 +65,61 @@ RSpec.describe "RemoteAccess extended", type: :request do
       expect(response.parsed_body['status']).to eq('not_acceptable')
     end
 
-    it "returns error on exception" do
-      allow(CloudflareService).to receive(:configure!).and_raise(Shell::CommandError.new("cloudflared", "config failed", 1))
+    it "returns the helper's reason on failure" do
+      allow(CloudflareService).to receive(:configure!)
+        .and_raise(CloudflareService::CloudflareError, "the tunnel token doesn't look like one Cloudflare gives")
       post '/network/remote_access/configure_tunnel', params: { tunnel_token: 'tok' }, as: :json
-      body = response.parsed_body
-      expect(body['status']).to eq('error')
-      expect(body['error']).to include('config failed')
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.parsed_body['error']).to include("doesn't look like one Cloudflare gives")
+    end
+  end
+
+  describe "POST restart_tunnel" do
+    it "restarts the tunnel" do
+      post '/network/remote_access/restart_tunnel', as: :json
+      expect(response.parsed_body['status']).to eq('ok')
+      expect(CloudflareService).to have_received(:restart!)
+    end
+
+    it "reports a tunnel that didn't restart" do
+      allow(CloudflareService).to receive(:restart!).and_return(false)
+      post '/network/remote_access/restart_tunnel', as: :json
+      expect(response).to have_http_status(:unprocessable_entity)
+    end
+  end
+
+  describe "while the security audit has blockers" do
+    let(:blocker) do
+      SecurityAudit::Check.new(name: 'ufw_firewall', description: 'UFW firewall is active', status: :fail, severity: :blocker)
+    end
+
+    before { allow(SecurityAudit).to receive(:blockers).and_return([blocker]) }
+    after { FileUtils.rm_f(CloudflareService.staged_token_path) }
+
+    it "refuses to set up, start or restart the tunnel" do
+      post '/network/remote_access/configure_tunnel', params: { tunnel_token: 'valid-token' }, as: :json
+      expect(response).to have_http_status(:forbidden)
+      expect(response.parsed_body['error']).to include('UFW firewall is active')
+      post '/network/remote_access/start_tunnel', as: :json
+      expect(response).to have_http_status(:forbidden)
+      post '/network/remote_access/restart_tunnel', as: :json
+      expect(response).to have_http_status(:forbidden)
+      post '/network/remote_access/stage_tunnel_token', params: { token: 'test-token' }
+      expect(response).to have_http_status(:forbidden)
+      expect(CloudflareService).not_to have_received(:configure!)
+      expect(CloudflareService).not_to have_received(:start!)
+    end
+
+    it "refuses in the setup stream too" do
+      CloudflareService.stage_token('test-token')
+      get '/network/remote_access/setup_tunnel_stream', headers: same_origin
+      expect(response.body).to include("Fix the security audit's blockers first")
+      expect(CloudflareService).not_to have_received(:configure!)
+    end
+
+    it "still stops the tunnel" do
+      post '/network/remote_access/stop_tunnel', as: :json
+      expect(response.parsed_body['status']).to eq('ok')
     end
   end
 

@@ -1,34 +1,35 @@
-# Manages Tailscale VPN service lifecycle.
-# No domain required — mesh VPN via Tailscale's coordination server.
+# Tailscale VPN. Installing it and changing its state go through the root helper:
+# packages.add_repository and packages.install (Tailscale's apt repository, key fingerprint
+# pinned; it replaces the downloaded install script run as root), tailscale.start (the
+# daemon), tailscale.up, tailscale.down and tailscale.logout. Reading its status needs no
+# root.
 
-require 'shell'
 require 'json'
+require 'open3'
 
 module TailscaleService
+  class TailscaleError < StandardError; end
+
+  BINARY = '/usr/bin/tailscale'
+  LOGIN_URL = %r{https://login\.tailscale\.com/\S+}
+
   class << self
     def installed?
-      File.exist?('/usr/bin/tailscale')
+      File.exist?(BINARY)
     end
 
     def running?
-      return false unless installed?
-      status = `sudo tailscale status --json 2>/dev/null`.strip
-      return false if status.empty?
-      data = JSON.parse(status)
-      data['BackendState'] == 'Running'
-    rescue StandardError # includes JSON::ParserError
-      false
+      status_data&.dig('BackendState') == 'Running'
     end
 
     def status
       return { installed: false, running: false } unless installed?
 
-      raw = `sudo tailscale status --json 2>/dev/null`.strip
-      return { installed: true, running: false } if raw.empty?
+      data = status_data
+      return { installed: true, running: false } unless data
 
-      data = JSON.parse(raw)
       backend_state = data['BackendState']
-      self_node = data.dig('Self')
+      self_node = data['Self']
 
       result = {
         installed: true,
@@ -42,58 +43,68 @@ module TailscaleService
       }
 
       # MagicDNS hostname (e.g., amahi-kai.tail1234.ts.net)
-      if result[:hostname].present?
-        result[:magic_dns] = result[:hostname]
-      end
+      result[:magic_dns] = result[:hostname] if result[:hostname].present?
 
       result
-    rescue StandardError => e # includes JSON::ParserError
-      { installed: true, running: false, error: e.message }
     end
 
-    def install!
-      # Official Tailscale install script — download then run with sudo bash
-      script_path = '/tmp/tailscale-install.sh'
-      system("curl -fsSL https://tailscale.com/install.sh -o #{script_path} 2>&1")
-      return false unless $?.success? && File.exist?(script_path)
-
-      # Run as root so the script's internal sudo/apt calls work without a terminal
-      success = system("sudo bash #{script_path} 2>&1")
-      FileUtils.rm_f(script_path)
-      success
+    # Installs Tailscale from its apt repository and starts the daemon; apt's output goes
+    # to the block. Raises TailscaleError.
+    def install!(&progress)
+      privileged('packages.add_repository', repository: 'tailscale')
+      privileged('packages.install', packages: ['tailscale']) { |line| progress&.call(line) }
+      privileged('tailscale.start')
+      true
     end
 
-    # Start Tailscale and return the auth URL if not yet authenticated.
-    # Returns { success: true, auth_url: nil } if already authenticated.
-    # Returns { success: true, auth_url: "https://..." } if auth needed.
-    def start!
-      # Try starting the daemon
-      Shell.run("systemctl enable tailscaled 2>/dev/null")
-      Shell.run("systemctl start tailscaled 2>/dev/null")
+    # Starts the daemon and brings Tailscale up. `tailscale up` prints a login URL when
+    # this device isn't in a tailnet yet; its output goes to the block.
+    # Returns { success: true, auth_url: "https://..." or nil } or { success: false, error: }.
+    def start!(&progress)
+      privileged('tailscale.start')
+      return { success: true, auth_url: nil } if running?
 
-      # Check status — returns instantly, includes auth URL if logged out
-      status_check = `sudo tailscale status 2>&1`.strip
-
-      if status_check.include?('Logged out') || status_check.include?('NeedsLogin')
-        # Auth URL is right in the status output — no need to block on `tailscale login`
-        auth_url = status_check[/https:\/\/login\.tailscale\.com\/[^\s]+/]
-        return { success: true, auth_url: auth_url, needs_login: true }
+      auth_url = nil
+      privileged('tailscale.up') do |line|
+        auth_url ||= line[LOGIN_URL]
+        progress&.call(line)
       end
-
-      # Already authenticated — just bring it up (quick, non-blocking)
-      `sudo timeout 5 tailscale up 2>&1`
-      { success: true, auth_url: nil }
-    rescue StandardError => e
+      { success: true, auth_url: auth_url }
+    rescue TailscaleError => e
       { success: false, error: e.message }
     end
 
     def stop!
-      Shell.run("tailscale down 2>/dev/null")
+      privileged('tailscale.down')
+      true
+    rescue TailscaleError
+      false
     end
 
     def logout!
-      Shell.run("tailscale logout 2>/dev/null")
-      Shell.run("systemctl stop tailscaled 2>/dev/null")
+      privileged('tailscale.logout')
+      true
+    rescue TailscaleError
+      false
+    end
+
+    private
+
+    # `tailscale status --json`, which any user may read; nil if it can't be read.
+    def status_data
+      return nil unless installed?
+      out, _err, status = Open3.capture3(BINARY, 'status', '--json')
+      return nil unless status.success? && out.present?
+      JSON.parse(out)
+    rescue JSON::ParserError, SystemCallError
+      nil
+    end
+
+    def privileged(operation, **args, &block)
+      Privileged.call(operation, **args, &block)
+    rescue Privileged::Error => e
+      Rails.logger.error("Tailscale: #{operation} failed: #{e.message}")
+      raise TailscaleError, e.message
     end
   end
 end

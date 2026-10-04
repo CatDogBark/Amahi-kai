@@ -93,17 +93,31 @@ RSpec.describe DockerService do
     end
   end
 
-  describe 'constants' do
-    it 'defines KEYRING_PATH' do
-      expect(DockerService::KEYRING_PATH).to be_a(String)
+  describe 'in production' do
+    before { allow(DockerService).to receive(:production?).and_return(true) }
+
+    it "installs from Docker's repository through the root helper, then lets the app use it and starts it" do
+      lines = []
+      DockerService.install! { |line| lines << line }
+      expect(Privileged.calls).to eq([
+                                       ['packages.add_repository', { repository: 'docker' }],
+                                       ['packages.install', { packages: %w[docker-ce docker-ce-cli containerd.io] }],
+                                       ['docker.grant_app_user', {}],
+                                       ['services.enable', { service: 'docker' }]
+                                     ])
+      expect(lines).to include('Installing Docker Engine...')
     end
 
-    it 'defines SOURCES_PATH' do
-      expect(DockerService::SOURCES_PATH).to be_a(String)
+    it "stops with the helper's reason" do
+      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('packages.add_repository', 'curl exited 6'))
+      expect { DockerService.install! }.to raise_error(DockerService::DockerError, 'curl exited 6')
     end
 
-    it 'defines GPG_URL' do
-      expect(DockerService::GPG_URL).to include('docker.com')
+    it 'starts, stops and restarts Docker through the helper' do
+      DockerService.start!
+      DockerService.stop!
+      DockerService.restart!
+      expect(Privileged.calls.map(&:first)).to eq(%w[services.start services.stop services.restart])
     end
   end
 end

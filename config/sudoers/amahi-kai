@@ -2,78 +2,27 @@
 # Installed as /etc/sudoers.d/amahi-kai by bin/amahi-install and bin/amahi-update, only
 # after `visudo -cf` accepts it. Design: docs/plans/privileged-helper.md
 #
-# User accounts, Samba config, share folders, Settings → Servers, the hostname, dnsmasq,
-# swap, reboot/power off, data drives (format, mount, fstab) and Greyhole go through the
-# root helper, which checks each request and logs it to /var/log/amahi-kai/helper.log.
-# The rules after it are for jobs that haven't moved to the helper yet (PR M3).
+# Everything that needs root goes through the root helper, which checks each request and
+# logs it to /var/log/amahi-kai/helper.log: user accounts, Samba, share folders, services,
+# the hostname, dnsmasq, swap, reboot/power off, data drives, Greyhole, package installs,
+# the Cloudflare Tunnel, Tailscale and the security audit's fixes. The other rules are for
+# the updater and for Docker apps (redesigned in Phase 4).
 
 # Privileged helper (libexec/amahi-helper)
 amahi ALL=(root) NOPASSWD: /usr/local/sbin/amahi-helper
-
-# Package installs (Docker, dnsmasq, cloudflared and the security audit's fixes;
-# moves to the helper in M3)
-amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get update
-amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get install *
 
 # Docker app folders (lib/docker_app_installer.rb)
 amahi ALL=(root) NOPASSWD: /usr/bin/mkdir -p /opt/amahi/*
 amahi ALL=(root) NOPASSWD: /usr/bin/cp /tmp/amahi-staging/* /opt/amahi/*
 amahi ALL=(root) NOPASSWD: /usr/bin/rm -rf /opt/amahi/apps/*
 
-# Docker installation (web UI triggered)
-amahi ALL=(root) NOPASSWD: /usr/bin/gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-amahi ALL=(root) NOPASSWD: /usr/bin/tee /etc/apt/sources.list.d/docker.list
-amahi ALL=(root) NOPASSWD: /usr/sbin/usermod -aG docker amahi
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable docker
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start docker
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop docker
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart docker
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl is-active docker
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl is-active --quiet docker
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl status docker
-
-# Docker container management (app install/uninstall/start/stop)
+# Docker container management (app install/uninstall/start/stop). Access to Docker is
+# full control of the NAS; Phase 4 narrows it.
 amahi ALL=(root) NOPASSWD: /usr/bin/docker
 amahi ALL=(root) NOPASSWD: /usr/sbin/smartctl
-
-# Cloudflare Tunnel
-amahi ALL=(root) NOPASSWD: /usr/bin/cloudflared
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/lib/amahi-kai/tmp/cloudflared.service /etc/systemd/system/cloudflared.service
-amahi ALL=(root) NOPASSWD: /usr/bin/rm -f /etc/systemd/system/cloudflared*
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl daemon-reload
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start cloudflared
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop cloudflared
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart cloudflared
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable cloudflared
-amahi ALL=(root) NOPASSWD: /usr/bin/mkdir -p /etc/amahi-kai
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/lib/amahi-kai/tmp/tunnel.token /etc/amahi-kai/tunnel.token
-amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get install -y cloudflared
-
-# Tailscale VPN
-amahi ALL=(root) NOPASSWD: /usr/bin/bash /tmp/tailscale-install.sh
-amahi ALL=(root) NOPASSWD: /usr/bin/tailscale
-amahi ALL=(root) NOPASSWD: /usr/bin/timeout 15 /usr/bin/tailscale login
-amahi ALL=(root) NOPASSWD: /usr/bin/timeout 10 /usr/bin/tailscale up
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start tailscaled
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop tailscaled
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart tailscaled
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable tailscaled
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl disable tailscaled
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl is-active tailscaled
-amahi ALL=(root) NOPASSWD: /usr/bin/tee /etc/apt/sources.list.d/cloudflared.list
-amahi ALL=(root) NOPASSWD: /usr/bin/gpg --dearmor -o /usr/share/keyrings/cloudflare-archive-keyring.gpg
 
 # Self-update (System Update in the web UI runs `sudo bin/amahi-update --stream`)
 amahi ALL=(root) NOPASSWD: /opt/amahi-kai/bin/amahi-update
 amahi ALL=(root) NOPASSWD: /opt/amahi-kai/bin/amahi-update --stream
 amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart amahi-kai
 amahi ALL=(root) NOPASSWD: /usr/bin/systemctl status amahi-kai
-
-# Security hardening
-amahi ALL=(root) NOPASSWD: /usr/sbin/ufw *
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart sshd
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart ssh
-amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get install -y fail2ban
-amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get install -y unattended-upgrades
-amahi ALL=(root) NOPASSWD: /usr/bin/dpkg-reconfigure -plow unattended-upgrades
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/lib/amahi-kai/tmp/sshd_config /etc/ssh/sshd_config

@@ -1,11 +1,9 @@
-require 'shell'
-
+# Docker Engine: installed and started through the root helper. Docker itself (the
+# `docker` command the app pages run) keeps its sudo rule until Phase 4.
 class DockerService
   class DockerError < StandardError; end
 
-  KEYRING_PATH = '/usr/share/keyrings/docker-archive-keyring.gpg'
-  SOURCES_PATH = '/etc/apt/sources.list.d/docker.list'
-  GPG_URL = 'https://download.docker.com/linux/ubuntu/gpg'
+  PACKAGES = %w[docker-ce docker-ce-cli containerd.io].freeze
 
   class << self
     def installed?
@@ -41,53 +39,50 @@ class DockerService
       `docker --version 2>/dev/null`.strip
     end
 
-    def install!
+    # Installs Docker Engine from Docker's apt repository (key fingerprint pinned), lets
+    # the app's user talk to it and starts it, all through the root helper. apt's output
+    # goes to the block. Raises DockerError.
+    def install!(&progress)
       return true unless production?
-
-      unless File.exist?(KEYRING_PATH)
-        result = Shell.run("sh -c 'curl -fsSL #{GPG_URL} | gpg --dearmor -o #{KEYRING_PATH}'")
-        raise DockerError, 'Failed to add Docker signing key' unless result
-      end
-
-      unless File.exist?(SOURCES_PATH)
-        arch = `dpkg --print-architecture`.strip
-        codename = `lsb_release -cs`.strip
-        repo_line = "deb [arch=#{arch} signed-by=#{KEYRING_PATH}] https://download.docker.com/linux/ubuntu #{codename} stable"
-        result = Shell.run("sh -c \"echo '#{repo_line}' > #{SOURCES_PATH}\"")
-        raise DockerError, 'Failed to add Docker apt source' unless result
-      end
-
-      Shell.run('apt-get update')
-
-      result = Shell.run('DEBIAN_FRONTEND=noninteractive apt-get install -y docker-ce docker-ce-cli containerd.io')
-      raise DockerError, 'Failed to install Docker packages' unless result
-
-      Shell.run('usermod -aG docker amahi')
-      Shell.run('systemctl enable docker')
-      Shell.run('systemctl start docker')
-
+      progress&.call("Adding Docker's apt repository...")
+      privileged('packages.add_repository', repository: 'docker')
+      progress&.call('Installing Docker Engine...')
+      privileged('packages.install', packages: PACKAGES) { |line| progress&.call("  #{line}") }
+      progress&.call('Setting up user permissions...')
+      privileged('docker.grant_app_user')
+      progress&.call('Enabling and starting Docker...')
+      privileged('services.enable', service: 'docker')
       true
     end
 
     def start!
       return true unless production?
-      Shell.run('systemctl start docker')
+      privileged('services.start', service: 'docker')
+      true
     end
 
     def stop!
       return true unless production?
-      Shell.run('systemctl stop docker')
+      privileged('services.stop', service: 'docker')
+      true
     end
 
     def restart!
       return true unless production?
-      Shell.run('systemctl restart docker')
+      privileged('services.restart', service: 'docker')
+      true
     end
 
     private
 
     def production?
       defined?(Rails) && Rails.env.production?
+    end
+
+    def privileged(operation, **args, &block)
+      Privileged.call(operation, **args, &block)
+    rescue Privileged::Error => e
+      raise DockerError, e.message
     end
 
     def dummy_status

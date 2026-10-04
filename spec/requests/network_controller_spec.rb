@@ -21,6 +21,24 @@ describe "Network Controller", type: :request do
   describe "admin" do
     before { login_as_admin }
 
+    describe "GET /network/install_dnsmasq_stream in production" do
+      before { allow(Rails.env).to receive(:production?).and_return(true) }
+
+      it "installs dnsmasq through the root helper and leaves it stopped until configured" do
+        allow(DnsmasqService).to receive(:stop!).and_return(true)
+        get "/network/install_dnsmasq_stream", headers: same_origin
+        expect(response.body).to include("dnsmasq installed successfully")
+        expect(Privileged.calls).to include(['packages.install', { packages: ['dnsmasq'] }])
+        expect(DnsmasqService).to have_received(:stop!)
+      end
+
+      it "streams the helper's reason when the install fails" do
+        allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('packages.install', 'apt-get exited 100: E: oops'))
+        get "/network/install_dnsmasq_stream", headers: same_origin
+        expect(response.body).to include("apt-get exited 100").and include("Installation failed")
+      end
+    end
+
     describe "GET /network (leases)" do
       it "shows the network page" do
         get "/network"
@@ -294,9 +312,10 @@ describe "Network Controller", type: :request do
     end
 
     describe "POST /network/configure_tunnel" do
+      before { allow(SecurityAudit).to receive(:blockers).and_return([]) }
+
       it "configures and starts tunnel with valid token" do
-        allow(CloudflareService).to receive(:configure!)
-        allow(CloudflareService).to receive(:start!)
+        allow(CloudflareService).to receive(:configure!).and_return(true)
         post "/network/remote_access/configure_tunnel", params: { tunnel_token: "eyJhIjoiYWJjMTIzIn0=" }, as: :json
         body = JSON.parse(response.body)
         expect(body["status"]).to eq("ok")
@@ -316,7 +335,7 @@ describe "Network Controller", type: :request do
       end
 
       it "handles configuration errors gracefully" do
-        allow(CloudflareService).to receive(:configure!).and_raise(Shell::CommandError.new("cloudflared", "Invalid token format", 1))
+        allow(CloudflareService).to receive(:configure!).and_raise(CloudflareService::CloudflareError, "Invalid token format")
         post "/network/remote_access/configure_tunnel", params: { tunnel_token: "bad-token" }, as: :json
         body = JSON.parse(response.body)
         expect(body["status"]).to eq("error")
@@ -326,7 +345,8 @@ describe "Network Controller", type: :request do
 
     describe "POST /network/start_tunnel" do
       it "starts the tunnel" do
-        allow(CloudflareService).to receive(:start!)
+        allow(SecurityAudit).to receive(:blockers).and_return([])
+        allow(CloudflareService).to receive(:start!).and_return(true)
         post "/network/remote_access/start_tunnel", as: :json
         body = JSON.parse(response.body)
         expect(body["status"]).to eq("ok")
@@ -335,7 +355,7 @@ describe "Network Controller", type: :request do
 
     describe "POST /network/stop_tunnel" do
       it "stops the tunnel" do
-        allow(CloudflareService).to receive(:stop!)
+        allow(CloudflareService).to receive(:stop!).and_return(true)
         post "/network/remote_access/stop_tunnel", as: :json
         body = JSON.parse(response.body)
         expect(body["status"]).to eq("ok")

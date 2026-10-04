@@ -4,16 +4,14 @@
 # Handles sudo escalation, logging, and error reporting.
 #
 # Usage:
-#   Shell.run("systemctl restart docker")
+#   Shell.run("docker restart jellyfin")
 #   Shell.run("mkdir -p /opt/amahi/apps/jellyfin")
-#   Shell.run!("systemctl restart smbd")  # raises on failure
+#   Shell.run!("docker start jellyfin")  # raises on failure
 #
-# User accounts, Samba config, share folders, Settings → Servers, the hostname, dnsmasq,
-# swap, reboot/power off, data drives and Greyhole don't use Shell: they go through the
-# root helper (Privileged.call).
-#
-#   # Blocking execution (waits for completion, used by package installs)
-#   Shell.run!("apt-get -y install ntfs-3g", blocking: true)
+# Only the Docker app code still uses Shell for root commands (until Phase 4). Everything
+# else that needs root (accounts, Samba, shares, services, the network, drives, Greyhole,
+# package installs, the tunnel, Tailscale, the security fixes) goes through the root
+# helper (Privileged.call).
 
 require 'open3'
 require 'shellwords'
@@ -21,16 +19,10 @@ require 'shellwords'
 module Shell
   # Privileged commands that need sudo when not running as root
   SUDO_COMMANDS = %w[
-    usermod
-    systemctl
     chmod chown
     mkdir rmdir cp mv rm
-    sh bash
-    apt-get dpkg rpm yum pacman
     docker
-    ufw
     smartctl
-    tailscale
   ].freeze
 
   # A last line of defence for the log: secrets belong on stdin or in private files

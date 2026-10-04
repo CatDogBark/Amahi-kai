@@ -1,14 +1,13 @@
 require 'shell'
 
+# The Cloudflare Tunnel. Installing cloudflared, saving the token and controlling the
+# service go through the root helper: packages.add_repository and packages.install
+# (Cloudflare's apt repository, key fingerprint pinned), tunnel.configure (token in a
+# root-only file, a unit the helper writes itself) and tunnel.start|stop|restart.
 class CloudflareService
   class CloudflareError < StandardError; end
 
-  CLOUDFLARED_CONFIG = '/etc/cloudflared/config.yml'
   TOKEN_FILE = '/etc/amahi-kai/tunnel.token'
-  KEYRING_PATH = '/usr/share/keyrings/cloudflare-archive-keyring.gpg'
-  SOURCES_PATH = '/etc/apt/sources.list.d/cloudflared.list'
-  GPG_URL = 'https://pkg.cloudflare.com/cloudflare-main.gpg'
-  REPO_LINE = "deb [signed-by=/usr/share/keyrings/cloudflare-archive-keyring.gpg] https://pkg.cloudflare.com/cloudflared any main"
 
   class << self
     def installed?
@@ -55,26 +54,12 @@ class CloudflareService
       timestamp.empty? ? nil : timestamp
     end
 
-    def install!
+    # Installs cloudflared from Cloudflare's apt repository; apt's output goes to the block.
+    # Raises CloudflareError.
+    def install!(&progress)
       return true unless production?
-
-      unless File.exist?(KEYRING_PATH)
-        # Download key then pipe to sudo gpg (matching sudoers entry exactly)
-        result = system("curl -fsSL #{GPG_URL} | sudo gpg --dearmor -o #{KEYRING_PATH} 2>&1")
-        raise CloudflareError, 'Failed to add Cloudflare signing key' unless result
-      end
-
-      unless File.exist?(SOURCES_PATH)
-        # Use tee with sudo (matching sudoers entry)
-        result = system("echo '#{REPO_LINE}' | sudo tee #{SOURCES_PATH} > /dev/null 2>&1")
-        raise CloudflareError, 'Failed to add Cloudflare apt source' unless result
-      end
-
-      Shell.run('apt-get update')
-
-      result = Shell.run('DEBIAN_FRONTEND=noninteractive apt-get install -y cloudflared')
-      raise CloudflareError, 'Failed to install cloudflared package' unless result
-
+      privileged('packages.add_repository', repository: 'cloudflared')
+      privileged('packages.install', packages: ['cloudflared']) { |line| progress&.call(line) }
       true
     end
 
@@ -99,75 +84,51 @@ class CloudflareService
       File.join(AMAHI_TMP_DIR, 'pending-tunnel.token')
     end
 
+    # Saves the token (only root can read it; cloudflared reads it with --token-file),
+    # writes cloudflared's unit and (re)starts the tunnel. Raises CloudflareError.
     def configure!(token)
       return true unless production?
-
-      # The token only lives in TOKEN_FILE, readable by root alone; cloudflared reads it
-      # with --token-file. It used to sit in the world-readable unit file and on
-      # cloudflared's command line, where any account on the NAS could see it.
-      tmp_path = File.join(AMAHI_TMP_DIR, 'tunnel.token')
-      FileUtils.mkdir_p(File.dirname(tmp_path))
-      FileUtils.rm_f(tmp_path)
-      File.write(tmp_path, token.strip, perm: 0600)
-      Shell.run("mkdir -p #{File.dirname(TOKEN_FILE)}")
-      Shell.run("cp #{tmp_path} #{TOKEN_FILE}")
-      FileUtils.rm_f(tmp_path)
-
-      # Write systemd unit file directly (avoids cloudflared service install TTY issues)
-      unit = <<~UNIT
-        [Unit]
-        Description=Cloudflare Tunnel
-        After=network-online.target
-        Wants=network-online.target
-
-        [Service]
-        Type=notify
-        ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate run --token-file #{TOKEN_FILE}
-        Restart=on-failure
-        RestartSec=5s
-        TimeoutStartSec=0
-        LimitNOFILE=65536
-
-        [Install]
-        WantedBy=multi-user.target
-      UNIT
-
-      tmp_path = File.join(AMAHI_TMP_DIR, 'cloudflared.service')
-      File.write(tmp_path, unit)
-      result = Shell.run("cp #{tmp_path} /etc/systemd/system/cloudflared.service")
-      FileUtils.rm_f(tmp_path)
-      raise CloudflareError, 'Failed to write cloudflared service file' unless result
-
-      Shell.run('systemctl daemon-reload')
-      Shell.run('systemctl enable cloudflared')
-
+      privileged('tunnel.configure', token: token.to_s.strip)
       true
     end
 
     def start!
-      return true unless production?
-      Shell.run('systemctl start cloudflared')
+      service('tunnel.start')
     end
 
     def stop!
-      return true unless production?
-      Shell.run('systemctl stop cloudflared')
+      service('tunnel.stop')
     end
 
     def restart!
-      return true unless production?
-      Shell.run('systemctl restart cloudflared')
+      service('tunnel.restart')
     end
 
     def token_configured?
       return true unless production?
-      File.exist?(TOKEN_FILE) || ENV['CLOUDFLARE_TUNNEL_TOKEN'].present? || Shell.run('systemctl is-enabled --quiet cloudflared 2>/dev/null')
+      File.exist?(TOKEN_FILE) || system('systemctl', 'is-enabled', '--quiet', 'cloudflared', err: File::NULL)
     end
 
     private
 
     def production?
       defined?(Rails) && Rails.env.production?
+    end
+
+    def privileged(operation, **args, &block)
+      Privileged.call(operation, **args, &block)
+    rescue Privileged::Error => e
+      raise CloudflareError, e.message
+    end
+
+    # A service action; false (with the reason logged) if it failed.
+    def service(operation)
+      return true unless production?
+      Privileged.call(operation)
+      true
+    rescue Privileged::Error => e
+      Rails.logger.error("Cloudflare Tunnel: #{operation} failed: #{e.message}")
+      false
     end
 
     def dummy_status

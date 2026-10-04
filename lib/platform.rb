@@ -92,14 +92,6 @@ class Platform
       @@platform == 'debian'
     end
 
-    def install(pkgs, sha1 = nil)
-      pkginstall(pkgs, sha1)
-    end
-
-    def uninstall(pkgs)
-      pkguninstall(pkgs)
-    end
-
     def service_start_command(name)
       "/usr/bin/systemctl start #{service_name(name)}.service"
     end
@@ -175,16 +167,6 @@ class Platform
       name = FILENAMES[@@platform][fname]
       raise "unknown filename '#{fname}' for '#{@@platform}'" unless name
       name
-    end
-
-    def pkginstall(pkgs, sha1 = nil)
-      esc_pkgs = Shellwords.escape(pkgs)
-      Shell.run!("DEBIAN_FRONTEND=noninteractive apt-get -y install #{esc_pkgs}")
-    end
-
-    def pkguninstall(pkgs)
-      esc_pkgs = Shellwords.escape(pkgs)
-      Shell.run!("DEBIAN_FRONTEND=noninteractive apt-get -y remove #{esc_pkgs}")
     end
   end
 

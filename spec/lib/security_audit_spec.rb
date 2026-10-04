@@ -5,7 +5,7 @@ RSpec.describe SecurityAudit do
     it 'returns an array of checks' do
       checks = SecurityAudit.run_all
       expect(checks).to be_an(Array)
-      expect(checks.length).to eq(8)
+      expect(checks.length).to eq(9)
       checks.each do |check|
         expect(check).to be_a(SecurityAudit::Check)
         expect([:pass, :warn, :fail]).to include(check.status)
@@ -128,6 +128,81 @@ RSpec.describe SecurityAudit do
 
     it 'returns false for unknown check' do
       expect(SecurityAudit.fix!('nonexistent')).to eq(true)
+    end
+  end
+
+  describe 'in production' do
+    let(:report) do
+      { 'ok' => true, 'firewall' => 'active',
+        'ssh' => { 'permitrootlogin' => 'no', 'passwordauthentication' => 'yes', 'kbdinteractiveauthentication' => 'no' } }
+    end
+    let(:checks) { SecurityAudit.run_all.index_by(&:name) }
+
+    before do
+      allow(SecurityAudit).to receive(:production?).and_return(true)
+      allow(Privileged).to receive(:call).and_call_original
+      allow(Privileged).to receive(:call).with('security.report').and_return(report)
+      allow(SecurityAudit).to receive(:`).and_return('')
+    end
+
+    it "reads UFW and sshd's effective settings from the root helper" do
+      expect(checks['ufw_firewall'].status).to eq(:pass)
+      expect(checks['ssh_root_login'].status).to eq(:pass)
+      expect(checks['ssh_password_auth'].status).to eq(:warn)
+    end
+
+    it 'counts password login as off only when keyboard-interactive login is off too' do
+      report['ssh'].merge!('passwordauthentication' => 'no', 'kbdinteractiveauthentication' => 'yes')
+      expect(checks['ssh_password_auth'].status).to eq(:warn)
+      report['ssh']['kbdinteractiveauthentication'] = 'no'
+      expect(SecurityAudit.run_all.find { |c| c.name == 'ssh_password_auth' }.status).to eq(:pass)
+    end
+
+    it 'treats an unreadable firewall state as a blocker' do
+      allow(Privileged).to receive(:call).with('security.report').and_raise(Privileged::Error.new('security.report', 'boom'))
+      expect(checks['ufw_firewall'].status).to eq(:fail)
+      expect(SecurityAudit.blockers.map(&:name)).to include('ufw_firewall')
+    end
+
+    it 'needs automatic updates turned on, not just the package' do
+      allow(SecurityAudit).to receive(:`).with(/unattended-upgrades/).and_return('install ok installed')
+      allow(File).to receive(:read).and_call_original
+      allow(File).to receive(:read).with(SecurityAudit::AUTO_UPGRADES).and_return(%(APT::Periodic::Unattended-Upgrade "0";\n))
+      expect(checks['unattended_upgrades'].status).to eq(:warn)
+      allow(File).to receive(:read).with(SecurityAudit::AUTO_UPGRADES).and_return(%(APT::Periodic::Unattended-Upgrade "1";\n))
+      expect(SecurityAudit.run_all.find { |c| c.name == 'unattended_upgrades' }.status).to eq(:pass)
+    end
+
+    it "warns about ports Docker publishes past UFW, but not ones kept on localhost" do
+      allow(File).to receive(:executable?).and_call_original
+      allow(File).to receive(:executable?).with('/usr/bin/docker').and_return(true)
+      ports = "0.0.0.0:8096->8096/tcp, :::8096->8096/tcp\n127.0.0.1:5432->5432/tcp\n\n192.168.1.5:53->53/udp"
+      allow(Open3).to receive(:capture3).with('sudo', '-n', '/usr/bin/docker', 'ps', '--format', '{{.Ports}}')
+                                        .and_return([ports, '', instance_double(Process::Status, success?: true)])
+      check = checks['docker_ports']
+      expect(check.status).to eq(:warn)
+      expect(check.description).to eq("Docker publishes 8096/tcp, 53/udp, which UFW doesn't filter")
+    end
+
+    it 'applies each fix through the root helper' do
+      %w[ufw_firewall ssh_root_login ssh_password_auth fail2ban unattended_upgrades].each { |name| SecurityAudit.fix!(name) }
+      expect(Privileged.calls).to eq([
+                                       ['security.enable_firewall', {}],
+                                       ['security.harden_ssh', { setting: 'root_login' }],
+                                       ['security.harden_ssh', { setting: 'password_login' }],
+                                       ['packages.install', { packages: ['fail2ban'] }],
+                                       ['packages.install', { packages: ['unattended-upgrades'] }],
+                                       ['security.enable_auto_updates', {}]
+                                     ])
+    end
+
+    it "keeps the helper's reason when a fix is refused, and Fix all reports it" do
+      refusal = 'no account that can log in has an SSH key (~/.ssh/authorized_keys)'
+      allow(Privileged).to receive(:call).with('security.harden_ssh', setting: 'password_login')
+                                         .and_raise(Privileged::Error.new('security.harden_ssh', refusal, refused: true))
+      expect(SecurityAudit.fix!('ssh_password_auth')).to be false
+      expect(SecurityAudit.last_error).to eq(refusal)
+      expect(SecurityAudit.fix_all!).to include({ name: 'ssh_password_auth', fixed: false, error: refusal })
     end
   end
 

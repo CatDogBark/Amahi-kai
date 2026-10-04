@@ -2,8 +2,9 @@
 # frozen_string_literal: true
 
 # amahi-helper: the program Amahi-kai runs as root for user accounts, Samba, share
-# folders, system services, the hostname, dnsmasq's config, swap, and reboot/power off.
-# Other system jobs still use their own sudo rules and move here later.
+# folders, system services, the hostname, dnsmasq's config, swap, reboot/power off, data
+# drives, Greyhole, package installs, the Cloudflare Tunnel, Tailscale and the security
+# audit's fixes. Only the updater and Docker keep their own sudo rules.
 #
 #   sudo -n /usr/local/sbin/amahi-helper users.create    (stdin: {"login":"ann","name":"Ann"})
 #   stdout: {"ok":true}  or  {"ok":false,"error":"..."}
@@ -89,6 +90,10 @@ module AmahiHelper
   # apt repositories the helper may add. The signing key is downloaded over HTTPS and
   # accepted only if the fingerprints in it (the key and its subkeys, as `gpg --show-keys`
   # lists them) are exactly the ones pinned here, so a key added to the file is refused.
+  # A .gpg keyring is stored binary (dearmored), a .asc one armored. %<codename>s and
+  # %<arch>s are filled from /etc/os-release and dpkg. The keyring and list paths are the
+  # ones earlier installs used, so a repository that is already set up is rewritten in
+  # place rather than added twice.
   APT_REPOSITORIES = {
     'greyhole' => {
       key_url: 'https://www.greyhole.net/releases/deb/greyhole-debsig.asc',
@@ -97,11 +102,85 @@ module AmahiHelper
       keyring: '/usr/share/keyrings/greyhole-archive-keyring.asc',
       list: '/etc/apt/sources.list.d/greyhole.list',
       source: 'deb [signed-by=/usr/share/keyrings/greyhole-archive-keyring.asc] https://www.greyhole.net/releases/deb stable main'
+    }.freeze,
+    'cloudflared' => {
+      key_url: 'https://pkg.cloudflare.com/cloudflare-main.gpg',
+      # Checked against the published key on the NAS, 2026-10-04.
+      fingerprints: %w[CC94B39C77AE7342A68B89628A682D308D4E5E73 06C89DB3B80A8F4349697C76029E1444B7D9F50F].freeze,
+      keyring: '/usr/share/keyrings/cloudflare-archive-keyring.gpg',
+      list: '/etc/apt/sources.list.d/cloudflared.list',
+      source: 'deb [signed-by=/usr/share/keyrings/cloudflare-archive-keyring.gpg] https://pkg.cloudflare.com/cloudflared any main'
+    }.freeze,
+    'tailscale' => {
+      key_url: 'https://pkgs.tailscale.com/stable/ubuntu/%<codename>s.noarmor.gpg',
+      # Checked against the published key on the NAS, 2026-10-04.
+      fingerprints: %w[2596A99EAAB33821893C0A79458CA832957F5868 2F625B3A774B946822EDDBEEB1547A3DDAAF03C6].freeze,
+      keyring: '/usr/share/keyrings/tailscale-archive-keyring.gpg',
+      list: '/etc/apt/sources.list.d/tailscale.list',
+      source: 'deb [signed-by=/usr/share/keyrings/tailscale-archive-keyring.gpg] https://pkgs.tailscale.com/stable/ubuntu %<codename>s main'
+    }.freeze,
+    'docker' => {
+      key_url: 'https://download.docker.com/linux/ubuntu/gpg',
+      # Checked against the published key here and on the NAS, 2026-10-04.
+      fingerprints: %w[9DC858229FC7DD38854AE2D88D81803C0EBFCD88 D3306A018370199E527AE7997EA0A9C3F273FCD8].freeze,
+      keyring: '/usr/share/keyrings/docker-archive-keyring.gpg',
+      list: '/etc/apt/sources.list.d/docker.list',
+      source: 'deb [arch=%<arch>s signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] ' \
+              'https://download.docker.com/linux/ubuntu %<codename>s stable'
     }.freeze
   }.freeze
+  OS_RELEASE = '/etc/os-release'
   # Packages the helper may install.
-  PACKAGES = %w[greyhole php8.3-mbstring php8.3-mysql].freeze
+  PACKAGES = %w[
+    greyhole php8.3-mbstring php8.3-mysql cloudflared tailscale docker-ce docker-ce-cli containerd.io
+    dnsmasq fail2ban unattended-upgrades
+  ].freeze
   APT_ENV = ENV_MIN.merge('DEBIAN_FRONTEND' => 'noninteractive').freeze
+
+  # Cloudflare Tunnel: the token sits in a file only root can read, and cloudflared reads
+  # it with --token-file, so it is in no unit file or command line.
+  CLOUDFLARED = '/usr/bin/cloudflared'
+  TUNNEL_TOKEN = '/etc/amahi-kai/tunnel.token'
+  TUNNEL_TOKEN_FORMAT = %r{\A[A-Za-z0-9+/=_-]{32,4096}\z}
+  TUNNEL_UNIT = '/etc/systemd/system/cloudflared.service'
+  TUNNEL_UNIT_CONTENT = <<~UNIT
+    [Unit]
+    Description=Cloudflare Tunnel
+    After=network-online.target
+    Wants=network-online.target
+
+    [Service]
+    Type=notify
+    ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate run --token-file #{TUNNEL_TOKEN}
+    Restart=on-failure
+    RestartSec=5s
+    TimeoutStartSec=0
+    LimitNOFILE=65536
+
+    [Install]
+    WantedBy=multi-user.target
+  UNIT
+
+  TAILSCALE = '/usr/bin/tailscale'
+
+  # The security audit's fixes. UFW lets in SSH, the web UI, HTTPS and Samba, plus DNS and
+  # DHCP once Amahi-kai has configured dnsmasq.
+  UFW = '/usr/sbin/ufw'
+  FIREWALL_PORTS = %w[22/tcp 3000/tcp 443/tcp 445/tcp 139/tcp 137:138/udp].freeze
+  DNSMASQ_PORTS = %w[53 67/udp].freeze
+  # sshd uses the first value it reads for a setting, and sshd_config includes
+  # sshd_config.d/*.conf first, in name order: 10-amahi-kai.conf comes before Ubuntu's
+  # 50-cloud-init.conf.
+  SSHD = '/usr/sbin/sshd'
+  SSHD_DROPIN = '/etc/ssh/sshd_config.d/10-amahi-kai.conf'
+  SSH_HARDENING = {
+    'root_login' => { 'PermitRootLogin' => 'no' },
+    'password_login' => { 'PasswordAuthentication' => 'no', 'KbdInteractiveAuthentication' => 'no' }
+  }.freeze
+  SSH_REPORTED = %w[permitrootlogin passwordauthentication kbdinteractiveauthentication].freeze
+  AUTO_UPGRADES = '/etc/apt/apt.conf.d/20auto-upgrades'
+  # What `dpkg-reconfigure -plow unattended-upgrades` writes when you answer yes.
+  AUTO_UPGRADES_CONTENT = "APT::Periodic::Update-Package-Lists \"1\";\nAPT::Periodic::Unattended-Upgrade \"1\";\n"
 
   LOGIN = /\A[a-z][a-z0-9]{2,31}\z/
   RESERVED_LOGINS = %w[root amahi nobody].freeze
@@ -116,6 +195,15 @@ module AmahiHelper
       params: %w[service],
       validate: ->(a) { { unit: service_unit(a['service']) } },
       plan: ->(v) { [['/usr/bin/systemctl', verb, *flags, v[:unit]]] }
+    }
+  end
+
+  # systemctl <verb> for one fixed unit, once its program is installed.
+  def self.unit_operation(verb, unit, program)
+    {
+      params: [],
+      validate: ->(_a) { installed!(program) && {} },
+      plan: ->(_v) { [['/usr/bin/systemctl', verb, unit]] }
     }
   end
 
@@ -286,6 +374,80 @@ module AmahiHelper
          ['/usr/bin/apt-get', '-y', '-o', 'Dpkg::Options::=--force-confold', '-o', 'DPkg::Lock::Timeout=300',
           'install', *v[:packages], { env: APT_ENV, stream: true }]]
       }
+    },
+    # Saves the tunnel token (root-only file), writes cloudflared's unit, and (re)starts it.
+    'tunnel.configure' => {
+      params: %w[token],
+      validate: ->(a) { installed!(CLOUDFLARED) && { token: tunnel_token(a['token']) } },
+      plan: lambda { |v|
+        [[:make_dir, File.dirname(TUNNEL_TOKEN), '0755'],
+         [:install, TUNNEL_TOKEN, v[:token], nil, '0600'],
+         [:install, TUNNEL_UNIT, TUNNEL_UNIT_CONTENT, nil],
+         %w[/usr/bin/systemctl daemon-reload],
+         %w[/usr/bin/systemctl enable cloudflared.service],
+         %w[/usr/bin/systemctl restart cloudflared.service]]
+      }
+    },
+    'tunnel.start' => unit_operation('start', 'cloudflared.service', CLOUDFLARED),
+    'tunnel.stop' => unit_operation('stop', 'cloudflared.service', CLOUDFLARED),
+    'tunnel.restart' => unit_operation('restart', 'cloudflared.service', CLOUDFLARED),
+    # tailscaled on now and at boot.
+    'tailscale.start' => {
+      params: [],
+      validate: ->(_a) { installed!(TAILSCALE) && {} },
+      plan: ->(_v) { [%w[/usr/bin/systemctl enable --now tailscaled.service]] }
+    },
+    # `tailscale up`, given 10 seconds: enough to connect a logged-in node, or to print
+    # the login URL (streamed) for one that isn't.
+    'tailscale.up' => {
+      params: [],
+      validate: ->(_a) { installed!(TAILSCALE) && {} },
+      plan: ->(_v) { [['/usr/bin/timeout', '10', TAILSCALE, 'up', { stream: true, allow_failure: true }]] }
+    },
+    'tailscale.down' => {
+      params: [],
+      validate: ->(_a) { installed!(TAILSCALE) && {} },
+      plan: ->(_v) { [[TAILSCALE, 'down']] }
+    },
+    'tailscale.logout' => {
+      params: [],
+      validate: ->(_a) { installed!(TAILSCALE) && {} },
+      plan: ->(_v) { [[TAILSCALE, 'logout', { allow_failure: true }], %w[/usr/bin/systemctl stop tailscaled.service]] }
+    },
+    # Lets the app's user talk to Docker (the Docker app pages use it).
+    'docker.grant_app_user' => {
+      params: [],
+      validate: ->(_a) { group_id('docker') ? {} : raise(Refused, "Docker isn't installed (no docker group)") },
+      plan: ->(_v) { [['/usr/sbin/usermod', '-aG', 'docker', APP_USER]] }
+    },
+    # What the security audit can't read without root: UFW's state and sshd's effective
+    # settings (`sshd -T`, so drop-ins count).
+    'security.report' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:security_report]] }
+    },
+    'security.enable_firewall' => {
+      params: [],
+      validate: ->(_a) { installed!(UFW) && { dnsmasq: File.exist?(DNSMASQ_CONF) } },
+      plan: lambda { |v|
+        ports = FIREWALL_PORTS + (v[:dnsmasq] ? DNSMASQ_PORTS : [])
+        [[UFW, 'default', 'deny', 'incoming'], *ports.map { |port| [UFW, 'allow', port] }, [UFW, '--force', 'enable']]
+      }
+    },
+    # Turns off SSH root login, or password login (only while an account that can log in
+    # has an SSH key, so nobody is locked out).
+    'security.harden_ssh' => {
+      params: %w[setting],
+      validate: ->(a) { ssh_hardening(a['setting']) },
+      plan: ->(v) { [[:harden_ssh, v[:settings]]] }
+    },
+    'security.enable_auto_updates' => {
+      params: [],
+      validate: lambda { |_a|
+        File.exist?('/usr/bin/unattended-upgrade') ? {} : raise(Refused, 'unattended-upgrades is not installed')
+      },
+      plan: ->(_v) { [[:install, AUTO_UPGRADES, AUTO_UPGRADES_CONTENT, nil]] }
     }
   }.freeze
 
@@ -578,6 +740,41 @@ module AmahiHelper
       value
     end
 
+    def tunnel_token(value)
+      value = string(value, 'token', max: 4096).strip
+      raise Refused, "the tunnel token doesn't look like one Cloudflare gives" unless value.match?(TUNNEL_TOKEN_FORMAT)
+      value
+    end
+
+    def installed!(program)
+      raise Refused, "#{File.basename(program)} isn't installed" unless File.executable?(program)
+      true
+    end
+
+    def ssh_hardening(value)
+      setting = listed(value, 'setting', SSH_HARDENING.keys)
+      if setting == 'password_login' && ssh_key_holders.empty?
+        raise Refused, 'no account that can log in has an SSH key (~/.ssh/authorized_keys); ' \
+                       'turning off password login would lock everyone out of SSH'
+      end
+      { settings: SSH_HARDENING.fetch(setting) }
+    end
+
+    # Accounts with a login shell (root aside) whose authorized_keys holds a key.
+    def ssh_key_holders
+      shells = File.readlines('/etc/shells', chomp: true).reject { |s| s.empty? || s.start_with?('#') }
+      holders = []
+      Etc.passwd do |pw|
+        next if pw.uid < UID_MIN || !shells.include?(pw.shell) || pw.shell.end_with?('nologin', 'false')
+        keys = File.join(pw.dir, '.ssh', 'authorized_keys')
+        next unless File.file?(keys)
+        holders << pw.name if File.foreach(keys).any? { |line| line.match?(/\A[^#]*\b(?:ssh-|ecdsa-|sk-)\S+ \S/) }
+      rescue SystemCallError
+        next
+      end
+      holders
+    end
+
     def package_list(value)
       raise Refused, 'packages must be a list' unless value.is_a?(Array) && !value.empty? && value.size <= 10
       value.map { |name| listed(name, 'package', PACKAGES) }.uniq
@@ -827,6 +1024,7 @@ module AmahiHelper
       Dir.mkdir(File.dirname(target), 0o755) if check == :dnsmasq && !File.directory?(File.dirname(target))
       tmp = File.join(File.dirname(target), ".#{File.basename(target)}.amahi-#{SecureRandom.hex(6)}")
       File.open(tmp, File::WRONLY | File::CREAT | File::EXCL | File::NOFOLLOW, 0o600) do |f|
+        f.binmode # keyrings are binary; nothing is transcoded
         f.write(content)
         f.fsync
         f.chown(0, group_id(group) || 0) if group
@@ -984,17 +1182,78 @@ module AmahiHelper
     def do_add_apt_repository(name)
       repo = APT_REPOSITORIES.fetch(name)
       raise Failed, "#{name}'s signing key fingerprint isn't pinned in the helper yet" if repo[:fingerprints].empty?
+      vars = repository_vars
       Dir.mktmpdir('amahi-apt-', RUN_DIR) do |dir|
-        key = File.join(dir, 'key.asc')
-        run_command(['/usr/bin/curl', '-fsSL', '--proto', '=https', '--tlsv1.2', '--max-time', '60', '-o', key, repo[:key_url]])
+        key = File.join(dir, 'key')
+        run_command(['/usr/bin/curl', '-fsSL', '--proto', '=https', '--tlsv1.2', '--max-time', '60', '-o', key,
+                     format(repo[:key_url], **vars)])
         listed = capture(['/usr/bin/gpg', '--homedir', dir, '--batch', '--show-keys', '--with-colons', key])
         found = listed.lines.grep(/\Afpr:/).map { |line| line.split(':')[9] }
         unless found.sort == repo[:fingerprints].sort
           raise Failed, "#{name}'s signing key has fingerprints #{found.join(', ')}, not the pinned ones"
         end
-        do_install(repo[:keyring], File.read(key), nil)
+        do_install(repo[:keyring], keyring_data(dir, key, repo[:keyring]), nil)
       end
-      do_install(repo[:list], "#{repo[:source]}\n", nil)
+      do_install(repo[:list], "#{format(repo[:source], **vars)}\n", nil)
+    end
+
+    # The checked key as the keyring's name says: binary for .gpg, armored for .asc.
+    def keyring_data(dir, key, keyring)
+      armored = File.binread(key, 10) == '-----BEGIN'
+      return File.binread(key) if armored == keyring.end_with?('.asc')
+      raise Failed, "#{File.basename(keyring)} must be an armored key" unless armored
+      binary = File.join(dir, 'key.gpg')
+      run_command(['/usr/bin/gpg', '--homedir', dir, '--batch', '--yes', '--output', binary, '--dearmor', key])
+      File.binread(binary)
+    end
+
+    # The Ubuntu codename and dpkg architecture apt sources are written for.
+    def repository_vars
+      codename = File.read(OS_RELEASE)[/^VERSION_CODENAME="?([a-z]{2,20})"?$/, 1]
+      raise Failed, "couldn't read the release codename from #{OS_RELEASE}" unless codename
+      arch = capture(['/usr/bin/dpkg', '--print-architecture']).strip
+      raise Failed, "unexpected architecture #{arch.inspect}" unless arch.match?(/\A[a-z0-9]{2,16}\z/)
+      { codename: codename, arch: arch }
+    end
+
+    def do_make_dir(path, mode)
+      Dir.mkdir(path, Integer(mode, 8)) unless File.directory?(path)
+      nil
+    end
+
+    def do_security_report
+      firewall = if File.executable?(UFW)
+                   capture([UFW, 'status'])[/^Status: (\w+)/, 1] || 'unknown'
+                 else
+                   'not installed'
+                 end
+      { 'firewall' => firewall, 'ssh' => File.executable?(SSHD) ? sshd_settings : {} }
+    end
+
+    # sshd's effective settings for SSH_REPORTED. sshd needs its privilege separation
+    # folder, which Ubuntu's socket-activated ssh only creates on the first connection.
+    def sshd_settings
+      Dir.mkdir('/run/sshd', 0o755) unless File.directory?('/run/sshd')
+      capture([SSHD, '-T']).lines.to_h { |line| line.split(' ', 2).map(&:strip) }.slice(*SSH_REPORTED)
+    end
+
+    # Writes the settings into Amahi-kai's sshd drop-in (keeping ones set earlier), checks
+    # the whole config with `sshd -t` (putting the old drop-in back if it fails), and
+    # reloads ssh. Replies with the effective settings.
+    def do_harden_ssh(settings)
+      old = File.exist?(SSHD_DROPIN) ? File.read(SSHD_DROPIN) : nil
+      kept = old.to_s.lines.filter_map { |line| line.strip.split(' ', 2) if line.match?(/\A[A-Za-z]+ (?:yes|no)\s*\z/) }.to_h
+      lines = kept.merge(settings).map { |key, value| "#{key} #{value}" }
+      do_install(SSHD_DROPIN, "# Written by Amahi-kai's security audit (Network → Security).\n#{lines.join("\n")}\n", nil)
+      begin
+        Dir.mkdir('/run/sshd', 0o755) unless File.directory?('/run/sshd')
+        capture([SSHD, '-t'])
+      rescue Failed
+        old ? do_install(SSHD_DROPIN, old, nil) : File.unlink(SSHD_DROPIN)
+        raise
+      end
+      run_command(['/usr/bin/systemctl', 'try-reload-or-restart', 'ssh.service'])
+      { 'ssh' => sshd_settings }
     end
 
     # A step as shown by --dry-run and in errors: secrets and file contents left out.

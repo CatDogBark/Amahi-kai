@@ -241,8 +241,10 @@ function setupTunnel() {
   fetch('<%= remote_access_stage_tunnel_token_path %>', {
     method: 'POST', headers: csrfHeaders(), credentials: 'same-origin', body: body
   }).then(function(r) {
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    openInstallTerminal('tunnel-setup', '<%= remote_access_setup_tunnel_stream_path %>');
+    if (r.ok) return openInstallTerminal('tunnel-setup', '<%= remote_access_setup_tunnel_stream_path %>');
+    return r.json().catch(function() { return {}; }).then(function(data) {
+      throw new Error(data.error || ('HTTP ' + r.status));
+    });
   }).catch(function(err) {
     alert('Could not send the tunnel token: ' + err.message);
   });
@@ -406,14 +408,19 @@ function tunnelAction(action) {
   var urls = {
     start: '<%= remote_access_start_tunnel_path %>',
     stop: '<%= remote_access_stop_tunnel_path %>',
-    restart: '<%= remote_access_start_tunnel_path %>'
+    restart: '<%= remote_access_restart_tunnel_path %>'
   };
   fetch(urls[action], {
     method: 'POST',
-    headers: { 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content }
+    headers: {
+      'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content,
+      'Accept': 'application/json'
+    }
   }).then(function(r) {
-    if (!r.ok) throw new Error('Server returned ' + r.status);
-    window.location.reload();
+    return r.json().catch(function() { return {}; }).then(function(data) {
+      if (!r.ok) throw new Error(data.error || ('Server returned ' + r.status));
+      window.location.reload();
+    });
   }).catch(function(err) {
     alert('Failed to ' + action + ' tunnel: ' + err.message);
   });

@@ -45,6 +45,7 @@ Rails.application.routes.draw do
     post 'configure_tunnel', action: 'configure_tunnel'
     post 'stage_tunnel_token', action: 'stage_tunnel_token'
     post 'start_tunnel', action: 'start_tunnel'
+    post 'restart_tunnel', action: 'restart_tunnel'
     post 'stop_tunnel', action: 'stop_tunnel'
     get 'install_cloudflared_stream', action: 'install_cloudflared_stream'
     get 'setup_tunnel_stream', action: 'setup_tunnel_stream'
