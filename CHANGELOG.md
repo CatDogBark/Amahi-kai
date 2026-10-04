@@ -74,6 +74,7 @@ All notable changes to Amahi-kai are documented here.
 - **Reboot and Power off work.** sudo had no rule for them, so the buttons did nothing; if one fails now, the page says so instead of "Rebooting".
 - **The setup wizard's swap file is added to `/etc/fstab`**, so it survives a reboot (that step used `sh`, which sudo refused). A server name with spaces or capitals becomes a valid hostname ("My NAS" → `my-nas`), and if the hostname can't be set the wizard says so.
 - **Setup can't finish with the default admin password.** The seeded `admin` password is public, so the wizard's last step now sends you back to change it while it still works, and the summary says so. The check looks at the account itself, so a password changed on the Users page counts too. The security audit uses the same check.
+- **Drive temperatures are read through the root helper,** and the app's last open-ended sudo rule (`smartctl` with any arguments) is gone. The helper reads every disk's temperature in one call and returns only the temperatures. Drives that report it as "36 (Min/Max 18/55)" now show a temperature instead of a dash.
 
 ### 🔧 Architecture & Code Quality
 

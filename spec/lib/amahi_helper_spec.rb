@@ -588,6 +588,48 @@ RSpec.describe 'AmahiHelper' do
       expect(refusal('disks.format', { 'device' => '/dev/sdb' })).to include('unmount it first')
     end
 
+    describe 'drive temperatures' do
+      let(:ata) do
+        <<~OUT
+          ID# ATTRIBUTE_NAME          FLAG     VALUE WORST THRESH TYPE      UPDATED  WHEN_FAILED RAW_VALUE
+            9 Power_On_Hours          0x0032   095   095   000    Old_age   Always       -       21854
+          190 Airflow_Temperature_Cel 0x0022   066   051   000    Old_age   Always       -       34
+          194 Temperature_Celsius     0x0022   064   045   000    Old_age   Always       -       36 (Min/Max 18/55)
+        OUT
+      end
+      let(:outputs) do
+        { '/dev/sda' => ata, '/dev/sdb' => "Current Drive Temperature:     41 C\n",
+          '/dev/sdc' => "190 Airflow_Temperature_Cel 0x0022   070   045   045    Old_age   Always       -       30\n",
+          '/dev/sdd' => "Smartctl open device: /dev/sdd failed: SMART not supported\n",
+          '/dev/nvme0n1' => "Temperature:                        44 Celsius\nTemperature Sensor 1: 48 Celsius\n" }
+      end
+
+      before do
+        allow(Open3).to receive(:capture3) do |_env, _cmd, *args, **_opts|
+          [outputs.fetch(args.last), '', instance_double(Process::Status, success?: false)]
+        end
+      end
+
+      it 'takes no arguments and plans one read-only action' do
+        expect(steps('disks.temperatures', {})).to eq([[:drive_temperatures]])
+        expect(refusal('disks.temperatures', { 'device' => '/dev/sda; reboot' })).to eq('unexpected argument device')
+      end
+
+      it 'reads every whole disk lsblk lists, through timeout, whatever smartctl exits with' do
+        reply = helper.do_drive_temperatures
+        expect(reply['temperatures']).to eq('/dev/sda' => 36, '/dev/sdb' => 41, '/dev/sdc' => 30,
+                                            '/dev/sdd' => nil, '/dev/nvme0n1' => 44)
+        expect(Open3).to have_received(:capture3)
+          .with(AmahiHelper::ENV_MIN, ['/usr/bin/timeout', '/usr/bin/timeout'], '5', '/usr/sbin/smartctl', '-A', '/dev/sda',
+                unsetenv_others: true, chdir: '/')
+      end
+
+      it 'reports nil when smartctl is missing' do
+        allow(Open3).to receive(:capture3).and_raise(Errno::ENOENT)
+        expect(helper.do_drive_temperatures['temperatures'].values.uniq).to eq([nil])
+      end
+    end
+
     it 'refuses names that are not disks or partitions, missing devices and ones lsblk does not list' do
       ['/dev/sdd1; reboot', '/dev/loop0', '/dev/mapper/vg-root', '/dev/sdd1/../sda1', 'sdd1', '/dev/md0', ''].each do |device|
         expect(refusal('disks.format', { 'device' => device })).not_to be_nil, device.inspect

@@ -75,6 +75,17 @@ module AmahiHelper
   MNT = '/mnt'
   DISK_DEVICE = %r{\A/dev/(?:[svx]d[a-z]{1,2}\d{0,3}|nvme\d{1,3}n\d{1,3}(?:p\d{1,3})?)\z}
   MOUNT_NAME = /\A[A-Za-z0-9][A-Za-z0-9._-]{0,63}\z/
+  WHOLE_DISK = %r{\A/dev/(?:[svx]d[a-z]{1,2}|nvme\d{1,3}n\d{1,3})\z}
+  SMARTCTL = '/usr/sbin/smartctl'
+  # Where `smartctl -A` reports the temperature, in °C. ATA drives: the raw value of attribute
+  # 194 (Temperature_Celsius) or 190 (Airflow_Temperature_Cel), the tenth column. NVMe and
+  # SAS drives print a line of their own.
+  TEMPERATURE_PATTERNS = [
+    /^\s*194\s+\S+(?:\s+\S+){7}\s+(\d+)/,
+    /^\s*190\s+\S+(?:\s+\S+){7}\s+(\d+)/,
+    /^Temperature:\s+(\d+) Celsius/,
+    /^Current Drive Temperature:\s+(\d+)/
+  ].freeze
   MOUNTABLE_FS = %w[ext2 ext3 ext4 xfs btrfs ntfs vfat exfat].freeze
   FSTAB_OPTIONS = 'defaults,nofail,x-systemd.device-timeout=10s'
   PREVIEW_LIMIT = { entries: 1_000_000, seconds: 30 }.freeze
@@ -357,6 +368,13 @@ module AmahiHelper
       params: %w[device],
       validate: ->(a) { preview_request(a['device']) },
       plan: ->(v) { [[:preview_drive, v[:device], v[:fstype]]] }
+    },
+    # Each whole disk's temperature, from its SMART data (the Disks page). Read-only; a disk
+    # without SMART, such as a virtual disk, reports nil.
+    'disks.temperatures' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:drive_temperatures]] }
     },
     # /etc/greyhole.conf, root:amahi 0640 (it holds the database password).
     'greyhole.write_config' => {
@@ -1148,6 +1166,26 @@ module AmahiHelper
       end
     ensure
       Dir.rmdir(dir) if dir && !mount_point?(dir)
+    end
+
+    # { 'temperatures' => { '/dev/sda' => 34, '/dev/vda' => nil } } for the whole disks lsblk lists.
+    def do_drive_temperatures
+      disks = block_tree.select { |d| d['type'] == 'disk' }.map { |d| d['path'] }.grep(WHOLE_DISK)
+      { 'temperatures' => disks.to_h { |disk| [disk, drive_temperature(disk)] } }
+    end
+
+    # smartctl's exit status is a bit mask that is often non-zero on healthy drives, so its
+    # output is read whatever the status. At most 5 seconds per disk.
+    def drive_temperature(disk)
+      out, _err, _status = Open3.capture3(ENV_MIN, ['/usr/bin/timeout', '/usr/bin/timeout'], '5', SMARTCTL, '-A', disk,
+                                          unsetenv_others: true, chdir: '/')
+      TEMPERATURE_PATTERNS.each do |pattern|
+        value = out[pattern, 1]
+        return value.to_i if value
+      end
+      nil
+    rescue SystemCallError
+      nil
     end
 
     # Top-level entries with sizes and file counts, walking at most PREVIEW_LIMIT.

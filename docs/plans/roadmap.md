@@ -27,6 +27,7 @@ so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 | 3. Q. Plain CSS | Sass compiler gone: the app's stylesheets are plain CSS and Bootstrap is its official 5.3.8 build (`vendor/assets`); System Status shows the deployed commit | #32 |
 | 3. Fix | System Update's restart no longer waits 90 seconds: the update page's stream ends when Puma stops, and Puma gives open requests 10 seconds | #33 |
 | 3. Fix | The setup wizard can't finish while the seeded admin password still works | #34 |
+| 3. Fix | Drive temperatures through the helper; `smartctl`'s open-ended sudo rule removed (5 rules left: the helper and Docker's) | #35 |
 
 ## Next: Phase 3
 
@@ -93,8 +94,9 @@ touches the same code.
 - Data drives mount with PR #13's `defaults,nofail,...` options. `nosuid,nodev` would be safer for
   drives brought from another machine; decide with the filesystem (below).
 - Per-request overhead: 4–5 `Setting` queries in `before_action_hook`.
-- Long jobs (apt, docker pull, system update) run inside web requests and hold Puma threads;
-  consider a job runner or `systemd-run` with a streamed log.
+- Long jobs (package installs, docker pull) run inside web requests and hold Puma threads.
+  System Update moved to its own job in #31; the others could follow the same way (a systemd
+  unit started by the helper, with its log streamed to the page).
 - 26 locale files, but newer screens hardcode English. Troy to decide whether i18n stays a goal.
 - Anonymous SMB browsing shows a `nobody` home folder (cosmetic; needs a guest account with no home
   directory).

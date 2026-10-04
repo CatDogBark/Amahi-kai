@@ -9,7 +9,9 @@ RSpec.describe DiskUtils do
     before do
       allow(described_class).to receive(:`).and_call_original
       allow(described_class).to receive(:`).with(/lsblk -dno NAME,MODEL,SIZE,TYPE -J/).and_return(lsblk_json)
-      allow(described_class).to receive(:`).with(/smartctl/).and_return("Temperature_Celsius     0x0022   070   040   000    Old_age   Always       -       30\n")
+      # SMART data needs root, so the temperatures come from the helper.
+      allow(Privileged).to receive(:call).with('disks.temperatures')
+        .and_return('ok' => true, 'temperatures' => { '/dev/sda' => 30 })
     end
 
     it 'returns an array of disk hashes with temperature info' do
@@ -27,15 +29,29 @@ RSpec.describe DiskUtils do
       expect(result.map { |d| d[:device] }).not_to include('/dev/sr0')
     end
 
-    context 'when smartctl returns no temperature' do
+    context 'when the drive reports no temperature' do
       before do
-        allow(described_class).to receive(:`).with(/smartctl/).and_return("")
+        allow(Privileged).to receive(:call).with('disks.temperatures')
+          .and_return('ok' => true, 'temperatures' => { '/dev/sda' => nil })
       end
 
       it 'returns dash for temps' do
         result = described_class.stats
         expect(result.first[:temp_c]).to eq('-')
         expect(result.first[:temp_f]).to eq('-')
+      end
+    end
+
+    context 'when the helper fails' do
+      before do
+        allow(Privileged).to receive(:call).with('disks.temperatures')
+          .and_raise(Privileged::Error.new('disks.temperatures', 'smartctl went away'))
+      end
+
+      it 'still lists the disks, without temperatures' do
+        result = described_class.stats
+        expect(result.first[:device]).to eq('/dev/sda')
+        expect(result.first[:temp_c]).to eq('-')
       end
     end
 

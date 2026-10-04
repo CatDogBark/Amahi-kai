@@ -61,20 +61,17 @@ In Rails, `Privileged.call('users.create', login: 'ann', name: 'Ann')` runs an o
 
 ## Sudoers
 
-`config/sudoers/amahi-kai`, 6 rules:
+`config/sudoers/amahi-kai`, 5 rules:
 
 | Rule | For |
 | --- | --- |
 | `/usr/local/sbin/amahi-helper` | Everything above, System Update included |
 | `/usr/bin/docker`, `mkdir -p /opt/amahi/*`, `cp /tmp/amahi-staging/* /opt/amahi/*`, `rm -rf /opt/amahi/apps/*` | Docker apps (Phase 4) |
-| `/usr/sbin/smartctl` | Drive health on the Disks page |
 
 ## Known gaps
 
 - **Docker** is root-equivalent: `sudo docker` and the `docker` group both are. Phase 4 starts
   with a design for Docker apps (per-app access, no Docker socket for the web app).
-- **`smartctl`** takes any arguments. It reads drive health; it should become a helper
-  operation.
 - **The database isn't rolled back** with the code: migrations must keep working with the
   previous version's code. System Update dumps the database first (`/var/lib/amahi-kai/backups`,
   root-only, the last 3); restoring one is a manual step.
@@ -82,7 +79,7 @@ In Rails, `Privileged.call('users.create', login: 'ann', name: 'Ann')` runs an o
 ## Checking a NAS
 
 ```
-sudo -l -U amahi                                   # the 6 rules above
+sudo -l -U amahi                                   # the 5 rules above
 sudo /usr/local/sbin/amahi-helper --self-test      # ok: N operations
 sudo tail -5 /var/log/amahi-kai/helper.log         # recent root actions
 sudo find /opt/amahi-kai -xdev \( -path /opt/amahi-kai/tmp -o -path /opt/amahi-kai/log \
