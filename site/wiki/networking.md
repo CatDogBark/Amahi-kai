@@ -57,11 +57,15 @@ For clients to use your aliases, they must use your Amahi-kai server as their DN
 
 ## Static Hosts
 
-Static hosts map specific MAC addresses to fixed IP addresses (DHCP reservations). Navigate to **Network > Hosts** to manage them.
+Static hosts give a device the same IP address and name every time (DHCP reservations), when
+Amahi-kai's gateway hands out addresses. Manage them on **Network > Hosts**:
 
-- **Name**: Friendly name for the device
-- **MAC**: The device's MAC address
-- **Address**: The last octet of the IP to assign (the network prefix is auto-filled)
+- **Name**: the device's name on the network (letters, numbers and hyphens, up to 63 characters)
+- **MAC**: the device's MAC address
+- **Address**: the last part of the IP address to give it (the network part is filled in)
+
+Adding, changing or removing a host rewrites dnsmasq's configuration with a `dhcp-host` line for
+each one, and restarts dnsmasq if it's running.
 
 ---
 
@@ -97,11 +101,13 @@ After installation, configure these settings on the Gateway page:
 | DHCP Range High | `.254` | Last IP in the DHCP range |
 | Lease Time | 14400 seconds | How long a DHCP lease lasts (4 hours) |
 
-Click **Save** to generate the dnsmasq configuration and apply it.
+Click **Save** to generate the dnsmasq configuration and apply it. Your DHCP and DNS choices are
+saved too, and kept when static hosts change.
 
 ### Generated Configuration
 
-Amahi-kai writes `/etc/dnsmasq.d/amahi.conf`:
+Amahi-kai writes `/etc/dnsmasq.d/amahi.conf` through its root helper, which only accepts the lines
+Amahi-kai generates (dnsmasq runs as root, so its configuration is kept to known settings):
 
 ```ini
 # Amahi-kai dnsmasq configuration
@@ -110,6 +116,7 @@ Amahi-kai writes `/etc/dnsmasq.d/amahi.conf`:
 dhcp-range=192.168.1.100,192.168.1.254,14400s
 dhcp-option=option:router,192.168.1.1
 dhcp-authoritative
+dhcp-host=aa:bb:cc:dd:ee:01,192.168.1.20,printer
 local=/local/
 expand-hosts
 domain=local

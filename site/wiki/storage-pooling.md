@@ -5,167 +5,109 @@ title: "Storage Pooling"
 
 # Storage Pooling
 
-Amahi-kai integrates with [Greyhole](https://www.greyhole.net/) to pool multiple physical drives into a single logical storage pool. Files written to pooled shares are distributed across drives, and you can configure per-share duplication to protect against drive failure.
+Amahi-kai uses [Greyhole](https://www.greyhole.net/) to combine several drives into one storage
+pool. Files saved to a pooled share are spread across the drives, and you can keep extra copies on
+different drives so a failed drive doesn't lose them.
 
 ---
 
-## How It Works
+## Adding drives
 
-Greyhole acts as a Samba VFS module. When a file is saved to a pooled share:
+Drives are prepared on **Disks > Devices** (or in the setup wizard's storage step):
 
-1. Samba writes the file to a **landing zone** (the share's directory on the primary drive)
-2. Greyhole picks up the file and moves/copies it across your pool drives
-3. If duplication is enabled, Greyhole stores multiple copies on different physical drives
-4. The original path remains accessible — Greyhole manages the underlying distribution transparently
+- **Format** a new or empty drive as ext4.
+- **Mount** it. Amahi-kai mounts data drives at `/mnt/<name>` and adds them to `/etc/fstab` by
+  UUID with `nofail`, so the server still starts if a drive is missing or dead.
+- **Preview** a drive before mounting it: Amahi-kai mounts it read-only for a moment and lists
+  its top-level folders, so you can see what's on it.
+- **Unmount** it before removing it.
+
+The drive the system runs from (including NVMe and LVM setups) is never offered for formatting or
+mounting.
+
+---
+
+## How pooling works
+
+Greyhole works with Samba. When a file is saved to a pooled share:
+
+1. Samba writes it to the share's folder (the landing zone).
+2. Greyhole moves it onto one of the pool drives, leaving a link in its place.
+3. With extra copies turned on, Greyhole keeps that many copies on different drives.
+4. The file stays where you put it as far as you can see; Greyhole handles where it really lives.
 
 ---
 
 ## Installing Greyhole
 
-### During Initial Install
+Any one of:
 
-Pass the `--with-greyhole` flag to the installer:
+- the installer's `--with-greyhole` option
+- the setup wizard's Greyhole step
+- **Disks > Storage Pool > Install Greyhole** (the progress streams as it installs)
 
-```bash
-sudo bin/amahi-install --with-greyhole
-```
-
-This installs the Greyhole package, PHP dependencies, and creates the Greyhole database.
-
-### After Installation (Web UI)
-
-If you didn't install Greyhole initially, you can install it from the web UI:
-
-1. Go to **Shares** tab
-2. Navigate to **Disk Pooling**
-3. Click **Install Greyhole**
-
-The web UI streams installation progress in real-time. Under the hood it:
-
-- Adds the Greyhole apt repository and signing key
-- Installs the `greyhole` package plus `php8.3-mysql` and `php8.3-mbstring`
-- Creates the `greyhole` database in MariaDB
-- Loads the Greyhole schema
-- Enables the `greyhole.service` systemd unit
+Amahi-kai adds Greyhole's apt repository (its signing key is checked against a pinned
+fingerprint), installs the package and the PHP modules it needs, creates its database and turns
+on the service.
 
 ---
 
-## Adding Pool Drives
+## Choosing pool drives
 
-### Setup Wizard
+On **Disks > Storage Pool**, turn each mounted data drive on or off for the pool. Each pool drive
+keeps at least 10 GB free; Greyhole stops putting files on a drive below that.
 
-During the first-run wizard (Step 4: Storage), you can select partitions to include in the pool. The wizard shows all mounted partitions except system mounts (`/`, `/boot`, `/boot/efi`).
+## Copies per share
 
-### Web UI
+On the **Shares** tab, turn pooling on for a share and set its number of copies:
 
-From the **Shares > Disk Pooling** page:
+| Copies | What happens |
+|--------|--------------|
+| 0 | Not pooled: files stay in the share's own folder |
+| 1 | Pooled, one copy: files are spread across drives, without duplicates |
+| 2 or more | That many copies, each on a different drive |
+| max | A copy on every pool drive |
 
-1. Available partitions are listed with their mount points and usage
-2. Toggle a partition to add or remove it from the pool
-3. Set the **minimum free space** threshold (in GB) — Greyhole will stop using a drive when free space drops below this
-
-### How Pool Drives Are Stored
-
-Pool drives are stored in the `disk_pool_partitions` table with:
-
-- **path** — The mount point (e.g., `/mnt/data1`)
-- **minimum_free** — Minimum free space in GB (default: 10 GB)
+Changing copies regenerates Greyhole's configuration and restarts it.
 
 ---
 
-## Configuring Duplication
+## Greyhole configuration
 
-Each share has a **disk pool copies** setting that controls how many copies of each file Greyhole maintains:
-
-| Copies | Behavior |
-|--------|----------|
-| 0 | Not pooled — files stay on the share's local directory only |
-| 1 | Pooled, no duplication — files are distributed but only 1 copy exists |
-| 2+ | Pooled with duplication — N copies on N different drives |
-| max (99+) | Maximum duplication — a copy on every pool drive |
-
-### Setting Duplication
-
-1. Go to **Shares** tab
-2. For any share, click the **Pool** toggle to enable pooling (sets copies to 1)
-3. Adjust the copies count with the **Copies** control
-
-When you change duplication settings, Amahi-kai automatically regenerates `/etc/greyhole.conf` and restarts Greyhole.
-
----
-
-## Greyhole Configuration
-
-Amahi-kai generates `/etc/greyhole.conf` automatically. **Do not edit it manually** — it will be overwritten.
-
-A generated config looks like:
+Amahi-kai writes `/etc/greyhole.conf` (readable only by root and Amahi-kai, since it holds a
+database password). Don't edit it by hand. It lists the pool drives and the copies per share:
 
 ```ini
-# Greyhole configuration - generated by Amahi-kai
-# Do not edit manually - changes will be overwritten
-
-db_host = localhost
-db_user = amahi
-db_pass = <your-database-password>
-db_name = greyhole
-
 storage_pool_drive = /mnt/data1, min_free: 10gb
 storage_pool_drive = /mnt/data2, min_free: 10gb
 
 num_copies[Movies] = 2
-num_copies[Music] = 1
 num_copies[Photos] = max
 ```
 
-The Samba config for pooled shares includes:
-
-```ini
-dfree command = /usr/bin/greyhole-dfree
-vfs objects = greyhole
-```
+Samba's configuration gets the settings Greyhole needs (following its links) whenever it's
+regenerated, so pooled files stay reachable after any share change.
 
 ---
 
 ## Managing Greyhole
 
-### Service Commands
-
 ```bash
-# Check status
 systemctl status greyhole
-
-# Start/stop/restart
-sudo systemctl start greyhole
-sudo systemctl stop greyhole
 sudo systemctl restart greyhole
-
-# View Greyhole queue
-greyhole --status
-
-# Run filesystem check
-greyhole --fsck
+greyhole --status     # what it's working on
+greyhole --fsck       # check the pool
 ```
 
-### Monitoring
+The dashboard and **Settings > Servers** show whether Greyhole is running.
 
-The dashboard shows Greyhole status in the services panel (if installed). The **Disk Pooling** page shows:
+### Removing a drive
 
-- Whether Greyhole is installed and running
-- Queue status (pending operations)
-- Per-drive usage and free space
+1. Turn the drive off in the pool on **Disks > Storage Pool**.
+2. Wait for Greyhole to move its files elsewhere (`greyhole --status` shows the queue).
+3. Unmount the drive on **Disks > Devices**, then remove it.
 
----
-
-## Removing a Drive
-
-Before physically removing a drive from the pool:
-
-1. Remove the partition from the pool in the Disk Pooling web UI
-2. Wait for Greyhole to redistribute files (check `greyhole --status`)
-3. Verify no pending operations remain
-4. Physically remove the drive
-
-Greyhole will move files off the drive before it's removed from the pool, ensuring no data loss (as long as other drives have sufficient space).
+Greyhole needs room on the other drives for the files it moves.
 
 ---
 
@@ -174,19 +116,12 @@ Greyhole will move files off the drive before it's removed from the pool, ensuri
 ### Greyhole won't start
 
 ```bash
-# Check the service log
 journalctl -u greyhole -n 50 --no-pager
-
-# Verify the database exists
-mysql -u root -e "SHOW DATABASES;" | grep greyhole
-
-# Re-initialize the schema
-sudo mysql -u root greyhole < /usr/share/greyhole/schema-mysql.sql
 ```
 
-### Files not being distributed
+### Files aren't spread across drives
 
-- Verify Greyhole is running: `systemctl is-active greyhole`
-- Check the queue: `greyhole --status`
-- Ensure the share has `disk_pool_copies > 0`
-- Verify pool drives have sufficient free space
+- Is Greyhole running? `systemctl is-active greyhole`
+- Is the share pooled (copies 1 or more)?
+- Do the pool drives have more than 10 GB free?
+- What is it doing? `greyhole --status`
