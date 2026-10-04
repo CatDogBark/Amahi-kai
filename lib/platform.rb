@@ -121,16 +121,22 @@ class Platform
       "true"  # no-op
     end
 
+    # Sets the system hostname from a server name: lowercase, spaces and other
+    # characters a hostname can't hold become hyphens ("My NAS" -> "my-nas").
+    # Returns true, or false with the reason logged.
     def set_hostname!(name)
-      Shell.run("hostnamectl set-hostname #{Shellwords.escape(name)}")
+      hostname = name.to_s.downcase.gsub(/[^a-z0-9-]+/, '-').gsub(/\A-+|-+\z/, '')[0, 63].to_s.chomp('-')
+      privileged('network.set_hostname', hostname: hostname)
     end
 
+    # Reboot and power off go through the root helper (sudo had no rule for them, so
+    # the buttons used to do nothing). Return true, or false with the reason logged.
     def reboot!
-      Shell.run("reboot")
+      privileged('system.reboot')
     end
 
     def poweroff!
-      Shell.run("poweroff")
+      privileged('system.poweroff')
     end
 
     def platform_versions
@@ -141,6 +147,14 @@ class Platform
   private
 
   class << self
+    def privileged(operation, **args)
+      Privileged.call(operation, **args)
+      true
+    rescue Privileged::Error => e
+      Rails.logger.error("Platform: #{operation} failed: #{e.message}")
+      false
+    end
+
     def set_platform
       if File.exist?('/etc/issue')
         line = File.read('/etc/issue').to_s

@@ -107,6 +107,19 @@ describe "Setup Controller", type: :request do
       it "redirects to storage step even with blank server name" do
         post setup_update_network_path, params: { server_name: "" }
         expect(response).to redirect_to(setup_storage_path)
+        expect(Privileged.calls).to be_empty
+      end
+
+      it "sets the system hostname through the root helper" do
+        post setup_update_network_path, params: { server_name: "My NAS" }
+        expect(Privileged.calls).to eq([['network.set_hostname', { hostname: 'my-nas' }]])
+      end
+
+      it "keeps the server name and warns when the hostname can't be changed" do
+        allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('network.set_hostname', 'refused'))
+        post setup_update_network_path, params: { server_name: "myhda" }
+        expect(Setting.get('server-name')).to eq("myhda")
+        expect(flash[:warning]).to include("hostname couldn't be changed")
       end
     end
 

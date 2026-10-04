@@ -1,8 +1,9 @@
 #!/usr/bin/ruby --disable-gems
 # frozen_string_literal: true
 
-# amahi-helper: the program Amahi-kai runs as root for user accounts, Samba and share
-# folders. Other system jobs still use their own sudo rules and move here later.
+# amahi-helper: the program Amahi-kai runs as root for user accounts, Samba, share
+# folders, system services, the hostname, dnsmasq's config, swap, and reboot/power off.
+# Other system jobs still use their own sudo rules and move here later.
 #
 #   sudo -n /usr/local/sbin/amahi-helper users.create    (stdin: {"login":"ann","name":"Ann"})
 #   stdout: {"ok":true}  or  {"ok":false,"error":"..."}
@@ -49,12 +50,35 @@ module AmahiHelper
   LMHOSTS = '/etc/samba/lmhosts'
   TESTPARM = '/usr/bin/testparm'
 
+  DNSMASQ_CONF = '/etc/dnsmasq.d/amahi.conf'
+  DNS_ALIASES = '/etc/dnsmasq.d/amahi-aliases.conf'
+  DNSMASQ = '/usr/sbin/dnsmasq'
+
+  # The services Settings → Servers may control: the entries in lib/system_services.rb
+  # that list actions (spec/lib/amahi_helper_spec.rb checks the two lists match).
+  SERVICES = {
+    'smbd' => 'smbd.service', 'nmbd' => 'nmbd.service', 'dnsmasq' => 'dnsmasq.service',
+    'greyhole' => 'greyhole.service', 'docker' => 'docker.service'
+  }.freeze
+
+  SWAPFILE = '/swapfile'
+  FSTAB = '/etc/fstab'
+
   LOGIN = /\A[a-z][a-z0-9]{2,31}\z/
   RESERVED_LOGINS = %w[root amahi nobody].freeze
 
   # Refused: the request is invalid and nothing was changed. Failed: a step failed.
   class Refused < StandardError; end
   class Failed < StandardError; end
+
+  # services.<verb>: systemctl <verb> [flags] <unit>, for a service in SERVICES.
+  def self.service_operation(verb, *flags)
+    {
+      params: %w[service],
+      validate: ->(a) { { unit: service_unit(a['service']) } },
+      plan: ->(v) { [['/usr/bin/systemctl', verb, *flags, v[:unit]]] }
+    }
+  end
 
   # Each operation lists its arguments, checks them (validate returns the clean values)
   # and plans its steps. A step is an argument list: a command starts with its absolute
@@ -119,7 +143,7 @@ module AmahiHelper
     'shares.create_dir' => {
       params: %w[path],
       validate: ->(a) { { path: share_path(a['path']) } },
-      plan: ->(v) { [[:mkdir_p, v[:path]], [:own_dir, v[:path], APP_USER, USERS_GROUP, 0o2775]] }
+      plan: ->(v) { [[:mkdir_p, v[:path]], [:own_dir, v[:path], APP_USER, USERS_GROUP, '2775']] }
     },
     # Removes a share folder only if it is empty.
     'shares.remove_dir' => {
@@ -132,6 +156,45 @@ module AmahiHelper
       params: %w[path writable],
       validate: ->(a) { { path: share_path(a['path']), writable: boolean(a, 'writable') } },
       plan: ->(v) { [[:guest_write, v[:path], v[:writable]]] }
+    },
+    # Settings → Servers. enable/disable also start/stop the service now (--now).
+    'services.start' => service_operation('start'),
+    'services.stop' => service_operation('stop'),
+    'services.restart' => service_operation('restart'),
+    'services.enable' => service_operation('enable', '--now'),
+    'services.disable' => service_operation('disable', '--now'),
+    'system.reboot' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [%w[/usr/bin/systemctl reboot]] }
+    },
+    'system.poweroff' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [%w[/usr/bin/systemctl poweroff]] }
+    },
+    # A swap file at /swapfile, on now and at boot. Only when there is none yet.
+    'system.create_swap' => {
+      params: %w[size_gb],
+      validate: ->(a) { { size_gb: integer(a, 'size_gb', 1..8) } },
+      plan: ->(v) { [[:create_swapfile, SWAPFILE, v[:size_gb]]] }
+    },
+    'network.set_hostname' => {
+      params: %w[hostname],
+      validate: ->(a) { { hostname: hostname(a['hostname']) } },
+      plan: ->(v) { [['/usr/bin/hostnamectl', 'set-hostname', v[:hostname]]] }
+    },
+    # dnsmasq's DHCP and DNS settings (Network → Gateway), checked with dnsmasq --test.
+    'network.write_dnsmasq_config' => {
+      params: %w[content],
+      validate: ->(a) { { content: dnsmasq_conf(a['content'], DNSMASQ_LINES) } },
+      plan: ->(v) { [[:install, DNSMASQ_CONF, v[:content], :dnsmasq]] }
+    },
+    # DNS aliases (Network → DNS Aliases): address=/name/ip lines only.
+    'network.write_dns_aliases' => {
+      params: %w[content],
+      validate: ->(a) { { content: dnsmasq_conf(a['content'], DNS_ALIAS_LINES) } },
+      plan: ->(v) { [[:install, DNS_ALIASES, v[:content], :dnsmasq]] }
     }
   }.freeze
 
@@ -151,6 +214,24 @@ module AmahiHelper
     greyhole recycle fruit streams_xattr catia acl_xattr shadow_copy2 full_audit dirsort worm readonly crossrename
   ].freeze
   GREYHOLE_DFREE = '/usr/bin/greyhole-dfree'
+
+  # --- dnsmasq config checks ---------------------------------------------------------
+
+  # dnsmasq can run scripts as root and read any file from its config, and the app
+  # writes these files whole, so every line must be one the app generates.
+  IPV4 = '(?:(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)\\.){3}(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)'
+  DOMAIN = '[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?'
+  DNSMASQ_LINES = [
+    /\Adhcp-range=#{IPV4},#{IPV4},\d{1,7}s\z/,
+    /\Adhcp-option=option:router,#{IPV4}\z/,
+    /\Adhcp-authoritative\z/,
+    %r{\Alocal=/#{DOMAIN}/\z}i,
+    /\Aexpand-hosts\z/,
+    /\Adomain=#{DOMAIN}\z/i,
+    /\Abind-interfaces\z/,
+    /\Aexcept-interface=lo\z/
+  ].freeze
+  DNS_ALIAS_LINES = [%r{\Aaddress=/[a-z][a-z0-9-]{0,62}/(?:#{IPV4})?\z}i].freeze
 
   class << self
     # --- Entry points --------------------------------------------------------------
@@ -231,6 +312,12 @@ module AmahiHelper
       value
     end
 
+    def integer(args, key, range)
+      value = args[key]
+      raise Refused, "#{key} must be a whole number from #{range.min} to #{range.max}" unless value.is_a?(Integer) && range.cover?(value)
+      value
+    end
+
     def boolean(args, key)
       value = args[key]
       raise Refused, "#{key} must be true or false" unless [true, false].include?(value)
@@ -279,6 +366,28 @@ module AmahiHelper
     def gecos(value)
       value = string(value, 'name', max: 64)
       raise Refused, 'name contains a control character or a colon' if value.match?(/[[:cntrl:]:]/)
+      value
+    end
+
+    def service_unit(value)
+      value = string(value, 'service', max: 32)
+      SERVICES.fetch(value) { raise Refused, "service #{value.inspect} isn't one Amahi-kai manages" }
+    end
+
+    # One DNS label (RFC 1123): letters, digits and hyphens, at most 63 characters.
+    def hostname(value)
+      value = string(value, 'hostname', max: 63)
+      raise Refused, "hostname #{value.inspect} must be letters, digits and hyphens, not starting or ending with a hyphen" unless value.match?(/\A[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\z/i)
+      value
+    end
+
+    def dnsmasq_conf(value, allowed)
+      value = string(value, 'content', max: 64 * 1024)
+      value.each_line do |line|
+        line = line.strip
+        next if line.empty? || line.start_with?('#')
+        raise Refused, "dnsmasq line #{line.inspect} is not one Amahi-kai writes" unless allowed.any? { |re| line.match?(re) }
+      end
       value
     end
 
@@ -439,7 +548,7 @@ module AmahiHelper
     def do_own_dir(path, user, group, mode)
       with_dir(path) do |dir|
         dir.chown(Etc.getpwnam(user).uid, group_id(group))
-        dir.chmod(mode)
+        dir.chmod(Integer(mode, 8))
       end
       nil
     end
@@ -481,14 +590,18 @@ module AmahiHelper
     end
 
     # Writes +content+ to a new file next to +target+, checks it, then renames it into
-    # place, so readers see the old file or the new one, never half of one.
+    # place, so readers see the old file or the new one, never half of one. dnsmasq's
+    # folder is created if dnsmasq isn't installed yet, so its config is ready when it is.
+    # (dnsmasq and Samba skip the temporary file: its name starts with a dot.)
     def do_install(target, content, check)
+      Dir.mkdir(File.dirname(target), 0o755) if check == :dnsmasq && !File.directory?(File.dirname(target))
       tmp = File.join(File.dirname(target), ".#{File.basename(target)}.amahi-#{SecureRandom.hex(6)}")
       File.open(tmp, File::WRONLY | File::CREAT | File::EXCL | File::NOFOLLOW, 0o644) do |f|
         f.write(content)
         f.fsync
       end
       check_smb_conf(tmp) if check == :smb_conf
+      check_dnsmasq_conf(tmp) if check == :dnsmasq
       File.rename(tmp, target)
       nil
     rescue SystemCallError => e
@@ -508,13 +621,48 @@ module AmahiHelper
       raise Failed, "#{TESTPARM} is missing; is Samba installed?"
     end
 
+    # Where dnsmasq is installed, it must accept the file too.
+    def check_dnsmasq_conf(path)
+      return unless File.executable?(DNSMASQ)
+      _out, err, status = Open3.capture3(ENV_MIN, [DNSMASQ, DNSMASQ], '--test', "--conf-file=#{path}",
+                                         unsetenv_others: true, chdir: '/')
+      raise Refused, "dnsmasq rejected the config: #{last_lines(err, 2)}" unless status.success?
+    end
+
+    # Creates the swap file, turns it on and adds it to fstab. Refuses if the file exists
+    # (it may be in use); removes it again if a step fails before swap is on.
+    def do_create_swapfile(path, size_gb)
+      File.open(path, File::WRONLY | File::CREAT | File::EXCL | File::NOFOLLOW, 0o600).close
+      begin
+        begin
+          run_command(['/usr/bin/fallocate', '-l', "#{size_gb}G", path])
+        rescue Failed
+          # Some filesystems can't fallocate a swap file; writing zeros always works.
+          run_command(['/usr/bin/dd', 'if=/dev/zero', "of=#{path}", 'bs=1M', "count=#{size_gb * 1024}", 'status=none'])
+        end
+        run_command(['/usr/sbin/mkswap', path])
+        run_command(['/usr/sbin/swapon', path])
+      rescue Failed
+        File.unlink(path)
+        raise
+      end
+      add_swap_to_fstab(path)
+      nil
+    rescue Errno::EEXIST
+      raise Refused, "#{path} already exists"
+    end
+
+    def add_swap_to_fstab(path)
+      return if File.foreach(FSTAB).any? { |line| line.split.first == path }
+      File.open(FSTAB, 'a') { |f| f.puts "#{path} none swap sw 0 0" }
+    end
+
     # A step as shown by --dry-run and in errors: secrets and file contents left out.
     def describe(step)
       step.map do |part|
         case part
         when Hash then part.key?(:stdin) ? { 'stdin' => '[withheld]' }.merge(part.except(:stdin).transform_keys(&:to_s)) : part.transform_keys(&:to_s)
         when Symbol then part.to_s
-        when Integer then format('%04o', part)
         when String then part.length > 200 ? "[#{part.bytesize} bytes]" : part
         else part
         end

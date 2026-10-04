@@ -78,4 +78,19 @@ describe Platform do
       expect(Platform::DEFAULT_GROUP).to eq("users")
     end
   end
+
+  describe ".set_hostname!" do
+    it "turns a server name into a hostname and sets it through the root helper" do
+      { "My NAS" => "my-nas", "  Bob's NAS! " => "bob-s-nas", "amahi-kai" => "amahi-kai" }.each do |name, hostname|
+        Privileged.reset!
+        expect(Platform.set_hostname!(name)).to be true
+        expect(Privileged.calls).to eq([['network.set_hostname', { hostname: hostname }]])
+      end
+    end
+
+    it "returns false when the helper refuses" do
+      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('network.set_hostname', 'refused'))
+      expect(Platform.set_hostname!("!!!")).to be false
+    end
+  end
 end

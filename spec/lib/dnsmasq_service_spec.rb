@@ -1,10 +1,6 @@
 require 'rails_helper'
 
 RSpec.describe DnsmasqService do
-  before do
-    allow(Shell).to receive(:run).and_return(true)
-  end
-
   describe '.installed?' do
     it 'returns true when dnsmasq binary exists' do
       allow(File).to receive(:exist?).with('/usr/sbin/dnsmasq').and_return(true)
@@ -37,93 +33,93 @@ RSpec.describe DnsmasqService do
   end
 
   describe '.restart!' do
-    it 'runs systemctl restart' do
-      described_class.restart!
-      expect(Shell).to have_received(:run).with('systemctl restart dnsmasq.service')
+    it 'restarts dnsmasq through the root helper when it is running' do
+      allow(described_class).to receive(:running?).and_return(true)
+      expect(described_class.restart!).to be true
+      expect(Privileged.calls).to eq([['services.restart', { service: 'dnsmasq' }]])
+    end
+
+    it 'does nothing when dnsmasq is not running' do
+      allow(described_class).to receive(:running?).and_return(false)
+      expect(described_class.restart!).to be true
+      expect(Privileged.calls).to be_empty
+    end
+
+    it 'reports a failure instead of raising' do
+      allow(described_class).to receive(:running?).and_return(true)
+      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('services.restart', 'exit 1'))
+      expect(described_class.restart!).to be false
     end
   end
 
   describe '.start!' do
-    it 'enables and starts the service' do
+    it 'starts dnsmasq now and at boot' do
       described_class.start!
-      expect(Shell).to have_received(:run).with('systemctl enable dnsmasq.service 2>/dev/null')
-      expect(Shell).to have_received(:run).with('systemctl start dnsmasq.service 2>/dev/null')
+      expect(Privileged.calls).to eq([['services.enable', { service: 'dnsmasq' }]])
     end
   end
 
   describe '.stop!' do
-    it 'stops and disables the service' do
+    it 'stops dnsmasq now and at boot' do
       described_class.stop!
-      expect(Shell).to have_received(:run).with('systemctl stop dnsmasq.service 2>/dev/null')
-      expect(Shell).to have_received(:run).with('systemctl disable dnsmasq.service 2>/dev/null')
+      expect(Privileged.calls).to eq([['services.disable', { service: 'dnsmasq' }]])
     end
   end
 
   describe '.write_config!' do
-    let(:staged_path) { File.join(DnsmasqService::STAGING_DIR, 'dnsmasq-amahi.conf') }
+    before { allow(described_class).to receive(:running?).and_return(false) }
 
-    before do
-      allow(FileUtils).to receive(:mkdir_p)
-      allow(File).to receive(:write).and_call_original
-      allow(File).to receive(:write).with(staged_path, anything)
-      allow(described_class).to receive(:running?).and_return(false)
+    def written
+      Privileged.calls.find { |op, _| op == 'network.write_dnsmasq_config' }&.last&.fetch(:content)
     end
 
     it 'writes DHCP config when dhcp_enabled' do
-      config_content = nil
-      allow(File).to receive(:write).with(staged_path, anything) do |_, content|
-        config_content = content
-      end
-
       described_class.write_config!(
         net: '192.168.1', dyn_lo: 100, dyn_hi: 200,
         gateway: '1', lease_time: 86400, domain: 'home',
         dhcp_enabled: true, dns_enabled: false
       )
 
-      expect(config_content).to include('dhcp-range=192.168.1.100,192.168.1.200,86400s')
-      expect(config_content).to include('dhcp-option=option:router,192.168.1.1')
-      expect(config_content).to include('dhcp-authoritative')
-      expect(config_content).not_to include('local=/home/')
+      expect(written).to include('dhcp-range=192.168.1.100,192.168.1.200,86400s')
+      expect(written).to include('dhcp-option=option:router,192.168.1.1')
+      expect(written).to include('dhcp-authoritative')
+      expect(written).not_to include('local=/home/')
     end
 
     it 'writes DNS config when dns_enabled' do
-      config_content = nil
-      allow(File).to receive(:write).with(staged_path, anything) do |_, content|
-        config_content = content
-      end
-
       described_class.write_config!(dns_enabled: true, domain: 'mynet')
-      expect(config_content).to include('local=/mynet/')
-      expect(config_content).to include('expand-hosts')
-      expect(config_content).to include('domain=mynet')
+      expect(written).to include('local=/mynet/')
+      expect(written).to include('expand-hosts')
+      expect(written).to include('domain=mynet')
     end
 
     it 'always includes bind-interfaces and except-interface' do
-      config_content = nil
-      allow(File).to receive(:write).with(staged_path, anything) do |_, content|
-        config_content = content
-      end
-
       described_class.write_config!
-      expect(config_content).to include('bind-interfaces')
-      expect(config_content).to include('except-interface=lo')
+      expect(written).to include('bind-interfaces')
+      expect(written).to include('except-interface=lo')
     end
 
-    it 'copies staged file to config path' do
-      described_class.write_config!
-      expect(Shell).to have_received(:run).with("cp #{staged_path} #{DnsmasqService::CONFIG_PATH}")
+    it 'writes only lines the root helper accepts' do
+      described_class.write_config!(net: '10.0.0', dyn_lo: 50, dyn_hi: 99, gateway: '254', lease_time: 600,
+                                    domain: 'home.lan', dhcp_enabled: true, dns_enabled: true)
+      Privileged.operations # loads libexec/amahi-helper
+      expect { AmahiHelper.dnsmasq_conf(written, AmahiHelper::DNSMASQ_LINES) }.not_to raise_error
     end
 
     it 'restarts if running' do
       allow(described_class).to receive(:running?).and_return(true)
       described_class.write_config!
-      expect(Shell).to have_received(:run).with('systemctl restart dnsmasq.service')
+      expect(Privileged.calls.map(&:first)).to eq(%w[network.write_dnsmasq_config services.restart])
     end
 
     it 'does not restart if not running' do
       described_class.write_config!
-      expect(Shell).not_to have_received(:run).with('systemctl restart dnsmasq.service')
+      expect(Privileged.calls.map(&:first)).to eq(%w[network.write_dnsmasq_config])
+    end
+
+    it "raises the helper's reason when the config is refused" do
+      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('network.write_dnsmasq_config', 'refused'))
+      expect { described_class.write_config! }.to raise_error(Privileged::Error, 'refused')
     end
   end
 end

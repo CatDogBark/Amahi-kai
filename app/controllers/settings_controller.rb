@@ -70,13 +70,19 @@ class SettingsController < ApplicationController
   end
 
   def reboot
-    Platform.reboot!
-    render plain: t('rebooting')
+    if Platform.reboot!
+      render plain: t('rebooting')
+    else
+      render plain: 'Reboot failed (details in the Amahi-kai log)', status: :internal_server_error
+    end
   end
 
   def poweroff
-    Platform.poweroff!
-    render plain: t('powering_off')
+    if Platform.poweroff!
+      render plain: t('powering_off')
+    else
+      render plain: 'Power off failed (details in the Amahi-kai log)', status: :internal_server_error
+    end
   end
 
   # Start, stop or restart a service on Settings → Servers. Only the actions

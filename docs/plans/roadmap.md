@@ -1,8 +1,10 @@
 # Fix plan and roadmap
 
-Status as of 2026-10-03. Each phase came from a full code review (October 2026; the detailed
+Status as of 2026-10-04. Each phase came from a full code review (October 2026; the detailed
 review is a Claude Doc Troy owns, linked from `CLAUDE.md`). Every PR below was deployed with
-System Update and checked on the NAS before the next one started.
+System Update and checked on the NAS, with one exception: from #21 to #24 System Update stopped
+at its migration step (json 3 broke Sprockets 4.2, fixed in #25) and the old app kept running,
+so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 
 ## Done
 
@@ -15,6 +17,8 @@ System Update and checked on the NAS before the next one started.
 | 3. Servers tab | Settings → Servers lists services live from systemd (`lib/system_services.rb`) with Start/Stop/Restart | #20 |
 | 3. J. Rails 8.1.4 | `load_defaults 8.1`, 13 gems with advisories updated, bundle-audit blocking | #21 |
 | 3. K. Dead code | PDC mode, printer shares, 8 legacy tables, the unused Docker API wrapper and gems, stale stubs and files | #22 |
+| 3. L. Privileged helper, part 1 | `libexec/amahi-helper`: users, Samba config and share folders, validated and logged; web users get no shell; 34 sudo rules gone | #24 |
+| 3. Fix | Sprockets 4.3: production boots with compiled assets again (System Update had stopped at migrations since #21) | #25 |
 
 ## Next: Phase 3
 
@@ -22,18 +26,22 @@ Decisions already made: Ruby stays on Ubuntu 24.04's patched 3.2; `main` stays t
 shares are tested on real drives, then tagged releases and an updater change; the codebase
 becomes root-owned (in N); Docker app work moves to Phase 4.
 
-- [ ] **L. Privileged helper, part 1**: users, Samba config and share folders. Built; waiting for
-  the NAS check. Design, operations and Troy's decisions in
-  [`privileged-helper.md`](privileged-helper.md).
-- [ ] **M. Privileged helper, part 2**: services, disks and fstab, hostname and dnsmasq,
-  Cloudflare tunnel, Tailscale, Greyhole, package installs, reboot and power off.
+- [ ] **M. Privileged helper, part 2**, in three PRs (Troy, 2026-10-04); design in
+  [`privileged-helper.md`](privileged-helper.md):
+  - [ ] **M1.** Settings → Servers, reboot and power off, hostname, dnsmasq and DNS aliases,
+    swap. Built; waiting for the NAS check.
+  - [ ] **M2.** Disks and fstab (keeping the PR #13 rules exactly), Greyhole config, service and
+    install (one install path instead of three).
+  - [ ] **M3.** Cloudflare Tunnel, Tailscale (its apt repository instead of a downloaded install
+    script run as root), package installs from a fixed list, and the security audit's fixes,
+    together with P below so that code is reworked once.
 - [ ] **N. Root-owned install**: sudoers down to the helper, the updater and Docker;
   `/opt/amahi-kai` owned by root; `amahi-update` runs Rails tasks (`bundle`, migrations, asset
   build) as `amahi`. Rewrite `docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`, which is out of
   date, to describe the helper.
 - [ ] **O. Update rollback**: keep the previous release; if migrations, the asset build or the
   health check fail, switch back and restart.
-- [ ] **P. Security audit fixes** (`lib/security_audit.rb`): read effective SSH settings with
+- [ ] **P. Security audit fixes** (with M3; `lib/security_audit.rb`): read effective SSH settings with
   `sshd -T` (drop-ins in `sshd_config.d` win over `sshd_config`); warn that Docker-published ports
   bypass UFW; make the "tunnel blocked until the audit passes" rule a server-side check, not just
   a hidden button.
@@ -49,8 +57,13 @@ touches the same code.
   complete until it's changed.
 - The per-IP login throttle (`config/initializers/rack_attack.rb`) trusts forwarded addresses from
   private ranges, so it's weaker on the LAN than it looks. The per-username limit holds.
-- Several features stage files at fixed `/tmp` paths before a root copy. The helper (L/M) should
-  write files itself instead.
+- Several features stage files at fixed `/tmp` paths before a root copy. Samba (L) and dnsmasq
+  (M1) no longer do: the helper writes the files. Greyhole, the tunnel and the Docker app
+  installer still do (M2, M3).
+- `UsersController#create` answers a JSON request with a template that doesn't exist (500). The
+  Users page posts the form as HTML, so only API-style callers hit it.
+- Static DHCP hosts (Network → Hosts) are saved and restart dnsmasq, but nothing writes them into
+  dnsmasq's config (no `dhcp-host` lines), so they have no effect.
 - Re-running the setup wizard's storage step clears the whole pool list
   (`lib/setup_service.rb`, `DiskPoolPartition.destroy_all`).
 - Duplicates: Greyhole install exists three times (`Greyhole.install!`, `DiskService`,

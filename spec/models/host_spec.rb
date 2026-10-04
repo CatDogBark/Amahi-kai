@@ -142,4 +142,13 @@ describe Host do
       host.destroy
     end
   end
+
+  describe "dnsmasq" do
+    it "restarts dnsmasq (if it's running) after a change" do
+      allow_any_instance_of(Host).to receive(:restart).and_call_original
+      allow(DnsmasqService).to receive(:restart!)
+      Host.new.send(:restart)
+      expect(DnsmasqService).to have_received(:restart!)
+    end
+  end
 end

@@ -32,19 +32,33 @@ RSpec.describe "SettingsController more", type: :request do
 
   describe "POST /settings/reboot" do
     it "calls Platform.reboot! and returns text" do
-      allow(Platform).to receive(:reboot!)
+      allow(Platform).to receive(:reboot!).and_return(true)
       post '/settings/reboot'
       expect(Platform).to have_received(:reboot!)
       expect(response).to have_http_status(:ok)
+    end
+
+    it "says so when the reboot fails" do
+      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('system.reboot', 'exit 1'))
+      post '/settings/reboot'
+      expect(response).to have_http_status(:internal_server_error)
+      expect(response.body).to include('Reboot failed')
     end
   end
 
   describe "POST /settings/poweroff" do
     it "calls Platform.poweroff! and returns text" do
-      allow(Platform).to receive(:poweroff!)
+      allow(Platform).to receive(:poweroff!).and_return(true)
       post '/settings/poweroff'
       expect(Platform).to have_received(:poweroff!)
       expect(response).to have_http_status(:ok)
+    end
+
+    it "says so when power off fails" do
+      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('system.poweroff', 'exit 1'))
+      post '/settings/poweroff'
+      expect(response).to have_http_status(:internal_server_error)
+      expect(response.body).to include('Power off failed')
     end
   end
 
@@ -142,20 +156,19 @@ RSpec.describe "SettingsController more", type: :request do
     before do
       allow(SystemServices).to receive(:find).and_return(nil)
       allow(SystemServices).to receive(:find).with('smbd').and_return(samba)
-      allow(Shell).to receive(:run).and_return(true)
     end
 
     %w[start stop restart].each do |verb|
-      it "runs systemctl #{verb} through sudo's exact unit name" do
+      it "#{verb}s the service through the root helper" do
         post "/settings/servers/smbd/#{verb}"
-        expect(Shell).to have_received(:run).with("systemctl #{verb} smbd.service")
+        expect(Privileged.calls).to eq([["services.#{verb}", { service: 'smbd' }]])
         expect(response).to redirect_to('/settings/servers')
         expect(flash[:notice]).to include('Samba')
       end
     end
 
     it "reports a failed command" do
-      allow(Shell).to receive(:run).and_return(false)
+      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('services.restart', 'exit 1'))
       post "/settings/servers/smbd/restart"
       expect(flash[:error]).to include('failed')
     end
@@ -165,13 +178,13 @@ RSpec.describe "SettingsController more", type: :request do
       allow(SystemServices).to receive(:find).with('mariadb').and_return(mariadb)
       post "/settings/servers/mariadb/stop"
       expect(response).to have_http_status(:not_found)
-      expect(Shell).not_to have_received(:run)
+      expect(Privileged.calls).to be_empty
     end
 
     it "refuses unknown services" do
       post "/settings/servers/sshd/stop"
       expect(response).to have_http_status(:not_found)
-      expect(Shell).not_to have_received(:run)
+      expect(Privileged.calls).to be_empty
     end
 
     it "has no route for other verbs" do

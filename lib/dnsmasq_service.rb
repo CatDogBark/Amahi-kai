@@ -1,11 +1,11 @@
 # Manages dnsmasq DHCP/DNS service lifecycle and configuration.
 # Extracted from NetworkController to keep Shell.run out of controllers.
-
-require 'shell'
+#
+# The root helper writes the config (network.write_dnsmasq_config, only lines this
+# module generates) and starts, stops and restarts the service (services.*).
 
 module DnsmasqService
   CONFIG_PATH = '/etc/dnsmasq.d/amahi.conf'
-  STAGING_DIR = '/tmp/amahi-staging'
 
   class << self
     def installed?
@@ -16,18 +16,21 @@ module DnsmasqService
       installed? && `systemctl is-active dnsmasq 2>/dev/null`.strip == 'active'
     end
 
+    # Restarts dnsmasq so it reads new settings; does nothing if it isn't running.
+    # Returns true, or false with the reason logged.
     def restart!
-      Shell.run("systemctl restart dnsmasq.service")
+      return true unless running?
+      privileged('services.restart')
     end
 
+    # Starts dnsmasq now and at boot.
     def start!
-      Shell.run("systemctl enable dnsmasq.service 2>/dev/null")
-      Shell.run("systemctl start dnsmasq.service 2>/dev/null")
+      privileged('services.enable')
     end
 
+    # Stops dnsmasq now and at boot.
     def stop!
-      Shell.run("systemctl stop dnsmasq.service 2>/dev/null")
-      Shell.run("systemctl disable dnsmasq.service 2>/dev/null")
+      privileged('services.disable')
     end
 
     # Write dnsmasq config and restart if running.
@@ -63,12 +66,19 @@ module DnsmasqService
       config_lines << "bind-interfaces"
       config_lines << "except-interface=lo"
 
-      FileUtils.mkdir_p(STAGING_DIR)
-      staged = File.join(STAGING_DIR, 'dnsmasq-amahi.conf')
-      File.write(staged, config_lines.join("\n") + "\n")
-      Shell.run("cp #{staged} #{CONFIG_PATH}")
+      # Raises Privileged::Error with the reason if the helper refuses or fails.
+      Privileged.call('network.write_dnsmasq_config', content: config_lines.join("\n") + "\n")
+      restart!
+    end
 
-      restart! if running?
+    private
+
+    def privileged(operation)
+      Privileged.call(operation, service: 'dnsmasq')
+      true
+    rescue Privileged::Error => e
+      Rails.logger.error("DnsmasqService: #{operation} failed: #{e.message}")
+      false
     end
   end
 end
