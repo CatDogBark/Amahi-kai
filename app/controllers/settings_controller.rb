@@ -15,6 +15,7 @@
 # team at http://www.amahi.org/ under "Contact Us."
 
 require 'shell'
+require 'open3'
 
 class SettingsController < ApplicationController
   include SseStreaming
@@ -119,33 +120,84 @@ class SettingsController < ApplicationController
     redirect_to settings_themes_path
   end
 
+  # System Update runs as its own job (amahi-kai-update.service, started by the root
+  # helper), so it outlives the restart of this app and can roll back. The page starts it
+  # here, then follows its log with update_system_stream.
+  UPDATE_LOG = '/var/log/amahi-kai/update.log'
+  UPDATE_JOB = 'amahi-kai-update.service'
+  UPDATE_STREAM_LIMIT = 70.minutes
+
   def update_system
-    redirect_to settings_system_status_path
+    error = start_update_job
+    respond_to do |format|
+      format.json do
+        if error
+          render json: { status: :error, error: error }, status: :unprocessable_entity
+        else
+          render json: { status: :ok }
+        end
+      end
+      format.html { redirect_to settings_system_status_path, (error ? :alert : :notice) => error || 'System Update started' }
+    end
   end
 
+  # The update's log from line +from+ on, until the job ends. The app restarts during an
+  # update, which ends this stream; the page reconnects with the number of lines it has.
   def update_system_stream
+    from = params[:from].to_i.clamp(0, 1_000_000)
     stream_sse do |sse|
-      sse.emit("Starting system update...")
-
-      unless Rails.env.production?
-        ["Pulling latest code...", "  Already up to date.",
-         "Installing dependencies...", "  Bundle complete!",
-         "Running database migrations...", "  No pending migrations.",
-         "Precompiling assets...", "  Assets precompiled.",
-         "Fixing file ownership...", "Restarting Amahi-kai...",
-         "✓ Amahi-kai updated and running!"].each do |line|
-          sleep(0.3)
-          sse.emit(line)
-        end
-        sse.done
+      if Rails.env.production?
+        follow_update_log(sse, from)
       else
-        success = sse.stream_command("sudo /opt/amahi-kai/bin/amahi-update --stream 2>&1")
-        sse.done(success ? "success" : "error")
+        simulate_update(sse, from)
       end
     end
   end
 
   private
+
+  # nil if the job started (or was already running), else why not.
+  def start_update_job
+    return nil unless Rails.env.production?
+    Privileged.call('system.update')
+    nil
+  rescue Privileged::Error => e
+    e.message
+  end
+
+  def follow_update_log(sse, from)
+    sent = from
+    deadline = Time.current + UPDATE_STREAM_LIMIT
+    loop do
+      running = update_running? # before reading, so the last lines are never missed
+      lines = File.exist?(UPDATE_LOG) ? File.readlines(UPDATE_LOG, chomp: true) : []
+      lines.drop(sent).each { |line| sse.emit(line.scrub) }
+      sent = [sent, lines.size].max
+      return sse.done(lines.last.to_s.start_with?('✓') ? 'success' : 'error') unless running
+      return sse.done('error') if Time.current > deadline
+      sleep 0.5
+    end
+  end
+
+  def update_running?
+    out, _err, _status = Open3.capture3('systemctl', 'is-active', UPDATE_JOB)
+    %w[active activating reloading].include?(out.strip)
+  rescue SystemCallError
+    false
+  end
+
+  def simulate_update(sse, from)
+    lines = ["Setting file ownership...", "Pulling latest code...", "  Already up to date.",
+             "Installing dependencies...", "  Bundle complete!",
+             "Backing up the database...", "Running database migrations...",
+             "Precompiling assets...", "Restarting Amahi-kai...",
+             "✓ Amahi-kai updated and running!"]
+    lines.drop(from).each do |line|
+      sleep(0.3)
+      sse.emit(line)
+    end
+    sse.done
+  end
 
   def gather_system_info
     hostname = `hostname`.strip rescue 'unknown'

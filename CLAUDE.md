@@ -6,8 +6,8 @@ over plain HTTP, through a Cloudflare Tunnel, and through Tailscale. Troy owns t
 (`CatDogBark/Amahi-kai`, **public**) and the NAS.
 
 Current work: Phase 3 of a code review fix plan. Read **`docs/plans/roadmap.md`** first, then the
-plan for the PR you're on (**`docs/plans/privileged-helper.md`**: L and M (M1–M3, with P) are
-done; N, the root-owned install, is built). The privilege model is in
+plan for the PR you're on (**`docs/plans/privileged-helper.md`**: L, M (M1–M3, with P) and N
+are done; O, update rollback, is built). The privilege model is in
 `docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`.
 
 ## Workflow
@@ -54,15 +54,20 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
   (`*_stream` actions) prove they come from an Amahi page with the CSRF token in the URL
   (`withStreamToken` in `app/assets/javascripts/stream_token.js`). A stream change can break
   System Update itself.
-- **A failed System Update leaves the old app running**, so the web UI looks fine. From #21 to #24
-  every update stopped at "Running database migrations" and it went unnoticed for four PRs. After
-  an update, check its last line ("✓ Amahi-kai updated and running!") and that System Status shows
-  Amahi-kai restarted. Production reads the compiled-assets manifest at every boot, which CI never
-  does; `spec/lib/assets_manifest_spec.rb` covers it.
+- **A failed System Update rolls back** to the commit that was running (since O; from #21 to #24
+  failures went unnoticed for four PRs). After an update, check its last line: "✓ Amahi-kai
+  updated and running!", or "✗ Update failed at: <step>. Rolled back to <commit>". Production
+  reads the compiled-assets manifest at every boot, which CI never does;
+  `spec/lib/assets_manifest_spec.rb` covers it.
+- **Migrations must work with the previous version's code**: rollback puts the code back but not
+  the database (it's dumped to `/var/lib/amahi-kai/backups` first). Add columns and tables;
+  don't rename or drop in the same PR that stops using them.
 - **The update that deploys a change runs the old code.** `bin/amahi-update` re-execs itself after
-  `git pull` (bash would otherwise keep running the old copy). It runs inside `amahi-kai.service`
-  when started from the web UI, so `systemctl restart amahi-kai` must stay its last step. If System
-  Update breaks, Troy runs `sudo /opt/amahi-kai/bin/amahi-update` over SSH.
+  `git pull` (bash would otherwise keep running the old copy) and passes the commit to roll back
+  to. The web UI starts it as its own job (`amahi-kai-update.service`, via the helper's
+  `system.update`) and follows `/var/log/amahi-kai/update.log`, reconnecting through the app's
+  restart. Run inside `amahi-kai.service` (the web UI before O), it can't check the restarted app.
+  If System Update breaks, Troy runs `sudo /opt/amahi-kai/bin/amahi-update` over SSH.
 - **Root access goes through the helper.** User accounts, Samba's files, share folders, Settings →
   Servers, the hostname, dnsmasq, swap, reboot/power off, data drives (format, mount, fstab),
   Greyhole, package installs (pinned apt repositories, a fixed package list), the Cloudflare

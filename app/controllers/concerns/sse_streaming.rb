@@ -96,13 +96,5 @@ module SseStreaming
     def error(text)
       emit(text)
     end
-
-    # Stream output from a shell command line by line.
-    def stream_command(cmd)
-      IO.popen(cmd) do |io|
-        io.each_line { |line| emit("  #{line.chomp}") }
-      end
-      $?.success?
-    end
   end
 end

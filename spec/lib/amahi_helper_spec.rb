@@ -405,6 +405,16 @@ RSpec.describe 'AmahiHelper' do
   end
 
   describe 'system' do
+    it "starts System Update's job, once it is installed" do
+      Tempfile.create('unit') do |unit|
+        stub_const('AmahiHelper::UPDATE_UNIT', unit.path)
+        expect(steps('system.update', {})).to eq([%w[/usr/bin/systemctl start amahi-kai-update.service]])
+      end
+      stub_const('AmahiHelper::UPDATE_UNIT', '/nonexistent/amahi-kai-update.service')
+      expect(refusal('system.update', {})).to eq("System Update's job isn't installed yet")
+      expect(refusal('system.update', { 'branch' => 'x' })).to eq('unexpected argument branch')
+    end
+
     it 'reboots and powers off through systemd' do
       expect(steps('system.reboot', {})).to eq([%w[/usr/bin/systemctl reboot]])
       expect(steps('system.poweroff', {})).to eq([%w[/usr/bin/systemctl poweroff]])
