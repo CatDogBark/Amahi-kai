@@ -1,25 +1,6 @@
 {
   "ignored_warnings": [
     {
-      "warning_type": "Unmaintained Dependency",
-      "warning_code": 122,
-      "fingerprint": "21ab0fe00fdd5899ffc405cff75aadb91b805ee996a614f7e27b08a287e9062d",
-      "check_name": "EOLRails",
-      "message": "Support for Rails 8.0.4 ends on 2026-11-07",
-      "file": "Gemfile.lock",
-      "line": 209,
-      "link": "https://brakemanscanner.org/docs/warning_types/unmaintained_dependency/",
-      "code": null,
-      "render_path": null,
-      "location": null,
-      "user_input": null,
-      "confidence": "Weak",
-      "cwe_id": [
-        1104
-      ],
-      "note": "Rails 8.0 security support ends 2026-11-07. The Rails 8.1 upgrade is the next Phase 3 PR; delete this entry with it."
-    },
-    {
       "warning_type": "File Access",
       "warning_code": 16,
       "fingerprint": "aa7eb67366c8441999bbc0718993768bd750e2021bf6387526f96e98dba5f0ef",

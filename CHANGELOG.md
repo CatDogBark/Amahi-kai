@@ -65,7 +65,8 @@ All notable changes to Amahi-kai are documented here.
 - **Idempotent Migrations** — `column_exists?` guards for MariaDB (no transactional DDL).
 - **Icon System** — 34 vendored Lucide SVGs via `IconHelper`. Zero glyphicons/bootstrap-icons remaining.
 - **CI Pipeline** — 5 parallel jobs (models, requests, lib, features, lint+security). RuboCop + Brakeman. SimpleCov coverage report with group breakdown.
-- **CI lint and security checks block merges.** RuboCop and Brakeman used to run with failures ignored. Tool versions are pinned; existing RuboCop offenses are recorded in `.rubocop_todo.yml` so only new ones fail, and the Brakeman warnings we reviewed are in `config/brakeman.ignore`, each with a note. A new job runs the model, service, helper and request specs on MariaDB, production's database. `bundle-audit` reports gem advisories (blocking after the Rails 8.1 upgrade).
+- **Rails 8.1.4** (Rails 8.0's security support ends 2026-11-07), with Rails 8.1's framework defaults. Ruby stays on Ubuntu 24.04's patched 3.2. Gems with published advisories are updated to fixed versions (rack, Puma 7.2.1, Nokogiri, Loofah, rails-html-sanitizer, concurrent-ruby, erb, addressable, excon, bcrypt, crass, sqlite3), and CI's `bundle-audit` check now blocks merges.
+- **CI lint and security checks block merges.** RuboCop and Brakeman used to run with failures ignored. Tool versions are pinned; existing RuboCop offenses are recorded in `.rubocop_todo.yml` so only new ones fail, and the Brakeman warnings we reviewed are in `config/brakeman.ignore`, each with a note. A new job runs the model, service, helper and request specs on MariaDB, production's database. `bundle-audit` fails on gem advisories.
 
 ### 📊 Test Coverage
 
