@@ -6,8 +6,8 @@ over plain HTTP, through a Cloudflare Tunnel, and through Tailscale. Troy owns t
 (`CatDogBark/Amahi-kai`, **public**) and the NAS.
 
 Current work: Phase 3 of a code review fix plan. Read **`docs/plans/roadmap.md`** first, then the
-plan for the PR you're on (**`docs/plans/privileged-helper.md`**: L, M1 and M2 are done; M3 is
-built).
+plan for the PR you're on (**`docs/plans/privileged-helper.md`**: L and M (M1–M3, with P) are
+done; N, the root-owned install, is next).
 
 ## Workflow
 

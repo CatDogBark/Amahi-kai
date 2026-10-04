@@ -36,15 +36,15 @@ class RemoteAccessController < ApplicationController
   end
 
   def start_tunnel
-    tunnel_action(CloudflareService.start!, 'start')
+    tunnel_action(CloudflareService.start!, 'start', 'Tunnel started')
   end
 
   def restart_tunnel
-    tunnel_action(CloudflareService.restart!, 'restart')
+    tunnel_action(CloudflareService.restart!, 'restart', 'Tunnel restarted')
   end
 
   def stop_tunnel
-    tunnel_action(CloudflareService.stop!, 'stop')
+    tunnel_action(CloudflareService.stop!, 'stop', 'Tunnel stopped')
   end
 
   def install_cloudflared_stream
@@ -258,8 +258,10 @@ class RemoteAccessController < ApplicationController
     "Fix the security audit's blockers first (Network → Security): #{blockers.map(&:description).join('; ')}"
   end
 
-  def tunnel_action(ok, action)
+  # The page reloads after the request; the flash shows the result there as a toast.
+  def tunnel_action(ok, action, done)
     if ok
+      flash[:notice] = done
       render json: { status: :ok }
     else
       render json: { status: :error, error: "The tunnel didn't #{action}; see the log for details" }, status: :unprocessable_entity

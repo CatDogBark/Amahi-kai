@@ -102,14 +102,14 @@
 
         <div class="d-flex gap-2">
           <% if @tunnel_status[:running] %>
-            <button type="button" class="btn btn-outline-danger" onclick="tunnelAction('stop')">
+            <button type="button" class="btn btn-outline-danger" onclick="tunnelAction('stop', this)">
               Disconnect
             </button>
-            <button type="button" class="btn btn-outline-primary" onclick="tunnelAction('restart')">
+            <button type="button" class="btn btn-outline-primary" onclick="tunnelAction('restart', this)">
               Restart
             </button>
           <% else %>
-            <button type="button" class="btn btn-success" onclick="tunnelAction('start')">
+            <button type="button" class="btn btn-success" onclick="tunnelAction('start', this)">
               Connect
             </button>
           <% end %>
@@ -404,12 +404,18 @@ function tailscaleAction(action) {
   }).then(function() { window.location.reload(); });
 }
 
-function tunnelAction(action) {
+function tunnelAction(action, btn) {
   var urls = {
     start: '<%= remote_access_start_tunnel_path %>',
     stop: '<%= remote_access_stop_tunnel_path %>',
     restart: '<%= remote_access_restart_tunnel_path %>'
   };
+  var busy = { start: 'Connecting…', stop: 'Disconnecting…', restart: 'Restarting…' };
+  var label = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> ' + busy[action];
+  }
   fetch(urls[action], {
     method: 'POST',
     headers: {
@@ -422,6 +428,10 @@ function tunnelAction(action) {
       window.location.reload();
     });
   }).catch(function(err) {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = label;
+    }
     alert('Failed to ' + action + ' tunnel: ' + err.message);
   });
 }

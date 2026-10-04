@@ -75,10 +75,13 @@ RSpec.describe "RemoteAccess extended", type: :request do
   end
 
   describe "POST restart_tunnel" do
-    it "restarts the tunnel" do
+    it "restarts the tunnel and says so on the reloaded page" do
       post '/network/remote_access/restart_tunnel', as: :json
       expect(response.parsed_body['status']).to eq('ok')
       expect(CloudflareService).to have_received(:restart!)
+      expect(flash[:notice]).to eq('Tunnel restarted')
+      get '/network/remote_access'
+      expect(response.body).to include('Tunnel restarted')
     end
 
     it "reports a tunnel that didn't restart" do

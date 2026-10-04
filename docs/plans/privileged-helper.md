@@ -2,8 +2,8 @@
 
 Status: **PR L done** (#24, checked on the NAS 2026-10-04). **PR M** is split in three (Troy,
 2026-10-04): **M1 done** (#26: services, reboot/power off, hostname, dnsmasq, swap), **M2 done**
-(#27: data drives, Greyhole), **M3 built** (packages, tunnel, Tailscale, Docker install, security
-audit with PR P). Sudoers is now the helper, the updater and Docker; PR N is next.
+(#27: data drives, Greyhole), **M3 done** (#28: packages, tunnel, Tailscale, Docker install,
+security audit with PR P). Sudoers is now the helper, the updater and Docker; PR N is next.
 
 ## Why
 
@@ -204,7 +204,7 @@ Drives can't be tested until the NAS hardware arrives (VM 104's disks belong to 
 3. `sudo -l -U amahi | grep -cE 'mount|mkfs|fstab|greyhole|mysql'` prints `0`.
 4. `sudo /usr/local/sbin/amahi-helper --self-test` prints `ok: 30 operations`.
 
-## PR M3: packages, tunnel, Tailscale, security audit (built)
+## PR M3: packages, tunnel, Tailscale, security audit (done, #28)
 
 Every package install now goes through `packages.add_repository` and `packages.install`. The
 helper knows four apt repositories (Greyhole, Cloudflare, Tailscale, Docker), each with its key's
