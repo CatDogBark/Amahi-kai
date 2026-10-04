@@ -29,6 +29,7 @@ so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 | 3. Fix | The setup wizard can't finish while the seeded admin password still works | #34 |
 | 3. Fix | Drive temperatures through the helper; `smartctl`'s open-ended sudo rule removed (5 rules left: the helper and Docker's) | #35 |
 | 3. Fix | Update and install windows keep their size: a status bar with a timer and the result; System Update's button just reloads | #36 |
+| 3. Update check | The helper checks for an update every 6 hours (timer) and on Check now; System Status shows it, with Update now or Repair; an update with nothing new stops after the pull | #37 |
 
 ## Next: Phase 3
 

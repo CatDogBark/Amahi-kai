@@ -6,9 +6,12 @@ set -euo pipefail
 # fails, or the new version doesn't answer after the restart, it goes back to the commit
 # that was running.
 #
-# Usage: sudo /opt/amahi-kai/bin/amahi-update [--stream]
+# Usage: sudo /opt/amahi-kai/bin/amahi-update [--stream] [--repair]
 #
 # --stream: Output progress messages for SSE streaming (used by web UI)
+# --repair: Run every step even if the pull brings nothing new (to fix an install). Without
+#           it, an update with nothing new stops after the pull. The web UI's Repair asks the
+#           root helper, which leaves /run/amahi-kai-update.repair for this script instead.
 #
 # System Update in the web UI starts amahi-kai-update.service (the root helper's
 # system.update), which runs this script with --stream and writes its output to
@@ -31,11 +34,16 @@ APP_USER="${APP_USER:-amahi}"
 APP_GROUP="${APP_GROUP:-amahi}"
 BACKUP_DIR="${BACKUP_DIR:-/var/lib/amahi-kai/backups}"
 STREAM=false
+REPAIR=false
 ORIG_ARGS=("$@")
+REPAIR_FLAG=/run/amahi-kai-update.repair
 
-if [[ "${1:-}" == "--stream" ]]; then
-  STREAM=true
-fi
+for arg in "$@"; do
+  case "$arg" in
+    --stream) STREAM=true ;;
+    --repair) REPAIR=true ;;
+  esac
+done
 
 log() {
   if $STREAM; then
@@ -114,6 +122,13 @@ rollback() {
   error "Update failed at: $step. Rolled back to ${PREV:0:7}; Amahi-kai is running the version it was.${BACKUP_FILE:+ Database backup: $BACKUP_FILE}"
 }
 
+# Updates the status the web UI shows (Update available / Up to date). The helper's check
+# takes the update lock, so it's released first; the check never fails the update.
+refresh_update_status() {
+  exec 9>&-
+  /usr/local/sbin/amahi-helper system.check_update </dev/null >/dev/null 2>&1 || true
+}
+
 # A dump of the app's database, readable by root only; the newest 3 are kept.
 backup_database() {
   local name="${DATABASE_NAME:-amahi_production}"
@@ -136,9 +151,18 @@ fi
 
 cd "$APP_DIR"
 
-# One update at a time (the web UI's job, or one started from a terminal).
+# One update at a time (the web UI's job, or one started from a terminal). The check for
+# updates takes the same lock for its fetch (a minute at most), so wait that long for it.
 exec 9>/run/amahi-kai-update.lock
-flock -n 9 || error "Another update is already running."
+flock -w 90 9 || error "Another update is already running."
+
+# Repair from the web UI: the root helper left a flag. It's read once; a re-exec below
+# passes --repair on.
+if [[ -f "$REPAIR_FLAG" ]]; then
+  rm -f "$REPAIR_FLAG"
+  REPAIR=true
+  ORIG_ARGS+=(--repair)
+fi
 
 # Source env if available
 if [[ -f "$ENV_FILE" ]]; then
@@ -167,8 +191,9 @@ log "Pulling latest code..."
 SCRIPT_SUM_BEFORE=$(sha256sum < "$APP_DIR/bin/amahi-update")
 REPO_URL="https://github.com/CatDogBark/Amahi-kai.git"
 
+PULL_FAILED=false
 if [[ -d ".git" ]]; then
-  root_git -C "$APP_DIR" pull origin main 2>&1 || log "⚠ Git pull failed — using files on disk"
+  root_git -C "$APP_DIR" pull origin main 2>&1 || PULL_FAILED=true
 else
   # No .git — clone to temp and sync files over
   log "No git history found — cloning fresh..."
@@ -194,6 +219,16 @@ if [[ -z "${AMAHI_UPDATE_REEXEC:-}" && "$(sha256sum < "$APP_DIR/bin/amahi-update
 fi
 
 NEW=$(root_git -C "$APP_DIR" rev-parse HEAD 2>/dev/null || true)
+if $REPAIR; then
+  $PULL_FAILED && log "⚠ Git pull failed; repairing the version on disk"
+  log "Repairing ${NEW:0:7}: running every step again..."
+elif $PULL_FAILED; then
+  error "Couldn't get the latest code from GitHub (the git output is above). Nothing changed; Amahi-kai is still running ${PREV:0:7}."
+elif [[ -n "$PREV" && -n "$NEW" && "$NEW" == "$PREV" ]]; then
+  refresh_update_status
+  log "✓ Already up to date (${NEW:0:7}). Nothing to install."
+  exit 0
+fi
 if [[ -n "$PREV" && -n "$NEW" && "$NEW" != "$PREV" ]]; then
   log "Updating from ${PREV:0:7} to ${NEW:0:7}"
 fi
@@ -290,4 +325,5 @@ if in_app_service; then
   exit 0
 fi
 restart_app || rollback "Starting the new version" restarted
+refresh_update_status
 log "✓ Amahi-kai updated and running!"

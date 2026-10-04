@@ -38,6 +38,7 @@ class SettingsController < ApplicationController
     @managed_shares = Share.by_name rescue []
     @managed_aliases = DnsAlias.all rescue []
     @indexed_files_count = ShareFile.count rescue 0
+    @update = UpdateStatus.load
   end
 
   def servers
@@ -127,8 +128,17 @@ class SettingsController < ApplicationController
   UPDATE_JOB = 'amahi-kai-update.service'
   UPDATE_STREAM_LIMIT = 70.minutes
 
+  # "Check now" on System Status: the helper fetches main and rewrites the update status.
+  def check_updates
+    Privileged.call('system.check_update')
+    render json: { status: 'ok' }
+  rescue Privileged::Error => e
+    render json: { status: 'error', error: e.message }, status: :unprocessable_entity
+  end
+
+  # repair=1 runs every step even when there's nothing new (System Status's Repair).
   def update_system
-    error = start_update_job
+    error = start_update_job(repair: params[:repair] == '1')
     respond_to do |format|
       format.json do
         if error
@@ -157,9 +167,9 @@ class SettingsController < ApplicationController
   private
 
   # nil if the job started (or was already running), else why not.
-  def start_update_job
+  def start_update_job(repair: false)
     return nil unless Rails.env.production?
-    Privileged.call('system.update')
+    repair ? Privileged.call('system.update', repair: true) : Privileged.call('system.update')
     nil
   rescue Privileged::Error => e
     e.message

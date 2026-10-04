@@ -169,12 +169,15 @@ function startSystemUpdate(id, startUrl, streamUrl) {
   });
 }
 
+var terminalLastLines = {};
+
 function followSystemUpdate(id, url, from, retries) {
   var received = from;
   var source = new EventSource(withStreamToken(url + (url.indexOf('?') === -1 ? '?' : '&') + 'from=' + from));
   source.onmessage = function(e) {
     received++;
     retries = 0;
+    terminalLastLines[id] = e.data;
     setTerminalClockLabel(id, 'Updating…');
     appendTerminalLine(id, e.data);
   };
@@ -183,7 +186,8 @@ function followSystemUpdate(id, url, from, retries) {
   source.addEventListener('done', function(e) {
     source.close();
     if (e.data === 'success') {
-      finishTerminal(id, 'success', '✓ Updated', 'Reload page');
+      var current = (terminalLastLines[id] || '').indexOf('Already up to date') !== -1;
+      finishTerminal(id, 'success', current ? '✓ Already up to date' : '✓ Updated', 'Reload page');
     } else {
       finishTerminal(id, 'error', '✗ The update didn\'t finish; the log above says why', 'Reload page');
     }

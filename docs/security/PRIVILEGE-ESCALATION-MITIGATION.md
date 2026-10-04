@@ -53,7 +53,9 @@ so passwords never appear on a command line. Each operation:
 The areas it covers: Linux and Samba accounts, Samba's config, share folders, system services,
 reboot and power off, the hostname, dnsmasq, swap, data drives and fstab, Greyhole, package
 installs (from pinned apt repositories and a fixed package list), the Cloudflare Tunnel,
-Tailscale, and the security audit's fixes. `amahi-helper --list` prints the operations, and
+Tailscale, the security audit's fixes, drive temperatures, and System Update (starting it, or
+checking for an update: `git fetch` as root, written to `/var/lib/amahi-kai/update-status.json`,
+every 6 hours from `amahi-kai-update-check.timer`). `amahi-helper --list` prints the operations, and
 `--dry-run OPERATION` shows what a request would do without doing it.
 
 In Rails, `Privileged.call('users.create', login: 'ann', name: 'Ann')` runs an operation through
