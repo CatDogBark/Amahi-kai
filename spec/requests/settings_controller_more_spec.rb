@@ -132,21 +132,6 @@ RSpec.describe "SettingsController more", type: :request do
     end
   end
 
-  # --- Change language ---
-
-  describe "POST /settings/change_language" do
-    it "sets locale cookie for valid locale" do
-      post '/settings/change_language', params: { locale: 'en' }, as: :json
-      expect(response).to have_http_status(:ok)
-      expect(response.parsed_body['status']).to eq('ok')
-    end
-
-    it "still returns ok for invalid locale (no crash)" do
-      post '/settings/change_language', params: { locale: 'zz_invalid' }, as: :json
-      expect(response).to have_http_status(:ok)
-    end
-  end
-
   # --- Service actions (Settings → Servers) ---
 
   describe "POST /settings/servers/:key/:verb" do

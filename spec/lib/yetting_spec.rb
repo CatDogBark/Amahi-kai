@@ -10,8 +10,7 @@ RSpec.describe Yetting do
 
   describe "method-style access" do
     it "returns configured values" do
-      # locales_implemented should be in yetting.yml
-      expect(Yetting.locales_implemented).to be_an(Array)
+      expect(Yetting.default_theme).to eq('amahi-kai')
     end
 
     it "raises NoMethodError for unknown keys" do
@@ -21,7 +20,7 @@ RSpec.describe Yetting do
 
   describe ".respond_to_missing?" do
     it "responds to configured keys" do
-      expect(Yetting.respond_to?(:locales_implemented)).to be true
+      expect(Yetting.respond_to?(:default_theme)).to be true
     end
 
     it "does not respond to unknown keys" do

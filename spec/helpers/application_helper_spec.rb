@@ -46,17 +46,6 @@ RSpec.describe ApplicationHelper, type: :helper do
     end
   end
 
-  describe "#rtl?" do
-    it "returns false by default" do
-      helper.instance_variable_set(:@locale_direction, "ltr")
-      expect(helper.rtl?).to be false
-    end
-
-    it "returns true for rtl direction" do
-      helper.instance_variable_set(:@locale_direction, "rtl")
-      expect(helper.rtl?).to be true
-    end
-  end
 
   describe "#path2uri" do
     it "returns smb URI for Mac" do

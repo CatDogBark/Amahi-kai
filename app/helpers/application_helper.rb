@@ -26,10 +26,6 @@ module ApplicationHelper
     current_user && current_user.admin?
   end
 
-  def rtl?
-    @locale_direction == 'rtl'
-  end
-
   def theme
     @theme
   end

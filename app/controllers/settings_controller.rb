@@ -24,7 +24,6 @@ class SettingsController < ApplicationController
 
   def index
     @page_title = t 'settings'
-    @available_locales = locales_implemented
     @advanced_settings = Setting.where(:name=>'advanced').first
     @version = Platform.platform_versions
   end
@@ -48,15 +47,6 @@ class SettingsController < ApplicationController
     else
       @services = SystemServices.all(versions: true)
     end
-  end
-
-  def change_language
-    
-    l = params[:locale]
-    if params[:locale] && I18n.available_locales.include?(params[:locale].to_sym)
-      cookies['locale'] = { :value => params[:locale], :expires => 1.year.from_now }
-    end
-    render json: { status: 'ok' }
   end
 
   def toggle_setting

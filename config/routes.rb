@@ -68,7 +68,6 @@ Rails.application.routes.draw do
   scope '/settings', controller: 'settings', as: 'settings' do
     get '/', action: 'index', as: 'index'
     # Actions that change something are POST-only, so a link can't trigger them.
-    post 'change_language', action: 'change_language'
     post 'toggle_setting', action: 'toggle_setting'
     post 'reboot', action: 'reboot'
     post 'poweroff', action: 'poweroff'

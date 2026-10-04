@@ -28,18 +28,12 @@ describe "Settings Controller", type: :request do
       end
     end
 
-    describe "change_language" do
-      it "sets locale cookie for valid locale" do
-        post "/settings/change_language", params: { locale: "en" }, as: :json
-        expect(response).to have_http_status(:ok)
-        body = JSON.parse(response.body)
-        expect(body["status"]).to eq("ok")
-      end
-
-      it "handles invalid locale gracefully" do
-        post "/settings/change_language", params: { locale: "xx_invalid" }, as: :json
-        expect(response).to have_http_status(:ok)
-      end
+    # English only: no language picker.
+    it "serves pages in English, whatever language the browser asks for" do
+      get "/settings", headers: { 'HTTP_ACCEPT_LANGUAGE' => 'de-DE,de;q=0.9' }
+      expect(response.body).to include('<html lang="en">')
+      expect(response.body).not_to include('change_language')
+      expect(I18n.available_locales).to eq([:en])
     end
 
     describe "toggle_setting" do
