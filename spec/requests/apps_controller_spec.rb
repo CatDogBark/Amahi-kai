@@ -94,10 +94,13 @@ describe "Apps Controller", type: :request, integration: true do
         expect(response).to have_http_status(:ok)
       end
 
-      it "handles errors gracefully" do
+      # The action rescues a failing check itself; the spec used to pass only when another
+      # spec ran first.
+      it "shows Docker as not installed when checking it fails" do
         allow(DockerService).to receive(:installed?).and_raise(RuntimeError, "docker not found")
         get "/apps/docker_apps"
         expect(response).to have_http_status(:ok)
+        expect(response.body).to include('Install Docker')
       end
     end
 

@@ -99,7 +99,23 @@ RSpec.describe DnsmasqService do
       expect(written).to include('except-interface=lo')
     end
 
+    it 'gives each static host its address and name (Network → Hosts)' do
+      allow(DnsmasqService).to receive(:rewrite_config!)
+      Host.create!(name: 'Printer', mac: 'AA:BB:CC:DD:EE:01', address: '20')
+      described_class.write_config!(net: '10.0.0', dhcp_enabled: true)
+      expect(written).to include('dhcp-host=aa:bb:cc:dd:ee:01,10.0.0.20,printer')
+    end
+
+    it 'leaves static hosts out when DHCP is off' do
+      allow(DnsmasqService).to receive(:rewrite_config!)
+      Host.create!(name: 'printer', mac: 'aa:bb:cc:dd:ee:01', address: '20')
+      described_class.write_config!(dns_enabled: true)
+      expect(written).not_to include('dhcp-host')
+    end
+
     it 'writes only lines the root helper accepts' do
+      allow(DnsmasqService).to receive(:rewrite_config!)
+      Host.create!(name: 'nas-backup', mac: 'aa:bb:cc:dd:ee:02', address: '21')
       described_class.write_config!(net: '10.0.0', dyn_lo: 50, dyn_hi: 99, gateway: '254', lease_time: 600,
                                     domain: 'home.lan', dhcp_enabled: true, dns_enabled: true)
       Privileged.operations # loads libexec/amahi-helper
@@ -120,6 +136,27 @@ RSpec.describe DnsmasqService do
     it "raises the helper's reason when the config is refused" do
       allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('network.write_dnsmasq_config', 'refused'))
       expect { described_class.write_config! }.to raise_error(Privileged::Error, 'refused')
+    end
+  end
+
+  describe '.rewrite_config!' do
+    before { allow(described_class).to receive(:running?).and_return(false) }
+
+    it "does nothing when dnsmasq isn't installed" do
+      allow(described_class).to receive(:installed?).and_return(false)
+      expect(described_class.rewrite_config!).to be false
+      expect(Privileged.calls).to be_empty
+    end
+
+    it 'writes the config from the saved settings' do
+      allow(described_class).to receive(:installed?).and_return(true)
+      Setting.set('dnsmasq_dhcp', '1')
+      Setting.set('dnsmasq_dns', '0')
+      Setting.set('dyn_lo', '120')
+      expect(described_class.rewrite_config!).to be true
+      content = Privileged.calls.find { |op, _| op == 'network.write_dnsmasq_config' }.last[:content]
+      expect(content).to include("dhcp-range=#{Setting.get('net')}.120,")
+      expect(content).not_to include('expand-hosts')
     end
   end
 end

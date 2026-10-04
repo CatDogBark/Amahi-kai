@@ -235,32 +235,18 @@ class NetworkController < ApplicationController
   end
 
   def update_dnsmasq_config
-    net = Setting.get('net') || '192.168.1'
-
     Setting.set("dyn_lo", params[:dyn_lo], KIND) if params[:dyn_lo].present?
     Setting.set("dyn_hi", params[:dyn_hi], KIND) if params[:dyn_hi].present?
     Setting.set("lease_time", params[:lease_time], KIND) if params[:lease_time].present?
     Setting.set("gateway", params[:gateway], KIND) if params[:gateway].present?
 
-    dhcp_enabled = params[:dhcp_enabled] == '1'
-    dns_enabled = params[:dns_enabled] == '1'
-
-    dyn_lo = (params[:dyn_lo] || Setting.get("dyn_lo") || "100").to_i
-    dyn_hi = (params[:dyn_hi] || Setting.get("dyn_hi") || "254").to_i
-    gateway = params[:gateway] || Setting.get("gateway") || "1"
-    lease_time = (params[:lease_time] || Setting.get("lease_time") || "14400").to_i
+    # Saved, so the form shows what was chosen (it used to forget the checkboxes) and later
+    # rewrites (a static host added) keep them.
+    Setting.set('dnsmasq_dhcp', params[:dhcp_enabled] == '1' ? '1' : '0', KIND)
+    Setting.set('dnsmasq_dns', params[:dns_enabled] == '1' ? '1' : '0', KIND)
 
     begin
-      DnsmasqService.write_config!(
-        net: net,
-        dyn_lo: dyn_lo,
-        dyn_hi: dyn_hi,
-        gateway: gateway,
-        lease_time: lease_time,
-        domain: Setting.get('domain') || 'local',
-        dhcp_enabled: dhcp_enabled,
-        dns_enabled: dns_enabled
-      )
+      DnsmasqService.write_config!(DnsmasqService.settings_options)
       flash[:notice] = "Configuration saved"
       redirect_to network_gateway_path
     rescue Privileged::Error => e

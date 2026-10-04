@@ -164,10 +164,11 @@ describe "Setup Controller", type: :request do
         expect(DiskPoolPartition.pluck(:path)).to include("/mnt/data")
       end
 
-      it "clears existing pool partitions before adding new ones" do
+      # Re-running the step used to empty the pool list first.
+      it "keeps the drives already in the pool and doesn't add one twice" do
         DiskPoolPartition.create!(path: "/mnt/old", minimum_free: 10)
-        get setup_prepare_drives_stream_path, params: { drives: "/dev/sdb1" }, headers: same_origin
-        expect(DiskPoolPartition.pluck(:path)).to eq(["/mnt/data"])
+        2.times { get setup_prepare_drives_stream_path, params: { drives: "/dev/sdb1" }, headers: same_origin }
+        expect(DiskPoolPartition.order(:path).pluck(:path)).to eq(["/mnt/data", "/mnt/old"])
       end
     end
 

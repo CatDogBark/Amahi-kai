@@ -50,8 +50,7 @@ module SetupService
       sse.emit("Preparing #{selected_drives.size} drive#{'s' if selected_drives.size > 1}...")
       sse.emit("")
 
-      # Remove existing pool partitions
-      DiskPoolPartition.destroy_all
+      # Drives join the pool; ones already in it stay (re-running this step used to empty it).
       success = true
 
       selected_drives.each do |device_path|
@@ -86,7 +85,7 @@ module SetupService
           can_pool = supported_fs.include?(fs_after)
 
           if can_pool
-            DiskPoolPartition.create!(path: mount_point, minimum_free: 10)
+            DiskPoolPartition.find_or_create_by!(path: mount_point) { |p| p.minimum_free = 10 }
             sse.emit("  ✓ Added to storage pool")
           else
             create_standalone_share(mount_point, part[:fstype], sse)

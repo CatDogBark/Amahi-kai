@@ -21,6 +21,20 @@ describe "Network Controller", type: :request do
   describe "admin" do
     before { login_as_admin }
 
+    describe "PUT /network/update_dnsmasq_config" do
+      before { allow(DnsmasqService).to receive(:running?).and_return(false) }
+
+      it "saves the DHCP and DNS choices, so the form shows them next time" do
+        put "/network/update_dnsmasq_config", params: { dhcp_enabled: '1', dyn_lo: '120' }
+        expect(Setting.get('dnsmasq_dhcp')).to eq('1')
+        expect(Setting.get('dnsmasq_dns')).to eq('0')
+        content = Privileged.calls.find { |op, _| op == 'network.write_dnsmasq_config' }.last[:content]
+        expect(content).to include('dhcp-range=', '.120,')
+        expect(content).not_to include('expand-hosts')
+        expect(response).to redirect_to('/network/gateway')
+      end
+    end
+
     describe "GET /network/install_dnsmasq_stream in production" do
       before { allow(Rails.env).to receive(:production?).and_return(true) }
 

@@ -533,6 +533,7 @@ module AmahiHelper
     /\Adhcp-range=#{IPV4},#{IPV4},\d{1,7}s\z/,
     /\Adhcp-option=option:router,#{IPV4}\z/,
     /\Adhcp-authoritative\z/,
+    /\Adhcp-host=(?:[0-9a-f]{2}:){5}[0-9a-f]{2},#{IPV4},[a-z][a-z0-9-]{0,62}\z/,
     %r{\Alocal=/#{DOMAIN}/\z}i,
     /\Aexpand-hosts\z/,
     /\Adomain=#{DOMAIN}\z/i,

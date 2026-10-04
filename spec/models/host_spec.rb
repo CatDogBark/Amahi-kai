@@ -129,26 +129,27 @@ describe Host do
     expect(host).to be_valid
   end
 
+  it "refuses a name longer than a hostname label (63 characters)" do
+    expect(Host.new(name: "a" * 63, mac: "aa:bb:cc:dd:ee:01", address: "60")).to be_valid
+    expect(Host.new(name: "a" * 64, mac: "aa:bb:cc:dd:ee:02", address: "61")).not_to be_valid
+  end
+
   describe "callbacks" do
-    it "should call restart after save" do
-      host = Host.new(name: "cbhost", mac: "11:22:33:44:55:66", address: "50")
-      expect(host).to receive(:restart).at_least(:once)
-      host.save!
-    end
+    before { allow(DnsmasqService).to receive(:rewrite_config!) }
 
-    it "should call restart after destroy" do
-      host = Host.create!(name: "destroyhost", mac: "11:22:33:44:55:67", address: "51")
-      expect(host).to receive(:restart)
+    it "rewrites dnsmasq's config after each change" do
+      host = Host.create!(name: "cbhost", mac: "11:22:33:44:55:66", address: "50")
+      host.update!(address: "52")
       host.destroy
+      expect(DnsmasqService).to have_received(:rewrite_config!).exactly(3).times
+    end
+
+    it "keeps the host when the helper refuses the config, and logs why" do
+      allow(DnsmasqService).to receive(:rewrite_config!)
+        .and_raise(Privileged::Error.new('network.write_dnsmasq_config', 'refused'))
+      expect { Host.create!(name: "cbhost", mac: "11:22:33:44:55:66", address: "50") }.not_to raise_error
+      expect(Host.find_by(name: "cbhost")).to be_present
     end
   end
 
-  describe "dnsmasq" do
-    it "restarts dnsmasq (if it's running) after a change" do
-      allow_any_instance_of(Host).to receive(:restart).and_call_original
-      allow(DnsmasqService).to receive(:restart!)
-      Host.new.send(:restart)
-      expect(DnsmasqService).to have_received(:restart!)
-    end
-  end
 end
