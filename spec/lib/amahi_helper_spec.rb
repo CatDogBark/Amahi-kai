@@ -874,8 +874,8 @@ RSpec.describe 'AmahiHelper' do
         expect(File.exist?("#{dir}/keyring.asc")).to be false
       end
 
-      it "pins the key and subkey fingerprints of Greyhole's and Docker's keys" do
-        %w[greyhole docker].each do |name|
+      it 'pins the key and subkey fingerprints of every repository' do
+        AmahiHelper::APT_REPOSITORIES.each_key do |name|
           expect(AmahiHelper::APT_REPOSITORIES[name][:fingerprints]).to all(match(/\A\h{40}\z/))
           expect(AmahiHelper::APT_REPOSITORIES[name][:fingerprints].size).to eq(2)
         end

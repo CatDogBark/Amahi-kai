@@ -105,20 +105,23 @@ module AmahiHelper
     }.freeze,
     'cloudflared' => {
       key_url: 'https://pkg.cloudflare.com/cloudflare-main.gpg',
-      fingerprints: [].freeze,
+      # Checked against the published key on the NAS, 2026-10-04.
+      fingerprints: %w[CC94B39C77AE7342A68B89628A682D308D4E5E73 06C89DB3B80A8F4349697C76029E1444B7D9F50F].freeze,
       keyring: '/usr/share/keyrings/cloudflare-archive-keyring.gpg',
       list: '/etc/apt/sources.list.d/cloudflared.list',
       source: 'deb [signed-by=/usr/share/keyrings/cloudflare-archive-keyring.gpg] https://pkg.cloudflare.com/cloudflared any main'
     }.freeze,
     'tailscale' => {
       key_url: 'https://pkgs.tailscale.com/stable/ubuntu/%<codename>s.noarmor.gpg',
-      fingerprints: [].freeze,
+      # Checked against the published key on the NAS, 2026-10-04.
+      fingerprints: %w[2596A99EAAB33821893C0A79458CA832957F5868 2F625B3A774B946822EDDBEEB1547A3DDAAF03C6].freeze,
       keyring: '/usr/share/keyrings/tailscale-archive-keyring.gpg',
       list: '/etc/apt/sources.list.d/tailscale.list',
       source: 'deb [signed-by=/usr/share/keyrings/tailscale-archive-keyring.gpg] https://pkgs.tailscale.com/stable/ubuntu %<codename>s main'
     }.freeze,
     'docker' => {
       key_url: 'https://download.docker.com/linux/ubuntu/gpg',
+      # Checked against the published key here and on the NAS, 2026-10-04.
       fingerprints: %w[9DC858229FC7DD38854AE2D88D81803C0EBFCD88 D3306A018370199E527AE7997EA0A9C3F273FCD8].freeze,
       keyring: '/usr/share/keyrings/docker-archive-keyring.gpg',
       list: '/etc/apt/sources.list.d/docker.list',
