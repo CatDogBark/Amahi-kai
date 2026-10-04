@@ -1,0 +1,13 @@
+# Checks whether an update is waiting, for the web UI's "Update available" (the root
+# helper's system.check_update: fetches main and writes /var/lib/amahi-kai/update-status.json).
+# Started by amahi-kai-update-check.timer. Installed by bin/amahi-install-helper.
+[Unit]
+Description=Amahi-kai: check for updates
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/amahi-helper system.check_update
+StandardInput=null
+TimeoutStartSec=5min

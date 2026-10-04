@@ -415,6 +415,85 @@ RSpec.describe 'AmahiHelper' do
       expect(refusal('system.update', { 'branch' => 'x' })).to eq('unexpected argument branch')
     end
 
+    it 'leaves the repair flag for the update script when asked to repair' do
+      Tempfile.create('unit') do |unit|
+        stub_const('AmahiHelper::UPDATE_UNIT', unit.path)
+        expect(steps('system.update', { 'repair' => true }))
+          .to eq([[:install, '/run/amahi-kai-update.repair', "repair\n", nil, '0600'],
+                  %w[/usr/bin/systemctl start amahi-kai-update.service]])
+        expect(steps('system.update', { 'repair' => false })).to eq([%w[/usr/bin/systemctl start amahi-kai-update.service]])
+        expect(refusal('system.update', { 'repair' => 'yes' })).to eq('repair must be true or false')
+      end
+    end
+
+    describe 'checking for updates' do
+      let(:repo) { Dir.mktmpdir }
+
+      def git(*args)
+        out, err, status = Open3.capture3('git', '-C', repo, '-c', 'user.name=t', '-c', 'user.email=t@t', *args)
+        raise err unless status.success?
+
+        out.strip
+      end
+
+      def commit(subject, changelog)
+        File.write("#{repo}/CHANGELOG.md", changelog)
+        git('add', 'CHANGELOG.md')
+        git('commit', '-q', '-m', subject)
+        git('rev-parse', 'HEAD')
+      end
+
+      before do
+        git('init', '-q', '-b', 'main')
+        @running = commit('Old (#1)', "# Changelog\n\n- **Old entry.**\n")
+        commit('Drive temperatures (#2)', "# Changelog\n\n- **Old entry.**\n- **Temperatures.** Detail.\n")
+        @latest = commit('Update window (#3)', "# Changelog\n\n- **Old entry.**\n- **Temperatures.** Detail.\n- **Window.**\n")
+        git('update-ref', 'refs/remotes/origin/main', @latest)
+        git('checkout', '-q', @running)
+        stub_const('AmahiHelper::GIT_OPTIONS', ['-c', 'core.hooksPath=/dev/null', '-C', repo])
+        stub_const('AmahiHelper::GIT', ENV['PATH'].split(':').map { |d| File.join(d, 'git') }.find { |f| File.executable?(f) })
+      end
+
+      after { FileUtils.rm_rf(repo) }
+
+      it 'plans one action with no arguments' do
+        expect(steps('system.check_update', {})).to eq([[:check_update]])
+        expect(refusal('system.check_update', { 'branch' => 'x' })).to eq('unexpected argument branch')
+      end
+
+      it 'lists the merged changes and the changelog entries added since the running commit' do
+        status = helper.update_status(nil)
+        expect(status).to include('current' => @running, 'latest' => @latest, 'available' => true, 'behind' => 2, 'error' => nil)
+        expect(status['commits'].map { |c| c['subject'] }).to eq(['Update window (#3)', 'Drive temperatures (#2)'])
+        expect(status['changelog']).to eq(['- **Temperatures.** Detail.', '- **Window.**'])
+      end
+
+      it 'is up to date on the latest commit' do
+        git('checkout', '-q', @latest)
+        expect(helper.update_status(nil)).to include('available' => false, 'behind' => 0, 'commits' => [], 'changelog' => [])
+      end
+
+      it 'writes the status for the app, and skips while an update holds the lock' do
+        dir = Dir.mktmpdir
+        stub_const('AmahiHelper::UPDATE_LOCK', "#{dir}/lock")
+        stub_const('AmahiHelper::UPDATE_STATUS', "#{dir}/status.json")
+        allow(helper).to receive(:fetch_main).and_return("couldn't fetch from GitHub: offline")
+        allow(helper).to receive(:do_install) { |path, content, *| File.write(path, content) }
+
+        reply = helper.do_check_update
+        expect(reply['update']).to include('available' => true, 'error' => "couldn't fetch from GitHub: offline")
+        expect(JSON.parse(File.read("#{dir}/status.json"))['behind']).to eq(2)
+
+        File.open("#{dir}/lock", File::RDWR | File::CREAT) do |held|
+          held.flock(File::LOCK_EX)
+          expect(helper.do_check_update).to include('skipped' => 'System Update is running')
+        end
+        expect(helper).to have_received(:fetch_main).once
+      ensure
+        FileUtils.rm_rf(dir)
+      end
+    end
+
     it 'reboots and powers off through systemd' do
       expect(steps('system.reboot', {})).to eq([%w[/usr/bin/systemctl reboot]])
       expect(steps('system.poweroff', {})).to eq([%w[/usr/bin/systemctl poweroff]])

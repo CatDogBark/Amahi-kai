@@ -65,6 +65,17 @@ module AmahiHelper
   }.freeze
 
   UPDATE_UNIT = '/etc/systemd/system/amahi-kai-update.service'
+  # Checking for updates: bin/amahi-update holds UPDATE_LOCK while it runs, and the check
+  # takes it too, so a fetch never races the update's pull. The check writes what it found
+  # to UPDATE_STATUS (the app reads it). REPAIR_FLAG tells the next update to run every
+  # step even with nothing new (bin/amahi-update reads and removes it).
+  APP_DIR = '/opt/amahi-kai'
+  GIT = '/usr/bin/git'
+  GIT_OPTIONS = ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-C', APP_DIR].freeze
+  UPDATE_LOCK = '/run/amahi-kai-update.lock'
+  UPDATE_STATUS = '/var/lib/amahi-kai/update-status.json'
+  UPDATE_REPAIR_FLAG = '/run/amahi-kai-update.repair'
+  UPDATE_LIST_LIMIT = 50
 
   SWAPFILE = '/swapfile'
   FSTAB = '/etc/fstab'
@@ -317,10 +328,26 @@ module AmahiHelper
     # System Update: starts its job (bin/amahi-update, as amahi-kai-update.service), which
     # outlives the app's restart and writes /var/log/amahi-kai/update.log. Already running:
     # nothing changes.
+    # With repair: true it runs every step even when there's nothing new (to fix an install).
     'system.update' => {
+      params: %w[repair],
+      validate: lambda do |a|
+        raise Refused, "System Update's job isn't installed yet" unless File.exist?(UPDATE_UNIT)
+        { repair: a.key?('repair') ? boolean(a, 'repair') : false }
+      end,
+      plan: lambda do |v|
+        steps = []
+        steps << [:install, UPDATE_REPAIR_FLAG, "repair\n", nil, '0600'] if v[:repair]
+        steps << %w[/usr/bin/systemctl start amahi-kai-update.service]
+      end
+    },
+    # Whether an update is waiting: fetches main, as System Update pulls it, and writes what's
+    # new (the merged changes and the changelog entries added) to UPDATE_STATUS. Skipped while
+    # an update runs. amahi-kai-update-check.timer runs it every 6 hours.
+    'system.check_update' => {
       params: [],
-      validate: ->(_a) { File.exist?(UPDATE_UNIT) ? {} : raise(Refused, "System Update's job isn't installed yet") },
-      plan: ->(_v) { [%w[/usr/bin/systemctl start amahi-kai-update.service]] }
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:check_update]] }
     },
     'system.create_swap' => {
       params: %w[size_gb],
@@ -1166,6 +1193,80 @@ module AmahiHelper
       end
     ensure
       Dir.rmdir(dir) if dir && !mount_point?(dir)
+    end
+
+    # --- Checking for updates ---
+
+    def do_check_update
+      status = with_update_lock { update_status(fetch_main) }
+      return { 'update' => read_update_status, 'skipped' => 'System Update is running' } unless status
+
+      do_install(UPDATE_STATUS, "#{JSON.pretty_generate(status)}\n", nil, '0640', APP_USER)
+      { 'update' => status }
+    end
+
+    # Runs the block holding the update lock, or returns nil if an update holds it.
+    def with_update_lock
+      File.open(UPDATE_LOCK, File::RDWR | File::CREAT, 0o644) do |lock|
+        return nil unless lock.flock(File::LOCK_EX | File::LOCK_NB)
+
+        yield
+      end
+    end
+
+    # nil when the fetch worked, else why not. The comparison then uses what was fetched last.
+    def fetch_main
+      _out, err, status = Open3.capture3(ENV_MIN.merge('GIT_TERMINAL_PROMPT' => '0'), ['/usr/bin/timeout', '/usr/bin/timeout'],
+                                         '60', GIT, *GIT_OPTIONS, 'fetch', '--quiet', 'origin', 'main',
+                                         unsetenv_others: true, chdir: '/')
+      status.success? ? nil : "couldn't fetch from GitHub: #{last_lines(err, 1)}"
+    rescue SystemCallError => e
+      "couldn't run git: #{e.message}"
+    end
+
+    def update_status(fetch_error)
+      current = git_output('rev-parse', 'HEAD')
+      latest = git_output('rev-parse', '--verify', '--quiet', 'origin/main^{commit}')
+      behind = current && latest ? git_output('rev-list', '--count', "#{current}..#{latest}").to_i : 0
+      range = "#{current}..#{latest}"
+      { 'checked_at' => Time.now.utc.iso8601, 'current' => current, 'latest' => latest,
+        'available' => behind.positive?, 'behind' => behind,
+        'commits' => behind.positive? ? update_commits(range) : [],
+        'changelog' => behind.positive? ? update_changelog(current, latest) : [],
+        'error' => fetch_error }
+    end
+
+    # The merged changes, newest first: [{ 'sha' => 'abc1234', 'subject' => 'Title (#37)' }].
+    def update_commits(range)
+      git_lines('log', '--first-parent', '--format=%h%x09%s', "-#{UPDATE_LIST_LIMIT}", range).map do |line|
+        sha, subject = line.split("\t", 2)
+        { 'sha' => sha, 'subject' => subject.to_s[0, 300] }
+      end
+    end
+
+    # The changelog entries (bullet lines) added between the two commits.
+    def update_changelog(current, latest)
+      git_lines('diff', '--no-color', '--unified=0', current, latest, '--', 'CHANGELOG.md')
+        .filter_map { |line| line[1..][0, 2000] if line.start_with?('+- ') }
+        .first(UPDATE_LIST_LIMIT)
+    end
+
+    def read_update_status
+      JSON.parse(File.read(UPDATE_STATUS))
+    rescue SystemCallError, JSON::ParserError
+      nil
+    end
+
+    # git's output in the app's checkout, or nil if git failed.
+    def git_output(*args)
+      out, _err, status = Open3.capture3(ENV_MIN, [GIT, GIT], *GIT_OPTIONS, *args, unsetenv_others: true, chdir: '/')
+      status.success? ? out.dup.force_encoding('UTF-8').scrub('?').strip : nil
+    rescue SystemCallError
+      nil
+    end
+
+    def git_lines(*args)
+      git_output(*args).to_s.lines(chomp: true)
     end
 
     # { 'temperatures' => { '/dev/sda' => 34, '/dev/vda' => nil } } for the whole disks lsblk lists.

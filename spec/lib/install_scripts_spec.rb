@@ -35,6 +35,21 @@ RSpec.describe 'install and update scripts' do
     end
   end
 
+  it 'installs and enables the check for updates' do
+    text = File.read(Rails.root.join('bin/amahi-install-helper'))
+    expect(text).to include('amahi-kai-update-check.service amahi-kai-update-check.timer')
+    expect(text).to include('systemctl enable --now amahi-kai-update-check.timer')
+    expect(File.read(Rails.root.join('config/systemd/amahi-kai-update-check.service')))
+      .to include('ExecStart=/usr/local/sbin/amahi-helper system.check_update')
+    expect(File.read(Rails.root.join('config/systemd/amahi-kai-update-check.timer'))).to include('OnUnitActiveSec=6h')
+  end
+
+  it 'stops early with nothing new, unless repairing, and shares the lock with the check' do
+    text = File.read(Rails.root.join('bin/amahi-update'))
+    expect(text).to include('Already up to date', '--repair) REPAIR=true', 'REPAIR_FLAG=/run/amahi-kai-update.repair')
+    expect(text).to include('flock -w 90 9', 'refresh_update_status')
+  end
+
   it 'pulls as root without hooks or an fsmonitor command from the checkout' do
     text = File.read(Rails.root.join('bin/amahi-update'))
     expect(text).to include('git -c core.hooksPath=/dev/null -c core.fsmonitor=false "$@"')
@@ -61,8 +76,9 @@ RSpec.describe 'install and update scripts' do
       expect(update.index('cp -a public/assets tmp/assets-previous')).to be < update.index('bin/rails assets:precompile')
     end
 
-    it 'runs one update at a time' do
-      expect(update).to include('flock -n 9')
+    # A check for updates holds the same lock during its fetch (a minute at most).
+    it 'runs one update at a time, waiting briefly for a check to finish its fetch' do
+      expect(update).to include('flock -w 90 9')
     end
   end
 

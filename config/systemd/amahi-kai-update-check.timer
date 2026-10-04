@@ -1,0 +1,12 @@
+# Runs amahi-kai-update-check.service 10 minutes after boot, then every 6 hours.
+# Installed and enabled by bin/amahi-install-helper.
+[Unit]
+Description=Amahi-kai: check for updates every 6 hours
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=6h
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target
