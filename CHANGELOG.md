@@ -73,6 +73,7 @@ All notable changes to Amahi-kai are documented here.
 - **System Update's restart takes seconds again, not a minute and a half.** The update window's own log connection kept the old version of Amahi-kai from stopping, so every update waited for systemd to kill it after 90 seconds. The window now lets go when the restart begins and picks the log up again from the new version, and Amahi-kai gives any other open request at most 15 seconds when it stops. The update that installs this fix still waits once, since that restart runs the old version.
 - **Reboot and Power off work.** sudo had no rule for them, so the buttons did nothing; if one fails now, the page says so instead of "Rebooting".
 - **The setup wizard's swap file is added to `/etc/fstab`**, so it survives a reboot (that step used `sh`, which sudo refused). A server name with spaces or capitals becomes a valid hostname ("My NAS" → `my-nas`), and if the hostname can't be set the wizard says so.
+- **Setup can't finish with the default admin password.** The seeded `admin` password is public, so the wizard's last step now sends you back to change it while it still works, and the summary says so. The check looks at the account itself, so a password changed on the Users page counts too. The security audit uses the same check.
 
 ### 🔧 Architecture & Code Quality
 

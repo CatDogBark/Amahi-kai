@@ -15,6 +15,12 @@ describe "Setup Controller", type: :request do
     Setting.set('setup_completed', 'false')
   end
 
+  # spec_helper loads db/seeds.rb before each example, so the seeded admin exists with
+  # the seeded password, as on a fresh install.
+  def change_seeded_admin_password
+    User.find_by(login: User::SEED_ADMIN_LOGIN).update!(password: "a-new-passphrase")
+  end
+
   describe "redirect guard (check_setup_completed)" do
     it "redirects authenticated admin to wizard when setup not completed" do
       login_as_admin
@@ -199,13 +205,34 @@ describe "Setup Controller", type: :request do
         get setup_complete_path
         expect(response).to have_http_status(:ok)
       end
+
+      it "asks for a new admin password instead of offering to finish while the seeded one works" do
+        get setup_complete_path
+        expect(response.body).to include("still the default")
+        expect(response.body).not_to include(setup_finish_path)
+      end
     end
 
     describe "POST /setup/finish" do
       it "marks setup completed and redirects to root" do
+        change_seeded_admin_password
         post setup_finish_path
         expect(response).to redirect_to(root_path)
         expect(Setting.get('setup_completed')).to eq('true')
+      end
+
+      it "refuses to finish while the seeded admin password still works" do
+        post setup_finish_path
+        expect(response).to redirect_to(setup_admin_path)
+        expect(flash[:error]).to include("Change the admin password")
+        expect(Setting.get('setup_completed')).to eq('false')
+      end
+
+      it "offers to finish once the seeded admin has a new password" do
+        change_seeded_admin_password
+        get setup_complete_path
+        expect(response.body).to include(setup_finish_path)
+        expect(response.body).not_to include("still the default")
       end
     end
   end

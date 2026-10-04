@@ -65,7 +65,6 @@ class SetupController < ApplicationController
     user.password_confirmation = params[:password_confirmation]
     if user.save
       keep_signed_in_after_password_change(user)
-      session[:admin_password_changed] = true
       redirect_to setup_network_path
     else
       flash[:error] = user.errors.full_messages.join(", ")
@@ -172,7 +171,8 @@ class SetupController < ApplicationController
   end
 
   def complete
-    @admin_password_changed = session[:admin_password_changed]
+    # Checked against the account itself, so a password changed on the Users page counts too.
+    @admin_password_changed = !User.seed_admin_password_in_use?
     @server_name = Setting.get('server-name')
     @pool_partitions = DiskPoolPartition.all rescue []
     @first_share = session[:first_share_created]
@@ -187,8 +187,13 @@ class SetupController < ApplicationController
   end
 
   def finish
+    # The seeded password is public; setup can't end while it still logs in.
+    if User.seed_admin_password_in_use?
+      flash[:error] = "Change the admin password before finishing setup."
+      redirect_to setup_admin_path
+      return
+    end
     Setting.set('setup_completed', 'true')
-    session.delete(:admin_password_changed)
     session.delete(:first_share_created)
     session.delete(:greyhole_installed)
     session.delete(:default_copies)
