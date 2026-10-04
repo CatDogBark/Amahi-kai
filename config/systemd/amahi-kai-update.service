@@ -1,0 +1,15 @@
+# System Update, run as its own job so it outlives the restart of amahi-kai.service and
+# can check the new version (and roll back). The web UI starts it through the root
+# helper (system.update) and follows the log. Installed by bin/amahi-install-helper.
+[Unit]
+Description=Amahi-kai System Update
+After=network-online.target mariadb.service
+Wants=network-online.target
+
+[Service]
+Type=exec
+ExecStart=/opt/amahi-kai/bin/amahi-update --stream
+Environment=HOME=/root
+StandardOutput=truncate:/var/log/amahi-kai/update.log
+StandardError=inherit
+RuntimeMaxSec=1h

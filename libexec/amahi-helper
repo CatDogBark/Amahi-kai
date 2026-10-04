@@ -64,6 +64,8 @@ module AmahiHelper
     'greyhole' => 'greyhole.service', 'docker' => 'docker.service'
   }.freeze
 
+  UPDATE_UNIT = '/etc/systemd/system/amahi-kai-update.service'
+
   SWAPFILE = '/swapfile'
   FSTAB = '/etc/fstab'
 
@@ -301,6 +303,14 @@ module AmahiHelper
       plan: ->(_v) { [%w[/usr/bin/systemctl poweroff]] }
     },
     # A swap file at /swapfile, on now and at boot. Only when there is none yet.
+    # System Update: starts its job (bin/amahi-update, as amahi-kai-update.service), which
+    # outlives the app's restart and writes /var/log/amahi-kai/update.log. Already running:
+    # nothing changes.
+    'system.update' => {
+      params: [],
+      validate: ->(_a) { File.exist?(UPDATE_UNIT) ? {} : raise(Refused, "System Update's job isn't installed yet") },
+      plan: ->(_v) { [%w[/usr/bin/systemctl start amahi-kai-update.service]] }
+    },
     'system.create_swap' => {
       params: %w[size_gb],
       validate: ->(a) { { size_gb: integer(a, 'size_gb', 1..8) } },

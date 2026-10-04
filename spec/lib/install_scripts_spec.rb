@@ -41,6 +41,40 @@ RSpec.describe 'install and update scripts' do
     expect(text).not_to match(/sudo -u "\$APP_USER" git/)
   end
 
+  describe 'rolling back a failed update' do
+    let(:update) { File.read(Rails.root.join('bin/amahi-update')) }
+
+    it 'goes back to the running commit when a step or the new version fails' do
+      ['Installing dependencies', 'Backing up the database', 'Running database migrations', 'Precompiling assets']
+        .each { |step| expect(update).to include(%(|| rollback "#{step}")).or include(%(rollback "#{step}")) }
+      expect(update).to include('restart_app || rollback "Starting the new version" restarted')
+      expect(update).to include('reset --hard --quiet "$PREV"')
+      expect(update).to include('AMAHI_UPDATE_PREV="$PREV"')
+    end
+
+    it 'backs up the database before migrating, and keeps the newest 3' do
+      expect(update.index('backup_database 2>&1')).to be < update.index('bin/rails db:migrate')
+      expect(update).to include('mysqldump --single-transaction').and include('tail -n +4')
+    end
+
+    it 'keeps the running version\'s compiled assets before replacing them' do
+      expect(update.index('cp -a public/assets tmp/assets-previous')).to be < update.index('bin/rails assets:precompile')
+    end
+
+    it 'runs one update at a time' do
+      expect(update).to include('flock -n 9')
+    end
+  end
+
+  it "installs System Update's job, which writes the log the page follows" do
+    unit = File.read(Rails.root.join('config/systemd/amahi-kai-update.service'))
+    expect(unit).to include('ExecStart=/opt/amahi-kai/bin/amahi-update --stream')
+    expect(unit).to include("StandardOutput=truncate:#{SettingsController::UPDATE_LOG}")
+    expect(File.read(Rails.root.join('bin/amahi-install-helper'))).to include('/etc/systemd/system/amahi-kai-update.service')
+    rules = File.readlines(Rails.root.join('config/sudoers/amahi-kai')).grep(/\Aamahi /).join
+    expect(rules).not_to include('amahi-update')
+  end
+
   it 'rotates the app log as the app user' do
     stanza = File.read(Rails.root.join('config/logrotate-amahi-kai.conf'))[/production\.log \{[^}]*\}/]
     expect(stanza).to include('su amahi amahi')

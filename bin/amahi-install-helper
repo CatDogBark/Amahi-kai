@@ -5,6 +5,7 @@
 #   /usr/local/sbin/amahi-helper    from libexec/amahi-helper, root:root 0755
 #   /var/log/amahi-kai/helper.log   the helper's audit log, root:amahi 0640
 #   /etc/logrotate.d/amahi-kai      from config/logrotate-amahi-kai.conf
+#   /etc/systemd/system/amahi-kai-update.service   System Update's job
 #   /etc/sudoers.d/amahi-kai        from config/sudoers/amahi-kai, only if visudo accepts it
 #
 # Exits non-zero if something wasn't installed; the sudoers file is then left as it was.
@@ -26,6 +27,10 @@ install -d -o root -g "$APP_GROUP" -m 0750 /var/log/amahi-kai
 [[ -e /var/log/amahi-kai/helper.log ]] || install -o root -g "$APP_GROUP" -m 0640 /dev/null /var/log/amahi-kai/helper.log
 if [[ -d /etc/logrotate.d ]]; then
   install -o root -g root -m 0644 "$APP_DIR/config/logrotate-amahi-kai.conf" /etc/logrotate.d/amahi-kai
+fi
+install -o root -g root -m 0644 "$APP_DIR/config/systemd/amahi-kai-update.service" /etc/systemd/system/amahi-kai-update.service
+if [[ -d /run/systemd/system ]]; then
+  systemctl daemon-reload
 fi
 
 # A broken file in /etc/sudoers.d stops sudo working for everyone, so the new rules are

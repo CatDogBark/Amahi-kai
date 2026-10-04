@@ -2,20 +2,34 @@
 set -euo pipefail
 
 # Amahi-kai Update Script
-# Pulls latest code, installs dependencies, runs migrations, and restarts.
+# Pulls latest code, installs dependencies, runs migrations, and restarts. If a step
+# fails, or the new version doesn't answer after the restart, it goes back to the commit
+# that was running.
+#
 # Usage: sudo /opt/amahi-kai/bin/amahi-update [--stream]
 #
 # --stream: Output progress messages for SSE streaming (used by web UI)
+#
+# System Update in the web UI starts amahi-kai-update.service (the root helper's
+# system.update), which runs this script with --stream and writes its output to
+# /var/log/amahi-kai/update.log; the page follows that log. Run outside amahi-kai.service
+# like that, or from a terminal, the script can restart the app and check that it answers.
 #
 # Root owns the code (bin/amahi-set-ownership) and runs only git, this script, the helper
 # installer and system commands. Everything that loads the app or its gems (bundle,
 # migrations, rails runner, the asset build) runs as the app user (as_app), which can
 # write vendor/bundle, so root never runs code the app user could have changed.
+#
+# Rollback puts the code, gems, compiled assets, helper and sudoers rules back as they
+# were. The database isn't rolled back (MariaDB can't undo schema changes reliably):
+# migrations must keep working with the previous version's code, and a backup of the
+# database is taken before they run (/var/lib/amahi-kai/backups, the last 3 kept).
 
 APP_DIR="${APP_DIR:-/opt/amahi-kai}"
 ENV_FILE="${ENV_FILE:-/etc/amahi-kai/amahi.env}"
 APP_USER="${APP_USER:-amahi}"
 APP_GROUP="${APP_GROUP:-amahi}"
+BACKUP_DIR="${BACKUP_DIR:-/var/lib/amahi-kai/backups}"
 STREAM=false
 ORIG_ARGS=("$@")
 
@@ -33,7 +47,7 @@ log() {
 
 error() {
   if $STREAM; then
-    echo "✗ $1" >&2
+    echo "✗ $1"
   else
     echo "ERROR: $1" >&2
   fi
@@ -50,6 +64,68 @@ root_git() {
   git -c core.hooksPath=/dev/null -c core.fsmonitor=false "$@"
 }
 
+# Inside amahi-kai.service (an older web UI ran this script that way), restarting the app
+# ends this script too, so it can't check the new version or roll back after that.
+in_app_service() {
+  grep -q '/amahi-kai\.service' /proc/self/cgroup 2>/dev/null
+}
+
+# Whether the app answers on its port (local requests skip the host allowlist).
+app_answers() {
+  local i
+  for i in $(seq 1 45); do
+    if curl -fsS -o /dev/null --max-time 5 "http://127.0.0.1:${PORT:-3000}/login" 2>/dev/null; then
+      return 0
+    fi
+    sleep 2
+  done
+  return 1
+}
+
+restart_app() {
+  systemctl restart amahi-kai 2>&1 && app_answers
+}
+
+# Puts the previous commit back and stops. $1 names the step that failed; $2 is "restarted"
+# once the new version has been restarted, so the previous one has to be restarted too.
+rollback() {
+  local step="$1" restarted="${2:-}"
+  if [[ -z "${PREV:-}" || "$(root_git -C "$APP_DIR" rev-parse HEAD)" == "$PREV" ]]; then
+    if [[ -n "$restarted" ]]; then
+      error "$step failed: Amahi-kai didn't answer after the restart, and there's no other version to go back to. Check: journalctl -u amahi-kai -n 100"
+    fi
+    error "$step failed. The code didn't change, so there's nothing to roll back to; Amahi-kai is still running the version it was."
+  fi
+  log "⚠ $step failed. Going back to ${PREV:0:7}..."
+  root_git -C "$APP_DIR" reset --hard --quiet "$PREV" 2>&1 || error "Rollback failed: git couldn't check out ${PREV:0:7}. Run: sudo $APP_DIR/bin/amahi-update"
+  "$APP_DIR/bin/amahi-set-ownership" >/dev/null 2>&1 || true
+  as_app "bundle install --quiet" 2>&1 || log "⚠ bundle install failed during rollback"
+  if [[ -d "$APP_DIR/tmp/assets-previous" ]]; then
+    as_app "find public/assets -mindepth 1 -delete && cp -a tmp/assets-previous/. public/assets/" 2>&1 \
+      || log "⚠ Couldn't restore the compiled assets"
+  fi
+  "$APP_DIR/bin/amahi-install-helper" >/dev/null 2>&1 || log "⚠ Couldn't reinstall the previous helper and sudoers rules"
+  if [[ -n "$restarted" ]]; then
+    log "Restarting the previous version..."
+    if ! restart_app; then
+      error "Update failed at: $step. Rolled back to ${PREV:0:7}, but it didn't start either. Check: journalctl -u amahi-kai -n 100"
+    fi
+  fi
+  error "Update failed at: $step. Rolled back to ${PREV:0:7}; Amahi-kai is running the version it was.${BACKUP_FILE:+ Database backup: $BACKUP_FILE}"
+}
+
+# A dump of the app's database, readable by root only; the newest 3 are kept.
+backup_database() {
+  local name="${DATABASE_NAME:-amahi_production}"
+  install -d -o root -g root -m 0700 "$BACKUP_DIR"
+  BACKUP_FILE="$BACKUP_DIR/$name-$(date +%Y%m%d-%H%M%S)-${PREV:0:7}.sql.gz"
+  (
+    umask 077
+    mysqldump --single-transaction --quick --routines --events "$name" | gzip > "$BACKUP_FILE.part"
+  ) && mv "$BACKUP_FILE.part" "$BACKUP_FILE" || { rm -f "$BACKUP_FILE.part"; BACKUP_FILE=""; return 1; }
+  ls -1t "$BACKUP_DIR/$name"-*.sql.gz 2>/dev/null | tail -n +4 | xargs -r rm -f --
+}
+
 # Must be root
 if [[ $EUID -ne 0 ]]; then
   error "This script must be run as root (or with sudo)."
@@ -59,6 +135,10 @@ fi
 [[ -d "$APP_DIR" ]] || error "App directory not found: $APP_DIR"
 
 cd "$APP_DIR"
+
+# One update at a time (the web UI's job, or one started from a terminal).
+exec 9>/run/amahi-kai-update.lock
+flock -n 9 || error "Another update is already running."
 
 # Source env if available
 if [[ -f "$ENV_FILE" ]]; then
@@ -71,6 +151,17 @@ fi
 #    app user; the first update with this step takes it back.)
 log "Setting file ownership..."
 "$APP_DIR/bin/amahi-set-ownership" 2>&1 || error "Couldn't set file ownership"
+
+# The commit to go back to: the one running now. After the re-exec below, the copy of this
+# script that pulled passes it on; an older copy didn't, so it's the commit before the pull.
+if [[ -n "${AMAHI_UPDATE_PREV:-}" ]]; then
+  PREV="$AMAHI_UPDATE_PREV"
+elif [[ -n "${AMAHI_UPDATE_REEXEC:-}" ]]; then
+  PREV=$(root_git -C "$APP_DIR" rev-parse --verify --quiet 'HEAD@{1}' 2>/dev/null || true)
+else
+  PREV=$(root_git -C "$APP_DIR" rev-parse --verify --quiet HEAD 2>/dev/null || true)
+fi
+BACKUP_FILE=""
 
 log "Pulling latest code..."
 SCRIPT_SUM_BEFORE=$(sha256sum < "$APP_DIR/bin/amahi-update")
@@ -98,19 +189,34 @@ fi
 # by this update wouldn't run until the next update. Carry on with the new copy instead.
 if [[ -z "${AMAHI_UPDATE_REEXEC:-}" && "$(sha256sum < "$APP_DIR/bin/amahi-update")" != "$SCRIPT_SUM_BEFORE" ]]; then
   log "Update script changed; continuing with the new version..."
-  exec env AMAHI_UPDATE_REEXEC=1 "$APP_DIR/bin/amahi-update" "${ORIG_ARGS[@]}"
+  exec 9>&-
+  exec env AMAHI_UPDATE_REEXEC=1 AMAHI_UPDATE_PREV="$PREV" "$APP_DIR/bin/amahi-update" "${ORIG_ARGS[@]}"
+fi
+
+NEW=$(root_git -C "$APP_DIR" rev-parse HEAD 2>/dev/null || true)
+if [[ -n "$PREV" && -n "$NEW" && "$NEW" != "$PREV" ]]; then
+  log "Updating from ${PREV:0:7} to ${NEW:0:7}"
 fi
 
 # The pull may have added files; they're root's already, but a new app folder isn't.
-"$APP_DIR/bin/amahi-set-ownership" >/dev/null 2>&1 || error "Couldn't set file ownership"
+"$APP_DIR/bin/amahi-set-ownership" >/dev/null 2>&1 || rollback "Setting file ownership"
+
+# Keep the running version's compiled assets, for a rollback.
+as_app "rm -rf tmp/assets-previous && cp -a public/assets tmp/assets-previous" 2>&1 || log "⚠ Couldn't keep a copy of the compiled assets"
 
 # 2. Install dependencies (into vendor/bundle; settings in .bundle/config)
 log "Installing dependencies..."
-as_app "bundle install" 2>&1
+as_app "bundle install" 2>&1 || rollback "Installing dependencies"
 
-# 3. Run migrations
+# 3. Back up the database, then run migrations
+log "Backing up the database..."
+if backup_database 2>&1; then
+  log "  $BACKUP_FILE"
+else
+  rollback "Backing up the database"
+fi
 log "Running database migrations..."
-as_app "RAILS_ENV=production bin/rails db:migrate" 2>&1
+as_app "RAILS_ENV=production bin/rails db:migrate" 2>&1 || rollback "Running database migrations"
 
 # 3a. Install the root helper and the sudoers rules. Samba, user account and share folder
 #     changes go through the helper (3b and 3c use it), and the updater is the only thing
@@ -168,21 +274,18 @@ fi
 log "Clearing caches..."
 as_app "rm -rf tmp/cache/* public/assets/*" 2>&1
 log "Precompiling assets..."
-as_app "RAILS_ENV=production bin/rails assets:precompile" 2>&1
+as_app "RAILS_ENV=production bin/rails assets:precompile" 2>&1 || rollback "Precompiling assets"
 
 # 5. Ensure all fstab mounts are active (FUSE mounts like ntfs-3g can get lost)
 log "Restoring mounts..."
 mount -a 2>&1 || log "⚠ Some mounts may have failed — check 'mount -a' manually"
 
-# 6. Restart service. This is last on purpose: run from the web UI, this script is part
-#    of the amahi-kai service, so restarting the service ends the script as well.
+# 6. Restart the app and check that it answers. Inside amahi-kai.service the restart ends
+#    this script, so it's the last thing it does there.
 log "Restarting Amahi-kai..."
-systemctl restart amahi-kai 2>&1 || error "Failed to restart service"
-
-# Verify it's running (reached when run from a terminal)
-sleep 2
-if systemctl is-active --quiet amahi-kai; then
-  log "✓ Amahi-kai updated and running!"
-else
-  error "Service failed to start after update. Check: journalctl -u amahi-kai -f"
+if in_app_service; then
+  systemctl restart amahi-kai 2>&1 || error "Failed to restart service"
+  exit 0
 fi
+restart_app || rollback "Starting the new version" restarted
+log "✓ Amahi-kai updated and running!"

@@ -8,7 +8,7 @@
       h5.mb-0
         span.me-2 = lucide_icon('refresh-cw', size: 18)
         | System Update
-      button.btn.btn-sm.btn-outline-info onclick="if(confirm('Run system update now?')){openInstallTerminal('update', '#{settings_update_system_stream_path}')}" Check for Updates
+      button.btn.btn-sm.btn-outline-info onclick="if(confirm('Run system update now?')){startSystemUpdate('update', '#{settings_update_system_path}', '#{settings_update_system_stream_path}')}" Check for Updates
 
   == render 'shared/install_terminal', id: 'update', title: 'Updating Amahi-kai', stream_url: settings_update_system_stream_path
 

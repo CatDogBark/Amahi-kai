@@ -40,6 +40,79 @@
 </style>
 
 <script>
+function terminalLineClass(text) {
+  if (text.match(/^(Adding|Updating|Installing|Setting up|Enabling|Starting|Generating|Configuring|Pre-configuring|Creating|Loading|Downloading|Backing up|Running|Pulling|Restarting|Precompiling)/)) return 'step';
+  if (text.match(/^✓/)) return 'success';
+  if (text.match(/^✗/)) return 'error';
+  if (text.match(/^⚠/)) return 'warn';
+  return '';
+}
+
+function appendTerminalLine(id, text, cls) {
+  var output = document.getElementById(id + '-output');
+  var terminal = document.getElementById(id + '-terminal');
+  var line = document.createElement('div');
+  line.className = 'term-line';
+  cls = cls || terminalLineClass(text);
+  if (cls) line.classList.add(cls);
+  line.textContent = text;
+  output.appendChild(line);
+  terminal.scrollTop = terminal.scrollHeight;
+}
+
+function finishTerminal(id) {
+  document.getElementById(id + '-cursor').style.display = 'none';
+  document.getElementById(id + '-install-footer').style.display = 'block';
+}
+
+// System Update runs as its own job on the NAS. Start it, then follow its log; the app
+// restarts during the update, so the log stream is reopened from where it left off.
+function startSystemUpdate(id, startUrl, streamUrl) {
+  document.getElementById(id + '-install-modal').style.display = 'flex';
+  document.getElementById(id + '-output').innerHTML = '';
+  document.getElementById(id + '-cursor').style.display = '';
+  document.getElementById(id + '-install-footer').style.display = 'none';
+  appendTerminalLine(id, 'Starting system update...');
+
+  var token = document.querySelector('meta[name=csrf-token]');
+  fetch(startUrl, {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'X-CSRF-Token': token ? token.content : '', 'Accept': 'application/json' }
+  }).then(function(r) {
+    return r.json().catch(function() { return {}; }).then(function(data) {
+      if (!r.ok || data.status !== 'ok') throw new Error(data.error || ('HTTP ' + r.status));
+      followSystemUpdate(id, streamUrl, 0, 0);
+    });
+  }).catch(function(err) {
+    appendTerminalLine(id, '✗ System Update didn\'t start: ' + err.message);
+    finishTerminal(id);
+  });
+}
+
+function followSystemUpdate(id, url, from, retries) {
+  var received = from;
+  var source = new EventSource(withStreamToken(url + (url.indexOf('?') === -1 ? '?' : '&') + 'from=' + from));
+  source.onmessage = function(e) {
+    received++;
+    retries = 0;
+    appendTerminalLine(id, e.data);
+  };
+  source.addEventListener('done', function() {
+    source.close();
+    finishTerminal(id);
+  });
+  source.onerror = function() {
+    source.close();
+    if (retries === 0) appendTerminalLine(id, '… Waiting for Amahi-kai to restart', 'warn');
+    if (retries >= 90) {
+      appendTerminalLine(id, '⚠ Lost track of the update. It keeps running on the NAS; refresh this page in a minute.');
+      finishTerminal(id);
+      return;
+    }
+    setTimeout(function() { followSystemUpdate(id, url, received, retries + 1); }, 2000);
+  };
+}
+
 function openInstallTerminal(id, url) {
   if (typeof url === 'undefined') url = '<%= stream_url %>';
   var modal = document.getElementById(id + '-install-modal');
@@ -56,23 +129,7 @@ function openInstallTerminal(id, url) {
   var source = new EventSource(withStreamToken(url));
 
   source.onmessage = function(e) {
-    var line = document.createElement('div');
-    line.className = 'term-line';
-    var text = e.data;
-
-    if (text.match(/^(Adding|Updating|Installing|Setting up|Enabling|Starting|Generating|Configuring|Pre-configuring|Creating|Loading|Downloading)/)) {
-      line.classList.add('step');
-    } else if (text.match(/^✓/)) {
-      line.classList.add('success');
-    } else if (text.match(/^✗/)) {
-      line.classList.add('error');
-    } else if (text.match(/^⚠/)) {
-      line.classList.add('warn');
-    }
-
-    line.textContent = text;
-    output.appendChild(line);
-    terminal.scrollTop = terminal.scrollHeight;
+    appendTerminalLine(id, e.data);
   };
 
   source.addEventListener('done', function(e) {
