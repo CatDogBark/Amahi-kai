@@ -3,55 +3,22 @@
 # after `visudo -cf` accepts it. Design: docs/plans/privileged-helper.md
 #
 # User accounts, Samba config, share folders, Settings → Servers, the hostname, dnsmasq,
-# swap, and reboot/power off go through the root helper, which checks each request and
-# logs it to /var/log/amahi-kai/helper.log. The rules after it are for jobs that haven't
-# moved to the helper yet.
+# swap, reboot/power off, data drives (format, mount, fstab) and Greyhole go through the
+# root helper, which checks each request and logs it to /var/log/amahi-kai/helper.log.
+# The rules after it are for jobs that haven't moved to the helper yet (PR M3).
 
 # Privileged helper (libexec/amahi-helper)
 amahi ALL=(root) NOPASSWD: /usr/local/sbin/amahi-helper
 
-# Samba restarts after Greyhole changes (lib/greyhole.rb; moves to the helper in M2)
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart smbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart nmbd.service
-
-# Database backups
-amahi ALL=(root) NOPASSWD: /usr/bin/mysqldump
-
-# Greyhole service management
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start greyhole.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop greyhole.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart greyhole.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl reload greyhole.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable greyhole.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl disable greyhole.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl status greyhole.service
-
-# Greyhole config management
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/lib/amahi-kai/tmp/* /etc/greyhole.conf
-
-# Greyhole installation (web UI triggered)
+# Package installs (Docker, dnsmasq, cloudflared and the security audit's fixes;
+# moves to the helper in M3)
 amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get update
 amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get install *
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /tmp/greyhole-debsig.asc /usr/share/keyrings/greyhole-archive-keyring.asc
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /tmp/greyhole.list /etc/apt/sources.list.d/greyhole.list
-amahi ALL=(root) NOPASSWD: /usr/bin/tee /etc/greyhole.conf
-amahi ALL=(root) NOPASSWD: /usr/bin/mysql -u root *
-amahi ALL=(root) NOPASSWD: /usr/bin/dpkg --configure -a
-amahi ALL=(root) NOPASSWD: /usr/sbin/phpenmod *
 
-# Disk management (web UI)
-amahi ALL=(root) NOPASSWD: /sbin/mkfs.ext4 *
-amahi ALL=(root) NOPASSWD: /bin/mount *
-amahi ALL=(root) NOPASSWD: /bin/umount *
-amahi ALL=(root) NOPASSWD: /usr/bin/mkdir -p /mnt/*
-amahi ALL=(root) NOPASSWD: /usr/bin/rmdir /mnt/*
+# Docker app folders (lib/docker_app_installer.rb)
 amahi ALL=(root) NOPASSWD: /usr/bin/mkdir -p /opt/amahi/*
 amahi ALL=(root) NOPASSWD: /usr/bin/cp /tmp/amahi-staging/* /opt/amahi/*
 amahi ALL=(root) NOPASSWD: /usr/bin/rm -rf /opt/amahi/apps/*
-amahi ALL=(root) NOPASSWD: /usr/bin/tee -a /etc/fstab
-amahi ALL=(root) NOPASSWD: /usr/bin/lsblk *
-amahi ALL=(root) NOPASSWD: /sbin/blkid *
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /tmp/fstab.new /etc/fstab
 
 # Docker installation (web UI triggered)
 amahi ALL=(root) NOPASSWD: /usr/bin/gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg

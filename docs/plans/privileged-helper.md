@@ -1,8 +1,8 @@
 # Privileged helper (Phase 3, PRs L and M)
 
 Status: **PR L done** (#24, checked on the NAS 2026-10-04). **PR M** is split in three (Troy,
-2026-10-04): **M1 built** (services, reboot/power off, hostname, dnsmasq, swap), then M2 (disks,
-Greyhole) and M3 (tunnel, Tailscale, packages, security audit).
+2026-10-04): **M1 done** (#26: services, reboot/power off, hostname, dnsmasq, swap), **M2 built**
+(data drives, Greyhole), then M3 (tunnel, Tailscale, packages, security audit).
 
 ## Why
 
@@ -149,7 +149,7 @@ and `ShareFileSystem#clear_permissions` (`chmod -R a+rwx`, which nothing called)
 4. `sudo -l -U amahi` lists the helper, and the removed rules are gone.
 5. The existing `smb://192.168.1.111/admin` still works.
 
-## PR M1: services, system, network (built)
+## PR M1: services, system, network (done, #26)
 
 | Operation | Replaces | Runs |
 | --- | --- | --- |
@@ -164,14 +164,47 @@ and `ShareFileSystem#clear_permissions` (`chmod -R a+rwx`, which nothing called)
 Removed sudoers rules (24): `systemctl start|stop|reload|enable|disable` for `smbd`/`nmbd`, all six
 `dnsmasq.service` rules, `hostnamectl set-hostname *`, the two `cp … /etc/dnsmasq.d/*` rules, and
 the swap rules (`fallocate`, `dd`, `chmod 600 /swapfile`, `mkswap`, `swapon`). `systemctl restart
-smbd.service`/`nmbd.service` stay until M2: Greyhole restarts Samba through them.
+smbd.service`/`nmbd.service` stayed until M2.
 
-## PR M2 and M3 (outline)
+## PR M2: data drives and Greyhole (built)
 
-- **M2**: `disks.format|mount|unmount` plus fstab entries (keep the PR #13 safety rules: `nofail`,
-  the OS-disk guard, no automatic deletion); `greyhole.*` (config, service, install, with one
-  install path instead of three). Greyhole's `reinject_samba_globals!` edits `smb.conf` with `sed`
-  as `amahi`, which can't work; drop it (`Share.samba_conf` already writes those settings).
+A data drive is a whole disk or partition (`sd*`, `vd*`, `xvd*`, `nvme*`) whose disk has nothing
+mounted outside `/mnt`. The helper checks that itself from `lsblk`, so the OS disk (`/` on LVM
+included), a disk used for swap or one mounted by hand elsewhere is refused whatever Rails sends.
+
+| Operation | Replaces | Runs |
+| --- | --- | --- |
+| `disks.format` {device} | `DiskManager.format_disk!` (Disks, setup wizard) | unmounted data drive only: `mkfs.ext4 -F`, `udevadm settle` |
+| `disks.mount` {device, mount_point} | `DiskManager.mount!` | `/mnt/<name>` (new, or an empty folder that isn't a mount point, and not a slot fstab gives another drive); `mount` (`ntfs-3g` for NTFS); one fstab line by UUID with the PR #13 options; replies with the mount point |
+| `disks.unmount` {device} | `DiskManager.unmount!` | `umount`; removes only that UUID's fstab line (old file kept as `/etc/fstab.amahi-backup`); removes an empty `/mnt/storage-N` |
+| `disks.preview` {device} | `DiskManager.preview` (broken: its `mkdir` in `/tmp` had no sudo rule) | mounts read-only in `/run` (`nosuid,nodev,noexec`, no journal replay), lists the top level with sizes (stops at a million entries or 30 s), unmounts |
+| `greyhole.write_config` {content} | `Greyhole.configure!` | only the lines `Greyhole.generate_config` writes, pool drives under `/mnt`; `/etc/greyhole.conf` root:amahi 0640 (it holds the database password) |
+| `greyhole.setup_database` | the SQL in `DiskService` and `SetupService` | `CREATE DATABASE greyhole`, grant to the app's MariaDB user, load the schema once the package has put it in place |
+| `packages.add_repository` {repository} | three copies of the Greyhole repo setup | `greyhole` only: key over HTTPS, accepted only if its fingerprints (key and subkey) are exactly the pinned ones, then the keyring and source list |
+| `packages.install` {packages} | `sudo apt-get install` for Greyhole | `greyhole`, `php8.3-mbstring`, `php8.3-mysql` only; `apt-get update` and `install` non-interactive, apt's output streamed to the page |
+
+Greyhole has one install path, `Greyhole.install!`, used by Disks → Storage Pool and the setup
+wizard. `Privileged.call` takes a block for streamed progress. Greyhole's `reinject_samba_globals!`
+(a `sed` on `smb.conf` as `amahi`, which couldn't work) and `fsck` (no callers) are gone.
+
+Removed sudoers rules (26): `mkfs.ext4`, `mount`, `umount`, `mkdir -p /mnt/*`, `rmdir /mnt/*`,
+`tee -a /etc/fstab`, `cp /tmp/fstab.new /etc/fstab`, `lsblk`, `blkid`; the seven
+`greyhole.service` rules, `cp`/`tee` to `/etc/greyhole.conf`, the Greyhole key and list copies
+from `/tmp`, `mysql -u root *`, `dpkg --configure -a`, `phpenmod *`; `systemctl restart
+smbd.service`/`nmbd.service`; and `mysqldump`, which nothing used and which could write any file
+as root.
+
+### Check on the NAS after the System Update (Troy)
+
+Drives can't be tested until the NAS hardware arrives (VM 104's disks belong to Proxmox).
+
+1. The update's last line is "✓ Amahi-kai updated and running!".
+2. Disks and Disks → Storage Pool load and list the drives as before.
+3. `sudo -l -U amahi | grep -cE 'mount|mkfs|fstab|greyhole|mysql'` prints `0`.
+4. `sudo /usr/local/sbin/amahi-helper --self-test` prints `ok: 30 operations`.
+
+## PR M3 (outline)
+
 - **M3**: `tunnel.*` (token file, unit), `tailscale.*` (install from Tailscale's apt repository,
   not a downloaded script run as root), `packages.install` (a fixed list of package names), and
   the security audit's fixes together with PR P.

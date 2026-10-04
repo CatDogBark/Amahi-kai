@@ -99,9 +99,62 @@ RSpec.describe Greyhole do
     end
   end
 
-  describe '.fsck' do
-    it 'returns true in non-production' do
-      expect(Greyhole.fsck).to be true
+  describe 'in production' do
+    before do
+      allow(Greyhole).to receive(:production?).and_return(true)
+      allow(Greyhole).to receive(:running?).and_return(true)
+      allow(SambaService).to receive(:push_config).and_return(true)
+    end
+
+    it 'installs through the root helper in one path, streaming apt output' do
+      allow(Privileged).to receive(:call).and_call_original
+      allow(Privileged).to receive(:call).with('packages.install', packages: Greyhole::PACKAGES) do |*_args, &block|
+        block.call('Setting up greyhole (0.16.4-1) ...')
+        { 'ok' => true }
+      end
+      messages = []
+
+      expect(Greyhole.install! { |msg| messages << msg }).to be true
+
+      expect(Privileged.calls.map(&:first)).to eq(%w[packages.add_repository greyhole.setup_database greyhole.write_config
+                                                     greyhole.setup_database services.restart services.enable])
+      expect(Privileged.calls.last).to eq(['services.enable', { service: 'greyhole' }])
+      expect(messages).to include('  Setting up greyhole (0.16.4-1) ...')
+      expect(SambaService).to have_received(:push_config)
+    end
+
+    it "stops with the helper's reason" do
+      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('packages.add_repository', 'fingerprint not pinned'))
+      expect { Greyhole.install! }.to raise_error(Greyhole::GreyholeError, 'fingerprint not pinned')
+    end
+
+    it 'writes the config through the helper and restarts Greyhole when it runs' do
+      create(:disk_pool_partition, path: '/mnt/storage-1', minimum_free: 10)
+      expect(Greyhole.configure!).to be true
+      op, args = Privileged.calls.first
+      expect(op).to eq('greyhole.write_config')
+      expect(args[:content]).to include('storage_pool_drive = /mnt/storage-1, min_free: 10gb')
+      expect(Privileged.calls.last).to eq(['services.restart', { service: 'greyhole' }])
+    end
+
+    it 'writes only lines the root helper accepts' do
+      create(:disk_pool_partition, path: '/mnt/storage-1', minimum_free: 10)
+      share = create(:share, name: 'Movies')
+      share.update_column(:disk_pool_copies, 2)
+      Privileged.operations # loads libexec/amahi-helper
+      expect { AmahiHelper.greyhole_conf(Greyhole.generate_config) }.not_to raise_error
+    end
+
+    it 'reports a refused config instead of raising' do
+      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('greyhole.write_config', 'refused'))
+      expect(Greyhole.configure!).to be false
+    end
+
+    it 'starts, stops and restarts through the helper' do
+      Greyhole.start!
+      Greyhole.stop!
+      Greyhole.restart!
+      expect(Privileged.calls.map(&:first)).to eq(%w[services.start services.stop services.restart])
     end
   end
 

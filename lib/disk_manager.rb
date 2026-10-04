@@ -1,8 +1,11 @@
 require 'json'
-require 'open3'
 require 'shellwords'
 require 'shell'
 
+# Lists drives, and formats, mounts, unmounts and previews data drives. The changes are
+# made by the root helper (disks.* operations), which checks the drive itself: it
+# refuses any drive with something mounted outside /mnt (the OS disk) and writes fstab
+# lines as UUID=... /mnt/<name> <type> defaults,nofail,x-systemd.device-timeout=10s 0 2.
 class DiskManager
   VALID_DEVICE_PATTERN = %r{\A/dev/[svx]d[a-z]+\d*\z}
   VALID_NVME_PATTERN = %r{\A/dev/nvme\d+n\d+(p\d+)?\z}
@@ -67,96 +70,35 @@ class DiskManager
     devices
   end
 
-  # Format a device as ext4
+  # Format a device as ext4.
   def self.format_disk!(device)
     validate_device!(device)
     raise DiskError, "Cannot format OS disk!" if os_disk?(device)
-
-    if production?
-      execute_command("sudo /sbin/mkfs.ext4 -F #{Shellwords.escape(device)}")
-      # Let kernel update block device info after formatting
-      execute_command("sudo /sbin/udevadm settle 2>/dev/null")
-      sleep 1
-    else
-      Rails.logger.info("[DiskManager] SIMULATED: mkfs.ext4 -F #{device}") if defined?(Rails)
-    end
+    privileged('disks.format', device: device)
     true
   end
 
-  # Mount a partition
+  # Mount a partition at +mount_point+ (default: the next free /mnt/storage-N) and add it
+  # to fstab. Returns the mount point.
   def self.mount!(device, mount_point = nil)
     validate_device!(device)
     raise DiskError, "Cannot mount OS disk partition this way!" if os_disk?(device)
 
     mount_point ||= auto_mount_point
-    uuid = get_uuid(device)
-    fstype = detect_fstype(device)
-
-    if production?
-      execute_command("sudo /usr/bin/mkdir -p #{Shellwords.escape(mount_point)}")
-
-      # Use appropriate mount type for the filesystem
-      mount_args = ["sudo", "/bin/mount"]
-      mount_args += ["-t", "ntfs-3g"] if fstype&.downcase == "ntfs"
-      mount_args += [device.to_s, mount_point.to_s]
-      mount_output, status = Open3.capture2e(*mount_args)
-      mount_status = status.exitstatus
-
-      # Verify mount actually worked
-      unless mount_status == 0 && mount_point_active?(mount_point)
-        execute_command("sudo /usr/bin/rmdir #{Shellwords.escape(mount_point)} 2>/dev/null")
-        detail = mount_output.to_s.strip.presence || "unknown error (exit #{mount_status})"
-        raise DiskError, "Mount failed — #{device} at #{mount_point}: #{detail}"
-      end
-
-      # Add to fstab using UUID for persistence
-      if uuid.present?
-        fstab_line = fstab_entry(uuid, mount_point, fstype)
-        # Check if already in fstab
-        fstab = File.read("/etc/fstab") rescue ""
-        unless fstab.include?(uuid)
-          execute_command("echo #{Shellwords.escape(fstab_line)} | sudo /usr/bin/tee -a /etc/fstab")
-        end
-      end
-    else
-      Rails.logger.info("[DiskManager] SIMULATED: mount #{device} #{mount_point}") if defined?(Rails)
-    end
-    mount_point
+    reply = privileged('disks.mount', device: device, mount_point: mount_point)
+    reply['mount_point'] || mount_point
   end
 
-  # Unmount a partition
+  # Unmount a partition and remove its fstab line.
   def self.unmount!(device)
     validate_device!(device)
     raise DiskError, "Cannot unmount OS disk!" if os_disk?(device)
-
-    # Find current mount point
-    mount_point = find_mount_point(device)
-    raise DiskError, "Device #{device} is not mounted" if mount_point.blank?
-
-    uuid = get_uuid(device)
-
-    if production?
-      execute_command("sudo /bin/umount #{Shellwords.escape(mount_point)}")
-      # Remove from fstab
-      if uuid.present?
-        # Read fstab, filter out the line, write back
-        fstab = File.read("/etc/fstab") rescue ""
-        new_fstab = fstab.lines.reject { |l| l.include?(uuid) }.join
-        File.write("/tmp/fstab.new", new_fstab)
-        execute_command("sudo /usr/bin/cp /tmp/fstab.new /etc/fstab")
-      end
-      # Clean up empty mount point directory
-      if mount_point.start_with?("/mnt/storage-")
-        execute_command("sudo /usr/bin/rmdir #{Shellwords.escape(mount_point)} 2>/dev/null")
-      end
-    else
-      Rails.logger.info("[DiskManager] SIMULATED: umount #{mount_point}") if defined?(Rails)
-    end
+    privileged('disks.unmount', device: device)
     true
   end
 
   # Preview contents of an unmounted partition.
-  # Temp-mounts, reads top-level directory listing with sizes, then unmounts.
+  # The helper mounts it read-only for a moment and lists the top level with sizes.
   # Returns hash with :entries (array), :total_used, :file_count
   def self.preview(device)
     validate_device!(device)
@@ -172,25 +114,13 @@ class DiskManager
     if part[:status] == :mounted && part[:mountpoint].present?
       return read_directory_summary(part[:mountpoint])
     end
+    return sample_preview unless production?
 
-    # Temp-mount for preview
-    preview_mount = "/tmp/amahi-preview-#{SecureRandom.hex(4)}"
-    begin
-      if production?
-        execute_command("sudo /usr/bin/mkdir -p #{Shellwords.escape(preview_mount)}")
-        result = execute_command("sudo /bin/mount -o ro #{Shellwords.escape(device)} #{Shellwords.escape(preview_mount)} 2>&1")
-      else
-        # Dev/test: return sample data
-        return sample_preview
-      end
-
-      read_directory_summary(preview_mount)
-    ensure
-      if production?
-        execute_command("sudo /bin/umount #{Shellwords.escape(preview_mount)} 2>/dev/null")
-        execute_command("sudo /usr/bin/rmdir #{Shellwords.escape(preview_mount)} 2>/dev/null")
-      end
+    reply = privileged('disks.preview', device: device)
+    entries = Array(reply['entries']).map do |e|
+      { name: e['name'], type: e['type'] == 'directory' ? :directory : :file, size: e['size'].to_i, file_count: e['file_count'].to_i }
     end
+    { entries: entries, total_used: reply['total_used'].to_i, file_count: reply['file_count'].to_i }
   end
 
   # Check if a device is the OS disk
@@ -214,13 +144,6 @@ class DiskManager
     [node["mountpoint"], *(node["children"] || []).flat_map { |c| mountpoints_in(c) }].compact
   end
 
-  # nofail: a dead or unplugged data drive mustn't stop the NAS from booting
-  # (without it systemd drops a headless box into emergency mode).
-  def self.fstab_entry(uuid, mount_point, fstype)
-    fstab_type = (fstype&.downcase == "ntfs") ? "ntfs-3g" : (fstype.presence || "ext4")
-    "UUID=#{uuid} #{mount_point} #{fstab_type} defaults,nofail,x-systemd.device-timeout=10s 0 2"
-  end
-
   # The whole disk a device belongs to: /dev/sda1 -> /dev/sda, /dev/nvme0n1p2 -> /dev/nvme0n1.
   def self.base_device(device)
     device.match?(VALID_NVME_PATTERN) ? device.sub(/p\d+\z/, '') : device.sub(/\d+\z/, '')
@@ -242,19 +165,11 @@ class DiskManager
     end
   end
 
-  def self.detect_fstype(device)
-    output = execute_command("sudo /sbin/blkid -s TYPE -o value #{Shellwords.escape(device)} 2>/dev/null")
-    output.to_s.strip.presence
-  end
-
-  def self.get_uuid(device)
-    output = execute_command("sudo /sbin/blkid -s UUID -o value #{Shellwords.escape(device)} 2>/dev/null")
-    output.to_s.strip.presence
-  end
-
-  def self.find_mount_point(device)
-    output = execute_command("lsblk -no MOUNTPOINT #{Shellwords.escape(device)} 2>/dev/null")
-    output.to_s.strip.presence
+  # Runs a root helper operation; its refusal or failure becomes a DiskError.
+  def self.privileged(operation, **args)
+    Privileged.call(operation, **args)
+  rescue Privileged::Error => e
+    raise DiskError, e.message
   end
 
   def self.auto_mount_point

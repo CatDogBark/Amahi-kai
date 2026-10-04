@@ -27,6 +27,8 @@
 
 require 'json'
 require 'etc'
+require 'find'
+require 'tmpdir'
 require 'open3'
 require 'securerandom'
 require 'digest'
@@ -63,6 +65,43 @@ module AmahiHelper
 
   SWAPFILE = '/swapfile'
   FSTAB = '/etc/fstab'
+
+  # Data drives: whole disks or partitions on SATA/SAS/virtio/Xen and NVMe devices,
+  # mounted at /mnt/<name>. The fstab options are the ones PR #13 settled on: nofail and
+  # a short timeout, so a missing drive can't stop the NAS booting.
+  MNT = '/mnt'
+  DISK_DEVICE = %r{\A/dev/(?:[svx]d[a-z]{1,2}\d{0,3}|nvme\d{1,3}n\d{1,3}(?:p\d{1,3})?)\z}
+  MOUNT_NAME = /\A[A-Za-z0-9][A-Za-z0-9._-]{0,63}\z/
+  MOUNTABLE_FS = %w[ext2 ext3 ext4 xfs btrfs ntfs vfat exfat].freeze
+  FSTAB_OPTIONS = 'defaults,nofail,x-systemd.device-timeout=10s'
+  PREVIEW_LIMIT = { entries: 1_000_000, seconds: 30 }.freeze
+  # Where the helper makes its temporary folders (preview mounts, downloaded keys):
+  # writable only by root.
+  RUN_DIR = '/run'
+
+  GREYHOLE_CONF = '/etc/greyhole.conf'
+  GREYHOLE_SCHEMA = '/usr/share/greyhole/schema-mysql.sql'
+  MYSQL = '/usr/bin/mysql'
+  # Greyhole reaches its database as the app's MariaDB user, which already exists.
+  GREYHOLE_DB_SQL = "CREATE DATABASE IF NOT EXISTS greyhole; " \
+                    "GRANT ALL PRIVILEGES ON greyhole.* TO 'amahi'@'localhost'; FLUSH PRIVILEGES;"
+
+  # apt repositories the helper may add. The signing key is downloaded over HTTPS and
+  # accepted only if the fingerprints in it (the key and its subkeys, as `gpg --show-keys`
+  # lists them) are exactly the ones pinned here, so a key added to the file is refused.
+  APT_REPOSITORIES = {
+    'greyhole' => {
+      key_url: 'https://www.greyhole.net/releases/deb/greyhole-debsig.asc',
+      # Checked against the published key on the NAS, 2026-10-04.
+      fingerprints: %w[6ADB83262FA757410B33E13978B31B49B8D12778 8DD897BA66D40E90A47CE092AF19B5B28FADF99F].freeze,
+      keyring: '/usr/share/keyrings/greyhole-archive-keyring.asc',
+      list: '/etc/apt/sources.list.d/greyhole.list',
+      source: 'deb [signed-by=/usr/share/keyrings/greyhole-archive-keyring.asc] https://www.greyhole.net/releases/deb stable main'
+    }.freeze
+  }.freeze
+  # Packages the helper may install.
+  PACKAGES = %w[greyhole php8.3-mbstring php8.3-mysql].freeze
+  APT_ENV = ENV_MIN.merge('DEBIAN_FRONTEND' => 'noninteractive').freeze
 
   LOGIN = /\A[a-z][a-z0-9]{2,31}\z/
   RESERVED_LOGINS = %w[root amahi nobody].freeze
@@ -195,6 +234,58 @@ module AmahiHelper
       params: %w[content],
       validate: ->(a) { { content: dnsmasq_conf(a['content'], DNS_ALIAS_LINES) } },
       plan: ->(v) { [[:install, DNS_ALIASES, v[:content], :dnsmasq]] }
+    },
+    # ext4 on a data drive that isn't mounted. Never a drive the system runs from.
+    'disks.format' => {
+      params: %w[device],
+      validate: ->(a) { { device: unmounted_data_device(a['device']).first } },
+      plan: ->(v) { [['/usr/sbin/mkfs.ext4', '-F', v[:device]], ['/usr/bin/udevadm', 'settle', { allow_failure: true }]] }
+    },
+    # Mounts a data drive at /mnt/<name> and adds it to fstab (by UUID) if it isn't
+    # there yet. Replies with the mount point.
+    'disks.mount' => {
+      params: %w[device mount_point],
+      validate: ->(a) { mount_request(a['device'], a['mount_point']) },
+      plan: ->(v) { [[:mount_drive, v[:device], v[:mount_point], v[:fstype], v[:uuid]]] }
+    },
+    # Unmounts a data drive and removes its fstab line; an empty /mnt/storage-N goes too.
+    'disks.unmount' => {
+      params: %w[device],
+      validate: ->(a) { unmount_request(a['device']) },
+      plan: ->(v) { [[:unmount_drive, v[:mount_points], v[:uuid]]] }
+    },
+    # Lists the top level of an unmounted data drive, mounted read-only for the moment.
+    'disks.preview' => {
+      params: %w[device],
+      validate: ->(a) { preview_request(a['device']) },
+      plan: ->(v) { [[:preview_drive, v[:device], v[:fstype]]] }
+    },
+    # /etc/greyhole.conf, root:amahi 0640 (it holds the database password).
+    'greyhole.write_config' => {
+      params: %w[content],
+      validate: ->(a) { { content: greyhole_conf(a['content']) } },
+      plan: ->(v) { [[:install, GREYHOLE_CONF, v[:content], nil, '0640', APP_USER]] }
+    },
+    # Greyhole's database, and its schema once the package has put it in place.
+    'greyhole.setup_database' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:greyhole_database]] }
+    },
+    'packages.add_repository' => {
+      params: %w[repository],
+      validate: ->(a) { { repository: listed(a['repository'], 'repository', APT_REPOSITORIES.keys) } },
+      plan: ->(v) { [[:add_apt_repository, v[:repository]]] }
+    },
+    # Installs packages from PACKAGES, with apt's output streamed as it runs.
+    'packages.install' => {
+      params: %w[packages],
+      validate: ->(a) { { packages: package_list(a['packages']) } },
+      plan: lambda { |v|
+        [['/usr/bin/apt-get', 'update', { env: APT_ENV, stream: true }],
+         ['/usr/bin/apt-get', '-y', '-o', 'Dpkg::Options::=--force-confold', '-o', 'DPkg::Lock::Timeout=300',
+          'install', *v[:packages], { env: APT_ENV, stream: true }]]
+      }
     }
   }.freeze
 
@@ -231,6 +322,13 @@ module AmahiHelper
     /\Abind-interfaces\z/,
     /\Aexcept-interface=lo\z/
   ].freeze
+  # Greyhole runs as root and some of its settings run commands, so its config may only
+  # hold the lines the app generates. Pool drives must be data drives under /mnt.
+  GREYHOLE_LINES = [
+    /\Adb_host = localhost\z/, /\Adb_user = amahi\z/, /\Adb_name = greyhole\z/, /\Adb_pass = [[:print:]]+\z/,
+    %r{\Astorage_pool_drive = (/mnt/[A-Za-z0-9][A-Za-z0-9._-]{0,63}(?:/[A-Za-z0-9._-]+)*), min_free: \d{1,6}gb\z},
+    /\Anum_copies\[[[:print:]]{1,64}\] = (?:\d{1,2}|max)\z/
+  ].freeze
   DNS_ALIAS_LINES = [%r{\Aaddress=/[a-z][a-z0-9-]{0,62}/(?:#{IPV4})?\z}i].freeze
 
   class << self
@@ -257,8 +355,11 @@ module AmahiHelper
       check_environment!
       raise Refused, 'the helper must run as root' unless Process.euid.zero?
       values = validate(op, args)
-      notes = plan(op, values).filter_map { |step| perform(step) }
-      notes.empty? ? { 'ok' => true } : { 'ok' => true, 'notes' => notes }
+      results = plan(op, values).filter_map { |step| perform(step) }
+      reply = { 'ok' => true }
+      results.grep(Hash).each { |data| reply.merge!(data) }
+      notes = results.grep(String)
+      notes.empty? ? reply : reply.merge('notes' => notes)
     rescue StandardError => e
       result = e.is_a?(Refused) ? 'refused' : 'failed'
       error = e.message
@@ -391,6 +492,97 @@ module AmahiHelper
       value
     end
 
+    # --- Data drives ---
+
+    # A whole disk or partition that is a data drive: everything mounted from its disk
+    # (partitions, LVM or RAID volumes, swap) is under /mnt. A drive with anything
+    # mounted elsewhere is the one the system runs from, or was set up by hand.
+    # Returns [device, its lsblk node].
+    def data_device(value)
+      value = string(value, 'device', max: 64)
+      raise Refused, "#{value.inspect} is not a disk or partition Amahi-kai manages" unless value.match?(DISK_DEVICE)
+      raise Refused, "#{value} doesn't exist" unless File.blockdev?(value)
+      disk, node = locate_device(block_tree, value)
+      raise Refused, "lsblk doesn't list #{value}" unless node
+      system_mounts = mountpoints(disk).reject { |mp| mp.start_with?("#{MNT}/") }
+      raise Refused, "#{value} is on a disk the system uses (#{system_mounts.first} is mounted from it)" if system_mounts.any?
+      [value, node]
+    end
+
+    def unmounted_data_device(value)
+      device, node = data_device(value)
+      mounted = mountpoints(node)
+      raise Refused, "#{device} is mounted at #{mounted.first}; unmount it first" if mounted.any?
+      [device, node]
+    end
+
+    def mount_request(device, mount_point)
+      device, = unmounted_data_device(device)
+      info = probe(device)
+      fstype = mountable_fstype(device, info)
+      mount_point = new_mount_point(mount_point)
+      owner = fstab_entries.find { |fields| fields[1] == mount_point && fields[0] != "UUID=#{info['UUID']}" }
+      raise Refused, "#{mount_point} belongs to another drive in /etc/fstab (#{owner[0]})" if owner
+      { device: device, mount_point: mount_point, fstype: fstype, uuid: info['UUID'] }
+    end
+
+    def unmount_request(device)
+      device, node = data_device(device)
+      mounted = mountpoints(node)
+      raise Refused, "#{device} isn't mounted" if mounted.empty?
+      { device: device, mount_points: mounted, uuid: probe(device)['UUID'] }
+    end
+
+    def preview_request(device)
+      device, = unmounted_data_device(device)
+      { device: device, fstype: mountable_fstype(device, probe(device)) }
+    end
+
+    def mountable_fstype(device, info)
+      fstype = info['TYPE'] or raise Refused, "#{device} has no filesystem; format it first"
+      raise Refused, "#{device} holds #{fstype}, which Amahi-kai doesn't mount" unless MOUNTABLE_FS.include?(fstype)
+      fstype
+    end
+
+    # /mnt/<name>: a real, empty folder that isn't a mount point yet, or a new one.
+    def new_mount_point(value)
+      value = string(value, 'mount_point', max: 128)
+      name = value[%r{\A#{MNT}/([^/]+)\z}, 1]
+      raise Refused, "mount point #{value.inspect} must be #{MNT}/<name> (letters, digits, . _ -)" unless name&.match?(MOUNT_NAME)
+      raise Refused, "#{MNT} must be a real folder" unless File.realpath(MNT) == MNT
+      return value unless File.exist?(value) || File.symlink?(value)
+      raise Refused, "#{value} is not a folder" unless File.lstat(value).directory?
+      raise Refused, "#{value} is already a mount point" if mount_point?(value)
+      raise Refused, "#{value} isn't empty" unless Dir.empty?(value)
+      value
+    end
+
+    # --- Greyhole and packages ---
+
+    def greyhole_conf(value)
+      value = string(value, 'content', max: 64 * 1024)
+      value.each_line do |line|
+        line = line.strip
+        next if line.empty? || line.start_with?('#')
+        match = GREYHOLE_LINES.lazy.map { |re| line.match(re) }.find(&:itself)
+        raise Refused, "greyhole.conf line #{line.sub(/\Adb_pass = .*/, 'db_pass = ...').inspect} is not one Amahi-kai writes" unless match
+        pool = match[1] if match.size > 1 # storage_pool_drive's path
+        raise Refused, "pool drive #{pool} must be a normalized path" if pool && !normalized_path?(pool)
+      end
+      value
+    end
+
+    def listed(value, what, allowed)
+      value = string(value, what, max: 64)
+      raise Refused, "#{what} #{value.inspect} isn't one Amahi-kai uses" unless allowed.include?(value)
+      value
+    end
+
+    def package_list(value)
+      raise Refused, 'packages must be a list' unless value.is_a?(Array) && !value.empty? && value.size <= 10
+      value.map { |name| listed(name, 'package', PACKAGES) }.uniq
+    end
+
     def password(value)
       value = string(value, 'password', max: 256)
       raise Refused, 'password contains a line break' if value.match?(/[\r\n]/)
@@ -511,22 +703,60 @@ module AmahiHelper
 
     # --- Steps ------------------------------------------------------------------------
 
-    # Runs one step; returns a note for the reply, or nil.
+    # Runs one step; returns a note for the reply (String), data for it (Hash), or nil.
     def perform(step)
       return run_command(step) unless step.first.is_a?(Symbol)
       action, *rest = step
       send(:"do_#{action}", *rest)
     end
 
+    # Options in the step's last Hash: :stdin, :allow_failure, :env (replaces ENV_MIN),
+    # and :stream, which copies the command's output to stderr line by line as it runs
+    # (Privileged.call passes it on, so long installs show progress).
     def run_command(step)
       argv = step.dup
       opts = argv.last.is_a?(Hash) ? argv.pop : {}
-      _out, err, status = Open3.capture3(ENV_MIN, [argv[0], argv[0]], *argv.drop(1),
-                                         stdin_data: opts[:stdin].to_s, unsetenv_others: true, chdir: '/')
+      env = opts[:env] || ENV_MIN
+      if opts[:stream]
+        err, status = stream_command(env, argv)
+      else
+        _out, err, status = Open3.capture3(env, [argv[0], argv[0]], *argv.drop(1),
+                                           stdin_data: opts[:stdin].to_s, unsetenv_others: true, chdir: '/')
+      end
       return nil if status.success?
       message = "#{File.basename(argv[0])} exited #{status.exitstatus}: #{last_lines(err, 3)}"
       return "ignored: #{message}" if opts[:allow_failure]
       raise Failed, message
+    rescue SystemCallError => e
+      return "ignored: #{argv[0]}: #{e.message}" if opts&.dig(:allow_failure)
+      raise Failed, "#{argv[0]}: #{e.message}"
+    end
+
+    def stream_command(env, argv)
+      tail = []
+      status = Open3.popen2e(env, [argv[0], argv[0]], *argv.drop(1), unsetenv_others: true, chdir: '/') do |stdin, out, wait|
+        stdin.close
+        forwarding = true
+        out.each_line do |line|
+          tail = (tail << line).last(3)
+          next unless forwarding
+          begin
+            $stderr.puts(line.chomp)
+            $stderr.flush
+          rescue IOError, SystemCallError
+            forwarding = false # the caller stopped listening; let the command finish
+          end
+        end
+        wait.value
+      end
+      [tail.join, status]
+    end
+
+    # A command's standard output; raises Failed if it fails.
+    def capture(argv)
+      out, err, status = Open3.capture3(ENV_MIN, [argv[0], argv[0]], *argv.drop(1), unsetenv_others: true, chdir: '/')
+      raise Failed, "#{File.basename(argv[0])} exited #{status.exitstatus}: #{last_lines(err, 3)}" unless status.success?
+      out
     rescue SystemCallError => e
       raise Failed, "#{argv[0]}: #{e.message}"
     end
@@ -593,12 +823,14 @@ module AmahiHelper
     # place, so readers see the old file or the new one, never half of one. dnsmasq's
     # folder is created if dnsmasq isn't installed yet, so its config is ready when it is.
     # (dnsmasq and Samba skip the temporary file: its name starts with a dot.)
-    def do_install(target, content, check)
+    def do_install(target, content, check, mode = '0644', group = nil)
       Dir.mkdir(File.dirname(target), 0o755) if check == :dnsmasq && !File.directory?(File.dirname(target))
       tmp = File.join(File.dirname(target), ".#{File.basename(target)}.amahi-#{SecureRandom.hex(6)}")
-      File.open(tmp, File::WRONLY | File::CREAT | File::EXCL | File::NOFOLLOW, 0o644) do |f|
+      File.open(tmp, File::WRONLY | File::CREAT | File::EXCL | File::NOFOLLOW, 0o600) do |f|
         f.write(content)
         f.fsync
+        f.chown(0, group_id(group) || 0) if group
+        f.chmod(Integer(mode, 8))
       end
       check_smb_conf(tmp) if check == :smb_conf
       check_dnsmasq_conf(tmp) if check == :dnsmasq
@@ -657,8 +889,117 @@ module AmahiHelper
       File.open(FSTAB, 'a') { |f| f.puts "#{path} none swap sw 0 0" }
     end
 
+    def do_mount_drive(device, mount_point, fstype, uuid)
+      created = !File.exist?(mount_point)
+      Dir.mkdir(mount_point, 0o755) if created
+      begin
+        run_command(['/usr/bin/mount', *(fstype == 'ntfs' ? %w[-t ntfs-3g] : []), device, mount_point])
+        raise Failed, "#{device} didn't mount at #{mount_point}" unless mount_point?(mount_point)
+      rescue Failed
+        Dir.rmdir(mount_point) if created && !mount_point?(mount_point)
+        raise
+      end
+      fstab_type = fstype == 'ntfs' ? 'ntfs-3g' : fstype
+      if uuid && fstab_entries.none? { |fields| fields[0] == "UUID=#{uuid}" }
+        File.open(FSTAB, 'a') { |f| f.puts "UUID=#{uuid} #{mount_point} #{fstab_type} #{FSTAB_OPTIONS} 0 2" }
+      end
+      { 'mount_point' => mount_point }
+    end
+
+    def do_unmount_drive(mount_points, uuid)
+      mount_points.each { |mp| run_command(['/usr/bin/umount', mp]) }
+      remove_fstab_lines("UUID=#{uuid}") if uuid
+      mount_points.each do |mp|
+        Dir.rmdir(mp) if mp.start_with?("#{MNT}/storage-") && Dir.empty?(mp)
+      rescue SystemCallError
+        nil
+      end
+      nil
+    end
+
+    # Rewrites fstab without the lines for +source+, keeping a copy of the old one as
+    # /etc/fstab.amahi-backup.
+    def remove_fstab_lines(source)
+      old = File.read(FSTAB)
+      new = old.lines.reject { |line| line.split.first == source }.join
+      return if new == old
+      File.write("#{FSTAB}.amahi-backup", old)
+      do_install(FSTAB, new, nil, format('%o', File.stat(FSTAB).mode & 0o7777))
+    end
+
+    def do_preview_drive(device, fstype)
+      dir = Dir.mktmpdir('amahi-preview-', RUN_DIR)
+      options = %w[ro nosuid nodev noexec]
+      options << 'noload' if %w[ext3 ext4].include?(fstype) # don't replay the journal
+      options << 'norecovery' if fstype == 'xfs'
+      run_command(['/usr/bin/mount', *(fstype == 'ntfs' ? %w[-t ntfs-3g] : []), '-o', options.join(','), device, dir])
+      begin
+        directory_summary(dir)
+      ensure
+        run_command(['/usr/bin/umount', dir, { allow_failure: true }])
+      end
+    ensure
+      Dir.rmdir(dir) if dir && !mount_point?(dir)
+    end
+
+    # Top-level entries with sizes and file counts, walking at most PREVIEW_LIMIT.
+    def directory_summary(dir)
+      started = Time.now
+      walked = 0
+      partial = false
+      entries = Dir.children(dir).sort.reject { |name| name.start_with?('.') || name == 'lost+found' }.map do |name|
+        path = File.join(dir, name)
+        stat = File.lstat(path)
+        entry = { 'name' => name.dup.force_encoding('UTF-8').scrub('?'), 'type' => stat.directory? ? 'directory' : 'file',
+                  'size' => stat.directory? ? 0 : stat.size, 'file_count' => stat.directory? ? 0 : 1 }
+        next entry unless stat.directory?
+        Find.find(path) do |inner|
+          walked += 1
+          if walked > PREVIEW_LIMIT[:entries] || Time.now - started > PREVIEW_LIMIT[:seconds]
+            partial = true
+            break
+          end
+          inner_stat = File.lstat(inner)
+          next unless inner_stat.file?
+          entry['size'] += inner_stat.size
+          entry['file_count'] += 1
+        rescue SystemCallError
+          next
+        end
+        entry
+      end
+      { 'entries' => entries, 'total_used' => entries.sum { |e| e['size'] },
+        'file_count' => entries.sum { |e| e['file_count'] }, 'partial' => partial }
+    end
+
+    def do_greyhole_database
+      run_command([MYSQL, '-u', 'root', '--batch', '-e', GREYHOLE_DB_SQL])
+      return nil unless File.exist?(GREYHOLE_SCHEMA)
+      count = "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'greyhole'"
+      return 'schema already loaded' if capture([MYSQL, '-u', 'root', '--batch', '--skip-column-names', '-e', count]).to_i.positive?
+      run_command([MYSQL, '-u', 'root', 'greyhole', { stdin: File.read(GREYHOLE_SCHEMA) }])
+      nil
+    end
+
+    def do_add_apt_repository(name)
+      repo = APT_REPOSITORIES.fetch(name)
+      raise Failed, "#{name}'s signing key fingerprint isn't pinned in the helper yet" if repo[:fingerprints].empty?
+      Dir.mktmpdir('amahi-apt-', RUN_DIR) do |dir|
+        key = File.join(dir, 'key.asc')
+        run_command(['/usr/bin/curl', '-fsSL', '--proto', '=https', '--tlsv1.2', '--max-time', '60', '-o', key, repo[:key_url]])
+        listed = capture(['/usr/bin/gpg', '--homedir', dir, '--batch', '--show-keys', '--with-colons', key])
+        found = listed.lines.grep(/\Afpr:/).map { |line| line.split(':')[9] }
+        unless found.sort == repo[:fingerprints].sort
+          raise Failed, "#{name}'s signing key has fingerprints #{found.join(', ')}, not the pinned ones"
+        end
+        do_install(repo[:keyring], File.read(key), nil)
+      end
+      do_install(repo[:list], "#{repo[:source]}\n", nil)
+    end
+
     # A step as shown by --dry-run and in errors: secrets and file contents left out.
     def describe(step)
+      step = step.dup.tap { |s| s[2] = "[#{s[2].bytesize} bytes]" } if step.first == :install
       step.map do |part|
         case part
         when Hash then part.key?(:stdin) ? { 'stdin' => '[withheld]' }.merge(part.except(:stdin).transform_keys(&:to_s)) : part.transform_keys(&:to_s)
@@ -695,6 +1036,54 @@ module AmahiHelper
       message = e.is_a?(Failed) ? e.message : "internal error: #{e.class}: #{e.message}"
       output.puts JSON.generate('ok' => false, 'error' => message)
       2
+    end
+
+    # lsblk's device tree (as root it sees everything; as anyone it sees mount points).
+    def block_tree
+      JSON.parse(capture(['/usr/bin/lsblk', '-J', '-o', 'PATH,TYPE,MOUNTPOINTS']))['blockdevices'] || []
+    rescue JSON::ParserError
+      raise Failed, "couldn't read lsblk's output"
+    end
+
+    # [top-level disk, node] for +device+ in +tree+, or [nil, nil].
+    def locate_device(tree, device)
+      tree.each do |disk|
+        node = find_node(disk, device)
+        return [disk, node] if node
+      end
+      [nil, nil]
+    end
+
+    def find_node(node, device)
+      return node if node['path'] == device
+      (node['children'] || []).each do |child|
+        found = find_node(child, device)
+        return found if found
+      end
+      nil
+    end
+
+    # Every mount point in +node+'s subtree ("[SWAP]" included).
+    def mountpoints(node)
+      [*Array(node['mountpoints']).compact, *(node['children'] || []).flat_map { |c| mountpoints(c) }].uniq
+    end
+
+    # blkid's low-level probe of the device itself (not the cache): TYPE, UUID, ...
+    def probe(device)
+      out, _err, status = Open3.capture3(ENV_MIN, ['/usr/sbin/blkid', '/usr/sbin/blkid'], '-p', '-o', 'export', device,
+                                         unsetenv_others: true, chdir: '/')
+      return {} unless status.success? # exit 2: nothing found
+      out.lines.to_h { |line| line.chomp.split('=', 2) }
+    end
+
+    def fstab_entries
+      File.readlines(FSTAB).map(&:split).reject { |fields| fields.empty? || fields[0].start_with?('#') }
+    end
+
+    def mount_point?(path)
+      File.stat(path).dev != File.stat(File.dirname(path)).dev
+    rescue SystemCallError
+      false
     end
 
     def last_lines(text, count)

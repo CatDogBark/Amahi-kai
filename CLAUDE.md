@@ -7,7 +7,7 @@ over plain HTTP, through a Cloudflare Tunnel, and through Tailscale. Troy owns t
 
 Current work: Phase 3 of a code review fix plan. Read **`docs/plans/roadmap.md`** first, then the
 plan for the PR you're on (**`docs/plans/privileged-helper.md`**: L is done; M is split into
-M1, M2 and M3, and M1 is built).
+M1, M2 and M3; M1 is done and M2 is built).
 
 ## Workflow
 
@@ -63,7 +63,8 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
   when started from the web UI, so `systemctl restart amahi-kai` must stay its last step. If System
   Update breaks, Troy runs `sudo /opt/amahi-kai/bin/amahi-update` over SSH.
 - **Root access goes through the helper.** User accounts, Samba's files, share folders, Settings →
-  Servers, the hostname, dnsmasq, swap and reboot/power off are changed by `libexec/amahi-helper`
+  Servers, the hostname, dnsmasq, swap, reboot/power off, data drives (format, mount, fstab) and
+  Greyhole are changed by `libexec/amahi-helper`
   (`Privileged.call('users.create', ...)`), which validates and logs every call. Add an operation there, not a sudoers rule. Sudoers rules are in
   `config/sudoers/amahi-kai`; `bin/amahi-install-helper` installs them and the helper (the
   installer and the updater both run it) only after `visudo -cf` passes.
