@@ -9,6 +9,16 @@ RSpec.describe "SettingsController extended", type: :request do
       expect(response).to have_http_status(:ok)
       expect(response.body).to include("System")
     end
+
+    # The update window's buttons live inside a bar that's always there, so the window keeps
+    # its height when they appear or disappear (it used to jump and cut off the last line).
+    it "puts the update window's buttons inside its always-visible status bar" do
+      get "/settings/system_status"
+      bar = Nokogiri::HTML(response.body).at_css('#update-install-bar')
+      expect(bar).not_to be_nil
+      expect(bar.at_css('#update-status')).not_to be_nil
+      expect(bar.at_css('#update-install-footer button')).not_to be_nil
+    end
   end
 
   describe "POST activate_theme" do
