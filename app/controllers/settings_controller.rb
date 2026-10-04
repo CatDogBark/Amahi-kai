@@ -175,6 +175,10 @@ class SettingsController < ApplicationController
       sent = [sent, lines.size].max
       return sse.done(lines.last.to_s.start_with?('✓') ? 'success' : 'error') unless running
       return sse.done('error') if Time.current > deadline
+      # The update is restarting the app: end without "done" and the page reconnects to the
+      # new version. Puma finishes open requests before it stops, so a stream that waited for
+      # the update would hold the restart until systemd killed Puma (90 seconds).
+      return if server_stopping?
       sleep 0.5
     end
   end
@@ -184,6 +188,13 @@ class SettingsController < ApplicationController
     %w[active activating reloading].include?(out.strip)
   rescue SystemCallError
     false
+  end
+
+  # True once Puma has been told to stop or restart. The stream's body runs in a Puma
+  # thread, which knows its server.
+  def server_stopping?
+    server = Puma::Server.current if defined?(Puma::Server)
+    server ? server.shutting_down? : false
   end
 
   def simulate_update(sse, from)

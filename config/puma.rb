@@ -43,5 +43,9 @@ environment ENV.fetch("RAILS_ENV") { "development" }
 #   ActiveRecord::Base.establish_connection if defined?(ActiveRecord)
 # end
 
+# When stopping, give open requests 10 seconds, then end them (Puma allows 5 more). The
+# default waits for ever, so one long request held a restart until systemd killed Puma.
+force_shutdown_after 10
+
 # Allow puma to be restarted by `rails restart` command.
 plugin :tmp_restart
