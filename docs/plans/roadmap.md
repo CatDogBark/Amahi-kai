@@ -26,6 +26,7 @@ so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 | 3. O. Update rollback | System Update runs as its own job, backs up the database, and rolls back to the running commit if a step or the restarted app fails; updater sudo rules gone (6 left) | #31 |
 | 3. Q. Plain CSS | Sass compiler gone: the app's stylesheets are plain CSS and Bootstrap is its official 5.3.8 build (`vendor/assets`); System Status shows the deployed commit | #32 |
 | 3. Fix | System Update's restart no longer waits 90 seconds: the update page's stream ends when Puma stops, and Puma gives open requests 10 seconds | #33 |
+| 3. Fix | The setup wizard can't finish while the seeded admin password still works | #34 |
 
 ## Next: Phase 3
 
@@ -74,8 +75,6 @@ becomes root-owned (in N); Docker app work moves to Phase 4.
 Smaller findings from the review that no PR covers yet. Fold them into a nearby PR when it
 touches the same code.
 
-- The seeded admin password works until someone changes it; `setup/finish` should refuse to
-  complete until it's changed.
 - The per-IP login throttle (`config/initializers/rack_attack.rb`) trusts forwarded addresses from
   private ranges, so it's weaker on the LAN than it looks. The per-username limit holds.
 - Several features staged files at fixed `/tmp` paths before a root copy. Samba (L), dnsmasq

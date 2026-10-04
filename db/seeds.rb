@@ -13,11 +13,12 @@ Setting.set('net', '192.168.1')
 Setting.set('self-address', '10')
 Setting.set('domain', 'amahi.net')
 
+# The setup wizard won't finish until this password is changed.
 admin = User.new(
-  login: 'admin',
+  login: User::SEED_ADMIN_LOGIN,
   name: 'Admin User',
-  password: 'secretpassword',
-  password_confirmation: 'secretpassword',
+  password: User::SEED_ADMIN_PASSWORD,
+  password_confirmation: User::SEED_ADMIN_PASSWORD,
   admin: true,
   role: 'admin'
 )

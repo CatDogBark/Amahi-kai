@@ -110,10 +110,7 @@ class SecurityAudit
 
     def admin_password_changed?
       return true unless defined?(User)
-      admin = User.find_by(login: 'admin')
-      return true if admin.nil?
-      # Check if default password still works
-      !admin.authenticate('secretpassword')
+      !User.seed_admin_password_in_use?
     rescue StandardError
       true # If we can't check, assume it's fine
     end

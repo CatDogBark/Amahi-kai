@@ -28,6 +28,11 @@ class User < ApplicationRecord
   # guest  — Samba-only access, no web UI beyond login
   ROLES = %w[admin user guest].freeze
 
+  # The account db/seeds.rb creates. Its password is public (it's in this repo), so the
+  # setup wizard can't finish and the security audit fails while it still works.
+  SEED_ADMIN_LOGIN = 'admin'.freeze
+  SEED_ADMIN_PASSWORD = 'secretpassword'.freeze
+
   validates :role, inclusion: { in: ROLES }
 
   scope :admins, -> { where(role: 'admin') }
@@ -87,6 +92,12 @@ class User < ApplicationRecord
   end
 
   class << self
+    # True while the seeded admin account still accepts the seeded password.
+    def seed_admin_password_in_use?
+      admin = find_by(login: SEED_ADMIN_LOGIN)
+      admin.present? && admin.authenticate(SEED_ADMIN_PASSWORD).present?
+    end
+
     # [full name, uid, login] of the Linux account for +username+, or nil.
     # Logins are lowercased when users are created, so look up the lowercase name.
     def system_find_name_by_username(username)

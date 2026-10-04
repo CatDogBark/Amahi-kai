@@ -213,4 +213,22 @@ describe User do
       expect { user.update!(name: 'Someone Else') }.not_to change { user.reload.session_token }
     end
   end
+  describe ".seed_admin_password_in_use?" do
+    # spec_helper loads db/seeds.rb before each example, as on a fresh install.
+    let(:seeded_admin) { User.find_by(login: User::SEED_ADMIN_LOGIN) }
+
+    it "is true while the seeded admin still logs in with the seeded password" do
+      expect(User.seed_admin_password_in_use?).to be true
+    end
+
+    it "is false once that password has changed" do
+      seeded_admin.update!(password: "a-new-passphrase")
+      expect(User.seed_admin_password_in_use?).to be false
+    end
+
+    it "is false when the seeded admin account is gone" do
+      seeded_admin.delete
+      expect(User.seed_admin_password_in_use?).to be false
+    end
+  end
 end

@@ -20,8 +20,8 @@
       <span class="check">✓</span>
       <span>Admin password changed</span>
     <% else %>
-      <span class="skip">–</span>
-      <span style="color: #9ca3af;">Admin password (unchanged)</span>
+      <span class="skip" style="color: #dc3545;">✗</span>
+      <span>Admin password is still the default. <%= link_to "Change it", setup_admin_path %> to finish setup.</span>
     <% end %>
   </div>
 
@@ -75,10 +75,16 @@
   </div>
 </div>
 
-<%= form_tag(setup_finish_path, method: :post) do %>
+<% if @admin_password_changed %>
+  <%= form_tag(setup_finish_path, method: :post) do %>
+    <div style="text-align: center; margin-top: 28px;">
+      <button type="submit" class="btn-kai" style="padding: 12px 40px; font-size: 16px;">
+        Go to Dashboard →
+      </button>
+    </div>
+  <% end %>
+<% else %>
   <div style="text-align: center; margin-top: 28px;">
-    <button type="submit" class="btn-kai" style="padding: 12px 40px; font-size: 16px;">
-      Go to Dashboard →
-    </button>
+    <%= link_to "Change the admin password", setup_admin_path, class: "btn-kai", style: "padding: 12px 40px; font-size: 16px; display: inline-block;" %>
   </div>
 <% end %>
