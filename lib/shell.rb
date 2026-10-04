@@ -22,7 +22,6 @@ module Shell
     chmod chown
     mkdir rmdir cp mv rm
     docker
-    smartctl
   ].freeze
 
   # A last line of defence for the log: secrets belong on stdin or in private files

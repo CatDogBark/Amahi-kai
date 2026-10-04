@@ -20,8 +20,9 @@ class DiskUtils
   class << self
     def stats
       disks = lsblk_disks
+      temperatures = drive_temperatures
       disks.each do |disk|
-        temp = smartctl_temp(disk[:device])
+        temp = temperatures[disk[:device]].to_i
         disk[:temp_c] = temp > 0 ? temp.to_s : '-'
         disk[:temp_f] = temp > 0 ? (temp * 1.8 + 32).to_i.to_s : '-'
         disk[:tempcolor] = temp_color(temp)
@@ -86,15 +87,12 @@ class DiskUtils
       end
     end
 
-    def smartctl_temp(device)
-      # smartctl needs sudo for SMART data; timeout to avoid hangs
-      output = `timeout 5 sudo smartctl -A #{Shellwords.escape(device)} 2>/dev/null`
-      match = output.match(/Temperature_Celsius.*?(\d+)\s*$/) ||
-              output.match(/Current Drive Temperature:\s*(\d+)/) ||
-              output.match(/Temperature:\s*(\d+)/)
-      match ? match[1].to_i : 0
-    rescue StandardError
-      0
+    # SMART data needs root, so the helper reads it: { '/dev/sda' => 34, '/dev/vda' => nil }.
+    def drive_temperatures
+      Privileged.call('disks.temperatures')['temperatures'] || {}
+    rescue Privileged::Error => e
+      Rails.logger.warn("DiskUtils: #{e.message}") if defined?(Rails)
+      {}
     end
 
     def temp_color(temp)
