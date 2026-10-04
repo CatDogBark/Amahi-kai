@@ -268,7 +268,7 @@ class SecurityAudit
     # Tailscale), so regenerate it rather than editing it: the next share change
     # regenerated the file and undid the old edit.
     def fix_samba_lan_binding!
-      SambaService.push_config && Shell.run('systemctl restart smbd.service')
+      SambaService.push_config && SystemServices.find('smbd')&.perform('restart')
     end
 
     def simulated_fix(check_name)

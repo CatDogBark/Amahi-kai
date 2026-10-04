@@ -305,7 +305,7 @@ RSpec.describe 'AmahiHelper' do
 
     it 'plans create, own and chmod 2775 for a folder in the share root' do
       planned = steps('shares.create_dir', { 'path' => "#{root}/movies" })
-      expect(planned).to eq([[:mkdir_p, "#{root}/movies"], [:own_dir, "#{root}/movies", 'amahi', 'users', 0o2775]])
+      expect(planned).to eq([[:mkdir_p, "#{root}/movies"], [:own_dir, "#{root}/movies", 'amahi', 'users', '2775']])
       expect(helper.describe(planned.last)).to eq(['own_dir', "#{root}/movies", 'amahi', 'users', '2775'])
     end
 
@@ -332,7 +332,7 @@ RSpec.describe 'AmahiHelper' do
     it 'creates nested folders and sets owner and mode through the open folder' do
       path = "#{root}/media/movies"
       helper.do_mkdir_p(path)
-      helper.do_own_dir(path, me, my_group, 0o2775)
+      helper.do_own_dir(path, me, my_group, '2775')
       expect(File.stat(path).mode & 0o7777).to eq(0o2775)
       expect(File.stat(path).gid).to eq(Process.gid)
     end
@@ -340,7 +340,7 @@ RSpec.describe 'AmahiHelper' do
     it "won't follow a symlink in place of a folder" do
       File.symlink(@tmp, "#{root}/movies")
       expect { helper.do_mkdir_p("#{root}/movies/x") }.to raise_error(AmahiHelper::Failed, /is not a folder/)
-      expect { helper.do_own_dir("#{root}/movies", me, my_group, 0o2775) }.to raise_error(AmahiHelper::Failed, /is not a folder/)
+      expect { helper.do_own_dir("#{root}/movies", me, my_group, '2775') }.to raise_error(AmahiHelper::Failed, /is not a folder/)
       expect(File.stat(@tmp).mode & 0o7777).not_to eq(0o2775)
     end
 
@@ -381,6 +381,147 @@ RSpec.describe 'AmahiHelper' do
       expect { helper.do_install(target, 'new', :smb_conf) }.to raise_error(AmahiHelper::Refused)
       expect(File.read(target)).to eq('old')
       expect(Dir.children(@tmp)).to contain_exactly('files', 'mnt', 'smb.conf')
+    end
+  end
+
+  describe 'services' do
+    it 'controls only the services it lists, by their systemd unit' do
+      expect(steps('services.restart', { 'service' => 'smbd' })).to eq([%w[/usr/bin/systemctl restart smbd.service]])
+      expect(steps('services.stop', { 'service' => 'docker' })).to eq([%w[/usr/bin/systemctl stop docker.service]])
+      expect(steps('services.start', { 'service' => 'greyhole' })).to eq([%w[/usr/bin/systemctl start greyhole.service]])
+    end
+
+    it 'enables and disables with --now, so the service starts or stops too' do
+      expect(steps('services.enable', { 'service' => 'dnsmasq' })).to eq([%w[/usr/bin/systemctl enable --now dnsmasq.service]])
+      expect(steps('services.disable', { 'service' => 'dnsmasq' })).to eq([%w[/usr/bin/systemctl disable --now dnsmasq.service]])
+    end
+
+    it 'refuses other services and unit names' do
+      %w[sshd amahi-kai mariadb smbd.service ../x].each do |name|
+        expect(refusal('services.restart', { 'service' => name })).to include("isn't one Amahi-kai manages"), name
+      end
+      expect(refusal('services.stop', {})).to eq('service is missing')
+    end
+  end
+
+  describe 'system' do
+    it 'reboots and powers off through systemd' do
+      expect(steps('system.reboot', {})).to eq([%w[/usr/bin/systemctl reboot]])
+      expect(steps('system.poweroff', {})).to eq([%w[/usr/bin/systemctl poweroff]])
+      expect(refusal('system.reboot', { 'delay' => 5 })).to eq('unexpected argument delay')
+    end
+
+    it 'creates a swap file of 1 to 8 GB' do
+      expect(steps('system.create_swap', { 'size_gb' => 2 })).to eq([[:create_swapfile, '/swapfile', 2]])
+      [0, 9, '2', 2.5, nil].each do |size|
+        expect(refusal('system.create_swap', { 'size_gb' => size })).to include('whole number from 1 to 8'), size.inspect
+      end
+    end
+
+    describe 'the swap file' do
+      let(:dir) { Dir.mktmpdir }
+      let(:swapfile) { "#{dir}/swapfile" }
+      let(:fstab) { "#{dir}/fstab" }
+      let(:ran) { [] }
+
+      before do
+        stub_const('AmahiHelper::FSTAB', fstab)
+        File.write(fstab, "UUID=abc / ext4 defaults 0 1\n")
+        allow(helper).to receive(:run_command) { |argv| ran << argv.first.split('/').last }
+      end
+
+      after { FileUtils.rm_rf(dir) }
+
+      it 'is created private, turned on and added to fstab once' do
+        helper.do_create_swapfile(swapfile, 1)
+        expect(File.stat(swapfile).mode & 0o777).to eq(0o600)
+        expect(ran).to eq(%w[fallocate mkswap swapon])
+        expect(File.read(fstab)).to end_with("#{swapfile} none swap sw 0 0\n")
+
+        File.unlink(swapfile)
+        helper.do_create_swapfile(swapfile, 1)
+        expect(File.read(fstab).scan(swapfile).size).to eq(1)
+      end
+
+      it 'falls back to writing zeros when fallocate fails' do
+        allow(helper).to receive(:run_command) do |argv|
+          ran << argv.first.split('/').last
+          raise AmahiHelper::Failed, 'fallocate exited 1' if argv.first.end_with?('fallocate')
+        end
+        helper.do_create_swapfile(swapfile, 1)
+        expect(ran).to eq(%w[fallocate dd mkswap swapon])
+      end
+
+      it 'is removed again when a step fails, and fstab is left alone' do
+        allow(helper).to receive(:run_command) { |argv| raise AmahiHelper::Failed, 'mkswap exited 1' if argv.first.end_with?('mkswap') }
+        expect { helper.do_create_swapfile(swapfile, 1) }.to raise_error(AmahiHelper::Failed)
+        expect(File.exist?(swapfile)).to be false
+        expect(File.read(fstab)).not_to include(swapfile)
+      end
+
+      it 'refuses when the file already exists' do
+        File.write(swapfile, 'in use')
+        expect { helper.do_create_swapfile(swapfile, 1) }.to raise_error(AmahiHelper::Refused, /already exists/)
+        expect(File.read(swapfile)).to eq('in use')
+      end
+    end
+  end
+
+  describe 'network' do
+    it 'sets the hostname to one DNS label' do
+      expect(steps('network.set_hostname', { 'hostname' => 'amahi-kai' })).to eq([%w[/usr/bin/hostnamectl set-hostname amahi-kai]])
+      ['my nas', '-nas', 'nas-', 'nas.lan', 'x' * 64, "nas\n"].each do |name|
+        expect(refusal('network.set_hostname', { 'hostname' => name })).not_to be_nil, name.inspect
+      end
+    end
+
+    let(:dnsmasq_conf) do
+      DnsmasqService.write_config!(net: '192.168.1', dyn_lo: 100, dyn_hi: 254, gateway: '1', lease_time: 14_400,
+                                   domain: 'amahi.net', dhcp_enabled: true, dns_enabled: true)
+      Privileged.calls.find { |op, _| op == 'network.write_dnsmasq_config' }.last[:content]
+    end
+
+    it "accepts dnsmasq's generated config and installs it with a dnsmasq check" do
+      allow(DnsmasqService).to receive(:running?).and_return(false)
+      expect(steps('network.write_dnsmasq_config', { 'content' => dnsmasq_conf }))
+        .to eq([[:install, '/etc/dnsmasq.d/amahi.conf', dnsmasq_conf, :dnsmasq]])
+    end
+
+    it 'refuses dnsmasq lines that could run scripts, read files or redirect DNS' do
+      ['dhcp-script=/tmp/x', 'conf-file=/etc/shadow', 'conf-dir=/tmp', 'addn-hosts=/tmp/h', 'server=8.8.8.8',
+       'dhcp-range=192.168.1.100,192.168.1.300,600s', 'domain=bad domain', 'except-interface=eth0',
+       "local=/x/\nuser=root"].each do |line|
+        expect(refusal('network.write_dnsmasq_config', { 'content' => "#{line}\n" })).to include('not one Amahi-kai writes'), line
+      end
+    end
+
+    it 'accepts only address lines for DNS aliases' do
+      ok = "# aliases\naddress=/files/192.168.1.10\naddress=/blocked/\n"
+      expect(steps('network.write_dns_aliases', { 'content' => ok })).to eq([[:install, '/etc/dnsmasq.d/amahi-aliases.conf', ok, :dnsmasq]])
+      ['address=/a.b/1.2.3.4', 'address=/x/1.2.3.400', 'server=/x/1.2.3.4', 'dhcp-range=1.2.3.4,1.2.3.5,1s'].each do |line|
+        expect(refusal('network.write_dns_aliases', { 'content' => "#{line}\n" })).to include('not one Amahi-kai writes'), line
+      end
+    end
+
+    it 'creates the dnsmasq folder if dnsmasq is not installed yet' do
+      Dir.mktmpdir do |dir|
+        target = "#{dir}/dnsmasq.d/amahi.conf"
+        allow(helper).to receive(:check_dnsmasq_conf)
+        helper.do_install(target, "bind-interfaces\n", :dnsmasq)
+        expect(File.read(target)).to eq("bind-interfaces\n")
+        expect(helper).to have_received(:check_dnsmasq_conf)
+      end
+    end
+
+    it 'checks the config with the real dnsmasq where it is installed' do
+      skip 'dnsmasq is not installed' unless File.executable?(AmahiHelper::DNSMASQ)
+      Dir.mktmpdir do |dir|
+        conf = "#{dir}/amahi.conf"
+        File.write(conf, "dhcp-range=192.168.1.100,192.168.1.254,14400s\nbind-interfaces\n")
+        expect { helper.check_dnsmasq_conf(conf) }.not_to raise_error
+        File.write(conf, "dhcp-rnage=1\n")
+        expect { helper.check_dnsmasq_conf(conf) }.to raise_error(AmahiHelper::Refused, /dnsmasq rejected/)
+      end
     end
   end
 

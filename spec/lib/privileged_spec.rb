@@ -74,14 +74,15 @@ RSpec.describe Privileged do
     end
   end
 
-  # Every Privileged.call in the app names an operation the helper has, and every
-  # operation is used: the helper shouldn't keep root abilities nothing asks for.
-  # (User#system_call wraps Privileged.call.)
+  # Every operation name the app uses is one the helper has, and every operation is
+  # used: the helper shouldn't keep root abilities nothing asks for. Operation names are
+  # found as quoted strings in the helper's namespaces, so names kept in a table (as in
+  # SystemServices::ACTION_OPERATIONS) count too.
   describe 'contract with libexec/amahi-helper' do
     let(:called) do
-      Dir[Rails.root.join('{app,lib}/**/*.rb')].flat_map do |file|
-        File.read(file).scan(/(?:Privileged\.call|system_call)\(\s*'([^']+)'/).flatten
-      end.uniq
+      namespaces = described_class.operations.map { |op| op.split('.').first }.uniq
+      pattern = /['"]((?:#{namespaces.join('|')})\.[a-z_]+)['"]/
+      Dir[Rails.root.join('{app,lib}/**/*.rb')].flat_map { |file| File.read(file).scan(pattern).flatten }.uniq
     end
 
     it 'only calls operations the helper has' do

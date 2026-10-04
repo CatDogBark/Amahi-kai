@@ -2,39 +2,17 @@
 # Installed as /etc/sudoers.d/amahi-kai by bin/amahi-install and bin/amahi-update, only
 # after `visudo -cf` accepts it. Design: docs/plans/privileged-helper.md
 #
-# User accounts, Samba config and share folders go through the root helper, which
-# checks each request and logs it to /var/log/amahi-kai/helper.log. The rules after
-# it are for jobs that haven't moved to the helper yet.
+# User accounts, Samba config, share folders, Settings → Servers, the hostname, dnsmasq,
+# swap, and reboot/power off go through the root helper, which checks each request and
+# logs it to /var/log/amahi-kai/helper.log. The rules after it are for jobs that haven't
+# moved to the helper yet.
 
 # Privileged helper (libexec/amahi-helper)
 amahi ALL=(root) NOPASSWD: /usr/local/sbin/amahi-helper
 
-# Config file staging
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /tmp/amahi-staging/* /etc/dnsmasq.d/*
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/lib/amahi-kai/tmp/* /etc/dnsmasq.d/*
-
-# Service management — Settings → Servers (lib/system_services.rb)
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start smbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop smbd.service
+# Samba restarts after Greyhole changes (lib/greyhole.rb; moves to the helper in M2)
 amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart smbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl reload smbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable smbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl disable smbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start nmbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop nmbd.service
 amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart nmbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl reload nmbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable nmbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl disable nmbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start dnsmasq.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop dnsmasq.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart dnsmasq.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl reload dnsmasq.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable dnsmasq.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl disable dnsmasq.service
-
-# Hostname management
-amahi ALL=(root) NOPASSWD: /usr/bin/hostnamectl set-hostname *
 
 # Database backups
 amahi ALL=(root) NOPASSWD: /usr/bin/mysqldump
@@ -132,8 +110,3 @@ amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get install -y fail2ban
 amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get install -y unattended-upgrades
 amahi ALL=(root) NOPASSWD: /usr/bin/dpkg-reconfigure -plow unattended-upgrades
 amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/lib/amahi-kai/tmp/sshd_config /etc/ssh/sshd_config
-amahi ALL=(root) NOPASSWD: /usr/bin/fallocate -l * /swapfile
-amahi ALL=(root) NOPASSWD: /usr/bin/dd if=/dev/zero of=/swapfile *
-amahi ALL=(root) NOPASSWD: /usr/bin/chmod 600 /swapfile
-amahi ALL=(root) NOPASSWD: /sbin/mkswap /swapfile
-amahi ALL=(root) NOPASSWD: /sbin/swapon /swapfile

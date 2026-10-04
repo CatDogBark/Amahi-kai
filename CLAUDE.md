@@ -6,7 +6,8 @@ over plain HTTP, through a Cloudflare Tunnel, and through Tailscale. Troy owns t
 (`CatDogBark/Amahi-kai`, **public**) and the NAS.
 
 Current work: Phase 3 of a code review fix plan. Read **`docs/plans/roadmap.md`** first, then the
-plan for the PR you're on (**`docs/plans/privileged-helper.md`**: PR L is built, M is next).
+plan for the PR you're on (**`docs/plans/privileged-helper.md`**: L is done; M is split into
+M1, M2 and M3, and M1 is built).
 
 ## Workflow
 
@@ -52,20 +53,26 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
   (`*_stream` actions) prove they come from an Amahi page with the CSRF token in the URL
   (`withStreamToken` in `app/assets/javascripts/stream_token.js`). A stream change can break
   System Update itself.
+- **A failed System Update leaves the old app running**, so the web UI looks fine. From #21 to #24
+  every update stopped at "Running database migrations" and it went unnoticed for four PRs. After
+  an update, check its last line ("✓ Amahi-kai updated and running!") and that System Status shows
+  Amahi-kai restarted. Production reads the compiled-assets manifest at every boot, which CI never
+  does; `spec/lib/assets_manifest_spec.rb` covers it.
 - **The update that deploys a change runs the old code.** `bin/amahi-update` re-execs itself after
   `git pull` (bash would otherwise keep running the old copy). It runs inside `amahi-kai.service`
   when started from the web UI, so `systemctl restart amahi-kai` must stay its last step. If System
   Update breaks, Troy runs `sudo /opt/amahi-kai/bin/amahi-update` over SSH.
-- **Root access goes through the helper.** User accounts, Samba's files and share folders are
-  changed by `libexec/amahi-helper` (`Privileged.call('users.create', ...)`), which validates and
-  logs every call. Add an operation there, not a sudoers rule. Sudoers rules are in
+- **Root access goes through the helper.** User accounts, Samba's files, share folders, Settings →
+  Servers, the hostname, dnsmasq, swap and reboot/power off are changed by `libexec/amahi-helper`
+  (`Privileged.call('users.create', ...)`), which validates and logs every call. Add an operation there, not a sudoers rule. Sudoers rules are in
   `config/sudoers/amahi-kai`; `bin/amahi-install-helper` installs them and the helper (the
   installer and the updater both run it) only after `visudo -cf` passes.
 - `Shell.capture` and `Open3` don't set `$?`; use the status they return.
 - Build commands from names as argument lists (`Open3.capture3('systemctl', 'show', unit)`), not
   strings through a shell.
 - `lib/system_services.rb` is the one list of system services (dashboard, System Status and
-  Settings → Servers). Its `actions` must match a sudoers rule exactly (`smbd.service` vs `docker`).
+  Settings → Servers). The services it gives `actions` to must match the helper's `SERVICES` list
+  (a spec checks).
 - Production refuses to boot without `SECRET_KEY_BASE` and creates `/var/lib/amahi-kai` at boot.
   To check production boot without root: `unshare -rm` and bind a scratch dir over `/var/lib`.
 - Samba config is generated from `Share.samba_conf` and must pass `testparm` before it's installed.

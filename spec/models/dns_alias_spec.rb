@@ -96,4 +96,23 @@ describe DnsAlias do
       alias_record.destroy
     end
   end
+
+  describe "dnsmasq aliases file" do
+    it "is written through the root helper with every alias, in lines the helper accepts" do
+      DnsAlias.create!(name: "files", address: "192.168.1.10")
+      DnsAlias.create!(name: "blocked", address: "")
+      DnsAlias.new.send(:regenerate_dnsmasq_config)
+
+      op, args = Privileged.calls.last
+      expect(op).to eq('network.write_dns_aliases')
+      expect(args[:content]).to include("address=/files/192.168.1.10\n", "address=/blocked/\n")
+      Privileged.operations # loads libexec/amahi-helper
+      expect { AmahiHelper.dnsmasq_conf(args[:content], AmahiHelper::DNS_ALIAS_LINES) }.not_to raise_error
+    end
+
+    it "keeps the alias when the helper refuses the file" do
+      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('network.write_dns_aliases', 'refused'))
+      expect { DnsAlias.new.send(:regenerate_dnsmasq_config) }.not_to raise_error
+    end
+  end
 end

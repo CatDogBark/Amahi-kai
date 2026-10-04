@@ -60,6 +60,9 @@ All notable changes to Amahi-kai are documented here.
 - **A share created guest-writeable gets a guest-writeable folder.** The permission used to be set before the folder existed.
 - **Removed unused code that made every file in a share world-writable** (`chmod -R a+rwx`). The Clear permissions button only ever cleared the share's user lists, and still does.
 - **The app starts again once its assets are compiled.** The gem updates that came with Rails 8.1.4 brought json 3, and Sprockets 4.2 (which builds the CSS and JavaScript) passed json an option it no longer accepts. Any production start with compiled assets in place stopped with `ArgumentError: unknown keyword: create_additions`, including the database migration step of System Update. Sprockets is updated to 4.3.0, the first release that works with json 3.
+- **Services, the hostname, dnsmasq, swap, reboot and power off go through the root helper too.** Settings → Servers' Start, Stop and Restart, the setup wizard's hostname and swap steps, and Network → Gateway's dnsmasq settings and DNS aliases each use one checked, logged operation, and 24 more sudo rules are gone. dnsmasq's config files may only contain the lines Amahi-kai writes (dnsmasq can run scripts as root), are checked with `dnsmasq --test`, and are no longer staged in `/tmp`.
+- **Reboot and Power off work.** sudo had no rule for them, so the buttons did nothing; if one fails now, the page says so instead of "Rebooting".
+- **The setup wizard's swap file is added to `/etc/fstab`**, so it survives a reboot (that step used `sh`, which sudo refused). A server name with spaces or capitals becomes a valid hostname ("My NAS" → `my-nas`), and if the hostname can't be set the wizard says so.
 
 ### 🔧 Architecture & Code Quality
 

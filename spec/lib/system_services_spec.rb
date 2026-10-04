@@ -101,19 +101,30 @@ RSpec.describe SystemServices do
   end
 
   describe 'Service#perform' do
-    before { allow(Shell).to receive(:run).and_return(true) }
-
-    it 'runs the listed actions through sudo with the unit as sudoers spells it' do
-      described_class.find('smbd').perform('restart')
-      described_class.find('docker').perform('stop')
-      expect(Shell).to have_received(:run).with('systemctl restart smbd.service')
-      expect(Shell).to have_received(:run).with('systemctl stop docker')
+    it 'runs the listed actions through the root helper' do
+      expect(described_class.find('smbd').perform('restart')).to be true
+      expect(described_class.find('docker').perform('stop')).to be true
+      expect(Privileged.calls).to eq([['services.restart', { service: 'smbd' }], ['services.stop', { service: 'docker' }]])
     end
 
     it 'refuses actions the service does not list' do
       expect { described_class.find('mariadb').perform('stop') }.to raise_error(ArgumentError)
       expect { described_class.find('smbd').perform('disable') }.to raise_error(ArgumentError)
-      expect(Shell).not_to have_received(:run)
+      expect(Privileged.calls).to be_empty
+    end
+
+    it 'reports a failure instead of raising' do
+      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('services.restart', 'exit 1'))
+      expect(described_class.find('smbd').perform('restart')).to be false
+    end
+  end
+
+  # The helper only controls the services this list gives actions to.
+  describe 'the root helper' do
+    it 'knows exactly the services that have actions' do
+      Privileged.operations # loads libexec/amahi-helper
+      with_actions = described_class::CATALOG.select { |e| e[:actions] }.map { |e| e[:key] }
+      expect(AmahiHelper::SERVICES.keys).to match_array(with_actions)
     end
   end
 

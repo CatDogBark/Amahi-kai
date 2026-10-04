@@ -4,12 +4,13 @@
 # Handles sudo escalation, logging, and error reporting.
 #
 # Usage:
-#   Shell.run("systemctl reload dnsmasq.service")
+#   Shell.run("systemctl restart greyhole.service")
 #   Shell.run("mkdir -p /mnt/storage-1", "mount /dev/sdb1 /mnt/storage-1")
 #   Shell.run!("systemctl restart smbd")  # raises on failure
 #
-# User accounts, Samba config and share folders don't use Shell: they go through
-# the root helper (Privileged.call).
+# User accounts, Samba config, share folders, Settings → Servers, the hostname, dnsmasq,
+# swap, and reboot/power off don't use Shell: they go through the root helper
+# (Privileged.call).
 #
 #   # Blocking execution (waits for completion, used by package installs)
 #   Shell.run!("apt-get -y install ntfs-3g", blocking: true)
@@ -21,18 +22,16 @@ module Shell
   # Privileged commands that need sudo when not running as root
   SUDO_COMMANDS = %w[
     usermod
-    systemctl hostnamectl
+    systemctl
     chmod chown
     mkdir rmdir cp mv rm
     sh bash
     apt-get dpkg rpm yum pacman
     docker
-    fallocate dd mkswap swapon swapoff
     mount umount
     ufw
     smartctl
     tailscale
-    reboot poweroff
   ].freeze
 
   # A last line of defence for the log: secrets belong on stdin or in private files

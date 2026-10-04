@@ -2,10 +2,10 @@
 #
 # One catalog for the dashboard, Settings → System Status and Settings → Servers.
 # Reading needs no root: `systemctl show` and `dpkg-query` work as any user.
-# Commands run as argument lists, never through a shell.
+# Commands run as argument lists, never through a shell. Start, stop and restart go
+# through the root helper (services.* operations), which has the same list of services.
 
 require 'open3'
-require 'shell'
 
 class SystemServices
   # key       — id used in URLs
@@ -14,29 +14,34 @@ class SystemServices
   # check     — optional services are listed only when this binary exists
   # process   — for daemons systemd can't track (Greyhole's LSB script forks),
   #             find the process with `pgrep -f` instead
-  # actions   — what Settings → Servers may do; each one matches a sudoers rule,
-  #             which names the unit exactly as `sudo_unit` spells it
+  # actions   — what Settings → Servers may do; the helper's SERVICES list
+  #             (libexec/amahi-helper) must name the same services
   # note      — shown instead of buttons for services managed elsewhere
   CATALOG = [
     { key: 'amahi-kai', name: 'Amahi-kai', unit: 'amahi-kai',
       note: 'Restarted by System Update' },
     { key: 'smbd', name: 'Samba', unit: 'smbd', package: 'samba',
-      actions: %w[start stop restart], sudo_unit: 'smbd.service' },
+      actions: %w[start stop restart] },
     { key: 'nmbd', name: 'Samba (nmbd)', unit: 'nmbd', package: 'samba',
-      actions: %w[start stop restart], sudo_unit: 'nmbd.service' },
+      actions: %w[start stop restart] },
     { key: 'mariadb', name: 'MariaDB', unit: 'mariadb', package: 'mariadb-server',
       note: 'Amahi-kai needs it running' },
     { key: 'dnsmasq', name: 'dnsmasq', unit: 'dnsmasq', package: 'dnsmasq', check: '/usr/sbin/dnsmasq',
-      actions: %w[start stop restart], sudo_unit: 'dnsmasq.service' },
+      actions: %w[start stop restart] },
     { key: 'greyhole', name: 'Greyhole', unit: 'greyhole', package: 'greyhole', check: '/usr/bin/greyhole',
-      process: 'greyhole --daemon', actions: %w[start stop restart], sudo_unit: 'greyhole.service' },
+      process: 'greyhole --daemon', actions: %w[start stop restart] },
     { key: 'docker', name: 'Docker', unit: 'docker', package: %w[docker-ce docker.io], check: '/usr/bin/docker',
-      actions: %w[start stop restart], sudo_unit: 'docker' },
+      actions: %w[start stop restart] },
     { key: 'cloudflared', name: 'Cloudflare Tunnel', unit: 'cloudflared', package: 'cloudflared',
       check: '/usr/bin/cloudflared', note: 'Managed on Remote Access' },
     { key: 'tailscaled', name: 'Tailscale VPN', unit: 'tailscaled', package: 'tailscale',
       check: '/usr/bin/tailscale', note: 'Managed on Remote Access' },
   ].freeze
+
+  # The helper operation for each action.
+  ACTION_OPERATIONS = {
+    'start' => 'services.start', 'stop' => 'services.stop', 'restart' => 'services.restart'
+  }.freeze
 
   PROPERTIES = %w[Description LoadState ActiveState SubState ActiveEnterTimestamp
                   MainPID MemoryCurrent UnitFileState].freeze
@@ -49,7 +54,6 @@ class SystemServices
       @key = entry[:key]
       @name = entry[:name]
       @unit = entry[:unit]
-      @sudo_unit = entry[:sudo_unit]
       @actions = entry[:actions] || []
       @note = entry[:note]
       @loaded = props['LoadState'] != 'not-found'
@@ -87,10 +91,15 @@ class SystemServices
       %w[enabled enabled-runtime alias].include?(boot)
     end
 
-    # Runs systemctl +verb+ through sudo. Returns true on success.
+    # Starts, stops or restarts the service through the root helper. Returns true on
+    # success; a failure is logged with the helper's reason.
     def perform(verb)
       raise ArgumentError, "#{name} can't #{verb}" unless actions.include?(verb)
-      Shell.run("systemctl #{verb} #{@sudo_unit}")
+      Privileged.call(ACTION_OPERATIONS.fetch(verb), service: key)
+      true
+    rescue Privileged::Error => e
+      Rails.logger.error("SystemServices: #{name} #{verb} failed: #{e.message}")
+      false
     end
 
     # Status for a process systemd can't track (see CATALOG :process).

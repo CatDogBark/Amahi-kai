@@ -88,18 +88,18 @@ describe "Settings Controller", type: :request do
     end
 
     describe "reboot" do
-      it "issues reboot command" do
-        allow(Shell).to receive(:run).and_return(true)
+      it "asks the root helper to reboot" do
         post "/settings/reboot"
         expect(response).to have_http_status(:ok)
+        expect(Privileged.calls).to eq([['system.reboot', {}]])
       end
     end
 
     describe "poweroff" do
-      it "issues poweroff command" do
-        allow(Shell).to receive(:run).and_return(true)
+      it "asks the root helper to power off" do
         post "/settings/poweroff"
         expect(response).to have_http_status(:ok)
+        expect(Privileged.calls).to eq([['system.poweroff', {}]])
       end
     end
 

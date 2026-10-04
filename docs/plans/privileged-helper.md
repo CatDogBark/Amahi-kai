@@ -1,7 +1,8 @@
 # Privileged helper (Phase 3, PRs L and M)
 
-Status: **PR L built** (users, Samba config, share folders); Troy's four decisions below are
-confirmed. PR M (the rest of the system jobs) is next.
+Status: **PR L done** (#24, checked on the NAS 2026-10-04). **PR M** is split in three (Troy,
+2026-10-04): **M1 built** (services, reboot/power off, hostname, dnsmasq, swap), then M2 (disks,
+Greyhole) and M3 (tunnel, Tailscale, packages, security audit).
 
 ## Why
 
@@ -79,7 +80,13 @@ sudo -n /usr/local/sbin/amahi-helper users.set_password  # stdin: {"login":"ann"
   directory`, `panic action`, `wins hook` and Samba's own path settings; `force user`/`force
   group`/`guest account` of root; `log file` outside `/var/log/samba`; share paths outside the
   roots above; VFS modules not on a short list. This applies to share "extra parameters" too.
-- Unit names (PR M) come from the same list as `lib/system_services.rb`.
+- Services: only the ones `lib/system_services.rb` gives actions to (`SERVICES` in the helper; a
+  spec checks the two lists match), by key, never a unit name from the request.
+- dnsmasq can run scripts as root and read any file from its config, and the app writes its files
+  whole, so every line must match one the app generates (`DNSMASQ_LINES`, `DNS_ALIAS_LINES`), and
+  where dnsmasq is installed, `dnsmasq --test` must accept the file.
+- Hostname: one DNS label (letters, digits, hyphens, at most 63). Swap: 1–8 GB at `/swapfile`, only
+  when the file doesn't exist.
 
 ### 5. Audit log
 
@@ -142,15 +149,34 @@ and `ShareFileSystem#clear_permissions` (`chmod -R a+rwx`, which nothing called)
 4. `sudo -l -U amahi` lists the helper, and the removed rules are gone.
 5. The existing `smb://192.168.1.111/admin` still works.
 
-## PR M scope (outline)
+## PR M1: services, system, network (built)
 
-`services.start|stop|restart` (units from `SystemServices::CATALOG`), `disks.format|mount|unmount`
-plus fstab entries (keep the PR #13 safety rules: `nofail`, the OS-disk guard, no automatic
-deletion), `network.set_hostname`, `dnsmasq.write_config|restart`, `tunnel.*` (token file, unit),
-`tailscale.*`, `greyhole.*` (config, service, install), `packages.install` (a fixed list of
-package names), `system.reboot|poweroff`. Then sudoers is down to the helper, the updater and
-Docker for PR N. Greyhole's `reinject_samba_globals!` edits `smb.conf` with `sed` as `amahi`, which
-can't work; drop it in M (`Share.samba_conf` already writes those settings).
+| Operation | Replaces | Runs |
+| --- | --- | --- |
+| `services.start`/`stop`/`restart` {service} | `Shell.run("systemctl …")` in `SystemServices` (Settings → Servers), `SecurityAudit`, `Host`, `DnsAlias` | `systemctl <verb> <unit>` |
+| `services.enable`/`disable` {service} | `DnsmasqService.start!`/`stop!` | `systemctl enable --now` / `disable --now` |
+| `system.reboot`, `system.poweroff` | `Platform.reboot!`/`poweroff!` (sudo had no rule for them, so the buttons did nothing) | `systemctl reboot` / `poweroff` |
+| `system.create_swap` {size_gb} | `SwapService` (setup wizard) | create `/swapfile` 600, `fallocate` (or `dd`), `mkswap`, `swapon`, one fstab line |
+| `network.set_hostname` {hostname} | `Platform.set_hostname!` (setup wizard) | `hostnamectl set-hostname` |
+| `network.write_dnsmasq_config` {content} | `DnsmasqService.write_config!` | checked lines, `dnsmasq --test`, atomic write to `/etc/dnsmasq.d/amahi.conf` |
+| `network.write_dns_aliases` {content} | `DnsAlias#regenerate_dnsmasq_config` | `address=` lines only, atomic write to `/etc/dnsmasq.d/amahi-aliases.conf` |
+
+Removed sudoers rules (24): `systemctl start|stop|reload|enable|disable` for `smbd`/`nmbd`, all six
+`dnsmasq.service` rules, `hostnamectl set-hostname *`, the two `cp … /etc/dnsmasq.d/*` rules, and
+the swap rules (`fallocate`, `dd`, `chmod 600 /swapfile`, `mkswap`, `swapon`). `systemctl restart
+smbd.service`/`nmbd.service` stay until M2: Greyhole restarts Samba through them.
+
+## PR M2 and M3 (outline)
+
+- **M2**: `disks.format|mount|unmount` plus fstab entries (keep the PR #13 safety rules: `nofail`,
+  the OS-disk guard, no automatic deletion); `greyhole.*` (config, service, install, with one
+  install path instead of three). Greyhole's `reinject_samba_globals!` edits `smb.conf` with `sed`
+  as `amahi`, which can't work; drop it (`Share.samba_conf` already writes those settings).
+- **M3**: `tunnel.*` (token file, unit), `tailscale.*` (install from Tailscale's apt repository,
+  not a downloaded script run as root), `packages.install` (a fixed list of package names), and
+  the security audit's fixes together with PR P.
+
+Then sudoers is down to the helper, the updater and Docker for PR N.
 
 ## Decisions (Troy, confirmed 2026-10-03)
 

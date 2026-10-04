@@ -14,9 +14,6 @@
 # License along with this program; if not, write to the Amahi
 # team at http://www.amahi.org/ under "Contact Us."
 
-require 'shell'
-require 'shellwords'
-
 class DnsAlias < ApplicationRecord
 
   after_save :restart
@@ -45,15 +42,14 @@ class DnsAlias < ApplicationRecord
       end
     end
 
-    FileUtils.mkdir_p(AMAHI_TMP_DIR)
-    staged_file = File.join(AMAHI_TMP_DIR, "amahi-aliases.conf")
-    File.write(staged_file, lines.join("\n") + "\n")
-
-    Shell.run("cp #{Shellwords.escape(staged_file)} /etc/dnsmasq.d/amahi-aliases.conf")
+    Privileged.call('network.write_dns_aliases', content: lines.join("\n") + "\n")
+  rescue Privileged::Error => e
+    # The alias is saved; the file catches up the next time an alias changes.
+    Rails.logger.error("DnsAlias: dnsmasq aliases not written: #{e.message}")
   end
 
   def reload_dnsmasq
-    Shell.run("systemctl restart dnsmasq.service")
+    DnsmasqService.restart!
   end
 
 end

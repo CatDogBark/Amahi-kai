@@ -84,7 +84,7 @@ class SetupController < ApplicationController
     unless name.blank?
       Setting.set('server-name', name)
       # Actually change the system hostname
-      Platform.set_hostname!(name)
+      flash[:warning] = "Saved the server name, but the system hostname couldn't be changed (details in the Amahi-kai log)" unless Platform.set_hostname!(name)
     end
     redirect_to setup_storage_path
   end
