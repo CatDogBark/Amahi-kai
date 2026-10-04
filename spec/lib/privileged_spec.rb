@@ -67,6 +67,37 @@ RSpec.describe Privileged do
         .to raise_error(Privileged::Error) { |e| expect(e).not_to be_refused }
     end
 
+    describe 'with a progress block' do
+      # A stand-in helper: echoes its arguments, writes progress to stderr, then replies.
+      def fake_helper(script)
+        allow(described_class).to receive(:command).and_return(['/bin/sh', '-c', script])
+      end
+
+      it "yields the helper's stderr lines as they come and returns its reply" do
+        fake_helper('read args; echo "got $args" >&2; echo "Unpacking greyhole ..." >&2; echo \'{"ok":true}\'')
+        lines = []
+        expect(described_class.call('packages.install', packages: ['greyhole']) { |line| lines << line }).to eq('ok' => true)
+        expect(lines).to eq(['got {"packages":["greyhole"]}', 'Unpacking greyhole ...'])
+      end
+
+      it 'keeps reading when the block fails, so the helper runs to the end' do
+        fake_helper('cat >/dev/null; for i in 1 2 3; do echo "line $i" >&2; done; echo \'{"ok":true,"done":3}\'')
+        seen = []
+        reply = described_class.call('packages.install', packages: ['greyhole']) do |line|
+          seen << line
+          raise IOError, 'stream closed'
+        end
+        expect(reply).to eq('ok' => true, 'done' => 3)
+        expect(seen).to eq(['line 1'])
+      end
+
+      it "raises with the helper's reason" do
+        fake_helper('cat >/dev/null; echo "E: Unable to locate package" >&2; echo \'{"ok":false,"error":"apt-get exited 100"}\'; exit 2')
+        expect { described_class.call('packages.install', packages: ['greyhole']) { |_line| nil } }
+          .to raise_error(Privileged::Error, 'apt-get exited 100')
+      end
+    end
+
     it 'raises when the helper is missing' do
       allow(Open3).to receive(:capture3).and_raise(Errno::ENOENT, '/usr/local/sbin/amahi-helper')
 

@@ -8,6 +8,9 @@
 # the installer's seeds) runs it directly. A refused or failed operation raises
 # Privileged::Error with the helper's message, which is fit to show in the UI.
 #
+# With a block, each line the helper writes to stderr while it runs is yielded (apt's
+# output during packages.install, for a progress stream).
+#
 # In dummy mode (development and tests) nothing runs: calls are recorded in
 # Privileged.calls and answered with {"ok"=>true}.
 
@@ -38,13 +41,17 @@ module Privileged
   end
 
   class << self
-    def call(operation, **args)
+    def call(operation, **args, &progress)
       return record(operation, args) if Shell.dummy?
 
       Rails.logger.info("Privileged: #{operation}")
       # A clean environment: Bundler's RUBYOPT must not reach a root Ruby process.
-      out, err, status = Open3.capture3(ENV_MIN, *command(operation), stdin_data: JSON.generate(args),
-                                        unsetenv_others: true, chdir: '/')
+      out, err, status = if progress
+                           run_streaming(operation, args, &progress)
+                         else
+                           Open3.capture3(ENV_MIN, *command(operation), stdin_data: JSON.generate(args),
+                                          unsetenv_others: true, chdir: '/')
+                         end
       reply = parse(out)
       return reply if status.success? && reply['ok']
 
@@ -71,6 +78,28 @@ module Privileged
     end
 
     private
+
+    # Like capture3, but yields stderr lines as they come. If the block fails (a closed
+    # progress stream), the output is still drained so the helper, and apt under it,
+    # run to the end.
+    def run_streaming(operation, args)
+      Open3.popen3(ENV_MIN, *command(operation), unsetenv_others: true, chdir: '/') do |stdin, stdout, stderr, wait|
+        stdin.write(JSON.generate(args))
+        stdin.close
+        reader = Thread.new { stdout.read }
+        tail = []
+        listening = true
+        stderr.each_line do |line|
+          tail = (tail << line).last(5)
+          begin
+            yield line.chomp if listening
+          rescue StandardError
+            listening = false
+          end
+        end
+        [reader.value, tail.join, wait.value]
+      end
+    end
 
     def command(operation)
       Process.uid.zero? ? [HELPER, operation] : [SUDO, '-n', HELPER, operation]

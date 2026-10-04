@@ -1,5 +1,9 @@
 class DiskPoolPartition < ApplicationRecord
   validates :path, presence: true, uniqueness: true
+  # Greyhole pools data drives mounted under /mnt; the root helper writes no other path
+  # into greyhole.conf.
+  validates :path, format: { with: %r{\A/mnt/[A-Za-z0-9][A-Za-z0-9._-]*(?:/(?!\.\.?(?:/|\z))[A-Za-z0-9._-]+)*\z},
+                             message: 'must be a data drive mounted under /mnt' }
   validates :minimum_free, presence: true, numericality: { greater_than_or_equal_to: 0 }
 
   def self.pool_paths

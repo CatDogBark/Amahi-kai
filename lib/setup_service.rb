@@ -200,25 +200,19 @@ module SetupService
       sse.done
     end
 
+    # Greyhole.install! writes the config (pool drives included) and starts Greyhole.
     def stream_greyhole_install_production(default_copies, sse)
       require 'greyhole'
 
       Greyhole.install! { |msg| sse.emit(msg) }
 
       sse.emit("")
-      sse.emit("Generating configuration...")
-      Greyhole.configure!
       sse.emit("  #{DiskPoolPartition.count} pool drives configured")
       sse.emit("  Default copies: #{default_copies}")
-      sse.emit("✓ Configuration written")
-
-      sse.emit("")
-      sse.emit("Starting Greyhole service...")
-      Greyhole.start!
       if Greyhole.running?
         sse.emit("✓ Greyhole is running!")
       else
-        sse.emit("⚠ Service started but may take a moment to initialize")
+        sse.emit("⚠ Greyhole was started but may take a moment to initialize")
       end
 
       sse.done

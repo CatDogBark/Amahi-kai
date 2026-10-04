@@ -59,9 +59,14 @@ RSpec.describe DiskManager do
       expect { DiskManager.format_disk!('/tmp/not-a-device') }.to raise_error(DiskManager::DiskError)
     end
 
-    it 'simulates formatting in non-production' do
-      # In test env, format_disk! should simulate (not actually format)
+    it 'formats through the root helper' do
       expect(DiskManager.format_disk!('/dev/sdb1')).to be true
+      expect(Privileged.calls).to eq([['disks.format', { device: '/dev/sdb1' }]])
+    end
+
+    it "raises the helper's reason as a DiskError" do
+      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('disks.format', '/dev/sdb1 is mounted at /mnt/storage-1; unmount it first'))
+      expect { DiskManager.format_disk!('/dev/sdb1') }.to raise_error(DiskManager::DiskError, /unmount it first/)
     end
   end
 
@@ -83,12 +88,50 @@ RSpec.describe DiskManager do
 
     it 'rejects mounting OS disk' do
       expect { DiskManager.mount!('/dev/sda1') }.to raise_error(DiskManager::DiskError, /OS disk/)
+      expect(Privileged.calls).to be_empty
+    end
+
+    it 'mounts through the root helper at the next free slot and returns the mount point' do
+      allow(DiskManager).to receive(:auto_mount_point).and_return('/mnt/storage-3')
+      expect(DiskManager.mount!('/dev/sdb1')).to eq('/mnt/storage-3')
+      expect(Privileged.calls).to eq([['disks.mount', { device: '/dev/sdb1', mount_point: '/mnt/storage-3' }]])
+    end
+
+    it 'uses the mount point the helper reports' do
+      allow(Privileged).to receive(:call).and_return('ok' => true, 'mount_point' => '/mnt/media')
+      expect(DiskManager.mount!('/dev/sdb1', '/mnt/media')).to eq('/mnt/media')
     end
   end
 
   describe '.unmount!' do
     it 'rejects invalid device paths' do
       expect { DiskManager.unmount!('/tmp/evil') }.to raise_error(DiskManager::DiskError)
+    end
+
+    it 'unmounts through the root helper' do
+      expect(DiskManager.unmount!('/dev/sdb1')).to be true
+      expect(Privileged.calls).to eq([['disks.unmount', { device: '/dev/sdb1' }]])
+    end
+
+    it "raises the helper's reason as a DiskError" do
+      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('disks.unmount', "/dev/sdb1 isn't mounted"))
+      expect { DiskManager.unmount!('/dev/sdb1') }.to raise_error(DiskManager::DiskError, "/dev/sdb1 isn't mounted")
+    end
+  end
+
+  describe '.preview in production' do
+    before { allow(DiskManager).to receive(:production?).and_return(true) }
+
+    it "lists an unmounted drive through the root helper, in the page's format" do
+      allow(DiskManager).to receive(:devices).and_return(DiskManager.send(:sample_devices))
+      allow(Privileged).to receive(:call).with('disks.preview', device: '/dev/sdb1').and_return(
+        'ok' => true, 'total_used' => 6000, 'file_count' => 2,
+        'entries' => [{ 'name' => 'Movies', 'type' => 'directory', 'size' => 5000, 'file_count' => 1 },
+                      { 'name' => 'a.txt', 'type' => 'file', 'size' => 1000, 'file_count' => 1 }]
+      )
+      preview = DiskManager.preview('/dev/sdb1')
+      expect(preview[:entries].first).to eq(name: 'Movies', type: :directory, size: 5000, file_count: 1)
+      expect(preview.slice(:total_used, :file_count)).to eq(total_used: 6000, file_count: 2)
     end
   end
 
@@ -133,17 +176,6 @@ RSpec.describe DiskManager do
     end
   end
 
-  describe '.fstab_entry' do
-    it 'marks data drives nofail so a missing one cannot block boot' do
-      line = DiskManager.fstab_entry('abcd-1234', '/mnt/storage-1', 'ext4')
-      expect(line).to eq('UUID=abcd-1234 /mnt/storage-1 ext4 defaults,nofail,x-systemd.device-timeout=10s 0 2')
-    end
-
-    it 'mounts NTFS with ntfs-3g' do
-      expect(DiskManager.fstab_entry('A1B2', '/mnt/storage-2', 'ntfs')).to include(' ntfs-3g defaults,nofail')
-    end
-  end
-
   describe '.auto_mount_point' do
     before do
       allow(File).to receive(:read).and_call_original
@@ -161,6 +193,7 @@ RSpec.describe DiskManager do
       allow(File).to receive(:read).with('/etc/fstab').and_return("")
       DiskManager.auto_mount_point
       expect(DiskManager).not_to have_received(:execute_command).with(%r{/etc/fstab})
+      expect(Privileged.calls).to be_empty
     end
   end
 

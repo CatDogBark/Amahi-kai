@@ -525,6 +525,332 @@ RSpec.describe 'AmahiHelper' do
     end
   end
 
+  describe 'data drives' do
+    # sda: the OS disk. sdb: a data drive mounted under /mnt. sdc: a disk used only for
+    # swap. sdd: an unmounted data drive. nvme0n1: an unmounted NVMe drive.
+    let(:tree) do
+      [{ 'path' => '/dev/sda', 'type' => 'disk', 'mountpoints' => [nil],
+         'children' => [{ 'path' => '/dev/sda1', 'type' => 'part', 'mountpoints' => ['/boot/efi'] },
+                        { 'path' => '/dev/sda2', 'type' => 'part', 'mountpoints' => [nil],
+                          'children' => [{ 'path' => '/dev/mapper/vg-root', 'type' => 'lvm', 'mountpoints' => ['/'] }] }] },
+       { 'path' => '/dev/sdb', 'type' => 'disk', 'mountpoints' => [nil],
+         'children' => [{ 'path' => '/dev/sdb1', 'type' => 'part', 'mountpoints' => ['/mnt/storage-1'] }] },
+       { 'path' => '/dev/sdc', 'type' => 'disk', 'mountpoints' => [nil],
+         'children' => [{ 'path' => '/dev/sdc1', 'type' => 'part', 'mountpoints' => ['[SWAP]'] }] },
+       { 'path' => '/dev/sdd', 'type' => 'disk', 'mountpoints' => [nil],
+         'children' => [{ 'path' => '/dev/sdd1', 'type' => 'part', 'mountpoints' => [nil] }] },
+       { 'path' => '/dev/nvme0n1', 'type' => 'disk', 'mountpoints' => [nil],
+         'children' => [{ 'path' => '/dev/nvme0n1p1', 'type' => 'part', 'mountpoints' => [nil] }] }]
+    end
+    let(:dir) { Dir.mktmpdir }
+    let(:mnt) { "#{dir}/mnt" }
+    let(:fstab) { "#{dir}/fstab" }
+
+    before do
+      Dir.mkdir(mnt)
+      File.write(fstab, "UUID=os / ext4 defaults 0 1\n")
+      stub_const('AmahiHelper::MNT', mnt)
+      stub_const('AmahiHelper::FSTAB', fstab)
+      # The tree's data drive is mounted under the stubbed /mnt.
+      tree[1]['children'][0]['mountpoints'] = ["#{mnt}/storage-1"]
+      allow(helper).to receive(:block_tree).and_return(tree)
+      allow(File).to receive(:blockdev?).and_call_original
+      allow(File).to receive(:blockdev?).with(a_string_starting_with('/dev/')).and_return(true)
+      allow(helper).to receive(:probe).and_return('TYPE' => 'ext4', 'UUID' => 'u-1')
+    end
+
+    after { FileUtils.rm_rf(dir) }
+
+    it 'formats an unmounted data drive as ext4' do
+      expect(steps('disks.format', { 'device' => '/dev/sdd1' }))
+        .to eq([%w[/usr/sbin/mkfs.ext4 -F /dev/sdd1], ['/usr/bin/udevadm', 'settle', { allow_failure: true }]])
+      expect(steps('disks.format', { 'device' => '/dev/nvme0n1' })).to start_with(%w[/usr/sbin/mkfs.ext4 -F /dev/nvme0n1])
+    end
+
+    it 'refuses any drive the system uses, whole disk or partition' do
+      %w[/dev/sda /dev/sda1 /dev/sda2 /dev/sdc /dev/sdc1].each do |device|
+        expect(refusal('disks.format', { 'device' => device })).to include('on a disk the system uses'), device
+      end
+    end
+
+    it 'refuses a mounted data drive' do
+      expect(refusal('disks.format', { 'device' => '/dev/sdb1' })).to eq("/dev/sdb1 is mounted at #{mnt}/storage-1; unmount it first")
+      expect(refusal('disks.format', { 'device' => '/dev/sdb' })).to include('unmount it first')
+    end
+
+    it 'refuses names that are not disks or partitions, missing devices and ones lsblk does not list' do
+      ['/dev/sdd1; reboot', '/dev/loop0', '/dev/mapper/vg-root', '/dev/sdd1/../sda1', 'sdd1', '/dev/md0', ''].each do |device|
+        expect(refusal('disks.format', { 'device' => device })).not_to be_nil, device.inspect
+      end
+      allow(File).to receive(:blockdev?).with('/dev/sdz').and_return(false)
+      expect(refusal('disks.format', { 'device' => '/dev/sdz' })).to eq("/dev/sdz doesn't exist")
+      expect(refusal('disks.format', { 'device' => '/dev/sdq' })).to eq("lsblk doesn't list /dev/sdq")
+    end
+
+    it 'mounts a data drive at /mnt/<name> by UUID' do
+      expect(steps('disks.mount', { 'device' => '/dev/sdd1', 'mount_point' => "#{mnt}/storage-2" }))
+        .to eq([[:mount_drive, '/dev/sdd1', "#{mnt}/storage-2", 'ext4', 'u-1']])
+    end
+
+    it 'mounts only filesystems it knows' do
+      allow(helper).to receive(:probe).and_return({})
+      expect(refusal('disks.mount', { 'device' => '/dev/sdd1', 'mount_point' => "#{mnt}/a" })).to include('has no filesystem; format it first')
+      allow(helper).to receive(:probe).and_return('TYPE' => 'crypto_LUKS')
+      expect(refusal('disks.mount', { 'device' => '/dev/sdd1', 'mount_point' => "#{mnt}/a" })).to include("which Amahi-kai doesn't mount")
+    end
+
+    it 'refuses mount points outside /mnt, nested, hidden, in use or taken in fstab' do
+      ['/etc', "#{mnt}/../etc", "#{mnt}/a/b", "#{mnt}/.a", "#{mnt}/", mnt, "#{mnt}/a b"].each do |mp|
+        expect(refusal('disks.mount', { 'device' => '/dev/sdd1', 'mount_point' => mp })).to include('must be'), mp
+      end
+      File.write("#{mnt}/file", 'x')
+      expect(refusal('disks.mount', { 'device' => '/dev/sdd1', 'mount_point' => "#{mnt}/file" })).to include('is not a folder')
+      File.symlink('/etc', "#{mnt}/link")
+      expect(refusal('disks.mount', { 'device' => '/dev/sdd1', 'mount_point' => "#{mnt}/link" })).to include('is not a folder')
+      FileUtils.mkdir_p("#{mnt}/full/data")
+      expect(refusal('disks.mount', { 'device' => '/dev/sdd1', 'mount_point' => "#{mnt}/full" })).to include("isn't empty")
+      allow(helper).to receive(:mount_point?).and_return(true)
+      Dir.mkdir("#{mnt}/busy")
+      expect(refusal('disks.mount', { 'device' => '/dev/sdd1', 'mount_point' => "#{mnt}/busy" })).to include('already a mount point')
+    end
+
+    it "refuses a mount point fstab gives another drive, but takes back the drive's own" do
+      File.write(fstab, "UUID=other #{mnt}/storage-2 ext4 defaults 0 2\nUUID=u-1 #{mnt}/storage-3 ext4 defaults 0 2\n")
+      expect(refusal('disks.mount', { 'device' => '/dev/sdd1', 'mount_point' => "#{mnt}/storage-2" }))
+        .to eq("#{mnt}/storage-2 belongs to another drive in /etc/fstab (UUID=other)")
+      expect(refusal('disks.mount', { 'device' => '/dev/sdd1', 'mount_point' => "#{mnt}/storage-3" })).to be_nil
+    end
+
+    it 'unmounts a mounted data drive' do
+      expect(steps('disks.unmount', { 'device' => '/dev/sdb1' })).to eq([[:unmount_drive, ["#{mnt}/storage-1"], 'u-1']])
+      expect(refusal('disks.unmount', { 'device' => '/dev/sdd1' })).to eq("/dev/sdd1 isn't mounted")
+      expect(refusal('disks.unmount', { 'device' => '/dev/sda1' })).to include('on a disk the system uses')
+    end
+
+    it 'previews an unmounted data drive' do
+      expect(steps('disks.preview', { 'device' => '/dev/sdd1' })).to eq([[:preview_drive, '/dev/sdd1', 'ext4']])
+      expect(refusal('disks.preview', { 'device' => '/dev/sdb1' })).to include('unmount it first')
+    end
+
+    describe 'mounting and unmounting' do
+      let(:ran) { [] }
+      let(:mounted) { [] }
+
+      before do
+        allow(helper).to receive(:run_command) do |argv|
+          ran << argv
+          path = argv.grep(String).last
+          mounted << path if argv.first == '/usr/bin/mount'
+          mounted.delete(path) if argv.first == '/usr/bin/umount'
+          nil
+        end
+        allow(helper).to receive(:mount_point?) { |path| mounted.include?(path) }
+      end
+
+      it 'mounts, and adds the PR #13 fstab line (nofail, short timeout) once' do
+        mp = "#{mnt}/storage-2"
+        expect(helper.do_mount_drive('/dev/sdd1', mp, 'ext4', 'u-1')).to eq('mount_point' => mp)
+        expect(ran).to eq([['/usr/bin/mount', '/dev/sdd1', mp]])
+        expect(File.read(fstab).lines.last).to eq("UUID=u-1 #{mp} ext4 defaults,nofail,x-systemd.device-timeout=10s 0 2\n")
+
+        mounted.clear
+        helper.do_mount_drive('/dev/sdd1', mp, 'ext4', 'u-1')
+        expect(File.read(fstab).scan('UUID=u-1').size).to eq(1)
+      end
+
+      it 'mounts NTFS with ntfs-3g' do
+        helper.do_mount_drive('/dev/sdd1', "#{mnt}/win", 'ntfs', 'A1B2')
+        expect(ran.last).to eq(['/usr/bin/mount', '-t', 'ntfs-3g', '/dev/sdd1', "#{mnt}/win"])
+        expect(File.read(fstab)).to include("UUID=A1B2 #{mnt}/win ntfs-3g defaults,nofail")
+      end
+
+      it 'removes the folder it made and leaves fstab alone when the mount fails' do
+        allow(helper).to receive(:run_command).and_raise(AmahiHelper::Failed, 'mount exited 32: wrong fs type')
+        expect { helper.do_mount_drive('/dev/sdd1', "#{mnt}/storage-2", 'ext4', 'u-1') }.to raise_error(AmahiHelper::Failed)
+        expect(File.exist?("#{mnt}/storage-2")).to be false
+        expect(File.read(fstab)).to eq("UUID=os / ext4 defaults 0 1\n")
+      end
+
+      it "unmounts, removes only the drive's fstab line (keeping a backup) and its empty storage folder" do
+        Dir.mkdir("#{mnt}/storage-1")
+        Dir.mkdir("#{mnt}/media")
+        mounted.push("#{mnt}/storage-1", "#{mnt}/media")
+        before = "UUID=os / ext4 defaults 0 1\nUUID=u-1 #{mnt}/storage-1 ext4 defaults,nofail 0 2\n" \
+                 "UUID=u-12 #{mnt}/media ext4 defaults,nofail 0 2\n"
+        File.write(fstab, before)
+        File.chmod(0o644, fstab)
+
+        helper.do_unmount_drive(["#{mnt}/storage-1"], 'u-1')
+        helper.do_unmount_drive(["#{mnt}/media"], nil)
+
+        expect(ran).to eq([['/usr/bin/umount', "#{mnt}/storage-1"], ['/usr/bin/umount', "#{mnt}/media"]])
+        expect(File.read(fstab)).to eq("UUID=os / ext4 defaults 0 1\nUUID=u-12 #{mnt}/media ext4 defaults,nofail 0 2\n")
+        expect(File.stat(fstab).mode & 0o777).to eq(0o644)
+        expect(File.read("#{fstab}.amahi-backup")).to eq(before)
+        expect(File.exist?("#{mnt}/storage-1")).to be false
+        expect(File.directory?("#{mnt}/media")).to be true
+      end
+
+      it 'previews read-only without replaying the journal, then unmounts and cleans up' do
+        stub_const('AmahiHelper::RUN_DIR', dir)
+        reply = helper.do_preview_drive('/dev/sdd1', 'ext4')
+        mount, umount = ran
+        expect(mount.first(3)).to eq(['/usr/bin/mount', '-o', 'ro,nosuid,nodev,noexec,noload'])
+        expect(mount[3]).to eq('/dev/sdd1')
+        expect(umount.first(2)).to eq(['/usr/bin/umount', mount[4]])
+        expect(File.exist?(mount[4])).to be false
+        expect(reply).to include('entries' => [], 'partial' => false)
+      end
+    end
+
+    it 'sums the top level of a drive, skipping hidden entries and lost+found' do
+      FileUtils.mkdir_p("#{dir}/top/Movies/sub")
+      File.write("#{dir}/top/Movies/a.mkv", 'x' * 100)
+      File.write("#{dir}/top/Movies/sub/b.mkv", 'x' * 50)
+      File.write("#{dir}/top/notes.txt", 'x' * 7)
+      FileUtils.mkdir_p("#{dir}/top/lost+found")
+      File.write("#{dir}/top/.hidden", 'x')
+
+      summary = helper.directory_summary("#{dir}/top")
+
+      expect(summary['entries']).to eq([{ 'name' => 'Movies', 'type' => 'directory', 'size' => 150, 'file_count' => 2 },
+                                        { 'name' => 'notes.txt', 'type' => 'file', 'size' => 7, 'file_count' => 1 }])
+      expect(summary).to include('total_used' => 157, 'file_count' => 3, 'partial' => false)
+
+      stub_const('AmahiHelper::PREVIEW_LIMIT', { entries: 1, seconds: 30 })
+      expect(helper.directory_summary("#{dir}/top")['partial']).to be true
+    end
+  end
+
+  describe 'Greyhole' do
+    let(:conf) do
+      "# Greyhole configuration - generated by Amahi-kai\n\ndb_host = localhost\ndb_user = amahi\ndb_pass = s3cret pass\n" \
+        "db_name = greyhole\n\nstorage_pool_drive = /mnt/storage-1, min_free: 10gb\n" \
+        "storage_pool_drive = /mnt/media/pool, min_free: 0gb\n\nnum_copies[Movies [HD]] = 2\nnum_copies[Backups] = max"
+    end
+
+    it 'installs the config root:amahi 0640, since it holds the database password' do
+      expect(steps('greyhole.write_config', { 'content' => conf }))
+        .to eq([[:install, '/etc/greyhole.conf', conf, nil, '0640', 'amahi']])
+    end
+
+    it 'refuses lines Amahi-kai does not write, and pool drives outside /mnt' do
+      ['df_command = rm -rf /', 'log_to_stderr = yes', 'db_host = db.example.com', 'db_user = root', 'include = /etc/shadow',
+       'storage_pool_drive = /, min_free: 10gb', 'storage_pool_drive = /etc, min_free: 10gb',
+       'storage_pool_drive = /mnt/../etc, min_free: 10gb', 'num_copies[x] = 2; df_command = y'].each do |line|
+        expect(refusal('greyhole.write_config', { 'content' => "#{line}\n" })).to include('is not one Amahi-kai writes'), line
+      end
+      expect(refusal('greyhole.write_config', { 'content' => "storage_pool_drive = /mnt/a/../../etc, min_free: 1gb\n" }))
+        .to include('must be a normalized path')
+    end
+
+    it 'keeps the database password out of refusals and logs' do
+      expect(refusal('greyhole.write_config', { 'content' => "db_pass = hunter2\tx\n" })).to eq('greyhole.conf line "db_pass = ..." is not one Amahi-kai writes')
+      expect(helper.describe([:install, '/etc/greyhole.conf', conf, nil, '0640', 'amahi']).to_s).not_to include('s3cret')
+    end
+
+    it 'installs files with the mode and group asked for' do
+      skip 'chown to root needs root' unless Process.euid.zero?
+      Dir.mktmpdir do |dir|
+        allow(helper).to receive(:group_id).with('amahi').and_return(Process.gid)
+        helper.do_install("#{dir}/greyhole.conf", 'x', nil, '0640', 'amahi')
+        stat = File.stat("#{dir}/greyhole.conf")
+        expect([stat.mode & 0o7777, stat.uid, stat.gid]).to eq([0o640, 0, Process.gid])
+      end
+    end
+
+    describe 'the database' do
+      let(:dir) { Dir.mktmpdir }
+      let(:ran) { [] }
+
+      before do
+        stub_const('AmahiHelper::GREYHOLE_SCHEMA', "#{dir}/schema-mysql.sql")
+        allow(helper).to receive(:run_command) { |argv| ran << argv }
+      end
+
+      after { FileUtils.rm_rf(dir) }
+
+      it "is created for the app's MariaDB user, and the schema loaded once the package has put it in place" do
+        helper.do_greyhole_database
+        expect(ran).to eq([['/usr/bin/mysql', '-u', 'root', '--batch', '-e', AmahiHelper::GREYHOLE_DB_SQL]])
+        expect(AmahiHelper::GREYHOLE_DB_SQL).to include("TO 'amahi'@'localhost'")
+
+        File.write("#{dir}/schema-mysql.sql", 'CREATE TABLE settings (x INT);')
+        allow(helper).to receive(:capture).and_return("0\n")
+        helper.do_greyhole_database
+        expect(ran.last).to eq(['/usr/bin/mysql', '-u', 'root', 'greyhole', { stdin: 'CREATE TABLE settings (x INT);' }])
+
+        ran.clear
+        allow(helper).to receive(:capture).and_return("12\n")
+        expect(helper.do_greyhole_database).to eq('schema already loaded')
+        expect(ran.size).to eq(1)
+      end
+    end
+  end
+
+  describe 'packages' do
+    it 'adds only the apt repositories it lists' do
+      expect(steps('packages.add_repository', { 'repository' => 'greyhole' })).to eq([[:add_apt_repository, 'greyhole']])
+      expect(refusal('packages.add_repository', { 'repository' => 'evil' })).to eq('repository "evil" isn\'t one Amahi-kai uses')
+    end
+
+    it 'installs only the packages it lists, non-interactively, keeping changed config files, with output streamed' do
+      expect(AmahiHelper::APT_ENV).to include('DEBIAN_FRONTEND' => 'noninteractive', 'PATH' => '/usr/sbin:/usr/bin:/sbin:/bin')
+      opts = { env: AmahiHelper::APT_ENV, stream: true }
+      expect(steps('packages.install', { 'packages' => %w[greyhole php8.3-mysql greyhole] })).to eq(
+        [['/usr/bin/apt-get', 'update', opts],
+         ['/usr/bin/apt-get', '-y', '-o', 'Dpkg::Options::=--force-confold', '-o', 'DPkg::Lock::Timeout=300',
+          'install', 'greyhole', 'php8.3-mysql', opts]]
+      )
+    end
+
+    it 'refuses other packages and malformed lists' do
+      [['openssh-server'], ['greyhole', '-o'], ['./x.deb'], [], 'greyhole', nil, ['greyhole'] * 11].each do |list|
+        expect(refusal('packages.install', { 'packages' => list })).not_to be_nil, list.inspect
+      end
+    end
+
+    describe 'a repository signing key' do
+      let(:dir) { Dir.mktmpdir }
+      let(:repo) do
+        { key_url: 'https://example.com/key.asc', fingerprints: ['A' * 40], keyring: "#{dir}/keyring.asc",
+          list: "#{dir}/x.list", source: "deb [signed-by=#{dir}/keyring.asc] https://example.com/deb stable main" }
+      end
+
+      before do
+        stub_const('AmahiHelper::RUN_DIR', dir)
+        allow(helper).to receive(:run_command) do |argv|
+          expect(argv).to include('--proto', '=https')
+          File.write(argv[argv.index('-o') + 1], 'KEY')
+          nil
+        end
+      end
+
+      after { FileUtils.rm_rf(dir) }
+
+      it 'is installed with the source list when its fingerprint is pinned' do
+        stub_const('AmahiHelper::APT_REPOSITORIES', { 'x' => repo })
+        allow(helper).to receive(:capture).and_return("pub:-:4096:1:ABC:::::::scESC:\nfpr:::::::::#{'A' * 40}:\n")
+        helper.do_add_apt_repository('x')
+        expect(File.read("#{dir}/keyring.asc")).to eq('KEY')
+        expect(File.read("#{dir}/x.list")).to eq("#{repo[:source]}\n")
+      end
+
+      it 'is refused when its fingerprint is another one' do
+        stub_const('AmahiHelper::APT_REPOSITORIES', { 'x' => repo })
+        allow(helper).to receive(:capture).and_return("fpr:::::::::#{'B' * 40}:\n")
+        expect { helper.do_add_apt_repository('x') }.to raise_error(AmahiHelper::Failed, /not a pinned one/)
+        expect(File.exist?("#{dir}/keyring.asc")).to be false
+      end
+
+      it 'is not even downloaded when no fingerprint is pinned' do
+        stub_const('AmahiHelper::APT_REPOSITORIES', { 'x' => repo.merge(fingerprints: []) })
+        expect { helper.do_add_apt_repository('x') }.to raise_error(AmahiHelper::Failed, /isn't pinned/)
+        expect(helper).not_to have_received(:run_command)
+      end
+    end
+  end
+
   describe 'running commands' do
     it 'runs without a shell, in a minimal environment, with stdin' do
       script = '[ -z "$RUBYOPT" ] && [ "$PATH" = "/usr/sbin:/usr/bin:/sbin:/bin" ] && read a && [ "$a" = secret ]'
@@ -536,8 +862,31 @@ RSpec.describe 'AmahiHelper' do
         .to raise_error(AmahiHelper::Failed, 'sh exited 3: first oops')
     end
 
-    it 'notes an allowed failure instead of raising' do
+    it 'notes an allowed failure instead of raising, a missing command included' do
       expect(helper.run_command(['/bin/sh', '-c', 'exit 4', { allow_failure: true }])).to start_with('ignored: sh exited 4')
+      expect(helper.run_command(['/nonexistent/udevadm', 'settle', { allow_failure: true }])).to start_with('ignored: /nonexistent/udevadm')
+    end
+
+    it 'streams output to stderr as it runs, in the environment given' do
+      script = '[ "$DEBIAN_FRONTEND" = noninteractive ] && echo one && echo two >&2'
+      env = { 'PATH' => '/usr/bin:/bin', 'DEBIAN_FRONTEND' => 'noninteractive' }
+      expect { helper.run_command(['/bin/sh', '-c', script, { env: env, stream: true }]) }.to output("one\ntwo\n").to_stderr
+      expect { helper.run_command(['/bin/sh', '-c', 'echo E: no space; exit 100', { stream: true }]) }
+        .to raise_error(AmahiHelper::Failed, 'sh exited 100: E: no space').and output.to_stderr
+    end
+  end
+
+  describe 'the reply' do
+    before do
+      allow(helper).to receive(:check_environment!)
+      allow(helper).to receive(:log)
+      allow(Process).to receive(:euid).and_return(0)
+      allow(helper).to receive(:plan).and_return([[:a], [:b], [:c]])
+      allow(helper).to receive(:perform).and_return({ 'mount_point' => '/mnt/a' }, 'ignored: udevadm', nil)
+    end
+
+    it "carries the steps' data and notes" do
+      expect(helper.execute('system.reboot', {})).to eq('ok' => true, 'mount_point' => '/mnt/a', 'notes' => ['ignored: udevadm'])
     end
   end
 

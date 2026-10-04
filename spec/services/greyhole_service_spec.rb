@@ -77,12 +77,6 @@ describe Greyhole do
     end
   end
 
-  describe '.fsck' do
-    it 'returns true in non-production' do
-      expect(Greyhole.fsck).to eq(true)
-    end
-  end
-
   describe '.start!' do
     it 'returns true in non-production' do
       expect(Greyhole.start!).to eq(true)

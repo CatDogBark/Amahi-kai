@@ -4,13 +4,13 @@
 # Handles sudo escalation, logging, and error reporting.
 #
 # Usage:
-#   Shell.run("systemctl restart greyhole.service")
-#   Shell.run("mkdir -p /mnt/storage-1", "mount /dev/sdb1 /mnt/storage-1")
+#   Shell.run("systemctl restart docker")
+#   Shell.run("mkdir -p /opt/amahi/apps/jellyfin")
 #   Shell.run!("systemctl restart smbd")  # raises on failure
 #
 # User accounts, Samba config, share folders, Settings → Servers, the hostname, dnsmasq,
-# swap, and reboot/power off don't use Shell: they go through the root helper
-# (Privileged.call).
+# swap, reboot/power off, data drives and Greyhole don't use Shell: they go through the
+# root helper (Privileged.call).
 #
 #   # Blocking execution (waits for completion, used by package installs)
 #   Shell.run!("apt-get -y install ntfs-3g", blocking: true)
@@ -28,7 +28,6 @@ module Shell
     sh bash
     apt-get dpkg rpm yum pacman
     docker
-    mount umount
     ufw
     smartctl
     tailscale

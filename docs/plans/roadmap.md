@@ -19,6 +19,7 @@ so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 | 3. K. Dead code | PDC mode, printer shares, 8 legacy tables, the unused Docker API wrapper and gems, stale stubs and files | #22 |
 | 3. L. Privileged helper, part 1 | `libexec/amahi-helper`: users, Samba config and share folders, validated and logged; web users get no shell; 34 sudo rules gone | #24 |
 | 3. Fix | Sprockets 4.3: production boots with compiled assets again (System Update had stopped at migrations since #21) | #25 |
+| 3. M1. Privileged helper, part 2a | Settings → Servers, reboot/power off, hostname, dnsmasq and DNS aliases, swap through the helper; 24 sudo rules gone | #26 |
 
 ## Next: Phase 3
 
@@ -28,10 +29,11 @@ becomes root-owned (in N); Docker app work moves to Phase 4.
 
 - [ ] **M. Privileged helper, part 2**, in three PRs (Troy, 2026-10-04); design in
   [`privileged-helper.md`](privileged-helper.md):
-  - [ ] **M1.** Settings → Servers, reboot and power off, hostname, dnsmasq and DNS aliases,
-    swap. Built; waiting for the NAS check.
-  - [ ] **M2.** Disks and fstab (keeping the PR #13 rules exactly), Greyhole config, service and
-    install (one install path instead of three).
+  - [x] **M1.** Settings → Servers, reboot and power off, hostname, dnsmasq and DNS aliases,
+    swap (#26).
+  - [ ] **M2.** Data drives and fstab (keeping the PR #13 rules exactly), Greyhole config,
+    database and install (one install path instead of three); 26 sudo rules gone. Built;
+    waiting for the NAS check.
   - [ ] **M3.** Cloudflare Tunnel, Tailscale (its apt repository instead of a downloaded install
     script run as root), package installs from a fixed list, and the security audit's fixes,
     together with P below so that code is reworked once.
@@ -57,17 +59,18 @@ touches the same code.
   complete until it's changed.
 - The per-IP login throttle (`config/initializers/rack_attack.rb`) trusts forwarded addresses from
   private ranges, so it's weaker on the LAN than it looks. The per-username limit holds.
-- Several features stage files at fixed `/tmp` paths before a root copy. Samba (L) and dnsmasq
-  (M1) no longer do: the helper writes the files. Greyhole, the tunnel and the Docker app
-  installer still do (M2, M3).
+- Several features stage files at fixed `/tmp` paths before a root copy. Samba (L), dnsmasq
+  (M1) and Greyhole (M2) no longer do: the helper writes the files. The tunnel and the Docker app
+  installer still do (M3, Phase 4).
 - `UsersController#create` answers a JSON request with a template that doesn't exist (500). The
   Users page posts the form as HTML, so only API-style callers hit it.
 - Static DHCP hosts (Network → Hosts) are saved and restart dnsmasq, but nothing writes them into
   dnsmasq's config (no `dhcp-host` lines), so they have no effect.
 - Re-running the setup wizard's storage step clears the whole pool list
   (`lib/setup_service.rb`, `DiskPoolPartition.destroy_all`).
-- Duplicates: Greyhole install exists three times (`Greyhole.install!`, `DiskService`,
-  `SetupService`); share toggles live in both `SharesController` and `ShareAccessManager`.
+- Duplicates: share toggles live in both `SharesController` and `ShareAccessManager`.
+- Data drives mount with PR #13's `defaults,nofail,...` options. `nosuid,nodev` would be safer for
+  drives brought from another machine; decide with the filesystem (below).
 - Per-request overhead: 4–5 `Setting` queries in `before_action_hook`.
 - Long jobs (apt, docker pull, system update) run inside web requests and hold Puma threads;
   consider a job runner or `systemd-run` with a streamed log.
@@ -88,9 +91,12 @@ VM 104's disks belong to Proxmox, so the disk-safety work (PR #13) is covered by
   partitions.
 - [ ] Re-run `bin/amahi-install`: users, shares and settings survive.
 - [ ] Greyhole pool and Samba binding on the same drives.
+- [ ] Preview an unmounted drive from Disks; install Greyhole from the setup wizard.
 
 Decide the filesystem before the drives are filled: today it's ext4 + Greyhole, which can't take
-snapshots.
+snapshots. **RAID** is a future feature to decide with it: Troy wants the setup wizard to set up
+either basic Greyhole pooling or RAID for a basic file NAS (2026-10-04). Nothing in the code
+builds RAID today (mdadm, or a filesystem's own redundancy such as btrfs or ZFS).
 
 ## Phase 4: Docker apps
 

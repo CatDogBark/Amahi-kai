@@ -127,5 +127,24 @@ RSpec.describe DiskService do
         expect(sse).to have_received(:done).with(no_args)
       end
     end
+
+    context 'in production' do
+      before { allow(Rails.env).to receive(:production?).and_return(true) }
+
+      it 'uses the one Greyhole install path' do
+        allow(Greyhole).to receive(:install!) { |&block| block.call('Installing Greyhole...') }
+        allow(Greyhole).to receive(:running?).and_return(true)
+        described_class.stream_greyhole_install(sse)
+        expect(sse).to have_received(:emit).with('Installing Greyhole...')
+        expect(sse).to have_received(:done).with(no_args)
+      end
+
+      it 'ends the stream with an error when the install fails' do
+        allow(Greyhole).to receive(:install!).and_raise(Greyhole::GreyholeError, 'apt-get exited 100: E: Unable to locate package greyhole')
+        described_class.stream_greyhole_install(sse)
+        expect(sse).to have_received(:emit).with(/Unable to locate package/)
+        expect(sse).to have_received(:done).with('error')
+      end
+    end
   end
 end

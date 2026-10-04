@@ -26,6 +26,15 @@ describe DiskPoolPartition do
       expect(part).not_to be_valid
     end
 
+    it 'requires a data drive under /mnt, since Greyhole only pools those' do
+      %w[/ /etc /mnt /mnt/ /mnt/../etc /mnt/.hidden /mnt/a/.. /mnt/a/./b /mnt/a//b /var/lib/mysql].each do |path|
+        expect(DiskPoolPartition.new(path: path, minimum_free: 10)).not_to be_valid, path
+      end
+      %w[/mnt/storage-1 /mnt/media/pool /mnt/media/.pool].each do |path|
+        expect(DiskPoolPartition.new(path: path, minimum_free: 10)).to be_valid, path
+      end
+    end
+
     it 'is valid with path and minimum_free' do
       part = DiskPoolPartition.new(path: '/mnt/drive1', minimum_free: 10)
       expect(part).to be_valid
