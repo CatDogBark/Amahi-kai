@@ -87,11 +87,13 @@ module AmahiHelper
                     "GRANT ALL PRIVILEGES ON greyhole.* TO 'amahi'@'localhost'; FLUSH PRIVILEGES;"
 
   # apt repositories the helper may add. The signing key is downloaded over HTTPS and
-  # accepted only if its fingerprint is one pinned here.
+  # accepted only if the fingerprints in it (the key and its subkeys, as `gpg --show-keys`
+  # lists them) are exactly the ones pinned here, so a key added to the file is refused.
   APT_REPOSITORIES = {
     'greyhole' => {
       key_url: 'https://www.greyhole.net/releases/deb/greyhole-debsig.asc',
-      fingerprints: [].freeze,
+      # Checked against the published key on the NAS, 2026-10-04.
+      fingerprints: %w[6ADB83262FA757410B33E13978B31B49B8D12778 8DD897BA66D40E90A47CE092AF19B5B28FADF99F].freeze,
       keyring: '/usr/share/keyrings/greyhole-archive-keyring.asc',
       list: '/etc/apt/sources.list.d/greyhole.list',
       source: 'deb [signed-by=/usr/share/keyrings/greyhole-archive-keyring.asc] https://www.greyhole.net/releases/deb stable main'
@@ -986,8 +988,10 @@ module AmahiHelper
         key = File.join(dir, 'key.asc')
         run_command(['/usr/bin/curl', '-fsSL', '--proto', '=https', '--tlsv1.2', '--max-time', '60', '-o', key, repo[:key_url]])
         listed = capture(['/usr/bin/gpg', '--homedir', dir, '--batch', '--show-keys', '--with-colons', key])
-        primary = listed.lines.grep(/\Afpr:/).first.to_s.split(':')[9]
-        raise Failed, "#{name}'s signing key has fingerprint #{primary.inspect}, not a pinned one" unless repo[:fingerprints].include?(primary)
+        found = listed.lines.grep(/\Afpr:/).map { |line| line.split(':')[9] }
+        unless found.sort == repo[:fingerprints].sort
+          raise Failed, "#{name}'s signing key has fingerprints #{found.join(', ')}, not the pinned ones"
+        end
         do_install(repo[:keyring], File.read(key), nil)
       end
       do_install(repo[:list], "#{repo[:source]}\n", nil)

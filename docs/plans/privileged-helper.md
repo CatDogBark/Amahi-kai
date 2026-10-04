@@ -180,7 +180,7 @@ included), a disk used for swap or one mounted by hand elsewhere is refused what
 | `disks.preview` {device} | `DiskManager.preview` (broken: its `mkdir` in `/tmp` had no sudo rule) | mounts read-only in `/run` (`nosuid,nodev,noexec`, no journal replay), lists the top level with sizes (stops at a million entries or 30 s), unmounts |
 | `greyhole.write_config` {content} | `Greyhole.configure!` | only the lines `Greyhole.generate_config` writes, pool drives under `/mnt`; `/etc/greyhole.conf` root:amahi 0640 (it holds the database password) |
 | `greyhole.setup_database` | the SQL in `DiskService` and `SetupService` | `CREATE DATABASE greyhole`, grant to the app's MariaDB user, load the schema once the package has put it in place |
-| `packages.add_repository` {repository} | three copies of the Greyhole repo setup | `greyhole` only: key over HTTPS, accepted if its fingerprint is pinned in the helper, then the keyring and source list |
+| `packages.add_repository` {repository} | three copies of the Greyhole repo setup | `greyhole` only: key over HTTPS, accepted only if its fingerprints (key and subkey) are exactly the pinned ones, then the keyring and source list |
 | `packages.install` {packages} | `sudo apt-get install` for Greyhole | `greyhole`, `php8.3-mbstring`, `php8.3-mysql` only; `apt-get update` and `install` non-interactive, apt's output streamed to the page |
 
 Greyhole has one install path, `Greyhole.install!`, used by Disks → Storage Pool and the setup

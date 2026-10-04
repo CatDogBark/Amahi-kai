@@ -813,7 +813,7 @@ RSpec.describe 'AmahiHelper' do
     describe 'a repository signing key' do
       let(:dir) { Dir.mktmpdir }
       let(:repo) do
-        { key_url: 'https://example.com/key.asc', fingerprints: ['A' * 40], keyring: "#{dir}/keyring.asc",
+        { key_url: 'https://example.com/key.asc', fingerprints: ['A' * 40, 'C' * 40], keyring: "#{dir}/keyring.asc",
           list: "#{dir}/x.list", source: "deb [signed-by=#{dir}/keyring.asc] https://example.com/deb stable main" }
       end
 
@@ -828,19 +828,28 @@ RSpec.describe 'AmahiHelper' do
 
       after { FileUtils.rm_rf(dir) }
 
-      it 'is installed with the source list when its fingerprint is pinned' do
+      it 'is installed with the source list when its fingerprints are the pinned ones' do
         stub_const('AmahiHelper::APT_REPOSITORIES', { 'x' => repo })
-        allow(helper).to receive(:capture).and_return("pub:-:4096:1:ABC:::::::scESC:\nfpr:::::::::#{'A' * 40}:\n")
+        allow(helper).to receive(:capture)
+          .and_return("pub:-:4096:1:ABC:::::::scESC:\nfpr:::::::::#{'A' * 40}:\nsub:-:4096:1:DEF::::::::e:\nfpr:::::::::#{'C' * 40}:\n")
         helper.do_add_apt_repository('x')
         expect(File.read("#{dir}/keyring.asc")).to eq('KEY')
         expect(File.read("#{dir}/x.list")).to eq("#{repo[:source]}\n")
       end
 
-      it 'is refused when its fingerprint is another one' do
+      it 'is refused when its fingerprints differ, or another key was added to the file' do
         stub_const('AmahiHelper::APT_REPOSITORIES', { 'x' => repo })
-        allow(helper).to receive(:capture).and_return("fpr:::::::::#{'B' * 40}:\n")
-        expect { helper.do_add_apt_repository('x') }.to raise_error(AmahiHelper::Failed, /not a pinned one/)
+        ["fpr:::::::::#{'B' * 40}:\n", "fpr:::::::::#{'A' * 40}:\n",
+         "fpr:::::::::#{'A' * 40}:\nfpr:::::::::#{'C' * 40}:\nfpr:::::::::#{'B' * 40}:\n"].each do |listing|
+          allow(helper).to receive(:capture).and_return(listing)
+          expect { helper.do_add_apt_repository('x') }.to raise_error(AmahiHelper::Failed, /not the pinned ones/)
+        end
         expect(File.exist?("#{dir}/keyring.asc")).to be false
+      end
+
+      it "pins the two fingerprints in Greyhole's key file" do
+        expect(AmahiHelper::APT_REPOSITORIES['greyhole'][:fingerprints]).to all(match(/\A\h{40}\z/))
+        expect(AmahiHelper::APT_REPOSITORIES['greyhole'][:fingerprints].size).to eq(2)
       end
 
       it 'is not even downloaded when no fingerprint is pinned' do
