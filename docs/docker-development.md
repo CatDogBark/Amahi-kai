@@ -66,4 +66,4 @@ For production deployment, see `bin/amahi-install` which installs Amahi-kai nati
 
 ---
 
-*See also: [Privilege Escalation Mitigation](security/PRIVILEGE-ESCALATION-MITIGATION.md) for the sudoers allowlist used in production.*
+*See also: [Privilege model](security/PRIVILEGE-ESCALATION-MITIGATION.md) for how production gets root access (the root helper, System Update and Docker).*

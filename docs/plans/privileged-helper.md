@@ -3,7 +3,9 @@
 Status: **PR L done** (#24, checked on the NAS 2026-10-04). **PR M** is split in three (Troy,
 2026-10-04): **M1 done** (#26: services, reboot/power off, hostname, dnsmasq, swap), **M2 done**
 (#27: data drives, Greyhole), **M3 done** (#28: packages, tunnel, Tailscale, Docker install,
-security audit with PR P). Sudoers is now the helper, the updater and Docker; PR N is next.
+security audit with PR P). Sudoers is now the helper, the updater and Docker. **PR N built**: the
+code in `/opt/amahi-kai` is root's, so the `amahi` user can't change what root runs (see
+[`docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`](../security/PRIVILEGE-ESCALATION-MITIGATION.md)).
 
 ## Why
 
@@ -24,10 +26,9 @@ validates every request itself**. It is also the first version of the platform's
 - Source in the repo: `libexec/amahi-helper`. Installed as `/usr/local/sbin/amahi-helper`,
   `root:root 0755`, by `bin/amahi-install-helper`, which `bin/amahi-install` and `bin/amahi-update`
   run as root.
-- Never run it from `/opt/amahi-kai`: that tree is writable by `amahi` until PR N, and an
-  `amahi`-writable root program is a root shell. (Until N, `amahi` could still change the source
-  before the next update copies it. That is the same exposure the updater has today, and N closes
-  it.)
+- Never run it from `/opt/amahi-kai` directly. Since PR N that tree is root's (only `tmp/`,
+  `log/`, `public/assets/` and `vendor/bundle/` are `amahi`'s), so `amahi` can't change the source
+  the updater installs; before N it could.
 - One sudoers line: `amahi ALL=(root) NOPASSWD: /usr/local/sbin/amahi-helper`.
 
 ### 2. Plain Ruby, standard library only

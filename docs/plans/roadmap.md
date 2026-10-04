@@ -39,10 +39,11 @@ becomes root-owned (in N); Docker app work moves to Phase 4.
     Tunnel, Tailscale (its apt repository instead of a downloaded install script run as root),
     Docker's install, and the security audit's fixes with P below; 42 sudo rules gone, leaving
     the helper, the updater and Docker (#28).
-- [ ] **N. Root-owned install**: sudoers down to the helper, the updater and Docker;
-  `/opt/amahi-kai` owned by root; `amahi-update` runs Rails tasks (`bundle`, migrations, asset
-  build) as `amahi`. Rewrite `docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`, which is out of
-  date, to describe the helper.
+- [ ] **N. Root-owned install**: `/opt/amahi-kai` owned by root (`bin/amahi-set-ownership`; the
+  `amahi` user keeps `tmp/`, `log/`, `public/assets/`, `vendor/bundle/`); the installer and
+  `amahi-update` run every Rails and bundle step as `amahi`; root's `git pull` runs without hooks;
+  `production.log` is rotated as `amahi`; `docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`
+  rewritten to describe the helper and this model. Built; waiting for the NAS check.
 - [ ] **O. Update rollback**: keep the previous release; if migrations, the asset build or the
   health check fail, switch back and restart.
 - [x] **P. Security audit fixes** (in M3, #28; `lib/security_audit.rb`): read effective SSH settings with
