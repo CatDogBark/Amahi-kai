@@ -206,7 +206,7 @@ as_app "rm -rf tmp/assets-previous && cp -a public/assets tmp/assets-previous" 2
 
 # 2. Install dependencies (into vendor/bundle; settings in .bundle/config)
 log "Installing dependencies..."
-as_app "bundle install" 2>&1 || rollback "Installing dependencies"
+as_app "bundle install --quiet" 2>&1 || rollback "Installing dependencies"
 
 # 3. Back up the database, then run migrations
 log "Backing up the database..."
@@ -274,7 +274,9 @@ fi
 log "Clearing caches..."
 as_app "rm -rf tmp/cache/* public/assets/*" 2>&1
 log "Precompiling assets..."
-as_app "RAILS_ENV=production bin/rails assets:precompile" 2>&1 || rollback "Precompiling assets"
+# (Without the line Sprockets writes per file, hundreds of them.)
+as_app "set -o pipefail; RAILS_ENV=production bin/rails assets:precompile 2>&1 | sed -u '/ INFO -- : Writing /d'" 2>&1 \
+  || rollback "Precompiling assets"
 
 # 5. Ensure all fstab mounts are active (FUSE mounts like ntfs-3g can get lost)
 log "Restoring mounts..."

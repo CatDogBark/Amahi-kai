@@ -23,6 +23,12 @@ RSpec.describe 'System Update', type: :request do
     body.split("\n\n").map { |chunk| chunk.lines.map(&:chomp) }.reject { |lines| lines.all?(&:empty?) }
   end
 
+  it "shows the deployed commit on System Status" do
+    allow(SystemServices).to receive(:app_commit).and_return('abc1234')
+    get '/settings/system_status'
+    expect(response.body).to include('abc1234')
+  end
+
   describe 'starting it' do
     it 'starts the job through the root helper' do
       post '/settings/update_system', as: :json

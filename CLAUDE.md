@@ -6,8 +6,8 @@ over plain HTTP, through a Cloudflare Tunnel, and through Tailscale. Troy owns t
 (`CatDogBark/Amahi-kai`, **public**) and the NAS.
 
 Current work: Phase 3 of a code review fix plan. Read **`docs/plans/roadmap.md`** first, then the
-plan for the PR you're on (**`docs/plans/privileged-helper.md`**: L, M (M1–M3, with P) and N
-are done; O, update rollback, is built). The privilege model is in
+plan for the PR you're on (**`docs/plans/privileged-helper.md`**: L, M (M1–M3, with P), N and O
+are done; Q, plain CSS instead of Sass, is built). The privilege model is in
 `docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`.
 
 ## Workflow
@@ -81,6 +81,9 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
   update). Root never runs app code: in `bin/amahi-install` and `bin/amahi-update`, every `bundle`,
   `bin/rails` and `rails runner` step goes through `as_app` (a spec checks). Anything the app writes at
   runtime must go in one of those folders or outside the tree.
+- **Stylesheets are plain CSS** (no Sass compiler since Q). Bootstrap is the official 5.3.8 build
+  in `vendor/assets` (CSS, and JS with Popper); update it by replacing those files. Theme CSS in
+  `public/themes/*/stylesheets` is built by hand from `src/` with Dart Sass.
 - `Shell.capture` and `Open3` don't set `$?`; use the status they return.
 - Build commands from names as argument lists (`Open3.capture3('systemctl', 'show', unit)`), not
   strings through a shell.

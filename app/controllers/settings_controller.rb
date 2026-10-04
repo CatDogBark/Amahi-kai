@@ -218,7 +218,7 @@ class SettingsController < ApplicationController
       uptime: uptime_raw,
       ruby_version: RUBY_VERSION,
       rails_version: Rails::VERSION::STRING,
-      app_version: 'amahi-kai',
+      app_version: SystemServices.app_commit || 'unknown',
       dummy_mode: ENV['AMAHI_DUMMY_MODE'] == 'true'
     }
   end

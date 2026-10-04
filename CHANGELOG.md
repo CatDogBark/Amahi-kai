@@ -75,6 +75,8 @@ All notable changes to Amahi-kai are documented here.
 
 ### 🔧 Architecture & Code Quality
 
+- **No Sass compiler any more.** The stylesheets are plain CSS, and Bootstrap is its official 5.3.8 build (CSS and JavaScript), so System Update no longer compiles LibSass, which is unmaintained, and builds assets faster. Pages look exactly as before (compared screenshot by screenshot). The `sassc`, `sass-rails` and `bootstrap` gems are gone. Theme sources are rebuilt by hand with Dart Sass (`public/themes/README.md`).
+- **System Status shows the deployed commit** in its Amahi-kai row (it showed the word "amahi-kai"). The update window no longer lists every gem and every compiled asset file.
 - **Plugin Consolidation** — All 6 plugin engines (Users, Shares, Network, Disks, Apps, Settings) merged into main app. Single layout, unified routing.
 - **Auth Modernization** — Authlogic → `has_secure_password` (bcrypt). Removed DES crypt (was truncating to 8 chars!). Linux users created with a locked password. Two stores: bcrypt (web) + pdbedit (Samba).
 - **Login Rate Limiting** — rack-attack throttling on login attempts.

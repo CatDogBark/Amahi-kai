@@ -23,6 +23,7 @@ so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 | 3. M2. Privileged helper, part 2b | Data drives (format, mount, fstab, preview) and Greyhole (config, database, one install path, pinned key) through the helper; 26 sudo rules gone | #27 |
 | 3. M3 + P. Privileged helper, part 2c | Package installs (pinned apt repositories, fixed list), Cloudflare Tunnel, Tailscale, Docker's install and the security audit's fixes through the helper; audit reads `sshd -T`, server-side tunnel gate; 42 sudo rules gone, 10 left | #28 |
 | 3. N. Root-owned install | `/opt/amahi-kai` is root's except the app's own folders; installer and updater run every Rails and bundle step as `amahi`; privilege model doc rewritten | #30 |
+| 3. O. Update rollback | System Update runs as its own job, backs up the database, and rolls back to the running commit if a step or the restarted app fails; updater sudo rules gone (6 left) | #31 |
 
 ## Next: Phase 3
 
@@ -45,21 +46,27 @@ becomes root-owned (in N); Docker app work moves to Phase 4.
   `amahi-update` run every Rails and bundle step as `amahi`; root's `git pull` runs without hooks;
   `production.log` is rotated as `amahi`; `docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`
   rewritten to describe the helper and this model (#30).
-- [ ] **O. Update rollback** (designed with Troy, 2026-10-04: in place, database backups, its own
-  job): System Update runs as `amahi-kai-update.service` (started by the helper's
+- [x] **O. Update rollback** (designed with Troy, 2026-10-04: in place, database backups, its own
+  job; #31): System Update runs as `amahi-kai-update.service` (started by the helper's
   `system.update`; the page follows `/var/log/amahi-kai/update.log` and reconnects through the
   restart). It remembers the running commit and its compiled assets, dumps the database before
   migrating (the last 3 kept), and if gems, migrations, the asset build or the restarted app
   fail, puts the previous commit back and says so. The database isn't rolled back, so
   migrations must work with the previous version's code. The updater's 4 sudo rules are gone.
-  Built; waiting for the NAS check.
 - [x] **P. Security audit fixes** (in M3, #28; `lib/security_audit.rb`): read effective SSH settings with
   `sshd -T` (drop-ins in `sshd_config.d` win over `sshd_config`); warn that Docker-published ports
   bypass UFW; make the "tunnel blocked until the audit passes" rule a server-side check, not just
   a hidden button. The firewall fix also opens DNS and DHCP once dnsmasq is configured, and the
   SSH password fix needs a key first.
-- [ ] **Q. Replace `sassc`** (LibSass is unmaintained) with `dartsass-rails` or Propshaft and plain
-  CSS. A real Content-Security-Policy (today it's report-only) is a stretch goal.
+- [ ] **Q. Replace `sassc`** (LibSass is unmaintained). Troy chose plain CSS (2026-10-04): Bootstrap
+  5.3.8's official CSS and JS are vendored (`vendor/assets`), the app's four Sass files are plain
+  CSS, and `sassc`, `sass-rails` and the `bootstrap` gem are gone (`sprockets-rails` is now in
+  the Gemfile itself). Screenshots of 14 pages in light and dark mode match the Sass build
+  pixel for pixel, live numbers aside. Theme sources are rebuilt by hand with Dart Sass
+  (`public/themes/README.md`). Sprockets stays; Propshaft can come later. Built; waiting for the
+  NAS check.
+- [ ] **Content-Security-Policy**: today it's report-only. Enforcing it needs the inline
+  scripts and `onclick` handlers moved into the JavaScript files first; its own PR.
 
 ## Open, not yet scheduled
 

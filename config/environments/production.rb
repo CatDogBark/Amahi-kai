@@ -22,10 +22,9 @@ Rails.application.configure do
   # Apache or NGINX already handles this.
   config.public_file_server.enabled = ENV['RAILS_SERVE_STATIC_FILES'].present?
 
-  # Compress JavaScripts and CSS.
-  # JS minification disabled — avoids requiring Node.js runtime on the server
+  # No minification: JS would need a Node.js runtime on the server, and CSS needed Sass.
+  # Bootstrap's vendored files are already minified; the app's own CSS and JS are small.
   # config.assets.js_compressor = :terser
-  config.assets.css_compressor = :sass
 
   # Fallback to assets pipeline if a precompiled asset is missed
   config.assets.compile = true
