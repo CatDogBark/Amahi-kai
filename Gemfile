@@ -7,6 +7,9 @@ gem 'rails', '~> 8.1.0'
 # gem 'actionpack-action_caching' # removed — unused
 
 gem 'sass-rails'
+# Sprockets 4.2 passes json an option json 3 removed, so a production boot crashed as soon
+# as compiled assets existed. 4.3 is the first release that works with json 3.
+gem 'sprockets', '~> 4.3.0'
 # gem 'propshaft'  # TODO: Replace sprockets with propshaft (requires full asset pipeline migration)
 # gem 'terser' # JS minification — requires Node.js runtime, not worth the dependency
 
