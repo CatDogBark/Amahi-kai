@@ -271,8 +271,8 @@ GEM
     slim (5.2.1)
       temple (~> 0.10.0)
       tilt (>= 2.1.0)
-    sprockets (4.2.2)
-      concurrent-ruby (~> 1.0)
+    sprockets (4.3.0)
+      concurrent-ruby (~> 1.1)
       logger
       rack (>= 2.2.4, < 4)
     sprockets-rails (3.5.2)
@@ -330,6 +330,7 @@ DEPENDENCIES
   sass-rails
   simplecov
   slim
+  sprockets (~> 4.3.0)
   sqlite3 (~> 2.0)
   stimulus-rails
   sys-filesystem

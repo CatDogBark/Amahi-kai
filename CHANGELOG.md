@@ -59,6 +59,7 @@ All notable changes to Amahi-kai are documented here.
 - **A web user can't take over an existing Linux login.** The "already exists in system" check had stopped working on current Rails, so a web user named after a Linux account could be created. Names a Linux account can't hold (a colon, control characters, more than 64 characters) are refused when entered.
 - **A share created guest-writeable gets a guest-writeable folder.** The permission used to be set before the folder existed.
 - **Removed unused code that made every file in a share world-writable** (`chmod -R a+rwx`). The Clear permissions button only ever cleared the share's user lists, and still does.
+- **The app starts again once its assets are compiled.** The gem updates that came with Rails 8.1.4 brought json 3, and Sprockets 4.2 (which builds the CSS and JavaScript) passed json an option it no longer accepts. Any production start with compiled assets in place stopped with `ArgumentError: unknown keyword: create_additions`, including the database migration step of System Update. Sprockets is updated to 4.3.0, the first release that works with json 3.
 
 ### 🔧 Architecture & Code Quality
 
