@@ -25,7 +25,7 @@ so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 | 3. N. Root-owned install | `/opt/amahi-kai` is root's except the app's own folders; installer and updater run every Rails and bundle step as `amahi`; privilege model doc rewritten | #30 |
 | 3. O. Update rollback | System Update runs as its own job, backs up the database, and rolls back to the running commit if a step or the restarted app fails; updater sudo rules gone (6 left) | #31 |
 | 3. Q. Plain CSS | Sass compiler gone: the app's stylesheets are plain CSS and Bootstrap is its official 5.3.8 build (`vendor/assets`); System Status shows the deployed commit | #32 |
-| 3. Fix | System Update's restart no longer waits 90 seconds: the update page's stream ends when Puma stops, and Puma gives open requests 10 seconds | this PR |
+| 3. Fix | System Update's restart no longer waits 90 seconds: the update page's stream ends when Puma stops, and Puma gives open requests 10 seconds | #33 |
 
 ## Next: Phase 3
 
