@@ -1,4 +1,6 @@
 require 'rails_helper'
+require 'puma/configuration'
+require 'puma/server'
 
 # System Update: the page starts the job (the root helper's system.update) and follows
 # /var/log/amahi-kai/update.log, reconnecting with ?from= while the app restarts.
@@ -75,6 +77,36 @@ RSpec.describe 'System Update', type: :request do
                                             ['data: ✗ Update failed at: Running database migrations.'],
                                             ['event: done', 'data: error']
                                           ])
+    end
+  end
+
+  # Puma finishes open requests before it stops, and the stream waits for the update, which
+  # waits for the restart, so restarts used to wait for systemd's 90-second stop timeout.
+  describe 'the restart' do
+    it 'ends the stream without "done" once Puma is stopping, so the page reconnects to the new version' do
+      File.write(log.path, "Precompiling assets...\nRestarting Amahi-kai...\n")
+      job_states('active', 'active', 'inactive')
+      allow(Puma::Server).to receive(:current).and_return(instance_double(Puma::Server, shutting_down?: true))
+
+      get '/settings/update_system_stream', headers: same_origin
+
+      expect(events(response.body)).to eq([['data: Precompiling assets...'], ['data: Restarting Amahi-kai...']])
+    end
+
+    it 'keeps following the log while Puma runs' do
+      File.write(log.path, "Restarting Amahi-kai...\n")
+      job_states('active', 'inactive')
+      allow(Puma::Server).to receive(:current).and_return(instance_double(Puma::Server, shutting_down?: false))
+
+      get '/settings/update_system_stream', headers: same_origin
+
+      expect(events(response.body).last).to eq(['event: done', 'data: error'])
+    end
+
+    it 'gives other open requests 10 seconds when Puma stops' do
+      config = Puma::Configuration.new(config_files: [Rails.root.join('config/puma.rb').to_s])
+      config.clamp
+      expect(config.options[:force_shutdown_after]).to eq(10)
     end
   end
 end

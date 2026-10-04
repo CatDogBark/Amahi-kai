@@ -6,8 +6,8 @@ over plain HTTP, through a Cloudflare Tunnel, and through Tailscale. Troy owns t
 (`CatDogBark/Amahi-kai`, **public**) and the NAS.
 
 Current work: Phase 3 of a code review fix plan. Read **`docs/plans/roadmap.md`** first, then the
-plan for the PR you're on (**`docs/plans/privileged-helper.md`**: L, M (M1–M3, with P), N and O
-are done; Q, plain CSS instead of Sass, is built). The privilege model is in
+plan for the PR you're on (**`docs/plans/privileged-helper.md`**: L, M (M1–M3, with P), N, O
+and Q are done). The privilege model is in
 `docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`.
 
 ## Workflow
@@ -67,6 +67,9 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
   to. The web UI starts it as its own job (`amahi-kai-update.service`, via the helper's
   `system.update`) and follows `/var/log/amahi-kai/update.log`, reconnecting through the app's
   restart. Run inside `amahi-kai.service` (the web UI before O), it can't check the restarted app.
+  Puma finishes open requests before it stops, so a stream that waits on the update must end
+  when Puma is stopping (`server_stopping?` in `SettingsController`), or the restart waits for
+  systemd to kill Puma (90 seconds; `force_shutdown_after` in `config/puma.rb` now caps it).
   If System Update breaks, Troy runs `sudo /opt/amahi-kai/bin/amahi-update` over SSH.
 - **Root access goes through the helper.** User accounts, Samba's files, share folders, Settings →
   Servers, the hostname, dnsmasq, swap, reboot/power off, data drives (format, mount, fstab),
