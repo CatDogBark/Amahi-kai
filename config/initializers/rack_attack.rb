@@ -5,11 +5,22 @@
 Rack::Attack.enabled = !Rails.env.test?
 
 class Rack::Attack
+  # The client's address. Rack's req.ip believes X-Forwarded-For from any private address,
+  # so a LAN client could claim a new address on every attempt. A direct connection is
+  # throttled by the socket's address. The Cloudflare Tunnel connects from the NAS itself
+  # (cloudflared on localhost) and sends the visitor's address as CF-Connecting-IP.
+  def self.client_ip(req)
+    remote = req.get_header('REMOTE_ADDR').to_s
+    return remote unless %w[127.0.0.1 ::1].include?(remote)
+
+    req.get_header('HTTP_CF_CONNECTING_IP').presence || remote
+  end
+
   # Throttle login attempts by IP address
   # 5 attempts per 20 seconds
   throttle("logins/ip", limit: 5, period: 20.seconds) do |req|
     if req.path == "/user_sessions" && req.post?
-      req.ip
+      client_ip(req)
     end
   end
 
@@ -25,13 +36,13 @@ class Rack::Attack
   # Throttle API/AJAX requests
   # 60 requests per minute per IP
   throttle("api/ip", limit: 60, period: 60.seconds) do |req|
-    req.ip if req.xhr?
+    client_ip(req) if req.xhr?
   end
 
   # Block suspicious requests
   blocklist("fail2ban/logins") do |req|
     # Block IPs that fail login 20 times in 1 hour
-    Rack::Attack::Allow2Ban.filter(req.ip, maxretry: 20, findtime: 1.hour, bantime: 1.hour) do
+    Rack::Attack::Allow2Ban.filter(client_ip(req), maxretry: 20, findtime: 1.hour, bantime: 1.hour) do
       req.path == "/user_sessions" && req.post?
     end
   end

@@ -36,6 +36,27 @@ describe "Users Controller", type: :request do
       end
     end
 
+    describe "POST /users as JSON" do
+      let(:user_params) do
+        { user: { login: 'newbie', name: 'New Person', password: 'longpassword', password_confirmation: 'longpassword',
+                  role: 'user' } }
+      end
+
+      it "answers with the updated list (it used to be a 500: no JSON template)" do
+        post '/users', params: user_params, as: :json
+        expect(response).to have_http_status(:ok)
+        expect(response.parsed_body['status']).to eq('ok')
+        expect(response.parsed_body['content']).to include('newbie')
+      end
+
+      it "answers with the form and its errors when the user isn't valid" do
+        post '/users', params: { user: user_params[:user].merge(password_confirmation: 'different') }, as: :json
+        expect(response).to have_http_status(:ok)
+        expect(response.parsed_body['errors']).to be true
+        expect(response.parsed_body['content']).to include('<form')
+      end
+    end
+
     describe "POST /users" do
       it "creates a new user" do
         expect {

@@ -21,13 +21,17 @@ class UsersController < ApplicationController
     if @user.save
       respond_to do |format|
         format.html { redirect_to users_path }
-        format.json { render json: { status: :ok, content: render_to_string(template: 'users/index', layout: false) } }
+        # The page's HTML inside JSON: the templates are HTML ones.
+        format.json do
+          @users = User.all_users
+          render json: { status: :ok, content: render_to_string(template: 'users/index', formats: [:html], layout: false) }
+        end
       end
     else
       @users = User.all_users
       respond_to do |format|
         format.html { render :index, status: :unprocessable_entity }
-        format.json { render json: { errors: true, content: render_to_string(partial: 'form', locals: { object: @user }), status: :ok } }
+        format.json { render json: { errors: true, content: render_to_string(partial: 'form', formats: [:html], locals: { object: @user }), status: :ok } }
       end
     end
   end

@@ -16,6 +16,29 @@ module DnsmasqService
       installed? && `systemctl is-active dnsmasq 2>/dev/null`.strip == 'active'
     end
 
+    # The options write_config! takes, from the saved settings (Network → Gateway).
+    def settings_options
+      {
+        net: Setting.get('net') || '192.168.1',
+        dyn_lo: (Setting.get('dyn_lo') || '100').to_i,
+        dyn_hi: (Setting.get('dyn_hi') || '254').to_i,
+        gateway: Setting.get('gateway') || '1',
+        lease_time: (Setting.get('lease_time') || '14400').to_i,
+        domain: Setting.get('domain') || 'local',
+        dhcp_enabled: Setting.get('dnsmasq_dhcp') == '1',
+        dns_enabled: Setting.get('dnsmasq_dns') == '1'
+      }
+    end
+
+    # Rewrites the config from the saved settings, for changes made elsewhere (static
+    # hosts). Does nothing unless dnsmasq is installed.
+    def rewrite_config!
+      return false unless installed?
+
+      write_config!(settings_options)
+      true
+    end
+
     # Restarts dnsmasq so it reads new settings; does nothing if it isn't running.
     # Returns true, or false with the reason logged.
     def restart!
@@ -55,6 +78,10 @@ module DnsmasqService
         config_lines << "dhcp-range=#{net}.#{dyn_lo},#{net}.#{dyn_hi},#{lease_time}s"
         config_lines << "dhcp-option=option:router,#{net}.#{gateway}"
         config_lines << "dhcp-authoritative"
+        # Static addresses (Network → Hosts): this MAC always gets this address and name.
+        Host.order(:name).each do |host|
+          config_lines << "dhcp-host=#{host.mac.downcase},#{net}.#{host.address},#{host.name.downcase}"
+        end
       end
 
       if dns_enabled

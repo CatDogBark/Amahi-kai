@@ -121,8 +121,7 @@ class AppsController < ApplicationController
 
   def docker_apps
     set_title t('apps')
-    @docker_installed = DockerService.installed?
-    @docker_running = DockerService.running?
+    @docker_installed, @docker_running = docker_state
     @current_category = params[:category]
 
     # Merge catalog with installed docker apps
@@ -312,4 +311,14 @@ class AppsController < ApplicationController
   def load_catalog
     @_catalog ||= AppCatalog.all
   end
+
+  # [installed, running]. A failing check shows Docker as not installed instead of
+  # breaking the Apps page.
+  def docker_state
+    [DockerService.installed?, DockerService.running?]
+  rescue StandardError => e
+    Rails.logger.warn("AppsController: couldn't check Docker: #{e.message}")
+    [false, false]
+  end
+
 end

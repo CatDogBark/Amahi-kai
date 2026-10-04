@@ -92,6 +92,13 @@ RSpec.describe SetupService do
         described_class.stream_prepare_drives(['/dev/sdz1'], [], sse)
         expect(sse).to have_received(:emit).with(/not found/)
       end
+
+      it 'keeps drives already in the pool when the step runs again' do
+        DiskPoolPartition.create!(path: '/mnt/other', minimum_free: 10)
+        described_class.stream_prepare_drives(['/dev/sdb1'], [], sse)
+        described_class.stream_prepare_drives(['/dev/sdb1'], [], sse)
+        expect(DiskPoolPartition.order(:path).pluck(:path)).to eq(['/mnt/data', '/mnt/other'])
+      end
     end
   end
 

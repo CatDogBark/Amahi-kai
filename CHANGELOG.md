@@ -78,6 +78,13 @@ All notable changes to Amahi-kai are documented here.
 - **The update and install windows no longer jump or cut off their last line.** Their buttons sit in a status bar that's always there, so the window keeps its size; every line scrolls into view (unless you've scrolled up to read); and the bar shows what's happening with a timer, then the result ("✓ Updated in 1:47"). After System Update the button just reloads the page: Amahi-kai is already back by then, so the old "Waiting for server to restart" step is gone. Waiting for the server (when the page loses track of an update) now gives up through the Cloudflare Tunnel too; error pages from Cloudflare used to keep it waiting forever. Firefox gets the same thin, dark scrollbar.
 - **System Status says whether an update is waiting.** Amahi-kai checks GitHub every 6 hours (and on "Check now") the same way System Update pulls. System Status shows "Update available" with each change linked to its pull request and an **Update now** button, or "Up to date" with a **Repair** button that runs every update step again on the version you have. An update with nothing new now stops after the pull instead of reinstalling, rebuilding and restarting everything, and one that can't reach GitHub says so and changes nothing (it used to carry on with the files on disk).
 
+- **Small fixes before Phase 4:**
+  - The login throttle counts attempts by the real client address. A LAN client could send a made-up `X-Forwarded-For` on every attempt and never be throttled; visitors through the Cloudflare Tunnel are counted by the address Cloudflare reports.
+  - Static DHCP hosts (Network → Hosts) reach dnsmasq: each gets a `dhcp-host` line, and adding, changing or removing one rewrites the config. They were saved but had no effect.
+  - The Gateway page remembers its DHCP and DNS checkboxes after saving.
+  - Re-running the setup wizard's storage step keeps the drives already in the pool instead of emptying the list.
+  - Adding a user through a JSON request no longer fails with a server error, and the Apps page still loads when checking Docker fails.
+
 ### 🔧 Architecture & Code Quality
 
 - **No Sass compiler any more.** The stylesheets are plain CSS, and Bootstrap is its official 5.3.8 build (CSS and JavaScript), so System Update no longer compiles LibSass, which is unmaintained, and builds assets faster. Pages look exactly as before (compared screenshot by screenshot). The `sassc`, `sass-rails` and `bootstrap` gems are gone. Theme sources are rebuilt by hand with Dart Sass (`public/themes/README.md`).

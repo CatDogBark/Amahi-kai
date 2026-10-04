@@ -30,6 +30,7 @@ so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 | 3. Fix | Drive temperatures through the helper; `smartctl`'s open-ended sudo rule removed (5 rules left: the helper and Docker's) | #35 |
 | 3. Fix | Update and install windows keep their size: a status bar with a timer and the result; System Update's button just reloads | #36 |
 | 3. Update check | The helper checks for an update every 6 hours (timer) and on Check now; System Status shows it, with Update now or Repair; an update with nothing new stops after the pull | #37 |
+| 3. Small fixes | Login throttle by the real client address; static DHCP hosts written to dnsmasq; Gateway checkboxes saved; setup storage step keeps the pool; Users JSON create; Apps page survives a failed Docker check | #38 |
 
 ## Next: Phase 3
 
@@ -78,20 +79,9 @@ becomes root-owned (in N); Docker app work moves to Phase 4.
 Smaller findings from the review that no PR covers yet. Fold them into a nearby PR when it
 touches the same code.
 
-- The per-IP login throttle (`config/initializers/rack_attack.rb`) trusts forwarded addresses from
-  private ranges, so it's weaker on the LAN than it looks. The per-username limit holds.
 - Several features staged files at fixed `/tmp` paths before a root copy. Samba (L), dnsmasq
   (M1), Greyhole (M2), the tunnel and Tailscale (M3) no longer do: the helper writes the files.
   The Docker app installer still does (Phase 4).
-- `spec/requests/apps_controller_spec.rb` "handles errors gracefully" fails when that file runs
-  alone (on `main` too) and passes in the full suite: `docker_apps` doesn't rescue the error the
-  spec raises. Fix the spec or the action.
-- `UsersController#create` answers a JSON request with a template that doesn't exist (500). The
-  Users page posts the form as HTML, so only API-style callers hit it.
-- Static DHCP hosts (Network → Hosts) are saved and restart dnsmasq, but nothing writes them into
-  dnsmasq's config (no `dhcp-host` lines), so they have no effect.
-- Re-running the setup wizard's storage step clears the whole pool list
-  (`lib/setup_service.rb`, `DiskPoolPartition.destroy_all`).
 - Duplicates: share toggles live in both `SharesController` and `ShareAccessManager`.
 - Data drives mount with PR #13's `defaults,nofail,...` options. `nosuid,nodev` would be safer for
   drives brought from another machine; decide with the filesystem (below).
