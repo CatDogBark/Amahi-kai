@@ -6,14 +6,15 @@ gem 'rails', '~> 8.1.0'
 # gem 'dalli' # removed — no memcached
 # gem 'actionpack-action_caching' # removed — unused
 
-gem 'sass-rails'
 # Sprockets 4.2 passes json an option json 3 removed, so a production boot crashed as soon
 # as compiled assets existed. 4.3 is the first release that works with json 3.
 gem 'sprockets', '~> 4.3.0'
+# The asset pipeline's Rails integration (helpers, assets:precompile). It used to come in
+# with sass-rails; the stylesheets are plain CSS now.
+gem 'sprockets-rails', '~> 3.5'
 # gem 'propshaft'  # TODO: Replace sprockets with propshaft (requires full asset pipeline migration)
 # gem 'terser' # JS minification — requires Node.js runtime, not worth the dependency
 
-gem 'bootstrap', '~> 5.3'
 gem 'slim'
 gem 'jbuilder'
 

@@ -1,0 +1,333 @@
+/* Amahi-kai login and setup pages (the login and setup layouts link this file).
+ * Plain CSS; it was Sass until 2026-10. The colours are the Amahi-kai palette:
+ * primary #0a6e8a, secondary #0d8aa8, accent #f0a030, dark #1a2332, text #2c3e50,
+ * muted #7f8c9b. The light and dark values are the --login-* variables below. */
+
+:root {
+  --login-form-bg: #1a2332;
+  --login-form-bg-gradient: linear-gradient(180deg, #28364d 0%, #1a2332 100%);
+  --login-form-border: rgba(255, 255, 255, 0.08);
+  --login-input-color: #2c3e50;
+  --login-input-bg: #f4f7fa;
+  --login-input-border: rgba(255, 255, 255, 0.15);
+  --login-input-focus-border: #0d8aa8;
+  --login-input-focus-shadow: rgba(13, 138, 168, 0.3);
+  --login-input-disabled-color: #999;
+  --login-input-disabled-bg: #eee;
+  --login-placeholder-color: #aaa;
+  --login-label-color: #ccc;
+  --login-rememberme-color: #7f8c9b;
+  --login-submit-bg: #0a6e8a;
+  --login-submit-gradient: linear-gradient(180deg, #0d8aa8 0%, #0a6e8a 100%);
+  --login-submit-border: #085b72;
+  --login-submit-hover-bg: #0c81a2;
+  --login-submit-hover-gradient: linear-gradient(180deg, #0f9dc0 0%, #0c81a2 100%);
+  --login-submit-hover-border: #0a6e8a;
+  --login-alert-danger-bg: rgba(192, 57, 43, 0.15);
+  --login-alert-danger-border: rgba(192, 57, 43, 0.4);
+  --login-alert-danger-color: #e74c3c;
+  --login-message-bg: rgba(39, 174, 96, 0.15);
+  --login-message-border: rgba(39, 174, 96, 0.4);
+  --login-message-color: #2ecc71;
+  --login-alert-info-bg: rgba(13, 138, 168, 0.15);
+  --login-alert-info-border: rgba(13, 138, 168, 0.4);
+  --login-alert-info-color: #44cff1;
+  --login-alert-warn-bg: rgba(240, 160, 48, 0.15);
+  --login-alert-warn-border: rgba(240, 160, 48, 0.4);
+  --login-alert-warn-color: #f0a030;
+  --login-alert-warn-link: #f3b660;
+  --login-updated-bg: #e8f8f0;
+  --login-updated-border: #27ae60;
+  --login-nav-link-color: #777;
+  --login-link-color: #0d8aa8;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --login-form-bg: #0d1117;
+    --login-form-bg-gradient: linear-gradient(180deg, #161b22 0%, #0d1117 100%);
+    --login-form-border: #30363d;
+    --login-input-color: #c9d1d9;
+    --login-input-bg: #161b22;
+    --login-input-border: #30363d;
+    --login-input-focus-border: #1a9fc2;
+    --login-input-focus-shadow: rgba(26, 159, 194, 0.3);
+    --login-input-disabled-color: #8b949e;
+    --login-input-disabled-bg: #21262d;
+    --login-placeholder-color: #6e7681;
+    --login-label-color: #c9d1d9;
+    --login-rememberme-color: #8b949e;
+    --login-submit-bg: #1a9fc2;
+    --login-submit-gradient: linear-gradient(180deg, #22b8d6 0%, #1a9fc2 100%);
+    --login-submit-border: #1a9fc2;
+    --login-submit-hover-bg: #1db1d8;
+    --login-submit-hover-gradient: linear-gradient(180deg, #33c2df 0%, #1db1d8 100%);
+    --login-submit-hover-border: #1db1d8;
+    --login-alert-danger-bg: rgba(218, 54, 51, 0.15);
+    --login-alert-danger-border: rgba(218, 54, 51, 0.4);
+    --login-alert-danger-color: #f85149;
+    --login-message-bg: rgba(46, 160, 67, 0.15);
+    --login-message-border: rgba(46, 160, 67, 0.4);
+    --login-message-color: #3fb950;
+    --login-alert-info-bg: rgba(26, 159, 194, 0.15);
+    --login-alert-info-border: rgba(26, 159, 194, 0.4);
+    --login-alert-info-color: #58a6ff;
+    --login-alert-warn-bg: rgba(240, 160, 48, 0.15);
+    --login-alert-warn-border: rgba(240, 160, 48, 0.4);
+    --login-alert-warn-color: #e3b341;
+    --login-alert-warn-link: #f0a030;
+    --login-updated-bg: #122117;
+    --login-updated-border: #2ea043;
+  }
+}
+
+[data-theme="dark"] {
+  --login-form-bg: #0d1117;
+  --login-form-bg-gradient: linear-gradient(180deg, #161b22 0%, #0d1117 100%);
+  --login-form-border: #30363d;
+  --login-input-color: #c9d1d9;
+  --login-input-bg: #161b22;
+  --login-input-border: #30363d;
+  --login-input-focus-border: #1a9fc2;
+  --login-input-focus-shadow: rgba(26, 159, 194, 0.3);
+  --login-input-disabled-color: #8b949e;
+  --login-input-disabled-bg: #21262d;
+  --login-placeholder-color: #6e7681;
+  --login-label-color: #c9d1d9;
+  --login-rememberme-color: #8b949e;
+  --login-submit-bg: #1a9fc2;
+  --login-submit-gradient: linear-gradient(180deg, #22b8d6 0%, #1a9fc2 100%);
+  --login-submit-border: #1a9fc2;
+  --login-submit-hover-bg: #1db1d8;
+  --login-submit-hover-gradient: linear-gradient(180deg, #33c2df 0%, #1db1d8 100%);
+  --login-submit-hover-border: #1db1d8;
+  --login-alert-danger-bg: rgba(218, 54, 51, 0.15);
+  --login-alert-danger-border: rgba(218, 54, 51, 0.4);
+  --login-alert-danger-color: #f85149;
+  --login-message-bg: rgba(46, 160, 67, 0.15);
+  --login-message-border: rgba(46, 160, 67, 0.4);
+  --login-message-color: #3fb950;
+  --login-alert-info-bg: rgba(26, 159, 194, 0.15);
+  --login-alert-info-border: rgba(26, 159, 194, 0.4);
+  --login-alert-info-color: #58a6ff;
+  --login-alert-warn-bg: rgba(240, 160, 48, 0.15);
+  --login-alert-warn-border: rgba(240, 160, 48, 0.4);
+  --login-alert-warn-color: #e3b341;
+  --login-alert-warn-link: #f0a030;
+  --login-updated-bg: #122117;
+  --login-updated-border: #2ea043;
+}
+
+body {
+  font: 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+body.login {
+  border-top-color: #1a2332;
+}
+
+html {
+  background: transparent;
+  min-height: 100%;
+  height: 100%;
+}
+
+#nav {
+  margin: 0 0 0 8px;
+  padding: 16px;
+}
+
+#nav a {
+  color: var(--login-nav-link-color);
+}
+
+a {
+  text-decoration: none;
+  color: var(--login-link-color);
+}
+
+#logo {
+  margin-top: 80px;
+  text-align: center;
+}
+
+#logo h1 a {
+  font-size: 36px;
+  font-weight: 700;
+  color: white;
+  text-decoration: none;
+  display: block;
+  padding-bottom: 8px;
+  letter-spacing: -0.5px;
+  background: none;
+  text-indent: 0;
+  width: auto;
+  height: auto;
+  overflow: visible;
+}
+
+#login {
+  width: 380px;
+  margin: 20px auto 7em auto;
+}
+
+.alert-danger {
+  margin: 0 0 16px 8px;
+  padding: 12px 16px;
+  border: 1px solid var(--login-alert-danger-border);
+  background-color: var(--login-alert-danger-bg);
+  color: var(--login-alert-danger-color);
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.message-message {
+  margin: 0 0 16px 8px;
+  padding: 12px 16px;
+  border: 1px solid var(--login-message-border);
+  background-color: var(--login-message-bg);
+  color: var(--login-message-color);
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.alert-info {
+  margin: 0 0 16px 8px;
+  padding: 12px 16px;
+  border: 1px solid var(--login-alert-info-border);
+  background-color: var(--login-alert-info-bg);
+  color: var(--login-alert-info-color);
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.alert-warn {
+  margin: 0 0 16px 8px;
+  padding: 12px 16px;
+  color: var(--login-alert-warn-color);
+  background-color: var(--login-alert-warn-bg);
+  border: 1px solid var(--login-alert-warn-border);
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.alert-warn a {
+  color: var(--login-alert-warn-link);
+}
+
+form {
+  margin-left: 8px;
+  padding: 30px 46px 74px 46px;
+  font-weight: bold;
+  border-radius: 8px;
+  box-shadow: rgba(0, 0, 0, 0.3) 0 8px 32px;
+  background: var(--login-form-bg);
+  background: var(--login-form-bg-gradient);
+  border: 1px solid var(--login-form-border);
+}
+
+form .rememberme {
+  font-weight: normal;
+  float: left;
+  margin-bottom: 0;
+  color: var(--login-rememberme-color);
+}
+
+form p {
+  margin-bottom: 24px;
+}
+
+form label {
+  padding-bottom: 4px;
+  display: block;
+  text-align: left;
+  vertical-align: top;
+  color: var(--login-label-color);
+  font-weight: 500;
+}
+
+form input {
+  color: var(--login-input-color);
+  background-color: var(--login-input-bg);
+  border: 1px solid var(--login-input-border);
+  border-radius: 4px;
+  transition: border-color 0.15s ease;
+}
+
+form input:focus {
+  border-color: var(--login-input-focus-border);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--login-input-focus-shadow);
+}
+
+form input[disabled='disabled'] {
+  color: var(--login-input-disabled-color);
+  background-color: var(--login-input-disabled-bg);
+}
+
+form .submit {
+  float: right;
+}
+
+form .submit input {
+  margin-top: -6px;
+  padding: 10px 24px;
+  background: var(--login-submit-bg);
+  background: var(--login-submit-gradient);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+  border: 1px solid var(--login-submit-border);
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-block;
+  text-align: center;
+  text-decoration: none;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+form .submit input:hover {
+  background: var(--login-submit-hover-bg);
+  background: var(--login-submit-hover-gradient);
+  border-color: var(--login-submit-hover-border);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+form #password, form #username, form #password_confirmation, form #user_email {
+  font-size: 16px;
+  width: 97%;
+  padding: 8px;
+  margin-right: 6px;
+}
+
+.updated {
+  background-color: var(--login-updated-bg);
+  border-color: var(--login-updated-border);
+}
+
+input::-webkit-input-placeholder {
+  color: var(--login-placeholder-color);
+  font-weight: normal;
+}
+
+input:-moz-placeholder {
+  color: var(--login-placeholder-color);
+  font-weight: normal;
+}
+
+input::-moz-placeholder {
+  color: var(--login-placeholder-color);
+  font-weight: normal;
+}
+
+input:-ms-input-placeholder {
+  color: var(--login-placeholder-color);
+  font-weight: normal;
+}

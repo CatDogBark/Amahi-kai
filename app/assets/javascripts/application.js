@@ -18,4 +18,4 @@
 //= require toast
 //= require lib/application
 
-//= require bootstrap
+//= require bootstrap.bundle.min

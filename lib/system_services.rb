@@ -188,6 +188,10 @@ class SystemServices
       [app_commit, "Rails #{Rails::VERSION::STRING}, Ruby #{RUBY_VERSION}"]
     end
 
+    public
+
+    # The deployed commit (7 characters), read from .git directly so it works whoever owns
+    # the checkout; nil if there's no checkout. Settings → Servers and System Status show it.
     def app_commit
       git = Rails.root.join('.git')
       head = File.read(git.join('HEAD')).strip
@@ -196,6 +200,8 @@ class SystemServices
     rescue SystemCallError
       nil
     end
+
+    private
 
     # A branch's commit: its loose ref file, or its line in packed-refs.
     def ref_sha(git, ref)

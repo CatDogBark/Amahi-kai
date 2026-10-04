@@ -1,0 +1,16 @@
+#disks-table td.cool {
+  color: green;
+}
+
+#disks-table td.warm {
+  color: orange;
+}
+
+#disks-table td.hot {
+  color: red;
+  font-weight: bold;
+}
+
+#disks-table a {
+  color: #777;
+}
