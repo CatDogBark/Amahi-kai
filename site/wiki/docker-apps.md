@@ -13,23 +13,16 @@ Amahi-kai includes a built-in Docker app catalog. You can install, start, stop, 
 
 Docker is **not** installed by default. Install it from the web UI:
 
-1. Go to the **Apps** tab (`/tab/apps`)
+1. Go to the **Apps** tab
 2. Click **Install Docker**
 3. Watch the streamed installation progress
 
-The installer adds Docker's official apt repository, installs `docker-ce`, adds the `amahi` user to the `docker` group, and enables the Docker service.
+Amahi-kai's root helper adds Docker's official apt repository (its signing key is checked
+against a pinned fingerprint), installs Docker, lets the `amahi` user manage it, and turns the
+service on.
 
-If you prefer to install Docker manually:
-
-```bash
-# The web UI runs these steps for you, but for reference:
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list
-sudo apt-get update
-sudo apt-get install -y docker-ce docker-ce-cli containerd.io
-sudo usermod -aG docker amahi
-sudo systemctl enable --now docker
-```
+> Access to Docker is full control of the server: a container can be given any file or device.
+> Only install apps you trust.
 
 ---
 
@@ -55,7 +48,9 @@ The app catalog is defined in `config/docker_apps/catalog.yml`. Currently availa
 | App | Description |
 |-----|-------------|
 | **Syncthing** | Peer-to-peer file synchronization |
-| **FileBrowser** | Web-based file manager for your shares |
+
+Browsing and managing share files from the web is built in: see the file browser on
+[File Sharing](file-sharing).
 
 ### Networking
 | App | Description |
@@ -120,7 +115,7 @@ http://<your-server-ip>:3000/app/<identifier>
 For example:
 - Jellyfin: `http://192.168.1.10:3000/app/jellyfin`
 - Gitea: `http://192.168.1.10:3000/app/gitea`
-- FileBrowser: `http://192.168.1.10:3000/app/filebrowser`
+- Grafana: `http://192.168.1.10:3000/app/grafana`
 
 The reverse proxy handles:
 - Path rewriting (so apps work under `/app/<name>` paths)
@@ -137,7 +132,7 @@ Most apps work fully through the built-in reverse proxy at `/app/<name>`. Some a
 
 | Status | Apps |
 |--------|------|
-| **Works fully** | Jellyfin, Grafana, Transmission, FileBrowser, Gitea, Syncthing, Pi-hole, Paperless-ngx, Audiobookshelf |
+| **Works fully** | Jellyfin, Grafana, Transmission, Gitea, Syncthing, Pi-hole, Paperless-ngx, Audiobookshelf |
 | **Limited** | Nextcloud, Portainer, Home Assistant, Vaultwarden, Uptime Kuma |
 
 **Limited apps** are ones that hardcode absolute URLs, require WebSocket connections on their own hostname, or refuse to run under a sub-path. After installing a limited app, you'll see a notification explaining that it may need direct port access or a dedicated hostname to work fully.
@@ -197,7 +192,13 @@ Each app stores its data under `/opt/amahi/apps/<identifier>/`. For example:
     data/
 ```
 
-Media apps also mount share directories. For instance, Jellyfin mounts `/opt/amahi/media` and FileBrowser mounts `/var/lib/amahi-kai/files`.
+Media apps also mount share folders; for instance, Jellyfin mounts `/opt/amahi/media`.
+
+### App ports and the firewall
+
+Docker writes its own firewall rules for the ports apps publish, ahead of UFW's, so an app's port
+is reachable from your LAN even with UFW on. The [security audit](security) lists them. Apps you
+only open through `/app/<name>` don't need their ports reachable.
 
 ### Backing Up App Data
 

@@ -5,183 +5,119 @@ title: "Security"
 
 # Security
 
-Amahi-kai includes a built-in security audit that checks your server's configuration and can automatically fix most issues. The audit is especially important before enabling [Remote Access](remote-access).
+Amahi-kai includes a security audit that checks the server's configuration and can fix most of
+what it finds. Run it before turning on [Remote Access](remote-access): the tunnel won't start
+while the audit reports a blocker.
 
 ---
 
 ## Security Audit
 
-Navigate to **Network > Security** (requires Advanced mode) to run the audit.
+Go to **Network > Security** (Advanced mode) and run the audit. Each check is one of:
 
-The audit checks 8 items, each classified as:
-
-| Status | Meaning |
+| Result | Meaning |
 |--------|---------|
-| **Pass** | Configuration is secure |
-| **Warning** | Recommended to fix, but not blocking |
-| **Blocker** | Must be fixed before enabling remote access |
+| **Pass** | Configured securely |
+| **Warning** | Worth fixing, but not blocking |
+| **Blocker** | Must be fixed before remote access can be turned on |
 
-### Checks Performed
+### Checks
 
-| Check | Severity | What It Verifies |
+| Check | Severity | What it looks at |
 |-------|----------|------------------|
-| Admin password changed | Blocker | Default password (`secretpassword`) has been changed |
-| UFW firewall active | Blocker | UFW is enabled with deny-by-default policy |
-| SSH root login disabled | Warning | `PermitRootLogin no` in sshd_config |
-| SSH password auth disabled | Warning | `PasswordAuthentication no` in sshd_config |
-| Fail2ban installed | Warning | `fail2ban` package is installed |
-| Unattended upgrades | Warning | `unattended-upgrades` package is installed |
-| Samba LAN binding | Blocker | Samba is bound to LAN interfaces only |
-| Open ports | Info | Lists all externally-listening ports |
+| Admin password changed | Blocker | The `admin` account no longer accepts the default password |
+| UFW firewall active | Blocker | UFW is turned on |
+| Samba bound to LAN | Blocker | Samba only listens on the LAN (and Tailscale) |
+| SSH root login disabled | Warning | Root can't log in over SSH |
+| SSH password login disabled | Warning | SSH accepts keys only |
+| Fail2ban | Warning | Repeated failed SSH logins get blocked |
+| Automatic security updates | Warning | `unattended-upgrades` is installed and turned on |
+| Docker ports | Warning | Lists Docker app ports reachable from the network (see below) |
+| Open ports | Info | Lists the ports the server listens on |
+
+The SSH checks read SSH's *effective* settings (`sshd -T`), so a setting in a drop-in file under
+`/etc/ssh/sshd_config.d/` counts, as it does for SSH itself.
 
 ---
 
-## Auto-Fix
+## Fixing issues
 
-Click **Fix All** in the security audit page to automatically resolve all fixable issues. The fix-all operation streams progress in real-time and performs:
+Click **Fix All**, or a check's own **Fix** button. The progress streams as it runs.
 
-### 1. Enable UFW Firewall
+- **Firewall:** turns on UFW with Amahi-kai's rules: SSH, the web UI (3000), HTTPS and Samba,
+  plus DNS and DHCP when Amahi-kai runs dnsmasq for your network.
+- **SSH:** turns off root login and password login. **Password login is only turned off once an
+  account that can log in has an SSH key**, so the fix can't lock you out. Set up a key first
+  (below).
+- **Fail2ban:** installs it; its SSH jail is on by default.
+- **Automatic security updates:** installs `unattended-upgrades` and turns it on.
+- **Samba binding:** Amahi-kai generates Samba's configuration with the LAN binding built in, so
+  this passes on its own unless the configuration was edited by hand.
 
-```bash
-sudo ufw --force enable
-sudo ufw default deny incoming
-sudo ufw allow 22/tcp      # SSH
-sudo ufw allow 3000/tcp    # Amahi-kai web UI
-```
+Not fixed automatically:
 
-### 2. Harden SSH
+- **Admin password:** change it on the Users page (the setup wizard requires it too).
+- **Docker ports and open ports:** informational; close anything you don't expect.
 
-Modifies `/etc/ssh/sshd_config`:
+### Docker and the firewall
 
-```
-PermitRootLogin no
-PasswordAuthentication no
-```
+Docker writes its own firewall rules for the ports its apps publish, ahead of UFW's, so UFW
+doesn't filter them. An app port published on all interfaces is reachable from your LAN even with
+UFW on. The **Docker ports** check lists them. Apps you only open through Amahi-kai's
+`/app/<name>` links don't need their ports reachable from the network.
 
-Then restarts sshd.
-
-> **Important**: Before disabling SSH password authentication, make sure you have SSH key access configured. Otherwise you could lock yourself out.
-
-### 3. Install Fail2ban
-
-```bash
-sudo apt-get install -y fail2ban
-```
-
-Fail2ban monitors log files and bans IPs that show malicious activity (brute-force SSH attempts, etc.).
-
-### 4. Enable Unattended Upgrades
+### Setting up an SSH key
 
 ```bash
-sudo apt-get install -y unattended-upgrades
-sudo dpkg-reconfigure -plow unattended-upgrades
-```
-
-This configures Ubuntu to automatically install security updates.
-
-### 5. Bind Samba to LAN
-
-Adds to `smb.conf` under `[global]`:
-
-```ini
-interfaces = lo <your-interface>
-bind interfaces only = yes
-```
-
-Then restarts Samba. This prevents Samba from listening on external/tunnel interfaces.
-
-### What Can't Be Auto-Fixed
-
-- **Admin password** — Must be changed manually through the web UI or setup wizard
-- **Open ports** — Informational only; manually close any unexpected ports
-
----
-
-## Individual Fixes
-
-You can also fix individual items by clicking their **Fix** button. Each fix runs the same commands as the auto-fix, but only for that specific check.
-
----
-
-## Sudoers Allowlist
-
-Amahi-kai follows the principle of least privilege. The `amahi` user cannot run arbitrary commands as root. Instead, a carefully scoped sudoers file at `/etc/sudoers.d/amahi-kai` allows only specific commands:
-
-| Category | Allowed Commands |
-|----------|------------------|
-| User management | `useradd`, `usermod`, `userdel` |
-| Samba | `pdbedit` |
-| File operations | `chmod`, `chown`, `mkdir` scoped to `/var/lib/amahi-kai/*` |
-| SSH | `chmod`/`chown` scoped to `/home/*/.ssh` |
-| Config staging | `cp` from staging dirs to `/etc/samba/*`, `/etc/dnsmasq.d/*` |
-| Service management | `systemctl` for specific services only |
-| Security hardening | `ufw`, `sshd` restart, `fail2ban` install |
-| Docker | `docker` commands, Docker install packages |
-| Cloudflare | `cloudflared`, apt install, service management |
-| Self-update | `bin/amahi-update`, `systemctl restart amahi-kai` |
-
-The sudoers file is validated with `visudo -cf` during installation to prevent syntax errors from locking out sudo.
-
----
-
-## Firewall (UFW)
-
-The installer opens port 3000 in UFW if it's active. The security auto-fix configures UFW with:
-
-- Default deny incoming
-- Allow SSH (22/tcp)
-- Allow Amahi-kai (3000/tcp)
-
-### Managing UFW
-
-```bash
-# Check status
-sudo ufw status verbose
-
-# Allow additional ports (e.g., for Samba)
-sudo ufw allow 445/tcp comment "Samba"
-sudo ufw allow 139/tcp comment "Samba (NetBIOS)"
-
-# Allow a specific Docker app port
-sudo ufw allow 8096/tcp comment "Jellyfin direct access"
-```
-
-> Note: If you only access Docker apps through Amahi-kai's reverse proxy, you don't need to open their individual ports — everything goes through port 3000.
-
----
-
-## SSH Hardening
-
-The auto-fix configures SSH with:
-
-- **Root login disabled** — Use a regular user and `sudo` instead
-- **Password authentication disabled** — Use SSH keys only
-
-### Setting Up SSH Keys Before Disabling Passwords
-
-```bash
-# On your local machine, generate a key (if you don't have one)
+# On your computer (once)
 ssh-keygen -t ed25519
 
-# Copy it to the server
+# Copy it to your account on the server, then check it works
 ssh-copy-id youruser@<server-ip>
-
-# Verify key-based login works
 ssh youruser@<server-ip>
-
-# Now it's safe to disable password authentication
 ```
 
-Amahi-kai also supports managing SSH public keys through the user model — each user can have a `public_key` field that gets written to their `~/.ssh/authorized_keys`.
+Then run the SSH fix.
 
 ---
 
-## Best Practices
+## How Amahi-kai uses root
 
-1. **Change the default admin password immediately** after installation
-2. **Run the security audit** and fix all issues before enabling remote access
-3. **Use SSH keys** instead of passwords for remote shell access
-4. **Keep the system updated** — enable unattended upgrades or run `sudo apt update && sudo apt upgrade` regularly
-5. **Review open ports** periodically with `ss -tlnp`
-6. **Don't expose Samba to the internet** — keep it LAN-only with interface binding
-7. **Back up regularly** — especially `/etc/amahi-kai/amahi.env` and `/opt/amahi/apps/`
+The web app runs as its own user, `amahi`, not as root.
+
+- **One root helper.** Everything that needs root (user and Samba accounts, Samba's
+  configuration, share folders, services, drives, Greyhole, package installs, the tunnel,
+  Tailscale, the audit's fixes, updates) goes through `/usr/local/sbin/amahi-helper`. It accepts
+  a fixed list of operations, checks every request itself, and logs each one to
+  `/var/log/amahi-kai/helper.log` (passwords and tokens are filtered out).
+- **Sudo is limited** to the helper and Docker. You can see the rules with `sudo -l -U amahi`.
+- **Root owns the code** in `/opt/amahi-kai`, so the web app can't change what root runs.
+- **Secrets stay private.** Passwords and the tunnel token are never put on a command line or in
+  a log; the tunnel token is in a file only root can read.
+
+Docker is the exception: access to Docker is full control of the machine. Only install apps you
+trust.
+
+---
+
+## Logins and sessions
+
+- Passwords are stored with bcrypt.
+- Sessions end after 7 days without use. Changing your password signs you out everywhere else.
+- Login attempts are rate-limited per address and per username.
+- Pages that change the system only accept requests from Amahi-kai's own pages (CSRF protection,
+  POST-only actions).
+- Amahi-kai only answers to its own addresses (IP, host name, Tailscale name and any names you
+  add), which blocks DNS-rebinding tricks.
+
+---
+
+## Best practices
+
+1. Run the security audit and clear the blockers before turning on remote access.
+2. Put [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/applications/) in
+   front of your tunnel hostname (for example, a one-time code sent to your email).
+3. Use SSH keys instead of passwords.
+4. Install updates when Amahi-kai says one is waiting (see [Updating](updating)).
+5. Keep Samba on the LAN; don't forward its ports on your router.
+6. Back up `/etc/amahi-kai/amahi.env` and your app data (`/opt/amahi/apps/`).

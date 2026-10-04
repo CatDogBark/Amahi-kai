@@ -5,177 +5,124 @@ title: "Updating"
 
 # Updating
 
-Amahi-kai can be updated from either the web UI or the command line. Updates pull the latest code from GitHub, install any new dependencies, run database migrations, rebuild assets, and restart the service.
+Amahi-kai checks for updates on its own and tells you when one is waiting. You choose when to
+install it, from the web UI or the command line. If an update fails, Amahi-kai goes back to the
+version that was running.
 
 ---
 
-## Web UI Update
+## Seeing what's new
 
-1. Go to **Settings > System Status**
-2. Click **Update System**
-3. Watch the streaming progress as each step completes
+Go to **Settings > System Status**. The **System Update** card shows one of:
 
-The web UI calls `sudo /opt/amahi-kai/bin/amahi-update --stream` and displays each line of output in real-time.
+- **Update available: N changes**, with each change listed and linked to its pull request on
+  GitHub, and an **Update now** button.
+- **Up to date (abc1234)**, with a **Repair** button (see below).
+- **Not checked yet**, right after installing.
 
----
+Amahi-kai checks 10 minutes after the server starts and then every 6 hours (the
+`amahi-kai-update-check.timer` systemd timer). **Check now** checks straight away. The card says
+when it last checked, and why if a check failed (for example, GitHub couldn't be reached).
 
-## CLI Update
-
-Run the update script directly:
-
-```bash
-sudo /opt/amahi-kai/bin/amahi-update
-```
-
-The `--stream` flag produces cleaner output for the web UI's SSE stream:
-
-```bash
-sudo /opt/amahi-kai/bin/amahi-update --stream
-```
+The check only looks; it never installs anything.
 
 ---
 
-## What the Update Does
+## Installing an update
 
-The `bin/amahi-update` script performs these steps in order:
+1. Go to **Settings > System Status**.
+2. Read the list of changes, then click **Update now**.
+3. A window shows each step as it runs, with a timer at the bottom. Amahi-kai restarts near the
+   end; the window waits for it and carries on.
+4. When it says **✓ Updated in …**, click **Reload page** to load the new version.
 
-### 1. Pull Latest Code
+The update runs as its own job on the server (`amahi-kai-update.service`), so closing the browser
+doesn't stop it. Its log is `/var/log/amahi-kai/update.log`.
 
-If the app directory has a `.git` history:
-```bash
-git pull origin main
-```
+An update with nothing new stops right after checking GitHub ("✓ Already up to date"), without
+reinstalling or restarting anything.
 
-If there's no `.git` directory (e.g., installed from a tarball), it clones fresh from GitHub and syncs the files over with rsync, preserving `.git` for future pulls.
+### Repair
 
-### 2. Install Dependencies
-
-```bash
-bundle config set --local path 'vendor/bundle'
-bundle config set --local without 'development test'
-bundle install --jobs 4
-```
-
-This installs any new gems added since the last update.
-
-### 3. Run Database Migrations
-
-```bash
-RAILS_ENV=production bin/rails db:migrate
-```
-
-Applies any new database schema changes.
-
-### 4. Clear Caches and Precompile Assets
-
-```bash
-rm -rf tmp/cache public/assets
-RAILS_ENV=production bin/rails assets:precompile
-```
-
-Rebuilds all CSS and JavaScript assets.
-
-### 5. Fix File Ownership
-
-```bash
-chown -R amahi:amahi /opt/amahi-kai
-```
-
-Ensures the `amahi` user owns all application files.
-
-### 6. Restart Service
-
-```bash
-systemctl restart amahi-kai
-```
-
-After restarting, the script waits 2 seconds and verifies the service is active.
+**Repair** (shown when you're up to date) runs every update step again on the version you have:
+gems, database migrations, the root helper and its sudo rules, the Samba configuration, file
+ownership, compiled assets and a restart. Use it when something about the install looks broken.
 
 ---
 
-## Verifying the Update
-
-After updating, check that everything is running:
+## From the command line
 
 ```bash
-# Service status
-systemctl status amahi-kai
-
-# Check the version in logs
-journalctl -u amahi-kai -n 5 --no-pager
-
-# Access the web UI
-curl -s -o /dev/null -w "%{http_code}" http://localhost:3000
-# Should return 302 (redirect to login)
+sudo /opt/amahi-kai/bin/amahi-update            # install an update
+sudo /opt/amahi-kai/bin/amahi-update --repair   # run every step again on the current version
 ```
+
+This is also the way in if the web UI itself won't load: SSH to the server and run it.
 
 ---
 
-## Troubleshooting Updates
+## What an update does
 
-### Update fails at "Pulling latest code"
+1. **Gets the latest code** from GitHub (as root; the code in `/opt/amahi-kai` belongs to root).
+   If nothing is new, it stops here. If GitHub can't be reached, it stops and changes nothing.
+2. **Installs gems** for the new version.
+3. **Backs up the database** to `/var/lib/amahi-kai/backups` (readable by root only; the last 3
+   are kept).
+4. **Runs database migrations.**
+5. **Installs the root helper and the sudo rules** that come with the new version (the rules are
+   checked with `visudo` first, so a bad file can't break sudo).
+6. **Regenerates the Samba configuration** and restarts Samba.
+7. **Rebuilds the web UI's styles and scripts.**
+8. **Remounts data drives** (in case one dropped).
+9. **Restarts Amahi-kai** and checks that it answers.
+10. **Refreshes the update status** on System Status.
 
-```bash
-# Check git status
-cd /opt/amahi-kai
-sudo -u amahi git status
+### If something fails
 
-# If there are local changes blocking the pull
-sudo -u amahi git stash
-sudo /opt/amahi-kai/bin/amahi-update
+If a step fails, or the restarted app doesn't answer, the update puts back the version that was
+running: its code, gems, compiled assets, root helper and sudo rules. The last line says so:
+
+```
+✗ Update failed at: Running database migrations. Rolled back to abc1234; Amahi-kai is running the version it was.
 ```
 
-### Update fails at "Installing dependencies"
+The database isn't rolled back automatically (migrations are written so the previous version
+still works with the new schema). If you ever need the backup taken before the update, it's the
+newest file in `/var/lib/amahi-kai/backups`.
+
+---
+
+## Troubleshooting
+
+### Read the log
 
 ```bash
-# Check for gem build errors
-cd /opt/amahi-kai
-sudo -u amahi bash -lc "bundle install --jobs 4 2>&1"
-
-# If native extensions fail, you may need dev libraries
-sudo apt-get install -y build-essential libmariadb-dev libssl-dev libyaml-dev
+sudo tail -50 /var/log/amahi-kai/update.log      # the last update's output
+journalctl -u amahi-kai-update -n 50 --no-pager  # the update job
+journalctl -u amahi-kai -n 50 --no-pager         # the app after its restart
 ```
 
-### Service fails to start after update
+### The update window lost track of the update
+
+If the window says it lost track, the update is still running on the server. Wait a minute, then
+reload the page, or check the log above.
+
+### Fixing permissions or a half-applied update
+
+Run **Repair**, or `sudo /opt/amahi-kai/bin/amahi-update --repair`. Don't change the ownership of
+`/opt/amahi-kai` by hand: root owns the code on purpose, so the web app can't change what root
+runs. Repair puts the ownership back the way it should be.
+
+### Checking the update check
 
 ```bash
-# Check what went wrong
-journalctl -u amahi-kai -n 30 --no-pager
-
-# Common fix: re-run migrations
-cd /opt/amahi-kai
-sudo -u amahi bash -lc "source /etc/amahi-kai/amahi.env && RAILS_ENV=production bin/rails db:migrate"
-
-# Then restart
-sudo systemctl restart amahi-kai
-```
-
-### Rolling back
-
-If an update breaks things, you can roll back to a previous version:
-
-```bash
-cd /opt/amahi-kai
-# See recent commits
-sudo -u amahi git log --oneline -10
-
-# Check out the previous working commit
-sudo -u amahi git checkout <commit-hash>
-
-# Re-run migrations and restart
-sudo -u amahi bash -lc "source /etc/amahi-kai/amahi.env && RAILS_ENV=production bin/rails db:migrate"
-sudo systemctl restart amahi-kai
+systemctl list-timers amahi-kai-update-check.timer   # when it runs next
+sudo cat /var/lib/amahi-kai/update-status.json       # what it found last
 ```
 
 ---
 
-## Automatic Updates
+## Automatic updates
 
-Amahi-kai does not auto-update itself. Updates are intentionally manual so you can choose when to apply them. If you want automatic updates, you could create a cron job:
-
-```bash
-# NOT RECOMMENDED for most users, but possible:
-echo "0 3 * * 0 root /opt/amahi-kai/bin/amahi-update >> /var/log/amahi-update.log 2>&1" | sudo tee /etc/cron.d/amahi-update
-```
-
-This would update every Sunday at 3 AM. However, manual updates are recommended so you can review changes and handle any issues interactively.
+Amahi-kai checks automatically but doesn't install updates on its own, so you can read what
+changes first and pick a convenient time.

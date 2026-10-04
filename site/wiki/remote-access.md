@@ -5,193 +5,111 @@ title: "Remote Access"
 
 # Remote Access
 
-Amahi-kai uses [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) to securely expose your home server to the internet without opening ports on your router. Traffic flows through Cloudflare's network, and your server connects outbound — no inbound firewall rules needed.
+Amahi-kai can be reached from outside your home two ways, both set up from **Network > Remote
+Access** (Advanced mode):
+
+- **[Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/):**
+  a public address like `https://home.yourdomain.com`, with no ports opened on your router. Your
+  server connects out to Cloudflare, and Cloudflare passes visitors through.
+- **[Tailscale](https://tailscale.com/):** a private network between your own devices. Nothing is
+  public; your phone or laptop reaches the server as if it were on your LAN.
+
+You can use either or both.
 
 ---
 
-## Prerequisites
+## Cloudflare Tunnel
 
-Before setting up remote access:
+### Before you start
 
-1. **A Cloudflare account** (free tier works)
-2. **A domain name** added to Cloudflare (can be a cheap domain — Cloudflare manages DNS)
-3. **Pass the security audit** — Amahi-kai requires no security blockers before enabling remote access
+1. A Cloudflare account (the free plan works) and a domain managed by Cloudflare.
+2. **No security blockers.** Run the [Security](security) audit first: Amahi-kai refuses to set
+   up or start the tunnel while the audit reports a blocker (stopping it is always allowed).
 
-> The Remote Access page in the web UI shows any security blockers that must be resolved first. See [Security](security) for details.
+### Create the tunnel in Cloudflare
 
----
+1. In the [Cloudflare Zero Trust dashboard](https://one.dash.cloudflare.com/), go to
+   **Networks > Tunnels** and click **Create a tunnel**.
+2. Choose **Cloudflared**, and name it (for example, "amahi-home").
+3. **Copy the tunnel token.**
+4. Add a public hostname: pick a subdomain (for example `home`) and your domain, and set the
+   service to `http://localhost:3000`.
 
-## Setup (Web UI)
+### Connect Amahi-kai
 
-The entire setup is done from the web UI:
+1. On **Network > Remote Access**, paste the token and click **Setup Tunnel**.
+2. The progress window shows Amahi-kai installing `cloudflared` (if needed), saving the token,
+   and starting the tunnel.
 
-1. Navigate to **Network > Remote Access** (requires Advanced mode)
-2. If `cloudflared` isn't installed, click **Install cloudflared** — the web UI streams the installation
+Your server is then at `https://home.yourdomain.com`. No other setting is needed: requests through
+the tunnel come from the server itself, so Amahi-kai accepts them for any hostname you route to
+it.
 
-### Creating a Tunnel in Cloudflare Dashboard
+The token is saved in `/etc/amahi-kai/tunnel.token`, which only root can read, and `cloudflared`
+reads it from there. It isn't kept in a service file or shown on a command line.
 
-1. Log in to the [Cloudflare Zero Trust dashboard](https://one.dash.cloudflare.com/)
-2. Go to **Networks > Tunnels**
-3. Click **Create a tunnel**
-4. Choose **Cloudflared** as the connector type
-5. Name your tunnel (e.g., "amahi-home")
-6. **Copy the tunnel token** — you'll need this in the next step
-7. Add a public hostname:
-   - **Subdomain**: e.g., `home` (or whatever you want)
-   - **Domain**: Select your Cloudflare domain
-   - **Service**: `http://localhost:3000`
+### Protect the hostname
 
-### Entering the Token in Amahi-kai
+Anyone who knows the address reaches your login page. Put
+[Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/applications/) in front of the
+hostname so only you get through (for example, a one-time code sent to your email address). This
+is set up in the Cloudflare dashboard; Amahi-kai doesn't need to know about it.
 
-1. Back in the Amahi-kai web UI, paste the tunnel token
-2. Click **Setup Tunnel**
-3. Watch the streaming progress as it:
-   - Installs `cloudflared` (if not already installed)
-   - Saves the token securely to `/etc/amahi-kai/tunnel.token`
-   - Creates a systemd service at `/etc/systemd/system/cloudflared.service`
-   - Enables and starts the tunnel
+### Managing the tunnel
 
-Once connected, your server is accessible at `https://home.yourdomain.com` (or whatever hostname you configured).
-
----
-
-## How It Works
-
-The `cloudflared` daemon runs as a systemd service that:
-
-1. Connects outbound to Cloudflare's edge network
-2. Establishes a persistent tunnel using your token
-3. Cloudflare routes incoming HTTPS requests to your tunnel
-4. The tunnel forwards requests to `http://localhost:3000` (Amahi-kai's Puma server)
-
-The systemd unit file:
-
-```ini
-[Unit]
-Description=Cloudflare Tunnel
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=notify
-ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate run --token <your-token>
-Restart=on-failure
-RestartSec=5s
-LimitNOFILE=65536
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### Allowed Hosts
-
-If you've set a domain for remote access, add it to `/etc/amahi-kai/amahi.env`:
+The Remote Access page shows whether `cloudflared` is installed and connected, and since when.
+**Start**, **Stop** and **Restart** show their progress and result. From the command line:
 
 ```bash
-RAILS_ALLOWED_HOST=home.yourdomain.com
+systemctl status cloudflared        # is it running
+sudo systemctl restart cloudflared  # restart it
+journalctl -u cloudflared -f        # follow its log
 ```
 
-Then restart Amahi-kai:
+### Docker apps through the tunnel
 
-```bash
-sudo systemctl restart amahi-kai
-```
-
-This allows Rails to accept requests from that hostname (Rails 8 blocks unknown hosts by default).
-
----
-
-## Managing the Tunnel
-
-### Web UI Controls
-
-The Remote Access page shows:
-- **Installed**: Whether `cloudflared` is installed
-- **Running**: Whether the tunnel is active
-- **Connected since**: Timestamp of the current connection
-- **Token configured**: Whether a tunnel token is saved
-
-You can **Start** or **Stop** the tunnel from the web UI.
-
-### CLI Commands
-
-```bash
-# Check tunnel status
-systemctl status cloudflared
-
-# Start/stop/restart
-sudo systemctl start cloudflared
-sudo systemctl stop cloudflared
-sudo systemctl restart cloudflared
-
-# View tunnel logs
-journalctl -u cloudflared -f
-
-# Check if cloudflared is installed
-cloudflared --version
-```
-
----
-
-## Exposing Docker Apps
-
-When you access Docker apps through the tunnel, they work via Amahi-kai's reverse proxy:
+Installed apps open under the same hostname through Amahi-kai's links:
 
 ```
 https://home.yourdomain.com/app/jellyfin
-https://home.yourdomain.com/app/gitea
-https://home.yourdomain.com/app/filebrowser
 ```
 
-For apps that need their own subdomain (Nextcloud, Vaultwarden, etc.), add additional public hostnames in the Cloudflare dashboard pointing to the app's port:
-
-| Hostname | Service |
-|----------|---------|
-| `home.yourdomain.com` | `http://localhost:3000` |
-| `nextcloud.yourdomain.com` | `https://localhost:8443` |
-| `vault.yourdomain.com` | `http://localhost:8880` |
-
----
-
-## Security Considerations
-
-- Cloudflare Tunnel encrypts all traffic end-to-end
-- Your server never exposes ports to the internet
-- The tunnel token is stored at `/etc/amahi-kai/tunnel.token` with restricted permissions
-- Amahi-kai requires login for all pages — unauthenticated users are redirected to the login screen
-- Run the [Security Audit](security) before enabling remote access
-
----
-
-## Troubleshooting
-
-### Tunnel won't connect
-
-```bash
-# Check the service
-journalctl -u cloudflared -n 20 --no-pager
-
-# Verify the token is saved
-ls -la /etc/amahi-kai/tunnel.token
-
-# Test cloudflared manually
-cloudflared tunnel --no-autoupdate run --token $(cat /etc/amahi-kai/tunnel.token)
-```
-
-### "Bad Gateway" or connection errors
-
-- Verify Amahi-kai is running: `systemctl is-active amahi-kai`
-- Check that port 3000 is listening: `ss -tlnp | grep 3000`
-- Verify the Cloudflare tunnel hostname points to `http://localhost:3000`
+Apps that don't work under a path (see [Docker Apps](docker-apps)) can get a hostname of their
+own: add another public hostname in the tunnel pointing at the app's port, for example
+`http://localhost:8096`.
 
 ### Removing the tunnel
 
+Stop it on the Remote Access page, then delete the tunnel in the Cloudflare dashboard. To remove
+it from the server completely:
+
 ```bash
-sudo systemctl stop cloudflared
-sudo systemctl disable cloudflared
-sudo rm -f /etc/systemd/system/cloudflared.service
+sudo systemctl disable --now cloudflared
+sudo rm -f /etc/systemd/system/cloudflared.service /etc/amahi-kai/tunnel.token
 sudo systemctl daemon-reload
-sudo rm -f /etc/amahi-kai/tunnel.token
 ```
 
-Then delete the tunnel in the Cloudflare Zero Trust dashboard.
+### Troubleshooting
+
+- **Tunnel won't connect:** `journalctl -u cloudflared -n 30 --no-pager` usually says why (an
+  expired or mistyped token, for example). Paste a new token with **Setup Tunnel**.
+- **"Bad gateway":** Amahi-kai isn't answering. Check `systemctl is-active amahi-kai`, and that the
+  tunnel's hostname points at `http://localhost:3000`.
+
+---
+
+## Tailscale
+
+1. On **Network > Remote Access**, click **Install Tailscale** and watch the progress.
+2. Click **Start**. The first time, the page shows a link to log in to Tailscale and approve the
+   server; open it and sign in.
+3. Install Tailscale on your phone or laptop and sign in to the same account.
+
+The server then shows up in your tailnet with a name like `amahi-kai.tail1234.ts.net`. Amahi-kai
+recognizes that name automatically, and Samba accepts connections from your tailnet, so the web
+UI and your shares work from anywhere your devices are signed in.
+
+**Stop** disconnects; **Log out** removes the server from your tailnet.
+
+If you already reach your LAN through another device's Tailscale subnet route, you don't need
+Tailscale on the server itself.
