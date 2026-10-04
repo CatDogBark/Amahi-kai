@@ -165,7 +165,6 @@ RSpec.describe Share, type: :model do
     it "generates full samba config" do
       create(:share, name: "TestConf")
       Setting.find_or_create_by!(name: "workgroup", kind: Setting::SHARES) { |s| s.value = "WORKGROUP" }
-      Setting.find_or_create_by!(name: "pdc", kind: Setting::SHARES) { |s| s.value = "0" }
       conf = Share.samba_conf("WORKGROUP")
       expect(conf).to be_a(String)
       expect(conf).to include("[TestConf]")
@@ -174,7 +173,6 @@ RSpec.describe Share, type: :model do
 
   describe ".header" do
     it "returns header config" do
-      Setting.find_or_create_by!(name: "pdc", kind: Setting::SHARES) { |s| s.value = "0" }
       header = Share.header("WORKGROUP")
       expect(header).to be_a(String)
       expect(header).to include("WORKGROUP")

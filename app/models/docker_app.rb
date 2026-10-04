@@ -1,6 +1,9 @@
 require 'shell'
 
 class DockerApp < ApplicationRecord
+  # A container operation failed. AppsController reports it to the page.
+  class ContainerError < StandardError; end
+
   # Validations
   validates :identifier, presence: true, uniqueness: true
   validates :name, presence: true
@@ -56,47 +59,6 @@ class DockerApp < ApplicationRecord
     container_name.presence || "amahi-#{identifier}"
   end
 
-  # Install the app (synchronous)
-  def install!
-    update!(status: 'pulling')
-    ContainerService.pull_image(image)
-    update!(status: 'installing')
-
-    # Create host directories for volumes and set permissions so containers can write
-    prepare_host_directories!
-
-    # Write init_files from catalog (e.g., config files the app needs at first boot)
-    write_init_files!
-
-    result = ContainerService.create(
-      image: image,
-      name: effective_container_name,
-      identifier: identifier,
-      ports: port_mappings,
-      volumes: volume_mappings,
-      environment: environment
-    )
-    # Determine host port from result or port_mappings
-    first_port = port_mappings.values.first
-    update!(status: 'running', container_name: effective_container_name, host_port: first_port)
-  rescue ContainerService::ContainerError, Shell::CommandError => e
-    update!(status: 'error', error_message: e.message)
-    raise
-  end
-
-  # Install in background (forked process)
-  def install_async!
-    if Rails.env.production?
-      pid = Process.fork do
-        install!
-      end
-      Process.detach(pid)
-    else
-      # In dev/test, just install synchronously (Docker calls are stubbed)
-      install!
-    end
-  end
-
   # Uninstall the app
   def uninstall!
     if container_name.present?
@@ -111,7 +73,7 @@ class DockerApp < ApplicationRecord
     app_dir = "/opt/amahi/apps/#{identifier}"
     Shell.run("rm -rf #{Shellwords.escape(app_dir)}") if identifier.present? && File.directory?(app_dir)
     update!(status: 'available', container_name: nil, host_port: nil, error_message: nil)
-  rescue ContainerService::ContainerError, Shell::CommandError => e
+  rescue ContainerError, Shell::CommandError => e
     update!(status: 'error', error_message: e.message)
     raise
   end
@@ -124,7 +86,7 @@ class DockerApp < ApplicationRecord
       update!(status: 'running')
     else
       update!(status: 'error', error_message: 'Container not found — reinstall the app')
-      raise "Failed to start container #{effective_container_name}"
+      raise ContainerError, "Failed to start container #{effective_container_name}"
     end
   end
 
@@ -143,7 +105,7 @@ class DockerApp < ApplicationRecord
         update!(status: 'stopped')
       else
         update!(status: 'error', error_message: "Stop failed: #{message.strip}")
-        raise "Failed to stop container #{effective_container_name}: #{message.strip}"
+        raise ContainerError, "Failed to stop container #{effective_container_name}: #{message.strip}"
       end
     end
   end
@@ -151,7 +113,10 @@ class DockerApp < ApplicationRecord
   # Restart the container
   def restart!
     cname = Shellwords.escape(effective_container_name)
-    Shell.run("docker restart #{cname} 2>/dev/null")
+    unless Shell.run("docker restart #{cname} 2>/dev/null")
+      update!(status: 'error', error_message: 'Restart failed')
+      raise ContainerError, "Failed to restart container #{effective_container_name}"
+    end
     update!(status: 'running')
   end
 
@@ -166,44 +131,6 @@ class DockerApp < ApplicationRecord
     when 'exited', 'stopped' then update!(status: 'stopped')
     when 'restarting' then update!(status: 'running')
     else update!(status: 'error', error_message: 'Container not found')
-    end
-  end
-
-  private
-
-  # Create host directories for all volume mounts and set open permissions
-  # so non-root containers can write to them
-  def prepare_host_directories!
-    return unless volume_mappings.present?
-    volume_mappings.each do |_container_path, host_path|
-      next if host_path.blank?
-      # Skip shared/system paths like /var/run/docker.sock
-      next if host_path.start_with?('/var/run/')
-      Shell.run("mkdir -p #{Shellwords.escape(host_path)}")
-      Shell.run("chmod 777 #{Shellwords.escape(host_path)}")
-    end
-  end
-
-  # Write init_files from the catalog (config files needed before first boot)
-  def write_init_files!
-    catalog_entry = AppCatalog.find(identifier) rescue nil
-    return unless catalog_entry && catalog_entry[:init_files].present?
-
-    catalog_entry[:init_files].each do |file_spec|
-      host_path = file_spec[:host] || file_spec['host']
-      content = file_spec[:content] || file_spec['content']
-      next unless host_path && content
-
-      dir = File.dirname(host_path)
-      Shell.run("mkdir -p #{Shellwords.escape(dir)}")
-      # Write via temp file + sudo mv to handle root-owned directories
-      require 'tempfile'
-      tmp = Tempfile.new('init_file')
-      tmp.write(content)
-      tmp.close
-      Shell.run("cp #{Shellwords.escape(tmp.path)} #{Shellwords.escape(host_path)}")
-      Shell.run("chmod 644 #{Shellwords.escape(host_path)}")
-      tmp.unlink
     end
   end
 end

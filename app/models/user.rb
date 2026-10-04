@@ -54,8 +54,6 @@ class User < ApplicationRecord
   before_save :rotate_session_token, if: :will_save_change_to_password_digest?
   before_save :before_save_hook
   before_destroy :before_destroy_hook
-  after_save :after_save_hook
-  after_create :after_create_hook
 
   # --- Role helpers ---
 
@@ -106,23 +104,10 @@ class User < ApplicationRecord
       [name, uid, pwd[1]]
     end
 
-    def system_all_new_users
-      res = []
-      Dir.chdir("/home") do
-        Dir.glob("*").sort.reverse.each do |login|
-          unless User.where(:login=> login).first
-            name, uid = system_find_name_by_username login
-            res << { :login => login, :name => name } unless name.nil? or name.blank? or uid < 500
-          end
-        end
-      end
-      res
-    end
-
+    # Every user except root, by login. (This used to scan /home on each call and try
+    # to add the accounts it found, which always failed: they had no password.)
     def all_users
-      new_users = self.system_all_new_users
-      self.create(new_users) unless new_users.blank?
-      self.where('login not in (?)', ['root']).sort { |x,y| x.login <=> y.login }
+      where.not(login: 'root').order(:login)
     end
 
     def system_user_exists? (username)
@@ -243,14 +228,6 @@ class User < ApplicationRecord
       errors.add(:base, "Couldn't update the Samba password for #{login}")
       throw :abort
     end
-  end
-
-  def after_save_hook
-    #
-  end
-
-  def after_create_hook
-    Share.create_logon_script(self.login)
   end
 
   # Run each step on its own: a user can have a Linux account but no Samba entry,

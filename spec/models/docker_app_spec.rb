@@ -107,16 +107,6 @@ describe DockerApp do
     end
   end
 
-  describe "#install!" do
-    it "installs and updates status to running" do
-      app = build_app
-      app.save!
-      app.install!
-      expect(app.reload.status).to eq("running")
-      expect(app.container_name).to eq("amahi-test-app")
-    end
-  end
-
   describe "#uninstall!" do
     it "uninstalls and resets status" do
       app = build_app(status: "running", container_name: "amahi-test-app")

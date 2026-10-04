@@ -42,25 +42,9 @@ class ApplicationController < ActionController::Base
   def before_action_hook
     set_locale
     set_direction
-    check_for_amahi_app
     prepare_theme
     adv = Setting.where(:name=>'advanced').first
     @advanced = adv && adv.value == '1'
-  end
-
-  def check_for_amahi_app
-    server = request.env['SERVER_NAME']
-    # The value, not the record: the record interpolated as "#<Setting...>", so the
-    # domain match below never matched anything.
-    dom = Setting.value_by_name('domain')
-    hostname = Setting.get('server-name') || 'amahi-kai'
-    # The domain is a setting, so escape it: its dots would match any character.
-    if server && dom.present? && server != hostname && server =~ /\A(.*)\.#{Regexp.escape(dom)}\z/
-      server = $1
-    end
-    if server && server != hostname && DnsAlias.where(:name=>server).first
-      redirect_to "http://#{hostname}/apps/#{server}"
-    end
   end
 
   def prepare_theme

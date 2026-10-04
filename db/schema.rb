@@ -10,39 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_10_03_010000) do
-  create_table "app_dependencies", force: :cascade do |t|
-    t.integer "app_id"
-    t.integer "dependency_id"
-    t.datetime "created_at", precision: nil
-    t.datetime "updated_at", precision: nil
-  end
-
-  create_table "apps", force: :cascade do |t|
-    t.boolean "installed"
-    t.string "name"
-    t.string "screenshot_url"
-    t.string "identifier"
-    t.text "description"
-    t.string "version"
-    t.string "app_url"
-    t.string "logo_url"
-    t.integer "webapp_id"
-    t.string "status"
-    t.boolean "show_in_dashboard", default: true
-    t.string "forum_url"
-    t.integer "theme_id"
-    t.text "special_instructions"
-    t.integer "db_id"
-    t.integer "server_id"
-    t.integer "share_id"
-    t.string "initial_user"
-    t.string "initial_password"
-    t.datetime "created_at", precision: nil
-    t.datetime "updated_at", precision: nil
-    t.integer "plugin_id"
-  end
-
+ActiveRecord::Schema[8.1].define(version: 2026_10_04_000000) do
   create_table "cap_accesses", force: :cascade do |t|
     t.integer "user_id"
     t.integer "share_id"
@@ -53,12 +21,6 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_03_010000) do
   create_table "cap_writers", force: :cascade do |t|
     t.integer "user_id"
     t.integer "share_id"
-    t.datetime "created_at", precision: nil
-    t.datetime "updated_at", precision: nil
-  end
-
-  create_table "dbs", force: :cascade do |t|
-    t.string "name", null: false
     t.datetime "created_at", precision: nil
     t.datetime "updated_at", precision: nil
   end
@@ -97,42 +59,10 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_03_010000) do
     t.index ["identifier"], name: "index_docker_apps_on_identifier", unique: true
   end
 
-  create_table "firewalls", force: :cascade do |t|
-    t.string "kind", default: ""
-    t.boolean "state", default: true
-    t.string "ip", default: ""
-    t.string "protocol", default: "both"
-    t.string "range", default: ""
-    t.string "mac", default: ""
-    t.string "url", default: ""
-    t.string "comment", default: ""
-    t.datetime "created_at", precision: nil
-    t.datetime "updated_at", precision: nil
-  end
-
   create_table "hosts", force: :cascade do |t|
     t.string "name", null: false
     t.string "mac", default: ""
     t.string "address"
-  end
-
-  create_table "plugins", force: :cascade do |t|
-    t.string "name"
-    t.string "path"
-    t.datetime "created_at", precision: nil
-    t.datetime "updated_at", precision: nil
-  end
-
-  create_table "servers", force: :cascade do |t|
-    t.string "name", null: false
-    t.string "comment", default: ""
-    t.string "pidfile"
-    t.string "start"
-    t.string "stop"
-    t.boolean "monitored", default: true
-    t.boolean "start_at_boot", default: true
-    t.datetime "created_at", precision: nil
-    t.datetime "updated_at", precision: nil
   end
 
   create_table "settings", force: :cascade do |t|
@@ -198,28 +128,4 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_03_010000) do
     t.string "role", default: "user", null: false
     t.string "session_token"
   end
-
-  create_table "webapp_aliases", force: :cascade do |t|
-    t.string "name"
-    t.integer "webapp_id"
-    t.datetime "created_at", precision: nil
-    t.datetime "updated_at", precision: nil
-  end
-
-  create_table "webapps", force: :cascade do |t|
-    t.string "name", null: false
-    t.string "path", default: ""
-    t.string "kind", default: ""
-    t.string "aliases", default: ""
-    t.string "fname", default: ""
-    t.boolean "deletable", default: true
-    t.boolean "login_required", default: false
-    t.integer "dns_alias_id"
-    t.text "custom_options"
-    t.datetime "created_at", precision: nil
-    t.datetime "updated_at", precision: nil
-  end
-
-  # Foreign key removed — share_files.share_id is int, shares.id is int(11) from legacy migration
-  # Referential integrity enforced at application level
 end

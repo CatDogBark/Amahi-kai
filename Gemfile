@@ -18,12 +18,10 @@ gem 'jbuilder'
 gem 'turbo-rails'
 gem 'stimulus-rails'
 
-gem 'activeresource'
 # gem 'rails-observers' # removed — unused
 
 gem 'bcrypt'
 
-gem 'docker-api'
 gem 'sys-filesystem'
 
 gem 'rack', '~> 3.2.5'

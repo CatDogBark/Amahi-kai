@@ -262,7 +262,6 @@ mkdir -p "$SHARE_ROOT"
 chown "$APP_USER:users" "$SHARE_ROOT"
 chmod 2775 "$SHARE_ROOT"
 mkdir -p "$CONFIG_DIR"
-mkdir -p /var/lib/amahi-kai/dbs
 mkdir -p /var/lib/amahi-kai/tmp
 chown "$APP_USER:$APP_GROUP" /var/lib/amahi-kai/tmp
 
