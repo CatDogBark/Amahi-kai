@@ -28,6 +28,7 @@ so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 | 3. Fix | System Update's restart no longer waits 90 seconds: the update page's stream ends when Puma stops, and Puma gives open requests 10 seconds | #33 |
 | 3. Fix | The setup wizard can't finish while the seeded admin password still works | #34 |
 | 3. Fix | Drive temperatures through the helper; `smartctl`'s open-ended sudo rule removed (5 rules left: the helper and Docker's) | #35 |
+| 3. Fix | Update and install windows keep their size: a status bar with a timer and the result; System Update's button just reloads | #36 |
 
 ## Next: Phase 3
 
