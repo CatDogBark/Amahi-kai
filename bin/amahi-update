@@ -6,6 +6,11 @@ set -euo pipefail
 # Usage: sudo /opt/amahi-kai/bin/amahi-update [--stream]
 #
 # --stream: Output progress messages for SSE streaming (used by web UI)
+#
+# Root owns the code (bin/amahi-set-ownership) and runs only git, this script, the helper
+# installer and system commands. Everything that loads the app or its gems (bundle,
+# migrations, rails runner, the asset build) runs as the app user (as_app), which can
+# write vendor/bundle, so root never runs code the app user could have changed.
 
 APP_DIR="${APP_DIR:-/opt/amahi-kai}"
 ENV_FILE="${ENV_FILE:-/etc/amahi-kai/amahi.env}"
@@ -35,6 +40,16 @@ error() {
   exit 1
 }
 
+# Runs a command in the app folder as the app user, with the app's environment.
+as_app() {
+  sudo -u "$APP_USER" -H bash -lc "set -a && source '$ENV_FILE' && set +a && cd '$APP_DIR' && $1"
+}
+
+# Git as root, without hooks or an fsmonitor command from the checkout's own config.
+root_git() {
+  git -c core.hooksPath=/dev/null -c core.fsmonitor=false "$@"
+}
+
 # Must be root
 if [[ $EUID -ne 0 ]]; then
   error "This script must be run as root (or with sudo)."
@@ -52,30 +67,31 @@ if [[ -f "$ENV_FILE" ]]; then
   set +a
 fi
 
-# 1. Pull latest code
+# 1. Root owns the code, then pulls the latest. (Older versions left the checkout to the
+#    app user; the first update with this step takes it back.)
+log "Setting file ownership..."
+"$APP_DIR/bin/amahi-set-ownership" 2>&1 || error "Couldn't set file ownership"
+
 log "Pulling latest code..."
 SCRIPT_SUM_BEFORE=$(sha256sum < "$APP_DIR/bin/amahi-update")
 REPO_URL="https://github.com/CatDogBark/Amahi-kai.git"
 
-# Ensure amahi trusts the app directory for git
-sudo -u "$APP_USER" git config --global --add safe.directory "$APP_DIR" 2>/dev/null || true
-
 if [[ -d ".git" ]]; then
-  # Pull as app user (who has the deploy key)
-  sudo -u "$APP_USER" git -C "$APP_DIR" pull origin main 2>&1 || log "⚠ Git pull failed — using files on disk"
+  root_git -C "$APP_DIR" pull origin main 2>&1 || log "⚠ Git pull failed — using files on disk"
 else
   # No .git — clone to temp and sync files over
   log "No git history found — cloning fresh..."
-  TMPDIR=$(mktemp -d)
-  if sudo -u "$APP_USER" git clone "$REPO_URL" "$TMPDIR/repo" 2>&1; then
-    rsync -a --exclude='.git' --exclude='vendor/bundle' --exclude='tmp' --exclude='log' "$TMPDIR/repo/" "$APP_DIR/"
+  CLONE_DIR=$(mktemp -d)
+  if root_git clone "$REPO_URL" "$CLONE_DIR/repo" 2>&1; then
+    rsync -a --exclude='.git' --exclude='vendor/bundle' --exclude='tmp' --exclude='log' --exclude='public/assets' \
+      "$CLONE_DIR/repo/" "$APP_DIR/"
     # Preserve .git for future pulls
-    cp -r "$TMPDIR/repo/.git" "$APP_DIR/.git"
+    cp -r "$CLONE_DIR/repo/.git" "$APP_DIR/.git"
     log "Code synced from repository"
   else
     log "⚠ Git clone failed — using files on disk"
   fi
-  rm -rf "$TMPDIR"
+  rm -rf "$CLONE_DIR"
 fi
 
 # bash keeps running the copy of this script it opened, so after the pull a step added
@@ -85,13 +101,16 @@ if [[ -z "${AMAHI_UPDATE_REEXEC:-}" && "$(sha256sum < "$APP_DIR/bin/amahi-update
   exec env AMAHI_UPDATE_REEXEC=1 "$APP_DIR/bin/amahi-update" "${ORIG_ARGS[@]}"
 fi
 
-# 2. Install dependencies
+# The pull may have added files; they're root's already, but a new app folder isn't.
+"$APP_DIR/bin/amahi-set-ownership" >/dev/null 2>&1 || error "Couldn't set file ownership"
+
+# 2. Install dependencies (into vendor/bundle; settings in .bundle/config)
 log "Installing dependencies..."
-sudo -u "$APP_USER" bash -lc "cd $APP_DIR && bundle config set --local path 'vendor/bundle' && bundle config set --local without 'development test' && bundle install --jobs 4" 2>&1
+as_app "bundle install" 2>&1
 
 # 3. Run migrations
 log "Running database migrations..."
-RAILS_ENV=production bin/rails db:migrate 2>&1
+as_app "RAILS_ENV=production bin/rails db:migrate" 2>&1
 
 # 3a. Install the root helper and the sudoers rules. Samba, user account and share folder
 #     changes go through the helper (3b and 3c use it), and the updater is the only thing
@@ -104,7 +123,7 @@ log "Installing the privileged helper and sudoers rules..."
 #     (network binding, Greyhole settings) take effect on update, then restart Samba:
 #     a new binding only applies after a restart. An invalid config is never installed.
 log "Updating Samba configuration..."
-if RAILS_ENV=production bin/rails runner 'exit(SambaService.push_config ? 0 : 1)' 2>&1; then
+if as_app "RAILS_ENV=production bin/rails runner 'exit(SambaService.push_config ? 0 : 1)'" 2>&1; then
   systemctl restart smbd nmbd 2>&1 || log "⚠ Samba restart failed"
 else
   log "⚠ Samba config not regenerated; keeping the current one"
@@ -114,7 +133,7 @@ fi
 #     gave them /bin/sh, and admins the sudo group). Accounts the app didn't create are
 #     left alone.
 log "Checking user accounts..."
-RAILS_ENV=production bin/rails runner 'User.normalize_system_accounts' 2>&1 || log "⚠ User accounts not checked"
+as_app "RAILS_ENV=production bin/rails runner 'User.normalize_system_accounts'" 2>&1 || log "⚠ User accounts not checked"
 
 # 3d. The app writes uploads into share folders that Samba users own (group users)
 id -nG "$APP_USER" | grep -qw users || usermod -aG users "$APP_USER"
@@ -145,21 +164,17 @@ if [[ -f /etc/greyhole.conf ]]; then
   chmod 640 /etc/greyhole.conf
 fi
 
-# 4. Clear cache and precompile assets
+# 4. Clear cache and precompile assets (in the app user's own folders)
 log "Clearing caches..."
-rm -rf "$APP_DIR/tmp/cache" "$APP_DIR/public/assets"
+as_app "rm -rf tmp/cache/* public/assets/*" 2>&1
 log "Precompiling assets..."
-RAILS_ENV=production bin/rails assets:precompile 2>&1
+as_app "RAILS_ENV=production bin/rails assets:precompile" 2>&1
 
-# 5. Fix ownership
-log "Fixing file ownership..."
-chown -R "$APP_USER:$APP_GROUP" "$APP_DIR"
-
-# 6. Ensure all fstab mounts are active (FUSE mounts like ntfs-3g can get lost)
+# 5. Ensure all fstab mounts are active (FUSE mounts like ntfs-3g can get lost)
 log "Restoring mounts..."
 mount -a 2>&1 || log "⚠ Some mounts may have failed — check 'mount -a' manually"
 
-# 7. Restart service. This is last on purpose: run from the web UI, this script is part
+# 6. Restart service. This is last on purpose: run from the web UI, this script is part
 #    of the amahi-kai service, so restarting the service ends the script as well.
 log "Restarting Amahi-kai..."
 systemctl restart amahi-kai 2>&1 || error "Failed to restart service"

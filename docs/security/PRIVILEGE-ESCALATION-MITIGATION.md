@@ -1,267 +1,96 @@
-# Privilege Escalation Mitigation Plan
+# Privilege model
 
-**Status:** Draft
-**Author:** Kai (AI agent) with Troy's review
-**Last updated:** 2026-02-17
-**Applies to:** Amahi-kai native production deployment (Ubuntu 24.04)
+How Amahi-kai gets root access on a NAS, and what keeps the web app from turning a bug into
+root. Last updated 2026-10-04 (PR N). Design and history: [`docs/plans/privileged-helper.md`](../plans/privileged-helper.md).
 
----
+## Summary
 
-## 1. Problem Statement
+The web app runs as the unprivileged `amahi` user. It reaches root in three ways only:
 
-Amahi-kai's Rails application executes privileged system commands (user management,
-service control, file permissions) via `lib/command.rb`. The `Command` class auto-prepends
-`sudo` for a hardcoded list of binaries when not running as root.
+1. **The root helper**, `/usr/local/sbin/amahi-helper` (from `libexec/amahi-helper`). It runs a
+   fixed list of operations, checks every request, and logs every call.
+2. **System Update**, `/opt/amahi-kai/bin/amahi-update`, which pulls the code and redeploys.
+3. **Docker**: the app runs `docker` through sudo and its user is in the `docker` group. Either
+   is full control of the NAS. Phase 4 narrows this.
 
-The app runs as a non-root `amahi` system user. The privilege boundary is enforced by
-a scoped sudoers allowlist that restricts exactly which commands can be escalated.
+Root never runs code the `amahi` user can change: the code is root's, and the installer and the
+updater run everything that loads the app or its gems as `amahi`.
 
----
+## Who owns what
 
-## 2. Current Privilege Surface
+| Path | Owner, mode | Why |
+| --- | --- | --- |
+| `/opt/amahi-kai` (the code, `.git`, `.bundle/config`) | root:root, not group- or world-writable | Root runs `bin/amahi-update`, `bin/amahi-install-helper`, and installs the helper and sudoers rules from here |
+| `/opt/amahi-kai/{tmp,log,public/assets,vendor/bundle}` | amahi | What the app writes: caches and pids, logs, the asset build, gems |
+| `/usr/local/sbin/amahi-helper` | root:root 0755 | Installed from the root-owned tree by `bin/amahi-install-helper` |
+| `/etc/sudoers.d/amahi-kai` | root:root 0440 | From `config/sudoers/amahi-kai`, installed only if `visudo -cf` accepts it |
+| `/etc/amahi-kai/amahi.env` | root:amahi 0640 | Database password and `SECRET_KEY_BASE`; the app reads it |
+| `/etc/amahi-kai/tunnel.token` | root:root 0600 | Only `cloudflared` (as root) reads it |
+| `/etc/greyhole.conf` | root:amahi 0640 | Holds the database password |
+| `/var/log/amahi-kai/helper.log` | root:amahi 0640 | The helper's audit log; the app can read it, not write it |
 
-### 2.1 Commands Requiring Root (via `Command.execute_direct`)
+`bin/amahi-set-ownership` sets this up. The installer runs it, and System Update runs it at the
+start of every update, so the first update after PR N takes the checkout back from the `amahi`
+user. Root's `git pull` runs with hooks and `core.fsmonitor` turned off, so nothing from the
+checkout's own git config runs as root. Logrotate rotates `log/production.log` as `amahi`.
 
-| Binary | Used By | Purpose |
-|--------|---------|---------|
-| `useradd` | `User#create_system_user` | Create Linux/Samba users |
-| `usermod` | `User#update_system_user`, `Platform.make_admin` | Modify users, group membership |
-| `userdel` | `User#destroy_system_user` | Remove users |
-| `pdbedit` | `User` model | Samba password database |
-| `systemctl` | `Platform` | Start/stop/reload services (smbd, nmbd, dnsmasq) |
-| `chmod` | `Share` model, `Platform.setup_ssh` | File permissions on shares and `.ssh` |
-| `chown` | `Share` model, `Platform.setup_ssh` | File ownership on shares and `.ssh` |
-| `cp` | Share config staging | Copy config files to system paths |
-| `mkdir` | Share creation | Create share directories |
+## The root helper
 
-### 2.2 What's NOT Needed
+One program, Ruby standard library only, started as `--disable-gems` so no gem or app code loads
+in the root process. The operation name is its one argument; the arguments come as JSON on stdin,
+so passwords never appear on a command line. Each operation:
 
-The `needs_sudo?` prefix list in `command.rb` also includes `apt-get`, `dpkg`, `rpm`,
-`yum`, `pacman`, `rm`, `rmdir`, `mv` — none of these are used by the application.
-They should **not** be granted sudo access.
+- accepts only the arguments it lists, and validates each one itself (it doesn't trust the app);
+- runs commands by absolute path as argument lists, with a minimal environment and no shell;
+- writes files atomically, after checking them (`testparm` for Samba, `dnsmasq --test`, `sshd -t`);
+- logs one JSON line per call, with secrets filtered out and file contents summarized as a size
+  and a hash.
 
----
+The areas it covers: Linux and Samba accounts, Samba's config, share folders, system services,
+reboot and power off, the hostname, dnsmasq, swap, data drives and fstab, Greyhole, package
+installs (from pinned apt repositories and a fixed package list), the Cloudflare Tunnel,
+Tailscale, and the security audit's fixes. `amahi-helper --list` prints the operations, and
+`--dry-run OPERATION` shows what a request would do without doing it.
 
-## 3. Architecture
+In Rails, `Privileged.call('users.create', login: 'ann', name: 'Ann')` runs an operation through
+`sudo -n`. In tests it records the call instead.
 
-### Native Install Security Model
+## Sudoers
+
+`config/sudoers/amahi-kai`, 10 rules:
+
+| Rule | For |
+| --- | --- |
+| `/usr/local/sbin/amahi-helper` | Everything above |
+| `/opt/amahi-kai/bin/amahi-update`, `… --stream`, `systemctl restart amahi-kai`, `systemctl status amahi-kai` | System Update |
+| `/usr/bin/docker`, `mkdir -p /opt/amahi/*`, `cp /tmp/amahi-staging/* /opt/amahi/*`, `rm -rf /opt/amahi/apps/*` | Docker apps (Phase 4) |
+| `/usr/sbin/smartctl` | Drive health on the Disks page |
+
+## Known gaps
+
+- **Docker** is root-equivalent: `sudo docker` and the `docker` group both are. Phase 4 starts
+  with a design for Docker apps (per-app access, no Docker socket for the web app).
+- **`smartctl`** takes any arguments. It reads drive health; it should become a helper
+  operation.
+- **Updates aren't rolled back** if a step fails (PR O): the old app keeps running and the update
+  says where it stopped.
+
+## Checking a NAS
 
 ```
-┌─────────────────────────────────────────┐
-│  Rails App (amahi user, non-root)       │
-├─────────────────────────────────────────┤
-│  Wrapper Scripts (argument validation)  │  ← Phase 2
-├─────────────────────────────────────────┤
-│  Sudoers (path + command scoping)       │  ← Phase 1
-├─────────────────────────────────────────┤
-│  Linux permissions (systemd, file ACLs) │
-└─────────────────────────────────────────┘
+sudo -l -U amahi                                   # the 10 rules above
+sudo /usr/local/sbin/amahi-helper --self-test      # ok: N operations
+sudo tail -5 /var/log/amahi-kai/helper.log         # recent root actions
+sudo find /opt/amahi-kai -xdev \( -path /opt/amahi-kai/tmp -o -path /opt/amahi-kai/log \
+  -o -path /opt/amahi-kai/public/assets -o -path /opt/amahi-kai/vendor/bundle \) -prune \
+  -o ! -user root -print | head                    # prints nothing
 ```
 
-On a native install, the `amahi` user runs under systemd. Service management via
-`systemctl` works directly (no D-Bus socket gymnastics needed). SSH key management
-and file operations work naturally since the app owns the machine — just like
-original Amahi.
+## Adding something that needs root
 
----
-
-## 4. Sudoers Specification
-
-File: `/etc/sudoers.d/amahi-kai`
-Permissions: `0440`, owned by `root:root`
-Installed by: `bin/amahi-install`
-
-### Phase 1 — Scoped Sudoers
-
-```sudoers
-# Amahi-kai — least-privilege sudoers
-# Phase 1: path-scoped commands, explicit allowlist
-
-# User management (wrapper scripts in Phase 2)
-amahi ALL=(root) NOPASSWD: /usr/sbin/useradd
-amahi ALL=(root) NOPASSWD: /usr/sbin/usermod
-amahi ALL=(root) NOPASSWD: /usr/sbin/userdel
-
-# Samba password management
-amahi ALL=(root) NOPASSWD: /usr/bin/pdbedit
-
-# File operations — scoped to share and SSH paths only
-amahi ALL=(root) NOPASSWD: /usr/bin/chmod [0-9]* /var/lib/amahi-kai/*
-amahi ALL=(root) NOPASSWD: /usr/bin/chmod -R [a-z]* /var/lib/amahi-kai/*
-amahi ALL=(root) NOPASSWD: /usr/bin/chmod [a-z]* /var/lib/amahi-kai/*
-amahi ALL=(root) NOPASSWD: /usr/bin/chmod u+rwx\,go-rwx /home/*/.ssh
-amahi ALL=(root) NOPASSWD: /usr/bin/chmod u+rw\,go-rwx /home/*/.ssh/authorized_keys
-amahi ALL=(root) NOPASSWD: /usr/bin/chown * /var/lib/amahi-kai/*
-amahi ALL=(root) NOPASSWD: /usr/bin/chown -R * /home/*/.ssh
-
-# Directory creation for shares
-amahi ALL=(root) NOPASSWD: /usr/bin/mkdir -p /var/lib/amahi-kai/*
-
-# Config file staging — fixed source path, no wildcards
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /tmp/amahi-staging/* /etc/samba/*
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /tmp/amahi-staging/* /etc/dnsmasq.d/*
-
-# Service management — scoped to Amahi-managed services ONLY
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start smbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop smbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart smbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl reload smbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable smbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl disable smbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start nmbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop nmbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart nmbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl reload nmbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable nmbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl disable nmbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start dnsmasq.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop dnsmasq.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart dnsmasq.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl reload dnsmasq.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable dnsmasq.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl disable dnsmasq.service
-
-# Database backups
-amahi ALL=(root) NOPASSWD: /usr/bin/mysqldump
-```
-
-### What's NOT Allowed
-
-- No `rm`, `mv`, `cp` (except scoped Samba/dnsmasq config copies)
-- No `apt-get`, `dpkg`, or package management
-- No `systemctl` for arbitrary services (no sshd, docker, etc.)
-- No shell access, no wildcards
-
-### Phase 1 Residual Risk: `useradd` UID-0 Backdoor
-
-**⚠️ KNOWN RISK:** The Phase 1 sudoers grants unrestricted `useradd` access. An attacker
-with code execution as `amahi` could run:
-
-```bash
-sudo useradd -o -u 0 -g root backdoor
-```
-
-This creates a UID-0 user — effectively a root backdoor.
-
-**Mitigation timeline:** Phase 2 wrapper scripts (see Section 5).
-
-**Phase 1 acceptability:** On a trusted LAN with no internet-facing attack surface beyond
-Cloudflare Tunnel (which terminates at the Rails app, not a shell), this is acceptable
-residual risk.
-
----
-
-## 5. Wrapper Scripts (Phase 2)
-
-### 5.1 Safe `useradd` Wrapper
-
-File: `/usr/local/sbin/amahi-useradd`
-Permissions: `0755`, owned by `root:root`
-
-```bash
-#!/bin/bash
-# /usr/local/sbin/amahi-useradd — safe wrapper for useradd
-# Blocks UID-0 / non-unique UID flags to prevent privilege escalation
-
-if echo "$@" | grep -qE '(-o|--non-unique|-u\s*0)'; then
-    echo "amahi-useradd: UID 0 / non-unique flags are not allowed" >&2
-    exit 1
-fi
-exec /usr/sbin/useradd "$@"
-```
-
-### 5.2 Safe `usermod` Wrapper
-
-File: `/usr/local/sbin/amahi-usermod`
-Permissions: `0755`, owned by `root:root`
-
-```bash
-#!/bin/bash
-# /usr/local/sbin/amahi-usermod — safe wrapper for usermod
-# Blocks UID-0 / non-unique UID flags
-
-if echo "$@" | grep -qE '(-o|--non-unique|-u\s*0)'; then
-    echo "amahi-usermod: UID 0 / non-unique flags are not allowed" >&2
-    exit 1
-fi
-exec /usr/sbin/usermod "$@"
-```
-
-### 5.3 Phase 2 Sudoers Update
-
-When wrappers are deployed, replace the direct grants:
-
-```sudoers
-# User management — via safe wrappers (blocks UID-0 escalation)
-amahi ALL=(root) NOPASSWD: /usr/local/sbin/amahi-useradd
-amahi ALL=(root) NOPASSWD: /usr/local/sbin/amahi-usermod
-amahi ALL=(root) NOPASSWD: /usr/sbin/userdel
-```
-
-And update `Command` / `needs_sudo?` to use the wrapper paths.
-
----
-
-## 6. Security Considerations
-
-### 6.1 Threat Model
-
-Home server, single trusted admin, local network. The threat model:
-
-- **Primary risk:** Rails RCE via unpatched vulnerability → attacker gets `amahi` user access
-- **Mitigated by:** Non-root user, scoped sudoers (no rm/mv/cp/apt-get, systemctl limited to 3 services)
-- **Accepted risk:** Admin with Rails credentials can manage system (that's the feature)
-
-### 6.2 Existing Hardening (already implemented)
-
-- Rack::Attack rate limiting
-- CSRF protection
-- Shellwords.escape on all user input to shell commands
-- CSP headers (report-only)
-- Session cookie hardening (httponly, same_site: :lax)
-- SQL injection fixes (parameterized queries)
-
-### 6.3 Code Cleanup Needed
-
-The `Command` class `needs_sudo?` method currently includes `rm`, `mv`, `cp`, `apt-get`
-in its prefix list. These should be removed to match the sudoers boundary. This is a
-defense-in-depth cleanup — sudoers is the real enforcement, but the code should reflect intent.
-
----
-
-## 7. Implementation Checklist
-
-### Phase 1 — Minimum Viable Hardening
-
-- [ ] `bin/amahi-install` installs `/etc/sudoers.d/amahi-kai` with path-scoped rules
-- [ ] Validate sudoers with `visudo -cf /etc/sudoers.d/amahi-kai`
-- [ ] Update `Command#needs_sudo?` to remove unused prefixes (`apt-get`, `rm`, etc.)
-- [ ] Document residual `useradd` UID-0 risk in operational notes
-- [ ] Smoke test: create user, create share, start/stop service, verify all work
-
-### Phase 2 — Full Hardening
-
-- [ ] Create `/usr/local/sbin/amahi-useradd` wrapper script (Section 5.1)
-- [ ] Create `/usr/local/sbin/amahi-usermod` wrapper script (Section 5.2)
-- [ ] Update sudoers to use wrapper paths instead of direct binaries
-- [ ] Update `Command` class to invoke wrappers
-- [ ] Test wrapper: `amahi-useradd -o -u 0 backdoor` is **rejected**
-- [ ] Test wrapper: `amahi-useradd -m -g users -c "Test" testuser` **works**
-- [ ] Add integration tests for privilege boundaries
-
-### Phase 3 — Future Consideration
-
-- [ ] AppArmor/seccomp profiles
-- [ ] Rate-limiting on privileged command execution
-- [ ] Audit logging for all sudo operations
-
----
-
-## 8. References
-
-- [sudoers manual](https://www.sudo.ws/docs/man/sudoers.man/)
-- `lib/command.rb` — privilege execution engine
-- `lib/platform.rb` — service management, SSH setup
-- `app/models/user.rb` — user CRUD (useradd/usermod/userdel/pdbedit)
-- `app/models/share.rb` — share permissions (chmod/chown)
-- `bin/amahi-install` — production installer (installs sudoers)
+Add an operation to `libexec/amahi-helper` (arguments, validation, plan), with specs in
+`spec/lib/amahi_helper_spec.rb`, and call it with `Privileged.call`. Don't add a sudoers rule. The
+contract spec in `spec/lib/privileged_spec.rb` fails if the app calls an operation the helper
+doesn't have, or the helper has one nothing calls. Never run app code as root in
+`bin/amahi-install` or `bin/amahi-update`; use `as_app` (`spec/lib/install_scripts_spec.rb`
+checks).

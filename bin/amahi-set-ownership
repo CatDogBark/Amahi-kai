@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# bin/amahi-set-ownership: root owns the app's code; the app user owns only what the app
+# writes. bin/amahi-install and bin/amahi-update run it as root; running it again is safe.
+#
+# Root runs files from this tree (bin/amahi-update through sudo, bin/amahi-install-helper,
+# which installs libexec/amahi-helper and config/sudoers/amahi-kai), so the app user, which
+# runs the web app, must not be able to change them. Everything here is root:root and not
+# writable by group or others, except the folders the app writes:
+#
+#   tmp/  log/  public/assets/  vendor/bundle/    owned by the app user
+#
+# .bundle/config (where the app user's `bundle install` puts gems) is written here too,
+# since the app user can't write .bundle/ any more.
+set -euo pipefail
+
+APP_DIR="${APP_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
+APP_USER="${APP_USER:-amahi}"
+APP_GROUP="${APP_GROUP:-amahi}"
+WRITABLE=(tmp log public/assets vendor/bundle)
+
+if [[ $EUID -ne 0 ]]; then
+  echo "amahi-set-ownership: run this as root" >&2
+  exit 1
+fi
+[[ -d "$APP_DIR" && ! -L "$APP_DIR" ]] || { echo "amahi-set-ownership: no app folder at $APP_DIR" >&2; exit 1; }
+
+prune=()
+for dir in "${WRITABLE[@]}"; do
+  prune+=(-path "$APP_DIR/$dir" -o)
+done
+unset 'prune[${#prune[@]}-1]'
+
+# The code: root:root, symlinks themselves rather than what they point to (-h, and find
+# doesn't follow them), and nothing writable by group or others.
+find "$APP_DIR" -xdev \( "${prune[@]}" \) -prune -o -exec chown -h root:root {} +
+find "$APP_DIR" -xdev \( "${prune[@]}" \) -prune -o ! -type l -perm /022 -exec chmod go-w {} +
+
+# The app's folders. Their parents are root's now, so only root can have put something
+# other than a real folder at these paths; it's replaced. Files root left inside them
+# (an older update ran the asset build as root) go back to the app user.
+for dir in "${WRITABLE[@]}"; do
+  path="$APP_DIR/$dir"
+  if [[ -L "$path" || ( -e "$path" && ! -d "$path" ) ]]; then
+    rm -rf -- "$path"
+  fi
+  install -d -o "$APP_USER" -g "$APP_GROUP" -m 0755 "$path"
+  find "$path" -xdev ! -user "$APP_USER" -exec chown -h "$APP_USER:$APP_GROUP" {} +
+done
+for dir in tmp/pids tmp/cache tmp/sockets; do
+  install -d -o "$APP_USER" -g "$APP_GROUP" -m 0755 "$APP_DIR/$dir"
+done
+
+# Gems go to vendor/bundle, production groups only, and the lockfile is never rewritten
+# (Gemfile.lock is root's; CI installs from the same lockfile).
+install -d -o root -g root -m 0755 "$APP_DIR/.bundle"
+bundle_config=$'---\nBUNDLE_PATH: "vendor/bundle"\nBUNDLE_WITHOUT: "development:test"\nBUNDLE_FROZEN: "true"\nBUNDLE_JOBS: "4"\n'
+if [[ "$(cat "$APP_DIR/.bundle/config" 2>/dev/null)"$'\n' != "$bundle_config" ]]; then
+  rm -f -- "$APP_DIR/.bundle/config"
+  printf '%s' "$bundle_config" > "$APP_DIR/.bundle/config"
+  chmod 0644 "$APP_DIR/.bundle/config"
+fi
+
+# Git runs here as root (updates) and as other users (looking at the code); the checkout
+# is root's, so it's safe for everyone to use.
+if command -v git >/dev/null && ! git config --system --get-all safe.directory 2>/dev/null | grep -qxF "$APP_DIR"; then
+  git config --system --add safe.directory "$APP_DIR"
+fi
+
+echo "Set ownership of $APP_DIR (code root's; ${WRITABLE[*]} $APP_USER's)"

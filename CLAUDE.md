@@ -7,7 +7,8 @@ over plain HTTP, through a Cloudflare Tunnel, and through Tailscale. Troy owns t
 
 Current work: Phase 3 of a code review fix plan. Read **`docs/plans/roadmap.md`** first, then the
 plan for the PR you're on (**`docs/plans/privileged-helper.md`**: L and M (M1–M3, with P) are
-done; N, the root-owned install, is next).
+done; N, the root-owned install, is built). The privilege model is in
+`docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`.
 
 ## Workflow
 
@@ -70,6 +71,11 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
   there, not a sudoers rule. Sudoers rules (only the helper, the updater and Docker are left) are in
   `config/sudoers/amahi-kai`; `bin/amahi-install-helper` installs them and the helper (the
   installer and the updater both run it) only after `visudo -cf` passes.
+- **Root owns the code.** `/opt/amahi-kai` is root's except `tmp/`, `log/`, `public/assets/` and
+  `vendor/bundle/` (`bin/amahi-set-ownership`, run by the installer and at the start of every
+  update). Root never runs app code: in `bin/amahi-install` and `bin/amahi-update`, every `bundle`,
+  `bin/rails` and `rails runner` step goes through `as_app` (a spec checks). Anything the app writes at
+  runtime must go in one of those folders or outside the tree.
 - `Shell.capture` and `Open3` don't set `$?`; use the status they return.
 - Build commands from names as argument lists (`Open3.capture3('systemctl', 'show', unit)`), not
   strings through a shell.
