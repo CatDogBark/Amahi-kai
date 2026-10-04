@@ -1,13 +1,16 @@
 # Amahi Home Server — Remote Access (Cloudflare Tunnel + Tailscale)
 # Split from NetworkController for maintainability.
+#
+# The tunnel exposes the NAS to the Internet, so it can't be set up or started while the
+# security audit has blockers (stopping it is always allowed).
 
-require 'shell'
 require 'tailscale_service'
 
 class RemoteAccessController < ApplicationController
   include SseStreaming
 
   before_action :admin_required
+  before_action :require_no_security_blockers, only: %i[configure_tunnel start_tunnel restart_tunnel stage_tunnel_token]
 
   def index
     @page_title = t('network')
@@ -26,21 +29,22 @@ class RemoteAccessController < ApplicationController
     end
     begin
       CloudflareService.configure!(token)
-      CloudflareService.start!
       render json: { status: :ok }
-    rescue Shell::CommandError, Errno::ENOENT, Errno::EACCES, IOError => e
-      render json: { status: :error, error: e.message }
+    rescue CloudflareService::CloudflareError => e
+      render json: { status: :error, error: e.message }, status: :unprocessable_entity
     end
   end
 
   def start_tunnel
-    CloudflareService.start!
-    render json: { status: :ok }
+    tunnel_action(CloudflareService.start!, 'start')
+  end
+
+  def restart_tunnel
+    tunnel_action(CloudflareService.restart!, 'restart')
   end
 
   def stop_tunnel
-    CloudflareService.stop!
-    render json: { status: :ok }
+    tunnel_action(CloudflareService.stop!, 'stop')
   end
 
   def install_cloudflared_stream
@@ -73,9 +77,9 @@ class RemoteAccessController < ApplicationController
       end
 
       begin
-        CloudflareService.install!
+        CloudflareService.install! { |line| sse.emit("  #{line}") }
         sse.emit("✓ cloudflared installed successfully!")
-      rescue CloudflareService::CloudflareError, Shell::CommandError => e
+      rescue CloudflareService::CloudflareError => e
         sse.emit("✗ Installation failed: #{e.message}")
       end
       sse.emit("", event: "done")
@@ -95,8 +99,15 @@ class RemoteAccessController < ApplicationController
 
   def setup_tunnel_stream
     token = CloudflareService.take_staged_token.to_s
+    blockers = SecurityAudit.blockers
 
     stream_sse do |sse|
+      if blockers.any?
+        sse.emit("✗ #{blocker_message(blockers)}")
+        sse.done("error")
+        next
+      end
+
       if token.blank?
         sse.emit("✗ No tunnel token provided")
         sse.done("error")
@@ -130,20 +141,18 @@ class RemoteAccessController < ApplicationController
       end
 
       begin
-        unless CloudflareService.installed?
-          sse.emit("Installing cloudflared...")
-          CloudflareService.install!
-          sse.emit("✓ cloudflared installed")
-        else
+        if CloudflareService.installed?
           sse.emit("✓ cloudflared already installed")
+        else
+          sse.emit("Installing cloudflared...")
+          CloudflareService.install! { |line| sse.emit("  #{line}") }
+          sse.emit("✓ cloudflared installed")
         end
 
-        sse.emit("Configuring tunnel service...")
+        sse.emit("Configuring and starting the tunnel...")
         CloudflareService.configure!(token)
         sse.emit("✓ Tunnel service configured")
 
-        sse.emit("Starting tunnel...")
-        CloudflareService.start!
         sleep 2
         if CloudflareService.running?
           sse.emit("✓ Cloudflare Tunnel is connected!")
@@ -152,7 +161,7 @@ class RemoteAccessController < ApplicationController
         end
 
         sse.done
-      rescue CloudflareService::CloudflareError, Shell::CommandError, Errno::ENOENT => e
+      rescue CloudflareService::CloudflareError => e
         sse.emit("✗ Error: #{e.message}")
         sse.done("error")
       end
@@ -195,48 +204,19 @@ class RemoteAccessController < ApplicationController
       end
 
       begin
-        # Install
-        sse.emit("Downloading Tailscale install script...")
-        script_path = '/tmp/tailscale-install.sh'
-        system("curl -fsSL https://tailscale.com/install.sh -o #{script_path} 2>&1")
-        unless $?.success? && File.exist?(script_path)
-          sse.emit("✗ Failed to download install script")
-          sse.done("error")
-          next
-        end
-
-        sse.emit("Installing Tailscale...")
-        IO.popen("sudo bash #{script_path} 2>&1") do |io|
-          io.each_line { |line| sse.emit("  #{line.chomp}") }
-        end
-        FileUtils.rm_f(script_path)
-        unless $?.success?
-          sse.emit("✗ Installation failed")
-          sse.done("error")
-          next
-        end
+        sse.emit("Adding Tailscale's apt repository and installing...")
+        TailscaleService.install! { |line| sse.emit("  #{line}") }
         sse.emit("✓ Tailscale installed")
 
-        # Start and get auth URL
         sse.emit("")
         sse.emit("Starting Tailscale...")
-        Shell.run("systemctl enable tailscaled 2>/dev/null")
-        Shell.run("systemctl start tailscaled 2>/dev/null")
+        result = TailscaleService.start! { |line| sse.emit("  #{line}") }
+        raise TailscaleService::TailscaleError, result[:error] unless result[:success]
 
-        # `tailscale up` blocks waiting for auth — run with timeout and capture URL
-        auth_url = nil
-        IO.popen("sudo timeout 10 tailscale up 2>&1") do |io|
-          io.each_line do |line|
-            sse.emit("  #{line.chomp}")
-            url = line[/https:\/\/login\.tailscale\.com\/[^\s]+/]
-            auth_url = url if url
-          end
-        end
-
-        if auth_url
+        if result[:auth_url]
           sse.emit("")
           sse.emit("✓ Open the link above to connect this device to your Tailnet.")
-          sse.emit(auth_url, event: "auth_url")
+          sse.emit(result[:auth_url], event: "auth_url")
         elsif TailscaleService.running?
           sse.emit("✓ Tailscale is already authenticated and running!")
         else
@@ -244,7 +224,7 @@ class RemoteAccessController < ApplicationController
         end
 
         sse.done
-      rescue Shell::CommandError, Errno::ENOENT, IOError => e
+      rescue TailscaleService::TailscaleError => e
         sse.emit("✗ Error: #{e.message}")
         sse.done("error")
       end
@@ -253,7 +233,7 @@ class RemoteAccessController < ApplicationController
 
   def start_tailscale
     result = TailscaleService.start!
-    render json: { status: result[:success] ? :ok : :error, auth_url: result[:auth_url] }
+    render json: { status: result[:success] ? :ok : :error, auth_url: result[:auth_url], error: result[:error] }.compact
   end
 
   def stop_tailscale
@@ -264,5 +244,25 @@ class RemoteAccessController < ApplicationController
   def logout_tailscale
     TailscaleService.logout!
     render json: { status: :ok }
+  end
+
+  private
+
+  def require_no_security_blockers
+    blockers = SecurityAudit.blockers
+    return if blockers.empty?
+    render json: { status: :error, error: blocker_message(blockers) }, status: :forbidden
+  end
+
+  def blocker_message(blockers)
+    "Fix the security audit's blockers first (Network → Security): #{blockers.map(&:description).join('; ')}"
+  end
+
+  def tunnel_action(ok, action)
+    if ok
+      render json: { status: :ok }
+    else
+      render json: { status: :error, error: "The tunnel didn't #{action}; see the log for details" }, status: :unprocessable_entity
+    end
   end
 end

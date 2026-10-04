@@ -47,22 +47,35 @@ RSpec.describe CloudflareService do
     end
 
     context 'in production' do
-      before do
-        allow(CloudflareService).to receive(:production?).and_return(true)
-        allow(Shell).to receive(:run).and_return(true)
-        allow(File).to receive(:write).and_call_original
+      before { allow(CloudflareService).to receive(:production?).and_return(true) }
+
+      it 'hands the token to the root helper, which saves it and (re)starts the tunnel' do
+        expect(CloudflareService.configure!(" eyJsecret-token \n")).to be true
+        expect(Privileged.calls).to eq([['tunnel.configure', { token: 'eyJsecret-token' }]])
       end
 
-      it 'points cloudflared at the token file and keeps the token out of the unit' do
-        CloudflareService.configure!('eyJsecret-token')
-        expect(File).to have_received(:write).with(end_with('cloudflared.service'), satisfy { |unit|
-          unit.include?("--token-file #{CloudflareService::TOKEN_FILE}") && !unit.include?('eyJsecret-token')
-        })
+      it "raises the helper's reason" do
+        allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('tunnel.configure', 'cloudflared isn\'t installed'))
+        expect { CloudflareService.configure!('eyJx') }.to raise_error(CloudflareService::CloudflareError, "cloudflared isn't installed")
       end
 
-      it 'stages the token in a file only its owner can read' do
-        CloudflareService.configure!('eyJsecret-token')
-        expect(File).to have_received(:write).with(end_with('tunnel.token'), 'eyJsecret-token', perm: 0600)
+      it "installs cloudflared from Cloudflare's repository, passing apt's output on" do
+        allow(Privileged).to receive(:call).and_call_original
+        allow(Privileged).to receive(:call).with('packages.install', packages: ['cloudflared']) do |*_args, &block|
+          block.call('Setting up cloudflared (2026.9.0) ...')
+          { 'ok' => true }
+        end
+        lines = []
+        CloudflareService.install! { |line| lines << line }
+        expect(Privileged.calls).to eq([['packages.add_repository', { repository: 'cloudflared' }]])
+        expect(lines).to eq(['Setting up cloudflared (2026.9.0) ...'])
+      end
+
+      it 'starts, stops and restarts through the helper, reporting failure as false' do
+        expect([CloudflareService.start!, CloudflareService.stop!, CloudflareService.restart!]).to all(be true)
+        expect(Privileged.calls.map(&:first)).to eq(%w[tunnel.start tunnel.stop tunnel.restart])
+        allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('tunnel.start', 'systemctl exited 1'))
+        expect(CloudflareService.start!).to be false
       end
     end
   end

@@ -204,26 +204,10 @@ class NetworkController < ApplicationController
         end
         sse.done
       else
-        success = true
+        begin
+          sse.emit("Installing dnsmasq (apt-get update, then install)...")
+          Privileged.call('packages.install', packages: ['dnsmasq']) { |line| sse.emit("  #{line}") }
 
-        steps = [
-          { label: "Updating package lists...", cmd: "sudo apt-get update 2>&1" },
-          { label: "Installing dnsmasq...", cmd: "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y dnsmasq 2>&1" },
-        ]
-
-        steps.each do |step|
-          sse.emit(step[:label])
-          IO.popen(step[:cmd]) do |io|
-            io.each_line { |line| sse.emit("  #{line.chomp}") }
-          end
-          unless $?.success?
-            sse.emit("  ✗ Command failed")
-            success = false
-            break
-          end
-        end
-
-        if success
           sse.emit("Stopping dnsmasq (safe until configured)...")
           DnsmasqService.stop!
           sse.emit("  ✓ Stopped and disabled (configure settings, then start)")
@@ -231,7 +215,8 @@ class NetworkController < ApplicationController
           sse.emit("")
           sse.emit("✓ dnsmasq installed successfully!")
           sse.done
-        else
+        rescue Privileged::Error => e
+          sse.emit("  ✗ #{e.message}")
           sse.emit("✗ Installation failed.")
           sse.done("error")
         end

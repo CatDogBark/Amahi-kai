@@ -810,46 +810,75 @@ RSpec.describe 'AmahiHelper' do
       end
     end
 
+    it 'pins every repository it knows, and lists only packages from Ubuntu or those repositories' do
+      expect(AmahiHelper::APT_REPOSITORIES.keys).to contain_exactly('greyhole', 'cloudflared', 'tailscale', 'docker')
+      expect(AmahiHelper::PACKAGES).to include('cloudflared', 'tailscale', 'docker-ce', 'dnsmasq', 'fail2ban', 'unattended-upgrades')
+    end
+
     describe 'a repository signing key' do
       let(:dir) { Dir.mktmpdir }
+      let(:key) { "-----BEGIN PGP PUBLIC KEY BLOCK-----\nKEY\n-----END PGP PUBLIC KEY BLOCK-----\n" }
+      let(:urls) { [] }
       let(:repo) do
-        { key_url: 'https://example.com/key.asc', fingerprints: ['A' * 40, 'C' * 40], keyring: "#{dir}/keyring.asc",
-          list: "#{dir}/x.list", source: "deb [signed-by=#{dir}/keyring.asc] https://example.com/deb stable main" }
+        { key_url: 'https://example.com/%<codename>s.key', fingerprints: ['A' * 40, 'C' * 40], keyring: "#{dir}/keyring.asc",
+          list: "#{dir}/x.list", source: "deb [arch=%<arch>s signed-by=#{dir}/keyring.asc] https://example.com/deb %<codename>s main" }
       end
+      let(:listing) { "pub:-:4096:1:ABC:::::::scESC:\nfpr:::::::::#{'A' * 40}:\nsub:-:4096:1:DEF::::::::e:\nfpr:::::::::#{'C' * 40}:\n" }
 
       before do
         stub_const('AmahiHelper::RUN_DIR', dir)
+        allow(helper).to receive(:repository_vars).and_return(codename: 'noble', arch: 'amd64')
         allow(helper).to receive(:run_command) do |argv|
-          expect(argv).to include('--proto', '=https')
-          File.write(argv[argv.index('-o') + 1], 'KEY')
+          if argv.include?('--dearmor')
+            File.binwrite(argv[argv.index('--output') + 1], "\x99BINARY")
+          else
+            expect(argv).to include('--proto', '=https')
+            urls << argv.last
+            File.write(argv[argv.index('-o') + 1], key)
+          end
           nil
         end
+        allow(helper).to receive(:capture).and_return(listing)
       end
 
       after { FileUtils.rm_rf(dir) }
 
-      it 'is installed with the source list when its fingerprints are the pinned ones' do
+      it 'is installed with the source list, for this release and architecture, when its fingerprints are the pinned ones' do
         stub_const('AmahiHelper::APT_REPOSITORIES', { 'x' => repo })
-        allow(helper).to receive(:capture)
-          .and_return("pub:-:4096:1:ABC:::::::scESC:\nfpr:::::::::#{'A' * 40}:\nsub:-:4096:1:DEF::::::::e:\nfpr:::::::::#{'C' * 40}:\n")
         helper.do_add_apt_repository('x')
-        expect(File.read("#{dir}/keyring.asc")).to eq('KEY')
-        expect(File.read("#{dir}/x.list")).to eq("#{repo[:source]}\n")
+        expect(urls).to eq(['https://example.com/noble.key'])
+        expect(File.read("#{dir}/keyring.asc")).to eq(key)
+        expect(File.read("#{dir}/x.list")).to eq("deb [arch=amd64 signed-by=#{dir}/keyring.asc] https://example.com/deb noble main\n")
+      end
+
+      it 'is stored binary in a .gpg keyring (dearmored if it came armored), armored in a .asc one' do
+        stub_const('AmahiHelper::APT_REPOSITORIES', { 'x' => repo.merge(keyring: "#{dir}/keyring.gpg") })
+        helper.do_add_apt_repository('x')
+        expect(File.binread("#{dir}/keyring.gpg")).to eq("\x99BINARY".b)
+
+        allow(helper).to receive(:run_command) { |argv| File.binwrite(argv[argv.index('-o') + 1], "\x99RAW") && nil }
+        helper.do_add_apt_repository('x')
+        expect(File.binread("#{dir}/keyring.gpg")).to eq("\x99RAW".b)
+
+        stub_const('AmahiHelper::APT_REPOSITORIES', { 'x' => repo })
+        expect { helper.do_add_apt_repository('x') }.to raise_error(AmahiHelper::Failed, /must be an armored key/)
       end
 
       it 'is refused when its fingerprints differ, or another key was added to the file' do
         stub_const('AmahiHelper::APT_REPOSITORIES', { 'x' => repo })
         ["fpr:::::::::#{'B' * 40}:\n", "fpr:::::::::#{'A' * 40}:\n",
-         "fpr:::::::::#{'A' * 40}:\nfpr:::::::::#{'C' * 40}:\nfpr:::::::::#{'B' * 40}:\n"].each do |listing|
-          allow(helper).to receive(:capture).and_return(listing)
+         "fpr:::::::::#{'A' * 40}:\nfpr:::::::::#{'C' * 40}:\nfpr:::::::::#{'B' * 40}:\n"].each do |other|
+          allow(helper).to receive(:capture).and_return(other)
           expect { helper.do_add_apt_repository('x') }.to raise_error(AmahiHelper::Failed, /not the pinned ones/)
         end
         expect(File.exist?("#{dir}/keyring.asc")).to be false
       end
 
-      it "pins the two fingerprints in Greyhole's key file" do
-        expect(AmahiHelper::APT_REPOSITORIES['greyhole'][:fingerprints]).to all(match(/\A\h{40}\z/))
-        expect(AmahiHelper::APT_REPOSITORIES['greyhole'][:fingerprints].size).to eq(2)
+      it "pins the key and subkey fingerprints of Greyhole's and Docker's keys" do
+        %w[greyhole docker].each do |name|
+          expect(AmahiHelper::APT_REPOSITORIES[name][:fingerprints]).to all(match(/\A\h{40}\z/))
+          expect(AmahiHelper::APT_REPOSITORIES[name][:fingerprints].size).to eq(2)
+        end
       end
 
       it 'is not even downloaded when no fingerprint is pinned' do
@@ -857,6 +886,197 @@ RSpec.describe 'AmahiHelper' do
         expect { helper.do_add_apt_repository('x') }.to raise_error(AmahiHelper::Failed, /isn't pinned/)
         expect(helper).not_to have_received(:run_command)
       end
+    end
+
+    it 'reads the release codename and architecture apt sources are written for' do
+      Tempfile.create('os-release') do |f|
+        f.write(%(NAME="Ubuntu"\nVERSION_CODENAME=noble\nUBUNTU_CODENAME=noble\n))
+        f.flush
+        stub_const('AmahiHelper::OS_RELEASE', f.path)
+        allow(helper).to receive(:capture).with(%w[/usr/bin/dpkg --print-architecture]).and_return("amd64\n")
+        expect(helper.repository_vars).to eq(codename: 'noble', arch: 'amd64')
+        allow(helper).to receive(:capture).with(%w[/usr/bin/dpkg --print-architecture]).and_return("amd64 ; x\n")
+        expect { helper.repository_vars }.to raise_error(AmahiHelper::Failed, /unexpected architecture/)
+      end
+    end
+  end
+
+  describe 'the Cloudflare Tunnel' do
+    let(:token) { "eyJhIjoiYWJjIiwidCI6ImRlZiIsInMiOiJnaGkifQ#{'x' * 40}==" }
+
+    before do
+      allow(File).to receive(:executable?).and_call_original
+      allow(File).to receive(:executable?).with('/usr/bin/cloudflared').and_return(true)
+    end
+
+    it 'saves the token where only root can read it, writes its own unit, and (re)starts the tunnel' do
+      planned = steps('tunnel.configure', { 'token' => " #{token}\n" })
+      expect(planned).to eq([
+                              [:make_dir, '/etc/amahi-kai', '0755'],
+                              [:install, '/etc/amahi-kai/tunnel.token', token, nil, '0600'],
+                              [:install, '/etc/systemd/system/cloudflared.service', AmahiHelper::TUNNEL_UNIT_CONTENT, nil],
+                              %w[/usr/bin/systemctl daemon-reload],
+                              %w[/usr/bin/systemctl enable cloudflared.service],
+                              %w[/usr/bin/systemctl restart cloudflared.service]
+                            ])
+      expect(AmahiHelper::TUNNEL_UNIT_CONTENT).to include('run --token-file /etc/amahi-kai/tunnel.token')
+      expect(planned.map { |step| helper.describe(step) }.to_s).not_to include(token)
+    end
+
+    it 'refuses tokens that are not one, and works only once cloudflared is installed' do
+      ['short', "#{token} --url http://x", "#{token}\nExecStartPre=/bin/sh", 'x' * 5000].each do |bad|
+        expect(refusal('tunnel.configure', { 'token' => bad })).not_to be_nil, bad[0, 40]
+      end
+      allow(File).to receive(:executable?).with('/usr/bin/cloudflared').and_return(false)
+      expect(refusal('tunnel.configure', { 'token' => token })).to eq("cloudflared isn't installed")
+      expect(refusal('tunnel.start', {})).to eq("cloudflared isn't installed")
+    end
+
+    it 'starts, stops and restarts only cloudflared' do
+      expect(steps('tunnel.start', {})).to eq([%w[/usr/bin/systemctl start cloudflared.service]])
+      expect(steps('tunnel.stop', {})).to eq([%w[/usr/bin/systemctl stop cloudflared.service]])
+      expect(steps('tunnel.restart', {})).to eq([%w[/usr/bin/systemctl restart cloudflared.service]])
+      expect(refusal('tunnel.start', { 'unit' => 'ssh' })).to eq('unexpected argument unit')
+    end
+  end
+
+  describe 'Tailscale and Docker' do
+    before do
+      allow(File).to receive(:executable?).and_call_original
+      allow(File).to receive(:executable?).with('/usr/bin/tailscale').and_return(true)
+    end
+
+    it 'runs fixed tailscale commands, giving `tailscale up` 10 seconds and streaming its output' do
+      expect(steps('tailscale.start', {})).to eq([%w[/usr/bin/systemctl enable --now tailscaled.service]])
+      expect(steps('tailscale.up', {})).to eq([['/usr/bin/timeout', '10', '/usr/bin/tailscale', 'up', { stream: true, allow_failure: true }]])
+      expect(steps('tailscale.down', {})).to eq([%w[/usr/bin/tailscale down]])
+      expect(steps('tailscale.logout', {})).to eq([['/usr/bin/tailscale', 'logout', { allow_failure: true }],
+                                                   %w[/usr/bin/systemctl stop tailscaled.service]])
+      expect(refusal('tailscale.up', { 'flags' => '--ssh' })).to eq('unexpected argument flags')
+      allow(File).to receive(:executable?).with('/usr/bin/tailscale').and_return(false)
+      expect(refusal('tailscale.up', {})).to eq("tailscale isn't installed")
+    end
+
+    it "adds the app's user to the docker group once Docker is installed" do
+      allow(helper).to receive(:group_id).with('docker').and_return(998)
+      expect(steps('docker.grant_app_user', {})).to eq([%w[/usr/sbin/usermod -aG docker amahi]])
+      allow(helper).to receive(:group_id).with('docker').and_return(nil)
+      expect(refusal('docker.grant_app_user', {})).to include("Docker isn't installed")
+    end
+  end
+
+  describe 'security fixes' do
+    let(:dir) { Dir.mktmpdir }
+
+    after { FileUtils.rm_rf(dir) }
+
+    before do
+      allow(File).to receive(:executable?).and_call_original
+      allow(File).to receive(:executable?).with('/usr/sbin/ufw').and_return(true)
+    end
+
+    it 'turns UFW on with SSH, the web UI, HTTPS and Samba let in, and DNS and DHCP once dnsmasq is configured' do
+      stub_const('AmahiHelper::DNSMASQ_CONF', "#{dir}/amahi.conf")
+      ufw = '/usr/sbin/ufw'
+      base = [[ufw, 'default', 'deny', 'incoming'], [ufw, 'allow', '22/tcp'], [ufw, 'allow', '3000/tcp'],
+              [ufw, 'allow', '443/tcp'], [ufw, 'allow', '445/tcp'], [ufw, 'allow', '139/tcp'], [ufw, 'allow', '137:138/udp']]
+      expect(steps('security.enable_firewall', {})).to eq([*base, [ufw, '--force', 'enable']])
+      File.write("#{dir}/amahi.conf", "bind-interfaces\n")
+      expect(steps('security.enable_firewall', {})).to eq([*base, [ufw, 'allow', '53'], [ufw, 'allow', '67/udp'], [ufw, '--force', 'enable']])
+    end
+
+    it 'turns off SSH root login' do
+      expect(steps('security.harden_ssh', { 'setting' => 'root_login' })).to eq([[:harden_ssh, { 'PermitRootLogin' => 'no' }]])
+      expect(refusal('security.harden_ssh', { 'setting' => 'PermitRootLogin yes' })).to include("isn't one Amahi-kai uses")
+    end
+
+    it 'turns off SSH password login only while an account that can log in has a key' do
+      allow(helper).to receive(:ssh_key_holders).and_return([])
+      expect(refusal('security.harden_ssh', { 'setting' => 'password_login' })).to include('would lock everyone out of SSH')
+      allow(helper).to receive(:ssh_key_holders).and_return(['troy'])
+      expect(steps('security.harden_ssh', { 'setting' => 'password_login' }))
+        .to eq([[:harden_ssh, { 'PasswordAuthentication' => 'no', 'KbdInteractiveAuthentication' => 'no' }]])
+    end
+
+    it 'finds accounts with a login shell and a key, not system or nologin accounts or comments' do
+      shells = "#{dir}/shells"
+      File.write(shells, "# /etc/shells\n/bin/sh\n/bin/bash\n/usr/bin/bash\n")
+      allow(File).to receive(:readlines).and_call_original
+      allow(File).to receive(:readlines).with('/etc/shells', chomp: true).and_return(File.readlines(shells, chomp: true))
+      people = { 'troy' => [1000, '/bin/bash', "ssh-ed25519 AAAAC3Nza troy@laptop\n"],
+                 'ann' => [1001, '/usr/sbin/nologin', "ssh-ed25519 AAAAC3Nza ann\n"],
+                 'bob' => [1002, '/bin/bash', "# ssh-ed25519 AAAAC3Nza old key\n"],
+                 'svc' => [999, '/bin/bash', "ssh-rsa AAAAB3Nza svc\n"],
+                 'eve' => [1003, '/bin/bash', nil] }
+      entries = people.map do |name, (uid, shell, keys)|
+        home = "#{dir}/#{name}"
+        FileUtils.mkdir_p("#{home}/.ssh")
+        File.write("#{home}/.ssh/authorized_keys", keys) if keys
+        Etc::Passwd.new(name, 'x', uid, 100, '', home, shell)
+      end
+      allow(Etc).to receive(:passwd) { |&block| entries.each(&block) }
+      expect(helper.ssh_key_holders).to eq(['troy'])
+    end
+
+    describe 'the sshd drop-in' do
+      let(:dropin) { "#{dir}/10-amahi-kai.conf" }
+      let(:ran) { [] }
+
+      before do
+        stub_const('AmahiHelper::SSHD_DROPIN', dropin)
+        allow(Dir).to receive(:mkdir).and_call_original
+        allow(Dir).to receive(:mkdir).with('/run/sshd', 0o755)
+        allow(File).to receive(:directory?).and_call_original
+        allow(File).to receive(:directory?).with('/run/sshd').and_return(true)
+        allow(helper).to receive(:run_command) { |argv| ran << argv && nil }
+        allow(helper).to receive(:capture).with(%w[/usr/sbin/sshd -t]).and_return('')
+        allow(helper).to receive(:capture).with(%w[/usr/sbin/sshd -T])
+                                          .and_return("port 22\npermitrootlogin no\npasswordauthentication no\nkbdinteractiveauthentication no\n")
+      end
+
+      it 'keeps earlier settings, is checked with sshd -t, reloads ssh and replies with the effective settings' do
+        helper.do_harden_ssh('PermitRootLogin' => 'no')
+        reply = helper.do_harden_ssh('PasswordAuthentication' => 'no', 'KbdInteractiveAuthentication' => 'no')
+        expect(File.read(dropin).lines.drop(1).join)
+          .to eq("PermitRootLogin no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\n")
+        expect(ran.last).to eq(%w[/usr/bin/systemctl try-reload-or-restart ssh.service])
+        expect(reply).to eq('ssh' => { 'permitrootlogin' => 'no', 'passwordauthentication' => 'no', 'kbdinteractiveauthentication' => 'no' })
+      end
+
+      it 'puts the old drop-in back if sshd rejects the config, and reloads nothing' do
+        File.write(dropin, "PermitRootLogin no\n")
+        allow(helper).to receive(:capture).with(%w[/usr/sbin/sshd -t]).and_raise(AmahiHelper::Failed, 'sshd exited 255: bad')
+        expect { helper.do_harden_ssh('PasswordAuthentication' => 'no') }.to raise_error(AmahiHelper::Failed)
+        expect(File.read(dropin)).to eq("PermitRootLogin no\n")
+        expect(ran).to be_empty
+
+        File.unlink(dropin)
+        expect { helper.do_harden_ssh('PasswordAuthentication' => 'no') }.to raise_error(AmahiHelper::Failed)
+        expect(File.exist?(dropin)).to be false
+      end
+    end
+
+    it "reports UFW's state and sshd's effective settings" do
+      allow(File).to receive(:executable?).with('/usr/sbin/sshd').and_return(true)
+      allow(Dir).to receive(:mkdir).and_call_original
+      allow(File).to receive(:directory?).and_call_original
+      allow(File).to receive(:directory?).with('/run/sshd').and_return(true)
+      allow(helper).to receive(:capture).with(%w[/usr/sbin/ufw status]).and_return("Status: active\n\nTo  Action  From\n")
+      allow(helper).to receive(:capture).with(%w[/usr/sbin/sshd -T]).and_return("permitrootlogin without-password\nport 22\n")
+      expect(steps('security.report', {})).to eq([[:security_report]])
+      expect(helper.do_security_report).to eq('firewall' => 'active', 'ssh' => { 'permitrootlogin' => 'without-password' })
+      allow(File).to receive(:executable?).with('/usr/sbin/ufw').and_return(false)
+      expect(helper.do_security_report['firewall']).to eq('not installed')
+    end
+
+    it 'turns on automatic updates the way dpkg-reconfigure does, once unattended-upgrades is installed' do
+      allow(File).to receive(:exist?).and_call_original
+      allow(File).to receive(:exist?).with('/usr/bin/unattended-upgrade').and_return(true)
+      expect(steps('security.enable_auto_updates', {}))
+        .to eq([[:install, '/etc/apt/apt.conf.d/20auto-upgrades',
+                 %(APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n), nil]])
+      allow(File).to receive(:exist?).with('/usr/bin/unattended-upgrade').and_return(false)
+      expect(refusal('security.enable_auto_updates', {})).to eq('unattended-upgrades is not installed')
     end
   end
 

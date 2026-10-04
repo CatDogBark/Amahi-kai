@@ -1,8 +1,13 @@
 require 'rails_helper'
 
 RSpec.describe TailscaleService do
-  before do
-    allow(Shell).to receive(:run).and_return(true)
+  def status_json(state, **extra)
+    { 'BackendState' => state }.merge(extra).to_json
+  end
+
+  def tailscale_status(out, success: true)
+    allow(Open3).to receive(:capture3).with('/usr/bin/tailscale', 'status', '--json')
+                                      .and_return([out, '', instance_double(Process::Status, success?: success)])
   end
 
   describe '.installed?' do
@@ -20,13 +25,13 @@ RSpec.describe TailscaleService do
   describe '.running?' do
     before { allow(described_class).to receive(:installed?).and_return(true) }
 
-    it 'returns true when BackendState is Running' do
-      allow(described_class).to receive(:`).with('sudo tailscale status --json 2>/dev/null').and_return('{"BackendState":"Running"}')
+    it 'reads the status as the app user (no root) and is true when BackendState is Running' do
+      tailscale_status(status_json('Running'))
       expect(described_class.running?).to be true
     end
 
     it 'returns false when not running' do
-      allow(described_class).to receive(:`).with('sudo tailscale status --json 2>/dev/null').and_return('{"BackendState":"Stopped"}')
+      tailscale_status(status_json('Stopped'))
       expect(described_class.running?).to be false
     end
 
@@ -35,13 +40,10 @@ RSpec.describe TailscaleService do
       expect(described_class.running?).to be false
     end
 
-    it 'returns false on empty output' do
-      allow(described_class).to receive(:`).with('sudo tailscale status --json 2>/dev/null').and_return('')
+    it 'returns false when the status cannot be read' do
+      tailscale_status('', success: false)
       expect(described_class.running?).to be false
-    end
-
-    it 'returns false on invalid JSON' do
-      allow(described_class).to receive(:`).with('sudo tailscale status --json 2>/dev/null').and_return('not json')
+      tailscale_status('not json')
       expect(described_class.running?).to be false
     end
   end
@@ -54,105 +56,80 @@ RSpec.describe TailscaleService do
 
     it 'returns full status when running' do
       allow(described_class).to receive(:installed?).and_return(true)
-      json = {
-        'BackendState' => 'Running',
-        'Self' => {
-          'TailscaleIPs' => ['100.64.0.1'],
-          'DNSName' => 'myhost.tail123.ts.net.',
-          'OS' => 'linux',
-          'Online' => true
-        },
-        'Peer' => { 'abc' => {}, 'def' => {} }
-      }.to_json
-      allow(described_class).to receive(:`).with('sudo tailscale status --json 2>/dev/null').and_return(json)
+      tailscale_status(status_json('Running',
+                                   'Self' => { 'TailscaleIPs' => ['100.64.0.1'], 'DNSName' => 'myhost.tail123.ts.net.',
+                                               'OS' => 'linux', 'Online' => true },
+                                   'Peer' => { 'abc' => {}, 'def' => {} }))
 
       result = described_class.status
-      expect(result[:installed]).to be true
-      expect(result[:running]).to be true
-      expect(result[:tailscale_ip]).to eq('100.64.0.1')
-      expect(result[:hostname]).to eq('myhost.tail123.ts.net')
-      expect(result[:peers]).to eq(2)
-      expect(result[:magic_dns]).to eq('myhost.tail123.ts.net')
+      expect(result).to include(installed: true, running: true, tailscale_ip: '100.64.0.1',
+                                hostname: 'myhost.tail123.ts.net', peers: 2, magic_dns: 'myhost.tail123.ts.net')
     end
 
-    it 'handles empty output' do
+    it 'reports installed but not running when the status cannot be read' do
       allow(described_class).to receive(:installed?).and_return(true)
-      allow(described_class).to receive(:`).with('sudo tailscale status --json 2>/dev/null').and_return('')
+      tailscale_status('not json')
       expect(described_class.status).to eq({ installed: true, running: false })
-    end
-
-    it 'handles parse errors gracefully' do
-      allow(described_class).to receive(:installed?).and_return(true)
-      allow(described_class).to receive(:`).with('sudo tailscale status --json 2>/dev/null').and_return('bad')
-      result = described_class.status
-      expect(result[:installed]).to be true
-      expect(result[:running]).to be false
-      expect(result[:error]).to be_present
     end
   end
 
   describe '.install!' do
-    it 'downloads and runs install script' do
-      # Stub system to simulate successful curl + bash
-      allow(described_class).to receive(:system).and_return(true)
-      # After system() is stubbed, $? won't be set naturally.
-      # Fake a successful $? by running a real no-op command first.
-      system("true") # sets $? to success
-      allow(File).to receive(:exist?).and_call_original
-      allow(File).to receive(:exist?).with('/tmp/tailscale-install.sh').and_return(true)
-      allow(FileUtils).to receive(:rm_f)
-
-      expect(described_class.install!).to be true
+    it "installs from Tailscale's apt repository through the root helper and starts the daemon" do
+      allow(Privileged).to receive(:call).and_call_original
+      allow(Privileged).to receive(:call).with('packages.install', packages: ['tailscale']) do |*_args, &block|
+        block.call('Setting up tailscale (1.90.1) ...')
+        { 'ok' => true }
+      end
+      lines = []
+      expect(described_class.install! { |line| lines << line }).to be true
+      expect(Privileged.calls).to eq([['packages.add_repository', { repository: 'tailscale' }], ['tailscale.start', {}]])
+      expect(lines).to eq(['Setting up tailscale (1.90.1) ...'])
     end
 
-    it 'returns false if download fails' do
-      allow(described_class).to receive(:system).and_return(false)
-      system("false") # sets $? to failure
-      expect(described_class.install!).to be false
+    it "raises the helper's reason" do
+      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('packages.add_repository', 'curl exited 22'))
+      expect { described_class.install! }.to raise_error(TailscaleService::TailscaleError, 'curl exited 22')
     end
   end
 
   describe '.start!' do
-    it 'enables and starts tailscaled then brings up' do
-      allow(described_class).to receive(:`).with('sudo tailscale status 2>&1').and_return('100.64.0.1 myhost')
-      allow(described_class).to receive(:`).with('sudo timeout 5 tailscale up 2>&1').and_return('')
+    before { allow(described_class).to receive(:installed?).and_return(true) }
 
-      result = described_class.start!
-      expect(result[:success]).to be true
-      expect(result[:auth_url]).to be_nil
-      expect(Shell).to have_received(:run).with('systemctl enable tailscaled 2>/dev/null')
-      expect(Shell).to have_received(:run).with('systemctl start tailscaled 2>/dev/null')
+    it 'starts the daemon and stops there when Tailscale is already up' do
+      tailscale_status(status_json('Running'))
+      expect(described_class.start!).to eq(success: true, auth_url: nil)
+      expect(Privileged.calls).to eq([['tailscale.start', {}]])
     end
 
-    it 'returns auth URL when login needed' do
-      allow(described_class).to receive(:`).with('sudo tailscale status 2>&1').and_return("Logged out. Login at: https://login.tailscale.com/a/abc123")
-
-      result = described_class.start!
-      expect(result[:success]).to be true
-      expect(result[:needs_login]).to be true
-      expect(result[:auth_url]).to eq('https://login.tailscale.com/a/abc123')
+    it "brings it up and returns the login URL `tailscale up` prints" do
+      tailscale_status(status_json('NeedsLogin'))
+      allow(Privileged).to receive(:call).and_call_original
+      allow(Privileged).to receive(:call).with('tailscale.up') do |*_args, &block|
+        ["\n", 'To authenticate, visit:', "\thttps://login.tailscale.com/a/abc123"].each { |line| block.call(line) }
+        { 'ok' => true, 'notes' => ['ignored: timeout exited 124'] }
+      end
+      lines = []
+      result = described_class.start! { |line| lines << line }
+      expect(result).to eq(success: true, auth_url: 'https://login.tailscale.com/a/abc123')
+      expect(lines).to include('To authenticate, visit:')
     end
 
-    it 'returns error on exception' do
-      allow(Shell).to receive(:run).and_raise(StandardError, 'boom')
-      result = described_class.start!
-      expect(result[:success]).to be false
-      expect(result[:error]).to eq('boom')
-    end
-  end
-
-  describe '.stop!' do
-    it 'runs tailscale down' do
-      described_class.stop!
-      expect(Shell).to have_received(:run).with('tailscale down 2>/dev/null')
+    it "returns the helper's reason when it fails" do
+      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('tailscale.start', "tailscale isn't installed"))
+      expect(described_class.start!).to eq(success: false, error: "tailscale isn't installed")
     end
   end
 
-  describe '.logout!' do
-    it 'logs out and stops the daemon' do
-      described_class.logout!
-      expect(Shell).to have_received(:run).with('tailscale logout 2>/dev/null')
-      expect(Shell).to have_received(:run).with('systemctl stop tailscaled 2>/dev/null')
+  describe '.stop! and .logout!' do
+    it 'go through the root helper' do
+      expect(described_class.stop!).to be true
+      expect(described_class.logout!).to be true
+      expect(Privileged.calls.map(&:first)).to eq(%w[tailscale.down tailscale.logout])
+    end
+
+    it 'return false when the helper fails' do
+      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('tailscale.down', 'tailscale exited 1'))
+      expect(described_class.stop!).to be false
     end
   end
 end

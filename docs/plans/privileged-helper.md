@@ -1,8 +1,9 @@
 # Privileged helper (Phase 3, PRs L and M)
 
 Status: **PR L done** (#24, checked on the NAS 2026-10-04). **PR M** is split in three (Troy,
-2026-10-04): **M1 done** (#26: services, reboot/power off, hostname, dnsmasq, swap), **M2 built**
-(data drives, Greyhole), then M3 (tunnel, Tailscale, packages, security audit).
+2026-10-04): **M1 done** (#26: services, reboot/power off, hostname, dnsmasq, swap), **M2 done**
+(#27: data drives, Greyhole), **M3 built** (packages, tunnel, Tailscale, Docker install, security
+audit with PR P). Sudoers is now the helper, the updater and Docker; PR N is next.
 
 ## Why
 
@@ -166,7 +167,7 @@ Removed sudoers rules (24): `systemctl start|stop|reload|enable|disable` for `sm
 the swap rules (`fallocate`, `dd`, `chmod 600 /swapfile`, `mkswap`, `swapon`). `systemctl restart
 smbd.service`/`nmbd.service` stayed until M2.
 
-## PR M2: data drives and Greyhole (built)
+## PR M2: data drives and Greyhole (done, #27)
 
 A data drive is a whole disk or partition (`sd*`, `vd*`, `xvd*`, `nvme*`) whose disk has nothing
 mounted outside `/mnt`. The helper checks that itself from `lsblk`, so the OS disk (`/` on LVM
@@ -203,13 +204,49 @@ Drives can't be tested until the NAS hardware arrives (VM 104's disks belong to 
 3. `sudo -l -U amahi | grep -cE 'mount|mkfs|fstab|greyhole|mysql'` prints `0`.
 4. `sudo /usr/local/sbin/amahi-helper --self-test` prints `ok: 30 operations`.
 
-## PR M3 (outline)
+## PR M3: packages, tunnel, Tailscale, security audit (built)
 
-- **M3**: `tunnel.*` (token file, unit), `tailscale.*` (install from Tailscale's apt repository,
-  not a downloaded script run as root), `packages.install` (a fixed list of package names), and
-  the security audit's fixes together with PR P.
+Every package install now goes through `packages.add_repository` and `packages.install`. The
+helper knows four apt repositories (Greyhole, Cloudflare, Tailscale, Docker), each with its key's
+fingerprints pinned, and a fixed package list (Greyhole and its PHP modules, `cloudflared`,
+`tailscale`, Docker Engine, `dnsmasq`, `fail2ban`, `unattended-upgrades`). Keyring and source-list
+paths are the ones earlier installs used, so an installed repository is rewritten in place.
 
-Then sudoers is down to the helper, the updater and Docker for PR N.
+| Operation | Replaces | Runs |
+| --- | --- | --- |
+| `tunnel.configure` {token} | `CloudflareService.configure!` (Rails wrote the unit file and token, and root copied them) | token checked (base64 characters), saved root-only 0600; the helper writes the unit itself (`--token-file`); `daemon-reload`, `enable`, `restart` |
+| `tunnel.start`/`stop`/`restart` | `systemctl … cloudflared` sudo rules | `systemctl <verb> cloudflared.service` |
+| `tailscale.start` | `systemctl enable/start tailscaled` | `systemctl enable --now tailscaled.service` |
+| `tailscale.up` | `sudo timeout 10 tailscale up` | the same, output streamed so the page gets the login URL |
+| `tailscale.down`, `tailscale.logout` | `sudo tailscale …` (an unrestricted rule) | `tailscale down`; `tailscale logout` and stop `tailscaled` |
+| `docker.grant_app_user` | `usermod -aG docker amahi` | the same, once the `docker` group exists |
+| `security.report` | `ufw status` and reading `sshd_config` | UFW's state and sshd's effective settings (`sshd -T`, so drop-ins count) |
+| `security.enable_firewall` | `ufw *` | deny incoming; allow 22/tcp, 3000/tcp, 443/tcp, 445/tcp, 139/tcp, 137:138/udp, plus 53 and 67/udp once Amahi-kai has configured dnsmasq; enable |
+| `security.harden_ssh` {setting} | copying a Rails-written `sshd_config` over the real one | `root_login` or `password_login` (password and keyboard-interactive) set to `no` in `sshd_config.d/10-amahi-kai.conf`, checked with `sshd -t` (old file put back if it fails), `try-reload-or-restart ssh`. Password login is refused while no account with a login shell has a key in `~/.ssh/authorized_keys` (Troy, 2026-10-04) |
+| `security.enable_auto_updates` | `dpkg-reconfigure -plow unattended-upgrades` | writes `20auto-upgrades` as that dialog does |
+
+Rails: `CloudflareService`, `TailscaleService` (status is read without root), `DockerService`
+(one install path; the Apps page's own copy is gone), the dnsmasq install on Network → Gateway, and
+`SecurityAudit`. PR P is in it: the SSH checks use `sshd -T`; automatic updates must be turned on,
+not only installed; a new check warns about Docker-published ports, which bypass UFW; a refused
+fix shows the helper's reason; and setting up, starting or restarting the tunnel is refused on the
+server while the audit has blockers (stopping it never is). Tunnel Restart now restarts.
+
+Removed sudoers rules (42): every `apt-get` rule (all `SETENV`), the Docker key, list, `usermod`
+and `systemctl` rules, all Cloudflare rules (`cloudflared` unrestricted, unit and token copies,
+`rm -f /etc/systemd/system/cloudflared*`, `daemon-reload`, the service and repository rules), all
+Tailscale rules (`bash /tmp/tailscale-install.sh`, `tailscale` unrestricted, `timeout … tailscale`,
+the `tailscaled` service rules), and the security rules (`ufw *`, ssh restarts, `dpkg-reconfigure`,
+copying `sshd_config`). 52 → 10 rules: the helper, the Docker app folders, `docker`, `smartctl` and
+the updater.
+
+### Check on the NAS after the System Update (Troy)
+
+1. The update's last line is "✓ Amahi-kai updated and running!".
+2. Network → Remote Access shows the tunnel connected and Tailscale running, as before.
+3. Network → Security runs the audit; the SSH lines match `sudo sshd -T`.
+4. `sudo -l -U amahi | grep -c NOPASSWD` prints `10`.
+5. `sudo /usr/local/sbin/amahi-helper --self-test` prints `ok: 43 operations`.
 
 ## Decisions (Troy, confirmed 2026-10-03)
 
@@ -222,3 +259,5 @@ Then sudoers is down to the helper, the updater and Docker for PR N.
 4. **Share "reset permissions"**: it turned out the button only empties the share's user lists;
    the `chmod -R a+rwx` was dead code. Troy chose (2026-10-04) to delete it and add no
    reset-permissions operation for now.
+5. **SSH password login fix** (2026-10-04): the helper turns it off only while an account that
+   can log in has an SSH key; Fix all still includes it.

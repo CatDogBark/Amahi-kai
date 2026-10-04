@@ -38,6 +38,20 @@ describe "Apps Controller", type: :request, integration: true do
         get "/apps/install_docker_stream", headers: same_origin
         expect(response.headers['Content-Type']).to include('text/event-stream')
       end
+
+      it "installs Docker through DockerService in production, streaming its progress" do
+        allow(Rails.env).to receive(:production?).and_return(true)
+        allow(DockerService).to receive(:install!) { |&block| block.call('Installing Docker Engine...') }
+        get "/apps/install_docker_stream", headers: same_origin
+        expect(response.body).to include('Installing Docker Engine...').and include('Docker installed successfully')
+      end
+
+      it "streams the reason when the install fails" do
+        allow(Rails.env).to receive(:production?).and_return(true)
+        allow(DockerService).to receive(:install!).and_raise(DockerService::DockerError, 'curl exited 6')
+        get "/apps/install_docker_stream", headers: same_origin
+        expect(response.body).to include('curl exited 6').and include('Docker installation failed')
+      end
     end
 
     describe "POST /apps/start_docker" do

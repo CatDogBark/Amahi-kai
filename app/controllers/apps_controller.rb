@@ -69,55 +69,13 @@ class AppsController < ApplicationController
         end
         sse.done
       else
-        # Production — real install with streamed output
-        success = true
-        steps = [
-          { label: "Adding Docker's official GPG key...", commands: [
-            { cmd: "curl -fsSL #{DockerService::GPG_URL} | sudo gpg --dearmor -o #{DockerService::KEYRING_PATH} 2>&1", run: !File.exist?(DockerService::KEYRING_PATH) },
-          ]},
-          { label: "Adding Docker apt repository...", commands: [
-            { cmd: "echo 'deb [arch=#{`dpkg --print-architecture`.strip} signed-by=#{DockerService::KEYRING_PATH}] https://download.docker.com/linux/ubuntu #{`lsb_release -cs`.strip} stable' | sudo tee #{DockerService::SOURCES_PATH} 2>&1", run: !File.exist?(DockerService::SOURCES_PATH) },
-          ]},
-          { label: "Updating package lists...", commands: [
-            { cmd: "sudo apt-get update 2>&1", run: true }
-          ]},
-          { label: "Installing Docker Engine...", commands: [
-            { cmd: "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y docker-ce docker-ce-cli containerd.io 2>&1", run: true }
-          ]},
-          { label: "Setting up user permissions...", commands: [
-            { cmd: "sudo usermod -aG docker amahi 2>&1", run: true }
-          ]},
-          { label: "Enabling Docker service...", commands: [
-            { cmd: "sudo systemctl enable docker 2>&1", run: true }
-          ]},
-          { label: "Starting Docker service...", commands: [
-            { cmd: "sudo systemctl start docker 2>&1", run: true }
-          ]},
-        ]
-
-        steps.each do |step|
-          sse.emit(step[:label])
-          step[:commands].each do |c|
-            next unless c[:run]
-            IO.popen(c[:cmd]) do |io|
-              io.each_line do |line|
-                sse.emit("  #{line.chomp}")
-              end
-            end
-            unless $?.success?
-              sse.emit("✗ Command failed: #{c[:cmd]}")
-              success = false
-              break
-            end
-          end
-          break unless success
-        end
-
-        if success
+        begin
+          DockerService.install! { |line| sse.emit(line) }
           sse.emit("")
           sse.emit("✓ Docker installed successfully!")
           sse.done
-        else
+        rescue DockerService::DockerError => e
+          sse.emit("  ✗ #{e.message}")
           sse.emit("")
           sse.emit("✗ Docker installation failed. Check logs above.")
           sse.done("error")
@@ -132,7 +90,7 @@ class AppsController < ApplicationController
       format.json { render json: { status: 'ok', running: true } }
       format.html { redirect_to apps_index_path, notice: "Docker service started." }
     end
-  rescue DockerService::DockerError, Shell::CommandError => e
+  rescue DockerService::DockerError => e
     respond_to do |format|
       format.json { render json: { status: 'error', message: e.message }, status: 500 }
       format.html { redirect_to apps_index_path, alert: "Failed to start Docker: #{e.message}" }
@@ -145,7 +103,7 @@ class AppsController < ApplicationController
       format.json { render json: { status: 'ok', running: false } }
       format.html { redirect_to apps_index_path, notice: "Docker service stopped." }
     end
-  rescue DockerService::DockerError, Shell::CommandError => e
+  rescue DockerService::DockerError => e
     respond_to do |format|
       format.json { render json: { status: 'error', message: e.message }, status: 500 }
       format.html { redirect_to apps_index_path, alert: "Failed to stop Docker: #{e.message}" }

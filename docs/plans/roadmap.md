@@ -20,6 +20,7 @@ so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 | 3. L. Privileged helper, part 1 | `libexec/amahi-helper`: users, Samba config and share folders, validated and logged; web users get no shell; 34 sudo rules gone | #24 |
 | 3. Fix | Sprockets 4.3: production boots with compiled assets again (System Update had stopped at migrations since #21) | #25 |
 | 3. M1. Privileged helper, part 2a | Settings → Servers, reboot/power off, hostname, dnsmasq and DNS aliases, swap through the helper; 24 sudo rules gone | #26 |
+| 3. M2. Privileged helper, part 2b | Data drives (format, mount, fstab, preview) and Greyhole (config, database, one install path, pinned key) through the helper; 26 sudo rules gone | #27 |
 
 ## Next: Phase 3
 
@@ -31,22 +32,23 @@ becomes root-owned (in N); Docker app work moves to Phase 4.
   [`privileged-helper.md`](privileged-helper.md):
   - [x] **M1.** Settings → Servers, reboot and power off, hostname, dnsmasq and DNS aliases,
     swap (#26).
-  - [ ] **M2.** Data drives and fstab (keeping the PR #13 rules exactly), Greyhole config,
-    database and install (one install path instead of three); 26 sudo rules gone. Built;
-    waiting for the NAS check.
-  - [ ] **M3.** Cloudflare Tunnel, Tailscale (its apt repository instead of a downloaded install
-    script run as root), package installs from a fixed list, and the security audit's fixes,
-    together with P below so that code is reworked once.
+  - [x] **M2.** Data drives and fstab (keeping the PR #13 rules exactly), Greyhole config,
+    database and install (one install path instead of three); 26 sudo rules gone (#27).
+  - [ ] **M3.** Package installs from pinned apt repositories and a fixed list, Cloudflare
+    Tunnel, Tailscale (its apt repository instead of a downloaded install script run as root),
+    Docker's install, and the security audit's fixes with P below; 42 sudo rules gone, leaving
+    the helper, the updater and Docker. Built; waiting for the NAS check.
 - [ ] **N. Root-owned install**: sudoers down to the helper, the updater and Docker;
   `/opt/amahi-kai` owned by root; `amahi-update` runs Rails tasks (`bundle`, migrations, asset
   build) as `amahi`. Rewrite `docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`, which is out of
   date, to describe the helper.
 - [ ] **O. Update rollback**: keep the previous release; if migrations, the asset build or the
   health check fail, switch back and restart.
-- [ ] **P. Security audit fixes** (with M3; `lib/security_audit.rb`): read effective SSH settings with
+- [ ] **P. Security audit fixes** (in M3; `lib/security_audit.rb`): read effective SSH settings with
   `sshd -T` (drop-ins in `sshd_config.d` win over `sshd_config`); warn that Docker-published ports
   bypass UFW; make the "tunnel blocked until the audit passes" rule a server-side check, not just
-  a hidden button.
+  a hidden button. Built with M3; the firewall fix also opens DNS and DHCP once dnsmasq is
+  configured, and the SSH password fix needs a key first.
 - [ ] **Q. Replace `sassc`** (LibSass is unmaintained) with `dartsass-rails` or Propshaft and plain
   CSS. A real Content-Security-Policy (today it's report-only) is a stretch goal.
 
@@ -59,9 +61,12 @@ touches the same code.
   complete until it's changed.
 - The per-IP login throttle (`config/initializers/rack_attack.rb`) trusts forwarded addresses from
   private ranges, so it's weaker on the LAN than it looks. The per-username limit holds.
-- Several features stage files at fixed `/tmp` paths before a root copy. Samba (L), dnsmasq
-  (M1) and Greyhole (M2) no longer do: the helper writes the files. The tunnel and the Docker app
-  installer still do (M3, Phase 4).
+- Several features staged files at fixed `/tmp` paths before a root copy. Samba (L), dnsmasq
+  (M1), Greyhole (M2), the tunnel and Tailscale (M3) no longer do: the helper writes the files.
+  The Docker app installer still does (Phase 4).
+- `spec/requests/apps_controller_spec.rb` "handles errors gracefully" fails when that file runs
+  alone (on `main` too) and passes in the full suite: `docker_apps` doesn't rescue the error the
+  spec raises. Fix the spec or the action.
 - `UsersController#create` answers a JSON request with a template that doesn't exist (500). The
   Users page posts the form as HTML, so only API-style callers hit it.
 - Static DHCP hosts (Network → Hosts) are saved and restart dnsmasq, but nothing writes them into

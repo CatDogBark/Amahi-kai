@@ -9,7 +9,7 @@ class SecurityController < ApplicationController
   def index
     @page_title = t('network')
     @checks = SecurityAudit.run_all
-    @has_blockers = SecurityAudit.has_blockers?
+    @has_blockers = @checks.any? { |c| c.status == :fail && c.severity == :blocker }
   end
 
   def audit_stream
@@ -69,7 +69,7 @@ class SecurityController < ApplicationController
   def fix
     check_name = params[:check_name].to_s
     result = SecurityAudit.fix!(check_name)
-    render json: { status: result ? :ok : :error, check: check_name }
+    render json: { status: result ? :ok : :error, check: check_name, error: (SecurityAudit.last_error unless result) }.compact
   end
 
   def fix_stream
@@ -121,11 +121,11 @@ class SecurityController < ApplicationController
           if r[:fixed]
             sse.emit("✓ Fixed: #{r[:name]}")
           else
-            sse.emit("✗ Failed to fix: #{r[:name]}")
+            sse.emit("✗ Failed to fix: #{r[:name]}#{" (#{r[:error]})" if r[:error]}")
           end
         end
         sse.emit("✓ Security fix-all complete!")
-      rescue Shell::CommandError, Errno::ENOENT, Errno::EACCES, IOError => e
+      rescue StandardError => e
         sse.emit("✗ Error: #{e.message}")
       end
       sse.emit("", event: "done")
