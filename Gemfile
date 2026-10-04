@@ -1,7 +1,7 @@
 source 'https://rubygems.org'
 
 gem 'rake'
-gem 'rails', '~> 8.0.0'
+gem 'rails', '~> 8.1.0'
 
 # gem 'dalli' # removed — no memcached
 # gem 'actionpack-action_caching' # removed — unused

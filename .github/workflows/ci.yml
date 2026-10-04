@@ -329,8 +329,6 @@ jobs:
       # Fails on any warning not in config/brakeman.ignore (each entry there has a note).
       - name: Brakeman
         run: brakeman --no-pager -q
-      # Reports only for now: the Rails 8.1 upgrade clears the current advisories,
-      # and makes this blocking.
+      # Fails on any known advisory for a locked gem; update the gem to clear it.
       - name: Gem advisories
         run: bundle-audit check --update
-        continue-on-error: true
