@@ -86,7 +86,8 @@ RSpec.describe DockerApp, type: :model do
     it "raises when docker not available" do
       app.update!(container_name: "amahi-test")
       allow(Shell).to receive(:run).and_return(false)
-      expect { app.start! }.to raise_error(RuntimeError)
+      # ContainerError, so AppsController answers with an error instead of a 500
+      expect { app.start! }.to raise_error(DockerApp::ContainerError)
       expect(app.reload.status).to eq("error")
     end
   end
@@ -94,9 +95,16 @@ RSpec.describe DockerApp, type: :model do
   describe "#restart!" do
     it "updates status to running" do
       app.update!(container_name: "amahi-test")
-      allow(app).to receive(:system).and_return(true)
+      allow(Shell).to receive(:run).and_return(true)
       app.restart!
       expect(app.reload.status).to eq("running")
+    end
+
+    it "records and raises a failed restart instead of claiming it runs" do
+      app.update!(container_name: "amahi-test")
+      allow(Shell).to receive(:run).and_return(false)
+      expect { app.restart! }.to raise_error(DockerApp::ContainerError)
+      expect(app.reload.status).to eq("error")
     end
   end
 

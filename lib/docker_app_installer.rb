@@ -49,7 +49,7 @@ module DockerAppInstaller
       end
       # ContainerError is what the install stream rescues; a RuntimeError left the
       # stream dead and the app stuck in "pulling".
-      raise ContainerService::ContainerError, "Failed to pull image #{image}" unless $?.success?
+      raise DockerApp::ContainerError, "Failed to pull image #{image}" unless $?.success?
       reporter&.call("  ✓ Pull complete")
     end
 
@@ -96,7 +96,7 @@ module DockerAppInstaller
       reporter&.call("Creating container #{container_name}...")
       result, status = Open3.capture2e(*cmd_parts)
       reporter&.call("  #{result.strip}") if result.present?
-      raise ContainerService::ContainerError, "Failed to create container" unless status.success?
+      raise DockerApp::ContainerError, "Failed to create container" unless status.success?
 
       container_name
     end

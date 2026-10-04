@@ -7,7 +7,6 @@ RSpec.describe SambaService do
     create(:setting, name: 'self-address', value: '100')
     create(:setting, name: 'domain', value: 'example.local')
     Setting.find_or_create_by!(name: 'workgroup', kind: Setting::GENERAL) { |s| s.value = 'WORKGROUP' }
-    Setting.find_or_create_by!(name: 'pdc', kind: Setting::SHARES) { |s| s.value = '0' }
     Setting.find_or_create_by!(name: 'debug', kind: Setting::SHARES) { |s| s.value = '0' }
 
     allow(Shell).to receive(:run).and_return(true)

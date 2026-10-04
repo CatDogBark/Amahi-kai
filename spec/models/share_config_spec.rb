@@ -128,7 +128,6 @@ RSpec.describe Share, 'config generation', type: :model do
   describe '.header_workgroup' do
     before do
       Setting.set('workgroup', 'MYGROUP')
-      Setting.set_kind(Setting::SHARES, "pdc", "0")
       Setting.set_kind(Setting::SHARES, "debug", "0")
       Setting.set_kind(Setting::SHARES, "win98", "0")
     end
@@ -202,40 +201,11 @@ RSpec.describe Share, 'config generation', type: :model do
     end
   end
 
-  describe '.header_pdc' do
-    before do
-      Setting.set_kind(Setting::SHARES, "workgroup", "MYGROUP")
-      Setting.set_kind(Setting::SHARES, "debug", "0")
-    end
-
-    it 'includes domain logons' do
-      result = Share.header_pdc("example.local")
-      expect(result).to include("domain logons = yes")
-    end
-
-    it 'includes domain master' do
-      result = Share.header_pdc("example.local")
-      expect(result).to include("domain master = yes")
-    end
-
-    it 'includes admin users' do
-      admin = create(:admin, login: "myadmin")
-      result = Share.header_pdc("example.local")
-      expect(result).to include("myadmin")
-    end
-
-    it 'includes netlogon and profiles sections' do
-      result = Share.header_pdc("example.local")
-      expect(result).to include("[netlogon]")
-      expect(result).to include("[profiles]")
-    end
-  end
-
-  describe '.header_common' do
-    it 'includes print$ and printers sections' do
-      result = Share.header_common
-      expect(result).to include("[print$]")
-      expect(result).to include("[printers]")
+  describe '.header' do
+    it 'turns printer sharing off and adds no printer shares' do
+      header = Share.header("example.local")
+      expect(header).to include("load printers = no", "disable spoolss = yes")
+      expect(header).not_to include("[printers]", "[print$]", "cups")
     end
   end
 
