@@ -365,168 +365,18 @@ if ! sudo -u "$APP_USER" bash -lc "set -a && source $ENV_FILE && set +a && cd $A
 fi
 
 # ---------------------------------------------------------------------------
-# 10. Sudoers allowlist (must be before db:seed — User creation runs system commands)
+# 10. Privileged helper and sudoers rules (before db:seed: creating the admin user
+#     makes its Linux and Samba accounts through the helper)
 # ---------------------------------------------------------------------------
-echo "==> Installing sudoers allowlist..."
-cat > /etc/sudoers.d/amahi-kai <<'SUDOERS'
-# Amahi-kai — least-privilege sudoers allowlist
-# See docs/security/PRIVILEGE-ESCALATION-MITIGATION.md
-
-# User management
-amahi ALL=(root) NOPASSWD: /usr/sbin/useradd
-amahi ALL=(root) NOPASSWD: /usr/sbin/usermod
-amahi ALL=(root) NOPASSWD: /usr/sbin/userdel
-
-# Samba password management
-amahi ALL=(root) NOPASSWD: /usr/bin/pdbedit
-
-# File operations — scoped to share and SSH paths
-amahi ALL=(root) NOPASSWD: /usr/bin/chmod [0-9]* /var/lib/amahi-kai/*
-amahi ALL=(root) NOPASSWD: /usr/bin/chmod -R [a-z]* /var/lib/amahi-kai/*
-amahi ALL=(root) NOPASSWD: /usr/bin/chmod [a-z]* /var/lib/amahi-kai/*
-amahi ALL=(root) NOPASSWD: /usr/bin/chmod u+rwx\,go-rwx /home/*/.ssh
-amahi ALL=(root) NOPASSWD: /usr/bin/chmod u+rw\,go-rwx /home/*/.ssh/authorized_keys
-amahi ALL=(root) NOPASSWD: /usr/bin/chown * /var/lib/amahi-kai/*
-amahi ALL=(root) NOPASSWD: /usr/bin/chown -R * /home/*/.ssh
-
-# Directory creation for shares
-amahi ALL=(root) NOPASSWD: /usr/bin/mkdir -p /var/lib/amahi-kai/*
-
-# Config file staging
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /tmp/amahi-staging/* /etc/samba/*
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /tmp/amahi-staging/* /etc/dnsmasq.d/*
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/lib/amahi-kai/tmp/* /etc/samba/*
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/lib/amahi-kai/tmp/* /etc/dnsmasq.d/*
-
-# Service management — scoped to Amahi-managed services ONLY
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start smbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop smbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart smbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl reload smbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable smbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl disable smbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start nmbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop nmbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart nmbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl reload nmbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable nmbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl disable nmbd.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start dnsmasq.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop dnsmasq.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart dnsmasq.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl reload dnsmasq.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable dnsmasq.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl disable dnsmasq.service
-
-# Hostname management
-amahi ALL=(root) NOPASSWD: /usr/bin/hostnamectl set-hostname *
-
-# Database backups
-amahi ALL=(root) NOPASSWD: /usr/bin/mysqldump
-
-# Greyhole service management
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start greyhole.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop greyhole.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart greyhole.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl reload greyhole.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable greyhole.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl disable greyhole.service
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl status greyhole.service
-
-# Greyhole config management
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/lib/amahi-kai/tmp/* /etc/greyhole.conf
-
-# Greyhole installation (web UI triggered)
-amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get update
-amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get install *
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /tmp/greyhole-debsig.asc /usr/share/keyrings/greyhole-archive-keyring.asc
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /tmp/greyhole.list /etc/apt/sources.list.d/greyhole.list
-amahi ALL=(root) NOPASSWD: /usr/bin/tee /etc/greyhole.conf
-amahi ALL=(root) NOPASSWD: /usr/bin/mysql -u root *
-amahi ALL=(root) NOPASSWD: /usr/bin/dpkg --configure -a
-amahi ALL=(root) NOPASSWD: /usr/sbin/phpenmod *
-
-# Disk management (web UI)
-amahi ALL=(root) NOPASSWD: /sbin/mkfs.ext4 *
-amahi ALL=(root) NOPASSWD: /bin/mount *
-amahi ALL=(root) NOPASSWD: /bin/umount *
-amahi ALL=(root) NOPASSWD: /usr/bin/mkdir -p /mnt/*
-amahi ALL=(root) NOPASSWD: /usr/bin/rmdir /mnt/*
-amahi ALL=(root) NOPASSWD: /usr/bin/mkdir -p /opt/amahi/*
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /tmp/amahi-staging/* /opt/amahi/*
-amahi ALL=(root) NOPASSWD: /usr/bin/rm -rf /opt/amahi/apps/*
-amahi ALL=(root) NOPASSWD: /usr/bin/tee -a /etc/fstab
-amahi ALL=(root) NOPASSWD: /usr/bin/lsblk *
-amahi ALL=(root) NOPASSWD: /sbin/blkid *
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /tmp/fstab.new /etc/fstab
-
-# Docker installation (web UI triggered)
-amahi ALL=(root) NOPASSWD: /usr/bin/gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-amahi ALL=(root) NOPASSWD: /usr/bin/tee /etc/apt/sources.list.d/docker.list
-amahi ALL=(root) NOPASSWD: /usr/sbin/usermod -aG docker amahi
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable docker
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start docker
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop docker
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart docker
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl is-active docker
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl is-active --quiet docker
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl status docker
-
-# Docker container management (app install/uninstall/start/stop)
-amahi ALL=(root) NOPASSWD: /usr/bin/docker
-amahi ALL=(root) NOPASSWD: /usr/sbin/smartctl
-
-# Cloudflare Tunnel
-amahi ALL=(root) NOPASSWD: /usr/bin/cloudflared
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/lib/amahi-kai/tmp/cloudflared.service /etc/systemd/system/cloudflared.service
-amahi ALL=(root) NOPASSWD: /usr/bin/rm -f /etc/systemd/system/cloudflared*
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl daemon-reload
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start cloudflared
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop cloudflared
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart cloudflared
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable cloudflared
-amahi ALL=(root) NOPASSWD: /usr/bin/mkdir -p /etc/amahi-kai
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/lib/amahi-kai/tmp/tunnel.token /etc/amahi-kai/tunnel.token
-amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get install -y cloudflared
-
-# Tailscale VPN
-amahi ALL=(root) NOPASSWD: /usr/bin/bash /tmp/tailscale-install.sh
-amahi ALL=(root) NOPASSWD: /usr/bin/tailscale
-amahi ALL=(root) NOPASSWD: /usr/bin/timeout 15 /usr/bin/tailscale login
-amahi ALL=(root) NOPASSWD: /usr/bin/timeout 10 /usr/bin/tailscale up
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl start tailscaled
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl stop tailscaled
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart tailscaled
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl enable tailscaled
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl disable tailscaled
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl is-active tailscaled
-amahi ALL=(root) NOPASSWD: /usr/bin/tee /etc/apt/sources.list.d/cloudflared.list
-amahi ALL=(root) NOPASSWD: /usr/bin/gpg --dearmor -o /usr/share/keyrings/cloudflare-archive-keyring.gpg
-
-# Self-update
-amahi ALL=(root) NOPASSWD: /opt/amahi-kai/bin/amahi-update
-amahi ALL=(root) NOPASSWD: /opt/amahi-kai/bin/amahi-update --stream
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart amahi-kai
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl status amahi-kai
-
-# Security hardening
-amahi ALL=(root) NOPASSWD: /usr/sbin/ufw *
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart sshd
-amahi ALL=(root) NOPASSWD: /usr/bin/systemctl restart ssh
-amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get install -y fail2ban
-amahi ALL=(root) NOPASSWD: SETENV: /usr/bin/apt-get install -y unattended-upgrades
-amahi ALL=(root) NOPASSWD: /usr/bin/dpkg-reconfigure -plow unattended-upgrades
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/lib/amahi-kai/tmp/sshd_config /etc/ssh/sshd_config
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /var/lib/amahi-kai/tmp/smb.conf /etc/samba/smb.conf
-amahi ALL=(root) NOPASSWD: /usr/bin/fallocate -l * /swapfile
-amahi ALL=(root) NOPASSWD: /usr/bin/dd if=/dev/zero of=/swapfile *
-amahi ALL=(root) NOPASSWD: /usr/bin/chmod 600 /swapfile
-amahi ALL=(root) NOPASSWD: /sbin/mkswap /swapfile
-amahi ALL=(root) NOPASSWD: /sbin/swapon /swapfile
-SUDOERS
-chmod 440 /etc/sudoers.d/amahi-kai
-visudo -cf /etc/sudoers.d/amahi-kai
-echo "    Sudoers validated OK"
+echo "==> Installing the privileged helper and sudoers rules..."
+if ! "$APP_DIR/bin/amahi-install-helper"; then
+  echo ""
+  echo "  ❌ The privileged helper or sudoers rules couldn't be installed."
+  echo "  Try running manually:"
+  echo "    sudo $APP_DIR/bin/amahi-install-helper"
+  echo ""
+  exit 1
+fi
 
 # ---------------------------------------------------------------------------
 # 11. Database migrations

@@ -26,7 +26,7 @@ The installer is idempotent — run it again to update or repair.
 5. Configures MariaDB (database + user)
 6. Runs migrations and seeds the database
 7. Precompiles assets
-8. Installs a least-privilege sudoers allowlist
+8. Installs the root helper (`/usr/local/sbin/amahi-helper`) and the app's sudoers rules
 9. Creates and enables the `amahi-kai` systemd service
 10. Opens port 3000 in UFW (if active)
 11. Starts Samba (smbd/nmbd) for file sharing
@@ -63,7 +63,9 @@ systemctl status dnsmasq      # DNS (if enabled)
 
 ### File Shares
 
-Shares are stored under `/var/lib/amahi-kai/files/` by default. Create and manage them from the Shares tab in the web UI.
+Shares are stored under `/var/lib/amahi-kai/files/` by default, or on a data drive mounted under `/mnt`; folders anywhere else are refused. Create and manage them from the Shares tab in the web UI.
+
+User accounts, Samba's config and share folders are changed by the root helper, which checks every request and logs it to `/var/log/amahi-kai/helper.log`.
 
 ### Cloudflare Tunnel (Optional)
 
@@ -71,12 +73,13 @@ To access your server remotely via a domain, set up a [Cloudflare Tunnel](https:
 
 ## Updating
 
+Use **Settings → System Status → Check for Updates** in the web UI, or over SSH:
+
 ```bash
-cd /opt/amahi-kai
-sudo -u amahi git pull
-sudo -u amahi bash -lc "source /etc/amahi-kai/amahi.env && bundle install && RAILS_ENV=production bin/rails db:migrate && RAILS_ENV=production bin/rails assets:precompile"
-sudo systemctl restart amahi-kai
+sudo /opt/amahi-kai/bin/amahi-update
 ```
+
+It pulls the code, installs gems, runs migrations, installs the root helper and sudoers rules, regenerates the Samba config and restarts the app. (A bare `git pull` and restart skips the helper and sudoers steps.)
 
 Or re-run the installer:
 

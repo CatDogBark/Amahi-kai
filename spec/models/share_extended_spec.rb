@@ -126,12 +126,6 @@ RSpec.describe Share, type: :model do
     end
   end
 
-  describe "#clear_permissions" do
-    it "executes chmod command without error" do
-      share = create(:share)
-      expect { share.clear_permissions }.not_to raise_error
-    end
-  end
 
   describe "#make_guest_writeable" do
     it "executes chmod command" do

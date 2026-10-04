@@ -11,7 +11,6 @@ Rails.application.routes.draw do
       put 'update_role'
       put 'update_password'
       put 'update_name'
-      put 'update_pubkey'
     end
   end
 

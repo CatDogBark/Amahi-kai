@@ -105,19 +105,12 @@ describe "Users Controller", type: :request do
       end
     end
 
+    # Web users get no shell, so the app no longer installs SSH keys for them.
     describe "PUT /users/:id/update_pubkey" do
-      it "updates a user's public key" do
+      it "no longer exists" do
         user = create(:user)
-        valid_key = "ssh-rsa " + "A" * 300
-        put "/users/#{user.id}/update_pubkey", params: { "public_key_#{user.id}" => valid_key }, as: :json
-        expect(user.reload.public_key).to eq(valid_key)
-      end
-
-      it "clears a blank public key" do
-        valid_key = "ssh-rsa " + "A" * 300
-        user = create(:user, public_key: valid_key)
-        put "/users/#{user.id}/update_pubkey", params: { "public_key_#{user.id}" => "" }, as: :json
-        expect(user.reload.public_key).to be_nil
+        put "/users/#{user.id}/update_pubkey", params: { "public_key_#{user.id}" => "ssh-ed25519 AAAA" }, as: :json
+        expect(response).to have_http_status(:not_found)
       end
     end
   end

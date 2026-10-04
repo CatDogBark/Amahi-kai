@@ -9,7 +9,6 @@ describe "Shares Toggle Actions", type: :request do
       allow(Share).to receive(:push_shares)
       allow(SambaService).to receive(:push_config)
       allow(Shell).to receive(:run).and_return(true)
-      allow(Platform).to receive(:reload)
     end
 
     let(:share) { create(:share, visible: true, rdonly: false) }

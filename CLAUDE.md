@@ -6,7 +6,7 @@ over plain HTTP, through a Cloudflare Tunnel, and through Tailscale. Troy owns t
 (`CatDogBark/Amahi-kai`, **public**) and the NAS.
 
 Current work: Phase 3 of a code review fix plan. Read **`docs/plans/roadmap.md`** first, then the
-plan for the PR you're on (next up: **`docs/plans/privileged-helper.md`**, PR L).
+plan for the PR you're on (**`docs/plans/privileged-helper.md`**: PR L is built, M is next).
 
 ## Workflow
 
@@ -40,8 +40,9 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
 - **Ruby is 3.2 on the NAS (Ubuntu's `ruby3.2`, 3.2.3).** Change `Gemfile.lock` only under Ruby
   3.2.x with Bundler 2.4.19, so the resolver can't pick gems the NAS can't run. Update gems
   minimally (`bundle update --conservative --patch <gem>`).
-- In tests `Shell.dummy?` is true, so `Shell.run` commands don't execute. Code that runs commands
-  as argument lists through `Open3` must be stubbed. Request specs log in with `login_as_admin`
+- In tests `Shell.dummy?` is true, so `Shell.run` commands don't execute, and `Privileged.call`
+  records calls in `Privileged.calls` (reset before each example) instead of running the helper.
+  Code that runs commands as argument lists through `Open3` must be stubbed. Request specs log in with `login_as_admin`
   or `login_as(user)` (`spec/support/request_helpers.rb`).
 - Migrations must be safe to rerun (`if_exists`, `column_exists?`): MariaDB can't roll back DDL.
 
@@ -55,8 +56,11 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
   `git pull` (bash would otherwise keep running the old copy). It runs inside `amahi-kai.service`
   when started from the web UI, so `systemctl restart amahi-kai` must stay its last step. If System
   Update breaks, Troy runs `sudo /opt/amahi-kai/bin/amahi-update` over SSH.
-- **Sudoers rules are written only by `bin/amahi-install`.** The updater doesn't touch them, so a
-  change to privileges needs the updater to install it too (PR L does this).
+- **Root access goes through the helper.** User accounts, Samba's files and share folders are
+  changed by `libexec/amahi-helper` (`Privileged.call('users.create', ...)`), which validates and
+  logs every call. Add an operation there, not a sudoers rule. Sudoers rules are in
+  `config/sudoers/amahi-kai`; `bin/amahi-install-helper` installs them and the helper (the
+  installer and the updater both run it) only after `visudo -cf` passes.
 - `Shell.capture` and `Open3` don't set `$?`; use the status they return.
 - Build commands from names as argument lists (`Open3.capture3('systemctl', 'show', unit)`), not
   strings through a shell.

@@ -14,9 +14,6 @@
 # License along with this program; if not, write to the Amahi
 # team at http://www.amahi.org/ under "Contact Us."
 
-require 'strscan'
-require 'shell'
-require 'shellwords'
 require 'etc'
 
 class User < ApplicationRecord
@@ -42,10 +39,9 @@ class User < ApplicationRecord
   :uniqueness => { :case_sensitive => false },
   :user_not_exist_in_system => {:message => 'already exists in system', :on => :create}
 
-  # this is a very coarse check on the public key! sshd(8) explains each key can be up to 8k?
-  validates_length_of :public_key, :in => 300..8192, :allow_nil => true
-
-  validates :name, :presence => true
+  # The name is also the Linux account's full name (GECOS field).
+  validates :name, :presence => true, :length => { :maximum => 64 },
+  :format => { :without => /[[:cntrl:]:]/, :message => "can't contain a colon or control characters" }
 
   validates :password, :length => { :minimum => 8 }, :if => :require_password?
 
@@ -91,17 +87,17 @@ class User < ApplicationRecord
   end
 
   class << self
+    # [full name, uid, login] of the Linux account for +username+, or nil.
+    # Logins are lowercased when users are created, so look up the lowercase name.
     def system_find_name_by_username(username)
       u = ENV['USER']
       if Rails.env.development? && username == u
         return [u, 4444, u]
       end
-      pwd = StringScanner.new(File.open('/etc/passwd').readlines.join)
-      user = Regexp.new("^(#{username}):[^:]*:(\\d+):\\d+:([^:]*):", Regexp::MULTILINE | Regexp::IGNORECASE)
-      pwd.scan_until user or return nil
-      uid = pwd[2].to_i
-      name = pwd[3].gsub(/,*$/,'')
-      [name, uid, pwd[1]]
+      pw = Etc.getpwnam(username.to_s.downcase)
+      [pw.gecos.sub(/,*\z/, ''), pw.uid, pw.name]
+    rescue ArgumentError
+      nil
     end
 
     # Every user except root, by login. (This used to scan /home on each call and try
@@ -118,17 +114,20 @@ class User < ApplicationRecord
       name, uid = system_find_name_by_username(username)
       name == nil
     end
-  end
 
-  def add_to_users_group
-    esc_login = Shellwords.escape(self.login)
-    Shell.run("usermod -g users -a -G users #{esc_login}")
-  end
-
-  def add_or_passwd_change_samba_user
-    esc_login = Shellwords.escape(self.login)
-    Shell.run("usermod #{esc_login}")
-    sync_samba_password
+    # Brings each user's Linux account to the current standard: no login shell and no
+    # extra groups. bin/amahi-update runs this; the helper skips accounts the app
+    # didn't create. Returns how many accounts were checked.
+    def normalize_system_accounts
+      find_each.count do |user|
+        next false unless system_user_exists?(user.login)
+        Privileged.call('users.normalize', login: user.login)
+        true
+      rescue Privileged::Error => e
+        Rails.logger.warn("User #{user.login}: account left as it is: #{e.message}")
+        false
+      end
+    end
   end
 
   def rotate_session_token
@@ -165,23 +164,28 @@ class User < ApplicationRecord
     new_record? || password.present? || password_confirmation.present?
   end
 
-  # Sync password to Samba's pdbedit database.
-  # Linux accounts are created with a locked password (no SSH password login).
-  # Web auth uses bcrypt in Rails DB. Samba uses pdbedit. No DES crypt.
-  # The password goes to pdbedit on stdin (-t reads it twice), never in argv or the log.
+  # Set the Samba password. Web logins use bcrypt in the app's database; the Linux
+  # password stays locked. The helper hands the password to pdbedit on stdin.
   def sync_samba_password
-    return if password.blank?
-    esc_login = Shellwords.escape(self.login)
-    Shell.run_with_input("pdbedit -d0 -t -a -u #{esc_login}", "#{password}\n#{password}\n")
+    return true if password.blank?
+    system_call('users.set_password', login: login, password: password)
   end
 
-  # Create the Linux user. useradd leaves the password locked, so there is no
-  # SSH password login; the account exists for Samba UID mapping and a home directory.
-  # (--disabled-password is an adduser option; useradd rejects it.)
+  # Create the Linux user: primary group users, no login shell, locked password. The
+  # account exists for Samba's user mapping and a home directory.
   def create_system_account
-    esc_login = Shellwords.escape(self.login)
-    esc_name = Shellwords.escape(self.name)
-    Shell.run("useradd -m -g users -c #{esc_name} #{esc_login}")
+    system_call('users.create', login: login, name: name)
+  end
+
+  # Runs a root helper operation. Returns true, or false with the helper's reason
+  # logged and kept in @system_error for the error shown in the UI.
+  def system_call(operation, **args)
+    Privileged.call(operation, **args)
+    true
+  rescue Privileged::Error => e
+    Rails.logger.error("User #{login}: #{operation} failed: #{e.message}")
+    @system_error = e.message
+    false
   end
 
   def before_create_hook
@@ -191,7 +195,7 @@ class User < ApplicationRecord
     return if User.system_user_exists? self.login
     unless create_system_account
       # Without a Linux account the user couldn't use Samba; don't create a half user.
-      errors.add(:base, "Couldn't create the Linux account for #{login}")
+      errors.add(:base, "Couldn't create the Linux account for #{login}: #{@system_error}")
       throw :abort
     end
     # The account exists now, so a Samba failure here is logged rather than undone;
@@ -199,9 +203,8 @@ class User < ApplicationRecord
     Rails.logger.error("Couldn't set the Samba password for #{login}") unless sync_samba_password
   end
 
+  # Web admin and Linux admin are separate: being an admin here adds no Linux groups.
   def before_save_hook
-    update_pubkey if public_key_changed?
-
     # Sync role → admin flag for backwards compatibility
     if has_attribute?(:role) && role_changed?
       self.admin = (role == 'admin')
@@ -210,49 +213,25 @@ class User < ApplicationRecord
       self.role = admin? ? 'admin' : 'user'
     end
 
-    if admin_changed?
-      make_admin
-      Share.push_shares
-    end
-
     # Users created while account creation was broken have no Linux account.
     # Setting their password creates it, so the Samba sync below can add them.
     create_system_account if persisted? && password.present? && !User.system_user_exists?(login)
 
     return unless User.system_user_exists? self.login
-    esc_login = Shellwords.escape(self.login)
-    esc_name = Shellwords.escape(self.name)
-    Shell.run("usermod -c #{esc_name} #{esc_login}")
+    # The Linux full name is cosmetic, so a failure is only logged.
+    system_call('users.set_name', login: login, name: name) if persisted? && will_save_change_to_name?
     # Keep web and Samba passwords in step: if Samba refuses the new one, keep the old.
     if password.present? && !sync_samba_password
-      errors.add(:base, "Couldn't update the Samba password for #{login}")
+      errors.add(:base, "Couldn't update the Samba password for #{login}: #{@system_error}")
       throw :abort
     end
   end
 
-  # Run each step on its own: a user can have a Linux account but no Samba entry,
-  # and a failed pdbedit used to stop the Linux account from being removed.
+  # The helper removes the Samba user, then the Linux account and its home directory,
+  # but only an account the app created (primary group users): one that existed
+  # before, such as the install user, is left alone. A refusal is logged, and the web
+  # user is still deleted.
   def before_destroy_hook
-    esc_login = Shellwords.escape(self.login)
-    Shell.run("pdbedit -d0 -x -u #{esc_login}")
-    Shell.run("userdel -r #{esc_login}") if app_created_system_account?
-  end
-
-  # Only remove Linux accounts this app made: create_system_account gives them the
-  # `users` group as their primary group. An account that existed before, such as
-  # the install user, is left alone along with its home directory.
-  def app_created_system_account?
-    pw = Etc.getpwnam(login)
-    pw.uid >= 1000 && pw.gid == Etc.getgrnam(Platform::DEFAULT_GROUP).gid
-  rescue ArgumentError
-    false
-  end
-
-  def update_pubkey
-    Platform.update_user_pubkey(login, public_key)
-  end
-
-  def make_admin
-    Platform.make_admin(login, admin?)
+    system_call('users.delete', login: login)
   end
 end

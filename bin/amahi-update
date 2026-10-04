@@ -93,6 +93,13 @@ sudo -u "$APP_USER" bash -lc "cd $APP_DIR && bundle config set --local path 'ven
 log "Running database migrations..."
 RAILS_ENV=production bin/rails db:migrate 2>&1
 
+# 3a. Install the root helper and the sudoers rules. Samba, user account and share folder
+#     changes go through the helper (3b and 3c use it), and the updater is the only thing
+#     that installs sudoers changes on an existing NAS. The sudoers file is replaced only
+#     if visudo accepts the new one.
+log "Installing the privileged helper and sudoers rules..."
+"$APP_DIR/bin/amahi-install-helper" 2>&1 || log "⚠ Privileged helper not fully installed; user, Samba and share changes may fail"
+
 # 3b. Regenerate smb.conf from the app's settings so changes to the generated config
 #     (network binding, Greyhole settings) take effect on update, then restart Samba:
 #     a new binding only applies after a restart. An invalid config is never installed.
@@ -103,10 +110,16 @@ else
   log "⚠ Samba config not regenerated; keeping the current one"
 fi
 
-# 3c. The app writes uploads into share folders that Samba users own (group users)
+# 3c. Web users' Linux accounts get no login shell and no extra groups (older versions
+#     gave them /bin/sh, and admins the sudo group). Accounts the app didn't create are
+#     left alone.
+log "Checking user accounts..."
+RAILS_ENV=production bin/rails runner 'User.normalize_system_accounts' 2>&1 || log "⚠ User accounts not checked"
+
+# 3d. The app writes uploads into share folders that Samba users own (group users)
 id -nG "$APP_USER" | grep -qw users || usermod -aG users "$APP_USER"
 
-# 3d. Keep secrets root-only. cloudflared reads the tunnel token from TOKEN_FILE
+# 3e. Keep secrets root-only. cloudflared reads the tunnel token from TOKEN_FILE
 #     (--token-file); older installs had it in the world-readable unit file and on
 #     cloudflared's command line. Switch only when the file holds the same token the
 #     unit uses, so a tunnel set up by hand is left alone. Nothing is printed.

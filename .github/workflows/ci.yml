@@ -332,3 +332,9 @@ jobs:
       # Fails on any known advisory for a locked gem; update the gem to clear it.
       - name: Gem advisories
         run: bundle-audit check --update
+      # The root helper must load with the standard library alone (no gems, no Bundler).
+      - name: Privileged helper self-test
+        run: ruby --disable-gems libexec/amahi-helper --self-test
+      # A sudoers file visudo rejects would be kept off the NAS; catch it here first.
+      - name: Sudoers syntax
+        run: sudo visudo -cf config/sudoers/amahi-kai

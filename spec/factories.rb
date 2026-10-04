@@ -5,7 +5,7 @@ FactoryBot.define do
     sequence(:name) { |n| "Name #{n}" }
     password { "secretpassword" }
 
-    # Stub system hooks to avoid calling system hooks (useradd, etc.
+    # Stub system hooks to avoid calling system hooks (users.create, etc.
     # Using transient + to_create instead of allow() which is not
     # available in FactoryBot 6.x callbacks
     transient do
@@ -73,7 +73,6 @@ FactoryBot.define do
       def null_fs.cleanup_directory; end
       def null_fs.make_guest_writeable; end
       def null_fs.make_guest_non_writeable; end
-      def null_fs.clear_permissions; end
       share.instance_variable_set(:@file_system, null_fs)
 
       # Stub access manager sync (after_save)

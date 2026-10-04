@@ -1,7 +1,7 @@
 # Privileged helper (Phase 3, PRs L and M)
 
-Status: design agreed in outline on 2026-10-03; **four decisions below are Troy's to confirm before
-PR L starts.**
+Status: **PR L built** (users, Samba config, share folders); Troy's four decisions below are
+confirmed. PR M (the rest of the system jobs) is next.
 
 ## Why
 
@@ -20,7 +20,8 @@ validates every request itself**. It is also the first version of the platform's
 ### 1. One root-owned program outside the app directory
 
 - Source in the repo: `libexec/amahi-helper`. Installed as `/usr/local/sbin/amahi-helper`,
-  `root:root 0755`, by `bin/amahi-install` and `bin/amahi-update` (both run as root).
+  `root:root 0755`, by `bin/amahi-install-helper`, which `bin/amahi-install` and `bin/amahi-update`
+  run as root.
 - Never run it from `/opt/amahi-kai`: that tree is writable by `amahi` until PR N, and an
   `amahi`-writable root program is a root shell. (Until N, `amahi` could still change the source
   before the next update copies it. That is the same exposure the updater has today, and N closes
@@ -30,87 +31,107 @@ validates every request itself**. It is also the first version of the platform's
 ### 2. Plain Ruby, standard library only
 
 - Shebang `#!/usr/bin/ruby --disable-gems`. No Rails, no Bundler, no gems: those live in
-  `amahi`-writable directories and must never load in a root process. Refuse to start if `RUBYOPT`
+  `amahi`-writable directories and must never load in a root process. Refuses to run if `RUBYOPT`
   or `RUBYLIB` is set (sudo's `env_reset` normally strips them).
-- Run commands by absolute path as argument lists (`Open3.capture3(ENV_MIN, '/usr/sbin/useradd',
-  ...)` with a fixed minimal `PATH`), never through a shell.
-- Structure the file as `module AmahiHelper` with the CLI entry under `if $0 == __FILE__`, so
-  RSpec can load it and test validation and command planning directly.
+- Runs commands by absolute path as argument lists with a fixed minimal environment
+  (`PATH=/usr/sbin:/usr/bin:/sbin:/bin`), never through a shell.
+- `module AmahiHelper` with the CLI entry under `if $PROGRAM_NAME == __FILE__`, so RSpec loads it
+  and tests validation and planning directly. Ruby 3.2 has no `File::DIRECTORY`, so folders are
+  opened with `NOFOLLOW` and checked with `fstat`.
 
 ### 3. Interface
 
 ```
-sudo /usr/local/sbin/amahi-helper users.create      # JSON on stdin: {"login":"troy2","name":"Troy"}
-sudo /usr/local/sbin/amahi-helper users.set_password  # {"login":"troy2","password":"..."}
-→ stdout {"ok":true} or {"ok":false,"error":"login 'root' is a system account"}
+sudo -n /usr/local/sbin/amahi-helper users.create        # stdin: {"login":"ann","name":"Ann"}
+sudo -n /usr/local/sbin/amahi-helper users.set_password  # stdin: {"login":"ann","password":"..."}
+→ stdout {"ok":true} or {"ok":false,"error":"login root is reserved"}
 ```
 
 - The operation name is the only argument. All arguments, secrets included, arrive as one JSON
-  object on stdin, so nothing appears in `ps`, the journal or sudo's log.
-- Exit 0 = done; 1 = refused by validation (nothing ran); 2 = a command failed (stderr included in
-  `error`).
+  object on stdin, so nothing appears in `ps`, the journal or sudo's log. Unknown or missing
+  arguments are refused.
+- Exit 0 = done; 1 = refused by validation (nothing changed); 2 = a step failed (the command's
+  stderr is in `error`).
+- `--dry-run OP` validates and prints the planned steps (passwords withheld); `--list` prints the
+  operations; `--self-test` checks the operation table and that no gems are loaded.
 - Rails side: `lib/privileged.rb`, `Privileged.call('users.create', login:, name:)` returns the
-  parsed result or raises `Privileged::Error` with the helper's message, which the UI shows. When
-  `Process.uid == 0` (installer, updater tasks) it runs the helper without `sudo`. In dummy mode
-  (dev/test) it runs nothing, records calls in `Privileged.calls` and returns `{ok: true}`.
+  reply or raises `Privileged::Error` with the helper's message, which the UI shows. As root (the
+  updater's `rails runner`, the installer's seeds) it runs the helper without `sudo`. In dummy mode
+  (dev/test) it runs nothing, records calls in `Privileged.calls` and returns `{"ok"=>true}`.
 
 ### 4. The helper validates everything and trusts nothing from Rails
 
-- Logins: `\A[a-z][a-z0-9]{2,31}\z`; refuse `root` and any uid below 1000. Modify or delete only
-  accounts the app created (primary group `users`), as `User#app_created_system_account?` does.
-- Names (GECOS): printable, no `:` or newline, at most 64 characters.
-- Share paths: `File.realpath` (of the parent when creating) must sit inside an allowed root: the
-  share root `/var/lib/amahi-kai/files`, or a mounted data drive under `/mnt/`. Everything else is
-  refused, including `/`, `/etc` and `/home`.
+- Logins: `\A[a-z][a-z0-9]{2,31}\z`; `root`, `amahi` and `nobody` are reserved. Change or delete
+  only accounts the app created: uid ≥ 1000 and primary group `users`. Anything else is refused.
+- Names (GECOS): no control characters or `:`, at most 64 characters (the `User` model checks the
+  same). Passwords: no line breaks, at most 256 characters.
+- Share paths: absolute and normalized (no `.`, `..`, `//`), strictly inside the share root
+  `/var/lib/amahi-kai/files` or a data drive mounted at `/mnt/<name>` (an unmounted mount point is
+  just a folder on the OS disk, so it's refused). A root must be a real directory at its own path.
+  Folders are changed through an open file descriptor after checking (via `/proc/self/fd`) that it
+  is the folder that was asked for, so a folder swapped for a symlink can't redirect a `chown`.
 - `samba.write_config`: the helper writes the content to a temp file in `/etc/samba`, runs
-  `testparm -s` on it, and renames it into place only if that passes. No copies from `/tmp`.
+  `testparm -s` on it, and renames it into place only if that passes. Samba can run commands as
+  root and change identities from its config, so the raw text and testparm's canonical output are
+  both checked, comparing names the way Samba does (case and spaces ignored). Refused: anything
+  that runs a command (`*exec`, `*command`, `*script`, `*program`, except `dfree command =
+  /usr/bin/greyhole-dfree`), `include`, `config file`, `username map`, `admin users`, `root
+  directory`, `panic action`, `wins hook` and Samba's own path settings; `force user`/`force
+  group`/`guest account` of root; `log file` outside `/var/log/samba`; share paths outside the
+  roots above; VFS modules not on a short list. This applies to share "extra parameters" too.
 - Unit names (PR M) come from the same list as `lib/system_services.rb`.
 
 ### 5. Audit log
 
-Every call appends one JSON line to `/var/log/amahi-kai/helper.log` (`root:amahi 0640`, so the UI
-can show it later): time, operation, arguments with `password`/`secret`/`token`/`key` fields
-replaced by `[FILTERED]`, the calling user (`SUDO_USER`), result and duration. Add a logrotate
-entry.
+Every call appends one JSON line to `/var/log/amahi-kai/helper.log` (`root:amahi 0640` in a
+`root:amahi 0750` folder, so the UI can show it later): time, operation, arguments with
+`password`/`secret`/`token`/`key` fields replaced by `[FILTERED]` and file contents replaced by
+their size and SHA-256, the calling user (`SUDO_USER`), result and error, and duration. Rotated
+weekly by `/etc/logrotate.d/amahi-kai` (`config/logrotate-amahi-kai.conf`).
 
 ### 6. Sudoers as a file in the repo
 
-Move the heredoc in `bin/amahi-install` into `config/sudoers/amahi-kai`. Both scripts install it
-after `visudo -cf` passes, and keep the old file if it doesn't. Each PR deletes the rules it made
-unnecessary, but only after a grep shows no remaining caller. Delete the stale
-`config/sudoers.d/amahi-kai` (an old `www-data` file nothing installs).
+`config/sudoers/amahi-kai`. `bin/amahi-install-helper` copies it next to the live file under a name
+with a dot (sudo skips those), runs `visudo -cf` on it, and only then moves it into place, so a
+broken file can't disable sudo; on failure the old file stays and the script exits non-zero. Each PR
+deletes the rules it made unnecessary, but only after a grep shows no remaining caller.
 
 ### 7. Tests
 
-- Unit specs load the helper and test, for each operation, the validation (good and bad input) and
-  the planned commands (dry-run mode returns the argument lists instead of running them).
-- Contract spec: every `Privileged.call('<op>'` in `app/` and `lib/` names an operation in
-  `AmahiHelper::OPERATIONS`.
-- CI: `ruby --disable-gems libexec/amahi-helper --self-test` (proves it loads without gems), and
-  `visudo -cf config/sudoers/amahi-kai`.
+- `spec/lib/amahi_helper_spec.rb` loads the helper and tests, for each operation, validation (good
+  and bad input) and the planned steps; file actions run on temporary folders; the CLI runs as its
+  own process with `--disable-gems`; the generated `smb.conf` must pass the Samba checks; where
+  Samba is installed, the real `testparm` is used.
+- `spec/lib/privileged_spec.rb`: how Rails runs the helper, and a contract check that every
+  `Privileged.call('<op>'` in `app/` and `lib/` names an operation and every operation is called.
+- CI (lint job): `ruby --disable-gems libexec/amahi-helper --self-test` and
+  `sudo visudo -cf config/sudoers/amahi-kai`.
 
-## PR L scope: users, Samba, share folders
+## PR L: users, Samba, share folders (built)
 
 | Operation | Replaces | Runs |
 | --- | --- | --- |
-| `users.create` {login, name} | `User#create_system_account` | `useradd -m -g users -s <shell> -c <name> <login>` |
+| `users.create` {login, name} | `User#create_system_account` | `useradd -m -g users -s /usr/sbin/nologin -c <name> <login>` |
 | `users.set_password` {login, password} | `User#sync_samba_password` | `pdbedit -d0 -t -a -u <login>`, password twice on stdin |
-| `users.set_name` {login, name} | `usermod -c` in `User#before_save_hook` | `usermod -c <name> <login>` |
-| `users.delete` {login} | `User#before_destroy_hook` | `pdbedit -x`; `userdel -r` only for app-created accounts |
-| `users.set_ssh_key` {login, key} | `Platform.update_user_pubkey` | only if decision 2 keeps it: writes `~/.ssh/authorized_keys` 0600, dir 0700, owned by the user; one line, a known key type, at most 8 KB |
-| `samba.write_config` {content} | `SambaService.write_smb_conf` | validate with `testparm`, atomic rename |
-| `samba.write_lmhosts` {content} | `SambaService.write_lmhosts` | atomic write |
-| `samba.reload` | `Platform.reload(:smb)` | `systemctl reload smbd.service` |
-| `shares.create_dir` {path} | `ShareFileSystem` mkdir/chown/chmod | `mkdir -p`, `chown amahi:users`, `chmod 2775` |
-| `shares.remove_dir` {path} | `ShareFileSystem` rmdir | `rmdir` (only if empty) |
-| `shares.set_guest_write` {path, writable} | `chmod o+w` / `o-w` | top directory only |
-| `shares.reset_permissions` {path} | `chmod -R a+rwx` | per decision 4 |
+| `users.set_name` {login, name} | `usermod -c` in `User#before_save_hook` | `usermod -c <name> <login>`, only when the name changes |
+| `users.normalize` {login} | (new) | `usermod -s /usr/sbin/nologin -G '' <login>` if the shell or extra groups differ |
+| `users.delete` {login} | `User#before_destroy_hook` | `pdbedit -x` (failure ignored); `userdel -r` for app-created accounts |
+| `samba.write_config` {content} | `SambaService.write_smb_conf` | checks above, `testparm -s`, atomic rename |
+| `samba.write_lmhosts` {content} | `SambaService.write_lmhosts` | address-and-name lines only, atomic rename |
+| `samba.reload` | `Platform.reload(:smb/:nmb)` | `systemctl try-reload-or-restart smbd.service nmbd.service` |
+| `shares.create_dir` {path} | `ShareFileSystem` mkdir/chown/chmod | create, then `amahi:users`, `2775` |
+| `shares.remove_dir` {path} | `ShareFileSystem` rmdir | remove only if empty |
+| `shares.set_guest_write` {path, writable} | `chmod o+w` / `o-w` | top folder only |
 
-`Platform.make_admin` (adds web admins to the Linux `sudo` group) goes or stays per decision 1.
+`bin/amahi-update` runs `User.normalize_system_accounts` (→ `users.normalize`) on every update, so
+existing accounts lose `/bin/sh` and the `sudo` group.
 
-Then remove the sudoers rules these replaced: `useradd`, `usermod`, `userdel`, `pdbedit`, the
-`chmod`/`chown`/`mkdir` rules on `/var/lib/amahi-kai/*` and `/home/*/.ssh`, and the `cp … /etc/samba/*`
-rules. Keep the `systemctl … smbd/nmbd` rules until M (Settings → Servers uses them).
+Removed sudoers rules: `useradd`, `usermod` (except `usermod -aG docker amahi`), `userdel`,
+`pdbedit`, the `chmod`/`chown`/`mkdir` rules on `/var/lib/amahi-kai/*` and `/home/*/.ssh`, and the
+`cp … /etc/samba/*` rules. The `systemctl … smbd/nmbd` rules stay until M (Settings → Servers uses
+them). Also removed: `Platform.make_admin`, `Platform.update_user_pubkey`, the per-user SSH key
+setting (it never worked on the NAS: sudo refused its `mkdir` and `mv`, so no keys were installed),
+and `ShareFileSystem#clear_permissions` (`chmod -R a+rwx`, which nothing called).
 
 ### Check on the NAS after the System Update (Troy)
 
@@ -119,6 +140,7 @@ rules. Keep the `systemctl … smbd/nmbd` rules until M (Settings → Servers us
 2. Shares: create a share (its folder is `amahi:users`, mode `2775`), toggle guest write, delete it.
 3. `sudo tail /var/log/amahi-kai/helper.log` shows each call and no passwords.
 4. `sudo -l -U amahi` lists the helper, and the removed rules are gone.
+5. The existing `smb://192.168.1.111/admin` still works.
 
 ## PR M scope (outline)
 
@@ -127,20 +149,17 @@ plus fstab entries (keep the PR #13 safety rules: `nofail`, the OS-disk guard, n
 deletion), `network.set_hostname`, `dnsmasq.write_config|restart`, `tunnel.*` (token file, unit),
 `tailscale.*`, `greyhole.*` (config, service, install), `packages.install` (a fixed list of
 package names), `system.reboot|poweroff`. Then sudoers is down to the helper, the updater and
-Docker for PR N.
+Docker for PR N. Greyhole's `reinject_samba_globals!` edits `smb.conf` with `sed` as `amahi`, which
+can't work; drop it in M (`Share.samba_conf` already writes those settings).
 
-## Decisions for Troy
+## Decisions (Troy, confirmed 2026-10-03)
 
-1. **Web admins are added to the Linux `sudo` group** (`Platform.make_admin`). Their Linux
-   passwords are locked, so it grants nothing today, but it ties web admin to OS admin.
-   Recommendation: drop it.
-2. **Shell access for web users.** Accounts get `/bin/sh`, and the per-user SSH key setting writes
-   `authorized_keys`, so a user with a key can SSH in. Recommendation: `/usr/sbin/nologin` for app
-   users and remove the SSH key setting (Troy uses his own `troy` account for SSH). Alternative:
-   keep the setting for admins only.
-3. **Language.** Recommendation: Ruby standard library only (same language and test suite as the
-   app; Ubuntu's `ruby3.2` is already installed). Alternative: Rust, shared with bitShare later, at
-   the cost of a build step on the NAS.
-4. **"Reset permissions" on a share** runs `chmod -R a+rwx`, making every file world-writable.
-   Recommendation: restore the normal share permissions (`amahi:users`, group-writable dirs
-   `2775`, files `664`).
+1. **Web admins in the Linux `sudo` group**: dropped. Web admin and OS admin are separate; making
+   someone an admin no longer touches Linux groups or rewrites `smb.conf`.
+2. **Shell access for web users**: app-created accounts get `/usr/sbin/nologin`, and the SSH key
+   setting is gone (Troy uses his own `troy` account for SSH). The `public_key` column stays until
+   a later cleanup.
+3. **Language**: Ruby, standard library only.
+4. **Share "reset permissions"**: it turned out the button only empties the share's user lists;
+   the `chmod -R a+rwx` was dead code. Troy chose (2026-10-04) to delete it and add no
+   reset-permissions operation for now.

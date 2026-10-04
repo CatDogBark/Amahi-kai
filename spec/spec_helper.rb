@@ -84,6 +84,8 @@ RSpec.configure do |config|
     DatabaseCleaner.start
     # load the seed to get the minimum env going
     load "#{Rails.root}/db/seeds.rb"
+    # Root helper calls recorded in dummy mode (the seeds make some); start each example empty.
+    Privileged.reset!
   end
 
   config.after(:each) do

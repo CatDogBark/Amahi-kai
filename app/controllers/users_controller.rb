@@ -7,7 +7,7 @@
 
 class UsersController < ApplicationController
   before_action :admin_required
-  before_action :set_user, only: %i[update update_pubkey destroy toggle_admin update_role update_password update_name]
+  before_action :set_user, only: %i[update destroy toggle_admin update_role update_password update_name]
 
   helper_method :can_i_toggle_admin?
 
@@ -48,14 +48,6 @@ class UsersController < ApplicationController
     else
       render json: { status: :not_acceptable, message: t('dont_have_permissions'), name: @user.name, id: @user.id }
     end
-  end
-
-  def update_pubkey
-    key = params["public_key_#{@user.id}"]
-    key = nil if key.blank?
-    @user.public_key = key
-    @user.save
-    render json: { status: @user.errors.empty? ? :ok : { messages: @user.errors.full_messages } }
   end
 
   def destroy
