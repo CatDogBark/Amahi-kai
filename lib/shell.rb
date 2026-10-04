@@ -4,9 +4,12 @@
 # Handles sudo escalation, logging, and error reporting.
 #
 # Usage:
-#   Shell.run("mkdir -p /var/lib/amahi-kai/files/movies")
-#   Shell.run("chown user:users /path", "chmod g+w /path")
+#   Shell.run("systemctl reload dnsmasq.service")
+#   Shell.run("mkdir -p /mnt/storage-1", "mount /dev/sdb1 /mnt/storage-1")
 #   Shell.run!("systemctl restart smbd")  # raises on failure
+#
+# User accounts, Samba config and share folders don't use Shell: they go through
+# the root helper (Privileged.call).
 #
 #   # Blocking execution (waits for completion, used by package installs)
 #   Shell.run!("apt-get -y install ntfs-3g", blocking: true)
@@ -17,11 +20,10 @@ require 'shellwords'
 module Shell
   # Privileged commands that need sudo when not running as root
   SUDO_COMMANDS = %w[
-    useradd usermod userdel
+    usermod
     systemctl hostnamectl
     chmod chown
     mkdir rmdir cp mv rm
-    pdbedit
     sh bash
     apt-get dpkg rpm yum pacman
     docker

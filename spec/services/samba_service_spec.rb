@@ -8,77 +8,47 @@ RSpec.describe SambaService do
     create(:setting, name: 'domain', value: 'example.local')
     Setting.find_or_create_by!(name: 'workgroup', kind: Setting::GENERAL) { |s| s.value = 'WORKGROUP' }
     Setting.find_or_create_by!(name: 'debug', kind: Setting::SHARES) { |s| s.value = '0' }
-
-    allow(Shell).to receive(:run).and_return(true)
-    allow(Platform).to receive(:reload)
-    allow(TempCache).to receive(:unique_filename).and_return('/tmp/test_samba_conf')
-    allow(File).to receive(:open).and_call_original
-    allow(File).to receive(:open).with('/tmp/test_samba_conf', 'w').and_yield(StringIO.new)
     allow(Share).to receive(:push_shares)
-    # testparm only exists where Samba is installed (not on CI's runner); the
-    # validation example below exercises it explicitly.
-    allow(described_class).to receive(:config_valid?).and_return(true)
+  end
+
+  def refuse(operation)
+    allow(Privileged).to receive(:call).and_call_original
+    allow(Privileged).to receive(:call).with(operation, any_args)
+      .and_raise(Privileged::Error.new(operation, 'testparm rejected smb.conf', refused: true))
   end
 
   describe '.push_config' do
-    it 'writes smb.conf and lmhosts then reloads nmb' do
+    it 'installs smb.conf and lmhosts through the helper, then reloads Samba' do
       create(:share, name: 'TestShare')
 
-      described_class.push_config
+      expect(described_class.push_config).to be true
 
-      expect(Shell).to have_received(:run).at_least(:twice)
-      expect(Platform).to have_received(:reload).with(:nmb)
+      expect(Privileged.calls.map(&:first)).to eq(%w[samba.write_config samba.write_lmhosts samba.reload])
+      config = Privileged.calls.first.last[:content]
+      expect(config).to include('[TestShare]')
+      expect(Privileged.calls[1].last[:content]).to include('127.0.0.1 localhost')
     end
 
-    it 'includes debug backups when debug is enabled' do
-      Setting.find_by(name: 'debug', kind: Setting::SHARES).update!(value: '1')
-      create(:share, name: 'DebugShare')
+    it 'returns false and still reloads for lmhosts when smb.conf is refused' do
+      refuse('samba.write_config')
 
-      described_class.push_config
+      expect(described_class.push_config).to be false
 
-      expect(Shell).to have_received(:run).with(
-        /cp \/etc\/samba\/smb.conf/, anything, anything
-      ).at_least(:once)
+      expect(Privileged.calls.map(&:first)).to eq(%w[samba.write_lmhosts samba.reload])
     end
   end
 
   describe '.write_smb_conf' do
-    it 'writes content and copies to /etc/samba/smb.conf' do
-      described_class.write_smb_conf('test content')
-
-      expect(Shell).to have_received(:run).with(
-        /cp.*\/etc\/samba\/smb.conf/,
-        /rm -f/
-      )
-    end
-  end
-
-  describe 'config validation' do
-    it 'keeps the current smb.conf when testparm rejects the new one' do
-      allow(described_class).to receive(:config_valid?).and_call_original
-      allow(File).to receive(:executable?).and_call_original
-      allow(File).to receive(:executable?).with('/usr/bin/testparm').and_return(true)
-      allow(Open3).to receive(:capture3).with('/usr/bin/testparm', '-s', anything)
-        .and_return(['', 'error', double(success?: false)])
-
+    it 'keeps the current smb.conf when the helper refuses the new one' do
+      refuse('samba.write_config')
       expect(described_class.write_smb_conf('broken')).to be false
-      expect(Shell).not_to have_received(:run).with(%r{/etc/samba/smb.conf}, anything)
-    end
-
-    it 'reloads smbd as well as nmbd after writing a new config' do
-      described_class.push_config
-      expect(Platform).to have_received(:reload).with(:smb)
     end
   end
 
-  describe '.write_lmhosts' do
-    it 'writes content and copies to /etc/samba/lmhosts' do
-      described_class.write_lmhosts('test content')
-
-      expect(Shell).to have_received(:run).with(
-        /cp.*\/etc\/samba\/lmhosts/,
-        /rm -f/
-      )
+  describe '.reload' do
+    it 'reports a failed reload instead of raising' do
+      allow(Privileged).to receive(:call).with('samba.reload').and_raise(Privileged::Error.new('samba.reload', 'exit 1'))
+      expect(described_class.reload).to be false
     end
   end
 end

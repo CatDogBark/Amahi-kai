@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# bin/amahi-install-helper: installs the root helper and the app's sudoers rules.
+# bin/amahi-install and bin/amahi-update run it as root; running it again is safe.
+#
+#   /usr/local/sbin/amahi-helper    from libexec/amahi-helper, root:root 0755
+#   /var/log/amahi-kai/helper.log   the helper's audit log, root:amahi 0640
+#   /etc/logrotate.d/amahi-kai      from config/logrotate-amahi-kai.conf
+#   /etc/sudoers.d/amahi-kai        from config/sudoers/amahi-kai, only if visudo accepts it
+#
+# Exits non-zero if something wasn't installed; the sudoers file is then left as it was.
+set -euo pipefail
+
+APP_DIR="${APP_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
+APP_GROUP="${APP_GROUP:-amahi}"
+SUDOERS=/etc/sudoers.d/amahi-kai
+
+if [[ $EUID -ne 0 ]]; then
+  echo "amahi-install-helper: run this as root" >&2
+  exit 1
+fi
+
+install -o root -g root -m 0755 "$APP_DIR/libexec/amahi-helper" /usr/local/sbin/amahi-helper
+/usr/local/sbin/amahi-helper --self-test
+
+install -d -o root -g "$APP_GROUP" -m 0750 /var/log/amahi-kai
+[[ -e /var/log/amahi-kai/helper.log ]] || install -o root -g "$APP_GROUP" -m 0640 /dev/null /var/log/amahi-kai/helper.log
+if [[ -d /etc/logrotate.d ]]; then
+  install -o root -g root -m 0644 "$APP_DIR/config/logrotate-amahi-kai.conf" /etc/logrotate.d/amahi-kai
+fi
+
+# A broken file in /etc/sudoers.d stops sudo working for everyone, so the new rules are
+# checked first and the current file is kept if visudo refuses them. sudo skips files
+# whose names contain a dot, so it never reads the temporary copy, and mv replaces the
+# file in one step.
+tmp=$(mktemp "$SUDOERS.XXXXXX")
+trap 'rm -f "$tmp"' EXIT
+install -o root -g root -m 0440 "$APP_DIR/config/sudoers/amahi-kai" "$tmp"
+if visudo -cf "$tmp" >/dev/null; then
+  mv -f "$tmp" "$SUDOERS"
+else
+  echo "The new sudoers rules failed visudo -c; kept the current $SUDOERS" >&2
+  exit 1
+fi
+echo "Installed the privileged helper and sudoers rules"

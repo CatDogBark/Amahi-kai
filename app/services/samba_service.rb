@@ -3,63 +3,47 @@
 # Extracted from Share model class methods to:
 # - Separate config generation (pure logic, testable) from deployment (side effects)
 # - Make the push_shares flow explicit and mockable
-
-require 'shell'
-require 'temp_cache'
-require 'platform'
-require 'open3'
+#
+# Files in /etc/samba are written by the root helper (samba.* operations), which
+# checks smb.conf with testparm and refuses parameters that would run commands as root.
 
 class SambaService
   # Generate and deploy Samba configuration, then reload services.
   # Returns whether a new smb.conf was installed.
   def self.push_config
     domain = Setting.value_by_name("domain")
-    debug = Setting.shares.value_by_name('debug') == '1'
 
-    written = write_smb_conf(Share.samba_conf(domain), debug: debug)
-    write_lmhosts(Share.samba_lmhosts(domain), debug: debug)
+    written = write_smb_conf(Share.samba_conf(domain))
+    lmhosts = write_lmhosts(Share.samba_lmhosts(domain))
 
     # smbd re-reads smb.conf on reload; it used to pick share changes up only on its own timer.
-    Platform.reload(:smb) if written
-    Platform.reload(:nmb)
+    reload if written || lmhosts
     written
   end
 
-  # Write smb.conf atomically via temp file + copy
-  def self.write_smb_conf(content, debug: false)
-    tmpfile = TempCache.unique_filename("smbconf")
-    File.open(tmpfile, "w") { |f| f.write(content) }
-
-    # Never install a config Samba can't load: that would take every share offline.
-    unless config_valid?(tmpfile)
-      Rails.logger.error("SambaService: generated smb.conf failed testparm; keeping the current one")
-      FileUtils.rm_f(tmpfile)
-      return false
-    end
-
-    cmds = []
-    cmds << "cp /etc/samba/smb.conf \"/tmp/smb.conf.#{Time.now}\"" if debug
-    cmds << "cp #{tmpfile} /etc/samba/smb.conf"
-    cmds << "rm -f #{tmpfile}"
-    Shell.run(*cmds)
+  # Installs smb.conf if Samba can load it; otherwise the current one stays.
+  def self.write_smb_conf(content)
+    Privileged.call('samba.write_config', content: content)
+    true
+  rescue Privileged::Error => e
+    Rails.logger.error("SambaService: smb.conf not installed; keeping the current one: #{e.message}")
+    false
   end
 
-  # testparm loads the file the way smbd would; skipped where Samba isn't installed.
-  def self.config_valid?(path)
-    return true unless File.executable?('/usr/bin/testparm')
-    _out, _err, status = Open3.capture3('/usr/bin/testparm', '-s', path)
-    status.success?
+  def self.write_lmhosts(content)
+    Privileged.call('samba.write_lmhosts', content: content)
+    true
+  rescue Privileged::Error => e
+    Rails.logger.error("SambaService: lmhosts not installed: #{e.message}")
+    false
   end
 
-  # Write lmhosts atomically via temp file + copy
-  def self.write_lmhosts(content, debug: false)
-    tmpfile = TempCache.unique_filename("lmhosts")
-    File.open(tmpfile, "w") { |f| f.write(content) }
-
-    cmds = []
-    cmds << "cp /etc/samba/lmhosts \"/tmp/lmhosts.#{Time.now}\"" if debug
-    cmds << "cp #{tmpfile} /etc/samba/lmhosts"
-    cmds << "rm -f #{tmpfile}"
-    Shell.run(*cmds)
+  # Reloads smbd and nmbd if they're running.
+  def self.reload
+    Privileged.call('samba.reload')
+    true
+  rescue Privileged::Error => e
+    Rails.logger.error("SambaService: Samba reload failed: #{e.message}")
+    false
   end
 end

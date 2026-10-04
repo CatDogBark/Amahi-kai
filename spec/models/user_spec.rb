@@ -71,24 +71,6 @@ describe User do
     end
   end
 
-  describe "public_key validations" do
-    it "should allow nil public_key" do
-      expect(create(:user, public_key: nil)).to be_valid
-    end
-
-    it "should reject public keys shorter than 300 characters" do
-      user = create(:user)
-      user.public_key = "x" * 299
-      expect(user).not_to be_valid
-    end
-
-    it "should reject public keys longer than 8192 characters" do
-      user = create(:user)
-      user.public_key = "x" * 8193
-      expect(user).not_to be_valid
-    end
-  end
-
   describe "scopes" do
     it "should return only admins with .admins scope" do
       regular = create(:user)
@@ -118,25 +100,25 @@ describe User do
     end
   end
 
-  describe "system account commands" do
+  # Linux and Samba accounts are changed by the root helper (spec/lib/amahi_helper_spec.rb
+  # covers what it runs); here, which operations the model asks for.
+  describe "system account operations" do
     let(:user) { User.new(login: "newperson", name: "New Person", password: "longenough1") }
+
+    def helper_error(message)
+      Privileged::Error.new('op', message)
+    end
 
     before do
       allow(User).to receive(:system_user_exists?).and_return(false)
-      allow(Shell).to receive(:run).and_return(true)
-      allow(Shell).to receive(:run_with_input).and_return(true)
     end
 
-    it "creates the Linux account with options useradd accepts" do
+    it "creates the Linux account, then sets the Samba password" do
       user.send(:before_create_hook)
-      expect(Shell).to have_received(:run).with("useradd -m -g users -c New\\ Person newperson")
-    end
-
-    it "sends the Samba password on stdin, not in the command" do
-      user.send(:sync_samba_password)
-      expect(Shell).to have_received(:run_with_input)
-        .with("pdbedit -d0 -t -a -u newperson", "longenough1\nlongenough1\n")
-      expect(Shell).not_to have_received(:run).with(/longenough1/)
+      expect(Privileged.calls).to eq([
+        ['users.create', { login: "newperson", name: "New Person" }],
+        ['users.set_password', { login: "newperson", password: "longenough1" }]
+      ])
     end
 
     it "creates a missing Linux account when an existing user's password is set" do
@@ -144,70 +126,77 @@ describe User do
       allow(User).to receive(:system_user_exists?).and_return(false, true)
       existing.password = existing.password_confirmation = "newpassword1"
       existing.save!
-      expect(Shell).to have_received(:run).with("useradd -m -g users -c Old\\ User olduser")
-      expect(Shell).to have_received(:run_with_input)
-        .with("pdbedit -d0 -t -a -u olduser", "newpassword1\nnewpassword1\n")
+      expect(Privileged.calls.map(&:first)).to eq(['users.create', 'users.set_password'])
     end
 
-    it "refuses to create a user whose Linux account can't be made" do
-      allow(Shell).to receive(:run).with(/\Auseradd/).and_return(false)
+    it "refuses to create a user whose Linux account can't be made, and says why" do
+      allow(Privileged).to receive(:call).with('users.create', anything).and_raise(helper_error("no space left"))
       expect(user.save).to be false
       expect(user).not_to be_persisted
-      expect(user.errors.full_messages.join).to include("Couldn't create the Linux account")
+      expect(user.errors.full_messages.join).to include("Couldn't create the Linux account for newperson: no space left")
     end
 
     it "keeps the old password when Samba refuses the new one" do
       existing = User.find(create(:user, login: "sambafail", name: "Samba Fail").id)
       allow(User).to receive(:system_user_exists?).and_return(true)
-      allow(Shell).to receive(:run_with_input).and_return(false)
+      allow(Privileged).to receive(:call).and_raise(helper_error("pdbedit exited 1"))
       existing.password = existing.password_confirmation = "newpassword1"
       expect(existing.save).to be false
-      expect(existing.errors.full_messages.join).to include("Couldn't update the Samba password")
+      expect(existing.errors.full_messages.join).to include("Couldn't update the Samba password for sambafail: pdbedit exited 1")
       expect(User.find(existing.id).authenticate("secretpassword")).to be_truthy
     end
 
-    it "leaves an existing Linux account alone when the password changes" do
+    it "only sets the password when the password changes" do
       existing = User.find(create(:user, login: "hasaccount", name: "Has Account").id)
       allow(User).to receive(:system_user_exists?).and_return(true)
       existing.password = existing.password_confirmation = "newpassword1"
       existing.save!
-      expect(Shell).not_to have_received(:run).with(/\Auseradd/)
-      expect(Shell).to have_received(:run_with_input)
-        .with("pdbedit -d0 -t -a -u hasaccount", "newpassword1\nnewpassword1\n")
+      expect(Privileged.calls).to eq([['users.set_password', { login: "hasaccount", password: "newpassword1" }]])
+    end
+
+    it "sets the Linux full name only when the name changes" do
+      existing = User.find(create(:user, login: "renamed", name: "Old Name").id)
+      allow(User).to receive(:system_user_exists?).and_return(true)
+      existing.update!(name: "New Name")
+      existing.update!(role: 'admin')
+      expect(Privileged.calls).to eq([['users.set_name', { login: "renamed", name: "New Name" }]])
+    end
+
+    it "still saves a new name when the Linux account refuses it" do
+      existing = User.find(create(:user, login: "notmine", name: "Old Name").id)
+      allow(User).to receive(:system_user_exists?).and_return(true)
+      allow(Privileged).to receive(:call).and_raise(helper_error("notmine is not an account Amahi created"))
+      expect(existing.update(name: "New Name")).to be true
     end
   end
 
   describe "system account cleanup on delete" do
     let(:user) { User.new(login: "leaving", name: "Leaving User") }
-    let(:users_group) { Struct.new(:gid).new(100) }
 
-    before do
-      allow(Etc).to receive(:getpwnam).and_call_original
-      allow(Etc).to receive(:getgrnam).and_call_original
-      allow(Etc).to receive(:getgrnam).with("users").and_return(users_group)
+    it "asks the helper to delete the accounts (it decides what it may remove)" do
+      user.send(:before_destroy_hook)
+      expect(Privileged.calls).to eq([['users.delete', { login: "leaving" }]])
     end
 
-    it "removes an app-created Linux account even when it has no Samba entry" do
-      allow(Etc).to receive(:getpwnam).with("leaving").and_return(Struct.new(:uid, :gid).new(1002, 100))
-      allow(Shell).to receive(:run).with("pdbedit -d0 -x -u leaving").and_return(false)
-      allow(Shell).to receive(:run).with("userdel -r leaving").and_return(true)
-      user.send(:before_destroy_hook)
-      expect(Shell).to have_received(:run).with("userdel -r leaving")
+    it "still deletes the web user when the helper refuses" do
+      existing = User.find(create(:user, login: "leaving").id)
+      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('users.delete', 'not an account Amahi created'))
+      existing.destroy
+      expect(User.exists?(existing.id)).to be false
     end
+  end
 
-    it "leaves a Linux account the app didn't create alone" do
-      allow(Etc).to receive(:getpwnam).with("leaving").and_return(Struct.new(:uid, :gid).new(1000, 1000))
-      allow(Shell).to receive(:run).and_return(true)
-      user.send(:before_destroy_hook)
-      expect(Shell).to have_received(:run).with("pdbedit -d0 -x -u leaving")
-      expect(Shell).not_to have_received(:run).with(/userdel/)
-    end
-
-    it "skips userdel when there is no Linux account" do
-      allow(Etc).to receive(:getpwnam).with("leaving").and_raise(ArgumentError)
-      allow(Shell).to receive(:run).and_return(true)
-      user.send(:before_destroy_hook)
-      expect(Shell).not_to have_received(:run).with(/userdel/)
+  describe ".normalize_system_accounts" do
+    it "normalizes each user that has a Linux account and skips refusals" do
+      create(:user, login: "first")
+      create(:user, login: "second")
+      create(:user, login: "nolinux")
+      allow(User).to receive(:system_user_exists?) { |login| login != "nolinux" }
+      allow(Privileged).to receive(:call).and_call_original
+      allow(Privileged).to receive(:call).with('users.normalize', login: "second")
+        .and_raise(Privileged::Error.new('users.normalize', 'not an account Amahi created'))
+      expect(User.normalize_system_accounts).to eq(User.count - 2)
+      expect(Privileged.calls).to include(['users.normalize', { login: "first" }])
     end
   end
   describe "session token" do

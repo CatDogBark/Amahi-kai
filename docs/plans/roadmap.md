@@ -22,8 +22,9 @@ Decisions already made: Ruby stays on Ubuntu 24.04's patched 3.2; `main` stays t
 shares are tested on real drives, then tagged releases and an updater change; the codebase
 becomes root-owned (in N); Docker app work moves to Phase 4.
 
-- [ ] **L. Privileged helper, part 1**: users, Samba config and share folders. Full design and
-  open decisions in [`privileged-helper.md`](privileged-helper.md).
+- [ ] **L. Privileged helper, part 1**: users, Samba config and share folders. Built; waiting for
+  the NAS check. Design, operations and Troy's decisions in
+  [`privileged-helper.md`](privileged-helper.md).
 - [ ] **M. Privileged helper, part 2**: services, disks and fstab, hostname and dnsmasq,
   Cloudflare tunnel, Tailscale, Greyhole, package installs, reboot and power off.
 - [ ] **N. Root-owned install**: sudoers down to the helper, the updater and Docker;
@@ -50,8 +51,6 @@ touches the same code.
   private ranges, so it's weaker on the LAN than it looks. The per-username limit holds.
 - Several features stage files at fixed `/tmp` paths before a root copy. The helper (L/M) should
   write files itself instead.
-- `User.system_find_name_by_username` parses `/etc/passwd` with a regex built from input; use
-  `Etc.getpwnam`.
 - Re-running the setup wizard's storage step clears the whole pool list
   (`lib/setup_service.rb`, `DiskPoolPartition.destroy_all`).
 - Duplicates: Greyhole install exists three times (`Greyhole.install!`, `DiskService`,

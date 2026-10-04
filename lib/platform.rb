@@ -72,10 +72,6 @@ class Platform
   }
 
   class << self
-    def reload(service)
-      Shell.run("systemctl reload #{service2name service}.service")
-    end
-
     def file_name(service)
       file2name(service)
     end
@@ -123,26 +119,6 @@ class Platform
     # Monit removed — method kept as no-op for any remaining callers
     def watchdog_restart_command
       "true"  # no-op
-    end
-
-    def make_admin(username, is_admin)
-      admin_groups = is_admin ? ",sudo" : ''
-      esc_user = Shellwords.escape(username)
-      Shell.run("usermod -G #{DEFAULT_GROUP}#{admin_groups} #{esc_user}")
-    end
-
-    def update_user_pubkey(username, key)
-      fname = TempCache.unique_filename "key"
-      File.open(fname, "w") { |f| f.write(key) }
-      esc_user = Shellwords.escape(username)
-      home = "/home/#{esc_user}"
-      Shell.run(
-        "mkdir -p #{home}/.ssh/",
-        "mv #{fname} #{home}/.ssh/authorized_keys",
-        "chown -R #{esc_user}:#{DEFAULT_GROUP} #{home}/.ssh",
-        "chmod u+rwx,go-rwx #{home}/.ssh",
-        "chmod u+rw,go-rwx #{home}/.ssh/authorized_keys"
-      )
     end
 
     def set_hostname!(name)

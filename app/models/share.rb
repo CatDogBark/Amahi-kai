@@ -43,8 +43,9 @@ class Share < ApplicationRecord
 
   # --- Callbacks (delegate to services) ---
   before_save :normalize_tags, if: :tags_changed?
-  before_save -> { file_system.update_guest_permissions }
+  # Folder first: guest write access is set on the folder setup_directory creates.
   before_save -> { file_system.setup_directory }
+  before_save -> { file_system.update_guest_permissions }
   before_destroy -> { file_system.cleanup_directory }
   after_create_commit :index_share_files
   after_save -> { access_manager.sync_everyone_access }
@@ -212,10 +213,6 @@ class Share < ApplicationRecord
 
   def update_extras!(params)
     self.update(params)
-  end
-
-  def clear_permissions
-    file_system.clear_permissions
   end
 
   # --- Samba config class methods ---

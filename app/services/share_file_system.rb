@@ -1,13 +1,12 @@
 # Handles filesystem operations for shares:
 # - Directory creation/removal
 # - Ownership and permissions
-# - Guest writeable chmod
+# - Guest write access
 #
 # Extracted from Share model callbacks to keep the model thin
-# and make side effects testable in isolation.
-
-require 'shellwords'
-require 'shell'
+# and make side effects testable in isolation. The changes themselves are made by the
+# root helper (shares.* operations), which only works inside the share root
+# (/var/lib/amahi-kai/files) or a mounted data drive under /mnt.
 
 class ShareFileSystem
   attr_reader :share
@@ -26,24 +25,25 @@ class ShareFileSystem
     # from being created.
     remove_empty_directory(share.path_was) unless share.path_was.blank?
 
-    path = Shellwords.escape(share.path)
-    created = Shell.run("mkdir -p #{path}", "chown amahi:users #{path}", "chmod 2775 #{path}")
-    return if created
-
+    # amahi:users, mode 2775: group-writable, and new files keep the users group.
+    Privileged.call('shares.create_dir', path: share.path)
+  rescue Privileged::Error => e
     # Say so instead of saving a share whose folder doesn't exist.
-    share.errors.add(:path, "#{share.path} couldn't be created")
+    share.errors.add(:path, "#{share.path} couldn't be created: #{e.message}")
     throw :abort
   end
 
+  # Removes +path+ if it's an empty folder; a folder with files in it stays.
   def remove_empty_directory(path)
-    Dir.rmdir(path) if Dir.exist?(path) && Dir.empty?(path)
-  rescue SystemCallError
-    Shell.run("rmdir --ignore-fail-on-non-empty #{Shellwords.escape(path)}")
+    Privileged.call('shares.remove_dir', path: path)
+  rescue Privileged::Error => e
+    Rails.logger.warn("ShareFileSystem: #{path} not removed: #{e.message}")
   end
 
-  # Called before save when guest_writeable changes
+  # Called before save, after setup_directory: when guest_writeable changes, or when a
+  # guest-writeable share gets a new folder (created without guest write access).
   def update_guest_permissions
-    return unless share.guest_writeable_changed?
+    return unless share.guest_writeable_changed? || (share.path_changed? && share.guest_writeable)
 
     if share.guest_writeable
       make_guest_writeable
@@ -54,21 +54,26 @@ class ShareFileSystem
 
   # Called before destroy — remove empty share directory
   def cleanup_directory
-    Shell.run("rmdir --ignore-fail-on-non-empty #{Shellwords.escape(share.path)}")
+    remove_empty_directory(share.path)
   end
 
-  # chmod o+w on the share path
+  # o+w on the share folder
   def make_guest_writeable
-    Shell.run("chmod o+w #{Shellwords.escape(share.path)}")
+    set_guest_write(true)
   end
 
-  # chmod o-w on the share path
+  # o-w on the share folder
   def make_guest_non_writeable
-    Shell.run("chmod o-w #{Shellwords.escape(share.path)}")
+    set_guest_write(false)
   end
 
-  # chmod -R a+rwx on the share path (clear all permissions)
-  def clear_permissions
-    Shell.run("chmod -R a+rwx #{Shellwords.escape(share.path)}")
+  private
+
+  def set_guest_write(writable)
+    Privileged.call('shares.set_guest_write', path: share.path, writable: writable)
+    true
+  rescue Privileged::Error => e
+    Rails.logger.error("ShareFileSystem: guest write for #{share.path} not changed: #{e.message}")
+    false
   end
 end

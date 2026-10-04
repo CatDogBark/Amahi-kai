@@ -55,8 +55,6 @@ div.user[id="whole_user_#{user.id}" data-controller="user"]
                 td
                   label #{t('last_login')}
                 td = formatted_date(user.last_login_at)
-              tr
-                = render partial: 'auth', locals: { user: user }
             tr
               td
                 label Role

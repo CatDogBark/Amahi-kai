@@ -38,14 +38,41 @@ RSpec.describe User, type: :model do
       result = User.system_find_name_by_username("nonexistent_user_#{SecureRandom.hex(8)}")
       expect(result).to be_nil
     end
+
+    it "finds an existing account whatever the case of the login" do
+      name, uid, login = User.system_find_name_by_username("ROOT")
+      expect([uid, login]).to eq([0, "root"])
+      expect(name).to be_a(String)
+    end
+
+    it "doesn't treat the login as a pattern" do
+      expect(User.system_find_name_by_username("r.*")).to be_nil
+    end
   end
 
-  describe "#make_admin" do
-    it "calls Platform.make_admin" do
-      allow(Platform).to receive(:make_admin)
-      user = create(:user, admin: true, role: 'admin')
-      user.send(:make_admin)
-      expect(Platform).to have_received(:make_admin).with(user.login, true)
+  describe "login validation against Linux accounts" do
+    it "refuses a login that already exists on the system" do
+      user = build(:user, login: "Root")
+      expect(user).not_to be_valid
+      expect(user.errors[:login]).to include("already exists in system")
+    end
+  end
+
+  describe "name validation" do
+    it "refuses names the Linux account can't hold" do
+      expect(build(:user, name: "a:b")).not_to be_valid
+      expect(build(:user, name: "two\nlines")).not_to be_valid
+      expect(build(:user, name: "x" * 65)).not_to be_valid
+      expect(build(:user, name: "José Ñandú")).to be_valid
+    end
+  end
+
+  describe "becoming an admin" do
+    it "doesn't change the user's Linux groups" do
+      user = User.find(create(:user).id)
+      allow(User).to receive(:system_user_exists?).and_return(true)
+      user.update!(role: 'admin')
+      expect(Privileged.calls).to be_empty
     end
   end
 

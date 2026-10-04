@@ -1,0 +1,613 @@
+#!/usr/bin/ruby --disable-gems
+# frozen_string_literal: true
+
+# amahi-helper: the program Amahi-kai runs as root for user accounts, Samba and share
+# folders. Other system jobs still use their own sudo rules and move here later.
+#
+#   sudo -n /usr/local/sbin/amahi-helper users.create    (stdin: {"login":"ann","name":"Ann"})
+#   stdout: {"ok":true}  or  {"ok":false,"error":"..."}
+#
+# The operation name is the only argument. Everything else, passwords included, comes
+# as one JSON object on stdin, so it never shows in ps, the journal or sudo's log.
+# Exit status: 0 done, 1 refused (the request was invalid; nothing changed), 2 a step
+# failed.
+#
+# The app is not trusted: every request is checked here. Commands run by absolute path
+# as argument lists (no shell) with a minimal environment, and every call is logged as
+# one JSON line in /var/log/amahi-kai/helper.log with secrets filtered out.
+#
+# Installed as /usr/local/sbin/amahi-helper (root:root 0755) by bin/amahi-install and
+# bin/amahi-update. Standard library only, and no gems (--disable-gems): gems and the
+# app live in directories the app user can write, and must never load in a root process.
+#
+#   amahi-helper --self-test            check the operation table and exit
+#   amahi-helper --list                 print the operation names
+#   amahi-helper --dry-run OP           validate stdin and print the planned steps; changes nothing
+
+require 'json'
+require 'etc'
+require 'open3'
+require 'securerandom'
+require 'digest'
+require 'time'
+
+module AmahiHelper
+  ENV_MIN = { 'PATH' => '/usr/sbin:/usr/bin:/sbin:/bin', 'LANG' => 'C.UTF-8' }.freeze
+  LOG_DIR = '/var/log/amahi-kai'
+  LOG_FILE = "#{LOG_DIR}/helper.log".freeze
+  MAX_INPUT = 2 * 1024 * 1024
+
+  APP_USER = 'amahi'
+  USERS_GROUP = 'users' # primary group of the accounts the app creates
+  NOLOGIN = '/usr/sbin/nologin'
+  UID_MIN = 1000
+
+  SHARE_ROOT = '/var/lib/amahi-kai/files'
+  DRIVES_ROOT = '/mnt' # data drives are mounted at /mnt/<name>
+
+  SMB_CONF = '/etc/samba/smb.conf'
+  LMHOSTS = '/etc/samba/lmhosts'
+  TESTPARM = '/usr/bin/testparm'
+
+  LOGIN = /\A[a-z][a-z0-9]{2,31}\z/
+  RESERVED_LOGINS = %w[root amahi nobody].freeze
+
+  # Refused: the request is invalid and nothing was changed. Failed: a step failed.
+  class Refused < StandardError; end
+  class Failed < StandardError; end
+
+  # Each operation lists its arguments, checks them (validate returns the clean values)
+  # and plans its steps. A step is an argument list: a command starts with its absolute
+  # path; the helper's own file actions start with a symbol. An optional last Hash holds
+  # :stdin and :allow_failure.
+  OPERATIONS = {
+    # A Linux account for a web user: primary group users, no shell, password locked
+    # (Samba has its own password, set with users.set_password).
+    'users.create' => {
+      params: %w[login name],
+      validate: ->(a) { { login: new_login(a['login']), name: gecos(a['name']) } },
+      plan: ->(v) { [['/usr/sbin/useradd', '-m', '-g', USERS_GROUP, '-s', NOLOGIN, '-c', v[:name], v[:login]]] }
+    },
+    # The Samba password. pdbedit adds the Samba user or changes its password; -t reads
+    # the password twice from stdin.
+    'users.set_password' => {
+      params: %w[login password],
+      validate: ->(a) { { login: app_login(a['login']), password: password(a['password']) } },
+      plan: ->(v) { [['/usr/bin/pdbedit', '-d0', '-t', '-a', '-u', v[:login], { stdin: "#{v[:password]}\n" * 2 }]] }
+    },
+    'users.set_name' => {
+      params: %w[login name],
+      validate: ->(a) { { login: app_login(a['login']), name: gecos(a['name']) } },
+      plan: ->(v) { [['/usr/sbin/usermod', '-c', v[:name], v[:login]]] }
+    },
+    # Brings an account the app created to the standard: no login shell and no extra
+    # groups (older versions gave /bin/sh, and admins the sudo group).
+    'users.normalize' => {
+      params: %w[login],
+      validate: ->(a) { { login: app_login(a['login']) } },
+      plan: ->(v) { normal_account?(v[:login]) ? [] : [['/usr/sbin/usermod', '-s', NOLOGIN, '-G', '', v[:login]]] }
+    },
+    # Removes the Samba user (if any), then the Linux account and home directory, but
+    # only an account the app created; one that existed before is left alone.
+    'users.delete' => {
+      params: %w[login],
+      validate: ->(a) { deletable_login(a['login']) },
+      plan: lambda { |v|
+        steps = [['/usr/bin/pdbedit', '-d0', '-x', '-u', v[:login], { allow_failure: true }]]
+        steps << ['/usr/sbin/userdel', '-r', v[:login]] if v[:linux_account]
+        steps
+      }
+    },
+    # Installed only if testparm loads it and it passes the checks in samba_problems.
+    'samba.write_config' => {
+      params: %w[content],
+      validate: ->(a) { { content: smb_conf(a['content']) } },
+      plan: ->(v) { [[:install, SMB_CONF, v[:content], :smb_conf]] }
+    },
+    'samba.write_lmhosts' => {
+      params: %w[content],
+      validate: ->(a) { { content: lmhosts(a['content']) } },
+      plan: ->(v) { [[:install, LMHOSTS, v[:content], nil]] }
+    },
+    # Reloads running Samba services; a stopped one stays stopped.
+    'samba.reload' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [['/usr/bin/systemctl', 'try-reload-or-restart', 'smbd.service', 'nmbd.service']] }
+    },
+    # A share folder: amahi:users, setgid so new files keep the users group, 2775.
+    'shares.create_dir' => {
+      params: %w[path],
+      validate: ->(a) { { path: share_path(a['path']) } },
+      plan: ->(v) { [[:mkdir_p, v[:path]], [:own_dir, v[:path], APP_USER, USERS_GROUP, 0o2775]] }
+    },
+    # Removes a share folder only if it is empty.
+    'shares.remove_dir' => {
+      params: %w[path],
+      validate: ->(a) { { path: share_path(a['path']) } },
+      plan: ->(v) { [[:rmdir, v[:path]]] }
+    },
+    # Guest write access to the share folder itself (o+w / o-w), not the files in it.
+    'shares.set_guest_write' => {
+      params: %w[path writable],
+      validate: ->(a) { { path: share_path(a['path']), writable: boolean(a, 'writable') } },
+      plan: ->(v) { [[:guest_write, v[:path], v[:writable]]] }
+    }
+  }.freeze
+
+  # --- Samba config checks ---------------------------------------------------------
+
+  # Samba can run commands as root and change identities from its config, so a config
+  # that does either is refused. Names are compared the way Samba does: case and
+  # spaces don't count ("Root PreExec" is "rootpreexec").
+  SAMBA_REFUSED = %w[
+    include configfile configbackend usernamemap adminusers root rootdir rootdirectory panicaction
+    magicoutput winshook passdbbackend smbpasswdfile privatedir lockdir lockdirectory statedirectory
+    cachedirectory piddirectory ncalrpcdir binddnsdir usersharepath templatehomedir templateshell
+    utmpdirectory wtmpdirectory
+  ].freeze
+  SAMBA_RUNS_COMMANDS = /(pre|post)exec|\Aexec\z|command|script|program/
+  SAMBA_VFS_MODULES = %w[
+    greyhole recycle fruit streams_xattr catia acl_xattr shadow_copy2 full_audit dirsort worm readonly crossrename
+  ].freeze
+  GREYHOLE_DFREE = '/usr/bin/greyhole-dfree'
+
+  class << self
+    # --- Entry points --------------------------------------------------------------
+
+    def main(argv, input: $stdin, output: $stdout)
+      case argv
+      in ['--self-test'] then self_test(output)
+      in ['--list'] then output.puts(OPERATIONS.keys) || 0
+      in ['--dry-run', String => op] then respond(output) { dry_run(op, read_args(input)) }
+      in [String => op] unless op.start_with?('-') then respond(output) { execute(op, input) }
+      else
+        warn 'usage: amahi-helper OPERATION < args.json | --dry-run OPERATION | --list | --self-test'
+        2
+      end
+    end
+
+    # Reads the arguments (from +input+, or a Hash), validates them and runs the
+    # operation's steps; returns the reply Hash. Logs the call whatever happens.
+    def execute(op, input)
+      started = Time.now
+      result = 'ok'
+      args = input.respond_to?(:read) ? read_args(input) : input
+      check_environment!
+      raise Refused, 'the helper must run as root' unless Process.euid.zero?
+      values = validate(op, args)
+      notes = plan(op, values).filter_map { |step| perform(step) }
+      notes.empty? ? { 'ok' => true } : { 'ok' => true, 'notes' => notes }
+    rescue StandardError => e
+      result = e.is_a?(Refused) ? 'refused' : 'failed'
+      error = e.message
+      raise
+    ensure
+      log(op, args, result, error, started)
+    end
+
+    def dry_run(op, args)
+      { 'ok' => true, 'steps' => plan(op, validate(op, args)).map { |step| describe(step) } }
+    end
+
+    def validate(op, args)
+      spec = OPERATIONS[op] or raise Refused, "unknown operation #{op.inspect}"
+      raise Refused, 'arguments must be a JSON object' unless args.is_a?(Hash)
+      extra = args.keys - spec[:params]
+      raise Refused, "unexpected argument #{extra.first}" if extra.any?
+      spec[:validate].call(args)
+    end
+
+    def plan(op, values)
+      OPERATIONS.fetch(op)[:plan].call(values)
+    end
+
+    def self_test(output)
+      problems = OPERATIONS.flat_map do |name, spec|
+        list = []
+        list << "#{name}: bad name" unless name.match?(/\A[a-z]+\.[a-z_]+\z/)
+        list << "#{name}: params must be a list of names" unless spec[:params].is_a?(Array) && spec[:params].all?(String)
+        list << "#{name}: validate and plan must be lambdas" unless spec[:validate].lambda? && spec[:plan].lambda?
+        list
+      end
+      problems << 'gems are loaded; run with --disable-gems' if defined?(::Gem)
+      if problems.empty?
+        output.puts "ok: #{OPERATIONS.size} operations"
+        0
+      else
+        output.puts problems
+        1
+      end
+    end
+
+    # --- Argument checks -------------------------------------------------------------
+
+    def string(value, what, max:)
+      raise Refused, "#{what} is missing" if value.nil? || value == ''
+      raise Refused, "#{what} must be a string" unless value.is_a?(String)
+      raise Refused, "#{what} is not valid UTF-8" unless value.dup.force_encoding('UTF-8').valid_encoding?
+      raise Refused, "#{what} is too long (at most #{max} characters)" if value.length > max
+      raise Refused, "#{what} contains a NUL byte" if value.include?("\0")
+      value
+    end
+
+    def boolean(args, key)
+      value = args[key]
+      raise Refused, "#{key} must be true or false" unless [true, false].include?(value)
+      value
+    end
+
+    def login(value)
+      value = string(value, 'login', max: 32)
+      raise Refused, "login #{value.inspect} must be 3-32 lowercase letters or digits, starting with a letter" unless value.match?(LOGIN)
+      raise Refused, "login #{value} is reserved" if RESERVED_LOGINS.include?(value)
+      value
+    end
+
+    def new_login(value)
+      value = login(value)
+      raise Refused, "#{value} already exists on this system" if passwd(value)
+      value
+    end
+
+    # An existing account the app created: a normal uid with the users group as its
+    # primary group. Anything else (root, the install user, system accounts) is refused.
+    def app_login(value)
+      value = login(value)
+      pw = passwd(value) or raise Refused, "#{value} has no Linux account"
+      raise Refused, "#{value} is not an account Amahi created" unless app_account?(pw)
+      value
+    end
+
+    # Deleting a web user whose Linux account is gone still removes its Samba user.
+    def deletable_login(value)
+      value = login(value)
+      pw = passwd(value)
+      raise Refused, "#{value} is not an account Amahi created" if pw && !app_account?(pw)
+      { login: value, linux_account: !pw.nil? }
+    end
+
+    def app_account?(pw)
+      pw.uid >= UID_MIN && pw.uid != 65_534 && pw.gid == group_id(USERS_GROUP)
+    end
+
+    def normal_account?(login)
+      passwd(login)&.shell == NOLOGIN && Etc.enum_for(:group).none? { |g| g.mem.include?(login) }
+    end
+
+    # The full name (GECOS) field: printable, no colon, at most 64 characters.
+    def gecos(value)
+      value = string(value, 'name', max: 64)
+      raise Refused, 'name contains a control character or a colon' if value.match?(/[[:cntrl:]:]/)
+      value
+    end
+
+    def password(value)
+      value = string(value, 'password', max: 256)
+      raise Refused, 'password contains a line break' if value.match?(/[\r\n]/)
+      value
+    end
+
+    # A share folder: an absolute, normalized path strictly inside the share root or a
+    # mounted data drive under /mnt. Checked against the real filesystem, so a symlink
+    # can't stand in for a root.
+    def share_path(value)
+      value = string(value, 'path', max: 4096)
+      raise Refused, "path #{value.inspect} must be absolute, without . or .. or //" unless normalized_path?(value)
+      raise Refused, "path #{value} contains a line break" if value.match?(/[\r\n]/)
+      share_root_of(value) or raise Refused, "path #{value} is not inside #{SHARE_ROOT} or a data drive under #{DRIVES_ROOT}"
+      value
+    end
+
+    def normalized_path?(path)
+      path.start_with?('/') && path.length > 1 && !path.end_with?('/') &&
+        path.split('/').drop(1).none? { |part| part.empty? || part == '.' || part == '..' }
+    end
+
+    # The root +path+ sits in (the share root, or a data drive's mount point), or nil.
+    def share_root_of(path)
+      roots = [share_root]
+      drive = path.delete_prefix("#{drives_root}/").split('/').first
+      roots << "#{drives_root}/#{drive}" if path.start_with?("#{drives_root}/") && drive
+      roots.find { |root| path.start_with?("#{root}/") && real_root?(root) }
+    end
+
+    # A root must be a real directory at its own path (no symlink anywhere in it), and a
+    # data drive must be mounted: an unmounted /mnt/<name> is just a folder on the OS disk.
+    def real_root?(root)
+      return false unless File.realpath(root) == root && File.lstat(root).directory?
+      root == share_root || File.stat(root).dev != File.stat(drives_root).dev
+    rescue SystemCallError
+      false
+    end
+
+    def share_root
+      SHARE_ROOT
+    end
+
+    def drives_root
+      DRIVES_ROOT
+    end
+
+    def smb_conf(value)
+      value = string(value, 'content', max: 1024 * 1024)
+      problems = samba_problems(value)
+      raise Refused, "smb.conf refused: #{problems.join('; ')}" if problems.any?
+      value
+    end
+
+    def lmhosts(value)
+      value = string(value, 'content', max: 64 * 1024)
+      value.each_line do |line|
+        line = line.strip
+        next if line.empty?
+        next if line.start_with?('#') && !line.match?(/\A#\s*(include|begin_alternate|end_alternate)/i)
+        raise Refused, "lmhosts line #{line.inspect} is not an address and a name" unless line.match?(/\A[0-9A-Fa-f.:]+\s+[^\s#]+\z/)
+      end
+      value
+    end
+
+    # Problems with a Samba config (raw text, or testparm's canonical output).
+    def samba_problems(text)
+      samba_params(text).filter_map do |section, name, value|
+        key = name.downcase.delete(" \t")
+        if key == 'dfreecommand'
+          "[#{section}] dfree command must be #{GREYHOLE_DFREE}" unless value == GREYHOLE_DFREE
+        elsif SAMBA_REFUSED.include?(key) || key.match?(SAMBA_RUNS_COMMANDS)
+          "[#{section}] #{name} is not allowed"
+        else
+          samba_value_problem(section, key, name, value)
+        end
+      end
+    end
+
+    def samba_value_problem(section, key, name, value)
+      case key
+      when 'path', 'directory'
+        "[#{section}] path #{value} is outside the share folders" unless config_share_path?(value)
+      when 'logfile'
+        "[#{section}] log file must be in /var/log/samba" unless value.start_with?('/var/log/samba/') && !value.include?('..')
+      when 'forceuser', 'guestaccount'
+        "[#{section}] #{name} must be an existing user other than root" unless (pw = passwd(value)) && !pw.uid.zero?
+      when 'forcegroup', 'group'
+        "[#{section}] #{name} must be an existing group other than root" unless (gid = group_id(value.delete_prefix('+'))) && !gid.zero?
+      when 'vfsobjects', 'vfsobject'
+        unknown = value.split(/[\s,]+/) - SAMBA_VFS_MODULES
+        "[#{section}] vfs objects #{unknown.join(', ')} not allowed" if unknown.any?
+      end
+    end
+
+    # Share paths in a config are text, so only their form is checked here; folders
+    # themselves are created with shares.create_dir.
+    def config_share_path?(value)
+      normalized_path?(value) && !value.include?('%') &&
+        (value.start_with?("#{share_root}/") || value.match?(%r{\A#{Regexp.escape(drives_root)}/[^/]+/}))
+    end
+
+    # [section, name, value] for each parameter. Samba joins a line ending in a
+    # backslash with the next one.
+    def samba_params(text)
+      section = 'global'
+      text.gsub(/\\\r?\n/, ' ').each_line.filter_map do |line|
+        line = line.strip
+        next if line.empty? || line.start_with?('#', ';')
+        if (header = line[/\A\[([^\]]*)\]/, 1])
+          section = header.strip.downcase
+          next
+        end
+        name, sep, value = line.partition('=')
+        [section, name.strip, value.strip] unless sep.empty?
+      end
+    end
+
+    # --- Steps ------------------------------------------------------------------------
+
+    # Runs one step; returns a note for the reply, or nil.
+    def perform(step)
+      return run_command(step) unless step.first.is_a?(Symbol)
+      action, *rest = step
+      send(:"do_#{action}", *rest)
+    end
+
+    def run_command(step)
+      argv = step.dup
+      opts = argv.last.is_a?(Hash) ? argv.pop : {}
+      _out, err, status = Open3.capture3(ENV_MIN, [argv[0], argv[0]], *argv.drop(1),
+                                         stdin_data: opts[:stdin].to_s, unsetenv_others: true, chdir: '/')
+      return nil if status.success?
+      message = "#{File.basename(argv[0])} exited #{status.exitstatus}: #{last_lines(err, 3)}"
+      return "ignored: #{message}" if opts[:allow_failure]
+      raise Failed, message
+    rescue SystemCallError => e
+      raise Failed, "#{argv[0]}: #{e.message}"
+    end
+
+    def do_mkdir_p(path)
+      root = share_root_of(path) or raise Failed, "#{path} is no longer inside a share root"
+      current = root
+      path.delete_prefix("#{root}/").split('/').each do |part|
+        current = "#{current}/#{part}"
+        begin
+          Dir.mkdir(current, 0o755)
+        rescue Errno::EEXIST
+          raise Failed, "#{current} is not a folder" unless File.lstat(current).directory?
+        end
+      end
+      nil
+    end
+
+    def do_own_dir(path, user, group, mode)
+      with_dir(path) do |dir|
+        dir.chown(Etc.getpwnam(user).uid, group_id(group))
+        dir.chmod(mode)
+      end
+      nil
+    end
+
+    def do_guest_write(path, writable)
+      with_dir(path) do |dir|
+        mode = dir.stat.mode & 0o7777
+        wanted = writable ? mode | 0o002 : mode & ~0o002
+        dir.chmod(wanted) unless wanted == mode
+      end
+      nil
+    end
+
+    def do_rmdir(path)
+      stat = File.lstat(path)
+      raise Failed, "#{path} is not a folder" unless stat.directory?
+      Dir.rmdir(path)
+      nil
+    rescue Errno::ENOENT
+      "#{path} doesn't exist"
+    rescue Errno::ENOTEMPTY, Errno::EEXIST
+      "#{path} isn't empty; left in place"
+    end
+
+    # Opens the folder at +path+ without following a symlink and checks that what it
+    # opened really is +path+, so a folder swapped for a symlink can't redirect the change.
+    # The change is then made through the open file, to the folder that was checked.
+    def with_dir(path)
+      raise Failed, "#{path} is not a folder" unless File.lstat(path).directory?
+      File.open(path, File::RDONLY | File::NOFOLLOW | File::NONBLOCK) do |dir|
+        raise Failed, "#{path} is not a folder" unless dir.stat.directory?
+        raise Failed, "#{path} moved while it was being changed" unless File.readlink("/proc/self/fd/#{dir.fileno}") == path
+        yield dir
+      end
+    rescue Errno::ENOENT
+      raise Failed, "#{path} doesn't exist"
+    rescue Errno::ELOOP
+      raise Failed, "#{path} is a symbolic link"
+    end
+
+    # Writes +content+ to a new file next to +target+, checks it, then renames it into
+    # place, so readers see the old file or the new one, never half of one.
+    def do_install(target, content, check)
+      tmp = File.join(File.dirname(target), ".#{File.basename(target)}.amahi-#{SecureRandom.hex(6)}")
+      File.open(tmp, File::WRONLY | File::CREAT | File::EXCL | File::NOFOLLOW, 0o644) do |f|
+        f.write(content)
+        f.fsync
+      end
+      check_smb_conf(tmp) if check == :smb_conf
+      File.rename(tmp, target)
+      nil
+    rescue SystemCallError => e
+      raise Failed, "couldn't write #{target}: #{e.message}"
+    ensure
+      File.unlink(tmp) if tmp && File.exist?(tmp)
+    end
+
+    # testparm loads the file the way smbd would, and prints what it understood with
+    # canonical parameter names; that is checked again (the raw text was checked first).
+    def check_smb_conf(path)
+      out, err, status = Open3.capture3(ENV_MIN, [TESTPARM, TESTPARM], '-s', path, unsetenv_others: true, chdir: '/')
+      raise Refused, "testparm rejected smb.conf: #{last_lines(err.gsub(/^Load smb config files.*$/, ''), 2)}" unless status.success?
+      problems = samba_problems(out)
+      raise Refused, "smb.conf refused: #{problems.join('; ')}" if problems.any?
+    rescue Errno::ENOENT
+      raise Failed, "#{TESTPARM} is missing; is Samba installed?"
+    end
+
+    # A step as shown by --dry-run and in errors: secrets and file contents left out.
+    def describe(step)
+      step.map do |part|
+        case part
+        when Hash then part.key?(:stdin) ? { 'stdin' => '[withheld]' }.merge(part.except(:stdin).transform_keys(&:to_s)) : part.transform_keys(&:to_s)
+        when Symbol then part.to_s
+        when Integer then format('%04o', part)
+        when String then part.length > 200 ? "[#{part.bytesize} bytes]" : part
+        else part
+        end
+      end
+    end
+
+    # --- Plumbing -------------------------------------------------------------------
+
+    # sudo clears these; refuse if they reached a root process some other way.
+    def check_environment!
+      bad = %w[RUBYOPT RUBYLIB].select { |name| ENV.key?(name) }
+      raise Refused, "refusing to run with #{bad.join(' and ')} set" if bad.any?
+    end
+
+    def read_args(input)
+      data = input.read(MAX_INPUT + 1).to_s
+      raise Refused, 'arguments are too large' if data.bytesize > MAX_INPUT
+      data.strip.empty? ? {} : JSON.parse(data)
+    rescue JSON::ParserError
+      raise Refused, 'arguments are not valid JSON'
+    end
+
+    def respond(output)
+      output.puts JSON.generate(yield)
+      0
+    rescue Refused => e
+      output.puts JSON.generate('ok' => false, 'error' => e.message)
+      1
+    rescue StandardError => e
+      message = e.is_a?(Failed) ? e.message : "internal error: #{e.class}: #{e.message}"
+      output.puts JSON.generate('ok' => false, 'error' => message)
+      2
+    end
+
+    def last_lines(text, count)
+      text.lines.map(&:strip).reject(&:empty?).last(count).join(' ')
+    end
+
+    def passwd(login)
+      Etc.getpwnam(login)
+    rescue ArgumentError
+      nil
+    end
+
+    def group_id(name)
+      Etc.getgrnam(name).gid
+    rescue ArgumentError
+      nil
+    end
+
+    # One JSON line per call. A log that can't be written doesn't stop the operation.
+    def log(op, args, result, error, started)
+      entry = {
+        'time' => Time.now.utc.iso8601(3), 'op' => op, 'args' => filtered(args),
+        'caller' => ENV['SUDO_USER'] || Etc.getpwuid(Process.uid)&.name,
+        'result' => result, 'error' => error, 'ms' => ((Time.now - started) * 1000).round
+      }.compact
+      write_log(JSON.generate(entry))
+    rescue StandardError => e
+      warn "amahi-helper: couldn't write #{LOG_FILE}: #{e.message}"
+    end
+
+    # The log is root:amahi 0640 in a root:amahi 0750 folder, so the app can show it.
+    def write_log(line)
+      gid = group_id(APP_USER)
+      unless File.directory?(LOG_DIR)
+        Dir.mkdir(LOG_DIR, 0o750)
+        File.chown(0, gid, LOG_DIR) if gid
+      end
+      File.open(LOG_FILE, File::WRONLY | File::APPEND | File::CREAT | File::NOFOLLOW, 0o640) do |f|
+        f.chown(0, gid) if gid && f.stat.gid != gid
+        f.puts(line)
+      end
+    end
+
+    def filtered(args)
+      return '(not a JSON object)' unless args.is_a?(Hash)
+      args.to_h do |key, value|
+        if key.to_s.match?(/pass|secret|token|key/i)
+          [key, '[FILTERED]']
+        elsif key == 'content' && value.is_a?(String)
+          [key, { 'bytes' => value.bytesize, 'sha256' => Digest::SHA256.hexdigest(value) }]
+        elsif value.is_a?(String) && value.length > 256
+          [key, "#{value[0, 256]}..."]
+        else
+          [key, value]
+        end
+      end
+    end
+  end
+end
+
+if $PROGRAM_NAME == __FILE__
+  File.umask(0o022)
+  exit AmahiHelper.main(ARGV)
+end

@@ -15,7 +15,6 @@ RSpec.describe "SharesController", type: :request do
       allow(Share).to receive(:push_shares)
       allow(SambaService).to receive(:push_config)
       allow(Shell).to receive(:run).and_return(true)
-      allow(Platform).to receive(:reload)
     end
 
     describe "POST /shares (create)" do
