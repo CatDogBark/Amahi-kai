@@ -35,4 +35,7 @@
       - @docker_apps.each do |app|
         = render partial: 'docker_app', locals: { app: app }
 
+== render 'shared/install_terminal', id: 'app', title: 'Installing App', stream_url: ''
+== render 'shares_dialog', shares: @shares
+
 = javascript_include_tag 'apps'

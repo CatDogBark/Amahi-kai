@@ -81,6 +81,18 @@ describe DockerApp do
     end
   end
 
+  describe 'shares' do
+    it 'keeps the shares the app was given, and sums them up for the Apps page' do
+      app = build_app
+      app.shares = [{ name: 'Movies', write: false }, { name: 'Downloads', write: true }, { name: 'TV' }]
+      app.save!
+      expect(app.reload.shares).to eq([{ name: 'Movies', write: false }, { name: 'Downloads', write: true }, { name: 'TV', write: false }])
+      expect(app.share_summary).to eq('Movies, TV (read only) · Downloads (read and write)')
+      expect(build_app(volume_mappings: { '/data' => '/x' }.to_json).shares).to eq([])
+      expect(build_app.share_summary).to eq('')
+    end
+  end
+
   describe 'start, stop and restart' do
     let(:app) { build_app(status: 'stopped').tap(&:save!) }
 

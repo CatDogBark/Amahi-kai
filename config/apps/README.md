@@ -15,6 +15,12 @@ web app only names an app (docs/plans/apps.md, P4.1).
 | `folders` | `name` (a folder under `/var/lib/amahi-kai/apps/<id>/`, owned by the app's user) and `path` in the container |
 | `environment` | Plain settings; `{{uid}}`, `{{gid}}` and `{{timezone}}` are filled in at install |
 | `secrets` | `env` and `label`: generated at install, passed as that environment variable, shown to admins |
+| `writes_shares` | `true` if the app may be given shares to write into (default `false`: shares are read only). Shares Greyhole pools are always read only |
+
+Shares chosen at install appear in the app at `/shares/<name>`. Their folders come from smb.conf;
+a pooled share also brings its copy folders on each Greyhole drive (read only, at the same path),
+which its files link to. A share an app writes into gets a default ACL on its folders, so files
+the app makes stay editable over SMB.
 
 To update an app, change its tag and digest together (the digest from the registry, for the tag's
 multi-architecture image) and test it on the NAS.

@@ -39,3 +39,51 @@ document.addEventListener('click', function(event) {
   field.select();
   try { document.execCommand('copy'); done(); } finally { field.remove(); }
 });
+
+// Installing an app: the install window (shared/install_terminal), titled with the app's name.
+function openAppInstall(identifier, url, name) {
+  var title = document.querySelector('#app-install-modal [style*="font-family:monospace"]');
+  if (title) title.textContent = 'Installing ' + (name || identifier) + '...';
+  openInstallTerminal('app', url);
+}
+
+// Choosing an app's shares (_shares_dialog) before it's installed, or installed again with new
+// ones. Shares Greyhole pools, and every share of an app that only reads, stay read only.
+document.addEventListener('click', function(event) {
+  var button = event.target.closest('[data-app-shares]');
+  if (button) openShareDialog(button);
+});
+
+function openShareDialog(button) {
+  var dialog = document.getElementById('app-shares-dialog');
+  var name = button.dataset.appName;
+  var writes = button.dataset.writes === 'true';
+  var current = JSON.parse(button.dataset.current || '[]');
+  var rows = Array.prototype.slice.call(dialog.querySelectorAll('[data-share]'));
+
+  dialog.querySelectorAll('[data-fill="name"]').forEach(function(el) { el.textContent = name; });
+  dialog.querySelector('[data-fill="verb"]').textContent = button.dataset.verb;
+  dialog.querySelector('[data-role="read-only-note"]').hidden = writes;
+  rows.forEach(function(row) {
+    var given = current.filter(function(share) { return share.name === row.dataset.share; })[0];
+    var pooled = row.dataset.pooled === 'true';
+    row.querySelector('[data-role="give"]').checked = !!given;
+    row.querySelector('[data-role="access"]').value = given && given.write ? 'write' : 'read';
+    row.querySelector('[data-role="access"]').hidden = !writes || pooled;
+    row.querySelector('[data-role="pooled-note"]').hidden = !writes || !pooled;
+  });
+
+  dialog.querySelector('[data-role="confirm"]').onclick = function() {
+    var params = [];
+    rows.forEach(function(row) {
+      if (!row.querySelector('[data-role="give"]').checked) return;
+      var share = encodeURIComponent(row.dataset.share);
+      params.push('share[]=' + share);
+      var access = row.querySelector('[data-role="access"]');
+      if (!access.hidden && access.value === 'write') params.push('write[]=' + share);
+    });
+    bootstrap.Modal.getOrCreateInstance(dialog).hide();
+    openAppInstall(button.dataset.appShares, button.dataset.url + (params.length ? '?' + params.join('&') : ''), name);
+  };
+  bootstrap.Modal.getOrCreateInstance(dialog).show();
+}

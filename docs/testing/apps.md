@@ -1,7 +1,7 @@
 # App tests on the NAS
 
-Apps through the root helper (P4.1, #58) and reaching apps (P4.2, #59) were built and checked
-with specs, but no app has been installed on the NAS yet. This is the list to run when there's
+Apps through the root helper (P4.1, #58), reaching apps (P4.2, #59) and shares for apps (P4.4,
+#60) were built and checked with specs, but no app has been installed on the NAS yet. This is the list to run when there's
 time. Tick each box as it passes; if one doesn't, stop there and send Claude what the page shows
 plus the output of the [commands at the end](#if-something-fails).
 
@@ -86,7 +86,27 @@ Each folder belongs to a different number below 1000.
   on your LAN or Tailscale" instead of **Open**, and the dashboard's app tiles go to the Apps page.
 - [ ] `http://192.168.1.111:3000/app/uptimekuma` is a Not Found page (the old proxy is gone).
 
-## 4. Uninstall and data
+## 4. Shares
+
+- [ ] **Jellyfin**: click **Change** next to **No shares** on its row, tick **Movies** (or any share
+  with a video in it), **Save and restart**. The row says **Shares Movies (read only)**. In
+  Jellyfin, add `/shares/Movies` as a library: the video plays.
+- [ ] Jellyfin can't change the share (it's read only):
+
+  ```bash
+  sudo docker exec amahi-jellyfin touch /shares/Movies/test
+  ```
+
+  It answers "Read-only file system".
+- [ ] **Transmission**: make a share called `Downloads` that Greyhole doesn't pool, then
+  **Change** Transmission's shares: tick it with **Read and write**. In Transmission's settings,
+  set the download folder to `/shares/Downloads`, and download something small (a Linux ISO's
+  torrent).
+- [ ] From your PC over SMB, rename and then delete the downloaded file in `Downloads`. Both work.
+- [ ] Once there's a pooled share (storage tests, step 4), give it to Jellyfin: its files play,
+  and **Read and write** isn't offered for it ("Read only: Greyhole pools it").
+
+## 5. Uninstall and data
 
 - [ ] **Uninstall** Uptime Kuma (it says the data stays). Its row goes back to **Install**, with
   "Its data from an earlier install is kept and used again."
@@ -97,12 +117,12 @@ Each folder belongs to a different number below 1000.
   sudo ls /var/lib/amahi-kai/apps
   ```
 
-## 5. Reboot
+## 6. Reboot
 
 - [ ] **Stop** one app, then reboot the VM. The running apps come back running, the stopped one
   stays stopped, and `sudo iptables -S AMAHI-APPS` lists the rules again.
 
-## 6. Optional: a port that's taken
+## 7. Optional: a port that's taken
 
 - [ ] Uninstall Uptime Kuma and delete its data. In a second terminal on the NAS, keep port 3001
   busy:

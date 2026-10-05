@@ -1,7 +1,7 @@
 # Phase 4: apps
 
-Status: planned with Troy, 2026-10-05; P4.1 (#58) and P4.2 (#59) are done, not yet tested on the
-NAS ([`docs/testing/apps.md`](../testing/apps.md)). The overall decisions and P4.1's are made (below); each
+Status: planned with Troy, 2026-10-05; P4.1 (#58), P4.2 (#59) and P4.4 (#60) are done, not yet
+tested on the NAS ([`docs/testing/apps.md`](../testing/apps.md)). The overall decisions and P4.1's are made (below); each
 later PR's decisions are listed under it, to settle when that PR starts.
 
 Apps are how Amahi-kai grows: Jellyfin, Vaultwarden and the like today, bitShare (and later
@@ -167,15 +167,28 @@ app needs a public hostname. HTTPS for apps through Tailscale (Vaultwarden needs
 
 ### P4.4: Storage for apps
 
-- [ ] Shares an app may mount: chosen at install, read-only by default; read-write only for shares
-  that aren't pooled (Greyhole), per the storage plan.
-- [ ] How an app's user may read shares (group membership, ACLs), given shares' per-user
-  permissions.
-- [ ] ZFS datasets: one per app on the pool chosen at install (moved here from storage S4); quotas
-  or not; the app's snapshots are the pool's.
-- [ ] Uninstall: keep the data (default) or delete it, and how leftover data is shown and cleaned
-  up later.
-- [ ] Backups of app data (Proton Drive comes later as its own app).
+**Done** (#60): shares for apps. Decisions (Troy, 2026-10-04):
+
+- [x] **Shares chosen at install**, none by default, and changed later from the app's row (a
+  reinstall with the new shares: the container is recreated, data and ports kept, and the image
+  isn't downloaded again).
+- [x] **Read only by default; read and write only for shares Greyhole doesn't pool**, and only for
+  apps whose manifest says `writes_shares` (Transmission). A pooled share's files are links to
+  their copies on the drives, so the app also gets that share's copy folder on each Greyhole drive,
+  read only, at the same path. A share an app writes into gets a default ACL on its folders, so
+  what the app makes is group-writable (`users`, like files made over SMB) whatever its umask; the
+  app joins the `users` group in its container.
+- [x] **Any share can be given**, and the dialog says that everyone with an account in the app can
+  see it, whatever the share's own user list says (Samba enforces those, not the folders: every
+  share folder is `users` 2775, files 0664).
+- [x] **Shares appear at `/shares/<name>`** in every app. The web app names shares; the helper
+  finds their folders in smb.conf (which only it writes) and checks they're in the share root or
+  on a mounted data drive.
+- [x] **ZFS datasets for apps wait for bitShare (P4.6)**: none of the five apps needs one, and
+  there's no pool yet to test with.
+- [x] **Backups of app data wait** (Proton Drive as its own app, or app data on a pool). Proxmox
+  backups of the NAS VM cover it meanwhile.
+- [x] Uninstall keeps the data unless asked (P4.1).
 
 ### P4.5: App updates
 
@@ -186,6 +199,8 @@ app needs a public hostname. HTTPS for apps through Tailscale (Vaultwarden needs
 
 ### P4.6: bitShare as the first built-in app
 
+- [ ] ZFS datasets for apps (from P4.4): one per app on the pool chosen at install; quotas or not;
+  the app's snapshots are the pool's.
 - [ ] How bitShare signs people in: Amahi-kai's users (so one account works for both), or its own.
 - [ ] How bitShare uses snapshots and datasets (through the helper, as any app would).
 - [ ] Where its image comes from (built from `~/Projects/bitShare` and published, then pinned in the

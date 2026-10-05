@@ -24,8 +24,8 @@ describe "Docker Apps", type: :request do
       get "/apps/docker_apps"
       expect(response).to have_http_status(:ok)
       %w[Jellyfin Vaultwarden Gitea Transmission].each { |name| expect(response.body).to include(name) }
-      expect(CGI.unescapeHTML(response.body))
-        .to include(%(openAppInstall('uptimekuma', '/apps/docker/install_stream/uptimekuma', "Uptime Kuma")))
+      expect(response.body).to include('data-app-shares="uptimekuma"', 'data-url="/apps/docker/install_stream/uptimekuma"')
+      expect(response.body).to include('id="app-shares-dialog"')
     end
 
     it "asks Docker for the apps' states, and links a running app to its own port" do
@@ -85,7 +85,7 @@ describe "Docker Apps", type: :request do
   describe "installing" do
     it "installs through the helper, streaming its progress, and says where to open the app" do
       get "/apps/docker/install_stream/uptimekuma", headers: same_origin.merge('Host' => '192.168.1.111')
-      expect(Privileged.calls).to include(['apps.install', { app: 'uptimekuma' }])
+      expect(Privileged.calls).to include(['apps.install', { app: 'uptimekuma', shares: [] }])
       expect(response.body).to include('✓ Uptime Kuma is installed and running')
       expect(response.body).to include('Open it at http://192.168.1.111:3001/ (on your LAN or Tailscale)')
       expect(DockerApp.find_by(identifier: 'uptimekuma')).to have_attributes(status: 'running', host_port: 3001,
@@ -94,7 +94,7 @@ describe "Docker Apps", type: :request do
 
     it "keeps the ports the helper gave when the catalog's were taken" do
       allow(Privileged).to receive(:call).and_call_original
-      allow(Privileged).to receive(:call).with('apps.install', app: 'gitea').and_return(
+      allow(Privileged).to receive(:call).with('apps.install', app: 'gitea', shares: []).and_return(
         'ok' => true, 'ports' => [{ 'preferred' => 3300, 'host' => 3302, 'container' => 3000, 'protocol' => 'tcp' },
                                   { 'preferred' => 2222, 'host' => 2222, 'container' => 2222, 'protocol' => 'tcp' }]
       )
@@ -110,6 +110,36 @@ describe "Docker Apps", type: :request do
       get "/apps/docker/install_stream/uptimekuma", headers: same_origin
       expect(response.body).to include('✗ docker exited 1: pull access denied')
       expect(DockerApp.find_by(identifier: 'uptimekuma')).to have_attributes(status: 'error', error_message: 'docker exited 1: pull access denied')
+    end
+
+    describe "with shares" do
+      before do
+        create(:share, name: 'Movies', disk_pool_copies: 2)
+        create(:share, name: 'Downloads')
+      end
+
+      it "gives the app the shares chosen, read only unless it writes shares and the share isn't pooled" do
+        get "/apps/docker/install_stream/transmission",
+            params: { share: %w[Movies Downloads Nope], write: %w[Movies Downloads] }, headers: same_origin
+        shares = [{ name: 'Downloads', write: true }, { name: 'Movies', write: false }]
+        expect(Privileged.calls).to include(['apps.install', { app: 'transmission', shares: shares }])
+        expect(DockerApp.find_by(identifier: 'transmission').shares).to eq(shares)
+      end
+
+      it "keeps every share read only for an app that only reads them" do
+        get "/apps/docker/install_stream/jellyfin", params: { share: %w[Downloads], write: %w[Downloads] }, headers: same_origin
+        expect(Privileged.calls).to include(['apps.install', { app: 'jellyfin', shares: [{ name: 'Downloads', write: false }] }])
+      end
+
+      it "lists the shares in the dialog, pooled ones marked, and shows an installed app's shares with Change" do
+        gitea(identifier: 'transmission', name: 'Transmission', status: 'stopped',
+              volume_mappings: [{ name: 'Downloads', write: true }, { name: 'Movies', write: false }].to_json)
+        get "/apps/installed_apps"
+        expect(response.body).to include('data-share="Movies" data-pooled="true"', 'data-share="Downloads" data-pooled="false"')
+        expect(response.body).to include('Shares Movies (read only) · Downloads (read and write)')
+        expect(CGI.unescapeHTML(response.body)).to include(%(data-current="[{"name":"Downloads","write":true},{"name":"Movies","write":false}]"))
+        expect(response.body).to include('data-verb="Save and restart"', 'id="app-install-modal"')
+      end
     end
 
     it "refuses an app that isn't in the catalog" do
