@@ -100,6 +100,7 @@ apt-get install -y --no-install-recommends \
   samba-common-bin \
   samba-vfs-modules \
   ntfs-3g \
+  smartmontools \
   sudo
 
 # VM guest agent (auto-detect)

@@ -9,6 +9,12 @@ require 'privileged'
 # installs ZFS.
 module StoragePools
   PACKAGE = 'zfsutils-linux'.freeze
+  SMART_PACKAGE = 'smartmontools'.freeze
+  ZPOOL = '/usr/sbin/zpool'.freeze
+  SMARTCTL = '/usr/sbin/smartctl'.freeze
+  # Ubuntu's ZFS package scrubs every healthy pool from here, on the second Sunday of each
+  # month at 00:24.
+  SCRUB_CRON = '/etc/cron.d/zfsutils-linux'.freeze
   LSBLK_COLUMNS = 'NAME,PATH,TYPE,SIZE,MODEL,SERIAL,FSTYPE,LABEL,MOUNTPOINTS,ROTA'.freeze
 
   class Error < StandardError; end
@@ -60,13 +66,44 @@ module StoragePools
     # { installed: true/false, pools: [Pool], error: nil or why the pools couldn't be read }.
     def status
       reply = Privileged.call('pools.status')
-      pools = Array(reply['pools']).map do |pool|
-        fields = pool.slice(*(Pool.members.map(&:to_s) - ['vdevs'])).transform_keys(&:to_sym)
-        Pool.new(**fields, vdevs: Array(pool['vdevs']))
-      end
-      { installed: reply['zfs'] == true, pools: pools, error: reply['error'] }
+      { installed: reply['zfs'] == true, pools: Array(reply['pools']).map { |pool| pool(pool) }, error: reply['error'] }
     rescue Privileged::Error => e
       { installed: false, pools: [], error: e.message }
+    end
+
+    # A Pool from one entry of the helper's 'pools' list.
+    def pool(data)
+      fields = data.slice(*(Pool.members.map(&:to_s) - ['vdevs'])).transform_keys(&:to_sym)
+      Pool.new(**fields, vdevs: Array(data['vdevs']))
+    end
+
+    def zfs_installed?
+      File.executable?(ZPOOL)
+    end
+
+    def smart_installed?
+      File.executable?(SMARTCTL)
+    end
+
+    # When Ubuntu's schedule scrubs next (the second Sunday of the month, at 00:24), or nil
+    # if its cron file isn't there.
+    # (Cron runs in the server's own time zone, so this does too.)
+    def next_scrub(now = Time.now)
+      return nil unless File.exist?(SCRUB_CRON)
+      [now.to_date.beginning_of_month, now.to_date.next_month.beginning_of_month].each do |month|
+        sunday = (month + 7..month + 13).find(&:sunday?)
+        at = Time.local(sunday.year, sunday.month, sunday.day, 0, 24)
+        return at if at > now
+      end
+    end
+
+    def scrub!(name)
+      privileged('pools.scrub', name: name.to_s)
+    end
+
+    # Runs the health check now (it also runs every 15 minutes).
+    def check_health!
+      privileged('storage.check_health')
     end
 
     # Every whole disk, with what it's used for (:role) and whether a new pool may take it
@@ -93,16 +130,24 @@ module StoragePools
       end
     end
 
-    # Installs ZFS (apt's output passed to +progress+ line by line), then loads it and caps
-    # its memory cache.
+    # Installs what's missing of ZFS (then loads it and caps its memory cache) and the drive
+    # health tools, passing apt's output to +progress+ line by line, then checks the drives.
     def install!(&progress)
       progress ||= ->(_line) {}
-      progress.call('Installing ZFS (zfsutils-linux)...')
-      privileged('packages.install', packages: [PACKAGE]) { |line| progress.call("  #{line}") }
-      progress.call('Loading ZFS and limiting its memory cache...')
-      reply = privileged('zfs.setup')
-      cache = reply['arc_max'] && ActiveSupport::NumberHelper.number_to_human_size(reply['arc_max'])
-      progress.call(cache ? "  ✓ ZFS's cache is limited to #{cache}" : '  ✓ ZFS is loaded')
+      unless zfs_installed?
+        progress.call('Installing ZFS (zfsutils-linux)...')
+        privileged('packages.install', packages: [PACKAGE]) { |line| progress.call("  #{line}") }
+        progress.call('Loading ZFS and limiting its memory cache...')
+        reply = privileged('zfs.setup')
+        cache = reply['arc_max'] && ActiveSupport::NumberHelper.number_to_human_size(reply['arc_max'])
+        progress.call(cache ? "  ✓ ZFS's cache is limited to #{cache}" : '  ✓ ZFS is loaded')
+      end
+      unless smart_installed?
+        progress.call('Installing the drive health tools (smartmontools)...')
+        privileged('packages.install', packages: [SMART_PACKAGE], recommends: false) { |line| progress.call("  #{line}") }
+      end
+      progress.call('Checking the drives...')
+      check_health!
     end
 
     # Creates a pool. The helper checks the name, the layout and every drive, and wipes them.

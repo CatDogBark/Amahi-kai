@@ -288,6 +288,109 @@ RSpec.describe 'AmahiHelper ZFS pools' do
     end
   end
 
+  describe 'pools.scrub' do
+    it 'scrubs a pool that exists' do
+      expect(steps('pools.scrub', { 'name' => 'old' })).to eq([%w[/usr/sbin/zpool scrub old]])
+      expect(refusal('pools.scrub', { 'name' => 'tank' })).to eq('there\'s no pool named "tank"')
+      expect(refusal('pools.scrub', { 'name' => 'old; reboot' })).to include("there's no pool named")
+      allow(File).to receive(:executable?).with('/usr/sbin/zpool').and_return(false)
+      expect(refusal('pools.scrub', { 'name' => 'old' })).to eq("zpool isn't installed")
+    end
+  end
+
+  describe 'packages.install' do
+    it "leaves out recommended packages when asked (smartmontools' would bring a mail server)" do
+      install = ->(args) { steps('packages.install', args).last }
+      expect(install.call({ 'packages' => ['smartmontools'], 'recommends' => false })).to include('--no-install-recommends')
+      expect(install.call({ 'packages' => ['zfsutils-linux'] })).not_to include('--no-install-recommends')
+      expect(install.call({ 'packages' => ['zfsutils-linux'], 'recommends' => true })).not_to include('--no-install-recommends')
+      expect(refusal('packages.install', { 'packages' => ['smartmontools'], 'recommends' => 'no' })).to eq('recommends must be true or false')
+    end
+  end
+
+  describe 'storage.check_health' do
+    let(:health_file) { "#{dir}/storage-health.json" }
+    let(:samsung) do
+      { 'smartctl' => { 'exit_status' => 0 }, 'model_name' => 'Samsung SSD 870 EVO 1TB', 'serial_number' => 'S6PXNM0T1',
+        'firmware_version' => 'SVT02B6Q', 'rotation_rate' => 0, 'smart_status' => { 'passed' => true },
+        'power_on_time' => { 'hours' => 4210 }, 'temperature' => { 'current' => 31 },
+        'ata_smart_attributes' => { 'table' => [
+          { 'id' => 5, 'name' => 'Reallocated_Sector_Ct', 'value' => 100, 'worst' => 100, 'thresh' => 10, 'raw' => { 'value' => 0 } },
+          { 'id' => 9, 'name' => 'Power_On_Hours', 'value' => 99, 'worst' => 99, 'thresh' => 0, 'raw' => { 'value' => 4210 } },
+          { 'id' => 177, 'name' => 'Wear_Leveling_Count', 'value' => 98, 'worst' => 98, 'thresh' => 0, 'raw' => { 'value' => 21 } },
+          { 'id' => 194, 'name' => 'Temperature_Celsius', 'value' => 69, 'worst' => 52, 'thresh' => 0, 'raw' => { 'value' => 31 } }
+        ] } }
+    end
+    let(:failing) do
+      { 'model_name' => 'WDC WD40EFZX', 'serial_number' => 'WD-1', 'firmware_version' => '81.00A81', 'rotation_rate' => 5400,
+        'smart_status' => { 'passed' => false }, 'power_on_time' => { 'hours' => 40_000 },
+        'ata_smart_attributes' => { 'table' => [
+          { 'id' => 5, 'name' => 'Reallocated_Sector_Ct', 'value' => 1, 'worst' => 1, 'thresh' => 140, 'raw' => { 'value' => 2000 } }
+        ] } }
+    end
+    let(:nvme) do
+      { 'model_name' => 'Samsung SSD 980 1TB', 'serial_number' => 'S2', 'firmware_version' => '1B4QFXO7', 'smart_status' => { 'passed' => true },
+        'power_on_time' => { 'hours' => 800 }, 'temperature' => { 'current' => 40 },
+        'nvme_smart_health_information_log' => { 'critical_warning' => 0, 'temperature' => 40, 'available_spare' => 100,
+                                                  'available_spare_threshold' => 10, 'percentage_used' => 3, 'media_errors' => 0 } }
+    end
+    let(:no_smart) { { 'smartctl' => { 'exit_status' => 1, 'messages' => [{ 'string' => '/dev/sda: Unable to detect device type' }] } } }
+    let(:outputs) do
+      { '/dev/sdc' => [samsung, 0], '/dev/sdd' => [failing, 8], '/dev/nvme0n1' => [nvme, 0],
+        '/dev/sde' => [{ 'smartctl' => { 'exit_status' => 9 } }, 9] }
+    end
+
+    before do
+      stub_const('AmahiHelper::STORAGE_HEALTH', health_file)
+      allow(File).to receive(:executable?).with('/usr/sbin/smartctl').and_return(true)
+      allow(helper).to receive(:do_pool_status).and_return('zfs' => true, 'pools' => [{ 'name' => 'old', 'health' => 'ONLINE' }])
+      allow(helper).to receive(:do_install) { |path, content, *| File.write(path, content) }
+      allow(Open3).to receive(:capture3) do |_env, _cmd, *args, **_opts|
+        data, code = outputs.fetch(args.last, [no_smart, 1])
+        [data.to_json, '', instance_double(Process::Status, exitstatus: code)]
+      end
+    end
+
+    it 'plans one action with no arguments' do
+      expect(steps('storage.check_health', {})).to eq([[:check_health]])
+      expect(refusal('storage.check_health', { 'drive' => '/dev/sda' })).to eq('unexpected argument drive')
+    end
+
+    it "reads every whole disk's SMART data without waking sleeping drives, and saves it with the pools for the app" do
+      File.write(health_file, { 'drives' => { '/dev/sde' => { 'model' => 'Sleepy HDD', 'passed' => true } } }.to_json)
+      reply = helper.do_check_health
+      saved = JSON.parse(File.read(health_file))
+      expect(saved).to eq(reply['health'])
+      expect(saved).to include('smartctl' => true, 'zfs' => true, 'pools' => [{ 'name' => 'old', 'health' => 'ONLINE' }])
+      expect(saved['checked_at']).to match(/\A\d{4}-\d\d-\d\dT/)
+      expect(saved['drives'].keys).to eq(%w[/dev/sda /dev/sdb /dev/sdc /dev/sdd /dev/sde /dev/sdf /dev/sdg /dev/sdh /dev/nvme0n1])
+      expect(saved['drives']['/dev/sda']).to be_nil
+      expect(saved['drives']['/dev/sdc']).to eq(
+        'model' => 'Samsung SSD 870 EVO 1TB', 'serial' => 'S6PXNM0T1', 'firmware' => 'SVT02B6Q', 'passed' => true,
+        'power_on_hours' => 4210, 'temperature' => 31, 'ssd' => true,
+        'attributes' => { '5' => { 'name' => 'Reallocated_Sector_Ct', 'value' => 100, 'thresh' => 10, 'raw' => 0 },
+                          '9' => { 'name' => 'Power_On_Hours', 'value' => 99, 'thresh' => 0, 'raw' => 4210 },
+                          '177' => { 'name' => 'Wear_Leveling_Count', 'value' => 98, 'thresh' => 0, 'raw' => 21 } },
+        'nvme' => nil
+      )
+      expect(saved['drives']['/dev/sdd']).to include('passed' => false, 'ssd' => false)
+      expect(saved['drives']['/dev/nvme0n1']).to include('ssd' => true, 'nvme' => include('percentage_used' => 3, 'media_errors' => 0))
+      expect(saved['drives']['/dev/sde']).to eq('model' => 'Sleepy HDD', 'passed' => true, 'asleep' => true)
+      expect(Open3).to have_received(:capture3)
+        .with(AmahiHelper::ENV_MIN, ['/usr/bin/timeout', '/usr/bin/timeout'], '10', '/usr/sbin/smartctl', '--json',
+              '-n', 'standby,9', '-i', '-H', '-A', '/dev/sdc', unsetenv_others: true, chdir: '/')
+      expect(helper).to have_received(:do_install).with(health_file, anything, nil, '0640', 'amahi')
+    end
+
+    it 'records no SMART data without smartctl' do
+      allow(File).to receive(:executable?).with('/usr/sbin/smartctl').and_return(false)
+      saved = helper.do_check_health['health']
+      expect(saved['smartctl']).to be(false)
+      expect(saved['drives'].values.uniq).to eq([nil])
+      expect(Open3).not_to have_received(:capture3)
+    end
+  end
+
   describe 'by-id names' do
     it 'prefers the model-and-serial link, ignoring partitions, and falls back to the plain path' do
       allow(helper).to receive(:stable_path).and_call_original

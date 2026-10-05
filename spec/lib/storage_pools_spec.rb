@@ -106,20 +106,67 @@ RSpec.describe StoragePools do
   end
 
   describe '.install!' do
-    it 'installs the package, then sets ZFS up, reporting as it goes' do
+    before do
+      allow(File).to receive(:executable?).and_call_original
       allow(Privileged).to receive(:call).and_call_original
       allow(Privileged).to receive(:call).with('packages.install', packages: ['zfsutils-linux']).and_yield('Setting up zfsutils-linux')
       allow(Privileged).to receive(:call).with('zfs.setup').and_return('ok' => true, 'arc_max' => 2_147_483_648)
+    end
+
+    def installed(zfs:, smart:)
+      allow(File).to receive(:executable?).with('/usr/sbin/zpool').and_return(zfs)
+      allow(File).to receive(:executable?).with('/usr/sbin/smartctl').and_return(smart)
+    end
+
+    it 'installs ZFS and the drive health tools (without their recommends), sets ZFS up and checks the drives' do
+      installed(zfs: false, smart: false)
       lines = []
       described_class.install! { |line| lines << line }
       expect(lines).to eq(['Installing ZFS (zfsutils-linux)...', '  Setting up zfsutils-linux',
-                           'Loading ZFS and limiting its memory cache...', "  ✓ ZFS's cache is limited to 2 GB"])
+                           'Loading ZFS and limiting its memory cache...', "  ✓ ZFS's cache is limited to 2 GB",
+                           'Installing the drive health tools (smartmontools)...', 'Checking the drives...'])
+      expect(Privileged).to have_received(:call).with('packages.install', packages: ['smartmontools'], recommends: false)
+      expect(Privileged.calls).to include(['storage.check_health', {}])
+    end
+
+    it 'installs only what is missing' do
+      installed(zfs: true, smart: false)
+      described_class.install!
+      expect(Privileged).not_to have_received(:call).with('packages.install', packages: ['zfsutils-linux'])
+      expect(Privileged).not_to have_received(:call).with('zfs.setup')
+      expect(Privileged).to have_received(:call).with('packages.install', packages: ['smartmontools'], recommends: false)
     end
 
     it 'raises the helper error' do
-      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('packages.install', 'apt failed'))
+      installed(zfs: false, smart: false)
+      allow(Privileged).to receive(:call).with('packages.install', packages: ['zfsutils-linux'])
+                                         .and_raise(Privileged::Error.new('packages.install', 'apt failed'))
       expect { described_class.install! }.to raise_error(StoragePools::Error, 'apt failed')
     end
+  end
+
+  describe '.next_scrub' do
+    before do
+      allow(File).to receive(:exist?).and_call_original
+      allow(File).to receive(:exist?).with('/etc/cron.d/zfsutils-linux').and_return(true)
+    end
+
+    it "is the second Sunday of the month at 00:24, Ubuntu's schedule" do
+      expect(described_class.next_scrub(Time.local(2026, 10, 4, 12))).to eq(Time.local(2026, 10, 11, 0, 24))
+      expect(described_class.next_scrub(Time.local(2026, 10, 11, 1))).to eq(Time.local(2026, 11, 8, 0, 24))
+      expect(described_class.next_scrub(Time.local(2026, 12, 20))).to eq(Time.local(2027, 1, 10, 0, 24))
+    end
+
+    it "is nil without the package's schedule" do
+      allow(File).to receive(:exist?).with('/etc/cron.d/zfsutils-linux').and_return(false)
+      expect(described_class.next_scrub).to be_nil
+    end
+  end
+
+  it 'scrubs a pool and checks the health through the helper' do
+    described_class.scrub!('tank')
+    described_class.check_health!
+    expect(Privileged.calls).to eq([['pools.scrub', { name: 'tank' }], ['storage.check_health', {}]])
   end
 
   describe '.create!' do

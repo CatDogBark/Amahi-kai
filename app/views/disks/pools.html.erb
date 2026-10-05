@@ -1,4 +1,5 @@
-<%# ZFS pools (docs/plans/storage.md). storage_pools.js runs the create form and Install ZFS. %>
+<%# ZFS pools (docs/plans/storage.md). storage_pools.js runs the create form and the buttons. %>
+<%= render 'shared/storage_alerts', health: @health %>
 <div class="settings-table" id="zfs-pools">
   <p class="text-muted">
     ZFS pools keep data safe across several drives, like RAID. They hold bitShare's data; SMB shares stay on
@@ -16,11 +17,18 @@
         <h5>ZFS isn't installed</h5>
         <p class="text-muted mb-3">
           Install it to create pools. It's Ubuntu's own ZFS package; Amahi-kai limits its memory cache to 2 GB
-          (half the memory on a smaller server).
+          (half the memory on a smaller server)<%= ', and installs smartmontools to watch the drives\' health' unless @smart_installed %>.
         </p>
-        <button type="button" class="btn btn-primary" id="install-zfs-btn" data-zfs-install="<%= disks_install_zfs_stream_path %>">Install ZFS</button>
+        <button type="button" class="btn btn-primary" id="install-zfs-btn" data-storage-install="<%= disks_install_storage_tools_stream_path %>">Install ZFS</button>
       </div>
     </div>
+  <% else %>
+    <% unless @smart_installed %>
+      <div class="alert alert-info d-flex align-items-center gap-3" id="smart-not-installed">
+        <span class="flex-grow-1">Drive health (SMART) needs smartmontools, which isn't installed.</span>
+        <button type="button" class="btn btn-sm btn-primary" id="install-smart-btn" data-storage-install="<%= disks_install_storage_tools_stream_path %>">Install smartmontools</button>
+      </div>
+    <% end %>
   <% end %>
 
   <% @status[:pools].each do |pool| %>
@@ -30,7 +38,12 @@
           <strong><%= lucide_icon('database', size: 16) %> <%= pool.name %></strong>
           <span class="text-muted ms-2"><%= pool.layout %> · <%= pluralize(pool.drives.size, 'drive') %></span>
         </div>
-        <%= pool_state_badge(pool.health) %>
+        <div class="d-flex align-items-center gap-2">
+          <% scrubbing = pool.scan.to_s.start_with?('scrub in progress') %>
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-storage-post="<%= disks_scrub_pool_path %>" data-name="<%= pool.name %>"
+                  title="Read every block and repair what can be repaired" <%= 'disabled' if scrubbing %>><%= scrubbing ? 'Scrubbing…' : 'Scrub now' %></button>
+          <%= pool_state_badge(pool.health) %>
+        </div>
       </div>
       <div class="card-body">
         <% if pool.error %>
@@ -53,6 +66,7 @@
         <p class="small text-muted mt-2 mb-0">
           Mounted at <code><%= pool.mountpoint %></code>.
           <% if pool.scan.blank? || pool.scan == 'none requested' %>No scrub has run yet.<% else %><%= pool.scan.upcase_first %>.<% end %>
+          <% if @next_scrub %>Next automatic scrub: <%= @next_scrub.strftime('%A, %B %-d at %H:%M') %>.<% end %>
         </p>
         <% if pool.data_errors %>
           <p class="small text-danger mb-0 mt-1">Errors: <%= pool.data_errors %></p>
@@ -60,7 +74,7 @@
       </div>
       <table class="table table-sm mb-0 small">
         <thead>
-          <tr><th>Drive</th><th>Model and serial</th><th>State</th><th class="text-end">Read / write / checksum errors</th></tr>
+          <tr><th>Drive</th><th>Model and serial</th><th>State</th><th>Health</th><th class="text-end">Read / write / checksum errors</th></tr>
         </thead>
         <tbody>
           <% pool.drives.each do |drive| %>
@@ -68,6 +82,7 @@
               <td><code><%= drive['device'] ? DiskManager.base_device(drive['device']) : '—' %></code></td>
               <td><%= drive['device'] ? pool_drive_id(drive['name']) : (drive['note'] || drive['name']) %></td>
               <td><%= pool_state_badge(drive['state']) %></td>
+              <td><%= drive['device'] ? drive_health(@health, DiskManager.base_device(drive['device'])) : '—' %></td>
               <td class="text-end"><%= [drive['read'], drive['write'], drive['cksum']].map { |n| n || '—' }.join(' / ') %></td>
             </tr>
           <% end %>
@@ -78,7 +93,13 @@
 
   <% free = @drives.select { |d| d[:free] } %>
   <div class="card mb-3">
-    <div class="card-header"><strong><%= lucide_icon('hard-drive', size: 16) %> <%= @status[:installed] ? 'Create a pool' : 'Drives' %></strong></div>
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <strong><%= lucide_icon('hard-drive', size: 16) %> <%= @status[:installed] ? 'Create a pool' : 'Drives' %></strong>
+      <span class="small text-muted" id="health-checked">
+        <%= @health.checked? ? "Health checked #{time_ago_in_words(@health.checked_at)} ago" : 'Health not checked yet' %>
+        <button type="button" class="btn btn-sm btn-outline-secondary ms-2" data-storage-post="<%= disks_check_health_path %>">Check now</button>
+      </span>
+    </div>
     <% if @status[:installed] && free.size >= 2 %>
       <form id="pool-form" action="<%= disks_create_pool_path %>" data-layouts="<%= StoragePools::LAYOUTS.to_json %>">
         <div class="card-body pb-0">
@@ -87,7 +108,7 @@
     <% end %>
         <table class="table table-sm mb-0" id="pool-drives">
           <thead>
-            <tr><th></th><th>Drive</th><th>Model</th><th>Size</th><th>Used for</th></tr>
+            <tr><th></th><th>Drive</th><th>Model</th><th>Size</th><th>Used for</th><th>Health</th></tr>
           </thead>
           <tbody>
             <% @drives.each do |drive| %>
@@ -97,10 +118,11 @@
                     <input type="checkbox" class="form-check-input" name="devices[]" value="<%= drive[:path] %>" data-size="<%= drive[:size] %>" id="pool-drive-<%= File.basename(drive[:path]) %>">
                   <% end %>
                 </td>
-                <td><label for="pool-drive-<%= File.basename(drive[:path]) %>"><code><%= drive[:path] %></code></label></td>
+                <td class="text-nowrap"><label for="pool-drive-<%= File.basename(drive[:path]) %>"><code><%= drive[:path] %></code></label></td>
                 <td><%= [drive[:model], drive[:serial]].compact.join(' · ').presence || '—' %></td>
-                <td><%= number_to_human_size(drive[:size]) %><%= ' SSD' if drive[:ssd] %></td>
+                <td class="text-nowrap"><%= number_to_human_size(drive[:size]) %><%= ' SSD' if drive[:ssd] %></td>
                 <td><%= drive_role(drive) %></td>
+                <td class="small"><%= drive_health(@health, drive[:path]) %></td>
               </tr>
             <% end %>
           </tbody>
@@ -142,4 +164,4 @@
   </div>
 </div>
 
-<%= render 'shared/install_terminal', id: 'zfs-install', title: 'Installing ZFS', stream_url: disks_install_zfs_stream_path %>
+<%= render 'shared/install_terminal', id: 'storage-install', title: 'Installing storage tools', stream_url: disks_install_storage_tools_stream_path %>

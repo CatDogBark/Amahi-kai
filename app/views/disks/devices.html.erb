@@ -1,3 +1,4 @@
+<%= render 'shared/storage_alerts', health: @health %>
 <div class="settings-table" id="disks-table">
   <% if @devices.empty? %>
     <div class="alert alert-info">No block devices detected.</div>
@@ -10,6 +11,7 @@
           <strong><%= device[:path] %></strong>
           <span class="text-muted ms-2"><%= device[:model] %></span>
           <span class="text-muted ms-2"><%= device[:size] %></span>
+          <%= drive_health_badge(@health, device[:path]) %>
         </div>
         <% if device[:os_disk] %>
           <span class="badge bg-warning text-dark">

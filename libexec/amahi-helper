@@ -129,6 +129,13 @@ module AmahiHelper
   MEMINFO = '/proc/meminfo'
   ZFS_MODPROBE = '/etc/modprobe.d/zfs-amahi.conf'
   ZFS_ARC_MAX = '/sys/module/zfs/parameters/zfs_arc_max'
+  # The health check (storage.check_health) writes the pools and every drive's SMART data
+  # here for the app's alerts. It keeps these ATA attributes: reallocated (5), pending (197)
+  # and uncorrectable (198) sectors, reported uncorrectable errors (187), power-on hours (9),
+  # and SSD wear (177 Samsung, 202 Micron, 231 and 233 others).
+  STORAGE_HEALTH = '/var/lib/amahi-kai/storage-health.json'
+  SMART_ATTRIBUTES = [5, 9, 177, 187, 197, 198, 202, 231, 233].freeze
+  SMART_ASLEEP = 9 # smartctl's exit status for a spun-down drive, which it doesn't wake (-n standby,9)
 
   GREYHOLE_CONF = '/etc/greyhole.conf'
   GREYHOLE_SCHEMA = '/usr/share/greyhole/schema-mysql.sql'
@@ -183,7 +190,7 @@ module AmahiHelper
   # Packages the helper may install.
   PACKAGES = %w[
     greyhole php8.3-mbstring php8.3-mysql cloudflared tailscale docker-ce docker-ce-cli containerd.io
-    dnsmasq fail2ban unattended-upgrades zfsutils-linux
+    dnsmasq fail2ban unattended-upgrades zfsutils-linux smartmontools
   ].freeze
   APT_ENV = ENV_MIN.merge('DEBIAN_FRONTEND' => 'noninteractive').freeze
 
@@ -461,6 +468,22 @@ module AmahiHelper
          [:pool_status]]
       }
     },
+    # Starts a scrub of one pool: ZFS reads every block and repairs what it can from the
+    # pool's redundancy. Ubuntu's ZFS package also scrubs every healthy pool on the second
+    # Sunday of each month (/etc/cron.d/zfsutils-linux).
+    'pools.scrub' => {
+      params: %w[name],
+      validate: ->(a) { installed!(ZPOOL) && { name: existing_pool(a['name']) } },
+      plan: ->(v) { [[ZPOOL, 'scrub', v[:name]]] }
+    },
+    # The pools and every whole disk's SMART health, written to STORAGE_HEALTH for the
+    # dashboard's and the Disks pages' alerts: amahi-kai-storage-check.timer runs it every
+    # 15 minutes, and Disks → ZFS Pools has Check now. Spun-down drives aren't woken.
+    'storage.check_health' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:check_health]] }
+    },
     # /etc/greyhole.conf, root:amahi 0640 (it holds the database password).
     'greyhole.write_config' => {
       params: %w[content],
@@ -478,13 +501,18 @@ module AmahiHelper
       validate: ->(a) { { repository: listed(a['repository'], 'repository', APT_REPOSITORIES.keys) } },
       plan: ->(v) { [[:add_apt_repository, v[:repository]]] }
     },
-    # Installs packages from PACKAGES, with apt's output streamed as it runs.
+    # Installs packages from PACKAGES, with apt's output streamed as it runs. recommends:
+    # false leaves out the packages they only recommend (smartmontools' would bring a mail
+    # server).
     'packages.install' => {
-      params: %w[packages],
-      validate: ->(a) { { packages: package_list(a['packages']) } },
+      params: %w[packages recommends],
+      validate: lambda { |a|
+        { packages: package_list(a['packages']), recommends: a.key?('recommends') ? boolean(a, 'recommends') : true }
+      },
       plan: lambda { |v|
         [['/usr/bin/apt-get', 'update', { env: APT_ENV, stream: true }],
-         ['/usr/bin/apt-get', '-y', '-o', 'Dpkg::Options::=--force-confold', '-o', 'DPkg::Lock::Timeout=300',
+         ['/usr/bin/apt-get', '-y', *(v[:recommends] ? [] : ['--no-install-recommends']),
+          '-o', 'Dpkg::Options::=--force-confold', '-o', 'DPkg::Lock::Timeout=300',
           'install', *v[:packages], { env: APT_ENV, stream: true }]]
       }
     },
@@ -899,6 +927,12 @@ module AmahiHelper
         raise Refused, "#{n['path']} is in /etc/fstab (#{listed}); unmount it on Disks → Devices first" if listed
       end
       [value, node]
+    end
+
+    def existing_pool(value)
+      value = string(value, 'name', max: 32)
+      raise Refused, "there's no pool named #{value.inspect}" unless value.match?(POOL_NAME) && pool_names.include?(value)
+      value
     end
 
     def subtree(node)
@@ -1411,6 +1445,57 @@ module AmahiHelper
       { 'zfs' => true, 'pools' => pools }
     rescue Failed => e
       { 'zfs' => true, 'pools' => [], 'error' => e.message } # e.g. the ZFS module isn't loaded
+    end
+
+    # { 'checked_at', 'smartctl' (installed?), 'drives' => { '/dev/sda' => SMART summary or
+    # nil }, and pools.status's 'zfs' and 'pools' }, saved to STORAGE_HEALTH (root:amahi 0640).
+    def do_check_health
+      previous = read_json(STORAGE_HEALTH) || {}
+      disks = block_tree.select { |d| d['type'] == 'disk' }.map { |d| d['path'] }.grep(WHOLE_DISK)
+      health = { 'checked_at' => Time.now.utc.iso8601, 'smartctl' => File.executable?(SMARTCTL),
+                 'drives' => disks.to_h { |disk| [disk, drive_health(disk, previous.dig('drives', disk))] } }
+      health.merge!(do_pool_status)
+      do_install(STORAGE_HEALTH, "#{JSON.pretty_generate(health)}\n", nil, '0640', APP_USER)
+      { 'health' => health }
+    end
+
+    # One drive's SMART data from `smartctl --json -i -H -A` (at most 10 seconds): see
+    # smart_summary. nil without smartctl, or for a drive without SMART (virtual disks). A
+    # spun-down drive isn't woken: it keeps what was read last, marked asleep.
+    def drive_health(disk, previous)
+      return nil unless File.executable?(SMARTCTL)
+      out, _err, status = Open3.capture3(ENV_MIN, ['/usr/bin/timeout', '/usr/bin/timeout'], '10', SMARTCTL, '--json',
+                                         '-n', "standby,#{SMART_ASLEEP}", '-i', '-H', '-A', disk,
+                                         unsetenv_others: true, chdir: '/')
+      return (previous || {}).merge('asleep' => true) if status.exitstatus == SMART_ASLEEP
+      smart_summary(JSON.parse(out))
+    rescue SystemCallError, JSON::ParserError
+      nil
+    end
+
+    # What the app's alerts need from smartctl's JSON: the drive's model, serial and
+    # firmware, whether its own health check passed, power-on hours, temperature, whether
+    # it's an SSD, the SMART_ATTRIBUTES (normalized value, threshold, raw count) and NVMe's
+    # health log.
+    def smart_summary(data)
+      passed = data.dig('smart_status', 'passed')
+      table = Array(data.dig('ata_smart_attributes', 'table')).select { |a| SMART_ATTRIBUTES.include?(a['id']) }
+      nvme = data['nvme_smart_health_information_log']
+      return nil if passed.nil? && table.empty? && nvme.nil?
+
+      { 'model' => data['model_name'], 'serial' => data['serial_number'], 'firmware' => data['firmware_version'],
+        'passed' => passed, 'power_on_hours' => data.dig('power_on_time', 'hours'),
+        'temperature' => data.dig('temperature', 'current'), 'ssd' => data['rotation_rate'] == 0 || !nvme.nil?,
+        'attributes' => table.to_h do |a|
+          [a['id'].to_s, { 'name' => a['name'], 'value' => a['value'], 'thresh' => a['thresh'], 'raw' => a.dig('raw', 'value') }]
+        end,
+        'nvme' => nvme&.slice('critical_warning', 'percentage_used', 'media_errors', 'available_spare', 'available_spare_threshold') }
+    end
+
+    def read_json(path)
+      JSON.parse(File.read(path))
+    rescue SystemCallError, JSON::ParserError
+      nil
     end
 
     # One pool's `zpool status -P`: its state, the status and action notes (shown when

@@ -1,0 +1,11 @@
+# Runs amahi-kai-storage-check.service 3 minutes after boot, then every 15 minutes.
+# Installed and enabled by bin/amahi-install-helper.
+[Unit]
+Description=Amahi-kai: check the storage's health every 15 minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=15min
+
+[Install]
+WantedBy=timers.target

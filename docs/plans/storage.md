@@ -10,7 +10,9 @@ tested on the physical drives ([Tests on real drives](#tests-on-real-drives)).
 - [x] **S1.** Install ZFS (and cap its cache); create a pool in the layout chosen; pool status
   on Disks → ZFS Pools; every drive's use shown, and drives with ZFS on them kept away from
   share storage (#44).
-- [ ] **S2.** Health: alerts on the dashboard and Disks pages, a monthly scrub, SMART checks.
+- [x] **S2.** Health: a check every 15 minutes (`storage.check_health`, `amahi-kai-storage-check.timer`)
+  of the pools and every drive's SMART data, alerts on the dashboard and Disks pages, Scrub now;
+  the monthly scrub is Ubuntu's own (below) (#46).
 - [ ] **S3.** Replace a drive, grow a pool, destroy a pool.
 - [ ] **S4.** Snapshots, and datasets per user of a pool.
 - [ ] **S5.** Greyhole handles files that don't arrive through Samba.
@@ -79,7 +81,14 @@ operations with their own validation and logging.
 - **Pool status:** health, capacity, each drive's state, the last scrub and its result.
 - **Alerts** on the dashboard and Disks pages when a pool is degraded or faulted, a scrub found
   errors, or a drive's SMART data looks bad.
-- **Scrubs:** a monthly timer, plus "scrub now".
+- **Scrubs:** Ubuntu's ZFS package already scrubs every healthy pool on the second Sunday of
+  each month (`/etc/cron.d/zfsutils-linux`; a pool's `org.debian:periodic-scrub` property turns it
+  off), so Amahi-kai shows when that runs next instead of adding a second schedule, plus "Scrub
+  now".
+- **Health check:** every 15 minutes the helper reads the pools and each drive's SMART data
+  (`smartctl --json`, `-n standby` so sleeping drives stay asleep) into
+  `/var/lib/amahi-kai/storage-health.json`; the app's alerts read that file. smartmontools comes
+  with ZFS, installed without its recommends (they'd bring a mail server).
 - **Replace a drive:** for a failed or failing drive, pick the new one, then show the resilver's
   progress.
 - **Grow a pool:** add a group with the same layout.
@@ -112,6 +121,8 @@ Also in the roadmap's hardware checklist. First, check each SSD's health (`smart
 hours, wear, reallocated sectors, firmware) before it goes in a pool.
 
 - Install ZFS from Disks → ZFS Pools; the cache limit is set (`/sys/module/zfs/parameters/zfs_arc_max`).
+- The SSDs' SMART data shows on ZFS Pools (model, firmware, wear, hours), matching `smartctl -a`.
+- Pulling a drive shows on the dashboard within 15 minutes (or at once with Check now).
 - Create a RAIDZ1 pool from the 4 SSDs; it survives a reboot (imported at boot).
 - Pull a drive: the pool shows degraded and the alert appears; replace it and watch the resilver.
 - Run a scrub; take a snapshot and roll a test dataset back.

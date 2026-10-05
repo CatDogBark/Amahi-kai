@@ -43,6 +43,15 @@ RSpec.describe 'ZFS pools', type: :request do
     expect(Privileged.calls).to be_empty
   end
 
+  it "keeps the dashboard's alerts from users who aren't admins" do
+    allow(StorageHealth).to receive(:load).and_return(StorageHealth.new('pools' => [{ 'name' => 'tank', 'health' => 'FAULTED', 'vdevs' => [] }]))
+    ensure_setup_completed!
+    login_as(create(:user))
+    get '/'
+    expect(response).to have_http_status(:ok)
+    expect(page.css('.storage-alerts')).to be_empty
+  end
+
   context 'as an admin' do
     before { login_as_admin }
 
@@ -50,11 +59,11 @@ RSpec.describe 'ZFS pools', type: :request do
       stub_pools(installed: false)
       get '/disks/pools'
       expect(response).to have_http_status(:ok)
-      expect(page.at_css('#install-zfs-btn')['data-zfs-install']).to eq('/disks/install_zfs_stream')
+      expect(page.at_css('#install-zfs-btn')['data-storage-install']).to eq('/disks/install_storage_tools_stream')
       expect(page.at_css('#pool-form')).to be_nil
       expect(page.css('#pool-drives tbody tr').size).to eq(6)
       expect(page.css('#pool-drives input')).to be_empty
-      expect(page.at_css('#zfs-install-install-modal')).not_to be_nil
+      expect(page.at_css('#storage-install-install-modal')).not_to be_nil
       expect(page.at_css('.setup-subtab .active-subtab-link').text.strip).to eq('ZFS Pools')
     end
 
@@ -66,8 +75,8 @@ RSpec.describe 'ZFS pools', type: :request do
       expect(card.text).to include('466 GB used', '1.82 TB free of 2.27 TB', 'One or more devices could not be used.',
                                    "What to do: Replace the device using 'zpool replace'.", '/srv/pools/tank', 'No scrub has run yet.')
       rows = card.css('tbody tr').map { |tr| tr.css('td').map { |td| td.text.strip } }
-      expect(rows).to eq([['/dev/sdc', 'Samsung_SSD_870_S1', 'ONLINE', '0 / 0 / 0'],
-                          ['—', 'was /dev/disk/by-id/ata-Samsung_SSD_870_S2-part1', 'UNAVAIL', '0 / 0 / 0']])
+      expect(rows).to eq([['/dev/sdc', 'Samsung_SSD_870_S1', 'ONLINE', '—', '0 / 0 / 0'],
+                          ['—', 'was /dev/disk/by-id/ata-Samsung_SSD_870_S2-part1', 'UNAVAIL', '—', '0 / 0 / 0']])
     end
 
     it 'offers only free drives to a new pool, with every layout, and a free name' do
@@ -112,16 +121,95 @@ RSpec.describe 'ZFS pools', type: :request do
       expect(response.parsed_body).to eq('status' => 'error', 'error' => '/dev/sdb is mounted at /mnt/storage-1; unmount it first')
     end
 
-    it 'installs ZFS and sets it up, streaming the progress' do
-      get '/disks/install_zfs_stream', headers: same_origin
-      expect(response.body).to include('data: Installing ZFS (zfsutils-linux)...', 'data: ✓ ZFS installed', "event: done\ndata: success")
-      expect(Privileged.calls).to eq([['packages.install', { packages: ['zfsutils-linux'] }], ['zfs.setup', {}]])
+    it 'installs ZFS and the drive health tools, streaming the progress' do
+      allow(File).to receive(:executable?).and_call_original
+      allow(File).to receive(:executable?).with('/usr/sbin/zpool').and_return(false)
+      allow(File).to receive(:executable?).with('/usr/sbin/smartctl').and_return(false)
+      get '/disks/install_storage_tools_stream', headers: same_origin
+      expect(response.body).to include('data: Installing ZFS (zfsutils-linux)...', 'data: ✓ Installed', "event: done\ndata: success")
+      expect(Privileged.calls).to eq([['packages.install', { packages: ['zfsutils-linux'] }], ['zfs.setup', {}],
+                                      ['packages.install', { packages: ['smartmontools'], recommends: false }],
+                                      ['storage.check_health', {}]])
     end
 
     it 'ends the install stream with an error when the install fails' do
       allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('packages.install', 'apt-get exited 100'))
-      get '/disks/install_zfs_stream', headers: same_origin
+      get '/disks/install_storage_tools_stream', headers: same_origin
       expect(response.body).to include('data: ✗ apt-get exited 100', "event: done\ndata: error")
+    end
+
+    context 'with a health check on file' do
+      let(:health) do
+        StorageHealth.new('checked_at' => 10.minutes.ago.utc.iso8601, 'smartctl' => true,
+                          'pools' => [{ 'name' => 'tank', 'health' => 'DEGRADED', 'vdevs' => [] }],
+                          'drives' => { '/dev/sdd' => { 'model' => 'Samsung SSD 870 EVO 1TB', 'passed' => true, 'power_on_hours' => 4210,
+                                                        'firmware' => 'SVT02B6Q', 'attributes' => { '5' => { 'raw' => 3 }, '177' => { 'value' => 98 } } },
+                                        '/dev/sde' => { 'model' => 'Samsung SSD 870 EVO 1TB', 'passed' => true, 'attributes' => {} } })
+      end
+
+      before { allow(StorageHealth).to receive(:load).and_return(health) }
+
+      it 'shows the alerts, each drive\'s health and when it was checked' do
+        stub_pools(installed: true, pools: [pool])
+        get '/disks/pools'
+        alerts = page.css('.storage-alerts .alert').map { |a| a.text.squish }
+        expect(alerts).to eq(['Pool tank is DEGRADED', '/dev/sdd (Samsung SSD 870 EVO 1TB) has 3 reallocated sectors See the drive →'])
+        health_cells = page.css('#pool-drives tbody tr').to_h { |tr| [tr.css('td')[1].text.strip, tr.css('td')[5].text.squish] }
+        expect(health_cells['/dev/sdd']).to eq('Check Has 3 reallocated sectors · 2% worn · 4,210 hours · firmware SVT02B6Q')
+        expect(health_cells['/dev/sde']).to eq('OK')
+        expect(health_cells['/dev/sda']).to eq('—')
+        expect(page.at_css('#health-checked').text).to include('Health checked 10 minutes ago')
+        expect(page.at_css('#health-checked button')['data-storage-post']).to eq('/disks/check_health')
+      end
+
+      it 'shows the alerts on every Disks page and on the dashboard' do
+        stub_pools(installed: true)
+        allow(DiskManager).to receive(:devices).and_return([])
+        ['/disks', '/disks/devices', '/disks/mounts', '/disks/storage_pool', '/'].each do |path|
+          get path
+          expect(page.css('.storage-alerts .alert').size).to eq(2), path
+        end
+      end
+
+      it 'puts a SMART badge on Devices' do
+        allow(DiskManager).to receive(:devices).and_return([
+          { name: 'sdd', path: '/dev/sdd', model: 'SSD', size: '931.5G', os_disk: false, zfs_pool: nil, partitions: [] }
+        ])
+        get '/disks/devices'
+        expect(page.at_css('#disks-table .card-header .badge').text).to eq('SMART Check')
+      end
+    end
+
+    it 'offers Scrub now (not while scrubbing) and says when the next automatic scrub is' do
+      allow(StoragePools).to receive(:next_scrub).and_return(Time.local(2026, 10, 11, 0, 24))
+      scrubbing = pool.dup.tap { |p| p.scan = 'scrub in progress since Sun Oct  4 10:00:00 2026' }
+      stub_pools(installed: true, pools: [pool, StoragePools::Pool.new(**scrubbing.to_h, name: 'busy')])
+      get '/disks/pools'
+      scrub = page.at_css('#pool-tank [data-storage-post="/disks/scrub_pool"]')
+      expect(scrub['data-name']).to eq('tank')
+      expect(scrub.text.strip).to eq('Scrub now')
+      expect(page.at_css('#pool-busy [data-storage-post="/disks/scrub_pool"]')['disabled']).not_to be_nil
+      expect(page.at_css('#pool-tank').text).to include('Next automatic scrub: Sunday, October 11 at 00:24.')
+    end
+
+    it 'scrubs a pool and runs the health check through the helper' do
+      post '/disks/scrub_pool', params: { name: 'tank' }, as: :json
+      expect(response.parsed_body).to eq('status' => 'ok')
+      post '/disks/check_health', as: :json
+      expect(Privileged.calls).to eq([['pools.scrub', { name: 'tank' }], ['storage.check_health', {}]])
+      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('pools.scrub', 'there\'s no pool named "x"', refused: true))
+      post '/disks/scrub_pool', params: { name: 'x' }, as: :json
+      expect(response.parsed_body).to eq('status' => 'error', 'error' => 'there\'s no pool named "x"')
+    end
+
+    it 'offers smartmontools when ZFS is installed but it is not' do
+      stub_pools(installed: true)
+      allow(StoragePools).to receive(:smart_installed?).and_return(false)
+      get '/disks/pools'
+      expect(page.at_css('#install-smart-btn')['data-storage-install']).to eq('/disks/install_storage_tools_stream')
+      allow(StoragePools).to receive(:smart_installed?).and_return(true)
+      get '/disks/pools'
+      expect(page.at_css('#smart-not-installed')).to be_nil
     end
 
     it 'marks pool drives on the Devices page, without the format and mount buttons' do
