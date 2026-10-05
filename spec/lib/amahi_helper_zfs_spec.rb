@@ -79,7 +79,7 @@ RSpec.describe 'AmahiHelper ZFS pools' do
          %w[/usr/sbin/wipefs -a /dev/sde], ['/usr/bin/udevadm', 'settle', { allow_failure: true }],
          [:make_dir, "#{dir}/pools", '0755'],
          ['/usr/sbin/zpool', 'create', '-f', '-o', 'ashift=12', '-o', 'autoexpand=on', '-o', 'autotrim=on', '-O', 'compression=lz4',
-          '-O', "mountpoint=#{dir}/pools/tank", 'tank', 'raidz1',
+          '-O', "mountpoint=#{dir}/pools/tank", '-O', 'amahi:snapshot-hourly=24', '-O', 'amahi:snapshot-daily=30', 'tank', 'raidz1',
           '/dev/disk/by-id/ata-SSD_sdc', '/dev/disk/by-id/ata-SSD_sdd', '/dev/disk/by-id/ata-SSD_sde'],
          [:pool_status]]
       )
@@ -260,7 +260,11 @@ RSpec.describe 'AmahiHelper ZFS pools' do
       allow(helper).to receive(:capture) do |argv|
         case argv
         when %w[/usr/sbin/zpool list -H -p -o name,size,allocated,free,health] then "tank\t2980000000000\t1000\t2979999999000\tONLINE\n"
-        when %w[/usr/sbin/zfs list -H -p -o used,available,mountpoint tank] then "1000\t2000000000000\t/srv/pools/tank\n"
+        when %w[/usr/sbin/zfs list -H -p -o used,available,mountpoint,usedbysnapshots tank] then "1000\t2000000000000\t/srv/pools/tank\t300\n"
+        when %w[/usr/sbin/zfs list -H -p -t snapshot -d 1 -s creation -o name,creation,used tank]
+          "tank@amahi-daily-2026-10-04-0010\t1791000000\t300\n"
+        when %w[/usr/sbin/zfs get -H -p -o property,value amahi:snapshot-hourly,amahi:snapshot-daily tank]
+          "amahi:snapshot-hourly\t12\namahi:snapshot-daily\t-\n"
         when %w[/usr/sbin/zpool status -P tank] then healthy
         else raise "unexpected #{argv}"
         end
@@ -268,7 +272,9 @@ RSpec.describe 'AmahiHelper ZFS pools' do
       pool = helper.do_pool_status['pools'].sole
       expect(pool).to include('name' => 'tank', 'size' => 2_980_000_000_000, 'allocated' => 1000, 'free' => 2_979_999_999_000,
                               'health' => 'ONLINE', 'used' => 1000, 'available' => 2_000_000_000_000,
-                              'mountpoint' => '/srv/pools/tank', 'state' => 'ONLINE')
+                              'mountpoint' => '/srv/pools/tank', 'state' => 'ONLINE', 'snapshot_space' => 300,
+                              'snapshot_policy' => { 'hourly' => 12, 'daily' => 30 },
+                              'snapshots' => [{ 'name' => 'amahi-daily-2026-10-04-0010', 'kind' => 'daily', 'created' => 1_791_000_000, 'used' => 300 }])
       expect(pool['vdevs'].sole['children'].size).to eq(3)
     end
 
@@ -375,6 +381,94 @@ RSpec.describe 'AmahiHelper ZFS pools' do
       FileUtils.mkdir_p("#{dir}/pools/kept/data")
       helper.do_remove_pool_dir('kept')
       expect(File.exist?("#{dir}/pools/kept/data")).to be(true)
+    end
+  end
+
+  describe 'snapshots' do
+    let(:now) { Time.local(2026, 10, 5, 14, 5) }
+    let(:list_cmd) { %w[/usr/sbin/zfs list -H -p -t snapshot -d 1 -s creation -o name,creation,used old] }
+    let(:get_cmd) { %w[/usr/sbin/zfs get -H -p -o property,value amahi:snapshot-hourly,amahi:snapshot-daily old] }
+    let(:snapshots) do
+      [['amahi-manual-2026-10-01-101500', now - (4 * 86_400)], ['amahi-daily-2026-10-03-0010', now - (2 * 86_400)],
+       ['my-own', now - 86_500], ['amahi-daily-2026-10-04-0010', now - 86_400],
+       ['amahi-hourly-2026-10-05-1305', now - 3600], ['amahi-hourly-2026-10-05-1345', now - 1200]]
+    end
+    let(:policy) { "amahi:snapshot-hourly\t1\namahi:snapshot-daily\t-\n" }
+    let(:ran) { [] }
+
+    before do
+      allow(helper).to receive(:capture).and_call_original
+      allow(helper).to receive(:capture).with(list_cmd) { snapshots.map { |name, at| "old@#{name}\t#{at.to_i}\t100\n" }.join }
+      allow(helper).to receive(:capture).with(get_cmd) { policy }
+      allow(helper).to receive(:run_command) { |argv| ran << argv }
+    end
+
+    it "lists a pool's snapshots with their kind (nil for ones Amahi-kai didn't take), and its policy" do
+      expect(helper.pool_snapshots('old').map { |snap| [snap['name'], snap['kind']] }).to eq(
+        [['amahi-manual-2026-10-01-101500', 'manual'], ['amahi-daily-2026-10-03-0010', 'daily'], ['my-own', nil],
+         ['amahi-daily-2026-10-04-0010', 'daily'], ['amahi-hourly-2026-10-05-1305', 'hourly'], ['amahi-hourly-2026-10-05-1345', 'hourly']]
+      )
+      expect(helper.snapshot_policy('old')).to eq('hourly' => 1, 'daily' => 30)
+      policy.replace("amahi:snapshot-hourly\t999\namahi:snapshot-daily\tjunk\n")
+      expect(helper.snapshot_policy('old')).to eq('hourly' => 168, 'daily' => 30)
+    end
+
+    it 'takes a snapshot now, kept until deleted' do
+      allow(Time).to receive(:now).and_return(Time.local(2026, 10, 5, 14, 32, 1))
+      expect(steps('pools.snapshot', { 'name' => 'old' })).to eq([%w[/usr/sbin/zfs snapshot -r old@amahi-manual-2026-10-05-143201], [:pool_status]])
+    end
+
+    it 'sets how many snapshots a pool keeps, and prunes at once' do
+      expect(steps('pools.snapshot_policy', { 'name' => 'old', 'hourly' => 0, 'daily' => 7 })).to eq(
+        [%w[/usr/sbin/zfs set amahi:snapshot-hourly=0 amahi:snapshot-daily=7 old], [:prune_snapshots, 'old'], [:pool_status]]
+      )
+      [200, -1, '5', 2.5].each do |bad|
+        expect(refusal('pools.snapshot_policy', { 'name' => 'old', 'hourly' => bad, 'daily' => 7 })).to include('whole number from 0 to 168'), bad.inspect
+      end
+      expect(refusal('pools.snapshot_policy', { 'name' => 'old', 'hourly' => 1, 'daily' => 400 })).to include('from 0 to 366')
+    end
+
+    it "deletes and rolls back only Amahi-kai's snapshots that exist, rollback behind the pool's name" do
+      expect(steps('pools.destroy_snapshot', { 'name' => 'old', 'snapshot' => 'amahi-daily-2026-10-03-0010' }))
+        .to eq([%w[/usr/sbin/zfs destroy -r old@amahi-daily-2026-10-03-0010], [:pool_status]])
+      expect(refusal('pools.destroy_snapshot', { 'name' => 'old', 'snapshot' => 'my-own' })).to eq('"my-own" isn\'t one of Amahi-kai\'s snapshots')
+      expect(refusal('pools.destroy_snapshot', { 'name' => 'old', 'snapshot' => 'amahi-daily-2020-01-01-0000' }))
+        .to eq('the pool old has no snapshot amahi-daily-2020-01-01-0000')
+      expect(refusal('pools.destroy_snapshot', { 'name' => 'old', 'snapshot' => 'amahi-daily-2026-10-03-0010; rm' })).to include("isn't one of")
+
+      rollback = { 'name' => 'old', 'snapshot' => 'amahi-daily-2026-10-04-0010' }
+      expect(refusal('pools.rollback', rollback.merge('confirm' => 'nope'))).to eq("type the pool's name (old) to roll it back")
+      expect(steps('pools.rollback', rollback.merge('confirm' => 'old')))
+        .to eq([[:rollback_pool, 'old', 'amahi-daily-2026-10-04-0010'], [:pool_status]])
+    end
+
+    it 'rolls back every dataset in the pool that has the snapshot' do
+      allow(helper).to receive(:capture).with(%w[/usr/sbin/zfs list -H -o name -r -t filesystem,volume old]).and_return("old\nold/bitshare\nold/new\n")
+      allow(helper).to receive(:capture).with(%w[/usr/sbin/zfs list -H -o name -r -t snapshot old])
+                                        .and_return("old@amahi-daily-2026-10-04-0010\nold/bitshare@amahi-daily-2026-10-04-0010\n")
+      expect(helper.do_rollback_pool('old', 'amahi-daily-2026-10-04-0010')).to eq('rolled_back' => %w[old old/bitshare])
+      expect(ran).to eq([%w[/usr/sbin/zfs rollback -r old@amahi-daily-2026-10-04-0010],
+                         %w[/usr/sbin/zfs rollback -r old/bitshare@amahi-daily-2026-10-04-0010]])
+    end
+
+    it "takes the snapshots that are due, then prunes the oldest of each kind beyond what's kept, never manual or others'" do
+      reply = helper.do_run_snapshots(now)
+      # The last hourly is 20 minutes old (not due); the last daily a day old (due).
+      expect(reply['pools'].sole).to include('pool' => 'old', 'taken' => ['amahi-daily-2026-10-05-1405'])
+      expect(reply['pools'].sole['pruned']).to eq(['amahi-hourly-2026-10-05-1305'])
+      expect(ran).to eq([%w[/usr/sbin/zfs snapshot -r old@amahi-daily-2026-10-05-1405],
+                         %w[/usr/sbin/zfs destroy -r old@amahi-hourly-2026-10-05-1305]])
+    end
+
+    it 'takes nothing of a kind turned off, removes those it kept, and fails at the end when a pool fails' do
+      policy.replace("amahi:snapshot-hourly\t0\namahi:snapshot-daily\t0\n")
+      helper.do_run_snapshots(now)
+      expect(ran.map(&:last)).to eq(%w[old@amahi-hourly-2026-10-05-1305 old@amahi-hourly-2026-10-05-1345
+                                       old@amahi-daily-2026-10-03-0010 old@amahi-daily-2026-10-04-0010])
+      expect(ran.map { |argv| argv[1] }.uniq).to eq(['destroy'])
+
+      allow(helper).to receive(:capture).with(list_cmd).and_raise(AmahiHelper::Failed, 'zfs exited 1: busy')
+      expect { helper.do_run_snapshots(now) }.to raise_error(AmahiHelper::Failed, 'old: zfs exited 1: busy')
     end
   end
 

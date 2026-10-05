@@ -148,6 +148,44 @@ RSpec.describe 'ZFS pools', type: :request do
       expect(card.at_css('[data-pool-scanning]')).to be_nil
     end
 
+    it "shows a pool's snapshots, what it keeps, and Roll back and Delete for Amahi-kai's own" do
+      created = 2.hours.ago.to_i
+      snappy = StoragePools::Pool.new(**pool.to_h, snapshot_space: 3_000_000, snapshot_policy: { 'hourly' => 12, 'daily' => 30 },
+                                                   snapshots: [{ 'name' => 'my-own', 'kind' => nil, 'created' => created - 60, 'used' => 1 },
+                                                               { 'name' => 'amahi-daily-2026-10-04-0010', 'kind' => 'daily', 'created' => created - 30, 'used' => 2 },
+                                                               { 'name' => 'amahi-hourly-2026-10-05-1300', 'kind' => 'hourly', 'created' => created, 'used' => 3 }])
+      stub_pools(installed: true, pools: [snappy])
+      get '/disks/pools'
+      section = page.at_css('#snapshots-tank')
+      expect(section.text.squish).to include('3 snapshots, using 2.86 MB')
+      form = section.at_css('[data-snapshot-policy]')
+      expect([form['data-url'], form.at_css('[name=hourly]')['value'], form.at_css('[name=daily]')['value']])
+        .to eq(['/disks/pool_snapshot_policy', '12', '30'])
+      expect(section.at_css('[data-storage-post="/disks/snapshot_pool"]')['data-name']).to eq('tank')
+      rows = section.css('[data-snapshot-table] tbody tr')
+      expect(rows.map { |tr| tr.css('td').first.text.squish }).to eq(['Hourly amahi-hourly-2026-10-05-1300', 'Daily amahi-daily-2026-10-04-0010',
+                                                                      "Not Amahi-kai's my-own"])
+      rollbacks = section.css('[data-pool-dialog="rollback"]')
+      expect(rollbacks.map { |b| [b['data-snapshot'], b['data-later']] }).to eq(
+        [['amahi-hourly-2026-10-05-1300', ''], ['amahi-daily-2026-10-04-0010', ', and so are the 1 snapshot taken after it']]
+      )
+      expect(rows.last.css('button')).to be_empty
+      delete = section.at_css('[data-storage-post="/disks/destroy_pool_snapshot"]')
+      expect(delete.to_h.slice('data-name', 'data-snapshot')).to eq('data-name' => 'tank', 'data-snapshot' => 'amahi-hourly-2026-10-05-1300')
+      expect(page.at_css('#rollback-dialog')['data-url']).to eq('/disks/rollback_pool')
+    end
+
+    it 'takes, deletes and rolls back snapshots and sets what a pool keeps, through the helper' do
+      post '/disks/snapshot_pool', params: { name: 'tank' }, as: :json
+      post '/disks/pool_snapshot_policy', params: { name: 'tank', hourly: 6, daily: 14 }, as: :json
+      post '/disks/destroy_pool_snapshot', params: { name: 'tank', snapshot: 'amahi-hourly-2026-10-05-1300' }, as: :json
+      post '/disks/rollback_pool', params: { name: 'tank', snapshot: 'amahi-daily-2026-10-04-0010', confirm: 'tank' }, as: :json
+      expect(response.parsed_body).to eq('status' => 'ok')
+      expect(Privileged.calls.map(&:first) - ['storage.check_health']).to eq(%w[pools.snapshot pools.snapshot_policy pools.destroy_snapshot pools.rollback])
+      post '/disks/pool_snapshot_policy', params: { name: 'tank', hourly: 'lots', daily: 14 }, as: :json
+      expect(response.parsed_body).to eq('status' => 'error', 'error' => 'Keep a whole number of snapshots')
+    end
+
     it 'says the page updates while a resilver runs, and offers no Add drives for a pool of mixed groups' do
       resilvering = StoragePools::Pool.new(**pool.to_h, scan: 'resilver in progress since Sun Oct  4 10:00:00 2026',
                                                         vdevs: pool.vdevs + [{ 'name' => 'mirror-1', 'children' => [{}, {}] }])

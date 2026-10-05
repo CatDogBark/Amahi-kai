@@ -1,0 +1,11 @@
+# Runs amahi-kai-snapshots.service every hour, and at boot if a run was missed while the
+# server was off. Installed and enabled by bin/amahi-install-helper.
+[Unit]
+Description=Amahi-kai: pool snapshots every hour
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+
+[Install]
+WantedBy=timers.target

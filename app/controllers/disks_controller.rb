@@ -172,6 +172,22 @@ class DisksController < ApplicationController
     pool_change { StoragePools.scrub!(params[:name]) }
   end
 
+  def snapshot_pool
+    pool_change { StoragePools.snapshot!(params[:name]) }
+  end
+
+  def pool_snapshot_policy
+    pool_change { StoragePools.set_snapshot_policy!(name: params[:name], hourly: params[:hourly], daily: params[:daily]) }
+  end
+
+  def destroy_pool_snapshot
+    pool_change { StoragePools.destroy_snapshot!(name: params[:name], snapshot: params[:snapshot]) }
+  end
+
+  def rollback_pool
+    pool_change { StoragePools.rollback!(name: params[:name], snapshot: params[:snapshot], confirm: params[:confirm]) }
+  end
+
   def check_health
     pool_change { StoragePools.check_health! }
   end

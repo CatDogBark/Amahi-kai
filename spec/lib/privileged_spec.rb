@@ -108,12 +108,17 @@ RSpec.describe Privileged do
   # Every operation name the app uses is one the helper has, and every operation is
   # used: the helper shouldn't keep root abilities nothing asks for. Operation names are
   # found as quoted strings in the helper's namespaces, so names kept in a table (as in
-  # SystemServices::ACTION_OPERATIONS) count too.
+  # SystemServices::ACTION_OPERATIONS) count too, and so do the systemd units that run one
+  # (ExecStart=/usr/local/sbin/amahi-helper pools.run_snapshots).
   describe 'contract with libexec/amahi-helper' do
     let(:called) do
       namespaces = described_class.operations.map { |op| op.split('.').first }.uniq
       pattern = /['"]((?:#{namespaces.join('|')})\.[a-z_]+)['"]/
-      Dir[Rails.root.join('{app,lib}/**/*.rb')].flat_map { |file| File.read(file).scan(pattern).flatten }.uniq
+      in_code = Dir[Rails.root.join('{app,lib}/**/*.rb')].flat_map { |file| File.read(file).scan(pattern).flatten }
+      in_units = Dir[Rails.root.join('config/systemd/*.service')].flat_map do |file|
+        File.read(file).scan(%r{^ExecStart=/usr/local/sbin/amahi-helper ([a-z]+\.[a-z_]+)$}).flatten
+      end
+      (in_code + in_units).uniq
     end
 
     it 'only calls operations the helper has' do

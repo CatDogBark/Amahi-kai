@@ -16,7 +16,11 @@ tested on the physical drives ([Tests on real drives](#tests-on-real-drives)).
 - [x] **S3.** Replace a drive (any drive, missing or failing; ZFS resilvers onto a free disk),
   grow a pool by one group shaped like its others, destroy a pool behind its typed name (its
   drives' ZFS labels are cleared, so they're free again); new pools get `autoexpand=on` (#50).
-- [ ] **S4.** Snapshots, and datasets per user of a pool.
+- [x] **S4.** Snapshots (Troy, 2026-10-05: datasets move to Phase 4's app model): each pool keeps its
+  newest hourly and daily snapshots (24 and 30 by default, set per pool and stored in its ZFS
+  properties `amahi:snapshot-hourly` and `amahi:snapshot-daily`), taken and pruned by
+  `amahi-kai-snapshots.timer`; take one now, delete, and roll the whole pool back behind its
+  typed name. Only Amahi-kai's own snapshots are ever deleted or pruned (#51).
 - [ ] **S5.** Greyhole handles files that don't arrive through Samba.
 
 ## Decisions
@@ -94,11 +98,12 @@ operations with their own validation and logging.
 - **Replace a drive:** for a failed or failing drive, pick the new one, then show the resilver's
   progress.
 - **Grow a pool:** add a group with the same layout.
-- **Snapshots:** automatic, with configurable retention (for example hourly kept a day, daily kept
-  a month), plus a list. Restoring bitShare's data is bitShare's job, so it is designed with
-  bitShare.
-- **Datasets:** one per user of the pool (first `bitshare`), so Phase 4 can grant an app exactly its
-  own dataset.
+- **Snapshots:** automatic, with configurable retention (hourly kept a day, daily kept a month by
+  default), plus a list. Snapshots are taken with `-r`, so datasets added later are covered.
+  Restoring single files, or bitShare's own data, is bitShare's job, so it is designed with
+  bitShare; Amahi-kai rolls back a whole pool.
+- **Datasets** (moved to Phase 4, Troy 2026-10-05): one per user of the pool (first `bitshare`),
+  created by the app model when an app needs storage, so an app gets exactly its own dataset.
 - **Destroy a pool:** behind a typed confirmation.
 - **Drive ownership:** the Disks page shows which drives are share storage and which belong to a
   pool, and neither side can take the other's drives. A drive with any ZFS label is never
@@ -138,7 +143,6 @@ hours, wear, reallocated sectors, firmware) before it goes in a pool.
 
 - Which drives go to the pool and which to Greyhole on the first build (the 4 SSDs, plus what
   later?).
-- Snapshot schedule defaults.
 - How bitShare gets its dataset and permissions: decided in the Phase 4 app model.
 - Share-storage drives still mount with `defaults,nofail,...`; whether to add `nosuid,nodev`
   (safer for drives brought from another machine) can be decided now that share storage stays

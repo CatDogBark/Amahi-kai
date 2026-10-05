@@ -129,6 +129,14 @@ module AmahiHelper
   MEMINFO = '/proc/meminfo'
   ZFS_MODPROBE = '/etc/modprobe.d/zfs-amahi.conf'
   ZFS_ARC_MAX = '/sys/module/zfs/parameters/zfs_arc_max'
+  # Snapshots: amahi-kai-snapshots.timer runs pools.run_snapshots every hour. Each pool keeps
+  # its newest N hourly and daily snapshots, N in its own ZFS properties (amahi:snapshot-hourly,
+  # amahi:snapshot-daily; unset means the default). Only snapshots named like ours are ever
+  # destroyed; manual ones are never pruned.
+  SNAPSHOT_KINDS = { 'hourly' => 50 * 60, 'daily' => 23 * 3600 }.freeze # kind => seconds before the next is due
+  SNAPSHOT_KEEP = { 'hourly' => 24, 'daily' => 30 }.freeze
+  SNAPSHOT_LIMITS = { 'hourly' => 0..168, 'daily' => 0..366 }.freeze
+  SNAPSHOT_NAME = /\Aamahi-(hourly|daily|manual)-\d{4}-\d\d-\d\d-\d{4}(?:\d\d)?\z/
   # The health check (storage.check_health) writes the pools and every drive's SMART data
   # here for the app's alerts. It keeps these ATA attributes: reallocated (5), pending (197)
   # and uncorrectable (198) sectors, reported uncorrectable errors (187), power-on hours (9),
@@ -464,7 +472,8 @@ module AmahiHelper
          ['/usr/bin/udevadm', 'settle', { allow_failure: true }],
          [:make_dir, POOL_ROOT, '0755'],
          [ZPOOL, 'create', '-f', '-o', 'ashift=12', '-o', 'autoexpand=on', *(v[:ssd] ? %w[-o autotrim=on] : []),
-          '-O', 'compression=lz4', '-O', "mountpoint=#{POOL_ROOT}/#{v[:name]}", v[:name], *v[:vdevs]],
+          '-O', 'compression=lz4', '-O', "mountpoint=#{POOL_ROOT}/#{v[:name]}",
+          *SNAPSHOT_KEEP.flat_map { |kind, keep| ['-O', "amahi:snapshot-#{kind}=#{keep}"] }, v[:name], *v[:vdevs]],
          [:pool_status]]
       }
     },
@@ -507,6 +516,48 @@ module AmahiHelper
          [:remove_pool_dir, v[:name]],
          [:pool_status]]
       }
+    },
+    # Takes a snapshot of a pool now (all its datasets), kept until it's deleted.
+    'pools.snapshot' => {
+      params: %w[name],
+      validate: ->(a) { installed!(ZPOOL) && { name: existing_pool(a['name']), stamp: Time.now.strftime('%Y-%m-%d-%H%M%S') } },
+      plan: ->(v) { [[ZFS, 'snapshot', '-r', "#{v[:name]}@amahi-manual-#{v[:stamp]}"], [:pool_status]] }
+    },
+    # How many hourly and daily snapshots a pool keeps (0 turns that kind off and removes them).
+    'pools.snapshot_policy' => {
+      params: %w[name hourly daily],
+      validate: lambda { |a|
+        installed!(ZPOOL) && { name: existing_pool(a['name']), hourly: integer(a, 'hourly', SNAPSHOT_LIMITS['hourly']),
+                               daily: integer(a, 'daily', SNAPSHOT_LIMITS['daily']) }
+      },
+      plan: lambda { |v|
+        [[ZFS, 'set', "amahi:snapshot-hourly=#{v[:hourly]}", "amahi:snapshot-daily=#{v[:daily]}", v[:name]],
+         [:prune_snapshots, v[:name]], [:pool_status]]
+      }
+    },
+    # Deletes one of Amahi-kai's snapshots of a pool (in all its datasets).
+    'pools.destroy_snapshot' => {
+      params: %w[name snapshot],
+      validate: ->(a) { snapshot_request(a['name'], a['snapshot']) },
+      plan: ->(v) { [[ZFS, 'destroy', '-r', "#{v[:name]}@#{v[:snapshot]}"], [:pool_status]] }
+    },
+    # Rolls a pool (every dataset that has the snapshot) back to one of Amahi-kai's snapshots:
+    # changes since are lost, and so are the snapshots taken after it. confirm repeats the name.
+    'pools.rollback' => {
+      params: %w[name snapshot confirm],
+      validate: lambda { |a|
+        values = snapshot_request(a['name'], a['snapshot'])
+        raise Refused, "type the pool's name (#{values[:name]}) to roll it back" unless a['confirm'] == values[:name]
+        values
+      },
+      plan: ->(v) { [[:rollback_pool, v[:name], v[:snapshot]], [:pool_status]] }
+    },
+    # The hourly job (amahi-kai-snapshots.timer): takes each pool's due snapshots and removes
+    # the oldest beyond what it keeps.
+    'pools.run_snapshots' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:run_snapshots]] }
     },
     # Starts a scrub of one pool: ZFS reads every block and repairs what it can from the
     # pool's redundancy. Ubuntu's ZFS package also scrubs every healthy pool on the second
@@ -1008,6 +1059,37 @@ module AmahiHelper
       { name: name, members: members, wipe: disks.flat_map { |disk| wipe_targets(disk) } }
     end
 
+    def snapshot_request(name, snapshot)
+      installed!(ZPOOL)
+      name = existing_pool(name)
+      snapshot = string(snapshot, 'snapshot', max: 128)
+      raise Refused, "#{snapshot.inspect} isn't one of Amahi-kai's snapshots" unless snapshot.match?(SNAPSHOT_NAME)
+      raise Refused, "the pool #{name} has no snapshot #{snapshot}" unless pool_snapshots(name).any? { |snap| snap['name'] == snapshot }
+      { name: name, snapshot: snapshot }
+    end
+
+    # The pool's own snapshots (its root dataset's), oldest first:
+    # [{ 'name' => 'amahi-daily-2026-10-05-0012', 'kind' => 'daily', 'created' => epoch, 'used' => bytes }].
+    # 'kind' is nil for snapshots Amahi-kai didn't take.
+    def pool_snapshots(name)
+      capture([ZFS, 'list', '-H', '-p', '-t', 'snapshot', '-d', '1', '-s', 'creation', '-o', 'name,creation,used', name])
+        .lines(chomp: true).filter_map do |line|
+          full, created, used = line.split("\t")
+          snap = full.to_s.split('@', 2)[1] or next
+          { 'name' => snap, 'kind' => snap[SNAPSHOT_NAME, 1], 'created' => created.to_i, 'used' => used.to_i }
+        end
+    end
+
+    # { 'hourly' => 24, 'daily' => 30 } from the pool's properties; unset or broken: the default.
+    def snapshot_policy(name)
+      values = capture([ZFS, 'get', '-H', '-p', '-o', 'property,value', 'amahi:snapshot-hourly,amahi:snapshot-daily', name])
+               .lines(chomp: true).to_h { |line| line.split("\t", 2) }
+      SNAPSHOT_KEEP.to_h do |kind, default|
+        value = values["amahi:snapshot-#{kind}"].to_s
+        [kind, value.match?(/\A\d+\z/) ? value.to_i.clamp(SNAPSHOT_LIMITS[kind]) : default]
+      end
+    end
+
     def pool_vdevs(name)
       parse_pool_status(capture([ZPOOL, 'status', '-P', name]))['vdevs']
     end
@@ -1503,6 +1585,52 @@ module AmahiHelper
 
     # --- ZFS pools ---
 
+    # Takes each pool's due hourly and daily snapshots, then prunes. A pool that fails doesn't
+    # stop the others; the step fails at the end, so the timer shows it.
+    def do_run_snapshots(now = Time.now)
+      return { 'pools' => [] } unless File.executable?(ZPOOL)
+      results = pool_names.map do |pool|
+        policy = snapshot_policy(pool)
+        snaps = pool_snapshots(pool)
+        taken = SNAPSHOT_KINDS.filter_map do |kind, interval|
+          next unless policy[kind].positive?
+          last = snaps.select { |snap| snap['kind'] == kind }.map { |snap| snap['created'] }.max
+          next if last && now.to_i - last < interval
+          name = "amahi-#{kind}-#{now.strftime('%Y-%m-%d-%H%M')}"
+          run_command([ZFS, 'snapshot', '-r', "#{pool}@#{name}"])
+          name
+        end
+        { 'pool' => pool, 'taken' => taken, 'pruned' => do_prune_snapshots(pool)['pruned'] }
+      rescue Failed => e
+        { 'pool' => pool, 'error' => e.message }
+      end
+      failed = results.select { |r| r['error'] }
+      raise Failed, failed.map { |r| "#{r['pool']}: #{r['error']}" }.join('; ') if failed.any?
+      { 'pools' => results }
+    end
+
+    # Destroys a pool's oldest hourly and daily snapshots beyond what it keeps. Only Amahi-kai's
+    # hourly and daily snapshots are counted or touched.
+    def do_prune_snapshots(pool)
+      policy = snapshot_policy(pool)
+      snaps = pool_snapshots(pool)
+      pruned = policy.flat_map do |kind, keep|
+        ours = snaps.select { |snap| snap['kind'] == kind }.sort_by { |snap| snap['created'] }
+        ours.first([ours.size - keep, 0].max).map { |snap| snap['name'] }
+      end
+      pruned.each { |snap| run_command([ZFS, 'destroy', '-r', "#{pool}@#{snap}"]) }
+      { 'pruned' => pruned }
+    end
+
+    # Rolls back every dataset in the pool that has the snapshot (snapshots are taken with -r).
+    def do_rollback_pool(pool, snapshot)
+      datasets = capture([ZFS, 'list', '-H', '-o', 'name', '-r', '-t', 'filesystem,volume', pool]).lines(chomp: true)
+      snaps = capture([ZFS, 'list', '-H', '-o', 'name', '-r', '-t', 'snapshot', pool]).lines(chomp: true)
+      rolled = datasets.select { |ds| snaps.include?("#{ds}@#{snapshot}") }
+      rolled.each { |ds| run_command([ZFS, 'rollback', '-r', "#{ds}@#{snapshot}"]) }
+      { 'rolled_back' => rolled }
+    end
+
     # The pool's empty mount point, once the pool is gone.
     def do_remove_pool_dir(name)
       dir = "#{POOL_ROOT}/#{name}"
@@ -1532,8 +1660,10 @@ module AmahiHelper
         next if name.to_s.empty?
         pool = { 'name' => name, 'size' => size.to_i, 'allocated' => allocated.to_i, 'free' => free.to_i, 'health' => health }
         begin
-          used, available, mountpoint = capture([ZFS, 'list', '-H', '-p', '-o', 'used,available,mountpoint', name]).chomp.split("\t")
-          pool.merge!('used' => used.to_i, 'available' => available.to_i, 'mountpoint' => mountpoint)
+          used, available, mountpoint, snapshot_space = capture([ZFS, 'list', '-H', '-p', '-o', 'used,available,mountpoint,usedbysnapshots', name]).chomp.split("\t")
+          pool.merge!('used' => used.to_i, 'available' => available.to_i, 'mountpoint' => mountpoint,
+                      'snapshot_space' => snapshot_space.to_i, 'snapshots' => pool_snapshots(name),
+                      'snapshot_policy' => snapshot_policy(name))
           pool.merge(parse_pool_status(capture([ZPOOL, 'status', '-P', name])))
         rescue Failed => e
           pool.merge('error' => e.message)

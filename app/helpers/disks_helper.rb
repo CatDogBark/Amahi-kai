@@ -42,6 +42,13 @@ module DisksHelper
                (content_tag(:span, details, class: 'small text-muted ms-2') if details.present?)].compact)
   end
 
+  SNAPSHOT_KINDS = { 'hourly' => 'Hourly', 'daily' => 'Daily', 'manual' => 'Taken now' }.freeze
+
+  # "Daily", "Hourly", "Taken now", or "Not Amahi-kai's" for snapshots taken some other way.
+  def snapshot_kind(snapshot)
+    SNAPSHOT_KINDS.fetch(snapshot['kind'], "Not Amahi-kai's")
+  end
+
   # What a whole disk is used for, on Disks → ZFS Pools (StoragePools.drives' roles).
   def drive_role(drive)
     case drive[:role]

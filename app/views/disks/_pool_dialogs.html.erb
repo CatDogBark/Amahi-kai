@@ -1,5 +1,6 @@
 <%# The ZFS Pools page's dialogs, opened by data-pool-dialog buttons (storage_pools.js fills
-    in the pool and posts the change): replace a drive, add a group of drives, delete a pool.
+    in the pool and posts the change): replace a drive, add a group of drives, delete a pool,
+    roll a pool back to a snapshot.
     free: the drives a pool may take (StoragePools.drives). %>
 <div class="modal fade" id="replace-dialog" tabindex="-1" aria-labelledby="replace-dialog-title" aria-hidden="true" data-url="<%= disks_replace_pool_drive_path %>">
   <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
@@ -59,6 +60,25 @@
         <span class="text-danger small me-auto" data-dialog-error=""></span>
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
         <button type="button" class="btn btn-danger" data-dialog-submit="" disabled>Delete pool</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="rollback-dialog" tabindex="-1" aria-labelledby="rollback-dialog-title" aria-hidden="true" data-url="<%= disks_rollback_pool_path %>">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title" id="rollback-dialog-title">Roll <span data-fill="name"></span> back</h5></div>
+      <div class="modal-body">
+        <p class="small">The pool goes back to how it was at the <strong data-fill="snapshot-label"></strong>.
+          Everything changed on it since is lost<span data-fill="later"></span>.</p>
+        <label class="form-label small" for="rollback-confirm">Type <strong data-fill="name"></strong> to confirm</label>
+        <input type="text" class="form-control form-control-sm" id="rollback-confirm" autocomplete="off" data-confirm-name="">
+      </div>
+      <div class="modal-footer">
+        <span class="text-danger small me-auto" data-dialog-error=""></span>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger" data-dialog-submit="" disabled>Roll back</button>
       </div>
     </div>
   </div>
