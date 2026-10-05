@@ -10,6 +10,7 @@
   mounts: Mounts
   storage_pool: Storage Pool
   zfs_pools: ZFS Pools
+  jobs: Jobs
   leases: Leases
   hosts: Hosts
   gateway: Gateway

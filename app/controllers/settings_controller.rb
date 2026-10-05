@@ -93,6 +93,13 @@ class SettingsController < ApplicationController
   end
 
   # index of all themes
+  # The jobs that run on their own (ScheduledJobs): what each does, when it last ran and how
+  # that went, and when it runs next.
+  def jobs
+    @page_title = t 'settings'
+    @jobs = ScheduledJobs.all
+  end
+
   def themes
     @page_title = t 'settings'
     @themes = Theme.available
@@ -285,8 +292,8 @@ class SettingsController < ApplicationController
 
   def gather_services
     SystemServices.all.map do |svc|
-      detail = svc.running? && svc.since ? "since #{l(svc.since, format: :long)}" : svc.state
-      { name: svc.name, unit: svc.unit, running: svc.running?, detail: detail }
+      detail = svc.running? && svc.since ? "since #{l(svc.since, format: :long)}" : (svc.idle_reason || svc.state)
+      { name: svc.name, unit: svc.unit, running: svc.running?, idle: svc.idle?, detail: detail }
     end
   end
 

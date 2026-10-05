@@ -23,7 +23,10 @@ class FrontController < ApplicationController
     @no_tabs = true
     @apps = DockerApp.dashboard.running
     @stats = DashboardStats.summary
-    @storage_health = StorageHealth.load if current_user.admin?
+    if current_user.admin?
+      @storage_health = StorageHealth.load
+      @jobs = ScheduledJobs.all(health: @storage_health)
+    end
     @shares = if current_user.admin?
                  Share.where(visible: true).order(:name)
                else

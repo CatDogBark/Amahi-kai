@@ -105,9 +105,10 @@
     </div>
   <% end %>
 
-  <%# ── System Health (CPU + Memory) + Services ── %>
+  <%# ── System (CPU, memory, drives) + Services + Jobs (admins) ── %>
+  <% column = @jobs ? 'col-lg-4' : 'col-md-6' %>
   <div class="row mb-4 g-3">
-    <div class="col-md-8">
+    <div class="<%= column %>">
       <div class="card h-100">
         <div class="card-header" style="background: var(--kai-dark); color: white;">
           <strong><%= lucide_icon('bar-chart-3', size: 16) %> System</strong>
@@ -159,7 +160,7 @@
     </div>
 
     <%# Services %>
-    <div class="col-md-4">
+    <div class="<%= column %>">
       <div class="card h-100">
         <div class="card-header" style="background: var(--kai-dark); color: white;">
           <strong><%= lucide_icon('settings', size: 16) %> Services</strong>
@@ -173,6 +174,8 @@
                   <td class="text-end pe-3 py-2" style="border-color: var(--kai-border, rgba(255,255,255,0.05));">
                     <% if svc[:running] %>
                       <span class="badge bg-success">Running</span>
+                    <% elsif svc[:idle] %>
+                      <span class="badge bg-info text-dark" title="<%= svc[:idle] %>">Idle</span>
                     <% else %>
                       <span class="badge" style="background: var(--kai-border); color: var(--kai-muted);">Stopped</span>
                     <% end %>
@@ -184,6 +187,33 @@
         </div>
       </div>
     </div>
+
+    <%# Scheduled jobs (admins): Settings → Jobs has the details %>
+    <% if @jobs %>
+      <div class="<%= column %>">
+        <div class="card h-100" id="jobs-card">
+          <div class="card-header d-flex justify-content-between align-items-center" style="background: var(--kai-dark); color: white;">
+            <strong><%= lucide_icon('refresh-cw', size: 16) %> Jobs</strong>
+            <a href="<%= settings_jobs_path %>" class="text-white text-decoration-none" style="font-size: 12px;">Details →</a>
+          </div>
+          <div class="card-body p-0">
+            <table class="table table-sm mb-0" style="color: var(--kai-text);">
+              <tbody>
+                <% @jobs.each do |job| %>
+                  <tr id="job-<%= job.key %>">
+                    <td class="ps-3 py-2" style="border-color: var(--kai-border, rgba(255,255,255,0.05));">
+                      <%= job.name %>
+                      <div class="text-muted" style="font-size: 0.75rem;">Last <%= job_last_run(job) %> · next <%= job_next_run(job) %></div>
+                    </td>
+                    <td class="text-end pe-3 py-2 align-middle" style="border-color: var(--kai-border, rgba(255,255,255,0.05));"><%= job_result_badge(job) %></td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    <% end %>
   </div>
 
   <%# ── Storage Pool (only when Greyhole active) ── %>
