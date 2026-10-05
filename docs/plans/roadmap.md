@@ -109,19 +109,11 @@ touches the same code.
 
 ## Test on real drives (when the NAS hardware arrives)
 
-VM 104's disks belong to Proxmox, so the disk-safety work (PR #13) is covered by specs only.
-
-- [ ] Format and mount a data drive from Disks; its `/etc/fstab` line ends
-  `defaults,nofail,x-systemd.device-timeout=10s 0 2`.
-- [ ] Reboot with one data drive unplugged: the NAS boots normally and the other drives mount.
-- [ ] Plug it back in: it mounts at its old `/mnt/storage-N`, and a new drive gets the next slot.
-- [ ] Boot from NVMe: Disks marks the NVMe as the OS disk and refuses to format or mount its
-  partitions.
-- [ ] Re-run `bin/amahi-install`: users, shares and settings survive.
-- [ ] Greyhole pool and Samba binding on the same drives.
-- [ ] Preview an unmounted drive from Disks; install Greyhole from the setup wizard.
-- [ ] ZFS pools, once S1–S5 are built: the list in [`storage.md`](storage.md#tests-on-real-drives),
-  after checking each SSD's health.
+All the hardware tests are in one checklist, to run once the SSDs are in the Jonsbo and passed
+through to the NAS VM: [`docs/testing/storage-on-real-drives.md`](../testing/storage-on-real-drives.md).
+It covers the disk-safety work (PR #13: fstab `nofail`, a drive missing at boot, the OS-disk
+guard), Greyhole, and every storage PR (S1–S5): drive health, pools, scrubs, snapshots, a failing
+drive, deleting a pool, then building the real pool.
 
 ## Next: Storage (ZFS pools for bitShare)
 

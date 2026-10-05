@@ -135,21 +135,10 @@ treated as nothing more.**
 
 ## Tests on real drives
 
-Also in the roadmap's hardware checklist. First, check each SSD's health (`smartctl -a`: power-on
-hours, wear, reallocated sectors, firmware) before it goes in a pool.
-
-- Install ZFS from Disks → ZFS Pools; the cache limit is set (`/sys/module/zfs/parameters/zfs_arc_max`).
-- The SSDs' SMART data shows on ZFS Pools (model, firmware, wear, hours), matching `smartctl -a`.
-- Pulling a drive shows on the dashboard within 15 minutes (or at once with Check now).
-- Create a RAIDZ1 pool from the 4 SSDs; it survives a reboot (imported at boot).
-- Pull a drive: the pool shows degraded and the alert appears; replace it and watch the resilver.
-- Run a scrub; take a snapshot and roll a test dataset back.
-- Grow a test pool by a second group; delete a test pool, and its drives show as free and can be
-  formatted for share storage.
-- Share storage (Greyhole) on the other drives works next to the pool, and neither offers the
-  other's drives.
-- A file copied over SMB to a share with 2 copies ends up with 2 copies, and the web file browser
-  previews and downloads it (it's a link to a pool drive).
+The checklist is [`docs/testing/storage-on-real-drives.md`](../testing/storage-on-real-drives.md):
+the drives' health first, then share storage and Greyhole on two SSDs next to a ZFS test pool on
+the other two, then the real 4-drive pool. Tests that need more hardware (a spare drive, 4 more
+drives, a machine booting from NVMe) are listed at its end.
 
 ## Open questions
 
