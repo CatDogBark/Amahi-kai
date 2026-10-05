@@ -75,6 +75,7 @@ Rails.application.routes.draw do
     post 'servers/:key/:verb', action: 'service_action', as: 'service_action',
          constraints: { verb: /start|stop|restart/ }
     get 'themes', action: 'themes'
+    get 'jobs', action: 'jobs'
     post 'activate_theme', action: 'activate_theme'
     put 'revoke_app', action: 'revoke_app'
     get 'system_status', action: 'system_status'

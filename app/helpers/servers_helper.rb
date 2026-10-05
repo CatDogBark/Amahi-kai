@@ -9,6 +9,7 @@ module ServersHelper
 
   # Bootstrap badge for a SystemServices::Service's state.
   def service_state_badge(service)
+    return content_tag(:span, 'Idle', class: 'badge bg-info text-dark', title: service.idle_reason) if service.idle?
     label, css = service.installed? ? STATE_BADGES.fetch(service.state, %w[Stopped bg-secondary]) : ['Not installed', 'bg-secondary']
     content_tag(:span, label, class: "badge #{css}", title: [service.state, service.sub_state].compact.join(' / '))
   end

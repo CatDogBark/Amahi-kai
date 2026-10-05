@@ -142,6 +142,8 @@
               td
                 - if svc[:running]
                   span.badge.bg-success Running
+                - elsif svc[:idle]
+                  span.badge.bg-info.text-dark Idle
                 - else
                   span.badge.bg-danger Stopped
               td.text-muted = svc[:detail]

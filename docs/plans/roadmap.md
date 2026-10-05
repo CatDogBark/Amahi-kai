@@ -38,6 +38,7 @@ so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 | Storage fix. lsblk tree | The helper's drive checks and ZFS Pools read lsblk as a tree (NAME first; a flat list is refused), so the system disk is recognised again; specs on the real lsblk; What's new without the dash | #45 |
 | Storage S2. Health | Health check every 15 minutes (pools + SMART, sleeping drives left asleep); alerts on the dashboard and Disks pages; drive health on ZFS Pools and Devices; Scrub now and Ubuntu's monthly scrub shown; smartmontools installed. Not yet tested on real drives | #46 |
 | Storage fix. Services and labels | ZFS's event daemon, smartd, Fail2ban and the VM guest agent in the services lists; drives without SMART data say why (virtual disk, none given, no smartmontools, not checked) | #47 |
+| Scheduled jobs | Jobs card on the dashboard (System, Services and Jobs in one row) and Settings → Jobs: Amahi-kai's timers, security updates and the pool scrub with last run, result and next run; smartd shown as Idle when there's nothing to watch | #48 |
 
 ## Next: Phase 3
 

@@ -17,6 +17,7 @@ class SystemServices
   # actions   — what Settings → Servers may do; the helper's SERVICES list
   #             (libexec/amahi-helper) must name the same services
   # note      — shown instead of buttons for services managed elsewhere
+  # idle      — when the service isn't running for this reason, it's "Idle" rather than stopped
   CATALOG = [
     { key: 'amahi-kai', name: 'Amahi-kai', unit: 'amahi-kai',
       note: 'Restarted by System Update' },
@@ -39,7 +40,7 @@ class SystemServices
     { key: 'zfs-zed', name: 'ZFS event daemon', unit: 'zfs-zed', package: 'zfs-zed', check: '/usr/sbin/zed',
       note: 'Comes with ZFS (Disks → ZFS Pools)' },
     { key: 'smartd', name: 'SMART monitoring', unit: 'smartmontools', package: 'smartmontools', check: '/usr/sbin/smartd',
-      note: 'Comes with smartmontools (Disks → ZFS Pools)' },
+      note: 'Comes with smartmontools (Disks → ZFS Pools)', idle: :no_smart_drives },
     { key: 'fail2ban', name: 'Fail2ban', unit: 'fail2ban', package: 'fail2ban', check: '/usr/bin/fail2ban-server',
       note: 'Set up by the security audit' },
     { key: 'qemu-guest-agent', name: 'VM guest agent', unit: 'qemu-guest-agent', package: 'qemu-guest-agent',
@@ -51,12 +52,19 @@ class SystemServices
     'start' => 'services.start', 'stop' => 'services.stop', 'restart' => 'services.restart'
   }.freeze
 
+  # smartd exits when no drive has SMART to watch (virtual disks have none), and systemd then
+  # counts it as failed; it starts with the server once a real drive is connected.
+  IDLE_REASONS = {
+    no_smart_drives: 'Nothing to watch: no drive here has SMART (virtual disks have none). ' \
+                     'It starts with the server once a drive with SMART is connected.'
+  }.freeze
+
   PROPERTIES = %w[Description LoadState ActiveState SubState ActiveEnterTimestamp
                   MainPID MemoryCurrent UnitFileState].freeze
 
   class Service
     attr_reader :key, :name, :unit, :description, :state, :sub_state, :since,
-                :pid, :memory, :boot, :version, :version_detail, :actions, :note
+                :pid, :memory, :boot, :version, :version_detail, :actions, :note, :idle_reason
 
     def initialize(entry, props, version: nil, version_detail: nil)
       @key = entry[:key]
@@ -79,6 +87,15 @@ class SystemServices
 
     def running?
       state == 'active'
+    end
+
+    # Not running, but because there's nothing for it to do (IDLE_REASONS).
+    def idle?
+      !idle_reason.nil?
+    end
+
+    def idle!(reason)
+      @idle_reason = reason
     end
 
     def installed?
@@ -132,7 +149,16 @@ class SystemServices
         version, detail = versions ? version_for(entry, packages) : nil
         service = Service.new(entry, props[i] || {}, version: version, version_detail: detail)
         apply_process_status(service, entry[:process]) if entry[:process]
+        service.idle!(IDLE_REASONS.fetch(entry[:idle])) if entry[:idle] && !service.running? && idle?(entry[:idle])
         service
+      end
+    end
+
+    def idle?(reason)
+      case reason
+      when :no_smart_drives
+        health = StorageHealth.load
+        health.checked? && health.drives.empty? # the last check found no drive with SMART data
       end
     end
 

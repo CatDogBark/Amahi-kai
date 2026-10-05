@@ -1,0 +1,34 @@
+/! The jobs that run on their own (ScheduledJobs). The dashboard's Jobs card links here.
+.card.mb-4
+  .card-header.bg-dark.text-white
+    h5.mb-0
+      span.me-2 = lucide_icon('refresh-cw', size: 18)
+      = t 'jobs'
+  .card-body
+    p.text-muted.small.mb-3
+      | Live from systemd. Times are the server's; each job's result is how its last run ended.
+    - if @jobs.empty?
+      p.mb-0.text-muted No scheduled jobs are installed.
+    - else
+      .table-responsive
+        table.table.table-sm.align-middle.mb-0#jobs-table
+          thead
+            tr
+              th Job
+              th Schedule
+              th Last run
+              th Result
+              th Next run
+          tbody
+            - @jobs.each do |job|
+              tr id="job-#{job.key}"
+                td
+                  .fw-bold = job.name
+                  .small.text-muted = job.about
+                td.text-nowrap = job.schedule
+                td.text-nowrap title=(job.last_run && l(job.last_run, format: :long)) = job_last_run(job).upcase_first
+                td = job_result_badge(job)
+                td.text-nowrap title=(job.next_run && l(job.next_run, format: :long))
+                  = job.next_run ? l(job.next_run, format: :short) : '—'
+                  - if job.next_run
+                    .small.text-muted = job_next_run(job)

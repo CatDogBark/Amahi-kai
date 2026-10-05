@@ -33,6 +33,18 @@ RSpec.describe SystemServices do
   describe '.all' do
     let(:services) { described_class.all(versions: true).index_by(&:key) }
 
+    # smartd exits when no drive has SMART (virtual disks), which systemd counts as failed.
+    it 'shows SMART monitoring as idle when the last health check found no drive with SMART' do
+      allow(StorageHealth).to receive(:load).and_return(StorageHealth.new('checked_at' => Time.now.utc.iso8601, 'drives' => { '/dev/sda' => nil }))
+      expect(described_class.all.index_by(&:key)['smartd']).to be_idle
+      allow(StorageHealth).to receive(:load).and_return(StorageHealth.new('checked_at' => Time.now.utc.iso8601,
+                                                                          'drives' => { '/dev/sdc' => { 'passed' => true } }))
+      expect(described_class.all.index_by(&:key)['smartd']).not_to be_idle
+      allow(StorageHealth).to receive(:load).and_return(StorageHealth.new({}))
+      expect(described_class.all.index_by(&:key)['smartd']).not_to be_idle
+      expect(services['mariadb']).not_to be_idle
+    end
+
     it "lists ZFS's event daemon, SMART monitoring, Fail2ban and the VM guest agent when installed, without buttons" do
       %w[zfs-zed smartd fail2ban qemu-guest-agent].each do |key|
         expect(services[key]).to have_attributes(actions: [], note: be_present), key
