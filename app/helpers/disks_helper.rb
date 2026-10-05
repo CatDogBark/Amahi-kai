@@ -10,6 +10,25 @@ module DisksHelper
     content_tag(:span, state.presence || 'UNKNOWN', class: "badge #{css}")
   end
 
+  HEALTH_BADGES = { ok: ['OK', 'bg-success'], warning: ['Check', 'bg-warning text-dark'], danger: ['Failing', 'bg-danger'] }.freeze
+
+  # A drive's SMART health for the drive tables: a badge, its problems, then its wear, hours
+  # and firmware. "—" for drives without SMART data (virtual disks, or not checked yet).
+  def drive_health(health, path)
+    details = health&.drive_details(path)
+    return content_tag(:span, '—', class: 'text-muted') if details.nil?
+    label, css = HEALTH_BADGES.fetch(health.drive_level(path))
+    problems = health.drive_problems(health.drive(path)).map(&:last).join(', ').upcase_first
+    safe_join([content_tag(:span, label, class: "badge #{css} me-1"), [problems.presence, details.presence].compact.join(' · ')], ' ')
+  end
+
+  # The badge alone, for Devices' card headers ("SMART OK"), or nil without SMART data.
+  def drive_health_badge(health, path)
+    return nil unless health&.drive(path)
+    label, css = HEALTH_BADGES.fetch(health.drive_level(path))
+    content_tag(:span, "SMART #{label}", class: "badge #{css} ms-2", title: health.drive_details(path))
+  end
+
   # What a whole disk is used for, on Disks → ZFS Pools (StoragePools.drives' roles).
   def drive_role(drive)
     case drive[:role]

@@ -1,6 +1,7 @@
 // Disks → ZFS Pools (disks/pools). The create form works out which layouts the ticked drives
 // allow, with the space they'd give and how many may fail, then asks the server to create
-// the pool. "Install ZFS" opens the install window.
+// the pool. data-storage-install buttons open the install window; data-storage-post buttons
+// (Scrub now, Check now) post to their URL, with their data-name, and reload.
 
 (function() {
   // Sizes as Rails' number_to_human_size writes them (1024-based, "2.73 TB").
@@ -106,9 +107,31 @@
     submit(form);
   });
 
+  function post(button) {
+    var label = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Working…';
+    fetch(button.dataset.storagePost, {
+      method: 'POST', credentials: 'same-origin',
+      headers: Object.assign({ 'Content-Type': 'application/json', 'Accept': 'application/json' }, csrfHeaders()),
+      body: JSON.stringify(button.dataset.name ? { name: button.dataset.name } : {})
+    }).then(function(r) { return r.json().catch(function() { return {}; }); })
+      .then(function(data) {
+        if (data.status === 'ok') { window.location.reload(); return; }
+        throw new Error(data.error || 'No answer from Amahi-kai');
+      })
+      .catch(function(err) {
+        alert(err.message);
+        button.disabled = false;
+        button.textContent = label;
+      });
+  }
+
   document.addEventListener('click', function(event) {
-    var button = event.target.closest('[data-zfs-install]');
-    if (button) openInstallTerminal('zfs-install', button.dataset.zfsInstall);
+    var install = event.target.closest('[data-storage-install]');
+    if (install) openInstallTerminal('storage-install', install.dataset.storageInstall);
+    var action = event.target.closest('[data-storage-post]');
+    if (action) post(action);
   });
 
   document.addEventListener('DOMContentLoaded', function() {

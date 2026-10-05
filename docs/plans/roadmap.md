@@ -36,6 +36,7 @@ so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 | 3. Update notice | A dot on the header's update button and a dashboard line when an update is waiting; the button opens a What's new window (changelog, pull requests, Update now or Later; else Check now and Repair) | #43 |
 | Storage S1. ZFS pools | Disks → ZFS Pools: install ZFS (cache capped), create a pool in the chosen layout, pool status; every drive's use shown; ZFS drives kept away from share storage. Not yet tested on real drives | #44 |
 | Storage fix. lsblk tree | The helper's drive checks and ZFS Pools read lsblk as a tree (NAME first; a flat list is refused), so the system disk is recognised again; specs on the real lsblk; What's new without the dash | #45 |
+| Storage S2. Health | Health check every 15 minutes (pools + SMART, sleeping drives left asleep); alerts on the dashboard and Disks pages; drive health on ZFS Pools and Devices; Scrub now and Ubuntu's monthly scrub shown; smartmontools installed. Not yet tested on real drives | #46 |
 
 ## Next: Phase 3
 
@@ -120,7 +121,7 @@ VM 104's disks belong to Proxmox, so the disk-safety work (PR #13) is covered by
 Decided 2026-10-04, in [`storage.md`](storage.md): SMB shares stay on simple drives and Greyhole;
 new ZFS pools, with the layout the user chooses, hold bitShare's data, on other drives; Greyhole
 also handles files that don't arrive through Samba (web uploads). Built now in five PRs (S1–S5,
-listed there; S1 is #44), then Phase 4, then bitShare. Tested on the physical drives once
+listed there; S1 is #44, S2 #46), then Phase 4, then bitShare. Tested on the physical drives once
 they're connected.
 
 ## Phase 4: Docker apps

@@ -7,6 +7,7 @@
 #   /etc/logrotate.d/amahi-kai      from config/logrotate-amahi-kai.conf
 #   /etc/systemd/system/amahi-kai-update.service   System Update's job
 #   /etc/systemd/system/amahi-kai-update-check.{service,timer}   the check for updates, every 6 hours
+#   /etc/systemd/system/amahi-kai-storage-check.{service,timer}  the storage health check, every 15 minutes
 #   /etc/sudoers.d/amahi-kai        from config/sudoers/amahi-kai, only if visudo accepts it
 #
 # Exits non-zero if something wasn't installed; the sudoers file is then left as it was.
@@ -29,13 +30,16 @@ install -d -o root -g "$APP_GROUP" -m 0750 /var/log/amahi-kai
 if [[ -d /etc/logrotate.d ]]; then
   install -o root -g root -m 0644 "$APP_DIR/config/logrotate-amahi-kai.conf" /etc/logrotate.d/amahi-kai
 fi
-for unit in amahi-kai-update.service amahi-kai-update-check.service amahi-kai-update-check.timer; do
+for unit in amahi-kai-update.service amahi-kai-update-check.service amahi-kai-update-check.timer \
+            amahi-kai-storage-check.service amahi-kai-storage-check.timer; do
   install -o root -g root -m 0644 "$APP_DIR/config/systemd/$unit" "/etc/systemd/system/$unit"
 done
 if [[ -d /run/systemd/system ]]; then
   systemctl daemon-reload
   systemctl enable --now amahi-kai-update-check.timer >/dev/null 2>&1 \
     || echo "Couldn't enable amahi-kai-update-check.timer; the web UI's Check now still works" >&2
+  systemctl enable --now amahi-kai-storage-check.timer >/dev/null 2>&1 \
+    || echo "Couldn't enable amahi-kai-storage-check.timer; Disks → ZFS Pools' Check now still works" >&2
 fi
 
 # A broken file in /etc/sudoers.d stops sudo working for everyone, so the new rules are

@@ -1,0 +1,11 @@
+# Checks the pools and every drive's SMART health for the dashboard's and the Disks pages'
+# alerts (the root helper's storage.check_health: writes /var/lib/amahi-kai/storage-health.json).
+# Started by amahi-kai-storage-check.timer. Installed by bin/amahi-install-helper.
+[Unit]
+Description=Amahi-kai: check the storage's health
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/amahi-helper storage.check_health
+StandardInput=null
+TimeoutStartSec=5min

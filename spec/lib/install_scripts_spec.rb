@@ -44,6 +44,16 @@ RSpec.describe 'install and update scripts' do
     expect(File.read(Rails.root.join('config/systemd/amahi-kai-update-check.timer'))).to include('OnUnitActiveSec=6h')
   end
 
+  it 'installs and enables the storage health check' do
+    text = File.read(Rails.root.join('bin/amahi-install-helper'))
+    expect(text).to include('amahi-kai-storage-check.service amahi-kai-storage-check.timer')
+    expect(text).to include('systemctl enable --now amahi-kai-storage-check.timer')
+    expect(File.read(Rails.root.join('config/systemd/amahi-kai-storage-check.service')))
+      .to include('ExecStart=/usr/local/sbin/amahi-helper storage.check_health')
+    expect(File.read(Rails.root.join('config/systemd/amahi-kai-storage-check.timer'))).to include('OnUnitActiveSec=15min')
+    expect(File.read(Rails.root.join('bin/amahi-install'))).to include('  smartmontools \\')
+  end
+
   it 'stops early with nothing new, unless repairing, and shares the lock with the check' do
     text = File.read(Rails.root.join('bin/amahi-update'))
     expect(text).to include('Already up to date', '--repair) REPAIR=true', 'REPAIR_FLAG=/run/amahi-kai-update.repair')

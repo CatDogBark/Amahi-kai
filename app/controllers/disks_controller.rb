@@ -3,11 +3,14 @@ require 'disk_manager'
 require 'shell'
 require 'disk_service'
 require 'storage_pools'
+require 'storage_health'
 
 class DisksController < ApplicationController
   include SseStreaming
 
   before_action :admin_required
+  # The storage health alerts at the top of every Disks page.
+  before_action(only: %i[index mounts devices storage_pool pools]) { @health = StorageHealth.load }
 
   def index
     @page_title = t('disks')
@@ -144,6 +147,22 @@ class DisksController < ApplicationController
     @drives = StoragePools.drives(@status[:pools])
     names = @status[:pools].map(&:name)
     @new_pool_name = (1..).lazy.map { |n| "pool#{n}" }.find { |name| names.exclude?(name) }
+    @smart_installed = StoragePools.smart_installed?
+    @next_scrub = StoragePools.next_scrub
+  end
+
+  def scrub_pool
+    StoragePools.scrub!(params[:name])
+    render json: { status: 'ok' }
+  rescue StoragePools::Error => e
+    render json: { status: 'error', error: e.message }, status: :unprocessable_content
+  end
+
+  def check_health
+    StoragePools.check_health!
+    render json: { status: 'ok' }
+  rescue StoragePools::Error => e
+    render json: { status: 'error', error: e.message }, status: :unprocessable_content
   end
 
   def create_pool
@@ -153,10 +172,11 @@ class DisksController < ApplicationController
     render json: { status: 'error', error: e.message }, status: :unprocessable_content
   end
 
-  def install_zfs_stream
+  # Installs what's missing of ZFS and the drive health tools.
+  def install_storage_tools_stream
     stream_sse do |sse|
       StoragePools.install! { |line| sse.emit(line) }
-      sse.emit('✓ ZFS installed')
+      sse.emit('✓ Installed')
       sse.done
     rescue StoragePools::Error => e
       sse.emit("✗ #{e.message}")

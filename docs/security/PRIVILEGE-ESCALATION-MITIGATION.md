@@ -1,7 +1,7 @@
 # Privilege model
 
 How Amahi-kai gets root access on a NAS, and what keeps the web app from turning a bug into
-root. Last updated 2026-10-04 (storage S1, ZFS pools). Design and history: [`docs/plans/privileged-helper.md`](../plans/privileged-helper.md).
+root. Last updated 2026-10-04 (storage S2, health checks). Design and history: [`docs/plans/privileged-helper.md`](../plans/privileged-helper.md).
 
 ## Summary
 
@@ -55,7 +55,9 @@ reboot and power off, the hostname, dnsmasq, swap, data drives and fstab, ZFS po
 only on whole data disks with nothing in use on them; pools mount under `/srv/pools`, where no
 share folder may be made), Greyhole, package
 installs (from pinned apt repositories and a fixed package list), the Cloudflare Tunnel,
-Tailscale, the security audit's fixes, drive temperatures, and System Update (starting it, or
+Tailscale, the security audit's fixes, drive temperatures, the storage health check (pools and
+SMART, every 15 minutes from `amahi-kai-storage-check.timer`, written to
+`/var/lib/amahi-kai/storage-health.json`), and System Update (starting it, or
 checking for an update: `git fetch` as root, written to `/var/lib/amahi-kai/update-status.json`,
 every 6 hours from `amahi-kai-update-check.timer`). `amahi-helper --list` prints the operations, and
 `--dry-run OPERATION` shows what a request would do without doing it.

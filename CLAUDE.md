@@ -88,6 +88,10 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
   in `vendor/assets` (CSS, and JS with Popper); update it by replacing those files. Theme CSS in
   `public/themes/*/stylesheets` is built by hand from `src/` with Dart Sass.
 - `Shell.capture` and `Open3` don't set `$?`; use the status they return.
+- **`lsblk -J` only nests partitions and volumes under their disk when NAME is the first
+  column**; with PATH first it lists every device flat, and a disk looks empty (#45: the helper's
+  system-disk check didn't hold). Ask for `NAME,PATH,...`; the helper refuses a flat list, and
+  specs run the real `lsblk`. Check fixtures against a real command's output.
 - Build commands from names as argument lists (`Open3.capture3('systemctl', 'show', unit)`), not
   strings through a shell.
 - `lib/system_services.rb` is the one list of system services (dashboard, System Status and

@@ -1,0 +1,16 @@
+<%# Storage health alerts (StorageHealth#alerts), for admins: on the dashboard and at the top
+    of every Disks page. Each links to the page with the drive, unless it's this one. %>
+<% alerts = health ? health.alerts : [] %>
+<% if alerts.any? %>
+  <div class="storage-alerts mb-3">
+    <% alerts.each do |alert| %>
+      <div class="alert <%= alert.level == :danger ? 'alert-danger' : 'alert-warning' %> py-2 px-3 mb-2 small d-flex align-items-center gap-2">
+        <%= lucide_icon('alert-triangle', size: 16) %>
+        <span class="flex-grow-1"><%= alert.message %></span>
+        <% unless request.path == alert.path %>
+          <a href="<%= alert.path %>" class="alert-link text-nowrap">See the drive →</a>
+        <% end %>
+      </div>
+    <% end %>
+  </div>
+<% end %>
