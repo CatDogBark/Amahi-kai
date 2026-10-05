@@ -1,7 +1,8 @@
 # App tests on the NAS
 
-Apps through the root helper (P4.1, #58), reaching apps (P4.2, #59) and shares for apps (P4.4,
-#60) were built and checked with specs, but no app has been installed on the NAS yet. This is the list to run when there's
+Apps through the root helper (P4.1, #58), reaching apps (P4.2, #59), shares for apps (P4.4, #60)
+and app updates (P4.5, #62) were built and checked with specs, but no app has been installed on
+the NAS yet. This is the list to run when there's
 time. Tick each box as it passes; if one doesn't, stop there and send Claude what the page shows
 plus the output of the [commands at the end](#if-something-fails).
 
@@ -106,7 +107,25 @@ Each folder belongs to a different number below 1000.
 - [ ] Once there's a pooled share (storage tests, step 4), give it to Jellyfin: its files play,
   and **Read and write** isn't offered for it ("Read only: Greyhole pools it").
 
-## 5. Uninstall and data
+## 5. Updates
+
+This needs an app whose catalog version is newer than the one it runs. The first time a version
+bump reaches the NAS (`script/app-versions`, then a PR and System Update), install the app
+**before** that update, so its row then offers the new version. Uptime Kuma or Vaultwarden is a
+good one to try first: they have Docker health checks and small data.
+
+- [ ] The row says **Version <old>** and **Update to <new>**, with **What's new** opening the
+  release notes. The dashboard's Apps card says **1 update**.
+- [ ] **Update to <new>**: the window copies the data, starts the new version, waits for it to be
+  healthy and ends with ✓. The row says **Version <new>**, with **Undo update (until <date>)**.
+  The app's own data (Uptime Kuma's monitors) is still there.
+- [ ] **Undo update**: the window ends with ✓, the row says **Version <old>** again, and Update is
+  offered again.
+- [ ] **Settings → Jobs** lists **App update copies**, daily.
+- [ ] Optional, rollback: the copy and the version come back by themselves when the new version
+  doesn't start. That's hard to cause on purpose; the specs cover it.
+
+## 6. Uninstall and data
 
 - [ ] **Uninstall** Uptime Kuma (it says the data stays). Its row goes back to **Install**, with
   "Its data from an earlier install is kept and used again."
@@ -117,12 +136,12 @@ Each folder belongs to a different number below 1000.
   sudo ls /var/lib/amahi-kai/apps
   ```
 
-## 6. Reboot
+## 7. Reboot
 
 - [ ] **Stop** one app, then reboot the VM. The running apps come back running, the stopped one
   stays stopped, and `sudo iptables -S AMAHI-APPS` lists the rules again.
 
-## 7. Optional: a port that's taken
+## 8. Optional: a port that's taken
 
 - [ ] Uninstall Uptime Kuma and delete its data. In a second terminal on the NAS, keep port 3001
   busy:

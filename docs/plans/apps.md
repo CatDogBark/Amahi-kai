@@ -1,7 +1,7 @@
 # Phase 4: apps
 
-Status: planned with Troy, 2026-10-05; P4.1 (#58), P4.2 (#59) and P4.4 (#60) are done, not yet
-tested on the NAS ([`docs/testing/apps.md`](../testing/apps.md)). The overall decisions and P4.1's are made (below); each
+Status: planned with Troy, 2026-10-05; P4.1 (#58), P4.2 (#59), P4.4 (#60) and P4.5 (#62) are done,
+not yet tested on the NAS ([`docs/testing/apps.md`](../testing/apps.md)). The overall decisions and P4.1's are made (below); each
 later PR's decisions are listed under it, to settle when that PR starts.
 
 Apps are how Amahi-kai grows: Jellyfin, Vaultwarden and the like today, bitShare (and later
@@ -192,10 +192,26 @@ app needs a public hostname. HTTPS for apps through Tailscale (Vaultwarden needs
 
 ### P4.5: App updates
 
-- [ ] Manual (an Update button when the catalog has a newer pinned version) or automatic.
-- [ ] Rollback to the previous image if the new one doesn't come up healthy.
-- [ ] How often the catalog's versions are bumped, and by whom (a Claude session, a script).
-- [ ] Showing what changed (the app's release notes link).
+**Done** (#62). Decisions (Troy, 2026-10-05):
+
+- [x] **Manual.** An installed app's row offers **Update to <version>** when the catalog (brought by
+  System Update) has another version than the one it runs. Installing again and changing shares
+  keep the version it runs; only Update changes it.
+- [x] **A copy first, and rollback.** The helper (`apps.update`) copies the app's folders (all but
+  those the manifest marks `backup: false`: Jellyfin's cache, Transmission's downloads) after
+  checking there's room, starts the new version, and waits up to 5 minutes for it to be healthy:
+  Docker's own health check where the image has one (Jellyfin, Uptime Kuma, Vaultwarden),
+  otherwise its web page answering and the container still running 10 seconds later (Gitea,
+  Transmission). If it isn't, the old version and the copied data are put back.
+- [x] **One copy per app, kept 30 days, for Undo update** (`apps.undo_update`); the next update
+  replaces it, and `amahi-kai-app-backups.timer` deletes it after 30 days (`apps.prune_backups`).
+  Copies are in `/var/lib/amahi-kai/app-backups` (root only; a description beside each copy for
+  the Apps page).
+- [x] **Version bumps are a person's job, no automation.** `script/app-versions` lists newer
+  releases of the same tag shape (and newer builds of the pinned tag) with release notes links;
+  `--update APP` writes the new tag and digest. Someone reads the notes and opens a PR. No bot,
+  no schedule, no Claude session runs it.
+- [x] **What's new** links to the new version's release notes (the manifest's `releases`).
 
 ### P4.6: bitShare as the first built-in app
 

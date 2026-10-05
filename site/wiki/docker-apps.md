@@ -120,6 +120,27 @@ passwords and user stay, and installing the app again picks them up. To delete t
 uninstall the app, then click **Delete it** on its row (it says its data from an earlier install
 is kept).
 
+### Updating an app
+
+Each installed app's row says which version it runs. When an Amahi-kai update brings a newer
+version of an app into the catalog, its row offers **Update to <version>**, next to **What's
+new** (the release notes). Nothing updates on its own.
+
+**Update**:
+
+1. Copies the app's data. Caches and Transmission's downloads are left out. It stops first if
+   there isn't room for the copy.
+2. Starts the new version, and waits up to 5 minutes for it to come up healthy.
+3. If it doesn't come up, puts the old version and its data back by itself, and says why.
+
+The copy is kept for **30 days**. During that time **Undo update** on the row puts the old
+version back, with the app's data as it was before the update; anything changed since is lost.
+A later update replaces the copy, and it's deleted after 30 days (Settings → Jobs: **App update
+copies**).
+
+New versions reach the catalog by hand: someone runs `script/app-versions`, reads the release
+notes, and makes the change in Amahi-kai's code (see `config/apps/README.md`).
+
 ### From the command line
 
 The web UI is the usual way; these are for looking closer:

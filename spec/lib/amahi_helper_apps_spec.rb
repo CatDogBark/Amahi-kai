@@ -78,7 +78,8 @@ RSpec.describe 'AmahiHelper apps' do
     end
 
     it 'installs from the manifest, and uninstalls keeping the data unless asked' do
-      expect(steps('apps.install', { 'app' => 'vaultwarden' })).to eq([[:install_app, 'vaultwarden', helper.app_manifest('vaultwarden'), []]])
+      # A reinstall (new shares) keeps the version the app runs: the last argument.
+      expect(steps('apps.install', { 'app' => 'vaultwarden' })).to eq([[:install_app, 'vaultwarden', helper.app_manifest('vaultwarden'), [], true]])
       image = helper.app_manifest('gitea')[:image]
       expect(steps('apps.uninstall', { 'app' => 'gitea' })).to eq([[:uninstall_app, 'gitea', image, false]])
       expect(steps('apps.uninstall', { 'app' => 'gitea', 'delete_data' => true })).to eq([[:uninstall_app, 'gitea', image, true]])
@@ -119,6 +120,8 @@ RSpec.describe 'AmahiHelper apps' do
       expect(failure('ports' => [{ 'host' => 8500, 'container' => 80, 'protocol' => 'sctp' }])).to include('must be tcp or udp')
       expect(failure('folders' => [{ 'name' => 'data', 'path' => '/data/../etc' }])).to include('normalized path')
       expect(failure('folders' => [{ 'name' => '../x', 'path' => '/data' }])).to include('folder name')
+      expect(failure('folders' => [{ 'name' => 'data', 'path' => '/data', 'backup' => 'no' }])).to include("backup must be true or false")
+      expect(failure('web_port' => 9999)).to include('web_port 9999 must be one of its ports')
       expect(failure('environment' => { 'bad name' => 'x' })).to include("isn't valid")
       expect(failure('environment' => { 'X' => "a\nb" })).to include('one line')
       expect(failure('environment' => { 'TOKEN' => 'fixed' })).to include('set in environment too')
@@ -162,7 +165,7 @@ RSpec.describe 'AmahiHelper apps' do
     it "creates the app's user and folders, keeps secrets off the command line, and starts the container" do
       manifest = helper.app_manifest('vaultwarden')
       expect(helper.do_install_app('vaultwarden', manifest)).to eq(
-        'app' => 'vaultwarden', 'container' => 'amahi-vaultwarden',
+        'app' => 'vaultwarden', 'container' => 'amahi-vaultwarden', 'image' => manifest[:image],
         'ports' => [{ 'preferred' => 8880, 'host' => 8880, 'container' => 8080, 'protocol' => 'tcp' }]
       )
 
@@ -276,6 +279,124 @@ RSpec.describe 'AmahiHelper apps' do
       expect(ran.map { |argv| argv[1] }).not_to include('pull')
       expect(helper).to have_received(:docker_output).with('image', 'inspect', '--format', '{{.Id}}',
                                                            start_with('gitea/gitea@sha256:'))
+    end
+
+    describe 'updating' do
+      let(:backups) { "#{dir}/app-backups" }
+      let(:old_image) { "vaultwarden/server:1.37.2@sha256:#{'b' * 64}" }
+      let(:manifest) { helper.app_manifest('vaultwarden') }
+      let(:running) { { 'vaultwarden' => old_image } }
+      let(:data) { "#{apps_root}/vaultwarden/data" }
+
+      before do
+        stub_const('AmahiHelper::APP_BACKUPS', backups)
+        allow(helper).to receive(:app_image) { |id| running[id] }
+        allow(helper).to receive(:disk_usage).and_return(10 * 1024**2)
+        allow(helper).to receive(:free_space).and_return(20 * 1024**3)
+        allow(helper).to receive(:app_health_problem).and_return(nil)
+        allow(helper).to receive(:run_command) { |argv| fake_docker.call(argv) }
+        helper.do_install_app('vaultwarden', manifest.merge(image: old_image))
+        File.write("#{data}/db.sqlite3", 'before')
+        ran.clear
+      end
+
+      # Copies for real, and the new version changes its data the way a database upgrade would.
+      let(:fake_docker) do
+        lambda do |argv|
+          ran << argv
+          accounts[argv.last] = account(argv.last, 996) if argv.first == '/usr/sbin/useradd'
+          FileUtils.cp_r(argv[-2], argv[-1], preserve: true) if argv.first == '/usr/bin/cp'
+          if argv[1] == 'create'
+            running['vaultwarden'] = argv.last
+            File.write("#{data}/db.sqlite3", 'upgraded') if argv.last == manifest[:image]
+          end
+          nil
+        end
+      end
+
+      def backup_info
+        JSON.parse(File.read("#{backups}/vaultwarden.json"))
+      end
+
+      it "copies the data, starts the new version, and keeps the copy for Undo" do
+        reply = helper.do_update_app('vaultwarden', manifest, [])
+        expect(reply).to include('updated' => true, 'image' => manifest[:image], 'from' => old_image)
+        commands = ran.map { |argv| argv.first(2).join(' ') }
+        expect(commands.index('/usr/bin/docker stop')).to be < commands.index('/usr/bin/cp -a')
+        expect(commands.index('/usr/bin/cp -a')).to be < commands.index('/usr/bin/docker create')
+        expect(ran.last).to eq(['/usr/bin/docker', 'image', 'rm', old_image, { allow_failure: true }])
+        expect(File.read("#{backups}/vaultwarden/data/db.sqlite3")).to eq('before')
+        expect(backup_info).to include('from' => old_image, 'to' => manifest[:image], 'folders' => ['data'])
+        expect(File.read("#{data}/db.sqlite3")).to eq('upgraded')
+      end
+
+      it "goes back to the old version and its data when the new one isn't healthy" do
+        allow(helper).to receive(:app_health_problem).and_return('it stopped (exit code 1)')
+        reply = helper.do_update_app('vaultwarden', manifest, [])
+        expect(reply).to eq('app' => 'vaultwarden', 'updated' => false, 'image' => old_image, 'problem' => 'it stopped (exit code 1)')
+        expect(File.read("#{data}/db.sqlite3")).to eq('before')
+        expect(running['vaultwarden']).to eq(old_image)
+        expect(File.exist?("#{backups}/vaultwarden.json")).to be false
+        expect(ran.map { |argv| argv[1..2] }).not_to include(['image', 'rm'])
+      end
+
+      it "goes back too when the new version can't even be created" do
+        allow(helper).to receive(:run_command) do |argv|
+          raise AmahiHelper::Failed, 'docker exited 125: invalid mount' if argv[1] == 'create' && argv.last == manifest[:image]
+          fake_docker.call(argv)
+        end
+        expect(helper.do_update_app('vaultwarden', manifest, [])).to include('updated' => false, 'problem' => 'docker exited 125: invalid mount')
+        expect(running['vaultwarden']).to eq(old_image)
+      end
+
+      it "refuses before stopping anything when the copy wouldn't fit, or there's nothing to update" do
+        allow(helper).to receive(:free_space).and_return(512 * 1024**2)
+        expect { helper.do_update_app('vaultwarden', manifest, []) }.to raise_error(AmahiHelper::Failed, /isn't room to copy vaultwarden's data/)
+        running['vaultwarden'] = manifest[:image]
+        expect { helper.do_update_app('vaultwarden', manifest, []) }.to raise_error(AmahiHelper::Failed, /the catalog's version, already/)
+        running.delete('vaultwarden')
+        expect { helper.do_update_app('vaultwarden', manifest, []) }.to raise_error(AmahiHelper::Failed, "vaultwarden isn't installed")
+        expect(ran).to be_empty
+      end
+
+      it 'leaves out folders the manifest marks backup: false' do
+        jellyfin = helper.app_manifest('jellyfin')
+        FileUtils.mkdir_p(%W[#{apps_root}/jellyfin/config #{apps_root}/jellyfin/cache])
+        expect(helper.app_backup_folders('jellyfin', jellyfin)).to eq(["#{apps_root}/jellyfin/config"])
+      end
+
+      it 'undoes the update within 30 days: the old version and data come back, and the copy goes' do
+        helper.do_update_app('vaultwarden', manifest, [])
+        reply = helper.do_undo_app_update('vaultwarden', manifest, [])
+        expect(reply).to include('image' => old_image)
+        expect(File.read("#{data}/db.sqlite3")).to eq('before')
+        expect(running['vaultwarden']).to eq(old_image)
+        expect(File.exist?("#{backups}/vaultwarden")).to be false
+        expect { helper.do_undo_app_update('vaultwarden', manifest, []) }.to raise_error(AmahiHelper::Failed, 'vaultwarden has no update to undo')
+      end
+
+      it 'keeps one copy per app, the newest, and deletes it after 30 days' do
+        helper.do_update_app('vaultwarden', manifest, [])
+        File.write("#{backups}/vaultwarden.json", backup_info.merge('taken_at' => (Time.now - 31 * 86_400).utc.iso8601).to_json)
+        expect { helper.do_undo_app_update('vaultwarden', manifest, []) }.to raise_error(AmahiHelper::Failed, /over 30 days old/)
+        File.write("#{backups}/stray.json", '{}') # no copy beside it
+        expect(helper.do_prune_app_backups).to eq('removed' => %w[stray vaultwarden])
+        expect(Dir.children(backups)).to eq([])
+      end
+
+      it "keeps the version an app runs when it's installed again (new shares), so only Update changes it" do
+        running['vaultwarden'] = old_image
+        reply = helper.do_install_app('vaultwarden', manifest, [], true)
+        expect(reply['image']).to eq(old_image)
+        expect(helper).to have_received(:say).with('Keeping the version it runs (1.37.2)')
+      end
+
+      it "uninstalls the image the app runs, and drops its copy with its data" do
+        helper.do_update_app('vaultwarden', manifest, [])
+        helper.do_uninstall_app('vaultwarden', 'something:else', true)
+        expect(ran).to include(['/usr/bin/docker', 'image', 'rm', manifest[:image], { allow_failure: true }])
+        expect(File.exist?("#{backups}/vaultwarden.json")).to be false
+      end
     end
 
     describe 'ports' do
@@ -407,8 +528,56 @@ RSpec.describe 'AmahiHelper apps' do
       allow(File).to receive(:executable?).with('/usr/bin/docker').and_return(true)
       expect(refusal('apps.install', { 'app' => 'jellyfin', 'shares' => [{ 'name' => 'Downloads', 'write' => true }] }))
         .to eq('jellyfin only reads shares')
-      expect(steps('apps.install', { 'app' => 'jellyfin', 'shares' => [{ 'name' => 'Movies' }] }).first.last)
+      expect(steps('apps.install', { 'app' => 'jellyfin', 'shares' => [{ 'name' => 'Movies' }] }).first[3])
         .to eq([{ name: 'Movies', path: "#{files}/movies", pooled: true, write: false }])
+    end
+  end
+
+  describe 'health after an update' do
+    let(:manifest) { helper.app_manifest('gitea') }
+    let(:clock) { [0] }
+
+    before do
+      allow(helper).to receive(:pause) { |seconds| clock[0] += seconds }
+      allow(helper).to receive(:monotonic_now) { clock[0] }
+      allow(helper).to receive(:app_restart_count).and_return(0)
+    end
+
+    def states(*list)
+      allow(helper).to receive(:app_state).and_return(*list)
+    end
+
+    it "trusts Docker's own health check where the image has one" do
+      states({ 'Status' => 'running', 'Health' => { 'Status' => 'starting' } }, { 'Status' => 'running', 'Health' => { 'Status' => 'healthy' } })
+      expect(helper.app_health_problem('gitea', manifest)).to be_nil
+      states({ 'Status' => 'running', 'Health' => { 'Status' => 'unhealthy' } })
+      expect(helper.app_health_problem('gitea', manifest)).to eq("Docker's health check for it failed")
+    end
+
+    it 'otherwise wants its web page answering, and it still running 10 seconds later' do
+      allow(helper).to receive(:app_answers?).and_return(false, true)
+      states({ 'Status' => 'running' })
+      expect(helper.app_health_problem('gitea', manifest)).to be_nil
+      expect(clock[0]).to eq(15)
+    end
+
+    it 'gives up when it stops, keeps restarting, or takes over 5 minutes' do
+      states({ 'Status' => 'exited', 'ExitCode' => 3 })
+      expect(helper.app_health_problem('gitea', manifest)).to eq('it stopped (exit code 3)')
+      states({ 'Status' => 'restarting' })
+      expect(helper.app_health_problem('gitea', manifest)).to eq("it didn't come up within 5 minutes")
+      states(nil)
+      expect(helper.app_health_problem('gitea', manifest)).to eq('its container is gone')
+    end
+
+    it "asks the app's own port, the one it was given" do
+      server = TCPServer.new('127.0.0.1', 0)
+      Thread.new { (client = server.accept).readpartial(100) && client.write("HTTP/1.1 302 Found\r\n\r\n") && client.close }
+      File.write("#{dir}/app-ports.json", { 'gitea' => [{ 'preferred' => 3300, 'host' => server.addr[1], 'protocol' => 'tcp' }] }.to_json)
+      stub_const('AmahiHelper::APP_PORTS', "#{dir}/app-ports.json")
+      expect(helper.app_answers?('gitea', manifest)).to be true
+      server.close
+      expect(helper.app_answers?('gitea', manifest)).to be false
     end
   end
 

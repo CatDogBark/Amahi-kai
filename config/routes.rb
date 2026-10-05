@@ -90,6 +90,8 @@ Rails.application.routes.draw do
     get 'installed_apps', action: 'installed_apps'
     post 'docker/install/:id', action: 'docker_install', as: 'docker_install'
     get 'docker/install_stream/:id', action: 'docker_install_stream', as: 'docker_install_stream'
+    get 'docker/update_stream/:id', action: 'docker_update_stream', as: 'docker_update_stream'
+    get 'docker/undo_update_stream/:id', action: 'docker_undo_update_stream', as: 'docker_undo_update_stream'
     post 'docker/uninstall/:id', action: 'docker_uninstall', as: 'docker_uninstall'
     post 'docker/start/:id', action: 'docker_start', as: 'docker_start'
     post 'docker/stop/:id', action: 'docker_stop', as: 'docker_stop'

@@ -1,0 +1,12 @@
+# Runs amahi-kai-app-backups.service once a day, and at boot if a run was missed while the
+# server was off. Installed and enabled by bin/amahi-install-helper.
+[Unit]
+Description=Amahi-kai: delete old app update copies daily
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=1h
+
+[Install]
+WantedBy=timers.target

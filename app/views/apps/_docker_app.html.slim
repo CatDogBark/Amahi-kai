@@ -31,6 +31,20 @@
             = app.ports.map { |port| port[:host] }.uniq.one? ? 'Port ' : 'Ports '
             = app.port_summary
         - if installed && %w[running stopped].include?(status)
+          / Versions (P4.5): Update when the catalog has another one, Undo update while the copy
+          / from before the last update is kept. Both run in the install window (apps.js).
+          - backup = AppCatalog.backup(identifier)
+          .small.mt-1
+            = "Version #{app.version}"
+            - if app.update_available?
+              - target = app.catalog_version
+              button.btn.btn-link.p-0.ms-2.align-baseline.fw-semibold type="button" style="font-size: inherit" data-app-stream=identifier data-url=apps_docker_update_stream_path(identifier) data-title="Updating #{name}..." data-confirm="Update #{name} to #{target}? It stops for a minute or two. A copy of its data is kept for #{AppCatalog::BACKUP_DAYS} days, and if #{target} doesn't come up, #{name} goes back to #{app.version} by itself." = "Update to #{target}"
+              - releases = AppCatalog.releases_url(identifier, entry[:image])
+              - if releases
+                a.ms-2 href=releases target="_blank" rel="noopener" What's new
+            - if backup
+              button.btn.btn-link.p-0.ms-2.align-baseline type="button" style="font-size: inherit" data-app-stream=identifier data-url=apps_docker_undo_update_stream_path(identifier) data-title="Undoing #{name}'s update..." data-confirm="Undo the update? #{name} goes back to #{AppCatalog.tag(backup[:from])} with its data from #{l(backup[:taken_at], format: :short)}. Anything changed in #{name} since then is lost." Undo update
+              span.text-secondary.ms-1 = "(until #{backup[:until].localtime.strftime('%B %-d')})"
           .small.mt-1
             = app.shares.any? ? "Shares #{app.share_summary}" : 'No shares'
             button.btn.btn-link.p-0.ms-2.align-baseline type="button" style="font-size: inherit" data=share_dialog.merge('verb' => 'Save and restart') Change

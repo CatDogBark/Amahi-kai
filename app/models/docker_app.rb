@@ -16,6 +16,21 @@ class DockerApp < ApplicationRecord
   scope :dashboard, -> { where(show_in_dashboard: true) }
   scope :by_category, ->(cat) { where(category: cat) }
 
+  # The version it runs ("1.37.3"), from the image it was installed or updated with.
+  def version
+    AppCatalog.tag(image)
+  end
+
+  # The catalog has another version of it (P4.5): System Update brought a newer manifest.
+  def update_available?
+    entry = AppCatalog.find(identifier)
+    entry.present? && image.present? && entry[:image] != image
+  end
+
+  def catalog_version
+    AppCatalog.tag(AppCatalog.find(identifier)&.dig(:image))
+  end
+
   # The app's page, on its own port of the NAS (docs/plans/apps.md, O3).
   def url(host)
     "http://#{host}:#{host_port}/" if host_port

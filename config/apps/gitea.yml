@@ -2,6 +2,7 @@ name: Gitea
 description: Your own Git server, like a small GitHub, for code and its history.
 category: development
 logo: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/gitea.png
+releases: https://github.com/go-gitea/gitea/releases/tag/v{version}
 image: gitea/gitea:1.27.3-rootless@sha256:1c17ecaead42eb3b5391553d8708103a4beb0e86edf5b9ebc1eb269c318845f2
 run_as: app
 web_port: 3300

@@ -10,7 +10,7 @@ describe "Docker Apps", type: :request do
   end
 
   def gitea(attrs = {})
-    DockerApp.create!({ identifier: 'gitea', name: 'Gitea', image: 'gitea/gitea:1.27.3-rootless', status: 'running',
+    DockerApp.create!({ identifier: 'gitea', name: 'Gitea', image: AppCatalog.find('gitea')[:image], status: 'running',
                         host_port: 3300 }.merge(attrs))
   end
 
@@ -169,6 +169,85 @@ describe "Docker Apps", type: :request do
       post "/apps/docker/start/jellyfin"
       expect(response).to have_http_status(:not_found)
       expect(response.parsed_body['message']).to eq("That app isn't installed")
+    end
+  end
+
+  # P4.5: Update when the catalog has another version, Undo update while the copy is kept.
+  describe "updates" do
+    let(:old) { "gitea/gitea:1.27.2-rootless@sha256:#{'b' * 64}" }
+    let(:catalog) { AppCatalog.find('gitea')[:image] }
+
+    def helper_replies(operation, reply)
+      allow(Privileged).to receive(:call).and_call_original
+      allow(Privileged).to receive(:call).with(operation, app: 'gitea', shares: []).and_return({ 'ok' => true }.merge(reply))
+    end
+
+    it "offers Update to the catalog's version, with its release notes, only when the app runs another" do
+      gitea(image: old)
+      get "/apps/installed_apps"
+      expect(response.body).to include('Version 1.27.2-rootless', 'Update to 1.27.3-rootless',
+                                       'data-url="/apps/docker/update_stream/gitea"',
+                                       'href="https://github.com/go-gitea/gitea/releases/tag/v1.27.3"')
+      DockerApp.find_by(identifier: 'gitea').update!(image: catalog)
+      get "/apps/installed_apps"
+      expect(response.body).to include('Version 1.27.3-rootless')
+      expect(response.body).not_to include('Update to')
+    end
+
+    it "counts the updates on the dashboard" do
+      gitea(image: old, show_in_dashboard: true)
+      get "/"
+      expect(response.body).to include('1 update')
+    end
+
+    it "updates through the helper, with the app's shares, and records the new version" do
+      gitea(image: old, volume_mappings: [].to_json)
+      helper_replies('apps.update', 'updated' => true, 'image' => catalog, 'from' => old)
+      get "/apps/docker/update_stream/gitea", headers: same_origin
+      expect(response.body).to include('✓ Gitea is updated to 1.27.3-rootless and running', 'goes back to 1.27.2-rootless for 30 days')
+      expect(DockerApp.find_by(identifier: 'gitea').image).to eq(catalog)
+    end
+
+    it "says when the new version didn't come up and the app went back" do
+      gitea(image: old)
+      helper_replies('apps.update', 'updated' => false, 'image' => old, 'problem' => 'it stopped (exit code 1)')
+      get "/apps/docker/update_stream/gitea", headers: same_origin
+      expect(response.body).to include("✗ 1.27.3-rootless didn't come up healthy: it stopped (exit code 1)",
+                                       'Gitea is back on 1.27.2-rootless', 'data: error')
+      expect(DockerApp.find_by(identifier: 'gitea')).to have_attributes(image: old, status: 'running')
+    end
+
+    it "shows the helper's reason when it couldn't start the update" do
+      gitea(image: old)
+      helper_fails('apps.update', "there isn't room to copy gitea's data before updating")
+      get "/apps/docker/update_stream/gitea", headers: same_origin
+      expect(response.body).to include("✗ there isn't room to copy gitea's data before updating")
+    end
+
+    it "offers Undo update while the copy is kept, and undoes through the helper" do
+      gitea
+      allow(AppCatalog).to receive(:backup).and_return(nil)
+      allow(AppCatalog).to receive(:backup).with('gitea').and_return(from: old, taken_at: Time.utc(2026, 10, 5, 12), until: Time.utc(2026, 11, 4, 12))
+      get "/apps/installed_apps"
+      expect(response.body).to include('Undo update', 'data-url="/apps/docker/undo_update_stream/gitea"', '(until November 4)')
+      helper_replies('apps.undo_update', 'image' => old)
+      get "/apps/docker/undo_update_stream/gitea", headers: same_origin
+      expect(response.body).to include('✓ Gitea is back on 1.27.2-rootless, with its data from before the update')
+      expect(DockerApp.find_by(identifier: 'gitea').image).to eq(old)
+    end
+
+    it "keeps the version an app runs when its shares change" do
+      gitea(image: old)
+      allow(Privileged).to receive(:call).and_call_original
+      allow(Privileged).to receive(:call).with('apps.install', app: 'gitea', shares: []).and_return('ok' => true, 'image' => old)
+      get "/apps/docker/install_stream/gitea", headers: same_origin
+      expect(DockerApp.find_by(identifier: 'gitea').image).to eq(old)
+    end
+
+    it "won't update an app that isn't installed" do
+      get "/apps/docker/update_stream/gitea", headers: same_origin
+      expect(response.body).to include("That app isn't installed")
+      expect(Privileged.calls.map(&:first)).not_to include('apps.update')
     end
   end
 

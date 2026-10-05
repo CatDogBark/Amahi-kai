@@ -148,6 +148,30 @@ class AppsController < ApplicationController
     end
   end
 
+  # Update (P4.5): the helper copies the app's data, starts the catalog's version, and goes back
+  # to the old one if it isn't healthy within 5 minutes.
+  def docker_update_stream
+    app_stream('apps.update') do |app, entry, reply, sse|
+      if reply['updated']
+        sse.emit("✓ #{entry[:name]} is updated to #{AppCatalog.tag(reply['image'])} and running")
+        sse.emit("  Undo update, on its row, goes back to #{AppCatalog.tag(reply['from'])} for #{AppCatalog::BACKUP_DAYS} days.")
+        true
+      else
+        sse.emit("✗ #{AppCatalog.tag(entry[:image])} didn't come up healthy: #{reply['problem']}")
+        sse.emit("  #{entry[:name]} is back on #{app.version}, with its data as it was before.")
+        false
+      end
+    end
+  end
+
+  # Undo update: the version and data from before the last update come back.
+  def docker_undo_update_stream
+    app_stream('apps.undo_update') do |app, entry, _reply, sse|
+      sse.emit("✓ #{entry[:name]} is back on #{app.version}, with its data from before the update")
+      true
+    end
+  end
+
   def docker_uninstall
     unless AppCatalog.find(params[:id])
       return render json: { status: 'error', message: "That app isn't in the catalog" }, status: :not_found
@@ -185,14 +209,15 @@ class AppsController < ApplicationController
   def install_app(entry, host, sse, shares)
     sse.emit("Installing #{entry[:name]}...")
     app = DockerApp.find_or_initialize_by(identifier: entry[:identifier])
-    app.update!(name: entry[:name], description: entry[:description], image: entry[:image],
+    app.update!(name: entry[:name], description: entry[:description], image: app.image.presence || entry[:image],
                 category: entry[:category], logo_url: entry[:logo_url], host_port: entry[:web_port],
                 container_name: "amahi-#{entry[:identifier]}", status: 'installing', error_message: nil,
                 shares: shares)
     reply = Privileged.call('apps.install', app: entry[:identifier], shares: shares) { |line| sse.emit("  #{line}") }
     ports = DockerApp.assigned_ports(entry, reply['ports'])
     web = ports.find { |port| port[:label] == 'web' }
-    app.update!(status: 'running', host_port: web&.dig(:host), ports: ports)
+    # A reinstall keeps the version the app runs (only Update changes it): the reply says which.
+    app.update!(status: 'running', host_port: web&.dig(:host), ports: ports, image: reply['image'].presence || entry[:image])
     sse.emit('')
     sse.emit("✓ #{entry[:name]} is installed and running")
     sse.emit("  Open it at #{app.url(host)} (on your LAN or Tailscale)") if web
@@ -212,6 +237,36 @@ class AppsController < ApplicationController
     Share.by_name.where(name: names).map do |share|
       write = entry[:writes_shares] && writes.include?(share.name) && share.disk_pool_copies.to_i.zero?
       { name: share.name, write: write }
+    end
+  end
+
+  # Runs +operation+ on an installed app with its shares, streaming the helper's progress, then
+  # records the version (and ports) it runs. The block writes the outcome and returns whether
+  # it worked.
+  def app_stream(operation)
+    app = DockerApp.find_by(identifier: params[:id])
+    entry = AppCatalog.find(params[:id])
+    host = request.host
+    stream_sse do |sse|
+      unless app && entry
+        sse.emit("That app isn't installed")
+        sse.done('error')
+        next
+      end
+      begin
+        reply = Privileged.call(operation, app: app.identifier, shares: app.shares) { |line| sse.emit("  #{line}") }
+        ports = reply['ports'] ? DockerApp.assigned_ports(entry, reply['ports']) : app.ports
+        app.update!(image: reply['image'].presence || app.image, status: 'running', error_message: nil,
+                    ports: ports, host_port: ports.find { |port| port[:label] == 'web' }&.dig(:host) || app.host_port)
+        sse.emit('')
+        worked = yield app, entry, reply, sse
+        sse.emit("  Open it at #{app.url(host)} (on your LAN or Tailscale)") if app.url(host)
+        worked ? sse.done : sse.done('error')
+      rescue Privileged::Error => e
+        DockerApp.refresh_statuses!
+        sse.emit("✗ #{e.message}")
+        sse.done('error')
+      end
     end
   end
 

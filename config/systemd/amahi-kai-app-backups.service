@@ -1,0 +1,11 @@
+# Deletes each app's copy from before its last update once it's 30 days old (the root
+# helper's apps.prune_backups). Started by amahi-kai-app-backups.timer. Installed by
+# bin/amahi-install-helper.
+[Unit]
+Description=Amahi-kai: delete app update copies over 30 days old
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/amahi-helper apps.prune_backups
+StandardInput=null
+TimeoutStartSec=15min

@@ -46,6 +46,17 @@ RSpec.describe AppCatalog do
     end
   end
 
+  describe "versions" do
+    it "reads an image's tag and links its release notes" do
+      expect(AppCatalog.tag("louislam/uptime-kuma:2.5.5-rootless@sha256:abc")).to eq("2.5.5-rootless")
+      expect(AppCatalog.releases_url("uptimekuma", "louislam/uptime-kuma:2.5.5-rootless@sha256:abc"))
+        .to eq("https://github.com/louislam/uptime-kuma/releases/tag/2.5.5")
+      expect(AppCatalog.releases_url("jellyfin", AppCatalog.find("jellyfin")[:image]))
+        .to eq("https://github.com/jellyfin/jellyfin/releases/tag/v12.1")
+      expect(AppCatalog.releases_url("portainer", "x:1")).to be_nil
+    end
+  end
+
   describe "data and secrets the helper keeps" do
     before do
       allow(AppCatalog).to receive(:apps_root).and_return(dir)
@@ -65,6 +76,16 @@ RSpec.describe AppCatalog do
       File.write(File.join(dir, "transmission.json"), "not json")
       expect(AppCatalog.secrets("transmission")).to eq([])
       expect(AppCatalog.secrets("portainer")).to eq([])
+    end
+
+    it "reads the copy from before the last update while it's kept, 30 days" do
+      allow(AppCatalog).to receive(:backups_dir).and_return(dir)
+      expect(AppCatalog.backup("gitea")).to be_nil
+      taken = 3.days.ago.utc.change(usec: 0)
+      File.write(File.join(dir, "gitea.json"), { "taken_at" => taken.iso8601, "from" => "gitea/gitea:1.27.2-rootless@sha256:x" }.to_json)
+      expect(AppCatalog.backup("gitea")).to eq(from: "gitea/gitea:1.27.2-rootless@sha256:x", taken_at: taken, until: taken + 30.days)
+      File.write(File.join(dir, "gitea.json"), { "taken_at" => 31.days.ago.utc.iso8601, "from" => "x" }.to_json)
+      expect(AppCatalog.backup("gitea")).to be_nil
     end
 
     it "keeps them under /var/lib/amahi-kai in production" do
