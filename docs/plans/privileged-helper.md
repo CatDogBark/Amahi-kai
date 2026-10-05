@@ -59,8 +59,9 @@ sudo -n /usr/local/sbin/amahi-helper users.set_password  # stdin: {"login":"ann"
   operations; `--self-test` checks the operation table and that no gems are loaded.
 - Rails side: `lib/privileged.rb`, `Privileged.call('users.create', login:, name:)` returns the
   reply or raises `Privileged::Error` with the helper's message, which the UI shows. As root (the
-  updater's `rails runner`, the installer's seeds) it runs the helper without `sudo`. In dummy mode
-  (dev/test) it runs nothing, records calls in `Privileged.calls` and returns `{"ok"=>true}`.
+  updater's `rails runner`, the installer's seeds) it runs the helper without `sudo`. Outside production
+  (dev/test; `Shell.simulated?`, once "dummy mode") it runs nothing, records calls in
+  `Privileged.calls` and returns `{"ok"=>true}`.
 
 ### 4. The helper validates everything and trusts nothing from Rails
 

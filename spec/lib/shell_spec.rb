@@ -2,12 +2,12 @@ require 'rails_helper'
 
 RSpec.describe Shell do
   before do
-    # Force non-dummy mode for these tests
-    described_class.dummy = false
+    # Run the real code paths (the system calls are stubbed)
+    described_class.simulated = false
   end
 
   after do
-    described_class.dummy = nil  # reset to auto-detect
+    described_class.simulated = nil  # back to the rule: simulated outside production
   end
 
   describe '.run' do
@@ -91,19 +91,22 @@ RSpec.describe Shell do
     end
   end
 
-  describe '.dummy?' do
-    it 'can be explicitly set' do
-      described_class.dummy = true
-      expect(described_class.dummy?).to be true
+  # Outside production nothing runs; production always runs, and no setting changes that
+  # (it used to be "dummy mode", which AMAHI_DUMMY_MODE in amahi.env could switch on).
+  describe '.simulated?' do
+    before { described_class.simulated = nil }
+
+    it 'is true outside production, where commands are only logged' do
+      expect(described_class).to be_simulated
+      expect(described_class.run("exit 1")).to eq(true) # would fail if it ran
     end
-  end
 
-  describe 'dummy mode' do
-    before { described_class.dummy = true }
-
-    it 'does not execute commands' do
-      # This would fail if actually executed
-      expect(described_class.run("exit 1")).to eq(true)
+    it 'is false in production, whatever AMAHI_DUMMY_MODE says' do
+      allow(Rails.env).to receive(:production?).and_return(true)
+      ENV['AMAHI_DUMMY_MODE'] = '1'
+      expect(described_class).not_to be_simulated
+    ensure
+      ENV.delete('AMAHI_DUMMY_MODE')
     end
   end
 

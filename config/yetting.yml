@@ -3,15 +3,12 @@ defaults: &defaults
   default_theme: 'amahi-kai'
   valid_dhcp_address_range: 100
 
-  dummy_mode: false
 
 development:
   <<: *defaults
-  dummy_mode: true
 
 test:
   <<: *defaults
-  dummy_mode: true
 
 system:
   <<: *defaults
