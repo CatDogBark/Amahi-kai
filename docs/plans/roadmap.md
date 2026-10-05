@@ -42,6 +42,7 @@ so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 | Tooltips | Bootstrap tooltips after 150 ms (data-tip, tooltips.js) instead of the browser's title; extra information marked (ⓘ, dotted underline, help cursor); needed information moved onto the page; a spec keeps title tooltips out | #49 |
 | Storage S3. Manage pools | Replace a drive (resilver, page refreshes while it runs), add a group shaped like the pool's, delete a pool behind its typed name (drives freed); autoexpand on new pools. Not yet tested on real drives | #50 |
 | Storage S4. Snapshots | Hourly and daily snapshots kept per pool (24 and 30 by default), taken and pruned by amahi-kai-snapshots.timer; take now, delete, roll back behind the pool's name; only Amahi-kai's own snapshots are touched. Datasets moved to Phase 4. Not yet tested on real drives | #51 |
+| Fix. Update window | A status check killed by the app's restart no longer reads as a finished (failed) update; the window waits for the restarted version | #52 |
 
 ## Next: Phase 3
 

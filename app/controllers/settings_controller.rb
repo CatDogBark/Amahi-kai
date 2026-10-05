@@ -176,25 +176,32 @@ class SettingsController < ApplicationController
     sent = from
     deadline = Time.current + UPDATE_STREAM_LIMIT
     loop do
-      running = update_running? # before reading, so the last lines are never missed
+      running = update_running? != false # before reading, so the last lines are never missed
       lines = File.exist?(UPDATE_LOG) ? File.readlines(UPDATE_LOG, chomp: true) : []
       lines.drop(sent).each { |line| sse.emit(line.scrub) }
       sent = [sent, lines.size].max
+      # The update is restarting the app: end without "done" and the page reconnects to the
+      # new version, which says how it ended. Puma finishes open requests before it stops, so
+      # a stream that waited for the update would hold the restart until systemd killed Puma
+      # (90 seconds). This comes before deciding the update is over: the restart also stops
+      # the check below, and a check stopped halfway says nothing about the update.
+      return if server_stopping?
       return sse.done(lines.last.to_s.start_with?('✓') ? 'success' : 'error') unless running
       return sse.done('error') if Time.current > deadline
-      # The update is restarting the app: end without "done" and the page reconnects to the
-      # new version. Puma finishes open requests before it stops, so a stream that waited for
-      # the update would hold the restart until systemd killed Puma (90 seconds).
-      return if server_stopping?
       sleep 0.5
     end
   end
 
+  # true or false from systemd, or nil when the check gave no answer. Stopping amahi-kai.service
+  # signals every process in it, so a check running at that moment is killed: that's no answer,
+  # not a finished update (System Update once said it failed when it hadn't, #52).
   def update_running?
-    out, _err, _status = Open3.capture3('systemctl', 'is-active', UPDATE_JOB)
-    %w[active activating reloading].include?(out.strip)
+    out, _err, status = Open3.capture3('systemctl', 'is-active', UPDATE_JOB)
+    state = out.strip
+    return nil if state.empty? || status.signaled?
+    %w[active activating reloading].include?(state)
   rescue SystemCallError
-    false
+    nil
   end
 
   # True once Puma has been told to stop or restart. The stream's body runs in a Puma
