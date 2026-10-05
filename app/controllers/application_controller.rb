@@ -95,6 +95,14 @@ class ApplicationController < ActionController::Base
   end
   helper_method :setup_completed?
 
+  # The page came through the Cloudflare Tunnel: cloudflared connects from the NAS itself and
+  # adds CF-Connecting-IP (as in config/initializers/rack_attack.rb). Apps' own ports aren't on
+  # the tunnel, so their Open links only work on the LAN and Tailscale.
+  def via_tunnel?
+    %w[127.0.0.1 ::1].include?(request.remote_addr) && request.headers['CF-Connecting-IP'].present?
+  end
+  helper_method :via_tunnel?
+
   def set_user_session_controller
     UserSession.controller = self
   end

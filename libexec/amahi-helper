@@ -36,6 +36,8 @@ require 'digest'
 require 'time'
 require 'yaml'
 require 'fileutils'
+require 'ipaddr'
+require 'socket'
 
 module AmahiHelper
   ENV_MIN = { 'PATH' => '/usr/sbin:/usr/bin:/sbin:/bin', 'LANG' => 'C.UTF-8' }.freeze
@@ -251,6 +253,20 @@ module AmahiHelper
   APP_RESERVED_PORTS = [22, 53, 67, 68, 80, 137, 138, 139, 443, 445, 3000].freeze
   # {{uid}}, {{gid}} and {{timezone}} in a manifest's environment are filled in at install.
   APP_PLACEHOLDERS = /\{\{(uid|gid|timezone)\}\}/
+  # The host ports each app was given (P4.2): its catalog ports when they're free, others when
+  # not, kept for its next install. root:amahi 0640, so the Apps page can show them.
+  APP_PORTS = '/var/lib/amahi-kai/app-ports.json'
+  # Who can reach the apps' ports (P4.2). Docker's rules for published ports come before UFW's,
+  # so the helper adds its own chain to Docker's DOCKER-USER: connections to a container from
+  # anywhere but the NAS's own private subnets and Tailscale are dropped. That covers a port
+  # forward on the router, and a future internet-facing port (router mode). Traffic from the
+  # NAS itself (cloudflared) doesn't pass through it. Apps are published on IPv4 only.
+  IPTABLES = '/usr/sbin/iptables'
+  IP = '/usr/sbin/ip'
+  APP_CHAIN = 'AMAHI-APPS'
+  DOCKER_BRIDGE = 'docker0'
+  PRIVATE_NETS = %w[10.0.0.0/8 172.16.0.0/12 192.168.0.0/16].map { |net| IPAddr.new(net) }.freeze
+  NOT_LAN_INTERFACES = /\A(lo|docker|br-|veth|tailscale)/
 
   # The security audit's fixes. UFW lets in SSH, the web UI, HTTPS and Samba, plus DNS and
   # DHCP once Amahi-kai has configured dnsmasq.
@@ -702,13 +718,21 @@ module AmahiHelper
       },
       plan: ->(v) { [[:uninstall_app, v[:id], v[:manifest][:image], v[:delete_data]]] }
     },
+    # Limits the apps' ports to the LAN and Tailscale (APP_CHAIN). Run by
+    # amahi-kai-app-firewall.service each time Docker starts, and at every install.
+    'apps.firewall' => {
+      params: [],
+      validate: ->(_a) { installed!(DOCKER) && installed!(IPTABLES) && {} },
+      plan: ->(_v) { [[:app_firewall]] }
+    },
     # Every app container's state, and whether Docker is running. Read-only.
     'apps.status' => {
       params: [],
       validate: ->(_a) { {} },
       plan: ->(_v) { [[:apps_status]] }
     },
-    # Every container's published ports, for the security audit. Read-only.
+    # Every container's published ports, and whether APP_CHAIN limits them, for the security
+    # audit. Read-only.
     'docker.published_ports' => {
       params: [],
       validate: ->(_a) { {} },
@@ -1943,18 +1967,126 @@ module AmahiHelper
       run_command([DOCKER, 'pull', manifest[:image], { stream: true }])
       container = app_container(id)
       run_command([DOCKER, 'rm', '--force', container, { allow_failure: true }])
+      ports = app_assign_ports(id, manifest[:ports])
+      ports.reject { |p| p[:host] == p[:preferred] }.uniq { |p| p[:host] }.each do |p|
+        say("Port #{p[:preferred]} is in use, so it gets port #{p[:host]}")
+      end
       say('Creating the container...')
       with_env_file(app_environment(manifest, uid, gid, secrets)) do |env_file|
         run_command([DOCKER, 'create', '--name', container, '--restart', 'unless-stopped',
                      '--memory', manifest[:memory], '--label', "amahi.app=#{id}", '--env-file', env_file,
                      *(manifest[:run_as] == 'app' ? ['--user', "#{uid}:#{gid}"] : []),
-                     *manifest[:ports].flat_map { |p| ['--publish', "#{p[:host]}:#{p[:container]}/#{p[:protocol]}"] },
+                     *ports.flat_map { |p| ['--publish', "0.0.0.0:#{p[:host]}:#{p[:container]}/#{p[:protocol]}"] },
                      *manifest[:folders].flat_map { |f| ['--volume', "#{dir}/#{f[:name]}:#{f[:path]}"] },
                      manifest[:image]])
       end
+      app_record_ports(id, ports)
+      do_app_firewall
       say('Starting it...')
       run_command([DOCKER, 'start', container])
-      { 'app' => id, 'container' => container }
+      { 'app' => id, 'container' => container, 'ports' => ports.map { |p| p.transform_keys(&:to_s) } }
+    end
+
+    # [{ preferred:, host:, container:, protocol: }]: the host port for each of the manifest's
+    # ports. Each keeps the port it had at the last install, or its catalog port, while that's
+    # free; otherwise the next free one. Ports with the same number (Transmission's peer port,
+    # TCP and UDP) stay together. Another app's ports count as taken even while it's stopped
+    # or uninstalled with its data kept.
+    def app_assign_ports(id, wanted)
+      records = read_json(APP_PORTS) || {}
+      before = Array(records[id]).select { |p| p.is_a?(Hash) }
+      taken = records.reject { |other, _| other == id }.values.flatten.grep(Hash).map { |p| [p['host'], p['protocol']] }
+      wanted.group_by { |p| p[:host] }.flat_map do |preferred, group|
+        protocols = group.map { |p| p[:protocol] }
+        free = ->(port) { port_free?(port, protocols, taken) }
+        last = before.find { |p| p['preferred'] == preferred && p['protocol'] == protocols.first }&.dig('host')
+        host = [last, preferred].compact.uniq.find(&free) ||
+               ((preferred + 1)..65_535).find(&free) || (1024...preferred).find(&free) or
+          raise Failed, "no free port for #{preferred}"
+        taken += protocols.map { |protocol| [host, protocol] }
+        group.map { |p| { preferred: preferred, host: host, container: p[:container], protocol: p[:protocol] } }
+      end
+    end
+
+    def port_free?(port, protocols, taken)
+      return false unless port.is_a?(Integer) && port.between?(1024, 65_535) && !APP_RESERVED_PORTS.include?(port)
+      protocols.all? { |protocol| !taken.include?([port, protocol]) && port_bindable?(port, protocol) }
+    end
+
+    # Nothing on the NAS listens on +port+ (docker-proxy holds every running app's ports).
+    # SO_REUSEADDR so that connections still closing (TIME_WAIT) don't count; a listener does.
+    def port_bindable?(port, protocol)
+      socket = Socket.new(:INET, protocol == 'udp' ? :DGRAM : :STREAM)
+      socket.setsockopt(:SOCKET, :REUSEADDR, true) unless protocol == 'udp'
+      socket.bind(Addrinfo.new(Socket.sockaddr_in(port, '0.0.0.0')))
+      true
+    rescue SystemCallError
+      false
+    ensure
+      socket&.close
+    end
+
+    def app_record_ports(id, ports)
+      records = read_json(APP_PORTS) || {}
+      records = records.merge(id => ports.map { |p| p.transform_keys(&:to_s) }).sort.to_h
+      do_install(APP_PORTS, "#{JSON.pretty_generate(records)}\n", nil, '0640', APP_USER)
+    end
+
+    def app_forget_ports(id)
+      records = read_json(APP_PORTS) or return
+      return unless records.key?(id)
+      do_install(APP_PORTS, "#{JSON.pretty_generate(records.except(id))}\n", nil, '0640', APP_USER)
+    end
+
+    # Rebuilds APP_CHAIN, jumped to from DOCKER-USER: established connections, traffic not going
+    # into a container, and containers' own traffic pass; new connections into a container pass
+    # only from Tailscale or the NAS's private subnets.
+    def do_app_firewall
+      subnets = lan_subnets
+      run_command([IPTABLES, '-w', '-N', 'DOCKER-USER', { allow_failure: true }])
+      run_command([IPTABLES, '-w', '-N', APP_CHAIN, { allow_failure: true }])
+      run_command([IPTABLES, '-w', '-F', APP_CHAIN])
+      app_chain_rules(subnets).each { |rule| run_command([IPTABLES, '-w', '-A', APP_CHAIN, *rule]) }
+      unless run_command([IPTABLES, '-w', '-C', 'DOCKER-USER', '-j', APP_CHAIN, { allow_failure: true }]).nil?
+        run_command([IPTABLES, '-w', '-I', 'DOCKER-USER', '1', '-j', APP_CHAIN])
+      end
+      { 'lan' => subnets }
+    end
+
+    def app_chain_rules(subnets)
+      [%w[-m conntrack --ctstate RELATED,ESTABLISHED -j RETURN],
+       ['!', '-o', DOCKER_BRIDGE, '-j', 'RETURN'],
+       ['-i', DOCKER_BRIDGE, '-j', 'RETURN'],
+       %w[-i tailscale0 -j RETURN],
+       *subnets.map { |net| ['-s', net, '-j', 'RETURN'] },
+       %w[-j DROP]]
+    end
+
+    # ["192.168.1.0/24"]: the private IPv4 subnets of the NAS's own network interfaces.
+    def lan_subnets
+      JSON.parse(capture([IP, '-j', '-4', 'addr', 'show'])).flat_map do |interface|
+        next [] if interface['ifname'].to_s.match?(NOT_LAN_INTERFACES)
+        Array(interface['addr_info']).filter_map do |addr|
+          prefix = addr['prefixlen']
+          next unless prefix.is_a?(Integer) && prefix.between?(8, 32)
+          net = IPAddr.new("#{addr['local']}/#{prefix}")
+          "#{net}/#{prefix}" if PRIVATE_NETS.any? { |private_net| private_net.include?(net) }
+        rescue IPAddr::Error
+          nil
+        end
+      end.uniq
+    rescue JSON::ParserError
+      raise Failed, "ip didn't list the network interfaces"
+    end
+
+    # APP_CHAIN is in place: DOCKER-USER jumps to it, and it ends by dropping.
+    def app_firewall_active?
+      return false unless File.executable?(IPTABLES)
+      rules = capture([IPTABLES, '-w', '-S', APP_CHAIN])
+      rules.lines.last.to_s.strip == "-A #{APP_CHAIN} -j DROP" &&
+        run_command([IPTABLES, '-w', '-C', 'DOCKER-USER', '-j', APP_CHAIN, { allow_failure: true }]).nil?
+    rescue Failed
+      false
     end
 
     # [uid, gid] of the app's system user (app-<id>), created on its first install.
@@ -2026,6 +2158,7 @@ module AmahiHelper
       raise Failed, "#{dir} isn't a folder" if File.symlink?(dir)
       FileUtils.remove_entry_secure(dir) if File.directory?(dir)
       FileUtils.rm_f("#{APP_SECRETS}/#{id}.json")
+      app_forget_ports(id)
       run_command(['/usr/sbin/userdel', "app-#{id}", { allow_failure: true }]) if passwd("app-#{id}")
       { 'app' => id, 'data_kept' => false }
     end
@@ -2045,10 +2178,11 @@ module AmahiHelper
       { 'docker' => true, 'apps' => apps.to_h }
     end
 
-    # { 'ports' => ["amahi-jellyfin\t0.0.0.0:8096->8096/tcp", ...] } for every running container.
+    # { 'ports' => ["amahi-jellyfin\t0.0.0.0:8096->8096/tcp", ...], 'limited' => true } for every
+    # running container; limited when APP_CHAIN keeps them to the LAN and Tailscale.
     def do_docker_ports
       out = docker_output('ps', '--format', "{{.Names}}\t{{.Ports}}")
-      { 'ports' => out.to_s.lines(chomp: true).reject(&:empty?) }
+      { 'ports' => out.to_s.lines(chomp: true).reject(&:empty?), 'limited' => app_firewall_active? }
     end
 
     # docker's output, or nil when it isn't installed or isn't running.

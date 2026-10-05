@@ -136,6 +136,9 @@ RSpec.describe 'AmahiHelper apps' do
       stub_const('AmahiHelper::APPS_ROOT', apps_root)
       stub_const('AmahiHelper::APP_SECRETS', secrets_dir)
       stub_const('AmahiHelper::RUN_DIR', dir)
+      stub_const('AmahiHelper::APP_PORTS', "#{dir}/app-ports.json")
+      allow(helper).to receive(:port_bindable?).and_return(true)
+      allow(helper).to receive(:do_app_firewall)
       allow(helper).to receive(:say)
       allow(helper).to receive(:host_timezone).and_return('America/Chicago')
       allow(helper).to receive(:group_id).and_call_original
@@ -157,7 +160,10 @@ RSpec.describe 'AmahiHelper apps' do
 
     it "creates the app's user and folders, keeps secrets off the command line, and starts the container" do
       manifest = helper.app_manifest('vaultwarden')
-      expect(helper.do_install_app('vaultwarden', manifest)).to eq('app' => 'vaultwarden', 'container' => 'amahi-vaultwarden')
+      expect(helper.do_install_app('vaultwarden', manifest)).to eq(
+        'app' => 'vaultwarden', 'container' => 'amahi-vaultwarden',
+        'ports' => [{ 'preferred' => 8880, 'host' => 8880, 'container' => 8080, 'protocol' => 'tcp' }]
+      )
 
       expect(ran.first).to eq(['/usr/sbin/useradd', '--system', '--user-group', '--no-create-home', '--home-dir', '/nonexistent',
                                '--shell', '/usr/sbin/nologin', 'app-vaultwarden'])
@@ -174,7 +180,7 @@ RSpec.describe 'AmahiHelper apps' do
       create = ran.find { |argv| argv[1] == 'create' }
       expect(create).to eq(['/usr/bin/docker', 'create', '--name', 'amahi-vaultwarden', '--restart', 'unless-stopped',
                             '--memory', '512m', '--label', 'amahi.app=vaultwarden', '--env-file', env_files.sole[0],
-                            '--user', '996:996', '--publish', '8880:8080/tcp',
+                            '--user', '996:996', '--publish', '0.0.0.0:8880:8080/tcp',
                             '--volume', "#{apps_root}/vaultwarden/data:/data", manifest[:image]])
       expect(create.join(' ')).not_to include(token)
 
@@ -182,6 +188,7 @@ RSpec.describe 'AmahiHelper apps' do
       expect(content.lines(chomp: true)).to contain_exactly('ROCKET_PORT=8080', 'TZ=America/Chicago', "ADMIN_TOKEN=#{token}")
       expect(mode).to eq(0o600)
       expect(File.exist?(path)).to be false
+      expect(helper).to have_received(:do_app_firewall)
     end
 
     it 'reuses the user, folders and secrets of an earlier install' do
@@ -202,7 +209,7 @@ RSpec.describe 'AmahiHelper apps' do
       create = ran.find { |argv| argv[1] == 'create' }
       expect(create).not_to include('--user')
       expect(create.each_cons(2).select { |flag, _| flag == '--publish' }.map(&:last))
-        .to eq(['9091:9091/tcp', '51413:51413/tcp', '51413:51413/udp'])
+        .to eq(['0.0.0.0:9091:9091/tcp', '0.0.0.0:51413:51413/tcp', '0.0.0.0:51413:51413/udp'])
       expect(env_files.sole[1].lines(chomp: true)).to include('PUID=996', 'PGID=996', 'USER=admin')
       expect(env_files.sole[1]).to match(/^PASS=[A-Za-z0-9]{32}$/)
     end
@@ -241,6 +248,137 @@ RSpec.describe 'AmahiHelper apps' do
         expect(File.exist?("#{secrets_dir}/gitea.json")).to be false
         expect(ran.last).to eq(['/usr/sbin/userdel', 'app-gitea', { allow_failure: true }])
       end
+
+      it "keeps the app's ports for its next install, unless its data goes too" do
+        helper.do_uninstall_app('gitea', image, false)
+        expect(JSON.parse(File.read("#{dir}/app-ports.json")).keys).to eq(['gitea'])
+        helper.do_uninstall_app('gitea', image, true)
+        expect(JSON.parse(File.read("#{dir}/app-ports.json"))).to eq({})
+      end
+    end
+
+    describe 'ports' do
+      def published(app)
+        ran.select { |argv| argv[1] == 'create' && argv.include?("amahi.app=#{app}") }.last
+           .each_cons(2).select { |flag, _| flag == '--publish' }.map(&:last)
+      end
+
+      def busy(*ports)
+        allow(helper).to receive(:port_bindable?) { |port, _protocol| !ports.include?(port) }
+      end
+
+      it "gives an app its catalog ports, and records them where the Apps page reads them" do
+        helper.do_install_app('gitea', helper.app_manifest('gitea'))
+        expect(published('gitea')).to eq(['0.0.0.0:3300:3000/tcp', '0.0.0.0:2222:2222/tcp'])
+        expect(JSON.parse(File.read("#{dir}/app-ports.json"))['gitea']).to eq(
+          [{ 'preferred' => 3300, 'host' => 3300, 'container' => 3000, 'protocol' => 'tcp' },
+           { 'preferred' => 2222, 'host' => 2222, 'container' => 2222, 'protocol' => 'tcp' }]
+        )
+      end
+
+      it 'takes the next free port when one is in use, says so, and keeps it on the next install' do
+        busy(3300, 3301)
+        reply = helper.do_install_app('gitea', helper.app_manifest('gitea'))
+        expect(reply['ports'].map { |p| p['host'] }).to eq([3302, 2222])
+        expect(helper).to have_received(:say).with('Port 3300 is in use, so it gets port 3302')
+
+        busy # 3300 is free again, but the app keeps the port it was given
+        helper.do_install_app('gitea', helper.app_manifest('gitea'))
+        expect(published('gitea')).to eq(['0.0.0.0:3302:3000/tcp', '0.0.0.0:2222:2222/tcp'])
+      end
+
+      it "never gives one app another app's port, even while that app is uninstalled" do
+        File.write("#{dir}/app-ports.json", { 'other' => [{ 'preferred' => 9091, 'host' => 9091, 'protocol' => 'tcp' }] }.to_json)
+        helper.do_install_app('transmission', helper.app_manifest('transmission'))
+        expect(published('transmission').first).to eq('0.0.0.0:9092:9091/tcp')
+      end
+
+      it "keeps a TCP and UDP pair on one port, and skips the NAS's own ports" do
+        busy(51_413)
+        helper.do_install_app('transmission', helper.app_manifest('transmission'))
+        expect(published('transmission').drop(1)).to eq(['0.0.0.0:51414:51413/tcp', '0.0.0.0:51414:51413/udp'])
+        expect(helper.port_free?(3000, ['tcp'], [])).to be false
+        expect(helper.port_free?(80, ['tcp'], [])).to be false
+      end
+    end
+  end
+
+  it 'sees a port as in use while something listens on it, TCP or UDP' do
+    server = TCPServer.new('0.0.0.0', 0)
+    port = server.addr[1]
+    expect(helper.port_bindable?(port, 'tcp')).to be false
+    server.close
+    expect(helper.port_bindable?(port, 'tcp')).to be true
+    udp = UDPSocket.new.tap { |socket| socket.bind('0.0.0.0', 0) }
+    expect(helper.port_bindable?(udp.addr[1], 'udp')).to be false
+  ensure
+    udp&.close
+  end
+
+  describe 'the app firewall' do
+    let(:ip_output) do
+      [{ 'ifname' => 'lo', 'addr_info' => [{ 'family' => 'inet', 'local' => '127.0.0.1', 'prefixlen' => 8 }] },
+       { 'ifname' => 'ens18', 'addr_info' => [{ 'family' => 'inet', 'local' => '192.168.1.111', 'prefixlen' => 24 },
+                                              { 'family' => 'inet', 'local' => '10.20.0.5', 'prefixlen' => 16 }] },
+       { 'ifname' => 'ens19', 'addr_info' => [{ 'family' => 'inet', 'local' => '203.0.113.7', 'prefixlen' => 24 }] },
+       { 'ifname' => 'docker0', 'addr_info' => [{ 'family' => 'inet', 'local' => '172.17.0.1', 'prefixlen' => 16 }] },
+       { 'ifname' => 'tailscale0', 'addr_info' => [{ 'family' => 'inet', 'local' => '100.64.96.4', 'prefixlen' => 32 }] }].to_json
+    end
+    let(:ran) { [] }
+    let(:jump_exists) { false }
+
+    before do
+      allow(File).to receive(:executable?).with('/usr/sbin/iptables').and_return(true)
+      allow(helper).to receive(:capture).and_call_original
+      allow(helper).to receive(:capture).with(%w[/usr/sbin/ip -j -4 addr show]).and_return(ip_output)
+      allow(helper).to receive(:run_command) do |argv|
+        ran << argv
+        'ignored: iptables exited 1: Bad rule' if argv.include?('-C') && !jump_exists
+      end
+    end
+
+    it "is run each time Docker starts" do
+      expect(steps('apps.firewall', {})).to eq([[:app_firewall]])
+      unit = File.read(Rails.root.join('config/systemd/amahi-kai-app-firewall.service'))
+      expect(unit).to include('ExecStart=/usr/local/sbin/amahi-helper apps.firewall', 'After=docker.service',
+                              'PartOf=docker.service', 'WantedBy=docker.service')
+    end
+
+    it "lets in only the NAS's private subnets and Tailscale, and drops the rest" do
+      expect(helper.do_app_firewall).to eq('lan' => ['192.168.1.0/24', '10.20.0.0/16'])
+      rules = ran.map { |argv| argv.reject { |arg| arg.is_a?(Hash) } }
+      expect(rules).to eq([
+                            %w[/usr/sbin/iptables -w -N DOCKER-USER], %w[/usr/sbin/iptables -w -N AMAHI-APPS],
+                            %w[/usr/sbin/iptables -w -F AMAHI-APPS],
+                            %w[/usr/sbin/iptables -w -A AMAHI-APPS -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN],
+                            %w[/usr/sbin/iptables -w -A AMAHI-APPS ! -o docker0 -j RETURN],
+                            %w[/usr/sbin/iptables -w -A AMAHI-APPS -i docker0 -j RETURN],
+                            %w[/usr/sbin/iptables -w -A AMAHI-APPS -i tailscale0 -j RETURN],
+                            %w[/usr/sbin/iptables -w -A AMAHI-APPS -s 192.168.1.0/24 -j RETURN],
+                            %w[/usr/sbin/iptables -w -A AMAHI-APPS -s 10.20.0.0/16 -j RETURN],
+                            %w[/usr/sbin/iptables -w -A AMAHI-APPS -j DROP],
+                            %w[/usr/sbin/iptables -w -C DOCKER-USER -j AMAHI-APPS],
+                            %w[/usr/sbin/iptables -w -I DOCKER-USER 1 -j AMAHI-APPS]
+                          ])
+    end
+
+    context 'when Docker already jumps to it' do
+      let(:jump_exists) { true }
+
+      it 'rebuilds the chain without adding a second jump' do
+        helper.do_app_firewall
+        expect(ran.map { |argv| argv[2..3] }).not_to include(%w[-I DOCKER-USER])
+      end
+    end
+
+    it 'reports whether the rules are in place, for the security audit' do
+      allow(helper).to receive(:capture).with(%w[/usr/sbin/iptables -w -S AMAHI-APPS])
+                                        .and_return("-N AMAHI-APPS\n-A AMAHI-APPS -i tailscale0 -j RETURN\n-A AMAHI-APPS -j DROP\n")
+      expect(helper.app_firewall_active?).to be false # DOCKER-USER doesn't jump to it
+      allow(helper).to receive(:run_command).and_return(nil)
+      expect(helper.app_firewall_active?).to be true
+      allow(helper).to receive(:capture).with(%w[/usr/sbin/iptables -w -S AMAHI-APPS]).and_raise(AmahiHelper::Failed, 'No chain')
+      expect(helper.app_firewall_active?).to be false
     end
   end
 
@@ -265,12 +403,14 @@ RSpec.describe 'AmahiHelper apps' do
     it "says when Docker isn't running" do
       docker_says('', success: false)
       expect(helper.do_apps_status).to eq('docker' => false, 'apps' => {})
-      expect(helper.do_docker_ports).to eq('ports' => [])
+      allow(helper).to receive(:app_firewall_active?).and_return(false)
+      expect(helper.do_docker_ports).to eq('ports' => [], 'limited' => false)
     end
 
     it "lists every running container's published ports for the security audit" do
       docker_says("amahi-gitea\t0.0.0.0:3300->3000/tcp\nother\t\n")
-      expect(helper.do_docker_ports).to eq('ports' => ["amahi-gitea\t0.0.0.0:3300->3000/tcp", "other\t"])
+      allow(helper).to receive(:app_firewall_active?).and_return(true)
+      expect(helper.do_docker_ports).to eq('ports' => ["amahi-gitea\t0.0.0.0:3300->3000/tcp", "other\t"], 'limited' => true)
     end
   end
 end

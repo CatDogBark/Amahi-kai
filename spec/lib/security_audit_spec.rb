@@ -185,6 +185,17 @@ RSpec.describe SecurityAudit do
       expect(check.description).to eq("Docker publishes 8096/tcp, 53/udp, which UFW doesn't filter")
     end
 
+    it "passes when Amahi-kai's rules keep the app ports to the LAN and Tailscale" do
+      allow(File).to receive(:executable?).and_call_original
+      allow(File).to receive(:executable?).with('/usr/bin/docker').and_return(true)
+      allow(Privileged).to receive(:call).and_call_original
+      allow(Privileged).to receive(:call).with('docker.published_ports')
+                                         .and_return('ok' => true, 'ports' => ["amahi-gitea\t0.0.0.0:3300->3000/tcp"], 'limited' => true)
+      check = checks['docker_ports']
+      expect(check.status).to eq(:pass)
+      expect(check.description).to eq('Docker app ports 3300/tcp are reachable from the LAN and Tailscale only')
+    end
+
     it 'applies each fix through the root helper' do
       %w[ufw_firewall ssh_root_login ssh_password_auth fail2ban unattended_upgrades].each { |name| SecurityAudit.fix!(name) }
       expect(Privileged.calls).to eq([

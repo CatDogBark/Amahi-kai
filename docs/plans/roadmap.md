@@ -45,7 +45,8 @@ so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 | Fix. Update window | A status check killed by the app's restart no longer reads as a finished (failed) update; the window waits for the restarted version | #52 |
 | Storage S5. Read-only file browser | The web file browser views and downloads only (upload, new folder, rename, delete removed), so shares change only through Samba; pooled files preview and download; folder zips work (the zip gem was missing), stream, and leave out links outside the share | #53 |
 | Remove dummy mode | No AMAHI_DUMMY_MODE setting or System Status row: outside production commands and the root helper are only recorded (Shell.simulated?), production always runs them; specs simulate by default | #55 |
-| Phase 4 P4.1. Apps through the root helper | The helper installs, starts, stops and uninstalls apps from manifests in `config/apps` (five apps, tag and digest pinned): a system user and folder per app, generated secrets shown to admins, memory limits, own ports, uninstall keeps data. The `docker` and `/opt/amahi` sudo rules and the `docker` group are gone: the helper is the only sudo rule | #58 |
+| Phase 4 P4.1. Apps through the root helper | The helper installs, starts, stops and uninstalls apps from manifests in `config/apps` (five apps, tag and digest pinned): a system user and folder per app, generated secrets shown to admins, memory limits, own ports, uninstall keeps data. The `docker` and `/opt/amahi` sudo rules and the `docker` group are gone: the helper is the only sudo rule. Not yet tested on the NAS ([`apps.md`](../testing/apps.md)) | #58 |
+| Phase 4 P4.2. Reaching apps | App ports reachable from the LAN and Tailscale only (the helper's `AMAHI-APPS` chain in Docker's `DOCKER-USER`, rebuilt each time Docker starts); ports automatic (catalog port, or the next free one, kept) and shown on the Apps page; `/app/<id>` proxy removed; no Open links through the Cloudflare Tunnel. Not yet tested on the NAS | #59 |
 
 ## Next: Phase 3
 
@@ -132,7 +133,9 @@ apps defined by our own manifest (one container each), each app on its own port 
 Cloudflare Tunnel hostname (remote use required), one user and folder per app, ZFS datasets for big
 data, shares read-only or read-write as chosen (never a pooled share read-write), uninstall keeps
 data, a curated catalog of five apps, bitShare as an ordinary app. PRs P4.1–P4.6; P4.1 (apps through
-the root helper) is done (#58); P4.2 (reaching apps) is next, its decisions to settle first.
+the root helper) and P4.2 (reaching apps) are done (#58, #59), to be tested on the NAS with
+[`docs/testing/apps.md`](../testing/apps.md). Tailscale is the default way to reach apps from outside (Troy,
+2026-10-04), so P4.3 (Cloudflare per app) is optional and later; P4.4 (storage for apps) is next.
 
 ## Direction
 

@@ -62,8 +62,10 @@ Not fixed automatically:
 ### Docker and the firewall
 
 Docker writes its own firewall rules for the ports its apps publish, ahead of UFW's, so UFW
-doesn't filter them. An app port published on all interfaces is reachable from your LAN even with
-UFW on. The **Docker ports** check lists them: each app you installed is opened on its port.
+doesn't filter them. Amahi-kai adds rules of its own in Docker's chain (`AMAHI-APPS`, each time
+Docker starts) so that app ports are reachable from the server's LAN and Tailscale only. The
+**Docker ports** check passes when those rules are in place, and warns about published ports
+when they aren't (for example, containers started outside Amahi-kai while its rules are missing).
 
 ### Setting up an SSH key
 

@@ -65,7 +65,10 @@ class AppCatalog
       data = YAML.safe_load(File.read(path))
       { identifier: File.basename(path, '.yml'), name: data['name'], description: data['description'],
         category: data['category'], logo_url: data['logo'], image: data['image'], web_port: data['web_port'],
-        ports: Array(data['ports']).map { |p| { host: p['host'], container: p['container'], protocol: p['protocol'] || 'tcp' } },
+        ports: Array(data['ports']).map do |p|
+          { host: p['host'], container: p['container'], protocol: p['protocol'] || 'tcp',
+            label: p['host'] == data['web_port'] ? 'web' : p['label'] }
+        end,
         secrets: Array(data['secrets']).map { |s| { env: s['env'], label: s['label'] } } }
     end
 

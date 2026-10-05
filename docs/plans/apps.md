@@ -1,6 +1,7 @@
 # Phase 4: apps
 
-Status: planned with Troy, 2026-10-05; P4.1 is done (#58). The overall decisions and P4.1's are made (below); each
+Status: planned with Troy, 2026-10-05; P4.1 (#58) and P4.2 (#59) are done, not yet tested on the
+NAS ([`docs/testing/apps.md`](../testing/apps.md)). The overall decisions and P4.1's are made (below); each
 later PR's decisions are listed under it, to settle when that PR starts.
 
 Apps are how Amahi-kai grows: Jellyfin, Vaultwarden and the like today, bitShare (and later
@@ -61,7 +62,8 @@ These shape every PR after them.
   proxy with a hostname per app on the LAN (`jellyfin.nas.lan`): nicer addresses, but it needs
   local DNS (dnsmasq isn't running on the NAS) and certificates. **Decided: own ports, with remote
   use required**: bitShare and other apps must work through the Cloudflare Tunnel (P4.3) or
-  Tailscale.
+  Tailscale. **Updated with P4.2 (Troy, 2026-10-04): Tailscale is the default way to reach apps
+  from outside**; a Cloudflare hostname for an app is a specialty case, built later if wanted.
 - [x] **O4. Where apps keep data.** Recommended: **each app gets its own system user and folder**
   (`/var/lib/amahi-kai/apps/<app>`, owned by that user, no `777`), and its container runs as that
   user. Big data goes on a **ZFS dataset** of its own (`<pool>/<app>`) when the app asks for storage
@@ -131,23 +133,32 @@ Decisions for this PR:
 
 ### P4.2: Reaching apps
 
-Each app on its own port, `/app/<id>` retired, the dashboard and Apps pages linking to each app's
-own address.
+**Done** (#59). Each app on its own port, `/app/<id>` retired, the dashboard and Apps pages linking
+to each app's own address.
 
-- [ ] Which apps the LAN can reach and which stay local-only (reached only through their tunnel
-  hostname); the default for new installs.
-- [ ] Ports: the catalog's usual port (8096 for Jellyfin) or picked automatically when it's taken.
-- [ ] Binding: all interfaces (today), or the LAN and Tailscale addresses only, given that Docker's
-  rules come before UFW.
-- [ ] Host networking (some apps want it to find devices on the LAN): allowed for named apps, or
-  never.
-- [ ] Keep router mode possible (roadmap, Direction): binding and firewall choices mustn't assume
-  the NAS only ever sits on someone else's LAN. Apps face the LAN side, never the internet side.
-- [ ] HTTPS on the LAN: plain HTTP like the admin UI, or certificates.
-- [ ] Apps' outgoing internet access: allowed by default (most need it for metadata and updates), or
-  opt-in.
+Decisions (Troy, 2026-10-04):
 
-### P4.3: Apps from anywhere (Cloudflare Tunnel)
+- [x] **Who can reach an app's port: the LAN and Tailscale only.** The helper's `apps.firewall`
+  adds a chain (`AMAHI-APPS`) to Docker's `DOCKER-USER`: new connections into a container are
+  dropped unless they come from Tailscale (`tailscale0`) or one of the NAS's own private subnets.
+  `amahi-kai-app-firewall.service` runs it each time Docker starts or restarts, and every install
+  runs it too. Traffic from the NAS itself (cloudflared) isn't filtered. Apps are published on IPv4
+  only. This keeps router mode possible: an internet-facing port would never reach apps.
+- [x] **Tunnel-only apps: not built.** Tailscale is the default way to reach apps from outside;
+  a per-app Cloudflare hostname is a specialty case (P4.3, later).
+- [x] **Ports: automatic.** An app gets its catalog port when it's free, otherwise the next free
+  one, and keeps it through reinstalls (`/var/lib/amahi-kai/app-ports.json`). The Apps page shows
+  every port each app uses.
+- [x] **Plain HTTP on the LAN**, like the admin UI. Vaultwarden's web vault needs HTTPS, so it
+  waits for HTTPS through Tailscale (later; turned on in the Tailscale admin console).
+- [x] **No host networking.** Docker forwards each app's ports to its container; an app with the
+  NAS's own network could open any port and get around the rules above.
+- [x] **Outgoing internet access allowed** (metadata, monitors, peers, mirrors).
+
+### P4.3: Apps through Cloudflare (optional, later)
+
+A specialty case since P4.2: Tailscale is the default way to reach apps from outside. Built if an
+app needs a public hostname. HTTPS for apps through Tailscale (Vaultwarden needs it) comes first.
 
 - [ ] Hostname naming (`jellyfin.example.com`, or chosen per app).
 - [ ] Which apps may be published at all, and whether each needs Cloudflare Access in front.

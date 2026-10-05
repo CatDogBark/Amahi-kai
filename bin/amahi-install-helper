@@ -9,6 +9,7 @@
 #   /etc/systemd/system/amahi-kai-update-check.{service,timer}   the check for updates, every 6 hours
 #   /etc/systemd/system/amahi-kai-storage-check.{service,timer}  the storage health check, every 15 minutes
 #   /etc/systemd/system/amahi-kai-snapshots.{service,timer}      pool snapshots, every hour
+#   /etc/systemd/system/amahi-kai-app-firewall.service   app ports kept to the LAN and Tailscale, with Docker
 #   /etc/sudoers.d/amahi-kai        from config/sudoers/amahi-kai, only if visudo accepts it
 #
 # It also takes the app's user out of the docker group (Docker runs only through the helper).
@@ -36,7 +37,7 @@ if [[ -d /etc/logrotate.d ]]; then
 fi
 for unit in amahi-kai-update.service amahi-kai-update-check.service amahi-kai-update-check.timer \
             amahi-kai-storage-check.service amahi-kai-storage-check.timer \
-            amahi-kai-snapshots.service amahi-kai-snapshots.timer; do
+            amahi-kai-snapshots.service amahi-kai-snapshots.timer amahi-kai-app-firewall.service; do
   install -o root -g root -m 0644 "$APP_DIR/config/systemd/$unit" "/etc/systemd/system/$unit"
 done
 if [[ -d /run/systemd/system ]]; then
@@ -47,6 +48,13 @@ if [[ -d /run/systemd/system ]]; then
     || echo "Couldn't enable amahi-kai-storage-check.timer; Disks → ZFS Pools' Check now still works" >&2
   systemctl enable --now amahi-kai-snapshots.timer >/dev/null 2>&1 \
     || echo "Couldn't enable amahi-kai-snapshots.timer; pools won't take snapshots on their own" >&2
+  # Starts with Docker from now on, and now if Docker is running (an update applies the rules).
+  systemctl enable amahi-kai-app-firewall.service >/dev/null 2>&1 \
+    || echo "Couldn't enable amahi-kai-app-firewall.service; app ports aren't limited to the LAN" >&2
+  if systemctl is-active --quiet docker.service; then
+    systemctl restart amahi-kai-app-firewall.service \
+      || echo "Couldn't limit app ports to the LAN and Tailscale (journalctl -u amahi-kai-app-firewall)" >&2
+  fi
 fi
 
 # The docker group is root on the NAS. Apps run only through the helper now (Phase 4), so

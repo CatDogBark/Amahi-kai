@@ -1,7 +1,8 @@
 # An app installed from the catalog (AppCatalog, config/apps). The root helper does the work
 # (apps.* operations, docs/plans/apps.md); the record keeps what the pages show: the app's
-# status, its web port and whether it's on the dashboard. (Its old port, volume and
-# environment columns are no longer used.)
+# status, the host ports the helper gave it (host_port is its web page's; all of them, as JSON,
+# in port_mappings) and whether it's on the dashboard. (Its old volume and environment columns
+# are no longer used.)
 class DockerApp < ApplicationRecord
   # A helper operation on the app failed. AppsController reports it to the page.
   class ContainerError < StandardError; end
@@ -18,6 +19,28 @@ class DockerApp < ApplicationRecord
   # The app's page, on its own port of the NAS (docs/plans/apps.md, O3).
   def url(host)
     "http://#{host}:#{host_port}/" if host_port
+  end
+
+  # [{ host:, container:, protocol:, label: }]: the ports the app was given at install.
+  def ports
+    list = JSON.parse(port_mappings.to_s)
+    list.is_a?(Array) ? list.grep(Hash).map { |port| port.symbolize_keys.slice(:host, :container, :protocol, :label) } : []
+  rescue JSON::ParserError
+    []
+  end
+
+  def ports=(list)
+    self.port_mappings = list.to_json
+  end
+
+  # "3300 (web) · 2222 (Git over SSH)", "51413 (peers, TCP and UDP)": for the Apps page.
+  def port_summary
+    ports.group_by { |port| [port[:host], port[:label]] }.map do |(host, label), group|
+      protocols = group.map { |port| port[:protocol] }.uniq.sort
+      kind = { %w[tcp udp] => 'TCP and UDP', %w[udp] => 'UDP' }[protocols]
+      detail = [label, kind].compact.join(', ')
+      detail.empty? ? host.to_s : "#{host} (#{detail})"
+    end.join(' · ')
   end
 
   def start!
@@ -41,6 +64,17 @@ class DockerApp < ApplicationRecord
   end
 
   class << self
+    # The catalog entry's ports with the host ports the helper gave them (apps.install's
+    # reply: each catalog port as preferred, and the one it got); the catalog's own where the
+    # reply has none (outside production).
+    def assigned_ports(entry, given)
+      given = Array(given).grep(Hash)
+      entry[:ports].map do |port|
+        match = given.find { |p| p['preferred'] == port[:host] && p['protocol'] == port[:protocol] }
+        port.merge(host: match ? match['host'] : port[:host])
+      end
+    end
+
     # Removes an app, installed or not (deleting the data an earlier install kept).
     def uninstall(identifier, delete_data: false)
       Privileged.call('apps.uninstall', app: identifier, delete_data: delete_data)

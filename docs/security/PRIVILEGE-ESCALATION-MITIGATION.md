@@ -1,7 +1,7 @@
 # Privilege model
 
 How Amahi-kai gets root access on a NAS, and what keeps the web app from turning a bug into
-root. Last updated 2026-10-04 (Phase 4 P4.1: Docker apps through the helper). Design and history: [`docs/plans/privileged-helper.md`](../plans/privileged-helper.md).
+root. Last updated 2026-10-04 (Phase 4 P4.2: app ports kept to the LAN and Tailscale). Design and history: [`docs/plans/privileged-helper.md`](../plans/privileged-helper.md).
 
 ## Summary
 
@@ -34,6 +34,7 @@ updater run everything that loads the app or its gems as `amahi`.
 | `/var/lib/amahi-kai/backups/` | root:root 0700 | Database dumps taken before each update's migrations (the last 3) |
 | `/var/lib/amahi-kai/apps/<app>/` | `app-<app>`, 0750 | A Docker app's folders, owned by its own system user (uid below 1000) |
 | `/var/lib/amahi-kai/app-secrets/<app>.json` | root:amahi 0640 | Passwords and keys generated at an app's install; shown to admins |
+| `/var/lib/amahi-kai/app-ports.json` | root:amahi 0640 | The host ports each app was given; the Apps page shows them |
 
 `bin/amahi-set-ownership` sets this up. The installer runs it, and System Update runs it at the
 start of every update, so the first update after PR N takes the checkout back from the `amahi`
@@ -88,6 +89,14 @@ mode, devices, capabilities, host networking, host folders or extra Docker argum
 manifest can't ask for them. Each app gets a system user (`app-<app>`), and the container runs as
 that user unless the image drops to it itself (the manifest says which), with a memory limit.
 Generated secrets reach the container through a root-only `--env-file`, never a command line.
+
+Each app gets its catalog ports when they're free (checked by binding them), otherwise the next
+free ones, and keeps them. Ports are published on IPv4. Docker's own rules for published ports
+come before UFW's, so the helper adds a chain, `AMAHI-APPS`, to Docker's `DOCKER-USER`: new
+connections into a container (`docker0`) pass only from `tailscale0` or the NAS's own private
+subnets, and the rest are dropped. `amahi-kai-app-firewall.service` (`apps.firewall`) rebuilds it
+after Docker starts or restarts, and every install does too. There is no host networking, so an
+app can't open ports of its own on the NAS.
 
 ## Known gaps
 

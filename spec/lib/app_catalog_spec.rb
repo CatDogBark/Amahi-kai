@@ -17,7 +17,7 @@ RSpec.describe AppCatalog do
     it "gives each app what the pages show" do
       vaultwarden = AppCatalog.find("vaultwarden")
       expect(vaultwarden).to include(name: "Vaultwarden", category: "security", web_port: 8880,
-                                     ports: [{ host: 8880, container: 8080, protocol: "tcp" }],
+                                     ports: [{ host: 8880, container: 8080, protocol: "tcp", label: "web" }],
                                      secrets: [{ env: "ADMIN_TOKEN", label: "Admin page token (the /admin page)" }])
       expect(vaultwarden[:image]).to start_with("vaultwarden/server:1.37.3@sha256:")
       expect(vaultwarden[:logo_url]).to start_with("https://")
