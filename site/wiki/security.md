@@ -63,8 +63,7 @@ Not fixed automatically:
 
 Docker writes its own firewall rules for the ports its apps publish, ahead of UFW's, so UFW
 doesn't filter them. An app port published on all interfaces is reachable from your LAN even with
-UFW on. The **Docker ports** check lists them. Apps you only open through Amahi-kai's
-`/app/<name>` links don't need their ports reachable from the network.
+UFW on. The **Docker ports** check lists them: each app you installed is opened on its port.
 
 ### Setting up an SSH key
 
@@ -87,16 +86,18 @@ The web app runs as its own user, `amahi`, not as root.
 
 - **One root helper.** Everything that needs root (user and Samba accounts, Samba's
   configuration, share folders, services, drives, Greyhole, package installs, the tunnel,
-  Tailscale, the audit's fixes, updates) goes through `/usr/local/sbin/amahi-helper`. It accepts
+  Tailscale, the audit's fixes, updates, Docker apps) goes through `/usr/local/sbin/amahi-helper`. It accepts
   a fixed list of operations, checks every request itself, and logs each one to
   `/var/log/amahi-kai/helper.log` (passwords and tokens are filtered out).
-- **Sudo is limited** to the helper and Docker. You can see the rules with `sudo -l -U amahi`.
+- **Sudo is limited** to the helper. You can see the rule with `sudo -l -U amahi`.
 - **Root owns the code** in `/opt/amahi-kai`, so the web app can't change what root runs.
 - **Secrets stay private.** Passwords and the tunnel token are never put on a command line or in
   a log; the tunnel token is in a file only root can read.
 
-Docker is the exception: access to Docker is full control of the machine. Only install apps you
-trust.
+Docker apps are installed only through the helper, from Amahi-kai's own catalog: the web app names
+an app and the helper builds its container from the app's definition, as the app's own user. The
+`amahi` user isn't in the `docker` group (that would be full control of the machine). Docker
+itself is still root-level software, so only install apps you trust.
 
 ---
 
@@ -120,4 +121,4 @@ trust.
 3. Use SSH keys instead of passwords.
 4. Install updates when Amahi-kai says one is waiting (see [Updating](updating)).
 5. Keep Samba on the LAN; don't forward its ports on your router.
-6. Back up `/etc/amahi-kai/amahi.env` and your app data (`/opt/amahi/apps/`).
+6. Back up `/etc/amahi-kai/amahi.env` and your app data (`/var/lib/amahi-kai/apps/`).

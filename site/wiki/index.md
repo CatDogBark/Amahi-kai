@@ -20,7 +20,7 @@ web UI to manage it all, from one install command.
 | [Getting Started](getting-started) | Installing, the setup wizard, system requirements |
 | [File Sharing](file-sharing) | Shares, per-user permissions, the web file browser, Samba |
 | [Storage Pooling](storage-pooling) | Adding drives safely, Greyhole, copies per share |
-| [Docker Apps](docker-apps) | The app catalog, installing apps, the `/app/` links |
+| [Docker Apps](docker-apps) | The app catalog, installing apps, their ports and data |
 | [Remote Access](remote-access) | Cloudflare Tunnel and Tailscale |
 | [Security](security) | The security audit and its fixes, how Amahi-kai uses root |
 | [Networking](networking) | DNS aliases, static hosts, the DHCP/DNS gateway |
@@ -49,7 +49,7 @@ Amahi-kai runs as a systemd service (`amahi-kai.service`, Puma on port 3000) as 
 | `/etc/amahi-kai/amahi.env` | Configuration (database, secret key) |
 | `/var/lib/amahi-kai/files` | Default folder for shares |
 | `/mnt/<name>` | Data drives |
-| `/opt/amahi/apps` | Docker app data |
+| `/var/lib/amahi-kai/apps` | Docker app data, a folder per app |
 | `/var/lib/amahi-kai/backups` | Database backups taken before each update (the last 3) |
 | `/var/log/amahi-kai/helper.log` | Every root action, one line each |
 | `/var/log/amahi-kai/update.log` | The last update's output |

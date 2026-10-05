@@ -3,8 +3,8 @@
 
 # amahi-helper: the program Amahi-kai runs as root for user accounts, Samba, share
 # folders, system services, the hostname, dnsmasq's config, swap, reboot/power off, data
-# drives, ZFS pools, Greyhole, package installs, the Cloudflare Tunnel, Tailscale and the
-# security audit's fixes. Only the updater and Docker keep their own sudo rules.
+# drives, ZFS pools, Greyhole, package installs, the Cloudflare Tunnel, Tailscale, the
+# security audit's fixes and the Docker apps. It is the app's only sudo rule.
 #
 #   sudo -n /usr/local/sbin/amahi-helper users.create    (stdin: {"login":"ann","name":"Ann"})
 #   stdout: {"ok":true}  or  {"ok":false,"error":"..."}
@@ -34,6 +34,8 @@ require 'open3'
 require 'securerandom'
 require 'digest'
 require 'time'
+require 'yaml'
+require 'fileutils'
 
 module AmahiHelper
   ENV_MIN = { 'PATH' => '/usr/sbin:/usr/bin:/sbin:/bin', 'LANG' => 'C.UTF-8' }.freeze
@@ -227,6 +229,28 @@ module AmahiHelper
   UNIT
 
   TAILSCALE = '/usr/bin/tailscale'
+
+  # Apps (docs/plans/apps.md, P4.1). The helper is the only way the web app reaches Docker. It
+  # installs, starts, stops and removes the catalog's apps, each built from its manifest in the
+  # root-owned code (APP_MANIFESTS), never from anything the web app sends: the web app only
+  # names an app. Each app gets a system user (app-<id>, a uid below UID_MIN, so the users.*
+  # operations can't touch it) owning its folders under APPS_ROOT, and secrets generated at
+  # install in APP_SECRETS (root:amahi 0640, shown to admins).
+  DOCKER = '/usr/bin/docker'
+  APP_MANIFESTS = "#{APP_DIR}/config/apps".freeze
+  APPS_ROOT = '/var/lib/amahi-kai/apps'
+  APP_SECRETS = '/var/lib/amahi-kai/app-secrets'
+  APP_ID = /\A[a-z][a-z0-9]{1,23}\z/
+  APP_IMAGE = %r{\A[a-z0-9]+(?:[._/-][a-z0-9]+)*:[A-Za-z0-9._-]{1,64}@sha256:[0-9a-f]{64}\z}
+  APP_FOLDER = /\A[a-z][a-z0-9_-]{0,31}\z/
+  APP_ENV_NAME = /\A[A-Z][A-Z0-9_]{0,63}\z/
+  APP_MEMORY = /\A[1-9][0-9]{0,4}[mg]\z/
+  APP_DEFAULT_MEMORY = '1g'
+  # Host ports apps can't take: the NAS's own services (SSH, DNS, DHCP, HTTP(S), Samba,
+  # Amahi-kai's web UI).
+  APP_RESERVED_PORTS = [22, 53, 67, 68, 80, 137, 138, 139, 443, 445, 3000].freeze
+  # {{uid}}, {{gid}} and {{timezone}} in a manifest's environment are filled in at install.
+  APP_PLACEHOLDERS = /\{\{(uid|gid|timezone)\}\}/
 
   # The security audit's fixes. UFW lets in SSH, the web UI, HTTPS and Samba, plus DNS and
   # DHCP once Amahi-kai has configured dnsmasq.
@@ -646,11 +670,49 @@ module AmahiHelper
       validate: ->(_a) { installed!(TAILSCALE) && {} },
       plan: ->(_v) { [[TAILSCALE, 'logout', { allow_failure: true }], %w[/usr/bin/systemctl stop tailscaled.service]] }
     },
-    # Lets the app's user talk to Docker (the Docker app pages use it).
-    'docker.grant_app_user' => {
+    # Installs or reinstalls an app from its manifest: its user and folders (kept from an
+    # earlier install), its secrets (likewise), the pinned image, pulled with progress, and
+    # its container, started.
+    'apps.install' => {
+      params: %w[app],
+      validate: ->(a) { installed!(DOCKER) && app_request(a['app']) },
+      plan: ->(v) { [[:install_app, v[:id], v[:manifest]]] }
+    },
+    'apps.start' => {
+      params: %w[app],
+      validate: ->(a) { installed!(DOCKER) && app_request(a['app']) },
+      plan: ->(v) { [[DOCKER, 'start', app_container(v[:id])]] }
+    },
+    'apps.stop' => {
+      params: %w[app],
+      validate: ->(a) { installed!(DOCKER) && app_request(a['app']) },
+      plan: ->(v) { [[DOCKER, 'stop', '--time', '30', app_container(v[:id])]] }
+    },
+    'apps.restart' => {
+      params: %w[app],
+      validate: ->(a) { installed!(DOCKER) && app_request(a['app']) },
+      plan: ->(v) { [[DOCKER, 'restart', '--time', '30', app_container(v[:id])]] }
+    },
+    # Removes an app's container and image. Its folders, secrets and user stay (a reinstall uses
+    # them again) unless delete_data is true. Works when the container is already gone.
+    'apps.uninstall' => {
+      params: %w[app delete_data],
+      validate: lambda { |a|
+        installed!(DOCKER) && app_request(a['app']).merge(delete_data: a.key?('delete_data') ? boolean(a, 'delete_data') : false)
+      },
+      plan: ->(v) { [[:uninstall_app, v[:id], v[:manifest][:image], v[:delete_data]]] }
+    },
+    # Every app container's state, and whether Docker is running. Read-only.
+    'apps.status' => {
       params: [],
-      validate: ->(_a) { group_id('docker') ? {} : raise(Refused, "Docker isn't installed (no docker group)") },
-      plan: ->(_v) { [['/usr/sbin/usermod', '-aG', 'docker', APP_USER]] }
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:apps_status]] }
+    },
+    # Every container's published ports, for the security audit. Read-only.
+    'docker.published_ports' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:docker_ports]] }
     },
     # What the security audit can't read without root: UFW's state and sshd's effective
     # settings (`sshd -T`, so drop-ins count).
@@ -1159,6 +1221,89 @@ module AmahiHelper
     def each_leaf(rows, &block)
       rows.each do |row|
         row['children'].empty? ? (yield row if row['device']) : each_leaf(row['children'], &block)
+      end
+    end
+
+    # --- Apps ---
+
+    def app_request(value)
+      id = string(value, 'app', max: 24)
+      raise Refused, "app #{id.inspect} isn't one Amahi-kai knows" unless id.match?(APP_ID)
+      { id: id, manifest: app_manifest(id) }
+    end
+
+    def app_container(id)
+      "amahi-#{id}"
+    end
+
+    # An app's manifest, from the code, checked field by field. A manifest that fails a check
+    # is a bug in the catalog, so it fails rather than being refused.
+    def app_manifest(id)
+      path = File.join(APP_MANIFESTS, "#{id}.yml")
+      raise Refused, "app #{id.inspect} isn't in Amahi-kai's catalog" unless File.file?(path)
+      data = YAML.safe_load(File.read(path))
+      raise Failed, "#{path} isn't an app manifest" unless data.is_a?(Hash)
+      bad = ->(why) { raise Failed, "#{id}'s manifest: #{why}" }
+      image = data['image'].to_s
+      bad.call('image must be name:tag@sha256:digest') unless image.match?(APP_IMAGE)
+      run_as = data['run_as']
+      bad.call('run_as must be app or image') unless %w[app image].include?(run_as)
+      memory = (data['memory'] || APP_DEFAULT_MEMORY).to_s
+      bad.call("memory #{memory.inspect} must be like 512m or 2g") unless memory.match?(APP_MEMORY)
+      environment = app_environment_spec(data['environment'], bad)
+      { image: image, run_as: run_as, memory: memory, ports: app_ports(data['ports'], bad),
+        folders: app_folders(data['folders'], bad), environment: environment,
+        secrets: app_secret_names(data['secrets'], environment, bad) }
+    rescue Psych::Exception => e
+      raise Failed, "#{id}'s manifest can't be read: #{e.message}"
+    end
+
+    def app_ports(list, bad)
+      ports = Array(list).map do |port|
+        bad.call('a port needs host and container numbers') unless port.is_a?(Hash)
+        host = port['host']
+        container = port['container']
+        protocol = (port['protocol'] || 'tcp').to_s
+        bad.call("host port #{host.inspect} must be from 1024 to 65535") unless host.is_a?(Integer) && host.between?(1024, 65_535)
+        bad.call("host port #{host} belongs to the NAS") if APP_RESERVED_PORTS.include?(host)
+        bad.call("container port #{container.inspect} must be from 1 to 65535") unless container.is_a?(Integer) && container.between?(1, 65_535)
+        bad.call("protocol #{protocol.inspect} must be tcp or udp") unless %w[tcp udp].include?(protocol)
+        { host: host, container: container, protocol: protocol }
+      end
+      twice = ports.map { |p| [p[:host], p[:protocol]] }.tally.find { |_port, count| count > 1 }
+      bad.call("host port #{twice[0].join('/')} is listed twice") if twice
+      ports
+    end
+
+    def app_folders(list, bad)
+      folders = Array(list).map do |folder|
+        bad.call('a folder needs a name and a path') unless folder.is_a?(Hash)
+        name = folder['name'].to_s
+        path = folder['path'].to_s
+        bad.call("folder name #{name.inspect} must be lowercase letters, digits, _ or -") unless name.match?(APP_FOLDER)
+        bad.call("folder path #{path.inspect} must be an absolute, normalized path") unless normalized_path?(path)
+        { name: name, path: path }
+      end
+      bad.call('a folder is listed twice') if folders.map { |f| f[:name] }.uniq.size != folders.size
+      folders
+    end
+
+    def app_environment_spec(environment, bad)
+      environment ||= {}
+      bad.call('environment must be a mapping') unless environment.is_a?(Hash)
+      environment.to_h do |key, value|
+        bad.call("environment name #{key.inspect} isn't valid") unless key.to_s.match?(APP_ENV_NAME)
+        bad.call("#{key} must be one line of text") unless value.is_a?(String) && value.length <= 1000 && !value.match?(/[\r\n\0]/)
+        [key.to_s, value]
+      end
+    end
+
+    def app_secret_names(list, environment, bad)
+      Array(list).map do |secret|
+        name = secret.is_a?(Hash) ? secret['env'].to_s : ''
+        bad.call("secret #{name.inspect} isn't a valid environment name") unless name.match?(APP_ENV_NAME)
+        bad.call("secret #{name} is set in environment too") if environment.key?(name)
+        name
       end
     end
 
@@ -1775,6 +1920,144 @@ module AmahiHelper
       File.realpath(path)
     rescue SystemCallError
       path # a missing drive: zpool shows the path it was last seen at
+    end
+
+    # --- Apps ---
+
+    # A progress line for the caller (Privileged.call's block), like a streamed command's.
+    def say(line)
+      $stderr.puts(line)
+      $stderr.flush
+    rescue IOError, SystemCallError
+      nil
+    end
+
+    def do_install_app(id, manifest)
+      uid, gid = app_account(id)
+      dir = "#{APPS_ROOT}/#{id}"
+      do_make_dir(APPS_ROOT, '0755')
+      app_folder(dir, uid, gid)
+      manifest[:folders].each { |folder| app_folder("#{dir}/#{folder[:name]}", uid, gid) }
+      secrets = app_secrets(id, manifest[:secrets])
+      say("Pulling #{manifest[:image].sub(/@.*/, '')}...")
+      run_command([DOCKER, 'pull', manifest[:image], { stream: true }])
+      container = app_container(id)
+      run_command([DOCKER, 'rm', '--force', container, { allow_failure: true }])
+      say('Creating the container...')
+      with_env_file(app_environment(manifest, uid, gid, secrets)) do |env_file|
+        run_command([DOCKER, 'create', '--name', container, '--restart', 'unless-stopped',
+                     '--memory', manifest[:memory], '--label', "amahi.app=#{id}", '--env-file', env_file,
+                     *(manifest[:run_as] == 'app' ? ['--user', "#{uid}:#{gid}"] : []),
+                     *manifest[:ports].flat_map { |p| ['--publish', "#{p[:host]}:#{p[:container]}/#{p[:protocol]}"] },
+                     *manifest[:folders].flat_map { |f| ['--volume', "#{dir}/#{f[:name]}:#{f[:path]}"] },
+                     manifest[:image]])
+      end
+      say('Starting it...')
+      run_command([DOCKER, 'start', container])
+      { 'app' => id, 'container' => container }
+    end
+
+    # [uid, gid] of the app's system user (app-<id>), created on its first install.
+    def app_account(id)
+      name = "app-#{id}"
+      unless passwd(name)
+        run_command(['/usr/sbin/useradd', '--system', '--user-group', '--no-create-home', '--home-dir', '/nonexistent',
+                     '--shell', NOLOGIN, name])
+      end
+      account = passwd(name) or raise Failed, "couldn't create the user #{name}"
+      raise Failed, "#{name} isn't a system account" unless account.uid.positive? && account.uid < UID_MIN
+      [account.uid, account.gid]
+    end
+
+    # A folder of the app's, owned by its user (0750). A folder from an earlier install is kept,
+    # contents and all; anything but a real folder there is refused.
+    def app_folder(path, uid, gid)
+      Dir.mkdir(path, 0o750) unless File.exist?(path) || File.symlink?(path)
+      raise Failed, "#{path} isn't a folder" unless File.lstat(path).directory?
+      File.lchown(uid, gid, path)
+      File.chmod(0o750, path)
+    end
+
+    # { 'ADMIN_TOKEN' => '...' }: the app's secrets, generated on its first install and kept in
+    # APP_SECRETS/<id>.json (root:amahi 0640) so the admin pages can show them.
+    def app_secrets(id, names)
+      unless File.directory?(APP_SECRETS)
+        Dir.mkdir(APP_SECRETS, 0o750)
+        File.chown(0, group_id(APP_USER), APP_SECRETS)
+      end
+      path = "#{APP_SECRETS}/#{id}.json"
+      kept = read_json(path) || {}
+      secrets = names.to_h { |name| [name, kept[name].is_a?(String) ? kept[name] : SecureRandom.alphanumeric(32)] }
+      do_install(path, "#{JSON.pretty_generate(kept.merge(secrets))}\n", nil, '0640', APP_USER) unless secrets.empty?
+      secrets
+    end
+
+    def app_environment(manifest, uid, gid, secrets)
+      values = { 'uid' => uid.to_s, 'gid' => gid.to_s, 'timezone' => host_timezone }
+      manifest[:environment].transform_values { |value| value.gsub(APP_PLACEHOLDERS) { values.fetch(Regexp.last_match(1)) } }
+                            .merge(secrets)
+    end
+
+    def host_timezone
+      zone = File.read('/etc/timezone').strip
+      zone.match?(%r{\A[A-Za-z0-9_+\-/]{1,64}\z}) ? zone : 'Etc/UTC'
+    rescue SystemCallError
+      'Etc/UTC'
+    end
+
+    # Writes the container's environment to a file only root can read, for docker create's
+    # --env-file, so secrets are never on a command line; removed afterwards.
+    def with_env_file(environment)
+      path = File.join(RUN_DIR, "amahi-app-env-#{SecureRandom.hex(8)}")
+      File.open(path, File::WRONLY | File::CREAT | File::EXCL, 0o600) do |f|
+        environment.each { |key, value| f.puts("#{key}=#{value}") }
+      end
+      yield path
+    ensure
+      File.unlink(path) if path && File.exist?(path)
+    end
+
+    def do_uninstall_app(id, image, delete_data)
+      run_command([DOCKER, 'rm', '--force', app_container(id), { allow_failure: true }])
+      run_command([DOCKER, 'image', 'rm', image, { allow_failure: true }])
+      return { 'app' => id, 'data_kept' => true } unless delete_data
+
+      dir = "#{APPS_ROOT}/#{id}"
+      raise Failed, "#{dir} isn't a folder" if File.symlink?(dir)
+      FileUtils.remove_entry_secure(dir) if File.directory?(dir)
+      FileUtils.rm_f("#{APP_SECRETS}/#{id}.json")
+      run_command(['/usr/sbin/userdel', "app-#{id}", { allow_failure: true }]) if passwd("app-#{id}")
+      { 'app' => id, 'data_kept' => false }
+    end
+
+    # { 'docker' => running?, 'apps' => { 'jellyfin' => { 'state' => 'running', ... } } }
+    def do_apps_status
+      out = docker_output('ps', '--all', '--filter', 'label=amahi.app', '--format', '{{json .}}')
+      return { 'docker' => false, 'apps' => {} } unless out
+
+      apps = out.lines.filter_map do |line|
+        row = JSON.parse(line)
+        id = row['Labels'].to_s[/(?:\A|,)amahi\.app=([a-z0-9]+)/, 1] or next
+        [id, { 'state' => row['State'], 'status' => row['Status'], 'image' => row['Image'] }]
+      rescue JSON::ParserError
+        nil
+      end
+      { 'docker' => true, 'apps' => apps.to_h }
+    end
+
+    # { 'ports' => ["amahi-jellyfin\t0.0.0.0:8096->8096/tcp", ...] } for every running container.
+    def do_docker_ports
+      out = docker_output('ps', '--format', "{{.Names}}\t{{.Ports}}")
+      { 'ports' => out.to_s.lines(chomp: true).reject(&:empty?) }
+    end
+
+    # docker's output, or nil when it isn't installed or isn't running.
+    def docker_output(*args)
+      return nil unless File.executable?(DOCKER)
+      out, _err, status = Open3.capture3(ENV_MIN, [DOCKER, DOCKER], *args, unsetenv_others: true, chdir: '/')
+      status.success? ? out : nil
+    rescue SystemCallError
+      nil
     end
 
     # --- Checking for updates ---

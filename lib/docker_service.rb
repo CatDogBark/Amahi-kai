@@ -1,5 +1,7 @@
-# Docker Engine: installed and started through the root helper. Docker itself (the
-# `docker` command the app pages run) keeps its sudo rule until Phase 4.
+require 'open3'
+
+# Docker Engine: installed and started through the root helper. The web app never talks to
+# Docker itself: the helper runs the apps (apps.*, docs/plans/apps.md).
 class DockerService
   class DockerError < StandardError; end
 
@@ -14,10 +16,14 @@ class DockerService
       output == 'install ok installed'
     end
 
+    # Docker's service is up (systemctl answers any user; the web app can't reach Docker's
+    # socket).
     def running?
       return false unless production?
-      # Use docker info instead of systemctl — avoids sudoers restrictions
-      system('docker info > /dev/null 2>&1')
+      out, _err, _status = Open3.capture3('systemctl', 'is-active', 'docker')
+      out.strip == 'active'
+    rescue SystemCallError
+      false
     end
 
     def enabled?
@@ -39,17 +45,14 @@ class DockerService
       `docker --version 2>/dev/null`.strip
     end
 
-    # Installs Docker Engine from Docker's apt repository (key fingerprint pinned), lets
-    # the app's user talk to it and starts it, all through the root helper. apt's output
-    # goes to the block. Raises DockerError.
+    # Installs Docker Engine from Docker's apt repository (key fingerprint pinned) and starts
+    # it, through the root helper. apt's output goes to the block. Raises DockerError.
     def install!(&progress)
       return true unless production?
       progress&.call("Adding Docker's apt repository...")
       privileged('packages.add_repository', repository: 'docker')
       progress&.call('Installing Docker Engine...')
       privileged('packages.install', packages: PACKAGES) { |line| progress&.call("  #{line}") }
-      progress&.call('Setting up user permissions...')
-      privileged('docker.grant_app_user')
       progress&.call('Enabling and starting Docker...')
       privileged('services.enable', service: 'docker')
       true

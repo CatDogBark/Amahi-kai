@@ -45,6 +45,7 @@ so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 | Fix. Update window | A status check killed by the app's restart no longer reads as a finished (failed) update; the window waits for the restarted version | #52 |
 | Storage S5. Read-only file browser | The web file browser views and downloads only (upload, new folder, rename, delete removed), so shares change only through Samba; pooled files preview and download; folder zips work (the zip gem was missing), stream, and leave out links outside the share | #53 |
 | Remove dummy mode | No AMAHI_DUMMY_MODE setting or System Status row: outside production commands and the root helper are only recorded (Shell.simulated?), production always runs them; specs simulate by default | #55 |
+| Phase 4 P4.1. Apps through the root helper | The helper installs, starts, stops and uninstalls apps from manifests in `config/apps` (five apps, tag and digest pinned): a system user and folder per app, generated secrets shown to admins, memory limits, own ports, uninstall keeps data. The `docker` and `/opt/amahi` sudo rules and the `docker` group are gone: the helper is the only sudo rule | #58 |
 
 ## Next: Phase 3
 
@@ -95,7 +96,7 @@ touches the same code.
 
 - Several features staged files at fixed `/tmp` paths before a root copy. Samba (L), dnsmasq
   (M1), Greyhole (M2), the tunnel and Tailscale (M3) no longer do: the helper writes the files.
-  The Docker app installer still does (Phase 4).
+  The Docker app installer did until P4.1 (#58), which replaced it with the helper.
 - Duplicates: share toggles live in both `SharesController` and `ShareAccessManager`.
 - Data drives mount with PR #13's `defaults,nofail,...` options. `nosuid,nodev` would be safer for
   drives brought from another machine; share storage stays ext4 ([`storage.md`](storage.md)), so
@@ -131,7 +132,7 @@ apps defined by our own manifest (one container each), each app on its own port 
 Cloudflare Tunnel hostname (remote use required), one user and folder per app, ZFS datasets for big
 data, shares read-only or read-write as chosen (never a pooled share read-write), uninstall keeps
 data, a curated catalog of five apps, bitShare as an ordinary app. PRs P4.1–P4.6; P4.1 (apps through
-the root helper) is first, its decisions made.
+the root helper) is done (#58); P4.2 (reaching apps) is next, its decisions to settle first.
 
 ## Direction
 

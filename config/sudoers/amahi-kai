@@ -6,17 +6,8 @@
 # logs it to /var/log/amahi-kai/helper.log: user accounts, Samba, share folders, services,
 # the hostname, dnsmasq, swap, reboot/power off, data drives, Greyhole, package installs,
 # the Cloudflare Tunnel, Tailscale, the security audit's fixes, drive temperatures,
-# starting System Update and checking for updates.
-# The other rules are for Docker apps (redesigned in Phase 4).
+# ZFS pools, Docker apps, starting System Update and checking for updates. It is the only
+# rule: anything else that needs root becomes a helper operation.
 
 # Privileged helper (libexec/amahi-helper)
 amahi ALL=(root) NOPASSWD: /usr/local/sbin/amahi-helper
-
-# Docker app folders (lib/docker_app_installer.rb)
-amahi ALL=(root) NOPASSWD: /usr/bin/mkdir -p /opt/amahi/*
-amahi ALL=(root) NOPASSWD: /usr/bin/cp /tmp/amahi-staging/* /opt/amahi/*
-amahi ALL=(root) NOPASSWD: /usr/bin/rm -rf /opt/amahi/apps/*
-
-# Docker container management (app install/uninstall/start/stop). Access to Docker is
-# full control of the NAS; Phase 4 narrows it.
-amahi ALL=(root) NOPASSWD: /usr/bin/docker

@@ -1,29 +1,19 @@
 # Unified shell execution for Amahi-kai.
 #
 # Replaces the legacy Command class with a simpler, consistent API.
-# Handles sudo escalation, logging, and error reporting.
+# Handles logging and error reporting.
 #
 # Usage:
-#   Shell.run("docker restart jellyfin")
-#   Shell.run("mkdir -p /opt/amahi/apps/jellyfin")
-#   Shell.run!("docker start jellyfin")  # raises on failure
+#   Shell.capture("pgrep -f greyhole")
+#   Shell.run!("true")  # raises on failure
 #
-# Only the Docker app code still uses Shell for root commands (until Phase 4). Everything
-# else that needs root (accounts, Samba, shares, services, the network, drives, Greyhole,
-# package installs, the tunnel, Tailscale, the security fixes) goes through the root
-# helper (Privileged.call).
+# Commands run as the app's own user: nothing here uses sudo. Everything that needs root
+# goes through the root helper (Privileged.call).
 
 require 'open3'
 require 'shellwords'
 
 module Shell
-  # Privileged commands that need sudo when not running as root
-  SUDO_COMMANDS = %w[
-    chmod chown
-    mkdir rmdir cp mv rm
-    docker
-  ].freeze
-
   # A last line of defence for the log: secrets belong on stdin or in private files
   # (see run_with_input), but anything secret-shaped that reaches a command is masked.
   REDACTIONS = [
@@ -71,12 +61,11 @@ module Shell
         return true
       end
 
-      actual_cmd = prepare(cmd)
-      log_cmd("#{actual_cmd} (stdin withheld)")
+      log_cmd("#{cmd} (stdin withheld)")
 
-      _stdout, stderr, status = Open3.capture3(actual_cmd, stdin_data: input)
+      _stdout, stderr, status = Open3.capture3(cmd, stdin_data: input)
       unless status.success?
-        log_warn("Command failed (exit #{status.exitstatus}): #{actual_cmd}\nstderr: #{stderr}")
+        log_warn("Command failed (exit #{status.exitstatus}): #{cmd}\nstderr: #{stderr}")
       end
       status.success?
     end
@@ -84,9 +73,8 @@ module Shell
     # Execute a single command and return [stdout, stderr, status].
     # For cases where you need the output.
     def capture(cmd)
-      actual_cmd = prepare(cmd)
-      log_cmd(actual_cmd)
-      Open3.capture3(actual_cmd)
+      log_cmd(cmd)
+      Open3.capture3(cmd)
     end
 
     # +text+ with anything secret-shaped masked (REDACTIONS).
@@ -118,41 +106,13 @@ module Shell
         return [true, '', '', 0]
       end
 
-      actual_cmd = prepare(cmd)
-      log_cmd(actual_cmd)
+      log_cmd(cmd)
 
-      stdout, stderr, status = Open3.capture3(actual_cmd)
+      stdout, stderr, status = Open3.capture3(cmd)
       unless status.success?
-        log_warn("Command failed (exit #{status.exitstatus}): #{actual_cmd}\nstderr: #{stderr}")
+        log_warn("Command failed (exit #{status.exitstatus}): #{cmd}\nstderr: #{stderr}")
       end
       [status.success?, stdout, stderr, status.exitstatus]
-    end
-
-    def prepare(cmd)
-      return cmd if Process.uid == 0
-
-      # Extract the actual command name, skipping env vars
-      parts = cmd.strip.split(/\s+/)
-      cmd_idx = parts.index { |p| !p.include?('=') } || 0
-      cmd_name = File.basename(parts[cmd_idx].to_s)
-
-      return cmd unless SUDO_COMMANDS.include?(cmd_name)
-
-      # Resolve to full path for sudoers NOPASSWD matching
-      full_path = which(parts[cmd_idx])
-      parts[cmd_idx] = full_path if full_path
-      "sudo #{parts.join(' ')}"
-    end
-
-    # The full path of +name+ on PATH, or nil. Looked up in Ruby, not by running
-    # `which` through a shell.
-    def which(name)
-      return name if name.include?('/')
-      ENV.fetch('PATH', '').split(File::PATH_SEPARATOR).each do |dir|
-        path = File.join(dir, name)
-        return path if File.file?(path) && File.executable?(path)
-      end
-      nil
     end
 
     def log_cmd(cmd)

@@ -5,7 +5,9 @@ title: "Docker Apps"
 
 # Docker Apps
 
-Amahi-kai includes a built-in Docker app catalog. You can install, start, stop, and uninstall containerized apps directly from the web UI. Each app gets a reverse proxy path at `/app/<identifier>`, so you access everything through the Amahi-kai web UI without remembering port numbers.
+Amahi-kai has a small catalog of apps that run in Docker containers. You install, start, stop
+and uninstall them from the **Apps** tab. Each app runs on its own port of the server, as its own
+user, with its own data folder, and keeps that data when it's uninstalled.
 
 ---
 
@@ -18,229 +20,144 @@ Docker is **not** installed by default. Install it from the web UI:
 3. Watch the streamed installation progress
 
 Amahi-kai's root helper adds Docker's official apt repository (its signing key is checked
-against a pinned fingerprint), installs Docker, lets the `amahi` user manage it, and turns the
-service on.
+against a pinned fingerprint), installs Docker and turns the service on.
 
-> Access to Docker is full control of the server: a container can be given any file or device.
-> Only install apps you trust.
-
----
-
-## App Catalog
-
-The app catalog is defined in `config/docker_apps/catalog.yml`. Currently available apps:
-
-### Productivity
-| App | Description |
-|-----|-------------|
-| **Nextcloud** | File sync, sharing, and collaboration platform |
-| **Vaultwarden** | Lightweight Bitwarden-compatible password manager |
-| **Paperless-ngx** | Document management and OCR scanning |
-
-### Media
-| App | Description |
-|-----|-------------|
-| **Jellyfin** | Free media server for movies, TV, and music |
-| **Transmission** | Lightweight BitTorrent client with web UI |
-| **Audiobookshelf** | Audiobook and podcast server |
-
-### Storage
-| App | Description |
-|-----|-------------|
-| **Syncthing** | Peer-to-peer file synchronization |
-
-Browsing and managing share files from the web is built in: see the file browser on
-[File Sharing](file-sharing).
-
-### Networking
-| App | Description |
-|-----|-------------|
-| **Pi-hole** | Network-wide DNS ad blocker |
-| **Home Assistant** | Smart home automation platform |
-
-### Monitoring
-| App | Description |
-|-----|-------------|
-| **Uptime Kuma** | Self-hosted service monitoring |
-| **Grafana** | Analytics and visualization dashboards |
-
-### Development
-| App | Description |
-|-----|-------------|
-| **Gitea** | Lightweight self-hosted Git service |
-| **Portainer** | Docker container management UI |
+> Docker itself is root-level software: an app's container runs with whatever its image does.
+> Amahi-kai only installs the apps in its catalog, each from a version that was checked, but only
+> install apps you trust.
 
 ---
 
-## Installing an App
+## The catalog
 
-1. Go to **Apps** tab and click **App Catalog**
-2. Browse by category or find your app
-3. Click **Install**
-4. Watch the streaming terminal as it:
-   - Creates config files (if the app needs them)
-   - Creates volume directories with appropriate permissions
-   - Pulls the Docker image
-   - Creates and starts the container
+| App | What it's for | Open it at |
+|-----|---------------|------------|
+| **Jellyfin** | Your own streaming service for movies, TV and music | `http://<server>:8096` |
+| **Vaultwarden** | A password manager server for the Bitwarden apps | `http://<server>:8880` |
+| **Uptime Kuma** | Watches websites and services, and tells you when one goes down | `http://<server>:3001` |
+| **Gitea** | Your own Git server, like a small GitHub | `http://<server>:3300` (Git over SSH on port 2222) |
+| **Transmission** | A BitTorrent client with a web interface | `http://<server>:9091` (peers on port 51413) |
 
-Once installed, the app appears on the **Installed Apps** page and (if configured) on the dashboard.
-
-### What Happens Under the Hood
-
-For each app, Amahi-kai:
-
-1. Creates a `DockerApp` database record tracking status, ports, and volumes
-2. Creates host directories for volume mounts (at `/opt/amahi/apps/<identifier>/`)
-3. Writes any `init_files` (config files the app needs before first boot)
-4. Pulls the Docker image
-5. Creates the container with:
-   - Name: `amahi-<identifier>`
-   - Port mappings from the catalog
-   - Volume mounts from the catalog
-   - Environment variables from the catalog
-   - Restart policy: `unless-stopped`
-   - Labels: `amahi.managed=true`, `amahi.app=<identifier>`
-6. Starts the container
+Each app is defined by a small file in `config/apps/` in Amahi-kai's code: the image and its
+exact version, its ports, its folders, its settings and a memory limit. Versions are pinned, so
+installing an app always gets the version that was tested; newer versions come with Amahi-kai's
+own updates. More apps are added when they're wanted.
 
 ---
 
-## Accessing Apps
+## Installing an app
 
-Every installed app is accessible through the built-in reverse proxy at:
+1. Go to the **Apps** tab
+2. Click **Install** on the app
+3. Watch the install window as Amahi-kai:
+   - creates the app's own user (`app-<name>`) and its folders
+   - generates its passwords or keys, if it has any
+   - downloads the app's image
+   - creates and starts its container
+4. The last line says where to open it, for example `http://192.168.1.111:8096/`
 
-```
-http://<your-server-ip>:3000/app/<identifier>
-```
+Once it's installed, **Open** on the Apps page and on the dashboard goes straight to the app.
 
-For example:
-- Jellyfin: `http://192.168.1.10:3000/app/jellyfin`
-- Gitea: `http://192.168.1.10:3000/app/gitea`
-- Grafana: `http://192.168.1.10:3000/app/grafana`
+**Set the app up right away.** Jellyfin, Uptime Kuma and Gitea ask the first person who opens
+them to create the admin account, so open the app and do that as soon as it's installed.
 
-The reverse proxy handles:
-- Path rewriting (so apps work under `/app/<name>` paths)
-- Header forwarding (`X-Forwarded-For`, `X-Forwarded-Proto`, `X-Real-IP`)
-- HTML rewriting for root-absolute paths in app responses
-- Cookie path rewriting
-- Location header rewriting for redirects
-- HTTPS upstream detection (for apps like Nextcloud and Portainer that use internal SSL)
-- MIME type correction
+### Passwords and keys
 
-### App Compatibility
+Apps that need a password from the start get one generated at install, never a default one:
 
-Most apps work fully through the built-in reverse proxy at `/app/<name>`. Some apps have limitations:
+- **Vaultwarden**: the token for its `/admin` page
+- **Transmission**: the web interface password (user `admin`)
 
-| Status | Apps |
-|--------|------|
-| **Works fully** | Jellyfin, Grafana, Transmission, Gitea, Syncthing, Pi-hole, Paperless-ngx, Audiobookshelf |
-| **Limited** | Nextcloud, Portainer, Home Assistant, Vaultwarden, Uptime Kuma |
-
-**Limited apps** are ones that hardcode absolute URLs, require WebSocket connections on their own hostname, or refuse to run under a sub-path. After installing a limited app, you'll see a notification explaining that it may need direct port access or a dedicated hostname to work fully.
-
-We're actively improving proxy compatibility to support more apps. There are **no plans for multi-container (docker-compose) support** — Amahi-kai runs single-container apps only, keeping things simple and predictable.
+An installed app's row on the Apps page has **Passwords and keys Amahi-kai made for …**: open it
+to see them, with a **Copy** button. Only admins see the Apps page. Reinstalling keeps the same
+values.
 
 ---
 
-## Managing Apps
+## Managing apps
 
-### Start / Stop / Restart
+### Start / Stop / Uninstall
 
-From the **Installed Apps** page, use the control buttons for each app:
+Use the buttons on the app's row. The page shows what Docker reports, so an app that stopped on
+its own shows as stopped, and one whose container was removed outside Amahi-kai shows an error
+with **Install again**.
+
+**Uninstall keeps the app's data.** It removes the container and its image; the app's folder,
+passwords and user stay, and installing the app again picks them up. To delete the data too,
+uninstall the app, then click **Delete it** on its row (it says its data from an earlier install
+is kept).
+
+### From the command line
+
+The web UI is the usual way; these are for looking closer:
 
 ```bash
-# Or from the command line:
-sudo docker start amahi-jellyfin
-sudo docker stop amahi-jellyfin
-sudo docker restart amahi-jellyfin
+sudo docker ps --filter label=amahi.app
 ```
 
-### Uninstalling
-
-Click **Uninstall** in the web UI. This:
-- Stops the container (with a 30-second timeout)
-- Removes the container and its anonymous volumes
-- Prunes unused Docker images
-- Removes the app's host directory (`/opt/amahi/apps/<identifier>/`)
-- Resets the database record to `available`
-
-### Checking Status
-
-The web UI shows real-time status. From the CLI:
-
 ```bash
-sudo docker ps                          # Running containers
-sudo docker inspect amahi-jellyfin      # Detailed container info
-sudo docker logs amahi-jellyfin         # Container logs
-sudo docker logs -f amahi-jellyfin      # Follow logs
+sudo docker logs amahi-jellyfin
 ```
 
 ---
 
-## App Data Storage
+## App data
 
-Each app stores its data under `/opt/amahi/apps/<identifier>/`. For example:
+Each app's data is in its own folder, owned by the app's user:
 
 ```
-/opt/amahi/apps/
+/var/lib/amahi-kai/apps/
   jellyfin/
     config/
     cache/
-  nextcloud/
-    config/
+  vaultwarden/
     data/
   gitea/
     data/
+    config/
 ```
 
-Media apps also mount share folders; for instance, Jellyfin mounts `/opt/amahi/media`.
+Generated passwords are in `/var/lib/amahi-kai/app-secrets/<app>.json`, readable only by root and
+Amahi-kai.
+
+Apps can't see your shares yet: giving an app a share or a ZFS dataset (Jellyfin's media, for
+example) is planned next.
+
+### Backing up an app's data
+
+Stop the app on the Apps page, then copy its folder:
+
+```bash
+sudo cp -a /var/lib/amahi-kai/apps/jellyfin /path/to/backup/
+```
+
+Then start it again.
 
 ### App ports and the firewall
 
 Docker writes its own firewall rules for the ports apps publish, ahead of UFW's, so an app's port
-is reachable from your LAN even with UFW on. The [security audit](security) lists them. Apps you
-only open through `/app/<name>` don't need their ports reachable.
-
-### Backing Up App Data
-
-To back up a Docker app's data:
-
-```bash
-# Stop the app first
-sudo docker stop amahi-jellyfin
-
-# Copy the data directory
-sudo cp -a /opt/amahi/apps/jellyfin /path/to/backup/
-
-# Restart
-sudo docker start amahi-jellyfin
-```
+is reachable from your LAN even with UFW on. The [security audit](security) lists them.
 
 ---
 
 ## Troubleshooting
 
-### App shows "Cannot connect"
+### The install window ends with ✗
 
-- Check if the container is running: `sudo docker ps | grep amahi-<app>`
-- Check container logs: `sudo docker logs amahi-<app>`
-- Verify the port mapping: `sudo docker port amahi-<app>`
-
-### App returns blank page or broken CSS
-
-This usually means the reverse proxy path rewriting isn't matching the app's expectations. Check:
-- Whether the app supports running under a sub-path
-- The `preserve_prefix` setting in `catalog.yml` (for apps like Grafana that handle their own sub-paths)
-
-### Container won't start after reboot
-
-Containers are created with `--restart unless-stopped`, so they should auto-start. If not:
+The line above it says why (for example, the image couldn't be downloaded). Fix that and click
+**Install again**. The root helper's log has every step:
 
 ```bash
-sudo docker start amahi-<app>
-# Or check why it failed:
-sudo docker logs amahi-<app>
+sudo tail -n 40 /var/log/amahi-kai/helper.log
 ```
 
-### Reinstalling a broken app
+### The app's page doesn't open
 
-Uninstall the app from the web UI, then install it again. This creates a fresh container. If you want to preserve data, back up `/opt/amahi/apps/<identifier>/` before uninstalling.
+- Check the app shows **Open** (running) on the Apps page
+- Look at its log: `sudo docker logs amahi-<app>`
+- Make sure nothing else on the server uses its port: `sudo ss -ltnp | grep <port>`
+
+### An app that ran out of memory
+
+Each app has a memory limit (1 GB unless its definition sets another: Jellyfin has 2 GB). An app
+that goes over it is restarted by Docker; its log says so.

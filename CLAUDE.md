@@ -8,7 +8,7 @@ over plain HTTP, through a Cloudflare Tunnel, and through Tailscale. Troy owns t
 Current work: the storage plan, **`docs/plans/storage.md`** (ZFS pools for bitShare, PRs S1–S5,
 all built; tested on the drives once they're in, with
 **`docs/testing/storage-on-real-drives.md`**), then Phase 4, planned in **`docs/plans/apps.md`**
-(P4.1 first). Read
+(P4.1 done; P4.2 next). Read
 **`docs/plans/roadmap.md`** first, then the plan for the PR you're on. Phase 3, the code review
 fix plan (**`docs/plans/privileged-helper.md`**), is done except Content-Security-Policy. The
 privilege model is in `docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`.
@@ -76,10 +76,10 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
 - **Root access goes through the helper.** User accounts, Samba's files, share folders, Settings →
   Servers, the hostname, dnsmasq, swap, reboot/power off, data drives (format, mount, fstab),
   ZFS pools, Greyhole, package installs (pinned apt repositories, a fixed package list), the Cloudflare
-  Tunnel, Tailscale and the security audit's fixes are changed by `libexec/amahi-helper`
+  Tunnel, Tailscale, Docker apps and the security audit's fixes are changed by `libexec/amahi-helper`
   (`Privileged.call('users.create', ...)`), which validates and logs every call. Add an operation
-  there, not a sudoers rule. Sudoers rules (only the helper, the updater and Docker are left) are in
-  `config/sudoers/amahi-kai`; `bin/amahi-install-helper` installs them and the helper (the
+  there, not a sudoers rule. The helper's is the only sudoers rule left (since P4.1), in
+  `config/sudoers/amahi-kai`; `bin/amahi-install-helper` installs it and the helper (the
   installer and the updater both run it) only after `visudo -cf` passes.
 - **Root owns the code.** `/opt/amahi-kai` is root's except `tmp/`, `log/`, `public/assets/` and
   `vendor/bundle/` (`bin/amahi-set-ownership`, run by the installer and at the start of every

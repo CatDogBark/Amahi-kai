@@ -11,11 +11,14 @@
 #   /etc/systemd/system/amahi-kai-snapshots.{service,timer}      pool snapshots, every hour
 #   /etc/sudoers.d/amahi-kai        from config/sudoers/amahi-kai, only if visudo accepts it
 #
+# It also takes the app's user out of the docker group (Docker runs only through the helper).
+#
 # Exits non-zero if something wasn't installed; the sudoers file is then left as it was.
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
 APP_GROUP="${APP_GROUP:-amahi}"
+APP_USER="${APP_USER:-amahi}"
 SUDOERS=/etc/sudoers.d/amahi-kai
 
 if [[ $EUID -ne 0 ]]; then
@@ -44,6 +47,13 @@ if [[ -d /run/systemd/system ]]; then
     || echo "Couldn't enable amahi-kai-storage-check.timer; Disks → ZFS Pools' Check now still works" >&2
   systemctl enable --now amahi-kai-snapshots.timer >/dev/null 2>&1 \
     || echo "Couldn't enable amahi-kai-snapshots.timer; pools won't take snapshots on their own" >&2
+fi
+
+# The docker group is root on the NAS. Apps run only through the helper now (Phase 4), so
+# the app's user leaves the group older versions put it in.
+if getent group docker >/dev/null && id -nG "$APP_USER" 2>/dev/null | tr ' ' '\n' | grep -qx docker; then
+  gpasswd -d "$APP_USER" docker >/dev/null
+  echo "Took $APP_USER out of the docker group"
 fi
 
 # A broken file in /etc/sudoers.d stops sudo working for everyone, so the new rules are

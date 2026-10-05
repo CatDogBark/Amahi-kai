@@ -176,9 +176,10 @@ RSpec.describe SecurityAudit do
     it "warns about ports Docker publishes past UFW, but not ones kept on localhost" do
       allow(File).to receive(:executable?).and_call_original
       allow(File).to receive(:executable?).with('/usr/bin/docker').and_return(true)
-      ports = "0.0.0.0:8096->8096/tcp, :::8096->8096/tcp\n127.0.0.1:5432->5432/tcp\n\n192.168.1.5:53->53/udp"
-      allow(Open3).to receive(:capture3).with('sudo', '-n', '/usr/bin/docker', 'ps', '--format', '{{.Ports}}')
-                                        .and_return([ports, '', instance_double(Process::Status, success?: true)])
+      ports = ["amahi-jellyfin\t0.0.0.0:8096->8096/tcp, :::8096->8096/tcp", "db\t127.0.0.1:5432->5432/tcp",
+               "dns\t192.168.1.5:53->53/udp"]
+      allow(Privileged).to receive(:call).and_call_original
+      allow(Privileged).to receive(:call).with('docker.published_ports').and_return('ok' => true, 'ports' => ports)
       check = checks['docker_ports']
       expect(check.status).to eq(:warn)
       expect(check.description).to eq("Docker publishes 8096/tcp, 53/udp, which UFW doesn't filter")

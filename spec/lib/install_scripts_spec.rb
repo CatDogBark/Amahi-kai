@@ -109,6 +109,14 @@ RSpec.describe 'install and update scripts' do
     expect(rules).not_to include('amahi-update')
   end
 
+  # Phase 4 (P4.1): Docker runs only through the helper, so the web app's user has no other
+  # way to root, and older installs' docker group membership is taken away.
+  it 'gives the app user one sudo rule, for the root helper, and no docker group' do
+    rules = File.readlines(Rails.root.join('config/sudoers/amahi-kai')).grep(/\Aamahi /)
+    expect(rules).to eq(["amahi ALL=(root) NOPASSWD: /usr/local/sbin/amahi-helper\n"])
+    expect(File.read(Rails.root.join('bin/amahi-install-helper'))).to include('gpasswd -d "$APP_USER" docker')
+  end
+
   it 'rotates the app log as the app user' do
     stanza = File.read(Rails.root.join('config/logrotate-amahi-kai.conf'))[/production\.log \{[^}]*\}/]
     expect(stanza).to include('su amahi amahi')

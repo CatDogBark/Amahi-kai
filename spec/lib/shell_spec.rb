@@ -110,30 +110,8 @@ RSpec.describe Shell do
     end
   end
 
-  describe 'sudo preparation' do
-    before { allow(Process).to receive(:uid).and_return(1000) }
-
-    it 'runs listed commands through sudo by full path' do
-      expect(described_class.send(:prepare, 'mkdir -p /opt/amahi/apps/x'))
-        .to match(%r{\Asudo /\S*/mkdir -p /opt/amahi/apps/x\z})
-    end
-
-    it 'leaves other commands alone' do
-      expect(described_class.send(:prepare, 'echo hi')).to eq('echo hi')
-    end
-  end
-
-  describe 'SUDO_COMMANDS' do
-    it 'includes common privileged commands' do
-      expect(Shell::SUDO_COMMANDS).to include('docker', 'chmod', 'chown')
-    end
-
-    it 'leaves out what the root helper does' do
-      expect(Shell::SUDO_COMMANDS).not_to include('systemctl', 'apt-get', 'ufw', 'tailscale', 'usermod', 'sh', 'bash')
-    end
-
-    it 'does not include unprivileged commands' do
-      expect(Shell::SUDO_COMMANDS).not_to include('echo', 'cat', 'ls')
-    end
+  it 'has no sudo step: root goes through the root helper' do
+    expect(described_class.private_methods).not_to include(:prepare)
+    expect(described_class.const_defined?(:SUDO_COMMANDS)).to be false
   end
 end

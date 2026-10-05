@@ -1108,13 +1108,6 @@ RSpec.describe 'AmahiHelper' do
       allow(File).to receive(:executable?).with('/usr/bin/tailscale').and_return(false)
       expect(refusal('tailscale.up', {})).to eq("tailscale isn't installed")
     end
-
-    it "adds the app's user to the docker group once Docker is installed" do
-      allow(helper).to receive(:group_id).with('docker').and_return(998)
-      expect(steps('docker.grant_app_user', {})).to eq([%w[/usr/sbin/usermod -aG docker amahi]])
-      allow(helper).to receive(:group_id).with('docker').and_return(nil)
-      expect(refusal('docker.grant_app_user', {})).to include("Docker isn't installed")
-    end
   end
 
   describe 'security fixes' do

@@ -1,3 +1,5 @@
+/ One app of the catalog (AppCatalog), installed (a DockerApp) or not. The root helper does
+/ the work (docs/plans/apps.md); the buttons post to the apps actions and the page reloads.
 - installed = app.is_a?(DockerApp)
 - identifier = installed ? app.identifier : app[:identifier]
 - name = installed ? app.name : app[:name]
@@ -5,10 +7,10 @@
 - category = installed ? app.category : app[:category]
 - logo = installed ? app.logo_url : app[:logo_url]
 - status = installed ? app.status : 'available'
-- catalog_entry = AppCatalog.find(identifier) || {}
-- proxy_mode = catalog_entry[:proxy_mode] || 'proxy'
+- data_path = File.join(AppCatalog.apps_root, identifier)
+- uninstall_note = "Uninstall #{name}? Its data stays in #{data_path} and is used again if you install it later."
 
-.app.docker-app id="docker_app_#{identifier}" data-proxy-mode=proxy_mode
+.app.docker-app id="docker_app_#{identifier}"
   table.settings.stretchtoggle
     tr.hover-style
       td.settings-col1.settings-col1-pad1.apps-col1 style="vertical-align:middle"
@@ -20,30 +22,46 @@
             span.badge.bg-secondary.ms-2.small= category
       td.settings-col2.ps-2.apps-col2.text-secondary style="vertical-align:middle"
         = description.present? ? truncate(description, length: 120) : t('no_description_supplied')
-      td.text-end.pe-3 style='width: 120px; vertical-align:middle'
+        - if status == 'error' && installed && app.error_message.present?
+          .small.text-danger.mt-1 = app.error_message
+        - if status == 'available' && AppCatalog.data_kept?(identifier)
+          .small.mt-1
+            | Its data from an earlier install is kept and used again.
+            button.btn.btn-link.p-0.ms-1.text-danger.align-baseline type="button" style="font-size: inherit" onclick="if(confirm(#{"Delete #{name}'s data in #{data_path}? This can't be undone.".to_json})){dockerAppAction('/apps/docker/uninstall/#{identifier}?delete_data=1', this)}" Delete it
+      td.text-end.pe-3.text-nowrap style='width: 240px; vertical-align:middle'
         - case status
         - when 'available'
-          button.btn.btn-sm.btn-primary onclick="openAppInstall('#{identifier}', '#{apps_docker_install_stream_path(identifier)}', '#{name}')"
+          button.btn.btn-sm.btn-primary onclick="openAppInstall('#{identifier}', '#{apps_docker_install_stream_path(identifier)}', #{name.to_json})"
             = t('install', default: 'Install')
         - when 'pulling', 'installing'
           span.badge.bg-warning.text-dark
             span.spinner-border.spinner-border-sm.me-1
-            = status.capitalize
+            | Installing
         - when 'running'
           .d-flex.gap-1.justify-content-end
-            - if installed && app.host_port.present?
-              - if proxy_mode == 'subdomain'
-                span.text-secondary.small.me-1 style="white-space:nowrap" Local access only
-                a.btn.btn-sm.btn-success style="white-space:nowrap" href="http://#{request.host}:#{app.host_port}" target="_blank" Open Direct
-              - else
-                a.btn.btn-sm.btn-success href="/app/#{identifier}" target="_blank" Open
-            button.btn.btn-sm.btn-outline-danger onclick="dockerAppAction('/apps/docker/stop/#{identifier}', '#{identifier}', this)" Stop
+            - if app.url(request.host)
+              a.btn.btn-sm.btn-success href=app.url(request.host) target="_blank" rel="noopener" Open
+            button.btn.btn-sm.btn-outline-danger onclick="dockerAppAction('/apps/docker/stop/#{identifier}', this)" Stop
+            button.btn.btn-sm.btn-outline-secondary onclick="if(confirm(#{uninstall_note.to_json})){dockerAppAction('/apps/docker/uninstall/#{identifier}', this)}" Uninstall
         - when 'stopped'
           .d-flex.gap-1.justify-content-end
-            button.btn.btn-sm.btn-outline-success onclick="dockerAppAction('/apps/docker/start/#{identifier}', '#{identifier}', this)" Start
-            button.btn.btn-sm.btn-outline-danger onclick="if(confirm('Uninstall #{name}? This removes the container and its data.')){dockerAppAction('/apps/docker/uninstall/#{identifier}', '#{identifier}', this)}" Uninstall
+            button.btn.btn-sm.btn-outline-success onclick="dockerAppAction('/apps/docker/start/#{identifier}', this)" Start
+            button.btn.btn-sm.btn-outline-secondary onclick="if(confirm(#{uninstall_note.to_json})){dockerAppAction('/apps/docker/uninstall/#{identifier}', this)}" Uninstall
         - when 'error'
           .d-flex.gap-1.align-items-center.justify-content-end
             span.badge.bg-danger Error
-            button.btn.btn-sm.btn-outline-primary onclick="openAppInstall('#{identifier}', '#{apps_docker_install_stream_path(identifier)}', '#{name}')" data-tip="Retry" aria-label="Retry" ↻
-            button.btn.btn-sm.btn-outline-danger onclick="if(confirm('Uninstall #{name}?')){dockerAppAction('/apps/docker/uninstall/#{identifier}', '#{identifier}', this)}" Uninstall
+            button.btn.btn-sm.btn-outline-primary onclick="openAppInstall('#{identifier}', '#{apps_docker_install_stream_path(identifier)}', #{name.to_json})" Install again
+            button.btn.btn-sm.btn-outline-secondary onclick="if(confirm(#{uninstall_note.to_json})){dockerAppAction('/apps/docker/uninstall/#{identifier}', this)}" Uninstall
+    - secrets = installed ? AppCatalog.secrets(identifier) : []
+    - if secrets.any?
+      tr
+        td colspan="3"
+          details.app-secrets.ps-3.pb-2
+            summary.small Passwords and keys Amahi-kai made for #{name}
+            table.table.table-sm.small.mb-0.mt-1
+              - secrets.each do |secret|
+                tr
+                  td.text-muted style="width: 40%" = secret[:label]
+                  td
+                    code.me-2 = secret[:value]
+                    button.btn.btn-sm.btn-outline-secondary.py-0 type="button" data-copy=secret[:value] Copy

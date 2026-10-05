@@ -204,15 +204,11 @@ class AppProxyController < ApplicationController
     }[ext]
   end
 
-  # Apps that use HTTPS internally (container port is 443 or 9443)
+  # Apps that use HTTPS inside their container: their web port leads to container port 443,
+  # 8443 or 9443 (in the catalog's manifest).
   def ssl_port?(app)
-    return false unless app.port_mappings.present?
-    ports = app.port_mappings
-    ports = JSON.parse(ports) if ports.is_a?(String)
-    ssl_ports = %w[443 9443 8443]
-    ports.keys.any? { |k| ssl_ports.include?(k.to_s) }
-  rescue JSON::ParserError, NoMethodError
-    false
+    ports = AppCatalog.find(app.identifier)&.dig(:ports) || []
+    ports.any? { |port| port[:host] == app.host_port && [443, 8443, 9443].include?(port[:container]) }
   end
 
   def rewrite_location(location, app)

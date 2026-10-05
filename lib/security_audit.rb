@@ -229,15 +229,16 @@ class SecurityAudit
       )
     end
 
+    # The ports Docker publishes beyond the NAS itself, read by the root helper (the web app
+    # can't reach Docker): "8096/tcp", ...
     def docker_published_ports
       return [] unless production? && File.executable?('/usr/bin/docker')
-      out, _err, status = Open3.capture3('sudo', '-n', '/usr/bin/docker', 'ps', '--format', '{{.Ports}}')
-      return [] unless status.success?
-      out.split(/[,\n]/).filter_map do |mapping|
+      lines = Array(Privileged.call('docker.published_ports')['ports'])
+      lines.flat_map { |line| line.split("\t", 2).last.to_s.split(',') }.filter_map do |mapping|
         host, port, proto = mapping.strip.match(%r{\A(.*):(\d+)(?:-\d+)?->[\d-]+/(tcp|udp)\z})&.captures
         "#{port}/#{proto}" if port && !host.start_with?('127.', '[::1]', '::1')
       end.uniq
-    rescue SystemCallError
+    rescue Privileged::Error
       []
     end
 
