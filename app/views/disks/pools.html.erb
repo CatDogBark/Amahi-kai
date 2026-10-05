@@ -41,7 +41,7 @@
         <div class="d-flex align-items-center gap-2">
           <% scrubbing = pool.scan.to_s.start_with?('scrub in progress') %>
           <button type="button" class="btn btn-sm btn-outline-secondary" data-storage-post="<%= disks_scrub_pool_path %>" data-name="<%= pool.name %>"
-                  title="Read every block and repair what can be repaired" <%= 'disabled' if scrubbing %>><%= scrubbing ? 'Scrubbing…' : 'Scrub now' %></button>
+                  data-tip="Read every block and repair what can be repaired" <%= 'disabled' if scrubbing %>><%= scrubbing ? 'Scrubbing…' : 'Scrub now' %></button>
           <%= pool_state_badge(pool.health) %>
         </div>
       </div>

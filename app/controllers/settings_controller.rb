@@ -292,7 +292,7 @@ class SettingsController < ApplicationController
 
   def gather_services
     SystemServices.all.map do |svc|
-      detail = svc.running? && svc.since ? "since #{l(svc.since, format: :long)}" : (svc.idle_reason || svc.state)
+      detail = svc.running? && svc.since ? "since #{l(svc.since, format: :long)}" : (svc.idle_detail || svc.state)
       { name: svc.name, unit: svc.unit, running: svc.running?, idle: svc.idle?, detail: detail }
     end
   end

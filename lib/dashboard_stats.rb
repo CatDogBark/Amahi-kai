@@ -33,7 +33,7 @@ class DashboardStats
     # Amahi-kai itself is left out: you're looking at it.
     def service_status
       SystemServices.all.reject { |svc| svc.key == 'amahi-kai' }.map do |svc|
-        { name: svc.name, unit: svc.unit, running: svc.running?, idle: svc.idle_reason, status: svc.state, since: svc.since }
+        { name: svc.name, unit: svc.unit, running: svc.running?, idle: svc.idle_summary, idle_detail: svc.idle_detail, status: svc.state, since: svc.since }
       end
     end
 

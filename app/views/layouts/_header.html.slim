@@ -10,14 +10,14 @@ nav.navbar.navbar-expand-md.bg-dark.navbar-inverse
     .theme-switcher
       .theme-track
         .theme-indicator
-        button.theme-opt.theme-opt-light onclick="setTheme('light', event)" title="Light"
+        button.theme-opt.theme-opt-light onclick="setTheme('light', event)" aria-label="Light" data-tip="Light" data-tip-placement="bottom"
           = lucide_icon('sun', size: 16)
-        button.theme-opt.theme-opt-dark onclick="setTheme('dark', event)" title="Dark"
+        button.theme-opt.theme-opt-dark onclick="setTheme('dark', event)" aria-label="Dark" data-tip="Dark" data-tip-placement="bottom"
           = lucide_icon('moon', size: 16)
-        button.theme-opt.theme-opt-system onclick="setTheme('system', event)" title="System"
+        button.theme-opt.theme-opt-system onclick="setTheme('system', event)" aria-label="System" data-tip="Follow the system" data-tip-placement="bottom"
           = lucide_icon('monitor', size: 16)
         span style="width: 1px; height: 20px; background: rgba(255,255,255,0.15); margin: 0 2px;"
-        button.theme-opt.ocean-toggle type="button" data-ocean-panel="" title="Water background" aria-label="Water background" aria-expanded="false"
+        button.theme-opt.ocean-toggle type="button" data-ocean-panel="" data-tip="Water background" data-tip-placement="bottom" aria-label="Water background" aria-expanded="false"
           = lucide_icon('waves', size: 16)
 
     #amahi-nav.collapse.navbar-collapse.justify-content-end    
@@ -33,11 +33,11 @@ nav.navbar.navbar-expand-md.bg-dark.navbar-inverse
             = t('help')
           /! Opens the System Update dialog (layouts/_system_update); the dot says an update is waiting.
           - update_label = update_status.available? ? "Update available: #{pluralize(update_status.behind, 'change')}" : 'System Update'
-          a.nav-item.nav-link.text-white.text-center.nav_hover#update-btn href="#" title=update_label aria-label=update_label data-whats-new=""
+          a.nav-item.nav-link.text-white.text-center.nav_hover#update-btn href="#" data-tip=update_label data-tip-placement="bottom" aria-label=update_label data-whats-new=""
             = lucide_icon('refresh-cw', size: 16)
             - if update_status.available?
               span.update-dot
-          a.nav-item.nav-link.text-white.text-center.nav_hover#advanced-toggle href="#" title="#{t('advanced_settings')}" style="opacity: #{@advanced ? '1' : '0.5'}" onclick="fetch('#{toggle_advanced_path}', {method:'POST', headers:{'X-CSRF-Token':document.querySelector('meta[name=csrf-token]').content}}).then(function(){location.reload()});return false;"
+          a.nav-item.nav-link.text-white.text-center.nav_hover#advanced-toggle href="#" data-tip="#{t('advanced_settings')}" data-tip-placement="bottom" aria-label="#{t('advanced_settings')}" style="opacity: #{@advanced ? '1' : '0.5'}" onclick="fetch('#{toggle_advanced_path}', {method:'POST', headers:{'X-CSRF-Token':document.querySelector('meta[name=csrf-token]').content}}).then(function(){location.reload()});return false;"
             = lucide_icon('wrench', size: 16)
       - else
         .navbar-nav

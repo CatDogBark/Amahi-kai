@@ -170,12 +170,15 @@
             <tbody>
               <% @stats[:services].each do |svc| %>
                 <tr>
-                  <td class="ps-3 py-2" style="border-color: var(--kai-border, rgba(255,255,255,0.05));"><%= svc[:name] %></td>
+                  <td class="ps-3 py-2" style="border-color: var(--kai-border, rgba(255,255,255,0.05));">
+                    <%= svc[:name] %>
+                    <% if svc[:idle] %><div class="text-muted" style="font-size: 0.75rem;"><%= svc[:idle] %></div><% end %>
+                  </td>
                   <td class="text-end pe-3 py-2" style="border-color: var(--kai-border, rgba(255,255,255,0.05));">
                     <% if svc[:running] %>
                       <span class="badge bg-success">Running</span>
                     <% elsif svc[:idle] %>
-                      <span class="badge bg-info text-dark" title="<%= svc[:idle] %>">Idle</span>
+                      <%= idle_badge(svc[:idle_detail]) %>
                     <% else %>
                       <span class="badge" style="background: var(--kai-border); color: var(--kai-muted);">Stopped</span>
                     <% end %>
@@ -199,6 +202,9 @@
           <div class="card-body p-0">
             <table class="table table-sm mb-0" style="color: var(--kai-text);">
               <tbody>
+                <% if @jobs.empty? %>
+                  <tr><td class="ps-3 py-2 text-muted small">No scheduled jobs are installed.</td></tr>
+                <% end %>
                 <% @jobs.each do |job| %>
                   <tr id="job-<%= job.key %>">
                     <td class="ps-3 py-2" style="border-color: var(--kai-border, rgba(255,255,255,0.05));">

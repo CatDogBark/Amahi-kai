@@ -26,9 +26,13 @@
                   .fw-bold = job.name
                   .small.text-muted = job.about
                 td.text-nowrap = job.schedule
-                td.text-nowrap title=(job.last_run && l(job.last_run, format: :long)) = job_last_run(job).upcase_first
+                td.text-nowrap
+                  - if job.last_run
+                    span.tip-text tabindex="0" data-tip=l(job.last_run, format: :long) = job_last_run(job).upcase_first
+                  - else
+                    = job_last_run(job).upcase_first
                 td = job_result_badge(job)
-                td.text-nowrap title=(job.next_run && l(job.next_run, format: :long))
+                td.text-nowrap
                   = job.next_run ? l(job.next_run, format: :short) : '—'
                   - if job.next_run
                     .small.text-muted = job_next_run(job)

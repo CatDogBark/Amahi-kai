@@ -45,5 +45,5 @@
         - when 'error'
           .d-flex.gap-1.align-items-center.justify-content-end
             span.badge.bg-danger Error
-            button.btn.btn-sm.btn-outline-primary onclick="openAppInstall('#{identifier}', '#{apps_docker_install_stream_path(identifier)}', '#{name}')" title="Retry" ↻
+            button.btn.btn-sm.btn-outline-primary onclick="openAppInstall('#{identifier}', '#{apps_docker_install_stream_path(identifier)}', '#{name}')" data-tip="Retry" aria-label="Retry" ↻
             button.btn.btn-sm.btn-outline-danger onclick="if(confirm('Uninstall #{name}?')){dockerAppAction('/apps/docker/uninstall/#{identifier}', '#{identifier}', this)}" Uninstall

@@ -41,7 +41,7 @@
           button#whats-new-install.btn.btn-info type="button" data-update-action="install" data-url=settings_update_system_path Update now
         - else
           button#whats-new-check.btn.btn-outline-secondary type="button" data-update-action="check" data-url=settings_check_updates_path Check now
-          button#whats-new-repair.btn.btn-outline-secondary type="button" title="Runs every update step again on the version you have" data-update-action="repair" data-url=settings_update_system_path(repair: 1) data-confirm="Repair runs every update step again on the version you have (dependencies, database, root helper, Samba config, assets) and restarts Amahi-kai. Go ahead?" Repair
+          button#whats-new-repair.btn.btn-outline-secondary type="button" data-tip="Runs every update step again on the version you have" data-update-action="repair" data-url=settings_update_system_path(repair: 1) data-confirm="Repair runs every update step again on the version you have (dependencies, database, root helper, Samba config, assets) and restarts Amahi-kai. Go ahead?" Repair
           button.btn.btn-secondary type="button" data-bs-dismiss="modal" Close
 
 == render 'shared/install_terminal', id: 'system-update', title: 'Updating Amahi-kai', stream_url: settings_update_system_stream_path

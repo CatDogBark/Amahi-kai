@@ -19,10 +19,10 @@
       <% end %>
     </div>
     <div class="fb-actions">
-      <button class="btn btn-sm btn-outline-light" data-action="click->file-browser#newFolder" title="New Folder">
+      <button class="btn btn-sm btn-outline-light" data-action="click->file-browser#newFolder">
         <%= lucide_icon('folder-plus', size: 16) %> New Folder
       </button>
-      <label class="btn btn-sm btn-outline-info mb-0" title="Upload Files">
+      <label class="btn btn-sm btn-outline-info mb-0 fb-upload-btn">
         <%= lucide_icon('upload', size: 16) %> Upload
         <input type="file" multiple class="d-none" data-action="change->file-browser#uploadFiles" data-file-browser-target="fileInput">
       </label>
@@ -53,7 +53,7 @@
         <thead>
           <tr>
             <th class="fb-check-col">
-              <input type="checkbox" data-action="change->file-browser#toggleAll" data-file-browser-target="selectAll" title="Select all">
+              <input type="checkbox" data-action="change->file-browser#toggleAll" data-file-browser-target="selectAll" aria-label="Select all" data-tip="Select all">
             </th>
             <th class="fb-icon-col"></th>
             <th class="fb-name-col">Name</th>
@@ -111,7 +111,7 @@
               </td>
               <td class="fb-action-col">
                 <div class="dropdown">
-                  <button class="btn btn-sm btn-link text-muted p-0" data-bs-toggle="dropdown" title="Actions">⋮</button>
+                  <button class="btn btn-sm btn-link text-muted p-0" data-bs-toggle="dropdown" aria-label="Actions" data-tip="Actions">⋮</button>
                   <ul class="dropdown-menu dropdown-menu-end">
                     <% unless entry[:directory] %>
                       <li>

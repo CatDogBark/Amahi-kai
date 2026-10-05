@@ -39,6 +39,7 @@ so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 | Storage S2. Health | Health check every 15 minutes (pools + SMART, sleeping drives left asleep); alerts on the dashboard and Disks pages; drive health on ZFS Pools and Devices; Scrub now and Ubuntu's monthly scrub shown; smartmontools installed. Not yet tested on real drives | #46 |
 | Storage fix. Services and labels | ZFS's event daemon, smartd, Fail2ban and the VM guest agent in the services lists; drives without SMART data say why (virtual disk, none given, no smartmontools, not checked) | #47 |
 | Scheduled jobs | Jobs card on the dashboard (System, Services and Jobs in one row) and Settings → Jobs: Amahi-kai's timers, security updates and the pool scrub with last run, result and next run; smartd shown as Idle when there's nothing to watch | #48 |
+| Tooltips | Bootstrap tooltips after 150 ms (data-tip, tooltips.js) instead of the browser's title; extra information marked (ⓘ, dotted underline, help cursor); needed information moved onto the page; a spec keeps title tooltips out | #49 |
 
 ## Next: Phase 3
 

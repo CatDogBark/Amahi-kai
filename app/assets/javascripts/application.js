@@ -17,6 +17,7 @@
 //= require toast
 //= require system_update
 //= require storage_pools
+//= require tooltips
 //= require lib/application
 
 //= require bootstrap.bundle.min

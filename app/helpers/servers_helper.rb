@@ -9,9 +9,14 @@ module ServersHelper
 
   # Bootstrap badge for a SystemServices::Service's state.
   def service_state_badge(service)
-    return content_tag(:span, 'Idle', class: 'badge bg-info text-dark', title: service.idle_reason) if service.idle?
+    return idle_badge(service.idle_detail) if service.idle?
     label, css = service.installed? ? STATE_BADGES.fetch(service.state, %w[Stopped bg-secondary]) : ['Not installed', 'bg-secondary']
-    content_tag(:span, label, class: "badge #{css}", title: [service.state, service.sub_state].compact.join(' / '))
+    content_tag(:span, label, class: "badge #{css}")
+  end
+
+  # "Idle ⓘ", with why in its tooltip (SystemServices' idle services).
+  def idle_badge(detail)
+    content_tag(:span, 'Idle', class: 'badge bg-info text-dark tip-info', tabindex: 0, data: { tip: detail })
   end
 
   # "1 day, 15 hours" — the two largest units, like the dashboard's uptime.
