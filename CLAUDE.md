@@ -6,7 +6,8 @@ over plain HTTP, through a Cloudflare Tunnel, and through Tailscale. Troy owns t
 (`CatDogBark/Amahi-kai`, **public**) and the NAS.
 
 Current work: the storage plan, **`docs/plans/storage.md`** (ZFS pools for bitShare, PRs S1–S5,
-built before the NAS drives are connected and tested on them afterwards), then Phase 4. Read
+all built; tested on the drives once they're in, with
+**`docs/testing/storage-on-real-drives.md`**), then Phase 4. Read
 **`docs/plans/roadmap.md`** first, then the plan for the PR you're on. Phase 3, the code review
 fix plan (**`docs/plans/privileged-helper.md`**), is done except Content-Security-Policy. The
 privilege model is in `docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`.
