@@ -9,6 +9,7 @@ require 'privileged'
 # installs ZFS.
 module StoragePools
   PACKAGE = 'zfsutils-linux'.freeze
+  LSBLK_COLUMNS = 'NAME,PATH,TYPE,SIZE,MODEL,SERIAL,FSTYPE,LABEL,MOUNTPOINTS,ROTA'.freeze
 
   class Error < StandardError; end
 
@@ -119,10 +120,15 @@ module StoragePools
       raise Error, e.message
     end
 
-    # lsblk's whole tree, sizes in bytes. Runs as the app (no root needed); [] if it fails.
+    # lsblk's whole tree, sizes in bytes; runs as the app (no root needed). NAME comes first
+    # because lsblk only nests partitions and volumes under their disk then (see the helper's
+    # block_tree): a flat list would make every disk look free, so it counts as no answer.
+    # [] if lsblk fails.
     def lsblk
-      out, _err, status = Open3.capture3('lsblk', '-J', '-b', '-o', 'PATH,TYPE,SIZE,MODEL,SERIAL,FSTYPE,LABEL,MOUNTPOINTS,ROTA')
-      status.success? ? JSON.parse(out)['blockdevices'] || [] : []
+      out, _err, status = Open3.capture3('lsblk', '-J', '-b', '-o', LSBLK_COLUMNS)
+      tree = status.success? ? JSON.parse(out)['blockdevices'] || [] : []
+      flat = tree.any? { |node| node['type'] == 'part' || node['type'] == 'lvm' || node['type'].to_s.start_with?('raid', 'crypt') }
+      flat ? [] : tree
     rescue SystemCallError, JSON::ParserError
       []
     end

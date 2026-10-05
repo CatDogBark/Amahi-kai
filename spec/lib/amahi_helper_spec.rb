@@ -465,7 +465,7 @@ RSpec.describe 'AmahiHelper' do
         status = helper.update_status(nil)
         expect(status).to include('current' => @running, 'latest' => @latest, 'available' => true, 'behind' => 2, 'error' => nil)
         expect(status['commits'].map { |c| c['subject'] }).to eq(['Update window (#3)', 'Drive temperatures (#2)'])
-        expect(status['changelog']).to eq(['- **Temperatures.** Detail.', '- **Window.**'])
+        expect(status['changelog']).to eq(['**Temperatures.** Detail.', '**Window.**'])
       end
 
       it 'is up to date on the latest commit' do
@@ -611,6 +611,27 @@ RSpec.describe 'AmahiHelper' do
         File.write(conf, "dhcp-rnage=1\n")
         expect { helper.check_dnsmasq_conf(conf) }.to raise_error(AmahiHelper::Refused, /dnsmasq rejected/)
       end
+    end
+  end
+
+  # Every drive check reads lsblk's tree. lsblk only nests partitions and volumes under their
+  # disk with NAME as the first column; with PATH first it listed every device flat, so a disk
+  # seemed to have nothing mounted from it and the system disk passed the checks.
+  describe 'the device tree' do
+    it "reads this machine's lsblk as a tree: partitions and volumes under their disk" do
+      skip 'no lsblk here' unless File.executable?('/usr/bin/lsblk')
+      tree = helper.block_tree
+      expect(tree.map { |node| node['type'] }).not_to include('part', 'lvm')
+      root_disk = tree.find { |disk| helper.mountpoints(disk).include?('/') }
+      skip "/ isn't on a disk the helper manages here" unless root_disk && root_disk['path'].match?(AmahiHelper::DISK_DEVICE)
+      expect(refusal('disks.format', { 'device' => root_disk['path'] })).to include('on a disk the system uses')
+    end
+
+    it 'refuses a flat list rather than read it' do
+      flat = { 'blockdevices' => [{ 'path' => '/dev/sda', 'type' => 'disk', 'mountpoints' => [nil] },
+                                  { 'path' => '/dev/sda1', 'type' => 'part', 'mountpoints' => ['/'] }] }.to_json
+      allow(helper).to receive(:capture).with(%w[/usr/bin/lsblk -J -o NAME,PATH,TYPE,FSTYPE,MOUNTPOINTS]).and_return(flat)
+      expect { helper.block_tree }.to raise_error(AmahiHelper::Failed, 'lsblk listed /dev/sda1 on its own, not under its disk')
     end
   end
 

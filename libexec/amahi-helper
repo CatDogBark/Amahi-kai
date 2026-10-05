@@ -1514,10 +1514,10 @@ module AmahiHelper
       end
     end
 
-    # The changelog entries (bullet lines) added between the two commits.
+    # The changelog entries (bullet lines, without the bullet) added between the two commits.
     def update_changelog(current, latest)
       git_lines('diff', '--no-color', '--unified=0', current, latest, '--', 'CHANGELOG.md')
-        .filter_map { |line| line[1..][0, 2000] if line.start_with?('+- ') }
+        .filter_map { |line| line.delete_prefix('+- ')[0, 2000] if line.start_with?('+- ') }
         .first(UPDATE_LIST_LIMIT)
     end
 
@@ -1716,9 +1716,16 @@ module AmahiHelper
       2
     end
 
-    # lsblk's device tree (as root it sees everything; as anyone it sees mount points).
+    # lsblk's device tree (as root it sees everything; as anyone it sees mount points): disks
+    # at the top, their partitions, LVM, RAID and encrypted volumes nested in 'children'.
+    # lsblk only nests them when NAME is the first column; otherwise it lists every device
+    # flat, and a disk would seem to have nothing on it. The drive checks depend on the
+    # nesting, so a flat list is refused rather than read.
     def block_tree
-      JSON.parse(capture(['/usr/bin/lsblk', '-J', '-o', 'PATH,TYPE,FSTYPE,MOUNTPOINTS']))['blockdevices'] || []
+      tree = JSON.parse(capture(['/usr/bin/lsblk', '-J', '-o', 'NAME,PATH,TYPE,FSTYPE,MOUNTPOINTS']))['blockdevices'] || []
+      flat = tree.find { |node| node['type'] == 'part' || node['type'] == 'lvm' || node['type'].to_s.start_with?('raid', 'crypt') }
+      raise Failed, "lsblk listed #{flat['path']} on its own, not under its disk" if flat
+      tree
     rescue JSON::ParserError
       raise Failed, "couldn't read lsblk's output"
     end
