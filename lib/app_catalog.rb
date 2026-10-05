@@ -1,5 +1,6 @@
 require 'yaml'
 require 'json'
+require 'time'
 
 # The app catalog (docs/plans/apps.md): one manifest per app in config/apps/<id>.yml. The root
 # helper reads the same files to install an app (apps.install, which checks every field); this
@@ -9,6 +10,10 @@ class AppCatalog
   # Where the helper keeps each app's folders and generated secrets (outside production: tmp/).
   APPS_ROOT = '/var/lib/amahi-kai/apps'.freeze
   SECRETS_DIR = '/var/lib/amahi-kai/app-secrets'.freeze
+  # The copy of an app's data from before its last update (the helper's apps.update), kept
+  # BACKUP_DAYS for Undo update; <id>.json describes it.
+  BACKUPS_DIR = '/var/lib/amahi-kai/app-backups'.freeze
+  BACKUP_DAYS = 30
 
   class << self
     def all
@@ -59,13 +64,41 @@ class AppCatalog
       production? ? SECRETS_DIR : Rails.root.join('tmp', 'app-secrets').to_s
     end
 
+    # "1.37.3" for vaultwarden/server:1.37.3@sha256:...
+    def tag(image)
+      image.to_s.sub(/@.*/, '').split(':', 2)[1]
+    end
+
+    # The release notes for the version +image+ runs (the manifest's releases, {version} being
+    # the tag's leading number), or nil.
+    def releases_url(id, image)
+      app = find(id) or return nil
+      version = tag(image).to_s[/\A\d+(?:\.\d+)*/]
+      app[:releases].sub('{version}', version) if app[:releases].present? && version
+    end
+
+    # { from: image, taken_at: Time, until: Time } for the copy from before the app's last update,
+    # or nil when there's none to undo to.
+    def backup(id)
+      info = JSON.parse(File.read(File.join(backups_dir, "#{id}.json")))
+      taken = Time.iso8601(info['taken_at'].to_s)
+      expires = taken + BACKUP_DAYS.days
+      { from: info['from'].to_s, taken_at: taken, until: expires } if expires > Time.current && info['from'].present?
+    rescue SystemCallError, JSON::ParserError, ArgumentError, TypeError
+      nil
+    end
+
+    def backups_dir
+      production? ? BACKUPS_DIR : Rails.root.join('tmp', 'app-backups').to_s
+    end
+
     private
 
     def entry(path)
       data = YAML.safe_load(File.read(path))
       { identifier: File.basename(path, '.yml'), name: data['name'], description: data['description'],
         category: data['category'], logo_url: data['logo'], image: data['image'], web_port: data['web_port'],
-        writes_shares: data['writes_shares'] == true,
+        writes_shares: data['writes_shares'] == true, releases: data['releases'],
         ports: Array(data['ports']).map do |p|
           { host: p['host'], container: p['container'], protocol: p['protocol'] || 'tcp',
             label: p['host'] == data['web_port'] ? 'web' : p['label'] }

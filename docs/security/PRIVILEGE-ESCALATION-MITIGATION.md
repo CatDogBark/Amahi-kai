@@ -1,7 +1,7 @@
 # Privilege model
 
 How Amahi-kai gets root access on a NAS, and what keeps the web app from turning a bug into
-root. Last updated 2026-10-04 (Phase 4 P4.4: shares for apps). Design and history: [`docs/plans/privileged-helper.md`](../plans/privileged-helper.md).
+root. Last updated 2026-10-05 (Phase 4 P4.5: app updates). Design and history: [`docs/plans/privileged-helper.md`](../plans/privileged-helper.md).
 
 ## Summary
 
@@ -35,6 +35,7 @@ updater run everything that loads the app or its gems as `amahi`.
 | `/var/lib/amahi-kai/apps/<app>/` | `app-<app>`, 0750 | A Docker app's folders, owned by its own system user (uid below 1000) |
 | `/var/lib/amahi-kai/app-secrets/<app>.json` | root:amahi 0640 | Passwords and keys generated at an app's install; shown to admins |
 | `/var/lib/amahi-kai/app-ports.json` | root:amahi 0640 | The host ports each app was given; the Apps page shows them |
+| `/var/lib/amahi-kai/app-backups/<app>/` | root:root 0700, in a root:amahi 0750 folder | The copy of an app's data from before its last update, kept 30 days; `<app>.json` beside it (root:amahi 0640) describes it for Undo update |
 
 `bin/amahi-set-ownership` sets this up. The installer runs it, and System Update runs it at the
 start of every update, so the first update after PR N takes the checkout back from the `amahi`
@@ -105,6 +106,11 @@ manifest says `writes_shares` and Greyhole doesn't pool the share. A pooled shar
 copy folder on each Greyhole drive, read only. For a share an app writes into, the app joins the
 `users` group in its container, and the share's folders get a default ACL (`setfacl -d`, applied to
 folders only, through `find`, which doesn't follow links) so what the app makes stays group-writable.
+
+Updates (`apps.update`) run the version the catalog pins, which only a change to the root-owned
+code can move; the web app names the app. The helper copies the app's folders (`cp -a`) into a
+root-only folder first, and puts them back (`apps.undo_update`, or by itself when the new version
+isn't healthy) only from that copy, by folder names it checks against the manifest's pattern.
 
 ## Known gaps
 

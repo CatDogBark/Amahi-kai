@@ -22,6 +22,7 @@ class FrontController < ApplicationController
     @page_title = t('dashboard')
     @no_tabs = true
     @apps = DockerApp.dashboard.running
+    @app_updates = DockerApp.all.count(&:update_available?)
     @stats = DashboardStats.summary
     if current_user.admin?
       @storage_health = StorageHealth.load

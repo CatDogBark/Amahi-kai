@@ -47,6 +47,7 @@ so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 | Remove dummy mode | No AMAHI_DUMMY_MODE setting or System Status row: outside production commands and the root helper are only recorded (Shell.simulated?), production always runs them; specs simulate by default | #55 |
 | Phase 4 P4.1. Apps through the root helper | The helper installs, starts, stops and uninstalls apps from manifests in `config/apps` (five apps, tag and digest pinned): a system user and folder per app, generated secrets shown to admins, memory limits, own ports, uninstall keeps data. The `docker` and `/opt/amahi` sudo rules and the `docker` group are gone: the helper is the only sudo rule. Not yet tested on the NAS ([`apps.md`](../testing/apps.md)) | #58 |
 | Phase 4 P4.2. Reaching apps | App ports reachable from the LAN and Tailscale only (the helper's `AMAHI-APPS` chain in Docker's `DOCKER-USER`, rebuilt each time Docker starts); ports automatic (catalog port, or the next free one, kept) and shown on the Apps page; `/app/<id>` proxy removed; no Open links through the Cloudflare Tunnel. Not yet tested on the NAS | #59 |
+| Phase 4 P4.5. App updates | Update to the catalog's version from the app's row (manual), with What's new; the helper copies the app's data (room checked, caches left out), starts the new version and rolls back if it isn't healthy in 5 minutes (Docker's health check, or the web page answering); one copy kept 30 days for Undo update, pruned daily; `script/app-versions` finds newer releases for a person to apply. Not yet tested on the NAS | #62 |
 | Fix. Times that stay current | "… ago" times (update check, System Status, pool health, snapshots, Jobs) are worked out again every minute and when a dialog opens (time_ago.js), instead of only when the page loaded; the update check shows its time of day | #61 |
 | Phase 4 P4.4. Shares for apps | Shares chosen at install and changed later, at `/shares/<name>`, found by name in smb.conf by the helper; read only unless the app writes shares and Greyhole doesn't pool the share (pooled shares bring their copy folders, read only); default ACLs keep what apps write editable over SMB; images aren't downloaded again. ZFS datasets for apps moved to P4.6. Not yet tested on the NAS | #60 |
 
@@ -137,8 +138,8 @@ data, shares read-only or read-write as chosen (never a pooled share read-write)
 data, a curated catalog of five apps, bitShare as an ordinary app. PRs P4.1–P4.6; P4.1 (apps through
 the root helper) and P4.2 (reaching apps) are done (#58, #59), to be tested on the NAS with
 [`docs/testing/apps.md`](../testing/apps.md). Tailscale is the default way to reach apps from outside (Troy,
-2026-10-04), so P4.3 (Cloudflare per app) is optional and later. P4.4 (shares for apps, #60) is done;
-P4.5 (app updates) is next.
+2026-10-04), so P4.3 (Cloudflare per app) is optional and later. P4.4 (shares for apps, #60) and P4.5
+(app updates, #62) are done; P4.6 (bitShare, with ZFS datasets for apps) is next.
 
 ## Direction
 

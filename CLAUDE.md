@@ -8,7 +8,7 @@ over plain HTTP, through a Cloudflare Tunnel, and through Tailscale. Troy owns t
 Current work: the storage plan, **`docs/plans/storage.md`** (ZFS pools for bitShare, PRs S1–S5,
 all built; tested on the drives once they're in, with
 **`docs/testing/storage-on-real-drives.md`**), then Phase 4, planned in **`docs/plans/apps.md`**
-(P4.1, P4.2 and P4.4 done, not yet tested on the NAS: `docs/testing/apps.md`; P4.5 next). Read
+(P4.1, P4.2, P4.4 and P4.5 done, not yet tested on the NAS: `docs/testing/apps.md`; P4.6 next). Read
 **`docs/plans/roadmap.md`** first, then the plan for the PR you're on. Phase 3, the code review
 fix plan (**`docs/plans/privileged-helper.md`**), is done except Content-Security-Policy. The
 privilege model is in `docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`.
@@ -19,9 +19,11 @@ privilege model is in `docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`.
   once CI passes) → Troy runs **System Update** in the NAS web UI and checks → next PR.
 - After each merge, stop and report to Troy in a few plain sentences: what changed, and exactly
   what to click or check on the NAS. Wait for his OK before starting the next PR.
-- You can't reach the NAS. Never ask for SSH access, and never ask for or print secrets (tokens,
-  passwords, `amahi.env`, `secret_key_base`). Anything that needs the NAS is Troy's to run: give him
-  read-only commands and ask for the output.
+- Claude can reach the NAS over SSH (Troy's go-ahead, 2026-10-05) for
+  read-only checks. `sudo` there needs Troy's password, which Claude never types, so anything
+  that needs root is Troy's to run: give him the commands, one per block. Never ask for or print
+  secrets (tokens, passwords, `amahi.env`, `secret_key_base`). Don't change the NAS directly;
+  changes go through PRs and System Update.
 - Commit as `CatDogBark <troyevangelist@gmail.com>`. Keep `CHANGELOG.md` up to date in each PR
   (Unreleased → "Security & Fixes" or "Architecture & Code Quality"), written for users.
 - Don't decide things the plan marks as Troy's decision; ask.

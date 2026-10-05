@@ -1,0 +1,49 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Which catalog apps (config/apps) have newer versions on their registry. A person runs it on a
+# development machine, reads the release notes, and opens a PR with the new versions; nothing
+# runs it on its own. Once System Update brings the PR to a NAS, the app's row offers Update.
+#
+#   script/app-versions                   newer releases and builds, with release notes links
+#   script/app-versions --update gitea    write gitea's newest tag and digest into gitea.yml
+#   script/app-versions --update all      the same for every app with something newer
+#
+# Ruby's standard library only; it needs to reach Docker Hub.
+
+require_relative '../lib/app_versions'
+
+versions = AppVersions.new
+update = ARGV[0] == '--update' ? ARGV[1].to_s : nil
+if ARGV.any? && (update.nil? || update.empty?)
+  warn 'usage: script/app-versions [--update APP|all]'
+  exit 2
+end
+if update && update != 'all' && !versions.ids.include?(update)
+  warn "#{update} isn't in config/apps (#{versions.ids.join(', ')})"
+  exit 2
+end
+
+ids = update && update != 'all' ? [update] : versions.ids
+failed = false
+ids.each do |id|
+  result = versions.check(id)
+  if result.error
+    failed = true
+    puts format('%-14s %s', id, "couldn't check: #{result.error}")
+    next
+  end
+
+  line = case result.kind
+         when :newer then "#{result.tag} -> #{result.latest}#{'  (new major version: read the notes)' if result.major}"
+         when :rebuilt then "#{result.tag} has a newer build"
+         else "#{result.tag}, up to date"
+         end
+  puts format('%-14s %s', id, line)
+  puts format('%-14s %s', '', result.notes) if result.notes && result.kind != :current
+  next unless update && result.kind != :current
+
+  AppVersions.write(versions.path(id), result.image)
+  puts format('%-14s %s', '', "wrote #{result.image} into config/apps/#{id}.yml")
+end
+exit(failed ? 1 : 0)

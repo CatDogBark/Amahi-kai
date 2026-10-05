@@ -41,11 +41,19 @@ document.addEventListener('click', function(event) {
 });
 
 // Installing an app: the install window (shared/install_terminal), titled with the app's name.
-function openAppInstall(identifier, url, name) {
+function openAppInstall(identifier, url, name, heading) {
   var title = document.querySelector('#app-install-modal [style*="font-family:monospace"]');
-  if (title) title.textContent = 'Installing ' + (name || identifier) + '...';
+  if (title) title.textContent = heading || 'Installing ' + (name || identifier) + '...';
   openInstallTerminal('app', url);
 }
+
+// Update and Undo update (data-app-stream): after their confirm, they run in the install window.
+document.addEventListener('click', function(event) {
+  var button = event.target.closest('[data-app-stream]');
+  if (!button) return;
+  if (button.dataset.confirm && !confirm(button.dataset.confirm)) return;
+  openAppInstall(button.dataset.appStream, button.dataset.url, null, button.dataset.title);
+});
 
 // Choosing an app's shares (_shares_dialog) before it's installed, or installed again with new
 // ones. Shares Greyhole pools, and every share of an app that only reads, stay read only.

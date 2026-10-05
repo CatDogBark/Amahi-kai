@@ -81,6 +81,17 @@ describe DockerApp do
     end
   end
 
+  describe 'versions' do
+    it "knows the version it runs and whether the catalog has another" do
+      app = build_app(image: "gitea/gitea:1.27.2-rootless@sha256:#{'b' * 64}")
+      expect(app.version).to eq('1.27.2-rootless')
+      expect(app.catalog_version).to eq('1.27.3-rootless')
+      expect(app).to be_update_available
+      expect(build_app(image: AppCatalog.find('gitea')[:image])).not_to be_update_available
+      expect(build_app(identifier: 'portainer')).not_to be_update_available
+    end
+  end
+
   describe 'shares' do
     it 'keeps the shares the app was given, and sums them up for the Apps page' do
       app = build_app

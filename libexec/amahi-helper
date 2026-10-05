@@ -275,6 +275,15 @@ module AmahiHelper
   APP_SHARE_NAME = %r{\A[^/,"'\\\x00-\x1f]{1,64}\z}
   SAMBA_SPECIAL_SECTIONS = %w[global homes printers print$].freeze
   SETFACL = '/usr/bin/setfacl'
+  # App updates (P4.5). Before an update the helper copies the app's folders (all but those its
+  # manifest marks backup: false, like caches) to APP_BACKUPS/<id>/ (root only), described by
+  # APP_BACKUPS/<id>.json (root:amahi 0640, for the Apps page's Undo update). One copy per app:
+  # the next update replaces it, and apps.prune_backups deletes it after APP_BACKUP_DAYS. If the
+  # new version isn't healthy within APP_HEALTH_TIMEOUT, the old one and the copy are put back.
+  APP_BACKUPS = '/var/lib/amahi-kai/app-backups'
+  APP_BACKUP_DAYS = 30
+  APP_BACKUP_MARGIN = 1024**3 # free space to leave after copying
+  APP_HEALTH_TIMEOUT = 300
 
   # The security audit's fixes. UFW lets in SSH, the web UI, HTTPS and Samba, plus DNS and
   # DHCP once Amahi-kai has configured dnsmasq.
@@ -697,13 +706,14 @@ module AmahiHelper
     # Installs or reinstalls an app from its manifest: its user and folders (kept from an
     # earlier install), its secrets (likewise), the pinned image, pulled with progress, and
     # its container, started, with the shares chosen ([{ "name": "Movies", "write": false }]).
-    # Changing an app's shares is a reinstall.
+    # Changing an app's shares is a reinstall, which keeps the version it runs: only
+    # apps.update moves it to the manifest's.
     'apps.install' => {
       params: %w[app shares],
       validate: lambda { |a|
         installed!(DOCKER) && app_request(a['app']).then { |v| v.merge(shares: app_share_choices(a['shares'], v[:id], v[:manifest])) }
       },
-      plan: ->(v) { [[:install_app, v[:id], v[:manifest], v[:shares]]] }
+      plan: ->(v) { [[:install_app, v[:id], v[:manifest], v[:shares], true]] }
     },
     'apps.start' => {
       params: %w[app],
@@ -719,6 +729,29 @@ module AmahiHelper
       params: %w[app],
       validate: ->(a) { installed!(DOCKER) && app_request(a['app']) },
       plan: ->(v) { [[DOCKER, 'restart', '--time', '30', app_container(v[:id])]] }
+    },
+    # Updates an installed app to its manifest's version: a copy of its data first, the new
+    # version started, and the old version and the copy put back if it isn't healthy in time.
+    'apps.update' => {
+      params: %w[app shares],
+      validate: lambda { |a|
+        installed!(DOCKER) && app_request(a['app']).then { |v| v.merge(shares: app_share_choices(a['shares'], v[:id], v[:manifest])) }
+      },
+      plan: ->(v) { [[:update_app, v[:id], v[:manifest], v[:shares]]] }
+    },
+    # Puts back the version and data from before the app's last update (within APP_BACKUP_DAYS).
+    'apps.undo_update' => {
+      params: %w[app shares],
+      validate: lambda { |a|
+        installed!(DOCKER) && app_request(a['app']).then { |v| v.merge(shares: app_share_choices(a['shares'], v[:id], v[:manifest])) }
+      },
+      plan: ->(v) { [[:undo_app_update, v[:id], v[:manifest], v[:shares]]] }
+    },
+    # Deletes pre-update copies older than APP_BACKUP_DAYS. Run daily by amahi-kai-app-backups.timer.
+    'apps.prune_backups' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:prune_app_backups]] }
     },
     # Removes an app's container and image. Its folders, secrets and user stay (a reinstall uses
     # them again) unless delete_data is true. Works when the container is already gone.
@@ -1288,7 +1321,10 @@ module AmahiHelper
       environment = app_environment_spec(data['environment'], bad)
       writes_shares = data.fetch('writes_shares', false)
       bad.call('writes_shares must be true or false') unless [true, false].include?(writes_shares)
-      { image: image, run_as: run_as, memory: memory, ports: app_ports(data['ports'], bad),
+      ports = app_ports(data['ports'], bad)
+      web_port = data['web_port']
+      bad.call("web_port #{web_port.inspect} must be one of its ports") unless web_port.nil? || ports.any? { |p| p[:host] == web_port }
+      { image: image, run_as: run_as, memory: memory, ports: ports, web_port: web_port,
         folders: app_folders(data['folders'], bad), environment: environment,
         secrets: app_secret_names(data['secrets'], environment, bad), writes_shares: writes_shares }
     rescue Psych::Exception => e
@@ -1319,7 +1355,9 @@ module AmahiHelper
         path = folder['path'].to_s
         bad.call("folder name #{name.inspect} must be lowercase letters, digits, _ or -") unless name.match?(APP_FOLDER)
         bad.call("folder path #{path.inspect} must be an absolute, normalized path") unless normalized_path?(path)
-        { name: name, path: path }
+        backup = folder.fetch('backup', true)
+        bad.call("folder #{name}'s backup must be true or false") unless [true, false].include?(backup)
+        { name: name, path: path, backup: backup }
       end
       bad.call('a folder is listed twice') if folders.map { |f| f[:name] }.uniq.size != folders.size
       folders
@@ -2026,7 +2064,11 @@ module AmahiHelper
       nil
     end
 
-    def do_install_app(id, manifest, shares = [])
+    def do_install_app(id, manifest, shares = [], keep_version = false)
+      if keep_version && (running = app_image(id)) && running != manifest[:image]
+        say("Keeping the version it runs (#{image_tag(running)})")
+        manifest = manifest.merge(image: running)
+      end
       uid, gid = app_account(id)
       dir = "#{APPS_ROOT}/#{id}"
       do_make_dir(APPS_ROOT, '0755')
@@ -2059,7 +2101,211 @@ module AmahiHelper
       do_app_firewall
       say('Starting it...')
       run_command([DOCKER, 'start', container])
-      { 'app' => id, 'container' => container, 'ports' => ports.map { |p| p.transform_keys(&:to_s) } }
+      { 'app' => id, 'container' => container, 'image' => manifest[:image], 'ports' => ports.map { |p| p.transform_keys(&:to_s) } }
+    end
+
+    # The image an app's container runs (name:tag@sha256:...), or nil without a container.
+    def app_image(id)
+      image = docker_output('inspect', '--format', '{{.Config.Image}}', app_container(id)).to_s.strip
+      image.match?(APP_IMAGE) ? image : nil
+    end
+
+    def image_tag(image)
+      image.sub(/@.*/, '').split(':').last
+    end
+
+    # --- Updates ---
+
+    def do_update_app(id, manifest, shares)
+      from = app_image(id) or raise Failed, "#{id} isn't installed"
+      raise Failed, "#{id} runs #{image_tag(from)}, the catalog's version, already" if from == manifest[:image]
+
+      app_backup_room!(id, manifest)
+      unless docker_output('image', 'inspect', '--format', '{{.Id}}', manifest[:image].sub(%r{:[^:@/]+@}, '@'))
+        say("Pulling #{manifest[:image].sub(/@.*/, '')}...")
+        run_command([DOCKER, 'pull', manifest[:image], { stream: true }])
+      end
+      say("Stopping it (#{image_tag(from)})...")
+      run_command([DOCKER, 'stop', '--time', '30', app_container(id)])
+      say('Copying its data first, so the update can be undone...')
+      app_backup(id, manifest, from)
+      say("Starting #{image_tag(manifest[:image])}...")
+      reply = nil
+      problem = begin
+        reply = do_install_app(id, manifest, shares)
+        say('Waiting for it to come up healthy (up to 5 minutes)...')
+        app_health_problem(id, manifest)
+      rescue Failed => e
+        e.message
+      end
+      if problem
+        say("It didn't come up healthy: #{problem}")
+        say("Going back to #{image_tag(from)}, with its data from before the update...")
+        app_restore(id, manifest, from, shares)
+        app_forget_backup(id)
+        return { 'app' => id, 'updated' => false, 'image' => from, 'problem' => problem }
+      end
+      run_command([DOCKER, 'image', 'rm', from, { allow_failure: true }])
+      { 'app' => id, 'updated' => true, 'image' => manifest[:image], 'from' => from, 'ports' => reply['ports'] }
+    end
+
+    def do_undo_app_update(id, manifest, shares)
+      backup = app_backup_info(id) or raise Failed, "#{id} has no update to undo"
+      raise Failed, "the copy from before #{id}'s update is over #{APP_BACKUP_DAYS} days old" if app_backup_expired?(backup)
+      from = backup['from'].to_s
+      raise Failed, "the copy from before #{id}'s update doesn't say which version it was" unless from.match?(APP_IMAGE)
+
+      say("Stopping it (#{image_tag(app_image(id) || manifest[:image])})...")
+      run_command([DOCKER, 'stop', '--time', '30', app_container(id), { allow_failure: true }])
+      say("Going back to #{image_tag(from)}, with its data from before the update...")
+      reply = app_restore(id, manifest, from, shares)
+      app_forget_backup(id)
+      { 'app' => id, 'image' => from, 'ports' => reply['ports'] }
+    end
+
+    def do_prune_app_backups
+      removed = Dir.glob("#{APP_BACKUPS}/*.json").filter_map do |path|
+        id = File.basename(path, '.json')
+        next unless id.match?(APP_ID)
+        backup = app_backup_info(id)
+        next unless backup.nil? || app_backup_expired?(backup)
+        app_forget_backup(id)
+        id
+      end
+      { 'removed' => removed }
+    end
+
+    # Fails unless the app's folders fit on the disk with APP_BACKUP_MARGIN left; the copy it
+    # replaces counts as free.
+    def app_backup_room!(id, manifest)
+      folders = app_backup_folders(id, manifest)
+      need = folders.empty? ? 0 : disk_usage(folders)
+      old = "#{APP_BACKUPS}/#{id}"
+      have = free_space(APPS_ROOT) + (File.directory?(old) ? disk_usage([old]) : 0)
+      return if need + APP_BACKUP_MARGIN <= have
+
+      raise Failed, "there isn't room to copy #{id}'s data before updating (#{gigabytes(need)} GB, and " \
+                    "#{gigabytes(have)} GB is free); free some space or grow the disk"
+    end
+
+    def app_backup_folders(id, manifest)
+      manifest[:folders].select { |f| f[:backup] }.map { |f| "#{APPS_ROOT}/#{id}/#{f[:name]}" }
+                        .select { |path| File.directory?(path) && !File.symlink?(path) }
+    end
+
+    def disk_usage(paths)
+      capture(['/usr/bin/du', '-s', '-x', '-B1', '--', *paths]).lines.sum(&:to_i)
+    end
+
+    def free_space(path)
+      capture(['/usr/bin/df', '--output=avail', '-B1', '--', path]).lines.last.to_i
+    end
+
+    def gigabytes(bytes)
+      format('%.1f', bytes / 1024.0**3)
+    end
+
+    # Replaces the app's copy: the description goes first, so a copy cut short is never offered.
+    def app_backup(id, manifest, from)
+      unless File.directory?(APP_BACKUPS)
+        Dir.mkdir(APP_BACKUPS, 0o750)
+        File.chown(0, group_id(APP_USER), APP_BACKUPS)
+      end
+      app_forget_backup(id)
+      data = "#{APP_BACKUPS}/#{id}"
+      Dir.mkdir(data, 0o700)
+      folders = app_backup_folders(id, manifest)
+      folders.each { |folder| run_command(['/usr/bin/cp', '-a', '--', folder, "#{data}/#{File.basename(folder)}"]) }
+      info = { 'taken_at' => Time.now.utc.iso8601, 'from' => from, 'to' => manifest[:image],
+               'folders' => folders.map { |folder| File.basename(folder) } }
+      do_install("#{APP_BACKUPS}/#{id}.json", "#{JSON.pretty_generate(info)}\n", nil, '0640', APP_USER)
+    end
+
+    # Puts the copied folders back and recreates the container on +image+.
+    def app_restore(id, manifest, image, shares)
+      backup = app_backup_info(id) or raise Failed, "there's no copy of #{id}'s data to go back to"
+      run_command([DOCKER, 'rm', '--force', app_container(id), { allow_failure: true }])
+      Array(backup['folders']).each do |name|
+        raise Failed, "the copy lists a folder #{name.inspect}" unless name.is_a?(String) && name.match?(APP_FOLDER)
+        target = "#{APPS_ROOT}/#{id}/#{name}"
+        FileUtils.remove_entry_secure(target) if File.exist?(target) || File.symlink?(target)
+        run_command(['/usr/bin/cp', '-a', '--', "#{APP_BACKUPS}/#{id}/#{name}", target])
+      end
+      do_install_app(id, manifest.merge(image: image), shares)
+    end
+
+    def app_backup_info(id)
+      info = read_json("#{APP_BACKUPS}/#{id}.json")
+      info.is_a?(Hash) && File.directory?("#{APP_BACKUPS}/#{id}") ? info : nil
+    end
+
+    def app_backup_expired?(info)
+      Time.iso8601(info['taken_at'].to_s) < Time.now - (APP_BACKUP_DAYS * 86_400)
+    rescue ArgumentError
+      true
+    end
+
+    def app_forget_backup(id)
+      FileUtils.rm_f("#{APP_BACKUPS}/#{id}.json")
+      data = "#{APP_BACKUPS}/#{id}"
+      FileUtils.remove_entry_secure(data) if File.exist?(data) || File.symlink?(data)
+    end
+
+    # nil once the app is healthy, else why not: Docker's own health check where the image has
+    # one; otherwise its web page answers and it's still running, not restarted, 10 s later.
+    def app_health_problem(id, manifest, timeout: APP_HEALTH_TIMEOUT)
+      deadline = monotonic_now + timeout
+      loop do
+        state = app_state(id)
+        return 'its container is gone' unless state
+        return "it stopped (exit code #{state['ExitCode']})" if %w[exited dead].include?(state['Status'])
+
+        health = state.dig('Health', 'Status')
+        return "Docker's health check for it failed" if health == 'unhealthy'
+        return nil if health == 'healthy'
+
+        if health.nil? && state['Status'] == 'running' && app_answers?(id, manifest)
+          restarts = app_restart_count(id)
+          pause(10)
+          again = app_state(id)
+          return nil if again && again['Status'] == 'running' && app_restart_count(id) == restarts
+        end
+        return "it didn't come up within #{timeout / 60} minutes" if monotonic_now >= deadline
+
+        pause(5)
+      end
+    end
+
+    def app_state(id)
+      out = docker_output('inspect', '--format', '{{json .State}}', app_container(id))
+      out ? JSON.parse(out) : nil
+    rescue JSON::ParserError
+      nil
+    end
+
+    def app_restart_count(id)
+      docker_output('inspect', '--format', '{{.RestartCount}}', app_container(id)).to_i
+    end
+
+    # The app's web page answers on its port (the one it was given, P4.2), with any HTTP reply.
+    def app_answers?(id, manifest)
+      return true unless manifest[:web_port]
+      given = Array((read_json(APP_PORTS) || {})[id]).grep(Hash).find { |p| p['preferred'] == manifest[:web_port] }
+      port = given ? given['host'] : manifest[:web_port]
+      Socket.tcp('127.0.0.1', port, connect_timeout: 3) do |socket|
+        socket.write("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n")
+        socket.wait_readable(5) && socket.readpartial(16).start_with?('HTTP/')
+      end
+    rescue SystemCallError, IOError
+      false
+    end
+
+    def monotonic_now
+      Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    end
+
+    def pause(seconds)
+      sleep(seconds)
     end
 
     # --mount (not --volume, which would make a missing folder) for each share, at /shares/<name>,
@@ -2256,6 +2502,7 @@ module AmahiHelper
     end
 
     def do_uninstall_app(id, image, delete_data)
+      image = app_image(id) || image
       run_command([DOCKER, 'rm', '--force', app_container(id), { allow_failure: true }])
       run_command([DOCKER, 'image', 'rm', image, { allow_failure: true }])
       return { 'app' => id, 'data_kept' => true } unless delete_data
@@ -2265,6 +2512,7 @@ module AmahiHelper
       FileUtils.remove_entry_secure(dir) if File.directory?(dir)
       FileUtils.rm_f("#{APP_SECRETS}/#{id}.json")
       app_forget_ports(id)
+      app_forget_backup(id)
       run_command(['/usr/sbin/userdel', "app-#{id}", { allow_failure: true }]) if passwd("app-#{id}")
       { 'app' => id, 'data_kept' => false }
     end
