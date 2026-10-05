@@ -80,6 +80,20 @@ web vault, so it's usable once HTTPS through Tailscale is added (later); until t
 **Set the app up right away.** Jellyfin, Uptime Kuma and Gitea ask the first person who opens
 them to create the admin account, so open the app and do that as soon as it's installed.
 
+### Giving an app shares
+
+**Install** first asks which shares to give the app (none by default). They appear inside the app
+at `/shares/<name>`: in Jellyfin, for example, add `/shares/Movies` as a library. To change them
+later, click **Change** next to **Shares** on the app's row: the app restarts with the new ones,
+keeping its data.
+
+- Shares are **read only** unless you choose **Read and write**, which only apps that save files
+  into shares offer (Transmission, for downloads).
+- Shares that **Greyhole pools** are always read only to apps: their files change over SMB only.
+- What an app saves into a share stays editable over SMB.
+- **Everyone with an account in the app can see the shares you give it**, whatever the share's own
+  list of users says. Give an app only the shares its users should see.
+
 ### Passwords and keys
 
 Apps that need a password from the start get one generated at install, never a default one:
@@ -139,8 +153,8 @@ Each app's data is in its own folder, owned by the app's user:
 Generated passwords are in `/var/lib/amahi-kai/app-secrets/<app>.json`, readable only by root and
 Amahi-kai.
 
-Apps can't see your shares yet: giving an app a share or a ZFS dataset (Jellyfin's media, for
-example) is planned next.
+Shares you give an app stay where they are: the app reads (or writes) them in place. Giving an
+app storage on a ZFS pool comes with bitShare.
 
 ### Backing up an app's data
 

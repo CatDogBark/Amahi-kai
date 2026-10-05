@@ -1,8 +1,8 @@
 # An app installed from the catalog (AppCatalog, config/apps). The root helper does the work
 # (apps.* operations, docs/plans/apps.md); the record keeps what the pages show: the app's
 # status, the host ports the helper gave it (host_port is its web page's; all of them, as JSON,
-# in port_mappings) and whether it's on the dashboard. (Its old volume and environment columns
-# are no longer used.)
+# in port_mappings), the shares it was given (JSON in volume_mappings, P4.4) and whether it's on
+# the dashboard. (Its old environment column is no longer used.)
 class DockerApp < ApplicationRecord
   # A helper operation on the app failed. AppsController reports it to the page.
   class ContainerError < StandardError; end
@@ -31,6 +31,25 @@ class DockerApp < ApplicationRecord
 
   def ports=(list)
     self.port_mappings = list.to_json
+  end
+
+  # [{ name:, write: }]: the shares the app was given, at /shares/<name> inside it.
+  def shares
+    list = JSON.parse(volume_mappings.to_s)
+    list.is_a?(Array) ? list.grep(Hash).map { |share| { name: share['name'].to_s, write: share['write'] == true } } : []
+  rescue JSON::ParserError
+    []
+  end
+
+  def shares=(list)
+    self.volume_mappings = list.map { |share| { name: share[:name], write: share[:write] == true } }.to_json
+  end
+
+  # "Movies, TV (read only) · Downloads (read and write)": for the Apps page.
+  def share_summary
+    shares.group_by { |share| share[:write] }.sort_by { |write, _| write ? 1 : 0 }.map do |write, group|
+      "#{group.map { |share| share[:name] }.join(', ')} (#{write ? 'read and write' : 'read only'})"
+    end.join(' · ')
   end
 
   # "3300 (web) · 2222 (Git over SSH)", "51413 (peers, TCP and UDP)": for the Apps page.

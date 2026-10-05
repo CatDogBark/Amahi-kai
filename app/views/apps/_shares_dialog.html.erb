@@ -1,0 +1,46 @@
+<%# Choosing an app's shares (docs/plans/apps.md, P4.4), before installing it or to change them.
+    The Install, Install again and Change buttons carry the app's details (data-app-shares, ...);
+    apps.js fills this in and sends the choice to the install stream (share[]=Movies&write[]=Downloads). %>
+<div class="modal fade" id="app-shares-dialog" tabindex="-1" aria-labelledby="app-shares-title" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title" id="app-shares-title">Shares for <span data-fill="name"></span></h5></div>
+      <div class="modal-body">
+        <p class="small">
+          Shares you give <span data-fill="name"></span> appear in it at <code>/shares/&lt;name&gt;</code>.
+          <strong>Everyone with an account in <span data-fill="name"></span> can see them</strong>, whatever the
+          share's own user list says.
+        </p>
+        <% if shares.any? %>
+          <table class="table table-sm align-middle mb-0">
+            <% shares.each do |share| %>
+              <tr data-share="<%= share.name %>" data-pooled="<%= share.disk_pool_copies.to_i.positive? %>">
+                <td>
+                  <label class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" data-role="give">
+                    <span class="form-check-label"><%= share.name %></span>
+                  </label>
+                </td>
+                <td class="text-end">
+                  <%# Inline display, not d-inline-block: Bootstrap's display utilities override [hidden]. %>
+                  <select class="form-select form-select-sm" style="display: inline-block; width: auto;" data-role="access" aria-label="<%= share.name %> access">
+                    <option value="read">Read only</option>
+                    <option value="write">Read and write</option>
+                  </select>
+                  <span class="small text-secondary" data-role="pooled-note">Read only: Greyhole pools it</span>
+                </td>
+              </tr>
+            <% end %>
+          </table>
+        <% else %>
+          <p class="text-secondary mb-0">There are no shares yet; the Shares tab makes them.</p>
+        <% end %>
+        <p class="small text-secondary mt-2 mb-0" data-role="read-only-note"><span data-fill="name"></span> only reads shares.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" data-role="confirm" data-fill="verb"></button>
+      </div>
+    </div>
+  </div>
+</div>

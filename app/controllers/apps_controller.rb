@@ -113,6 +113,7 @@ class AppsController < ApplicationController
     @docker_installed, @docker_running = docker_state
     DockerApp.refresh_statuses! if @docker_running
     @docker_apps = DockerApp.order(:name)
+    @shares = Share.by_name
   end
 
   def docker_apps
@@ -125,6 +126,7 @@ class AppsController < ApplicationController
     catalog = catalog.select { |app| app[:category] == @current_category } if @current_category.present?
     @docker_apps = catalog.map { |entry| installed[entry[:identifier]] || entry }
     @categories = AppCatalog.categories
+    @shares = Share.by_name
   end
 
   # The install itself runs in the stream (the page opens it in the install window).
@@ -135,13 +137,14 @@ class AppsController < ApplicationController
   def docker_install_stream
     entry = AppCatalog.find(params[:id])
     host = request.host
+    shares = entry ? chosen_shares(entry) : []
     stream_sse do |sse|
       unless entry
         sse.emit("That app isn't in the catalog")
         sse.done('error')
         next
       end
-      install_app(entry, host, sse)
+      install_app(entry, host, sse, shares)
     end
   end
 
@@ -177,14 +180,16 @@ class AppsController < ApplicationController
 
   private
 
-  # Installs +entry+ through the root helper (apps.install), streaming its progress.
-  def install_app(entry, host, sse)
+  # Installs +entry+ through the root helper (apps.install), streaming its progress. Changing an
+  # app's shares installs it again with the new ones.
+  def install_app(entry, host, sse, shares)
     sse.emit("Installing #{entry[:name]}...")
     app = DockerApp.find_or_initialize_by(identifier: entry[:identifier])
     app.update!(name: entry[:name], description: entry[:description], image: entry[:image],
                 category: entry[:category], logo_url: entry[:logo_url], host_port: entry[:web_port],
-                container_name: "amahi-#{entry[:identifier]}", status: 'installing', error_message: nil)
-    reply = Privileged.call('apps.install', app: entry[:identifier]) { |line| sse.emit("  #{line}") }
+                container_name: "amahi-#{entry[:identifier]}", status: 'installing', error_message: nil,
+                shares: shares)
+    reply = Privileged.call('apps.install', app: entry[:identifier], shares: shares) { |line| sse.emit("  #{line}") }
     ports = DockerApp.assigned_ports(entry, reply['ports'])
     web = ports.find { |port| port[:label] == 'web' }
     app.update!(status: 'running', host_port: web&.dig(:host), ports: ports)
@@ -196,6 +201,18 @@ class AppsController < ApplicationController
     app&.update(status: 'error', error_message: e.message)
     sse.emit("✗ #{e.message}")
     sse.done('error')
+  end
+
+  # [{ name:, write: }] from the share dialog (share[]=Movies&write[]=Downloads): only shares that
+  # exist, and write only where the app writes shares and Greyhole doesn't pool the share. The
+  # helper checks the same against smb.conf.
+  def chosen_shares(entry)
+    names = Array(params[:share]).map(&:to_s)
+    writes = Array(params[:write]).map(&:to_s)
+    Share.by_name.where(name: names).map do |share|
+      write = entry[:writes_shares] && writes.include?(share.name) && share.disk_pool_copies.to_i.zero?
+      { name: share.name, write: write }
+    end
   end
 
   # Start, stop or restart an installed app; the page reloads on { status: 'ok' }.

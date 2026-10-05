@@ -36,14 +36,6 @@
           p= t('docker_not_configured', default: 'Check that Docker is installed and the app catalog is configured.')
 
 == render 'shared/install_terminal', id: 'app', title: 'Installing App', stream_url: ''
-
-javascript:
-  // Override openInstallTerminal for app installs to set dynamic title
-  var _origOpen = openInstallTerminal;
-  function openAppInstall(identifier, url, name) {
-    var titleEl = document.querySelector('#app-install-modal [style*="font-family:monospace"]');
-    if (titleEl) titleEl.textContent = 'Installing ' + (name || identifier) + '...';
-    _origOpen('app', url);
-  }
+== render 'shares_dialog', shares: @shares
 
 = javascript_include_tag 'apps'

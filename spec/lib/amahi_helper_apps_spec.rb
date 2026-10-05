@@ -78,7 +78,7 @@ RSpec.describe 'AmahiHelper apps' do
     end
 
     it 'installs from the manifest, and uninstalls keeping the data unless asked' do
-      expect(steps('apps.install', { 'app' => 'vaultwarden' })).to eq([[:install_app, 'vaultwarden', helper.app_manifest('vaultwarden')]])
+      expect(steps('apps.install', { 'app' => 'vaultwarden' })).to eq([[:install_app, 'vaultwarden', helper.app_manifest('vaultwarden'), []]])
       image = helper.app_manifest('gitea')[:image]
       expect(steps('apps.uninstall', { 'app' => 'gitea' })).to eq([[:uninstall_app, 'gitea', image, false]])
       expect(steps('apps.uninstall', { 'app' => 'gitea', 'delete_data' => true })).to eq([[:uninstall_app, 'gitea', image, true]])
@@ -139,6 +139,7 @@ RSpec.describe 'AmahiHelper apps' do
       stub_const('AmahiHelper::APP_PORTS', "#{dir}/app-ports.json")
       allow(helper).to receive(:port_bindable?).and_return(true)
       allow(helper).to receive(:do_app_firewall)
+      allow(helper).to receive(:docker_output).and_return(nil) # the image isn't downloaded yet
       allow(helper).to receive(:say)
       allow(helper).to receive(:host_timezone).and_return('America/Chicago')
       allow(helper).to receive(:group_id).and_call_original
@@ -257,6 +258,26 @@ RSpec.describe 'AmahiHelper apps' do
       end
     end
 
+    it "lets what an app writes into a share stay editable over SMB, installing acl if needed" do
+      share = { name: 'Downloads', path: "#{dir}/downloads", pooled: false, write: true }
+      allow(helper).to receive(:app_share_mounts).and_return([])
+      allow(File).to receive(:executable?).with('/usr/bin/setfacl').and_return(false)
+      helper.do_install_app('transmission', helper.app_manifest('transmission'), [share])
+      acl = ran.index { |argv| argv.first == '/usr/bin/find' }
+      expect(ran[acl - 1]).to include('/usr/bin/apt-get', 'install', 'acl')
+      expect(ran[acl]).to eq(['/usr/bin/find', "#{dir}/downloads", '-xdev', '-type', 'd', '-exec',
+                              '/usr/bin/setfacl', '-d', '-m', 'u::rwx,g::rwx,o::rx', '{}', '+'])
+      expect(ran.index { |argv| argv[1] == 'start' }).to be > acl
+    end
+
+    it "doesn't download an image it has already (so changing shares works offline)" do
+      allow(helper).to receive(:docker_output).and_return("sha256:abc\n")
+      helper.do_install_app('gitea', helper.app_manifest('gitea'))
+      expect(ran.map { |argv| argv[1] }).not_to include('pull')
+      expect(helper).to have_received(:docker_output).with('image', 'inspect', '--format', '{{.Id}}',
+                                                           start_with('gitea/gitea@sha256:'))
+    end
+
     describe 'ports' do
       def published(app)
         ran.select { |argv| argv[1] == 'create' && argv.include?("amahi.app=#{app}") }.last
@@ -300,6 +321,94 @@ RSpec.describe 'AmahiHelper apps' do
         expect(helper.port_free?(3000, ['tcp'], [])).to be false
         expect(helper.port_free?(80, ['tcp'], [])).to be false
       end
+    end
+  end
+
+  describe 'shares' do
+    let(:files) { "#{dir}/files" }
+    let(:drives) { "#{dir}/mnt" }
+    let(:smb_conf) do
+      <<~CONF
+        [global]
+        \tworkgroup = HOME
+        \tpath = /etc
+        [homes]
+        \tpath = /home
+        [Movies]
+        \tcomment = Movies
+        \tpath = #{files}/movies
+        \tvfs objects = greyhole
+        [Downloads]
+        \tpath = #{files}/downloads
+        [Outside]
+        \tpath = /etc
+        [Odd, Name]
+        \tpath = #{files}/odd
+      CONF
+    end
+    let(:transmission) { helper.app_manifest('transmission') }
+    let(:jellyfin) { helper.app_manifest('jellyfin') }
+
+    before do
+      FileUtils.mkdir_p(%W[#{files}/movies #{files}/downloads #{files}/odd #{drives}/storage-1/Movies #{drives}/storage-2])
+      File.write("#{dir}/smb.conf", smb_conf)
+      File.write("#{dir}/greyhole.conf", "storage_pool_drive = #{drives}/storage-1, min_free: 10gb\n" \
+                                         "storage_pool_drive = #{drives}/storage-2, min_free: 10gb\n")
+      stub_const('AmahiHelper::SMB_CONF', "#{dir}/smb.conf")
+      stub_const('AmahiHelper::GREYHOLE_CONF', "#{dir}/greyhole.conf")
+      stub_const('AmahiHelper::DRIVES_ROOT', drives)
+      allow(helper).to receive(:share_root).and_return(files)
+    end
+
+    def choose(manifest, shares)
+      helper.app_share_choices(shares, 'transmission', manifest)
+    end
+
+    def refused(manifest, shares)
+      choose(manifest, shares)
+      nil
+    rescue AmahiHelper::Refused => e
+      e.message
+    end
+
+    it "finds shares by name in smb.conf, with their folders and whether Greyhole pools them" do
+      expect(choose(transmission, [{ 'name' => 'movies' }, { 'name' => 'Downloads', 'write' => true }])).to eq(
+        [{ name: 'Movies', path: "#{files}/movies", pooled: true, write: false },
+         { name: 'Downloads', path: "#{files}/downloads", pooled: false, write: true }]
+      )
+      expect(choose(transmission, nil)).to eq([])
+    end
+
+    it 'refuses shares that are not there, writing where the app or Greyhole says no, and odd requests' do
+      expect(refused(transmission, [{ 'name' => 'Photos' }])).to eq('"Photos" isn\'t one of the NAS\'s shares')
+      expect(refused(transmission, [{ 'name' => 'homes' }])).to eq('"homes" isn\'t one of the NAS\'s shares')
+      expect(refused(transmission, [{ 'name' => 'Outside' }])).to include("isn't in the share root")
+      expect(refused(transmission, [{ 'name' => 'Odd, Name' }])).to include("name can't be a folder in an app")
+      expect(refused(transmission, [{ 'name' => 'Movies', 'write' => true }])).to eq('share Movies is pooled by Greyhole, so apps can only read it')
+      expect(refused(jellyfin, [{ 'name' => 'Downloads', 'write' => true }])).to eq('transmission only reads shares')
+      expect(refused(transmission, [{ 'name' => 'Downloads', 'path' => '/etc' }])).to include('each share must be')
+      expect(refused(transmission, [{ 'name' => 'Downloads' }, { 'name' => 'downloads' }])).to eq('a share is listed twice')
+      expect(refused(transmission, 'Downloads')).to include('must be a list')
+    end
+
+    it "mounts shares at /shares/<name>, a pooled share with its copy folders, and lets a writer join the users group" do
+      allow(helper).to receive(:group_id).and_call_original
+      allow(helper).to receive(:group_id).with('users').and_return(100)
+      mounts = helper.app_share_mounts(choose(transmission, [{ 'name' => 'Movies' }, { 'name' => 'Downloads', 'write' => true }]))
+      expect(mounts).to eq(['--group-add', '100',
+                            '--mount', "type=bind,source=#{files}/movies,target=/shares/Movies,readonly",
+                            '--mount', "type=bind,source=#{drives}/storage-1/Movies,target=#{drives}/storage-1/Movies,readonly",
+                            '--mount', "type=bind,source=#{files}/downloads,target=/shares/Downloads"])
+      expect(helper.app_share_mounts(choose(transmission, [{ 'name' => 'Downloads' }])))
+        .to eq(['--mount', "type=bind,source=#{files}/downloads,target=/shares/Downloads,readonly"])
+    end
+
+    it "is checked when the request comes in" do
+      allow(File).to receive(:executable?).with('/usr/bin/docker').and_return(true)
+      expect(refusal('apps.install', { 'app' => 'jellyfin', 'shares' => [{ 'name' => 'Downloads', 'write' => true }] }))
+        .to eq('jellyfin only reads shares')
+      expect(steps('apps.install', { 'app' => 'jellyfin', 'shares' => [{ 'name' => 'Movies' }] }).first.last)
+        .to eq([{ name: 'Movies', path: "#{files}/movies", pooled: true, write: false }])
     end
   end
 

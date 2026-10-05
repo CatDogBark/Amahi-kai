@@ -1,7 +1,7 @@
 # Privilege model
 
 How Amahi-kai gets root access on a NAS, and what keeps the web app from turning a bug into
-root. Last updated 2026-10-04 (Phase 4 P4.2: app ports kept to the LAN and Tailscale). Design and history: [`docs/plans/privileged-helper.md`](../plans/privileged-helper.md).
+root. Last updated 2026-10-04 (Phase 4 P4.4: shares for apps). Design and history: [`docs/plans/privileged-helper.md`](../plans/privileged-helper.md).
 
 ## Summary
 
@@ -97,6 +97,14 @@ connections into a container (`docker0`) pass only from `tailscale0` or the NAS'
 subnets, and the rest are dropped. `amahi-kai-app-firewall.service` (`apps.firewall`) rebuilds it
 after Docker starts or restarts, and every install does too. There is no host networking, so an
 app can't open ports of its own on the NAS.
+
+Shares are given to an app by name. The helper finds each share's folder in smb.conf (which only
+it writes), checks the folder is in the share root or on a mounted data drive, and mounts it with
+`--mount` (which never creates a missing folder) at `/shares/<name>`, read only unless the app's
+manifest says `writes_shares` and Greyhole doesn't pool the share. A pooled share also brings its
+copy folder on each Greyhole drive, read only. For a share an app writes into, the app joins the
+`users` group in its container, and the share's folders get a default ACL (`setfacl -d`, applied to
+folders only, through `find`, which doesn't follow links) so what the app makes stays group-writable.
 
 ## Known gaps
 

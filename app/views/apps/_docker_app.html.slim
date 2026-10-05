@@ -7,6 +7,10 @@
 - category = installed ? app.category : app[:category]
 - logo = installed ? app.logo_url : app[:logo_url]
 - status = installed ? app.status : 'available'
+- entry = AppCatalog.find(identifier) || {}
+/ The share dialog (_shares_dialog, apps.js) opens from buttons carrying these; it then installs.
+- share_dialog = { 'app-shares' => identifier, 'app-name' => name, 'url' => apps_docker_install_stream_path(identifier),
+                   'writes' => entry[:writes_shares].to_s, 'current' => (installed ? app.shares : []).to_json }
 - data_path = File.join(AppCatalog.apps_root, identifier)
 - uninstall_note = "Uninstall #{name}? Its data stays in #{data_path} and is used again if you install it later."
 
@@ -26,6 +30,10 @@
           .small.mt-1
             = app.ports.map { |port| port[:host] }.uniq.one? ? 'Port ' : 'Ports '
             = app.port_summary
+        - if installed && %w[running stopped].include?(status)
+          .small.mt-1
+            = app.shares.any? ? "Shares #{app.share_summary}" : 'No shares'
+            button.btn.btn-link.p-0.ms-2.align-baseline type="button" style="font-size: inherit" data=share_dialog.merge('verb' => 'Save and restart') Change
         - if status == 'error' && installed && app.error_message.present?
           .small.text-danger.mt-1 = app.error_message
         - if status == 'available' && AppCatalog.data_kept?(identifier)
@@ -35,7 +43,7 @@
       td.text-end.pe-3.text-nowrap style='width: 240px; vertical-align:middle'
         - case status
         - when 'available'
-          button.btn.btn-sm.btn-primary onclick="openAppInstall('#{identifier}', '#{apps_docker_install_stream_path(identifier)}', #{name.to_json})"
+          button.btn.btn-sm.btn-primary type="button" data=share_dialog.merge('verb' => 'Install')
             = t('install', default: 'Install')
         - when 'pulling', 'installing'
           span.badge.bg-warning.text-dark
@@ -56,7 +64,7 @@
         - when 'error'
           .d-flex.gap-1.align-items-center.justify-content-end
             span.badge.bg-danger Error
-            button.btn.btn-sm.btn-outline-primary onclick="openAppInstall('#{identifier}', '#{apps_docker_install_stream_path(identifier)}', #{name.to_json})" Install again
+            button.btn.btn-sm.btn-outline-primary type="button" data=share_dialog.merge('verb' => 'Install again') Install again
             button.btn.btn-sm.btn-outline-secondary onclick="if(confirm(#{uninstall_note.to_json})){dockerAppAction('/apps/docker/uninstall/#{identifier}', this)}" Uninstall
     - secrets = installed ? AppCatalog.secrets(identifier) : []
     - if secrets.any?

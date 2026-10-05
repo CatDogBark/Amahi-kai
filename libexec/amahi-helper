@@ -267,6 +267,14 @@ module AmahiHelper
   DOCKER_BRIDGE = 'docker0'
   PRIVATE_NETS = %w[10.0.0.0/8 172.16.0.0/12 192.168.0.0/16].map { |net| IPAddr.new(net) }.freeze
   NOT_LAN_INTERFACES = /\A(lo|docker|br-|veth|tailscale)/
+  # Shares an app is given (P4.4) appear in it at /shares/<name>. The web app names shares; the
+  # helper finds their folders in smb.conf, which only it writes. Shares Greyhole pools are read
+  # only (their files change over SMB), and come with their copy folders on each pool drive at
+  # the same path, which their files link to.
+  APP_SHARE_TARGET = '/shares'
+  APP_SHARE_NAME = %r{\A[^/,"'\\\x00-\x1f]{1,64}\z}
+  SAMBA_SPECIAL_SECTIONS = %w[global homes printers print$].freeze
+  SETFACL = '/usr/bin/setfacl'
 
   # The security audit's fixes. UFW lets in SSH, the web UI, HTTPS and Samba, plus DNS and
   # DHCP once Amahi-kai has configured dnsmasq.
@@ -688,11 +696,14 @@ module AmahiHelper
     },
     # Installs or reinstalls an app from its manifest: its user and folders (kept from an
     # earlier install), its secrets (likewise), the pinned image, pulled with progress, and
-    # its container, started.
+    # its container, started, with the shares chosen ([{ "name": "Movies", "write": false }]).
+    # Changing an app's shares is a reinstall.
     'apps.install' => {
-      params: %w[app],
-      validate: ->(a) { installed!(DOCKER) && app_request(a['app']) },
-      plan: ->(v) { [[:install_app, v[:id], v[:manifest]]] }
+      params: %w[app shares],
+      validate: lambda { |a|
+        installed!(DOCKER) && app_request(a['app']).then { |v| v.merge(shares: app_share_choices(a['shares'], v[:id], v[:manifest])) }
+      },
+      plan: ->(v) { [[:install_app, v[:id], v[:manifest], v[:shares]]] }
     },
     'apps.start' => {
       params: %w[app],
@@ -1275,9 +1286,11 @@ module AmahiHelper
       memory = (data['memory'] || APP_DEFAULT_MEMORY).to_s
       bad.call("memory #{memory.inspect} must be like 512m or 2g") unless memory.match?(APP_MEMORY)
       environment = app_environment_spec(data['environment'], bad)
+      writes_shares = data.fetch('writes_shares', false)
+      bad.call('writes_shares must be true or false') unless [true, false].include?(writes_shares)
       { image: image, run_as: run_as, memory: memory, ports: app_ports(data['ports'], bad),
         folders: app_folders(data['folders'], bad), environment: environment,
-        secrets: app_secret_names(data['secrets'], environment, bad) }
+        secrets: app_secret_names(data['secrets'], environment, bad), writes_shares: writes_shares }
     rescue Psych::Exception => e
       raise Failed, "#{id}'s manifest can't be read: #{e.message}"
     end
@@ -1329,6 +1342,63 @@ module AmahiHelper
         bad.call("secret #{name} is set in environment too") if environment.key?(name)
         name
       end
+    end
+
+    # [{ name:, path:, pooled:, write: }] for the shares the app is to be given.
+    def app_share_choices(value, id, manifest)
+      return [] if value.nil?
+      raise Refused, 'shares must be a list of at most 32' unless value.is_a?(Array) && value.size <= 32
+      shares = samba_shares
+      chosen = value.map do |item|
+        raise Refused, 'each share must be {"name": ..., "write": true or false}' unless item.is_a?(Hash) && (item.keys - %w[name write]).empty?
+        name = string(item['name'], 'share name', max: 64)
+        share = shares[name.downcase] or raise Refused, "#{name.inspect} isn't one of the NAS's shares"
+        raise Refused, "share #{share[:name]}'s name can't be a folder in an app" unless share[:name].match?(APP_SHARE_NAME)
+        path = share[:path]
+        unless normalized_path?(path) && !path.include?(',') && share_root_of(path)
+          raise Refused, "share #{share[:name]}'s folder #{path} isn't in the share root or on a mounted data drive"
+        end
+        write = item.key?('write') ? boolean(item, 'write') : false
+        raise Refused, "#{id} only reads shares" if write && !manifest[:writes_shares]
+        raise Refused, "share #{share[:name]} is pooled by Greyhole, so apps can only read it" if write && share[:pooled]
+        share.merge(write: write)
+      end
+      raise Refused, 'a share is listed twice' if chosen.map { |share| share[:name] }.uniq.size != chosen.size
+      chosen
+    end
+
+    # { 'movies' => { name: 'Movies', path: '/var/lib/amahi-kai/files/movies', pooled: false } }:
+    # the shares in smb.conf (names keep their case: Greyhole's folders on the drives use it).
+    def samba_shares
+      shares = {}
+      current = nil
+      File.read(SMB_CONF).gsub(/\\\r?\n/, ' ').each_line do |line|
+        line = line.strip
+        next if line.empty? || line.start_with?('#', ';')
+        if (header = line[/\A\[([^\]]*)\]/, 1])
+          name = header.strip
+          current = SAMBA_SPECIAL_SECTIONS.include?(name.downcase) ? nil : (shares[name.downcase] = { name: name, path: nil, pooled: false })
+          next
+        end
+        key, sep, value = line.partition('=')
+        next if current.nil? || sep.empty?
+        case key.downcase.delete(" \t")
+        when 'path' then current[:path] = value.strip
+        when 'vfsobjects' then current[:pooled] ||= value.downcase.split.include?('greyhole')
+        end
+      end
+      shares.select { |_name, share| share[:path] }
+    rescue SystemCallError
+      {}
+    end
+
+    # The folders holding a pooled share's copies, one per Greyhole drive (<drive>/<share>).
+    def greyhole_copies(share)
+      drives = File.read(GREYHOLE_CONF).scan(/^\s*storage_pool_drive\s*=\s*([^,\n]+)/).flatten.map(&:strip)
+      drives.select { |drive| normalized_path?(drive) && drive.start_with?("#{DRIVES_ROOT}/") && !drive.include?(',') }
+            .map { |drive| "#{drive}/#{share}" }.select { |dir| File.directory?(dir) && !File.symlink?(dir) }.uniq
+    rescue SystemCallError
+      []
     end
 
     # --- Greyhole and packages ---
@@ -1956,15 +2026,19 @@ module AmahiHelper
       nil
     end
 
-    def do_install_app(id, manifest)
+    def do_install_app(id, manifest, shares = [])
       uid, gid = app_account(id)
       dir = "#{APPS_ROOT}/#{id}"
       do_make_dir(APPS_ROOT, '0755')
       app_folder(dir, uid, gid)
       manifest[:folders].each { |folder| app_folder("#{dir}/#{folder[:name]}", uid, gid) }
       secrets = app_secrets(id, manifest[:secrets])
-      say("Pulling #{manifest[:image].sub(/@.*/, '')}...")
-      run_command([DOCKER, 'pull', manifest[:image], { stream: true }])
+      if docker_output('image', 'inspect', '--format', '{{.Id}}', manifest[:image].sub(%r{:[^:@/]+@}, '@'))
+        say("Using #{manifest[:image].sub(/@.*/, '')}, downloaded already")
+      else
+        say("Pulling #{manifest[:image].sub(/@.*/, '')}...")
+        run_command([DOCKER, 'pull', manifest[:image], { stream: true }])
+      end
       container = app_container(id)
       run_command([DOCKER, 'rm', '--force', container, { allow_failure: true }])
       ports = app_assign_ports(id, manifest[:ports])
@@ -1978,13 +2052,45 @@ module AmahiHelper
                      *(manifest[:run_as] == 'app' ? ['--user', "#{uid}:#{gid}"] : []),
                      *ports.flat_map { |p| ['--publish', "0.0.0.0:#{p[:host]}:#{p[:container]}/#{p[:protocol]}"] },
                      *manifest[:folders].flat_map { |f| ['--volume', "#{dir}/#{f[:name]}:#{f[:path]}"] },
-                     manifest[:image]])
+                     *app_share_mounts(shares), manifest[:image]])
       end
+      shares.select { |share| share[:write] }.each { |share| app_share_writable(share[:path]) }
       app_record_ports(id, ports)
       do_app_firewall
       say('Starting it...')
       run_command([DOCKER, 'start', container])
       { 'app' => id, 'container' => container, 'ports' => ports.map { |p| p.transform_keys(&:to_s) } }
+    end
+
+    # --mount (not --volume, which would make a missing folder) for each share, at /shares/<name>,
+    # read only unless chosen otherwise; a pooled share's copy folders, read only, at their own
+    # paths. An app that writes into a share joins the users group, which shares belong to.
+    def app_share_mounts(shares)
+      mounts = shares.flat_map do |share|
+        target = "#{APP_SHARE_TARGET}/#{share[:name]}"
+        copies = share[:pooled] ? greyhole_copies(share[:name]).map { |copy| [copy, copy, true] } : []
+        [[share[:path], target, !share[:write]], *copies]
+      end
+      args = mounts.uniq { |_source, target, _ro| target }.flat_map do |source, target, readonly|
+        ['--mount', "type=bind,source=#{source},target=#{target}#{',readonly' if readonly}"]
+      end
+      return args unless shares.any? { |share| share[:write] }
+
+      users = group_id(USERS_GROUP) or raise Failed, "there's no #{USERS_GROUP} group"
+      ['--group-add', users.to_s, *args]
+    end
+
+    # A share an app writes into gets a default ACL on each of its folders, so what the app makes
+    # there is group-writable (the users group, like files made over SMB) whatever its umask:
+    # with a default ACL, the umask doesn't apply. find doesn't follow links.
+    def app_share_writable(path)
+      unless File.executable?(SETFACL)
+        say('Installing acl...')
+        run_command(['/usr/bin/apt-get', '-y', '--no-install-recommends', '-o', 'DPkg::Lock::Timeout=300',
+                     'install', 'acl', { env: APT_ENV, stream: true }])
+      end
+      say("Letting what it writes in #{path} stay editable over SMB...")
+      run_command(['/usr/bin/find', path, '-xdev', '-type', 'd', '-exec', SETFACL, '-d', '-m', 'u::rwx,g::rwx,o::rx', '{}', '+'])
     end
 
     # [{ preferred:, host:, container:, protocol: }]: the host port for each of the manifest's
