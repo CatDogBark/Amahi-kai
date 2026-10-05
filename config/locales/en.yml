@@ -9,6 +9,7 @@
   visibility: Visibility
   mounts: Mounts
   storage_pool: Storage Pool
+  zfs_pools: ZFS Pools
   leases: Leases
   hosts: Hosts
   gateway: Gateway

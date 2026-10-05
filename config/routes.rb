@@ -115,6 +115,9 @@ Rails.application.routes.draw do
     post 'toggle_greyhole', action: 'toggle_greyhole'
     post 'install_greyhole', action: 'install_greyhole'
     get 'install_greyhole_stream', action: 'install_greyhole_stream'
+    get 'pools', action: 'pools'
+    post 'create_pool', action: 'create_pool'
+    get 'install_zfs_stream', action: 'install_zfs_stream'
   end
 
   match 'login' => 'user_sessions#new', :as => :login, via: [:get]

@@ -1,7 +1,19 @@
 # Storage plan
 
-Status: decided with Troy on 2026-10-04. Built once the NAS drives arrive, since it needs real
-hardware to test. Phase 4 (Docker apps) can go ahead in the meantime.
+Status: decided with Troy on 2026-10-04. **Built now, before the drives are connected**, then
+Phase 4, then bitShare (Troy, 2026-10-04). Each PR is checked on the NAS only for not breaking
+Amahi-kai; once the SSDs are in, Troy checks their health first, then the whole storage work is
+tested on the physical drives ([Tests on real drives](#tests-on-real-drives)).
+
+## Build order
+
+- [x] **S1.** Install ZFS (and cap its cache); create a pool in the layout chosen; pool status
+  on Disks → ZFS Pools; every drive's use shown, and drives with ZFS on them kept away from
+  share storage (#44).
+- [ ] **S2.** Health: alerts on the dashboard and Disks pages, a monthly scrub, SMART checks.
+- [ ] **S3.** Replace a drive, grow a pool, destroy a pool.
+- [ ] **S4.** Snapshots, and datasets per user of a pool.
+- [ ] **S5.** Greyhole handles files that don't arrive through Samba.
 
 ## Decisions
 
@@ -61,7 +73,9 @@ operations with their own validation and logging.
 - **Install ZFS** (`zfsutils-linux`) on request, like Greyhole and Docker today.
 - **Create a pool:** pick unmounted data drives (never the OS disk, never a drive already used by
   share storage), pick a layout, confirm wiping them. Created with `ashift=12`, `compression=lz4`,
-  and `autotrim=on` for SSDs, and imported at every boot.
+  and `autotrim=on` for SSDs, and imported at every boot. Pools mount at `/srv/pools/<name>`,
+  not under `/mnt`, so the helper never accepts a share folder on one. The drives are named by
+  their `/dev/disk/by-id` links (model and serial), so a failed one can be found in its bay.
 - **Pool status:** health, capacity, each drive's state, the last scrub and its result.
 - **Alerts** on the dashboard and Disks pages when a pool is degraded or faulted, a scrub found
   errors, or a drive's SMART data looks bad.
@@ -76,7 +90,9 @@ operations with their own validation and logging.
   own dataset.
 - **Destroy a pool:** behind a typed confirmation.
 - **Drive ownership:** the Disks page shows which drives are share storage and which belong to a
-  pool, and neither side can take the other's drives.
+  pool, and neither side can take the other's drives. A drive with any ZFS label is never
+  formatted or mounted as share storage; one with a label from a pool that isn't imported here
+  can go into a new pool, which erases it.
 
 ### Greyhole: files that don't arrive through Samba
 
@@ -92,8 +108,10 @@ specs, and test it on the real drives.
 
 ## Tests on real drives
 
-Add these to the roadmap's hardware checklist when the storage work is built:
+Also in the roadmap's hardware checklist. First, check each SSD's health (`smartctl -a`: power-on
+hours, wear, reallocated sectors, firmware) before it goes in a pool.
 
+- Install ZFS from Disks → ZFS Pools; the cache limit is set (`/sys/module/zfs/parameters/zfs_arc_max`).
 - Create a RAIDZ1 pool from the 4 SSDs; it survives a reboot (imported at boot).
 - Pull a drive: the pool shows degraded and the alert appears; replace it and watch the resilver.
 - Run a scrub; take a snapshot and roll a test dataset back.

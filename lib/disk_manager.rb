@@ -14,7 +14,7 @@ class DiskManager
 
   # Detect all block devices with partition info
   def self.devices
-    raw = execute_command("lsblk -J -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT,MODEL,SERIAL,UUID 2>/dev/null")
+    raw = execute_command("lsblk -J -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT,MODEL,SERIAL,UUID,LABEL 2>/dev/null")
     return sample_devices if raw.blank?
 
     begin
@@ -63,6 +63,7 @@ class DiskManager
         size: dev["size"],
         serial: dev["serial"],
         os_disk: (mountpoints_in(dev) & OS_MOUNTPOINTS).any?,
+        zfs_pool: zfs_pool_in(dev),
         partitions: partitions
       }
     end
@@ -142,6 +143,17 @@ class DiskManager
   # LVM or RAID volumes inside them (Ubuntu's default install puts / on LVM).
   def self.mountpoints_in(node)
     [node["mountpoint"], *(node["children"] || []).flat_map { |c| mountpoints_in(c) }].compact
+  end
+
+  # The pool named on a ZFS-labelled disk or partition, if any: such a drive belongs to
+  # Disks → ZFS Pools (the helper refuses to format or mount it).
+  def self.zfs_pool_in(node)
+    return node["label"].presence || "unnamed" if node["fstype"] == "zfs_member"
+    (node["children"] || []).each do |child|
+      found = zfs_pool_in(child)
+      return found if found
+    end
+    nil
   end
 
   # The whole disk a device belongs to: /dev/sda1 -> /dev/sda, /dev/nvme0n1p2 -> /dev/nvme0n1.

@@ -34,6 +34,7 @@ so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 | 3. Repo cleanup | Unused files, scripts, initializers, classes, partials, images and archived browser tests removed (with Capybara and the Feature Specs job); README, install guide and CONTRIBUTING refreshed | #39 |
 | 3. English only | 25 translations, the language picker, the language cookie and right-to-left styling removed (Troy's decision) | #40 |
 | 3. Update notice | A dot on the header's update button and a dashboard line when an update is waiting; the button opens a What's new window (changelog, pull requests, Update now or Later; else Check now and Repair) | #43 |
+| Storage S1. ZFS pools | Disks → ZFS Pools: install ZFS (cache capped), create a pool in the chosen layout, pool status; every drive's use shown; ZFS drives kept away from share storage. Not yet tested on real drives | #44 |
 
 ## Next: Phase 3
 
@@ -110,13 +111,16 @@ VM 104's disks belong to Proxmox, so the disk-safety work (PR #13) is covered by
 - [ ] Re-run `bin/amahi-install`: users, shares and settings survive.
 - [ ] Greyhole pool and Samba binding on the same drives.
 - [ ] Preview an unmounted drive from Disks; install Greyhole from the setup wizard.
+- [ ] ZFS pools, once S1–S5 are built: the list in [`storage.md`](storage.md#tests-on-real-drives),
+  after checking each SSD's health.
 
-## Storage: ZFS pools for bitShare (after the drives arrive)
+## Next: Storage (ZFS pools for bitShare)
 
 Decided 2026-10-04, in [`storage.md`](storage.md): SMB shares stay on simple drives and Greyhole;
 new ZFS pools, with the layout the user chooses, hold bitShare's data, on other drives; Greyhole
-also handles files that don't arrive through Samba (web uploads). Built and tested once Troy's
-drives are in.
+also handles files that don't arrive through Samba (web uploads). Built now in five PRs (S1–S5,
+listed there; S1 is #44), then Phase 4, then bitShare. Tested on the physical drives once
+they're connected.
 
 ## Phase 4: Docker apps
 

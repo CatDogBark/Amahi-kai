@@ -135,6 +135,18 @@ describe "Setup Controller", type: :request do
         get setup_storage_path
         expect(response).to have_http_status(:ok)
       end
+
+      it "doesn't offer drives that hold a ZFS pool" do
+        allow(DiskManager).to receive(:devices).and_return([
+          { name: "sdc", path: "/dev/sdc", model: "SSD", size: "1T", os_disk: false, zfs_pool: "tank",
+            partitions: [{ path: "/dev/sdc1", status: :unmounted, fstype: "zfs_member", size: "1T" }] },
+          { name: "sdd", path: "/dev/sdd", model: "SSD", size: "1T", os_disk: false, zfs_pool: nil,
+            partitions: [{ path: "/dev/sdd", status: :unformatted, size: "1T" }] }
+        ])
+        get setup_storage_path
+        values = Nokogiri::HTML(response.body).css('input[name="drives[]"]').map { |i| i['value'] }
+        expect(values).to eq(["/dev/sdd"])
+      end
     end
 
     describe "POST /setup/storage" do

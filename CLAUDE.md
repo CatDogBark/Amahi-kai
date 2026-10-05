@@ -5,10 +5,11 @@ development: the one install is Troy's NAS, an Ubuntu 24.04 VM on Proxmox, reach
 over plain HTTP, through a Cloudflare Tunnel, and through Tailscale. Troy owns the repo
 (`CatDogBark/Amahi-kai`, **public**) and the NAS.
 
-Current work: Phase 3 of a code review fix plan. Read **`docs/plans/roadmap.md`** first, then the
-plan for the PR you're on (**`docs/plans/privileged-helper.md`**: L, M (M1–M3, with P), N, O
-and Q are done). The privilege model is in
-`docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`.
+Current work: the storage plan, **`docs/plans/storage.md`** (ZFS pools for bitShare, PRs S1–S5,
+built before the NAS drives are connected and tested on them afterwards), then Phase 4. Read
+**`docs/plans/roadmap.md`** first, then the plan for the PR you're on. Phase 3, the code review
+fix plan (**`docs/plans/privileged-helper.md`**), is done except Content-Security-Policy. The
+privilege model is in `docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`.
 
 ## Workflow
 
@@ -72,7 +73,7 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
   If System Update breaks, Troy runs `sudo /opt/amahi-kai/bin/amahi-update` over SSH.
 - **Root access goes through the helper.** User accounts, Samba's files, share folders, Settings →
   Servers, the hostname, dnsmasq, swap, reboot/power off, data drives (format, mount, fstab),
-  Greyhole, package installs (pinned apt repositories, a fixed package list), the Cloudflare
+  ZFS pools, Greyhole, package installs (pinned apt repositories, a fixed package list), the Cloudflare
   Tunnel, Tailscale and the security audit's fixes are changed by `libexec/amahi-helper`
   (`Privileged.call('users.create', ...)`), which validates and logs every call. Add an operation
   there, not a sudoers rule. Sudoers rules (only the helper, the updater and Docker are left) are in

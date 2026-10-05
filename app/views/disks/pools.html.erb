@@ -1,0 +1,145 @@
+<%# ZFS pools (docs/plans/storage.md). storage_pools.js runs the create form and Install ZFS. %>
+<div class="settings-table" id="zfs-pools">
+  <p class="text-muted">
+    ZFS pools keep data safe across several drives, like RAID. They hold bitShare's data; SMB shares stay on
+    share storage (<a href="<%= disks_devices_path %>">Devices</a> and <a href="<%= disks_storage_pool_path %>">Storage Pool</a>).
+    Each drive belongs to one or the other.
+  </p>
+
+  <% if @status[:error] %>
+    <div class="alert alert-warning">Couldn't read the pools: <%= @status[:error] %></div>
+  <% end %>
+
+  <% unless @status[:installed] %>
+    <div class="card mb-3" id="zfs-not-installed">
+      <div class="card-body">
+        <h5>ZFS isn't installed</h5>
+        <p class="text-muted mb-3">
+          Install it to create pools. It's Ubuntu's own ZFS package; Amahi-kai limits its memory cache to 2 GB
+          (half the memory on a smaller server).
+        </p>
+        <button type="button" class="btn btn-primary" id="install-zfs-btn" data-zfs-install="<%= disks_install_zfs_stream_path %>">Install ZFS</button>
+      </div>
+    </div>
+  <% end %>
+
+  <% @status[:pools].each do |pool| %>
+    <div class="card mb-3 pool-card" id="pool-<%= pool.name %>">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+          <strong><%= lucide_icon('database', size: 16) %> <%= pool.name %></strong>
+          <span class="text-muted ms-2"><%= pool.layout %> · <%= pluralize(pool.drives.size, 'drive') %></span>
+        </div>
+        <%= pool_state_badge(pool.health) %>
+      </div>
+      <div class="card-body">
+        <% if pool.error %>
+          <div class="alert alert-warning small">Couldn't read this pool: <%= pool.error %></div>
+        <% end %>
+        <% if pool.status %>
+          <div class="alert alert-warning small">
+            <%= pool.status %>
+            <% if pool.action %><br><strong>What to do:</strong> <%= pool.action %><% end %>
+          </div>
+        <% end %>
+        <% total = pool.used.to_i + pool.available.to_i %>
+        <div class="d-flex justify-content-between small mb-1">
+          <span><%= number_to_human_size(pool.used.to_i) %> used</span>
+          <span><%= number_to_human_size(pool.available.to_i) %> free of <%= number_to_human_size(total) %></span>
+        </div>
+        <div class="progress" style="height: 8px;">
+          <div class="progress-bar" style="width: <%= total.positive? ? (100.0 * pool.used.to_i / total).round(1) : 0 %>%"></div>
+        </div>
+        <p class="small text-muted mt-2 mb-0">
+          Mounted at <code><%= pool.mountpoint %></code>.
+          <% if pool.scan.blank? || pool.scan == 'none requested' %>No scrub has run yet.<% else %><%= pool.scan.upcase_first %>.<% end %>
+        </p>
+        <% if pool.data_errors %>
+          <p class="small text-danger mb-0 mt-1">Errors: <%= pool.data_errors %></p>
+        <% end %>
+      </div>
+      <table class="table table-sm mb-0 small">
+        <thead>
+          <tr><th>Drive</th><th>Model and serial</th><th>State</th><th class="text-end">Read / write / checksum errors</th></tr>
+        </thead>
+        <tbody>
+          <% pool.drives.each do |drive| %>
+            <tr>
+              <td><code><%= drive['device'] ? DiskManager.base_device(drive['device']) : '—' %></code></td>
+              <td><%= drive['device'] ? pool_drive_id(drive['name']) : (drive['note'] || drive['name']) %></td>
+              <td><%= pool_state_badge(drive['state']) %></td>
+              <td class="text-end"><%= [drive['read'], drive['write'], drive['cksum']].map { |n| n || '—' }.join(' / ') %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% end %>
+
+  <% free = @drives.select { |d| d[:free] } %>
+  <div class="card mb-3">
+    <div class="card-header"><strong><%= lucide_icon('hard-drive', size: 16) %> <%= @status[:installed] ? 'Create a pool' : 'Drives' %></strong></div>
+    <% if @status[:installed] && free.size >= 2 %>
+      <form id="pool-form" action="<%= disks_create_pool_path %>" data-layouts="<%= StoragePools::LAYOUTS.to_json %>">
+        <div class="card-body pb-0">
+          <p class="small text-muted mb-2">Choose the drives, then the layout. Drives in use (the system disk, share storage, other pools) can't be chosen.</p>
+        </div>
+    <% end %>
+        <table class="table table-sm mb-0" id="pool-drives">
+          <thead>
+            <tr><th></th><th>Drive</th><th>Model</th><th>Size</th><th>Used for</th></tr>
+          </thead>
+          <tbody>
+            <% @drives.each do |drive| %>
+              <tr class="<%= 'text-muted' unless drive[:free] %>">
+                <td>
+                  <% if @status[:installed] && free.size >= 2 && drive[:free] %>
+                    <input type="checkbox" class="form-check-input" name="devices[]" value="<%= drive[:path] %>" data-size="<%= drive[:size] %>" id="pool-drive-<%= File.basename(drive[:path]) %>">
+                  <% end %>
+                </td>
+                <td><label for="pool-drive-<%= File.basename(drive[:path]) %>"><code><%= drive[:path] %></code></label></td>
+                <td><%= [drive[:model], drive[:serial]].compact.join(' · ').presence || '—' %></td>
+                <td><%= number_to_human_size(drive[:size]) %><%= ' SSD' if drive[:ssd] %></td>
+                <td><%= drive_role(drive) %></td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+    <% if @status[:installed] && free.size >= 2 %>
+        <div class="card-body">
+          <div class="mb-3">
+            <div class="fw-semibold mb-1">Layout</div>
+            <% StoragePools::LAYOUTS.each do |layout| %>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="layout" value="<%= layout[:key] %>" id="layout-<%= layout[:key] %>" disabled>
+                <label class="form-check-label" for="layout-<%= layout[:key] %>">
+                  <strong><%= layout[:name] %></strong><%= " (like #{layout[:like]})" if layout[:like] %>
+                  <span class="badge bg-info text-dark ms-1" data-layout-suggested="<%= layout[:key] %>" hidden>suggested</span>
+                  <span class="text-muted small ms-1" data-layout-info="<%= layout[:key] %>"></span>
+                </label>
+              </div>
+            <% end %>
+          </div>
+          <div class="mb-3" style="max-width: 320px;">
+            <label for="pool-name" class="form-label fw-semibold mb-1">Name</label>
+            <input type="text" class="form-control form-control-sm" id="pool-name" name="name" value="<%= @new_pool_name %>"
+                   maxlength="32" pattern="[a-z][a-z0-9_-]*" autocomplete="off">
+            <div class="small text-muted mt-1">Lowercase letters, digits, _ and -. It's mounted at /srv/pools/&lt;name&gt;.</div>
+          </div>
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" id="pool-erase">
+            <label class="form-check-label" for="pool-erase">Erase everything on the chosen drives</label>
+          </div>
+          <button type="submit" class="btn btn-danger" id="create-pool-btn" disabled>Create pool</button>
+          <span class="text-danger small ms-2" id="pool-form-error"></span>
+        </div>
+      </form>
+    <% elsif @status[:installed] %>
+      <div class="card-body small text-muted">
+        A pool needs at least 2 free drives. Drives in use (the system disk, share storage, other pools) aren't offered.
+      </div>
+    <% end %>
+  </div>
+</div>
+
+<%= render 'shared/install_terminal', id: 'zfs-install', title: 'Installing ZFS', stream_url: disks_install_zfs_stream_path %>

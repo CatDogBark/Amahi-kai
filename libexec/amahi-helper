@@ -3,8 +3,8 @@
 
 # amahi-helper: the program Amahi-kai runs as root for user accounts, Samba, share
 # folders, system services, the hostname, dnsmasq's config, swap, reboot/power off, data
-# drives, Greyhole, package installs, the Cloudflare Tunnel, Tailscale and the security
-# audit's fixes. Only the updater and Docker keep their own sudo rules.
+# drives, ZFS pools, Greyhole, package installs, the Cloudflare Tunnel, Tailscale and the
+# security audit's fixes. Only the updater and Docker keep their own sudo rules.
 #
 #   sudo -n /usr/local/sbin/amahi-helper users.create    (stdin: {"login":"ann","name":"Ann"})
 #   stdout: {"ok":true}  or  {"ok":false,"error":"..."}
@@ -104,6 +104,32 @@ module AmahiHelper
   # writable only by root.
   RUN_DIR = '/run'
 
+  # ZFS pools (docs/plans/storage.md): bitShare's storage, on whole disks of their own. They
+  # mount under POOL_ROOT, not /mnt, so no share folder can be made on one (share folders
+  # live in SHARE_ROOT or on data drives under /mnt).
+  ZPOOL = '/usr/sbin/zpool'
+  ZFS = '/usr/sbin/zfs'
+  WIPEFS = '/usr/sbin/wipefs'
+  POOL_ROOT = '/srv/pools'
+  POOL_NAME = /\A[a-z][a-z0-9_-]{0,31}\z/
+  # Words zpool keeps for vdev types, and names that look like Solaris disks (c0...).
+  RESERVED_POOL_NAMES = /\A(?:mirror|raidz\d?|draid\d?|spare|log|cache|special|dedup|c\d.*)\z/
+  # The layouts a new pool may have: the fewest drives, and whether they go in pairs.
+  POOL_LAYOUTS = {
+    'mirror' => { min: 2 }, 'striped_mirrors' => { min: 4, pairs: true },
+    'raidz1' => { min: 3 }, 'raidz2' => { min: 4 }, 'raidz3' => { min: 5 }
+  }.freeze
+  POOL_MAX_DRIVES = 24
+  # A pool names its drives by these /dev/disk/by-id links (model and serial first, so a
+  # failed drive can be found), so it doesn't depend on the order drives appear at boot.
+  BY_ID = '/dev/disk/by-id'
+  BY_ID_PREFERENCE = %w[ata- nvme- scsi- wwn- virtio-].freeze
+  # ZFS's memory cache (ARC): at most 2 GiB, and at most half the memory.
+  ARC_LIMIT = 2 * 1024**3
+  MEMINFO = '/proc/meminfo'
+  ZFS_MODPROBE = '/etc/modprobe.d/zfs-amahi.conf'
+  ZFS_ARC_MAX = '/sys/module/zfs/parameters/zfs_arc_max'
+
   GREYHOLE_CONF = '/etc/greyhole.conf'
   GREYHOLE_SCHEMA = '/usr/share/greyhole/schema-mysql.sql'
   MYSQL = '/usr/bin/mysql'
@@ -157,7 +183,7 @@ module AmahiHelper
   # Packages the helper may install.
   PACKAGES = %w[
     greyhole php8.3-mbstring php8.3-mysql cloudflared tailscale docker-ce docker-ce-cli containerd.io
-    dnsmasq fail2ban unattended-upgrades
+    dnsmasq fail2ban unattended-upgrades zfsutils-linux
   ].freeze
   APT_ENV = ENV_MIN.merge('DEBIAN_FRONTEND' => 'noninteractive').freeze
 
@@ -402,6 +428,38 @@ module AmahiHelper
       params: [],
       validate: ->(_a) { {} },
       plan: ->(_v) { [[:drive_temperatures]] }
+    },
+    # Loads ZFS and caps its memory cache (ARC_LIMIT or half the memory), now and at every
+    # boot. Run once zfsutils-linux is installed.
+    'zfs.setup' => {
+      params: [],
+      validate: ->(_a) { installed!(ZPOOL) && { arc_max: arc_limit } },
+      plan: lambda { |v|
+        [['/usr/sbin/modprobe', 'zfs'],
+         [:install, ZFS_MODPROBE, "options zfs zfs_arc_max=#{v[:arc_max]}\n", nil],
+         [:set_arc_max, v[:arc_max]]]
+      }
+    },
+    # The pools, with their drives, health and last scrub (Disks → ZFS Pools). Read-only.
+    'pools.status' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:pool_status]] }
+    },
+    # A new pool on whole data disks, which are wiped first, in the layout the user chose:
+    # ashift=12, lz4 compression, autotrim when every drive is an SSD, mounted at
+    # POOL_ROOT/<name>. zpool records it in its cache file, so it's imported at every boot.
+    'pools.create' => {
+      params: %w[name layout devices],
+      validate: ->(a) { pool_request(a['name'], a['layout'], a['devices']) },
+      plan: lambda { |v|
+        [*v[:wipe].map { |device| [WIPEFS, '-a', device] },
+         ['/usr/bin/udevadm', 'settle', { allow_failure: true }],
+         [:make_dir, POOL_ROOT, '0755'],
+         [ZPOOL, 'create', '-f', '-o', 'ashift=12', *(v[:ssd] ? %w[-o autotrim=on] : []),
+          '-O', 'compression=lz4', '-O', "mountpoint=#{POOL_ROOT}/#{v[:name]}", v[:name], *v[:vdevs]],
+         [:pool_status]]
+      }
     },
     # /etc/greyhole.conf, root:amahi 0640 (it holds the database password).
     'greyhole.write_config' => {
@@ -724,7 +782,14 @@ module AmahiHelper
       raise Refused, "lsblk doesn't list #{value}" unless node
       system_mounts = mountpoints(disk).reject { |mp| mp.start_with?("#{MNT}/") }
       raise Refused, "#{value} is on a disk the system uses (#{system_mounts.first} is mounted from it)" if system_mounts.any?
+      raise Refused, "#{value} is on a disk that holds a ZFS pool (Disks → ZFS Pools)" if zfs_disk?(disk)
       [value, node]
+    end
+
+    # Anything on the disk carries a ZFS label: it's in a pool, or was. Drives like that are
+    # never formatted or mounted as share storage.
+    def zfs_disk?(node)
+      node['fstype'] == 'zfs_member' || (node['children'] || []).any? { |child| zfs_disk?(child) }
     end
 
     def unmounted_data_device(value)
@@ -773,6 +838,124 @@ module AmahiHelper
       raise Refused, "#{value} is already a mount point" if mount_point?(value)
       raise Refused, "#{value} isn't empty" unless Dir.empty?(value)
       value
+    end
+
+    # --- ZFS pools ---
+
+    def pool_request(name, layout, devices)
+      installed!(ZPOOL)
+      name = new_pool_name(name)
+      layout = listed(layout, 'layout', POOL_LAYOUTS.keys)
+      raise Refused, 'devices must be a list of disks' unless devices.is_a?(Array) && devices.size <= POOL_MAX_DRIVES
+      rule = POOL_LAYOUTS.fetch(layout)
+      raise Refused, "#{layout} needs at least #{rule[:min]} drives" if devices.size < rule[:min]
+      raise Refused, "#{layout} needs an even number of drives" if rule[:pairs] && devices.size.odd?
+      tree = block_tree
+      pooled = pooled_devices
+      disks = devices.map { |device| pool_disk(device, tree, pooled) }
+      paths = disks.map(&:first)
+      raise Refused, "#{paths.find { |p| paths.count(p) > 1 }} is listed twice" if paths.uniq.size != paths.size
+      { name: name, wipe: disks.flat_map { |_path, node| wipe_targets(node) },
+        vdevs: vdev_args(layout, paths.map { |path| stable_path(path) }), ssd: paths.all? { |path| ssd?(path) } }
+    end
+
+    def new_pool_name(value)
+      value = string(value, 'name', max: 32)
+      raise Refused, "pool name #{value.inspect} must be 1-32 lowercase letters, digits, _ or -, starting with a letter" unless value.match?(POOL_NAME)
+      raise Refused, "#{value} is a word ZFS keeps for itself" if value.match?(RESERVED_POOL_NAMES)
+      raise Refused, "a pool named #{value} already exists" if pool_names.include?(value)
+      if File.exist?(POOL_ROOT) || File.symlink?(POOL_ROOT)
+        raise Refused, "#{POOL_ROOT} must be a real folder" unless File.realpath(POOL_ROOT) == POOL_ROOT
+      end
+      target = "#{POOL_ROOT}/#{value}"
+      if File.exist?(target) || File.symlink?(target)
+        raise Refused, "#{target} is in the way (not an empty folder)" unless File.lstat(target).directory? && Dir.empty?(target) && !mount_point?(target)
+      end
+      value
+    end
+
+    # A whole data disk with nothing on it in use: not the system's, nothing mounted, no
+    # LVM, RAID or encryption on it, nothing of it in fstab, and not in a pool.
+    # Returns [path, its lsblk node].
+    def pool_disk(value, tree, pooled)
+      value = string(value, 'device', max: 64)
+      raise Refused, "#{value.inspect} is not a whole disk" unless value.match?(WHOLE_DISK)
+      raise Refused, "#{value} doesn't exist" unless File.blockdev?(value)
+      node = tree.find { |disk| disk['path'] == value } or raise Refused, "lsblk doesn't list #{value}"
+      mounted = mountpoints(node)
+      system_mounts = mounted.reject { |mp| mp.start_with?("#{MNT}/") }
+      raise Refused, "#{value} is a disk the system uses (#{system_mounts.first} is mounted from it)" if system_mounts.any?
+      raise Refused, "#{value} is mounted at #{mounted.first}; unmount it first" if mounted.any?
+      nodes = subtree(node)
+      other = nodes.find { |n| !%w[disk part].include?(n['type']) }
+      raise Refused, "#{value} holds #{other['path']} (#{other['type']}), which is in use" if other
+      pool = nodes.map { |n| pooled[n['path']] }.compact.first
+      raise Refused, "#{value} is in the pool #{pool}" if pool
+      sources = fstab_entries.map(&:first)
+      nodes.each do |n|
+        info = probe(n['path'])
+        names = [n['path'], ("UUID=#{info['UUID']}" if info['UUID']), ("PARTUUID=#{info['PART_ENTRY_UUID']}" if info['PART_ENTRY_UUID'])]
+        listed = (names.compact & sources).first
+        raise Refused, "#{n['path']} is in /etc/fstab (#{listed}); unmount it on Disks → Devices first" if listed
+      end
+      [value, node]
+    end
+
+    def subtree(node)
+      [node, *(node['children'] || []).flat_map { |child| subtree(child) }]
+    end
+
+    # Partitions before the disk they're on, so no old filesystem signature is left behind.
+    def wipe_targets(node)
+      [*(node['children'] || []).flat_map { |child| wipe_targets(child) }, node['path']]
+    end
+
+    def vdev_args(layout, paths)
+      case layout
+      when 'mirror' then ['mirror', *paths]
+      when 'striped_mirrors' then paths.each_slice(2).flat_map { |pair| ['mirror', *pair] }
+      else [layout, *paths]
+      end
+    end
+
+    def stable_path(disk)
+      links = Dir.children(BY_ID).reject { |name| name.include?('-part') }
+                 .select { |name| File.realpath(File.join(BY_ID, name)) == disk }
+      best = links.min_by { |name| [BY_ID_PREFERENCE.index { |prefix| name.start_with?(prefix) } || BY_ID_PREFERENCE.size, name] }
+      best ? File.join(BY_ID, best) : disk
+    rescue SystemCallError
+      disk
+    end
+
+    def ssd?(disk)
+      File.read("/sys/block/#{File.basename(disk)}/queue/rotational").strip == '0'
+    rescue SystemCallError
+      false
+    end
+
+    def arc_limit
+      memory = File.read(MEMINFO)[/^MemTotal:\s+(\d+) kB/, 1].to_i * 1024
+      raise Failed, "couldn't read the memory size from #{MEMINFO}" unless memory.positive?
+      [ARC_LIMIT, memory / 2].min
+    end
+
+    def pool_names
+      return [] unless File.executable?(ZPOOL)
+      capture([ZPOOL, 'list', '-H', '-o', 'name']).lines(chomp: true).reject(&:empty?)
+    end
+
+    # { '/dev/sdb1' => 'tank', ... }: every device in an imported pool, by its kernel name.
+    def pooled_devices
+      return {} unless File.executable?(ZPOOL)
+      pool_names.each_with_object({}) do |pool, found|
+        each_leaf(parse_pool_status(capture([ZPOOL, 'status', '-P', pool]))['vdevs']) { |leaf| found[leaf['device']] = pool }
+      end
+    end
+
+    def each_leaf(rows, &block)
+      rows.each do |row|
+        row['children'].empty? ? (yield row if row['device']) : each_leaf(row['children'], &block)
+      end
     end
 
     # --- Greyhole and packages ---
@@ -1196,6 +1379,92 @@ module AmahiHelper
       Dir.rmdir(dir) if dir && !mount_point?(dir)
     end
 
+    # --- ZFS pools ---
+
+    def do_set_arc_max(bytes)
+      File.write(ZFS_ARC_MAX, bytes.to_s) if File.exist?(ZFS_ARC_MAX)
+      { 'arc_max' => bytes }
+    rescue SystemCallError => e
+      raise Failed, "couldn't set ZFS's cache size: #{e.message}"
+    end
+
+    # { 'zfs' => installed?, 'pools' => [...] }, each pool with its health, its raw size
+    # (zpool's, parity included), the space its files use and have left (zfs's, after
+    # parity), its mount point and what `zpool status` says (see parse_pool_status). A pool
+    # that can't be read comes with an 'error' instead.
+    def do_pool_status
+      return { 'zfs' => false, 'pools' => [] } unless File.executable?(ZPOOL)
+
+      rows = capture([ZPOOL, 'list', '-H', '-p', '-o', 'name,size,allocated,free,health']).lines(chomp: true)
+      pools = rows.filter_map do |line|
+        name, size, allocated, free, health = line.split("\t")
+        next if name.to_s.empty?
+        pool = { 'name' => name, 'size' => size.to_i, 'allocated' => allocated.to_i, 'free' => free.to_i, 'health' => health }
+        begin
+          used, available, mountpoint = capture([ZFS, 'list', '-H', '-p', '-o', 'used,available,mountpoint', name]).chomp.split("\t")
+          pool.merge!('used' => used.to_i, 'available' => available.to_i, 'mountpoint' => mountpoint)
+          pool.merge(parse_pool_status(capture([ZPOOL, 'status', '-P', name])))
+        rescue Failed => e
+          pool.merge('error' => e.message)
+        end
+      end
+      { 'zfs' => true, 'pools' => pools }
+    rescue Failed => e
+      { 'zfs' => true, 'pools' => [], 'error' => e.message } # e.g. the ZFS module isn't loaded
+    end
+
+    # One pool's `zpool status -P`: its state, the status and action notes (shown when
+    # something is wrong), the last scrub or resilver, the errors line, and its vdevs as a
+    # tree: [{ 'name' => 'raidz1-0', 'state' => 'ONLINE', 'children' => [{ 'name' =>
+    # '/dev/disk/by-id/ata-...-part1', 'device' => '/dev/sdb1', 'read' => '0', ... }] }].
+    def parse_pool_status(text)
+      fields = {}
+      config = []
+      key = nil
+      text.each_line(chomp: true) do |line|
+        if key == 'config'
+          if line.start_with?('errors:')
+            fields['errors'] = line.delete_prefix('errors:').strip
+            key = 'errors'
+          else
+            config << line
+          end
+        elsif (match = line.match(/\A {0,8}([a-z]+):(?: (.*))?\z/))
+          key = match[1]
+          fields[key] = match[2].to_s.strip unless key == 'config'
+        elsif key && line.match?(/\A\s+\S/)
+          fields[key] = "#{fields[key]} #{line.strip}".strip # a note continued on the next line
+        end
+      end
+      pool = pool_tree(config).first
+      { 'state' => fields['state'], 'status' => fields['status'], 'action' => fields['action'], 'scan' => fields['scan'],
+        'errors' => fields['errors'], 'vdevs' => pool ? pool['children'] : [] }
+    end
+
+    # The config section's rows, nested by their indent (two spaces a level, after a tab).
+    def pool_tree(lines)
+      root = { 'children' => [] }
+      parents = [root]
+      lines.each do |line|
+        match = line.match(/\A\t( *)(\S+)(?:\s+([A-Z]+)(?:\s+(\S+)\s+(\S+)\s+(\S+))?)?\s*(.*)\z/) or next
+        next if match[2] == 'NAME' && match[3] == 'STATE'
+        depth = match[1].size / 2
+        parent = parents[depth] or next
+        row = { 'name' => match[2], 'state' => match[3], 'read' => match[4], 'write' => match[5], 'cksum' => match[6],
+                'note' => (match[7].empty? ? nil : match[7]), 'children' => [] }
+        row['device'] = device_name(row['name']) if row['name'].start_with?('/dev/')
+        parent['children'] << row
+        parents = parents.first(depth + 1) << row
+      end
+      root['children']
+    end
+
+    def device_name(path)
+      File.realpath(path)
+    rescue SystemCallError
+      path # a missing drive: zpool shows the path it was last seen at
+    end
+
     # --- Checking for updates ---
 
     def do_check_update
@@ -1449,7 +1718,7 @@ module AmahiHelper
 
     # lsblk's device tree (as root it sees everything; as anyone it sees mount points).
     def block_tree
-      JSON.parse(capture(['/usr/bin/lsblk', '-J', '-o', 'PATH,TYPE,MOUNTPOINTS']))['blockdevices'] || []
+      JSON.parse(capture(['/usr/bin/lsblk', '-J', '-o', 'PATH,TYPE,FSTYPE,MOUNTPOINTS']))['blockdevices'] || []
     rescue JSON::ParserError
       raise Failed, "couldn't read lsblk's output"
     end
