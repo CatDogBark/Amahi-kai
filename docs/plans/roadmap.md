@@ -33,6 +33,7 @@ so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 | 3. Small fixes | Login throttle by the real client address; static DHCP hosts written to dnsmasq; Gateway checkboxes saved; setup storage step keeps the pool; Users JSON create; Apps page survives a failed Docker check | #38 |
 | 3. Repo cleanup | Unused files, scripts, initializers, classes, partials, images and archived browser tests removed (with Capybara and the Feature Specs job); README, install guide and CONTRIBUTING refreshed | #39 |
 | 3. English only | 25 translations, the language picker, the language cookie and right-to-left styling removed (Troy's decision) | #40 |
+| 3. Update notice | A dot on the header's update button and a dashboard line when an update is waiting; the button opens a What's new window (changelog, pull requests, Update now or Later; else Check now and Repair) | #43 |
 
 ## Next: Phase 3
 

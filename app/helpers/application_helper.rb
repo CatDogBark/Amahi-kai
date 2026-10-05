@@ -26,6 +26,11 @@ module ApplicationHelper
     current_user && current_user.admin?
   end
 
+  # What the last check for updates found, read once per page (admins' header and dashboard).
+  def update_status
+    @update_status ||= UpdateStatus.load
+  end
+
   def theme
     @theme
   end

@@ -31,8 +31,12 @@ nav.navbar.navbar-expand-md.bg-dark.navbar-inverse
             = t('apps')
           a.nav-item.nav-link.text-white.text-center.nav_hover href="https://amahi-kai.com/wiki/" target='_blank'  
             = t('help')
-          a.nav-item.nav-link.text-white.text-center.nav_hover#update-btn href="#" title="System Update" onclick="if(confirm('Run system update now?')){startSystemUpdate('system-update','#{settings_update_system_path}','#{settings_update_system_stream_path}')};return false;"
+          /! Opens the System Update dialog (layouts/_system_update); the dot says an update is waiting.
+          - update_label = update_status.available? ? "Update available: #{pluralize(update_status.behind, 'change')}" : 'System Update'
+          a.nav-item.nav-link.text-white.text-center.nav_hover#update-btn href="#" title=update_label aria-label=update_label data-whats-new=""
             = lucide_icon('refresh-cw', size: 16)
+            - if update_status.available?
+              span.update-dot
           a.nav-item.nav-link.text-white.text-center.nav_hover#advanced-toggle href="#" title="#{t('advanced_settings')}" style="opacity: #{@advanced ? '1' : '0.5'}" onclick="fetch('#{toggle_advanced_path}', {method:'POST', headers:{'X-CSRF-Token':document.querySelector('meta[name=csrf-token]').content}}).then(function(){location.reload()});return false;"
             = lucide_icon('wrench', size: 16)
       - else

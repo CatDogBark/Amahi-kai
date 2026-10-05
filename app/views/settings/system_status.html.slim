@@ -37,24 +37,6 @@
 
   == render 'shared/install_terminal', id: 'update', title: 'Updating Amahi-kai', stream_url: settings_update_system_stream_path
 
-  javascript:
-    function checkForUpdates(button, url) {
-      var again = function(message) {
-        alert(message);
-        button.disabled = false;
-        button.textContent = 'Check now';
-      };
-      button.disabled = true;
-      button.textContent = 'Checking…';
-      fetch(url, { method: 'POST', headers: csrfHeaders(), credentials: 'same-origin' })
-        .then(function(r) { return r.json().catch(function() { return {}; }); })
-        .then(function(data) {
-          if (data.status === 'ok') { window.location.reload(); return; }
-          again('The check for updates failed: ' + (data.error || 'no answer from Amahi-kai'));
-        })
-        .catch(function(err) { again('The check for updates failed: ' + err.message); });
-    }
-
   /! ── System Overview ──
   .card.mb-4
     .card-header.bg-dark.text-white

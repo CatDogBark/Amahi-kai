@@ -24,3 +24,44 @@ footer a:hover {
   color: #eee;
   text-decoration: none;
 }
+
+/* System Update: the dot on the header's update button, and the dashboard's notice, when an
+   update is waiting (layouts/_system_update has the dialog they open) */
+#update-btn {
+  position: relative;
+}
+
+#update-btn .update-dot {
+  position: absolute;
+  top: 5px;
+  right: 3px;
+  box-shadow: 0 0 0 2px #212529;
+}
+
+.update-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--kai-accent, #f0a030);
+}
+
+.update-notice {
+  color: var(--kai-accent, #f0a030);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.update-notice:hover {
+  text-decoration: underline;
+}
+
+.update-notice .update-dot {
+  margin-right: 6px;
+  vertical-align: 1px;
+}
+
+.whats-new-changelog li {
+  margin-bottom: 0.5rem;
+}
