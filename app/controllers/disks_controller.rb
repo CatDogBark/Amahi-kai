@@ -151,25 +151,29 @@ class DisksController < ApplicationController
     @next_scrub = StoragePools.next_scrub
   end
 
+  # The pool buttons post JSON and reload on { status: 'ok' }, or show the error.
+  def create_pool
+    pool_change { StoragePools.create!(name: params[:name], layout: params[:layout], devices: Array(params[:devices])) }
+  end
+
+  def replace_pool_drive
+    pool_change { StoragePools.replace!(name: params[:name], old: params[:old], new: params[:new]) }
+  end
+
+  def add_pool_group
+    pool_change { StoragePools.add_group!(name: params[:name], devices: Array(params[:devices])) }
+  end
+
+  def destroy_pool
+    pool_change { StoragePools.destroy!(name: params[:name], confirm: params[:confirm]) }
+  end
+
   def scrub_pool
-    StoragePools.scrub!(params[:name])
-    render json: { status: 'ok' }
-  rescue StoragePools::Error => e
-    render json: { status: 'error', error: e.message }, status: :unprocessable_content
+    pool_change { StoragePools.scrub!(params[:name]) }
   end
 
   def check_health
-    StoragePools.check_health!
-    render json: { status: 'ok' }
-  rescue StoragePools::Error => e
-    render json: { status: 'error', error: e.message }, status: :unprocessable_content
-  end
-
-  def create_pool
-    StoragePools.create!(name: params[:name], layout: params[:layout], devices: Array(params[:devices]))
-    render json: { status: 'ok' }
-  rescue StoragePools::Error => e
-    render json: { status: 'error', error: e.message }, status: :unprocessable_content
+    pool_change { StoragePools.check_health! }
   end
 
   # Installs what's missing of ZFS and the drive health tools.
@@ -182,5 +186,14 @@ class DisksController < ApplicationController
       sse.emit("✗ #{e.message}")
       sse.done('error')
     end
+  end
+
+  private
+
+  def pool_change
+    yield
+    render json: { status: 'ok' }
+  rescue StoragePools::Error => e
+    render json: { status: 'error', error: e.message }, status: :unprocessable_content
   end
 end

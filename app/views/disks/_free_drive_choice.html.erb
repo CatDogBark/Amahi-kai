@@ -1,0 +1,15 @@
+<%# The free drives to choose from in the pool dialogs (type: radio or checkbox). %>
+<% if free.empty? %>
+  <p class="text-muted small mb-0">No drive is free. Connect one, or free one on Disks → Devices.</p>
+<% else %>
+  <div class="list-group mb-2">
+    <% free.each do |drive| %>
+      <label class="list-group-item d-flex align-items-center gap-2 small">
+        <input class="form-check-input m-0" type="<%= type %>" name="<%= name %>" value="<%= drive[:path] %>" data-size="<%= drive[:size] %>">
+        <code><%= drive[:path] %></code>
+        <span class="flex-grow-1"><%= [drive[:model], drive[:serial]].compact.join(' · ') %></span>
+        <span class="text-nowrap"><%= number_to_human_size(drive[:size]) %></span>
+      </label>
+    <% end %>
+  </div>
+<% end %>

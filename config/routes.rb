@@ -119,6 +119,9 @@ Rails.application.routes.draw do
     get 'pools', action: 'pools'
     post 'create_pool', action: 'create_pool'
     post 'scrub_pool', action: 'scrub_pool'
+    post 'replace_pool_drive', action: 'replace_pool_drive'
+    post 'add_pool_group', action: 'add_pool_group'
+    post 'destroy_pool', action: 'destroy_pool'
     post 'check_health', action: 'check_health'
     get 'install_storage_tools_stream', action: 'install_storage_tools_stream'
   end

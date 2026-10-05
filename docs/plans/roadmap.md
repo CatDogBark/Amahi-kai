@@ -40,6 +40,7 @@ so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 | Storage fix. Services and labels | ZFS's event daemon, smartd, Fail2ban and the VM guest agent in the services lists; drives without SMART data say why (virtual disk, none given, no smartmontools, not checked) | #47 |
 | Scheduled jobs | Jobs card on the dashboard (System, Services and Jobs in one row) and Settings → Jobs: Amahi-kai's timers, security updates and the pool scrub with last run, result and next run; smartd shown as Idle when there's nothing to watch | #48 |
 | Tooltips | Bootstrap tooltips after 150 ms (data-tip, tooltips.js) instead of the browser's title; extra information marked (ⓘ, dotted underline, help cursor); needed information moved onto the page; a spec keeps title tooltips out | #49 |
+| Storage S3. Manage pools | Replace a drive (resilver, page refreshes while it runs), add a group shaped like the pool's, delete a pool behind its typed name (drives freed); autoexpand on new pools. Not yet tested on real drives | #50 |
 
 ## Next: Phase 3
 
@@ -124,7 +125,7 @@ VM 104's disks belong to Proxmox, so the disk-safety work (PR #13) is covered by
 Decided 2026-10-04, in [`storage.md`](storage.md): SMB shares stay on simple drives and Greyhole;
 new ZFS pools, with the layout the user chooses, hold bitShare's data, on other drives; Greyhole
 also handles files that don't arrive through Samba (web uploads). Built now in five PRs (S1–S5,
-listed there; S1 is #44, S2 #46), then Phase 4, then bitShare. Tested on the physical drives once
+listed there; S1 is #44, S2 #46, S3 #50), then Phase 4, then bitShare. Tested on the physical drives once
 they're connected.
 
 ## Phase 4: Docker apps
