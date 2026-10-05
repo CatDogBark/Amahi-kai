@@ -27,6 +27,8 @@ gem 'stimulus-rails'
 gem 'bcrypt'
 
 gem 'sys-filesystem'
+# Folder downloads in the web file browser (FileBrowserService.create_zip)
+gem 'rubyzip', '~> 3.4', require: false
 
 gem 'rack', '~> 3.2.5'
 gem 'rack-attack'

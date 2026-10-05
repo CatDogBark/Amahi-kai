@@ -11,6 +11,41 @@ different drives so a failed drive doesn't lose them.
 
 ---
 
+## What Greyhole is for
+
+Greyhole is mass storage for your SMB shares, with simple redundancy: pictures, videos, music,
+documents, backups. It's good at:
+
+- drives of any size, added one at a time
+- a number of copies per share (2 copies of Photos, 1 of Downloads)
+- each drive staying a normal ext4 drive you can read anywhere, even on its own
+
+It only notices files that arrive **through Samba**: Greyhole's module in Samba tells it about each
+file written, renamed or deleted. So:
+
+- **Change files over the network share** (SMB). The web file browser only views and downloads.
+- **Don't let apps write into a pooled share.** An app (a Docker container, say) that writes into
+  a pooled share's folder goes around Samba: its new files only get their extra copies at
+  Greyhole's weekly check, and files it deletes or renames leave their old copies behind, using
+  space. Give apps that write their own data a ZFS pool, or a share that isn't pooled.
+
+## Share storage or ZFS pools?
+
+Amahi-kai has two kinds of storage, and each drive belongs to one of them.
+
+| | Share storage (simple drives, Greyhole) | ZFS pools |
+| --- | --- | --- |
+| For | SMB shares: your files over the network | bitShare and apps' data |
+| Drives | Any sizes, added one at a time | Matched drives, added a group at a time |
+| Redundancy | Extra copies per share | Mirror or RAIDZ1/2/3, for the whole pool |
+| Snapshots | No | Hourly and daily, to roll back to |
+| Checks | Greyhole's own | Scrubs and drive health (SMART) |
+
+ZFS pools are on **Disks → ZFS Pools**. They can't hold SMB shares, and they get their own page
+here once they've been tested on real drives.
+
+---
+
 ## Adding drives
 
 Drives are prepared on **Disks > Devices** (or in the setup wizard's storage step):

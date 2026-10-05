@@ -234,6 +234,7 @@ GEM
       rspec-mocks (~> 3.13)
       rspec-support (~> 3.13)
     rspec-support (3.13.7)
+    rubyzip (3.7.0)
     securerandom (0.4.1)
     simplecov (0.22.0)
       docile (~> 1.1)
@@ -296,6 +297,7 @@ DEPENDENCIES
   rails (~> 8.1.0)
   rake
   rspec-rails
+  rubyzip (~> 3.4)
   simplecov
   slim
   sprockets (~> 4.3.0)

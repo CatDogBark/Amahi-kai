@@ -102,17 +102,22 @@ Each user also has a private home share, `\\<server-ip>\username`.
 
 ## File browser
 
-Click **Browse** on a share (or on the dashboard) to use it in your web browser. You can:
+Click **Browse** on a share (or on the dashboard) to look through it in your web browser. You can:
 
 - move through folders, with a breadcrumb trail
-- upload files (drag and drop works), and create folders
-- rename and delete, including several items at once
-- download files, or a whole folder as a zip
 - preview images, video, audio and PDFs
+- download files, or a whole folder as a zip (**Download this folder**, or **Download as zip** on a
+  folder)
 
-Users only see the shares they have access to, and can only change shares they can write to.
-HTML, JavaScript and XML files are shown as plain text, and files open sandboxed (scripts in them
-can't run), so a file someone puts in a share can't act on your Amahi-kai session.
+The file browser only views: it doesn't upload, rename, move or delete. Files change over the
+network share (SMB, above), so Samba, and [Greyhole](storage-pooling) on pooled shares, sees every
+change, and each user's share permissions apply. Away from home, connect over
+[Tailscale](remote-access) and use the share as usual. A stolen web login can't change your files.
+
+Users only see the shares they have access to. HTML, JavaScript and XML files are shown as plain
+text, and files open sandboxed (scripts in them can't run), so a file someone puts in a share
+can't act on your Amahi-kai session. A folder download only includes the files that are in the
+share.
 
 ---
 

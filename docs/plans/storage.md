@@ -21,7 +21,9 @@ tested on the physical drives ([Tests on real drives](#tests-on-real-drives)).
   properties `amahi:snapshot-hourly` and `amahi:snapshot-daily`), taken and pruned by
   `amahi-kai-snapshots.timer`; take one now, delete, and roll the whole pool back behind its
   typed name. Only Amahi-kai's own snapshots are ever deleted or pruned (#51).
-- [ ] **S5.** Greyhole handles files that don't arrive through Samba.
+- [x] **S5.** The web file browser only views and downloads (Troy, 2026-10-05), so every change
+  to a share goes through Samba and Greyhole needs no special handling; pooled files preview and
+  download, and folder zips work (#53).
 
 ## Decisions
 
@@ -110,17 +112,26 @@ operations with their own validation and logging.
   formatted or mounted as share storage; one with a label from a pool that isn't imported here
   can go into a new pool, which erases it.
 
-### Greyhole: files that don't arrive through Samba
+### Greyhole: only basic SMB storage
 
-Greyhole only notices files written through Samba (its Samba module logs each change). A file
-uploaded with the web file browser, or written into a share folder by an app, goes straight onto
-disk: Greyhole doesn't spread it across drives or make its copies, even for a share set to 2
-copies.
+Greyhole only notices changes made through Samba: its Samba module drops a note in
+`/var/spool/greyhole` for each file written, renamed or deleted, and the daemon turns the notes into
+tasks. A file written into a share's folder any other way gets its copies only at Greyhole's weekly
+`--fsck` (which queues the same write task Samba would); a delete or rename made any other way
+leaves Greyhole's copies and records behind.
 
-Requirement (Troy, 2026-10-04): **Greyhole handles those files like Samba writes.** Check how
-Greyhole can be told about a file it didn't see (from its own documentation and code) and use that
-for every upload, or else run Greyhole's check over pooled shares on a schedule. Cover it with
-specs, and test it on the real drives.
+The first idea (2026-10-04) was to tell Greyhole about the web file browser's changes. Decided
+instead (Troy, 2026-10-05): **Greyhole is basic SMB mass storage with simple redundancy, and is
+treated as nothing more.**
+
+- The web file browser only views and downloads (S5). Files change over SMB, so every change
+  goes through Samba and Greyhole needs nothing special.
+- Apps don't write into pooled shares: an app that writes its own data gets a ZFS dataset (Phase 4)
+  or a share that isn't pooled. If an app ever needs Greyhole, that's handled with that app.
+- Research kept for then: `greyhole --fsck --dir=<folder>` queues write tasks for plain files in a
+  folder; `greyhole --cp` copies a file onto the pool directly (synchronously, as the caller's
+  user); the spool note format (`unlink`, `rmdir`, `rename`: the action, the share, the path(s), a
+  blank line) has been the same in Greyhole's Samba modules from 4.5 to 4.22.
 
 ## Tests on real drives
 
@@ -137,7 +148,8 @@ hours, wear, reallocated sectors, firmware) before it goes in a pool.
   formatted for share storage.
 - Share storage (Greyhole) on the other drives works next to the pool, and neither offers the
   other's drives.
-- A file uploaded through the web file browser to a share with 2 copies ends up with 2 copies.
+- A file copied over SMB to a share with 2 copies ends up with 2 copies, and the web file browser
+  previews and downloads it (it's a link to a pool drive).
 
 ## Open questions
 

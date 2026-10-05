@@ -80,87 +80,70 @@ describe "FileBrowser Controller", type: :request do
       end
     end
 
-    describe "POST /files/:share_id/upload" do
-      it "uploads a file" do
-        file = Rack::Test::UploadedFile.new(StringIO.new("data"), "text/plain", false, original_filename: "upload.txt")
-        post "/files/#{share.name}/upload", params: { files: [file] }
-        expect(response).to have_http_status(:ok)
-        expect(response.parsed_body['status']).to eq('ok')
+    # The browser only views: files change over SMB, so Samba (and Greyhole) sees every change.
+    describe "read-only" do
+      it "has no way to upload, make folders, rename or delete" do
+        %w[POST:upload POST:new_folder PUT:rename DELETE:delete].each do |route|
+          verb, action = route.split(':')
+          expect { Rails.application.routes.recognize_path("/files/#{share.name}/#{action}", method: verb) }
+            .to raise_error(ActionController::RoutingError), route
+        end
+        FileUtils.mkdir_p(File.join(tmpdir, "album"))
+        File.write(File.join(tmpdir, "hello.txt"), "hi")
+        get "/files/#{share.name}/browse"
+        page = Nokogiri::HTML(response.body)
+        expect(page.text).not_to include("Upload", "New Folder", "Rename", "Delete")
+        expect(page.css('input[type=file], input[type=checkbox]')).to be_empty
+        menus = page.css('.fb-row .dropdown-item').map { |a| a.text.squish }
+        expect(menus).to eq(['Download as zip', 'Download'])
+        expect(page.at_css('#fb-download-folder')['href']).to eq("/files/#{share.name}/download")
       end
 
-      it "rejects missing files param" do
-        post "/files/#{share.name}/upload", params: {}
-        expect(response).to have_http_status(:unprocessable_entity)
+      it "says files are added over SMB when the share is empty" do
+        get "/files/#{share.name}/browse"
+        expect(response.body).to include("Add files over the network share (SMB)")
       end
 
-      it "puts the uploaded file in the share" do
-        file = Rack::Test::UploadedFile.new(StringIO.new("data"), "text/plain", false, original_filename: "upload.txt")
-        post "/files/#{share.name}/upload", params: { files: [file] }
-        expect(File.read(File.join(tmpdir, "upload.txt"))).to eq("data")
-      end
-    end
-
-    describe "names that can't be used as given" do
-      it "refuses to rename to .. with a clear error" do
-        File.write(File.join(tmpdir, "old.txt"), "x")
-        put "/files/#{share.name}/rename", params: { old_name: "old.txt", new_name: ".." }
-        expect(response).to have_http_status(:unprocessable_entity)
-        expect(response.parsed_body["error"]).to include("Invalid name")
-        expect(File.exist?(File.join(tmpdir, "old.txt"))).to be true
-      end
-
-      it "refuses a delete name with a slash" do
-        delete "/files/#{share.name}/delete", params: { names: ["../outside.txt"] }
-        expect(response).to have_http_status(:unprocessable_entity)
-      end
-
-      it "deletes the file with two dots in its name, not another one" do
-        File.write(File.join(tmpdir, "a..b.txt"), "x")
-        File.write(File.join(tmpdir, "ab.txt"), "keep")
-        delete "/files/#{share.name}/delete", params: { names: ["a..b.txt"] }
-        expect(File.exist?(File.join(tmpdir, "a..b.txt"))).to be false
-        expect(File.read(File.join(tmpdir, "ab.txt"))).to eq("keep")
+      it "downloads the share, or a folder in it, as a zip" do
+        FileUtils.mkdir_p(File.join(tmpdir, "album"))
+        File.write(File.join(tmpdir, "album", "pic.jpg"), "jpg")
+        get "/files/#{share.name}/download"
+        expect(response.headers['Content-Type']).to eq('application/zip')
+        get "/files/#{share.name}/download/album"
+        expect(response.headers['Content-Disposition']).to include('album.zip')
       end
     end
 
-    describe "POST /files/:share_id/new_folder" do
-      it "creates a new folder" do
-        post "/files/#{share.name}/new_folder", params: { name: "newfolder" }
+    # A pooled share holds links to its files' copies on the Greyhole pool drives.
+    describe "a pooled share" do
+      let(:pool) { Dir.mktmpdir }
+      after { FileUtils.remove_entry(pool, true) }
+
+      before do
+        share.update!(disk_pool_copies: 2)
+        allow(DiskPoolPartition).to receive(:pluck).with(:path).and_return([pool]) # pool drives are under /mnt on a NAS
+        FileUtils.mkdir_p(File.join(pool, share.name))
+        File.write(File.join(pool, share.name, "movie.mp4"), "video")
+        File.write(File.join(pool, "elsewhere.txt"), "no")
+        File.symlink(File.join(pool, share.name, "movie.mp4"), File.join(tmpdir, "movie.mp4"))
+        File.symlink(File.join(pool, "elsewhere.txt"), File.join(tmpdir, "elsewhere.txt"))
+      end
+
+      it "previews and downloads files from their copy on a pool drive" do
+        get "/files/#{share.name}/raw/movie.mp4"
         expect(response).to have_http_status(:ok)
-        expect(response.parsed_body['status']).to eq('ok')
+        expect(response.body).to eq("video")
+        get "/files/#{share.name}/download/movie.mp4"
+        expect(response.body).to eq("video")
       end
 
-      it "rejects blank name" do
-        post "/files/#{share.name}/new_folder", params: { name: "" }
-        expect(response).to have_http_status(:unprocessable_entity)
-      end
-    end
-
-    describe "PUT /files/:share_id/rename" do
-      it "renames an entry" do
-        File.write(File.join(tmpdir, "old.txt"), "data")
-        put "/files/#{share.name}/rename", params: { old_name: "old.txt", new_name: "new.txt" }
-        expect(response).to have_http_status(:ok)
-        expect(response.parsed_body['status']).to eq('ok')
-      end
-
-      it "rejects blank names" do
-        put "/files/#{share.name}/rename", params: { old_name: "", new_name: "" }
-        expect(response).to have_http_status(:unprocessable_entity)
-      end
-    end
-
-    describe "DELETE /files/:share_id/delete" do
-      it "deletes entries" do
-        File.write(File.join(tmpdir, "doomed.txt"), "bye")
-        delete "/files/#{share.name}/delete", params: { names: ["doomed.txt"] }
-        expect(response).to have_http_status(:ok)
-        expect(response.parsed_body['status']).to eq('ok')
-      end
-
-      it "rejects empty names" do
-        delete "/files/#{share.name}/delete", params: { names: [] }
-        expect(response).to have_http_status(:unprocessable_entity)
+      it "refuses links anywhere else, and leaves them out of zips" do
+        get "/files/#{share.name}/raw/elsewhere.txt"
+        expect(response).not_to have_http_status(:ok)
+        get "/files/#{share.name}/download"
+        require 'zip'
+        names = Zip::InputStream.open(StringIO.new(response.body)) { |z| [].tap { |n| while (e = z.get_next_entry) do n << e.name end } }
+        expect(names).to eq(["movie.mp4"])
       end
     end
 
