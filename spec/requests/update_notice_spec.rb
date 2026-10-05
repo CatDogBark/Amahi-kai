@@ -34,7 +34,7 @@ RSpec.describe 'Update notice', type: :request do
 
     it 'puts a dot on the update button, which opens the dialog instead of updating' do
       button = page.at_css('#update-btn')
-      expect(button['title']).to eq('Update available: 2 changes')
+      expect(button['data-tip']).to eq('Update available: 2 changes')
       expect(button.at_css('.update-dot')).not_to be_nil
       expect(button.key?('data-whats-new')).to be(true)
       expect(button['onclick']).to be_nil
@@ -74,7 +74,7 @@ RSpec.describe 'Update notice', type: :request do
     end
 
     it 'shows no dot and no dashboard notice' do
-      expect(page.at_css('#update-btn')['title']).to eq('System Update')
+      expect(page.at_css('#update-btn')['data-tip']).to eq('System Update')
       expect(page.at_css('.update-dot')).to be_nil
       expect(page.at_css('.update-notice')).to be_nil
     end

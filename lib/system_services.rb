@@ -54,9 +54,11 @@ class SystemServices
 
   # smartd exits when no drive has SMART to watch (virtual disks have none), and systemd then
   # counts it as failed; it starts with the server once a real drive is connected.
+  # [shown under the badge, its tooltip]
   IDLE_REASONS = {
-    no_smart_drives: 'Nothing to watch: no drive here has SMART (virtual disks have none). ' \
-                     'It starts with the server once a drive with SMART is connected.'
+    no_smart_drives: ['No drive with SMART yet',
+                      'smartd stops itself when no drive has SMART to watch (virtual disks have none). ' \
+                      'It starts with the server once a drive with SMART is connected.']
   }.freeze
 
   PROPERTIES = %w[Description LoadState ActiveState SubState ActiveEnterTimestamp
@@ -64,7 +66,7 @@ class SystemServices
 
   class Service
     attr_reader :key, :name, :unit, :description, :state, :sub_state, :since,
-                :pid, :memory, :boot, :version, :version_detail, :actions, :note, :idle_reason
+                :pid, :memory, :boot, :version, :version_detail, :actions, :note, :idle_summary, :idle_detail
 
     def initialize(entry, props, version: nil, version_detail: nil)
       @key = entry[:key]
@@ -91,11 +93,12 @@ class SystemServices
 
     # Not running, but because there's nothing for it to do (IDLE_REASONS).
     def idle?
-      !idle_reason.nil?
+      !idle_summary.nil?
     end
 
-    def idle!(reason)
-      @idle_reason = reason
+    def idle!(summary, detail)
+      @idle_summary = summary
+      @idle_detail = detail
     end
 
     def installed?
@@ -149,7 +152,7 @@ class SystemServices
         version, detail = versions ? version_for(entry, packages) : nil
         service = Service.new(entry, props[i] || {}, version: version, version_detail: detail)
         apply_process_status(service, entry[:process]) if entry[:process]
-        service.idle!(IDLE_REASONS.fetch(entry[:idle])) if entry[:idle] && !service.running? && idle?(entry[:idle])
+        service.idle!(*IDLE_REASONS.fetch(entry[:idle])) if entry[:idle] && !service.running? && idle?(entry[:idle])
         service
       end
     end

@@ -24,17 +24,21 @@
               td
                 .fw-bold = svc.name
                 .small.text-muted = svc.description || "#{svc.unit}.service"
-              td = service_state_badge(svc)
               td
-                - if svc.version
-                  span title=svc.version_detail = svc.version
-                  - if svc.key == 'amahi-kai'
-                    .small.text-muted = svc.version_detail
+                = service_state_badge(svc)
+                - if svc.idle?
+                  .small.text-muted.mt-1 = svc.idle_summary
+              td
+                - if svc.key == 'amahi-kai' && svc.version
+                  = svc.version
+                  .small.text-muted = svc.version_detail
+                - elsif svc.version
+                  span.tip-text tabindex="0" data-tip=svc.version_detail = svc.version
                 - else
                   span.text-muted &mdash;
               td
                 - if svc.uptime
-                  span title="Since #{l(svc.since, format: :long)}" = duration_words(svc.uptime)
+                  span.tip-text tabindex="0" data-tip="Since #{l(svc.since, format: :long)}" = duration_words(svc.uptime)
                 - else
                   span.text-muted &mdash;
               td = svc.memory ? number_to_human_size(svc.memory) : content_tag(:span, '—', class: 'text-muted')

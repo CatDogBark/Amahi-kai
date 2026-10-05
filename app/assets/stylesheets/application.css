@@ -65,3 +65,28 @@ footer a:hover {
 .whats-new-changelog li {
   margin-bottom: 0.5rem;
 }
+
+/* Tooltips (tooltips.js). Extra information is marked so it can be found: an ⓘ after badges
+   and status words, a dotted underline under times and versions, and the help cursor on both.
+   Icon buttons name themselves with a plain data-tip and keep the pointer. */
+.tip-info,
+.tip-text {
+  cursor: help;
+}
+
+.tip-info::after {
+  content: "ⓘ";
+  margin-left: 0.3em;
+  font-weight: normal;
+  opacity: 0.8;
+}
+
+.tip-text {
+  text-decoration: underline dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.tooltip {
+  --bs-tooltip-max-width: 320px;
+}

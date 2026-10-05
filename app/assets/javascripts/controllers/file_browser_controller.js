@@ -68,7 +68,7 @@
       }
       formData.append('path', this.pathValue);
 
-      var btn = this.element.querySelector('[title="Upload Files"]');
+      var btn = this.element.querySelector('.fb-upload-btn');
       if (btn) {
         btn.dataset.originalText = btn.innerHTML;
         btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Uploading...';

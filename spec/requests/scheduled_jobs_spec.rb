@@ -49,15 +49,18 @@ RSpec.describe 'Scheduled jobs', type: :request do
     it 'shows an idle service as Idle, with why, on the dashboard, System Status and Servers' do
       smartd = SystemServices::Service.new({ key: 'smartd', name: 'SMART monitoring', unit: 'smartmontools', note: 'x' },
                                            { 'LoadState' => 'loaded', 'ActiveState' => 'failed' })
-      smartd.idle!('Nothing to watch')
+      smartd.idle!('No drive with SMART yet', 'Nothing to watch')
       allow(SystemServices).to receive(:all).and_return([smartd])
       get root_path
-      expect(page.at_xpath("//tr[td[contains(., 'SMART monitoring')]]//span[@class='badge bg-info text-dark']")['title']).to eq('Nothing to watch')
+      row = page.at_xpath("//tr[td[contains(., 'SMART monitoring')]]")
+      expect(row.css('td').first.text.squish).to eq('SMART monitoring No drive with SMART yet')
+      expect(row.at_css('.badge.tip-info')['data-tip']).to eq('Nothing to watch')
       get '/settings/system_status'
       expect(page.at_xpath("//tr[td[contains(., 'SMART monitoring')]]").css('td').map { |td| td.text.strip }).to eq(['SMART monitoring', 'Idle', 'Nothing to watch'])
       Setting.set('advanced', '1')
       get '/settings/servers'
       expect(page.at_css('#service-smartd .badge').text).to eq('Idle')
+      expect(page.at_css('#service-smartd').text).to include('No drive with SMART yet')
     end
   end
 

@@ -13,7 +13,7 @@
         - if @update.available?
           button#update-now-btn.btn.btn-sm.btn-info type="button" onclick="if(confirm(#{"Install #{pluralize(@update.behind, 'change')} now? Amahi-kai restarts at the end.".to_json})){startSystemUpdate('update', '#{settings_update_system_path}', '#{settings_update_system_stream_path}')}" Update now
         - else
-          button#repair-btn.btn.btn-sm.btn-outline-secondary type="button" title="Runs every update step again on the version you have" onclick="if(confirm(#{'Repair runs every update step again on the version you have (dependencies, database, root helper, Samba config, assets) and restarts Amahi-kai. Go ahead?'.to_json})){startSystemUpdate('update', '#{settings_update_system_path(repair: 1)}', '#{settings_update_system_stream_path}')}" Repair
+          button#repair-btn.btn.btn-sm.btn-outline-secondary type="button" data-tip="Runs every update step again on the version you have" onclick="if(confirm(#{'Repair runs every update step again on the version you have (dependencies, database, root helper, Samba config, assets) and restarts Amahi-kai. Go ahead?'.to_json})){startSystemUpdate('update', '#{settings_update_system_path(repair: 1)}', '#{settings_update_system_stream_path}')}" Repair
     .card-body
       - if @update.available?
         p.mb-2

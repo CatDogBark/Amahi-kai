@@ -26,16 +26,20 @@ module DisksHelper
     safe_join([content_tag(:span, label, class: "badge #{css} me-1"), [problems.presence, details.presence].compact.join(' · ')], ' ')
   end
 
-  # The badge alone, for Devices' card headers ("SMART OK"); "Virtual disk" for one without
-  # SMART data; else nil.
+  # For Devices' card headers: the SMART badge and the drive's wear, hours and firmware;
+  # "Virtual disk ⓘ" for one without SMART data; else nil.
   def drive_health_badge(health, path, model: nil)
     return nil unless health
     unless health.drive(path)
       return nil unless health.missing_reason(path, model) == :virtual
-      return content_tag(:span, 'Virtual disk', class: 'badge bg-secondary ms-2', title: 'Virtual disks have no SMART data')
+      return content_tag(:span, 'Virtual disk', class: 'badge bg-secondary ms-2 tip-info', tabindex: 0,
+                                                data: { tip: 'Virtual disks have no SMART data: there are no drive health readings for them' })
     end
     label, css = HEALTH_BADGES.fetch(health.drive_level(path))
-    content_tag(:span, "SMART #{label}", class: "badge #{css} ms-2", title: health.drive_details(path))
+    details = [health.drive_problems(health.drive(path)).map(&:last).join(', ').upcase_first.presence,
+               health.drive_details(path).presence].compact.join(' · ')
+    safe_join([content_tag(:span, "SMART #{label}", class: "badge #{css} ms-2"),
+               (content_tag(:span, details, class: 'small text-muted ms-2') if details.present?)].compact)
   end
 
   # What a whole disk is used for, on Disks → ZFS Pools (StoragePools.drives' roles).

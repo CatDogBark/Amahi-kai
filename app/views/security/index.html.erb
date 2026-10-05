@@ -34,11 +34,11 @@
               <td class="text-center" style="vertical-align:middle;">
                 <% case check.status %>
                 <% when :pass %>
-                  <span class="status-badge status-pass" title="Pass">✓</span>
+                  <span class="status-badge status-pass" role="img" aria-label="Pass" data-tip="Pass">✓</span>
                 <% when :warn %>
-                  <span class="status-badge status-warn" title="Warning">⚠</span>
+                  <span class="status-badge status-warn" role="img" aria-label="Warning" data-tip="Warning">⚠</span>
                 <% when :fail %>
-                  <span class="status-badge status-fail" title="Failed">✗</span>
+                  <span class="status-badge status-fail" role="img" aria-label="Failed" data-tip="Failed">✗</span>
                 <% end %>
               </td>
               <td style="vertical-align:middle;"><%= check.description %></td>
