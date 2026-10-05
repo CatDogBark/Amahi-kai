@@ -82,7 +82,8 @@
               <td><code><%= drive['device'] ? DiskManager.base_device(drive['device']) : '—' %></code></td>
               <td><%= drive['device'] ? pool_drive_id(drive['name']) : (drive['note'] || drive['name']) %></td>
               <td><%= pool_state_badge(drive['state']) %></td>
-              <td><%= drive['device'] ? drive_health(@health, DiskManager.base_device(drive['device'])) : '—' %></td>
+              <% disk = drive['device'] && DiskManager.base_device(drive['device']) %>
+              <td><%= disk ? drive_health(@health, disk, model: @drives.find { |d| d[:path] == disk }&.dig(:model)) : '—' %></td>
               <td class="text-end"><%= [drive['read'], drive['write'], drive['cksum']].map { |n| n || '—' }.join(' / ') %></td>
             </tr>
           <% end %>
@@ -122,7 +123,7 @@
                 <td><%= [drive[:model], drive[:serial]].compact.join(' · ').presence || '—' %></td>
                 <td class="text-nowrap"><%= number_to_human_size(drive[:size]) %><%= ' SSD' if drive[:ssd] %></td>
                 <td><%= drive_role(drive) %></td>
-                <td class="small"><%= drive_health(@health, drive[:path]) %></td>
+                <td class="small"><%= drive_health(@health, drive[:path], model: drive[:model]) %></td>
               </tr>
             <% end %>
           </tbody>

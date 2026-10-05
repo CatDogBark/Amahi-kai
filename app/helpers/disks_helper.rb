@@ -12,19 +12,28 @@ module DisksHelper
 
   HEALTH_BADGES = { ok: ['OK', 'bg-success'], warning: ['Check', 'bg-warning text-dark'], danger: ['Failing', 'bg-danger'] }.freeze
 
+  NO_SMART = { not_checked: 'Not checked yet', no_smartctl: 'Needs smartmontools',
+               virtual: 'Virtual disk: no SMART data', no_smart: 'No SMART data from this drive' }.freeze
+
   # A drive's SMART health for the drive tables: a badge, its problems, then its wear, hours
-  # and firmware. "—" for drives without SMART data (virtual disks, or not checked yet).
-  def drive_health(health, path)
-    details = health&.drive_details(path)
-    return content_tag(:span, '—', class: 'text-muted') if details.nil?
+  # and firmware; or why there's none (+model+ tells a virtual disk).
+  def drive_health(health, path, model: nil)
+    return content_tag(:span, '—', class: 'text-muted') unless health
+    details = health.drive_details(path)
+    return content_tag(:span, NO_SMART.fetch(health.missing_reason(path, model)), class: 'text-muted') if details.nil?
     label, css = HEALTH_BADGES.fetch(health.drive_level(path))
     problems = health.drive_problems(health.drive(path)).map(&:last).join(', ').upcase_first
     safe_join([content_tag(:span, label, class: "badge #{css} me-1"), [problems.presence, details.presence].compact.join(' · ')], ' ')
   end
 
-  # The badge alone, for Devices' card headers ("SMART OK"), or nil without SMART data.
-  def drive_health_badge(health, path)
-    return nil unless health&.drive(path)
+  # The badge alone, for Devices' card headers ("SMART OK"); "Virtual disk" for one without
+  # SMART data; else nil.
+  def drive_health_badge(health, path, model: nil)
+    return nil unless health
+    unless health.drive(path)
+      return nil unless health.missing_reason(path, model) == :virtual
+      return content_tag(:span, 'Virtual disk', class: 'badge bg-secondary ms-2', title: 'Virtual disks have no SMART data')
+    end
     label, css = HEALTH_BADGES.fetch(health.drive_level(path))
     content_tag(:span, "SMART #{label}", class: "badge #{css} ms-2", title: health.drive_details(path))
   end

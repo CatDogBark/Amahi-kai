@@ -75,7 +75,7 @@ RSpec.describe 'ZFS pools', type: :request do
       expect(card.text).to include('466 GB used', '1.82 TB free of 2.27 TB', 'One or more devices could not be used.',
                                    "What to do: Replace the device using 'zpool replace'.", '/srv/pools/tank', 'No scrub has run yet.')
       rows = card.css('tbody tr').map { |tr| tr.css('td').map { |td| td.text.strip } }
-      expect(rows).to eq([['/dev/sdc', 'Samsung_SSD_870_S1', 'ONLINE', '—', '0 / 0 / 0'],
+      expect(rows).to eq([['/dev/sdc', 'Samsung_SSD_870_S1', 'ONLINE', 'Not checked yet', '0 / 0 / 0'],
                           ['—', 'was /dev/disk/by-id/ata-Samsung_SSD_870_S2-part1', 'UNAVAIL', '—', '0 / 0 / 0']])
     end
 
@@ -157,7 +157,7 @@ RSpec.describe 'ZFS pools', type: :request do
         health_cells = page.css('#pool-drives tbody tr').to_h { |tr| [tr.css('td')[1].text.strip, tr.css('td')[5].text.squish] }
         expect(health_cells['/dev/sdd']).to eq('Check Has 3 reallocated sectors · 2% worn · 4,210 hours · firmware SVT02B6Q')
         expect(health_cells['/dev/sde']).to eq('OK')
-        expect(health_cells['/dev/sda']).to eq('—')
+        expect(health_cells['/dev/sda']).to eq('Not checked yet')
         expect(page.at_css('#health-checked').text).to include('Health checked 10 minutes ago')
         expect(page.at_css('#health-checked button')['data-storage-post']).to eq('/disks/check_health')
       end
@@ -169,6 +169,28 @@ RSpec.describe 'ZFS pools', type: :request do
           get path
           expect(page.css('.storage-alerts .alert').size).to eq(2), path
         end
+      end
+
+      it 'says why a drive has no SMART data: a virtual disk, a drive that gives none, or no smartmontools' do
+        checked = ->(smartctl) { StorageHealth.new('checked_at' => 1.minute.ago.utc.iso8601, 'smartctl' => smartctl,
+                                                   'drives' => { '/dev/sda' => nil, '/dev/sdd' => nil }) }
+        drives = [drive('/dev/sda', :os, model: 'QEMU HARDDISK'), drive('/dev/sdd', :free, model: 'Samsung SSD 870 EVO 1TB')]
+        stub_pools(installed: true, drives: drives)
+        cells = lambda do
+          get '/disks/pools'
+          page.css('#pool-drives tbody tr').to_h { |tr| [tr.css('td')[1].text.strip, tr.css('td')[5].text.squish] }
+        end
+        allow(StorageHealth).to receive(:load).and_return(checked.call(true))
+        expect(cells.call).to eq('/dev/sda' => 'Virtual disk: no SMART data', '/dev/sdd' => 'No SMART data from this drive')
+        allow(StorageHealth).to receive(:load).and_return(checked.call(false))
+        expect(cells.call.values.uniq).to eq(['Needs smartmontools'])
+
+        allow(StorageHealth).to receive(:load).and_return(checked.call(true))
+        allow(DiskManager).to receive(:devices).and_return([
+          { name: 'sda', path: '/dev/sda', model: 'QEMU HARDDISK', size: '35G', os_disk: true, zfs_pool: nil, partitions: [] }
+        ])
+        get '/disks/devices'
+        expect(page.css('#disks-table .card-header .badge').map(&:text).map(&:squish)).to eq(['Virtual disk', 'OS Disk'])
       end
 
       it 'puts a SMART badge on Devices' do

@@ -33,6 +33,15 @@ RSpec.describe SystemServices do
   describe '.all' do
     let(:services) { described_class.all(versions: true).index_by(&:key) }
 
+    it "lists ZFS's event daemon, SMART monitoring, Fail2ban and the VM guest agent when installed, without buttons" do
+      %w[zfs-zed smartd fail2ban qemu-guest-agent].each do |key|
+        expect(services[key]).to have_attributes(actions: [], note: be_present), key
+      end
+      expect(services['smartd'].unit).to eq('smartmontools')
+      allow(File).to receive(:exist?).with('/usr/sbin/zed').and_return(false)
+      expect(described_class.all.map(&:key)).not_to include('zfs-zed')
+    end
+
     it 'reads state, start time, PID, memory and boot setting from systemd' do
       samba = services['smbd']
       expect(samba).to be_running

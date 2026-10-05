@@ -36,6 +36,14 @@ class SystemServices
       check: '/usr/bin/cloudflared', note: 'Managed on Remote Access' },
     { key: 'tailscaled', name: 'Tailscale VPN', unit: 'tailscaled', package: 'tailscale',
       check: '/usr/bin/tailscale', note: 'Managed on Remote Access' },
+    { key: 'zfs-zed', name: 'ZFS event daemon', unit: 'zfs-zed', package: 'zfs-zed', check: '/usr/sbin/zed',
+      note: 'Comes with ZFS (Disks → ZFS Pools)' },
+    { key: 'smartd', name: 'SMART monitoring', unit: 'smartmontools', package: 'smartmontools', check: '/usr/sbin/smartd',
+      note: 'Comes with smartmontools (Disks → ZFS Pools)' },
+    { key: 'fail2ban', name: 'Fail2ban', unit: 'fail2ban', package: 'fail2ban', check: '/usr/bin/fail2ban-server',
+      note: 'Set up by the security audit' },
+    { key: 'qemu-guest-agent', name: 'VM guest agent', unit: 'qemu-guest-agent', package: 'qemu-guest-agent',
+      check: '/usr/sbin/qemu-ga', note: 'Lets Proxmox see and shut down the VM' }
   ].freeze
 
   # The helper operation for each action.
