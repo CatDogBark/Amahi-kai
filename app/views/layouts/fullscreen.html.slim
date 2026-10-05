@@ -36,4 +36,7 @@ html[lang="en"]
       .push
     = render 'layouts/footer'
 
+    - if current_user_is_admin?
+      == render 'layouts/system_update'
+
     #js-templates[style="display:none"]

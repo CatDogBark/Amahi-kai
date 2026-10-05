@@ -8,4 +8,12 @@ module SettingsHelper
 
     safe_join([match[1], link_to("##{match[2]}", "#{UPDATE_REPO}/pull/#{match[2]}", target: '_blank', rel: 'noopener')])
   end
+
+  # A changelog entry from the update check, its **bold** and `code` shown as such and
+  # everything else escaped. Asterisks inside code are kept from starting bold text.
+  def changelog_entry(text)
+    html = ERB::Util.html_escape(text.to_s)
+    html = html.gsub(/`([^`]+)`/) { "<code>#{Regexp.last_match(1).gsub('*', '&#42;')}</code>" }
+    html.gsub(/\*\*(.+?)\*\*/) { "<strong>#{Regexp.last_match(1)}</strong>" }.html_safe # rubocop:disable Rails/OutputSafety
+  end
 end

@@ -13,6 +13,14 @@
           <span class="text-muted">
             <% unless hostname.blank? || hostname.casecmp?('amahi-kai') %><%= hostname %> · <% end %>Up <%= @stats[:system][:uptime] %> · <%= @stats[:system][:os] %>
           </span>
+          <% if current_user_is_admin? && update_status.available? %>
+            <%# Opens the System Update dialog (layouts/_system_update) %>
+            <div class="mt-1">
+              <a href="#" class="update-notice" data-whats-new="">
+                <span class="update-dot"></span>Update available: <%= pluralize(update_status.behind, 'change') %> — see what's new
+              </a>
+            </div>
+          <% end %>
         </div>
         <div class="d-none d-md-block text-muted" style="font-size: 12px;">
           <%= Time.current.strftime('%A, %B %-d, %Y') %>

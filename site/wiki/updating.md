@@ -13,7 +13,13 @@ version that was running.
 
 ## Seeing what's new
 
-Go to **Settings > System Status**. The **System Update** card shows one of:
+When an update is waiting, the **System Update** button in the header (the circling arrows, for
+admins) gets an orange dot, and the dashboard says **Update available: N changes — see what's
+new**. Either opens **What's new**: the changelog entries the update brings, the pull requests it
+merges (linked to GitHub), and **Update now** or **Later**. With nothing new, the same button
+shows when Amahi-kai last checked, with **Check now** and **Repair**.
+
+**Settings > System Status** has the same in its **System Update** card, which shows one of:
 
 - **Update available: N changes**, with each change listed and linked to its pull request on
   GitHub, and an **Update now** button.
@@ -30,8 +36,8 @@ The check only looks; it never installs anything.
 
 ## Installing an update
 
-1. Go to **Settings > System Status**.
-2. Read the list of changes, then click **Update now**.
+1. Click the **System Update** button in the header (or go to **Settings > System Status**).
+2. Read what's new, then click **Update now**.
 3. A window shows each step as it runs, with a timer at the bottom. Amahi-kai restarts near the
    end; the window waits for it and carries on.
 4. When it says **✓ Updated in …**, click **Reload page** to load the new version.
