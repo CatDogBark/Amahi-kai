@@ -1,0 +1,112 @@
+# Storage plan
+
+Status: decided with Troy on 2026-10-04. Built once the NAS drives arrive, since it needs real
+hardware to test. Phase 4 (Docker apps) can go ahead in the meantime.
+
+## Decisions
+
+Amahi-kai has two kinds of storage, side by side. Each data drive belongs to exactly one.
+
+1. **Share storage: simple drives and Greyhole (what exists today).** Drives with ext4, mounted at
+   `/mnt/<name>`, optionally pooled with Greyhole and its copies per share. **SMB shares live only
+   here.** It stays the easy home NAS that drew Troy to Amahi in the first place: mixed drive
+   sizes, any device can open it. Troy keeps his general data here (pictures, videos, books,
+   documents).
+2. **ZFS pools (new), for bitShare.** Amahi-kai creates a pool on the drives the user assigns, and
+   **the user chooses the layout** (below); Amahi-kai shows a recommendation but doesn't force it.
+   More than one pool is allowed. Pools are not SMB shares: bitShare owns its data (versions,
+   conflicts, locks, chunk storage), and files changed over SMB behind its back would break that.
+
+- **One RAID engine: ZFS.** It covers the RAID levels people ask for. A second engine (mdadm,
+  Btrfs) would double the setup, drive-replacement and failure handling to build and test.
+- **Other Docker apps' data stays on the OS disk** (`/opt/amahi/apps`) for now. Pools are plain
+  ZFS, so Phase 4 can offer an app a dataset on a pool later without a redesign.
+- **Backups:** the local redundancy is the main defence. Cloud backup to Proton Drive comes later
+  as an app, as redundancy on top (rclone has a Proton Drive backend, still marked beta).
+
+## Layouts offered
+
+When a pool is created, Amahi-kai lists the layouts the chosen drives allow, each with its usable
+space and how many drives may fail.
+
+| Layout | Like | Minimum drives | Survives |
+| --- | --- | --- | --- |
+| Mirror | RAID 1 | 2 | All drives but one |
+| Striped mirrors | RAID 10 | 4 | One drive per pair |
+| RAIDZ1 | RAID 5 | 3 | 1 drive |
+| RAIDZ2 | RAID 6 | 4 | 2 drives |
+| RAIDZ3 | — | 5 | 3 drives |
+
+A pool grows by adding another group of drives with the same layout (another mirror pair, or
+another RAIDZ group). Ubuntu 24.04 ships OpenZFS 2.2, which can't add a single drive to an existing
+RAIDZ group (that came in 2.3); the UI should say so when it matters.
+
+## Troy's first build
+
+- Jonsbo N3, 8 hot-swap bays, as the Proxmox host. **The drive controller (HBA) is passed through
+  to the Amahi-kai VM**, so Amahi-kai sees the real disks and owns them (ZFS needs direct access
+  for its health and SMART data). That needs a motherboard with IOMMU and a free slot for the HBA:
+  check before buying the board.
+- **4 matched SATA SSDs, about 1 TB each**, bought together; 4 bays left for later.
+- Suggested pool for those 4: **RAIDZ1** (about 3 TB usable, survives one drive), grown later with
+  a second 4-drive RAIDZ1 (about 6 TB). Matching how drives get bought (4 at a time) avoids the
+  2.2 limit above. Striped mirrors (about 2 TB, grows in pairs) is the alternative.
+- **Give the NAS VM 8 GB of RAM** (the host has 16). Cap ZFS's cache (ARC) at about 2 GB.
+
+## What gets built
+
+Everything that touches drives goes through the root helper (`libexec/amahi-helper`), as
+operations with their own validation and logging.
+
+- **Install ZFS** (`zfsutils-linux`) on request, like Greyhole and Docker today.
+- **Create a pool:** pick unmounted data drives (never the OS disk, never a drive already used by
+  share storage), pick a layout, confirm wiping them. Created with `ashift=12`, `compression=lz4`,
+  and `autotrim=on` for SSDs, and imported at every boot.
+- **Pool status:** health, capacity, each drive's state, the last scrub and its result.
+- **Alerts** on the dashboard and Disks pages when a pool is degraded or faulted, a scrub found
+  errors, or a drive's SMART data looks bad.
+- **Scrubs:** a monthly timer, plus "scrub now".
+- **Replace a drive:** for a failed or failing drive, pick the new one, then show the resilver's
+  progress.
+- **Grow a pool:** add a group with the same layout.
+- **Snapshots:** automatic, with configurable retention (for example hourly kept a day, daily kept
+  a month), plus a list. Restoring bitShare's data is bitShare's job, so it is designed with
+  bitShare.
+- **Datasets:** one per user of the pool (first `bitshare`), so Phase 4 can grant an app exactly its
+  own dataset.
+- **Destroy a pool:** behind a typed confirmation.
+- **Drive ownership:** the Disks page shows which drives are share storage and which belong to a
+  pool, and neither side can take the other's drives.
+
+### Greyhole: files that don't arrive through Samba
+
+Greyhole only notices files written through Samba (its Samba module logs each change). A file
+uploaded with the web file browser, or written into a share folder by an app, goes straight onto
+disk: Greyhole doesn't spread it across drives or make its copies, even for a share set to 2
+copies.
+
+Requirement (Troy, 2026-10-04): **Greyhole handles those files like Samba writes.** Check how
+Greyhole can be told about a file it didn't see (from its own documentation and code) and use that
+for every upload, or else run Greyhole's check over pooled shares on a schedule. Cover it with
+specs, and test it on the real drives.
+
+## Tests on real drives
+
+Add these to the roadmap's hardware checklist when the storage work is built:
+
+- Create a RAIDZ1 pool from the 4 SSDs; it survives a reboot (imported at boot).
+- Pull a drive: the pool shows degraded and the alert appears; replace it and watch the resilver.
+- Run a scrub; take a snapshot and roll a test dataset back.
+- Share storage (Greyhole) on the other drives works next to the pool, and neither offers the
+  other's drives.
+- A file uploaded through the web file browser to a share with 2 copies ends up with 2 copies.
+
+## Open questions
+
+- Which drives go to the pool and which to Greyhole on the first build (the 4 SSDs, plus what
+  later?).
+- Snapshot schedule defaults.
+- How bitShare gets its dataset and permissions: decided in the Phase 4 app model.
+- Share-storage drives still mount with `defaults,nofail,...`; whether to add `nosuid,nodev`
+  (safer for drives brought from another machine) can be decided now that share storage stays
+  ext4.
