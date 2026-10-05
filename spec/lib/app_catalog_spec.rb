@@ -1,73 +1,78 @@
 require "spec_helper"
 require "app_catalog"
 
+# The catalog the Apps pages show, read from the same manifests the root helper installs from
+# (config/apps; the helper's own checks are in amahi_helper_apps_spec.rb).
 RSpec.describe AppCatalog do
+  let(:dir) { Dir.mktmpdir }
+
   before { AppCatalog.reload! }
+  after { FileUtils.rm_rf(dir) }
 
   describe ".all" do
-    it "returns all 14 apps" do
-      expect(AppCatalog.all.size).to eq(13)
+    it "lists the five apps, by name" do
+      expect(AppCatalog.all.map { |app| app[:identifier] }).to eq(%w[gitea jellyfin transmission uptimekuma vaultwarden])
     end
 
-    it "includes identifier and name in each entry" do
-      first = AppCatalog.all.first
-      expect(first).to have_key(:identifier)
-      expect(first).to have_key(:name)
-      expect(AppCatalog.all.all? { |a| a.key?(:identifier) && a.key?(:name) }).to be true
+    it "gives each app what the pages show" do
+      vaultwarden = AppCatalog.find("vaultwarden")
+      expect(vaultwarden).to include(name: "Vaultwarden", category: "security", web_port: 8880,
+                                     ports: [{ host: 8880, container: 8080, protocol: "tcp" }],
+                                     secrets: [{ env: "ADMIN_TOKEN", label: "Admin page token (the /admin page)" }])
+      expect(vaultwarden[:image]).to start_with("vaultwarden/server:1.37.3@sha256:")
+      expect(vaultwarden[:logo_url]).to start_with("https://")
     end
   end
 
   describe ".find" do
-    it "finds an app by identifier" do
-      app = AppCatalog.find("jellyfin")
-      expect(app[:name]).to eq("Jellyfin")
-      expect(app[:image]).to eq("linuxserver/jellyfin")
-    end
-
-    it "returns nil for unknown id" do
-      expect(AppCatalog.find("nonexistent")).to be_nil
+    it "returns nil for an app that isn't in the catalog" do
+      expect(AppCatalog.find("portainer")).to be_nil
+      expect(AppCatalog.find("../jellyfin")).to be_nil
     end
   end
 
-  describe ".by_category" do
-    it "filters apps by category" do
-      media = AppCatalog.by_category("media")
-      expect(media.map { |a| a[:identifier] }).to include("jellyfin")
-    end
-
-    it "returns empty array for unknown category" do
+  describe "filters" do
+    it "finds apps by category and by name or description" do
+      expect(AppCatalog.by_category("media").map { |app| app[:identifier] }).to eq(["jellyfin"])
       expect(AppCatalog.by_category("gaming")).to eq([])
-    end
-  end
-
-  describe ".search" do
-    it "matches on name" do
-      results = AppCatalog.search("Grafana")
-      expect(results.size).to eq(1)
-      expect(results.first[:identifier]).to eq("grafana")
-    end
-
-    it "matches on description" do
-      results = AppCatalog.search("password")
-      expect(results.size).to eq(1)
-      expect(results.first[:identifier]).to eq("vaultwarden")
-    end
-
-    it "is case-insensitive" do
-      results = AppCatalog.search("docker")
-      expect(results.size).to be >= 1
-    end
-
-    it "returns empty for no match" do
+      expect(AppCatalog.search("GITEA").map { |app| app[:identifier] }).to eq(["gitea"])
+      expect(AppCatalog.search("password").map { |app| app[:identifier] }).to eq(["vaultwarden"])
       expect(AppCatalog.search("zzzznotfound")).to eq([])
     end
+
+    it "lists the categories in order" do
+      expect(AppCatalog.categories).to eq(AppCatalog.categories.sort)
+      expect(AppCatalog.categories).to include("media", "security")
+    end
   end
 
-  describe ".categories" do
-    it "returns unique sorted categories" do
-      cats = AppCatalog.categories
-      expect(cats).to include("media", "productivity", "monitoring")
-      expect(cats).to eq(cats.sort)
+  describe "data and secrets the helper keeps" do
+    before do
+      allow(AppCatalog).to receive(:apps_root).and_return(dir)
+      allow(AppCatalog).to receive(:secrets_dir).and_return(dir)
+    end
+
+    it "knows when an app's folders are still there from an earlier install" do
+      expect(AppCatalog.data_kept?("gitea")).to be false
+      Dir.mkdir(File.join(dir, "gitea"))
+      expect(AppCatalog.data_kept?("gitea")).to be true
+    end
+
+    it "shows an app's generated secrets with their labels, and nothing when there are none" do
+      expect(AppCatalog.secrets("transmission")).to eq([])
+      File.write(File.join(dir, "transmission.json"), { "PASS" => "abc123", "OTHER" => "x" }.to_json)
+      expect(AppCatalog.secrets("transmission")).to eq([{ label: "Web interface password (user admin)", value: "abc123" }])
+      File.write(File.join(dir, "transmission.json"), "not json")
+      expect(AppCatalog.secrets("transmission")).to eq([])
+      expect(AppCatalog.secrets("portainer")).to eq([])
+    end
+
+    it "keeps them under /var/lib/amahi-kai in production" do
+      allow(AppCatalog).to receive(:apps_root).and_call_original
+      allow(AppCatalog).to receive(:secrets_dir).and_call_original
+      allow(Rails.env).to receive(:production?).and_return(true)
+      expect(AppCatalog.apps_root).to eq("/var/lib/amahi-kai/apps")
+      expect(AppCatalog.secrets_dir).to eq("/var/lib/amahi-kai/app-secrets")
     end
   end
 end

@@ -1,66 +1,41 @@
 // Apps plugin JS
 
-// POST action for docker app controls (start/stop/uninstall)
-function dockerAppAction(url, identifier, btn) {
+// Apps (app/views/apps): the buttons post to the apps actions, then the page reloads to show the
+// app's new state. Copy buttons (data-copy) copy an app's generated password or key.
+
+function dockerAppAction(url, btn) {
   if (btn) {
     btn.disabled = true;
-    btn._origHTML = btn.innerHTML;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
   }
-
-  fetch(url, {
-    method: 'POST',
-    headers: csrfHeaders(),
-    credentials: 'same-origin'
-  })
-    .then(function(r) { return r.json(); })
+  fetch(url, { method: 'POST', headers: csrfHeaders(), credentials: 'same-origin' })
+    .then(function(r) { return r.json().catch(function() { return {}; }); })
     .then(function(data) {
-      if (data.status === 'ok') {
-        // Update the row in-place
-        var row = document.getElementById('docker_app_' + identifier);
-        if (row) {
-          var actionCell = row.querySelector('td:last-child');
-          if (actionCell) {
-            actionCell.innerHTML = buildAppButtons(identifier, data.app_status, data.host_port, data.name);
-          }
-        }
-      } else {
-        alert('Action failed: ' + (data.message || 'Unknown error'));
-      }
+      if (data.status !== 'ok') alert('That didn\'t work: ' + (data.message || 'no answer from Amahi-kai'));
+      window.location.reload();
     })
     .catch(function(err) {
-      console.error('App action failed:', err);
-      alert('Action failed — check your connection');
-    })
-    .finally(function() {
-      if (btn) {
-        btn.innerHTML = btn._origHTML || btn.innerHTML;
-        btn.disabled = false;
-      }
+      alert('That didn\'t work: ' + err.message);
+      window.location.reload();
     });
 }
 
-function buildAppButtons(identifier, status, hostPort, name) {
-  if (status === 'running') {
-    var html = '<div class="d-flex gap-1 justify-content-end">';
-    var row = document.getElementById('docker_app_' + identifier);
-    var proxyMode = row ? row.getAttribute('data-proxy-mode') : 'proxy';
-    if (hostPort && proxyMode === 'subdomain') {
-      html += '<span class="text-secondary small me-1">Needs subdomain</span><button class="btn btn-sm btn-outline-secondary disabled" type="button">🔗</button>';
-    } else if (hostPort) {
-      html += '<a class="btn btn-sm btn-success" href="/app/' + identifier + '" target="_blank">Open</a>';
-    }
-    html += '<button class="btn btn-sm btn-outline-danger" onclick="dockerAppAction(\'/apps/docker/stop/' + identifier + '\', \'' + identifier + '\', this)">Stop</button>';
-    html += '</div>';
-    return html;
-  } else if (status === 'stopped') {
-    var html = '<div class="d-flex gap-1 justify-content-end">';
-    html += '<button class="btn btn-sm btn-outline-success" onclick="dockerAppAction(\'/apps/docker/start/' + identifier + '\', \'' + identifier + '\', this)">Start</button>';
-    html += '<button class="btn btn-sm btn-outline-danger" onclick="if(confirm(\'Uninstall ' + name + '?\')){dockerAppAction(\'/apps/docker/uninstall/' + identifier + '\', \'' + identifier + '\', this)}">Uninstall</button>';
-    html += '</div>';
-    return html;
-  } else if (status === 'available') {
-    return '<button class="btn btn-sm btn-primary" onclick="openAppInstall(\'' + identifier + '\', \'/apps/docker/install_stream/' + identifier + '\', \'' + name + '\')">Install</button>';
+// The clipboard API needs HTTPS, and the LAN page is plain HTTP, so copy through a selected
+// text field there.
+document.addEventListener('click', function(event) {
+  var button = event.target.closest('[data-copy]');
+  if (!button) return;
+  var text = button.dataset.copy;
+  var done = function() { button.textContent = 'Copied'; setTimeout(function() { button.textContent = 'Copy'; }, 1500); };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(done);
+    return;
   }
-  return '';
-}
+  var field = document.createElement('textarea');
+  field.value = text;
+  field.style.position = 'fixed';
+  field.style.opacity = '0';
+  document.body.appendChild(field);
+  field.select();
+  try { document.execCommand('copy'); done(); } finally { field.remove(); }
+});

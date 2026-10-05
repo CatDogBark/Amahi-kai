@@ -96,13 +96,13 @@ RSpec.describe DockerService do
   describe 'in production' do
     before { allow(DockerService).to receive(:production?).and_return(true) }
 
-    it "installs from Docker's repository through the root helper, then lets the app use it and starts it" do
+    # The web app's user isn't added to the docker group: apps run only through the helper.
+    it "installs from Docker's repository through the root helper and starts it" do
       lines = []
       DockerService.install! { |line| lines << line }
       expect(Privileged.calls).to eq([
                                        ['packages.add_repository', { repository: 'docker' }],
                                        ['packages.install', { packages: %w[docker-ce docker-ce-cli containerd.io] }],
-                                       ['docker.grant_app_user', {}],
                                        ['services.enable', { service: 'docker' }]
                                      ])
       expect(lines).to include('Installing Docker Engine...')
@@ -118,6 +118,15 @@ RSpec.describe DockerService do
       DockerService.stop!
       DockerService.restart!
       expect(Privileged.calls.map(&:first)).to eq(%w[services.start services.stop services.restart])
+    end
+
+    it "asks systemd whether Docker's service is up, without Docker's socket" do
+      allow(Open3).to receive(:capture3).with('systemctl', 'is-active', 'docker')
+                                        .and_return(["active\n", '', instance_double(Process::Status, success?: true)])
+      expect(DockerService.running?).to be true
+      allow(Open3).to receive(:capture3).with('systemctl', 'is-active', 'docker')
+                                        .and_return(["inactive\n", '', instance_double(Process::Status, success?: false)])
+      expect(DockerService.running?).to be false
     end
   end
 end

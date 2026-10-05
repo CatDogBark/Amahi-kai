@@ -1,0 +1,23 @@
+name: Transmission
+description: A BitTorrent client with a web interface, for downloading torrents to the NAS.
+category: downloads
+logo: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/transmission.png
+image: linuxserver/transmission:4.1.3-r0-ls363@sha256:4813745e2c721997d8849f5718786fd4406b3c656fbef479f87a161e51383cbd
+run_as: image
+web_port: 9091
+memory: 1g
+ports:
+  - { host: 9091, container: 9091 }
+  - { host: 51413, container: 51413 }
+  - { host: 51413, container: 51413, protocol: udp }
+folders:
+  - { name: config, path: /config }
+  - { name: downloads, path: /downloads }
+  - { name: watch, path: /watch }
+environment:
+  PUID: "{{uid}}"
+  PGID: "{{gid}}"
+  TZ: "{{timezone}}"
+  USER: admin
+secrets:
+  - { env: PASS, label: "Web interface password (user admin)" }

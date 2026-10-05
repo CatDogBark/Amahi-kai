@@ -1,8 +1,6 @@
 # Amahi Home Server
 # Copyright (C) 2007-2013 Amahi
 
-require 'shell'
-require 'docker_app_installer'
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License v3
 # (29 June 2007), as published in the COPYING file.
@@ -55,8 +53,6 @@ class AppsController < ApplicationController
           "  Setting up containerd.io (1.7.24-1) ...",
           "  Setting up docker-ce-cli (5:27.4.1-1) ...",
           "  Setting up docker-ce (5:27.4.1-1) ...",
-          "Setting up user permissions...",
-          "  Adding amahi to docker group...",
           "Enabling Docker service...",
           "  Created symlink /etc/systemd/system/multi-user.target.wants/docker.service",
           "Starting Docker service...",
@@ -110,206 +106,105 @@ class AppsController < ApplicationController
     end
   end
 
-  # ─── Docker Apps ──────────────────────────────────────────
+  # ─── Docker Apps (docs/plans/apps.md: the root helper installs and runs them) ───
 
   def installed_apps
     set_title t('apps')
-    @docker_installed = DockerService.installed?
-    @docker_running = DockerService.running?
-    @docker_apps = DockerApp.where.not(status: 'available').order(:name)
+    @docker_installed, @docker_running = docker_state
+    DockerApp.refresh_statuses! if @docker_running
+    @docker_apps = DockerApp.order(:name)
   end
 
   def docker_apps
     set_title t('apps')
     @docker_installed, @docker_running = docker_state
+    DockerApp.refresh_statuses! if @docker_running
     @current_category = params[:category]
-
-    # Merge catalog with installed docker apps
-    catalog = load_catalog
     installed = DockerApp.all.index_by(&:identifier)
-
-    @docker_apps = catalog.map do |entry|
-      installed[entry[:identifier]] || entry
-    end
-
-    # Add any installed apps not in catalog (manually installed)
-    installed.each do |id, app|
-      @docker_apps << app unless catalog.any? { |e| e[:identifier] == id }
-    end
-
-    # Filter by category if specified
-    if @current_category.present?
-      @docker_apps.select! do |app|
-        cat = app.is_a?(DockerApp) ? app.category : app[:category]
-        cat == @current_category
-      end
-    end
-
-    @categories = catalog.map { |e| e[:category] }.compact.uniq.sort
-  rescue JSON::ParserError, Errno::ENOENT, IOError => e
-    Rails.logger.error("Docker apps error: #{e.message}")
-    @docker_apps = []
-    @categories = []
+    catalog = AppCatalog.all
+    catalog = catalog.select { |app| app[:category] == @current_category } if @current_category.present?
+    @docker_apps = catalog.map { |entry| installed[entry[:identifier]] || entry }
+    @categories = AppCatalog.categories
   end
 
+  # The install itself runs in the stream (the page opens it in the install window).
   def docker_install
-    identifier = params[:id]
-    entry = load_catalog.find { |e| e[:identifier] == identifier }
-    unless entry
-      redirect_to '/apps', alert: "App not found"
-      return
-    end
-    # Just redirect — actual install happens via streaming terminal
-    redirect_to '/apps'
+    redirect_to apps_index_path
   end
 
   def docker_install_stream
-    identifier = params[:id]
-    entry = load_catalog.find { |e| e[:identifier] == identifier }
-    proxy_base = "#{request.scheme}://#{request.host_with_port}"
-
+    entry = AppCatalog.find(params[:id])
+    host = request.host
     stream_sse do |sse|
       unless entry
-        sse.emit("App not found in catalog")
-        sse.done("error")
+        sse.emit("That app isn't in the catalog")
+        sse.done('error')
         next
       end
-
-      app_name = entry[:name]
-      image = entry[:image]
-
-      sse.emit("Installing #{app_name}...")
-      sse.emit("")
-
-      unless Rails.env.production?
-        # Dev/test simulation
-        lines = [
-          "Creating app record...",
-          "Pulling image #{image}...",
-          "  Pulling from library/#{image}",
-          "  Downloading layer 1/5...",
-          "  Downloading layer 2/5...",
-          "  Downloading layer 3/5...",
-          "  Downloading layer 4/5...",
-          "  Downloading layer 5/5...",
-          "  Pull complete",
-          "Creating container amahi-#{identifier}...",
-          "  Port mapping: #{entry[:ports].map { |c,h| "#{h} -> #{c}" }.join(', ')}",
-          "Starting container...",
-          "",
-          "✓ #{app_name} installed and running!",
-          "  Access at #{proxy_base}/app/#{identifier}"
-        ]
-        lines.each { |l| sleep(0.4); sse.emit(l) }
-
-        # Create the DB record
-        docker_app = DockerApp.find_or_initialize_by(identifier: identifier)
-        docker_app.assign_attributes(
-          name: entry[:name], description: entry[:description],
-          image: image, category: entry[:category],
-          logo_url: entry[:logo_url], port_mappings: entry[:ports],
-          volume_mappings: entry[:volumes], environment: entry[:environment],
-          status: 'running', container_name: "amahi-#{identifier}",
-          host_port: entry[:ports].values.first
-        )
-        docker_app.save!
-        sse.done
-      else
-        begin
-          # Create DB record
-          docker_app = DockerApp.find_or_initialize_by(identifier: identifier)
-          docker_app.assign_attributes(
-            name: entry[:name], description: entry[:description],
-            image: image, category: entry[:category],
-            logo_url: entry[:logo_url], port_mappings: entry[:ports],
-            volume_mappings: entry[:volumes], environment: entry[:environment],
-            status: 'pulling'
-          )
-          docker_app.save!
-
-          reporter = ->(msg) { sse.emit(msg) }
-
-          DockerAppInstaller.create_init_files(entry[:init_files], reporter: reporter)
-          DockerAppInstaller.create_volumes(entry[:volumes], user: entry[:user], reporter: reporter)
-          DockerAppInstaller.pull_image(image, reporter: reporter)
-
-          docker_app.update!(status: 'installing')
-          container_name = DockerAppInstaller.create_container(
-            identifier: identifier,
-            image: image,
-            entry: entry,
-            reporter: reporter
-          )
-          DockerAppInstaller.start_container(container_name, reporter: reporter)
-
-          first_port = (entry[:ports] || {}).values.first
-          docker_app.update!(
-            status: 'running',
-            container_name: container_name,
-            host_port: first_port
-          )
-
-          sse.emit("")
-          sse.emit("✓ #{app_name} installed and running!")
-          sse.emit("  Access at #{proxy_base}/app/#{identifier}") if first_port
-          sse.done
-
-        rescue DockerApp::ContainerError, Shell::CommandError, DockerService::DockerError, Errno::ENOENT, IOError => e
-          docker_app&.update(status: 'error', error_message: e.message)
-          sse.emit("✗ #{e.message}")
-          sse.done("error")
-        end
-      end
+      install_app(entry, host, sse)
     end
   end
 
   def docker_uninstall
-    docker_app = DockerApp.find_by!(identifier: params[:id])
-    docker_app.uninstall!
-    render json: { status: 'ok', app_status: 'available', name: docker_app.name }
-  rescue DockerApp::ContainerError, Shell::CommandError, ActiveRecord::RecordNotFound => e
-    render json: { status: 'error', message: e.message }, status: 500
+    unless AppCatalog.find(params[:id])
+      return render json: { status: 'error', message: "That app isn't in the catalog" }, status: :not_found
+    end
+
+    DockerApp.uninstall(params[:id], delete_data: ActiveModel::Type::Boolean.new.cast(params[:delete_data]) == true)
+    render json: { status: 'ok' }
+  rescue DockerApp::ContainerError => e
+    render json: { status: 'error', message: e.message }, status: :unprocessable_content
   end
 
   def docker_start
-    docker_app = DockerApp.find_by!(identifier: params[:id])
-    docker_app.start!
-    render json: { status: 'ok', app_status: 'running', host_port: docker_app.host_port, name: docker_app.name }
-  rescue DockerApp::ContainerError, Shell::CommandError, ActiveRecord::RecordNotFound => e
-    render json: { status: 'error', message: e.message }, status: 500
+    app_action(&:start!)
   end
 
   def docker_stop
-    docker_app = DockerApp.find_by!(identifier: params[:id])
-    docker_app.stop!
-    render json: { status: 'ok', app_status: 'stopped', name: docker_app.name }
-  rescue DockerApp::ContainerError, Shell::CommandError, ActiveRecord::RecordNotFound => e
-    render json: { status: 'error', message: e.message }, status: 500
+    app_action(&:stop!)
   end
 
   def docker_restart
-    docker_app = DockerApp.find_by!(identifier: params[:id])
-    docker_app.restart!
-    render json: { status: 'ok', app_status: 'running', host_port: docker_app.host_port, name: docker_app.name }
-  rescue DockerApp::ContainerError, Shell::CommandError, ActiveRecord::RecordNotFound => e
-    redirect_to '/apps/docker_apps', alert: "Restart failed: #{e.message}"
+    app_action(&:restart!)
   end
 
   def docker_status
     docker_app = DockerApp.find_by!(identifier: params[:id])
-    render json: {
-      status: docker_app.status,
-      host_port: docker_app.host_port,
-      error_message: docker_app.error_message
-    }
+    render json: { status: docker_app.status, host_port: docker_app.host_port, error_message: docker_app.error_message }
   rescue ActiveRecord::RecordNotFound
     render json: { status: 'available' }
   end
 
   private
 
-  def load_catalog
-    @_catalog ||= AppCatalog.all
+  # Installs +entry+ through the root helper (apps.install), streaming its progress.
+  def install_app(entry, host, sse)
+    sse.emit("Installing #{entry[:name]}...")
+    app = DockerApp.find_or_initialize_by(identifier: entry[:identifier])
+    app.update!(name: entry[:name], description: entry[:description], image: entry[:image],
+                category: entry[:category], logo_url: entry[:logo_url], host_port: entry[:web_port],
+                container_name: "amahi-#{entry[:identifier]}", status: 'installing', error_message: nil)
+    Privileged.call('apps.install', app: entry[:identifier]) { |line| sse.emit("  #{line}") }
+    app.update!(status: 'running')
+    sse.emit('')
+    sse.emit("✓ #{entry[:name]} is installed and running")
+    sse.emit("  Open it at http://#{host}:#{entry[:web_port]}/") if entry[:web_port]
+    sse.done
+  rescue Privileged::Error => e
+    app&.update(status: 'error', error_message: e.message)
+    sse.emit("✗ #{e.message}")
+    sse.done('error')
+  end
+
+  # Start, stop or restart an installed app; the page reloads on { status: 'ok' }.
+  def app_action
+    app = DockerApp.find_by(identifier: params[:id])
+    return render json: { status: 'error', message: "That app isn't installed" }, status: :not_found unless app
+
+    yield app
+    render json: { status: 'ok' }
+  rescue DockerApp::ContainerError => e
+    render json: { status: 'error', message: e.message }, status: :unprocessable_content
   end
 
   # [installed, running]. A failing check shows Docker as not installed instead of
@@ -320,5 +215,4 @@ class AppsController < ApplicationController
     Rails.logger.warn("AppsController: couldn't check Docker: #{e.message}")
     [false, false]
   end
-
 end

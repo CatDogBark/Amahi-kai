@@ -1,19 +1,19 @@
 # Privilege model
 
 How Amahi-kai gets root access on a NAS, and what keeps the web app from turning a bug into
-root. Last updated 2026-10-04 (storage S2, health checks). Design and history: [`docs/plans/privileged-helper.md`](../plans/privileged-helper.md).
+root. Last updated 2026-10-04 (Phase 4 P4.1: Docker apps through the helper). Design and history: [`docs/plans/privileged-helper.md`](../plans/privileged-helper.md).
 
 ## Summary
 
-The web app runs as the unprivileged `amahi` user. It reaches root in two ways only:
+The web app runs as the unprivileged `amahi` user. It reaches root one way only:
+**the root helper**, `/usr/local/sbin/amahi-helper` (from `libexec/amahi-helper`). It runs a
+fixed list of operations, checks every request, and logs every call. One of them,
+`system.update`, starts **System Update**: `bin/amahi-update` as its own systemd job
+(`amahi-kai-update.service`), which pulls the code and redeploys, and rolls back if that
+fails. The page follows its log, `/var/log/amahi-kai/update.log`.
 
-1. **The root helper**, `/usr/local/sbin/amahi-helper` (from `libexec/amahi-helper`). It runs a
-   fixed list of operations, checks every request, and logs every call. One of them,
-   `system.update`, starts **System Update**: `bin/amahi-update` as its own systemd job
-   (`amahi-kai-update.service`), which pulls the code and redeploys, and rolls back if that
-   fails. The page follows its log, `/var/log/amahi-kai/update.log`.
-2. **Docker**: the app runs `docker` through sudo and its user is in the `docker` group. Either
-   is full control of the NAS. Phase 4 narrows this.
+Docker apps go through the helper too (since Phase 4's P4.1): the app has no `sudo docker` and
+isn't in the `docker` group.
 
 Root never runs code the `amahi` user can change: the code is root's, and the installer and the
 updater run everything that loads the app or its gems as `amahi`.
@@ -32,6 +32,8 @@ updater run everything that loads the app or its gems as `amahi`.
 | `/var/log/amahi-kai/helper.log` | root:amahi 0640 | The helper's audit log; the app can read it, not write it |
 | `/var/log/amahi-kai/update.log` | root, in a root:amahi 0750 folder | The last System Update's output; the update page reads it |
 | `/var/lib/amahi-kai/backups/` | root:root 0700 | Database dumps taken before each update's migrations (the last 3) |
+| `/var/lib/amahi-kai/apps/<app>/` | `app-<app>`, 0750 | A Docker app's folders, owned by its own system user (uid below 1000) |
+| `/var/lib/amahi-kai/app-secrets/<app>.json` | root:amahi 0640 | Passwords and keys generated at an app's install; shown to admins |
 
 `bin/amahi-set-ownership` sets this up. The installer runs it, and System Update runs it at the
 start of every update, so the first update after PR N takes the checkout back from the `amahi`
@@ -67,17 +69,30 @@ In Rails, `Privileged.call('users.create', login: 'ann', name: 'Ann')` runs an o
 
 ## Sudoers
 
-`config/sudoers/amahi-kai`, 5 rules:
+`config/sudoers/amahi-kai`, 1 rule:
 
 | Rule | For |
 | --- | --- |
-| `/usr/local/sbin/amahi-helper` | Everything above, System Update included |
-| `/usr/bin/docker`, `mkdir -p /opt/amahi/*`, `cp /tmp/amahi-staging/* /opt/amahi/*`, `rm -rf /opt/amahi/apps/*` | Docker apps (Phase 4) |
+| `/usr/local/sbin/amahi-helper` | Everything above, System Update and Docker apps included |
+
+`bin/amahi-install-helper` also takes `amahi` out of the `docker` group, which versions before
+P4.1 put it in.
+
+## Docker apps
+
+The web app only names an app (`apps.install`, `app: "jellyfin"`). The helper reads the app's
+manifest from the root-owned code (`config/apps/<app>.yml`) and checks every field: an image
+pinned by tag and digest, published ports from 1024 up and none of the NAS's own, folders only
+under the app's own folder, environment values on one line. There is no field for privileged
+mode, devices, capabilities, host networking, host folders or extra Docker arguments, so a
+manifest can't ask for them. Each app gets a system user (`app-<app>`), and the container runs as
+that user unless the image drops to it itself (the manifest says which), with a memory limit.
+Generated secrets reach the container through a root-only `--env-file`, never a command line.
 
 ## Known gaps
 
-- **Docker** is root-equivalent: `sudo docker` and the `docker` group both are. Phase 4 starts
-  with a design for Docker apps (per-app access, no Docker socket for the web app).
+- **Docker itself** runs as root: an app's container is as contained as Docker makes it. The
+  catalog decides what runs, and it is reviewed with the code.
 - **The database isn't rolled back** with the code: migrations must keep working with the
   previous version's code. System Update dumps the database first (`/var/lib/amahi-kai/backups`,
   root-only, the last 3); restoring one is a manual step.
@@ -85,7 +100,7 @@ In Rails, `Privileged.call('users.create', login: 'ann', name: 'Ann')` runs an o
 ## Checking a NAS
 
 ```
-sudo -l -U amahi                                   # the 5 rules above
+sudo -l -U amahi                                   # the 1 rule above
 sudo /usr/local/sbin/amahi-helper --self-test      # ok: N operations
 sudo tail -5 /var/log/amahi-kai/helper.log         # recent root actions
 sudo find /opt/amahi-kai -xdev \( -path /opt/amahi-kai/tmp -o -path /opt/amahi-kai/log \

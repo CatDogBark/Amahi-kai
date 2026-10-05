@@ -1,0 +1,15 @@
+name: Jellyfin
+description: Your own streaming service for movies, TV and music, on TVs, phones and browsers.
+category: media
+logo: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/jellyfin.png
+image: jellyfin/jellyfin:12.1@sha256:78d3ea1207d1322471fcac39a614f004f2ccf7e878f95ab2977d752f07e4dd7e
+run_as: app
+web_port: 8096
+memory: 2g
+ports:
+  - { host: 8096, container: 8096 }
+folders:
+  - { name: config, path: /config }
+  - { name: cache, path: /cache }
+environment:
+  TZ: "{{timezone}}"

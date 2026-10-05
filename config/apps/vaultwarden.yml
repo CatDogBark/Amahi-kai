@@ -1,0 +1,18 @@
+name: Vaultwarden
+description: A password manager server for the Bitwarden apps and browser extensions.
+category: security
+logo: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/vaultwarden.png
+image: vaultwarden/server:1.37.3@sha256:1587c45feaa479f1f5e8af3b00eded36bff77bcf1880cf8dbf0541706dd470e0
+run_as: app
+web_port: 8880
+memory: 512m
+ports:
+  - { host: 8880, container: 8080 }
+folders:
+  - { name: data, path: /data }
+environment:
+  # A user other than root can't listen on port 80.
+  ROCKET_PORT: "8080"
+  TZ: "{{timezone}}"
+secrets:
+  - { env: ADMIN_TOKEN, label: "Admin page token (the /admin page)" }

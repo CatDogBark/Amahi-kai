@@ -1,6 +1,6 @@
 # Phase 4: apps
 
-Status: planned with Troy, 2026-10-05. The overall decisions and P4.1's are made (below); each
+Status: planned with Troy, 2026-10-05; P4.1 is done (#58). The overall decisions and P4.1's are made (below); each
 later PR's decisions are listed under it, to settle when that PR starts.
 
 Apps are how Amahi-kai grows: Jellyfin, Vaultwarden and the like today, bitShare (and later
@@ -81,6 +81,9 @@ These shape every PR after them.
 ## PRs
 
 ### P4.1: Apps through the root helper (the foundation)
+
+**Done** (#58). Manifests are in `config/apps` (format in its README). The Open buttons already use
+each app's own port; `/app/<id>` stays until P4.2 retires it.
 
 - The manifest format, and the catalog converted to it (pinned versions, no default passwords,
   no free-form arguments, apps that need root-level access dropped).

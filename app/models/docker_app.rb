@@ -1,136 +1,86 @@
-require 'shell'
-
+# An app installed from the catalog (AppCatalog, config/apps). The root helper does the work
+# (apps.* operations, docs/plans/apps.md); the record keeps what the pages show: the app's
+# status, its web port and whether it's on the dashboard. (Its old port, volume and
+# environment columns are no longer used.)
 class DockerApp < ApplicationRecord
-  # A container operation failed. AppsController reports it to the page.
+  # A helper operation on the app failed. AppsController reports it to the page.
   class ContainerError < StandardError; end
 
-  # Validations
   validates :identifier, presence: true, uniqueness: true
   validates :name, presence: true
   validates :image, presence: true
   validates :status, inclusion: { in: %w[available pulling installing running stopped error] }
 
-  # Scopes
   scope :running, -> { where(status: 'running') }
   scope :dashboard, -> { where(show_in_dashboard: true) }
   scope :by_category, ->(cat) { where(category: cat) }
 
-  # JSON accessors (stored as text for SQLite compatibility)
-  def port_mappings
-    val = super
-    val.is_a?(String) ? JSON.parse(val) : (val || {})
-  rescue JSON::ParserError
-    {}
+  # The app's page, on its own port of the NAS (docs/plans/apps.md, O3).
+  def url(host)
+    "http://#{host}:#{host_port}/" if host_port
   end
 
-  def port_mappings=(value)
-    super(value.is_a?(Hash) ? value.to_json : value)
-  end
-
-  def volume_mappings
-    val = super
-    val.is_a?(String) ? JSON.parse(val) : (val || {})
-  rescue JSON::ParserError
-    {}
-  end
-
-  def volume_mappings=(value)
-    super(value.is_a?(Hash) ? value.to_json : value)
-  end
-
-  def environment
-    val = super
-    val.is_a?(String) ? JSON.parse(val) : (val || {})
-  rescue JSON::ParserError
-    {}
-  end
-
-  def environment=(value)
-    super(value.is_a?(Hash) ? value.to_json : value)
-  end
-
-  # URL for accessing this app through the reverse proxy
-  def url
-    "/app/#{identifier}"
-  end
-
-  # Container name defaults to identifier
-  def effective_container_name
-    container_name.presence || "amahi-#{identifier}"
-  end
-
-  # Uninstall the app
-  def uninstall!
-    if container_name.present?
-      cname = Shellwords.escape(effective_container_name)
-      # Force stop (30s timeout) then force remove — don't fail if container is already gone
-      Shell.run("docker stop -t 30 #{cname} 2>/dev/null")
-      Shell.run("docker rm -f -v #{cname} 2>/dev/null")
-    end
-    # Prune unused images to reclaim disk space
-    Shell.run("docker image prune -f 2>/dev/null")
-    # Clean up host app directory (configs, databases, etc.)
-    app_dir = "/opt/amahi/apps/#{identifier}"
-    Shell.run("rm -rf #{Shellwords.escape(app_dir)}") if identifier.present? && File.directory?(app_dir)
-    update!(status: 'available', container_name: nil, host_port: nil, error_message: nil)
-  rescue ContainerError, Shell::CommandError => e
-    update!(status: 'error', error_message: e.message)
-    raise
-  end
-
-  # Start the container
   def start!
-    cname = Shellwords.escape(effective_container_name)
-    result = Shell.run("docker start #{cname} 2>/dev/null")
-    if result
-      update!(status: 'running')
-    else
-      update!(status: 'error', error_message: 'Container not found — reinstall the app')
-      raise ContainerError, "Failed to start container #{effective_container_name}"
-    end
+    helper('apps.start')
+    update!(status: 'running', error_message: nil)
   end
 
-  # Stop the container
   def stop!
-    cname = Shellwords.escape(effective_container_name)
-    output, stderr, status = Shell.capture("docker stop -t 30 #{cname}")
-    # Use the status Shell.capture returns: it runs through Open3, which leaves $?
-    # holding whatever command ran before, so stop used to succeed or fail at random.
-    if status.success?
-      update!(status: 'stopped')
-    else
-      # If container doesn't exist, force cleanup the DB record (docker says so on stderr)
-      message = "#{output}\n#{stderr}"
-      if message.include?('No such container') || message.include?('not found')
-        update!(status: 'stopped')
-      else
-        update!(status: 'error', error_message: "Stop failed: #{message.strip}")
-        raise ContainerError, "Failed to stop container #{effective_container_name}: #{message.strip}"
-      end
-    end
+    helper('apps.stop')
+    update!(status: 'stopped', error_message: nil)
   end
 
-  # Restart the container
   def restart!
-    cname = Shellwords.escape(effective_container_name)
-    unless Shell.run("docker restart #{cname} 2>/dev/null")
-      update!(status: 'error', error_message: 'Restart failed')
-      raise ContainerError, "Failed to restart container #{effective_container_name}"
-    end
-    update!(status: 'running')
+    helper('apps.restart')
+    update!(status: 'running', error_message: nil)
   end
 
-  # Refresh status from Docker
-  def refresh_status!
-    return unless container_name.present?
-    cname = Shellwords.escape(effective_container_name)
-    output, _stderr, _status = Shell.capture("docker inspect --format '{{.State.Status}}' #{cname}")
-    output = output.strip
-    case output
-    when 'running' then update!(status: 'running')
-    when 'exited', 'stopped' then update!(status: 'stopped')
-    when 'restarting' then update!(status: 'running')
-    else update!(status: 'error', error_message: 'Container not found')
+  # Removes the app's container; its data stays unless +delete_data+ (DockerApp.uninstall).
+  def uninstall!(delete_data: false)
+    self.class.uninstall(identifier, delete_data: delete_data)
+  end
+
+  class << self
+    # Removes an app, installed or not (deleting the data an earlier install kept).
+    def uninstall(identifier, delete_data: false)
+      Privileged.call('apps.uninstall', app: identifier, delete_data: delete_data)
+      where(identifier: identifier).destroy_all
+    rescue Privileged::Error => e
+      where(identifier: identifier).update_all(status: 'error', error_message: e.message)
+      raise ContainerError, e.message
     end
+
+    # Each installed app's status from Docker, all at once (apps.status). Nothing changes when
+    # Docker can't be asked.
+    def refresh_statuses!
+      reply = Privileged.call('apps.status')
+      return unless reply['docker']
+
+      states = reply['apps'] || {}
+      where.not(status: %w[pulling installing]).find_each do |app|
+        state = states.dig(app.identifier, 'state')
+        status = case state
+                 when 'running', 'restarting' then 'running'
+                 when 'exited', 'created', 'paused', 'dead' then 'stopped'
+                 end
+        if state.nil?
+          # An install that failed keeps its own reason.
+          app.update!(status: 'error', error_message: 'Its container is gone: install it again') unless app.status == 'error'
+        elsif status && status != app.status
+          app.update!(status: status, error_message: nil)
+        end
+      end
+    rescue Privileged::Error => e
+      Rails.logger.warn("DockerApp: couldn't read the apps' status: #{e.message}")
+    end
+  end
+
+  private
+
+  def helper(operation, **args)
+    Privileged.call(operation, app: identifier, **args)
+  rescue Privileged::Error => e
+    update!(status: 'error', error_message: e.message)
+    raise ContainerError, e.message
   end
 end

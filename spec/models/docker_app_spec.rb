@@ -1,159 +1,128 @@
 require 'spec_helper'
 
+# An installed app's record. The root helper does the work (apps.*); outside production
+# Privileged.call records the calls instead of running them.
 describe DockerApp do
-  before(:each) do
-    create(:admin)
-    create(:setting, name: "net", value: "1")
-    create(:setting, name: "self-address", value: "1")
-  end
-
   def build_app(attrs = {})
-    defaults = {
-      identifier: "test-app",
-      name: "Test App",
-      image: "test/app:latest",
-      status: "available"
-    }
-    DockerApp.new(defaults.merge(attrs))
+    DockerApp.new({ identifier: 'gitea', name: 'Gitea', image: 'gitea/gitea:1.27.3-rootless', status: 'running',
+                    host_port: 3300 }.merge(attrs))
   end
 
-  describe "validations" do
-    it "requires identifier" do
+  def helper_fails(operation, message)
+    allow(Privileged).to receive(:call).and_call_original
+    allow(Privileged).to receive(:call).with(operation, any_args).and_raise(Privileged::Error.new(operation, message))
+  end
+
+  describe 'validations' do
+    it 'requires an identifier, a name and an image' do
       expect(build_app(identifier: nil)).not_to be_valid
-    end
-
-    it "requires name" do
       expect(build_app(name: nil)).not_to be_valid
-    end
-
-    it "requires image" do
       expect(build_app(image: nil)).not_to be_valid
     end
 
-    it "requires valid status" do
-      expect(build_app(status: "invalid")).not_to be_valid
-    end
-
-    it "accepts valid statuses" do
-      %w[available pulling installing running stopped error].each do |s|
-        expect(build_app(status: s)).to be_valid
+    it 'accepts only known statuses' do
+      expect(build_app(status: 'invalid')).not_to be_valid
+      %w[available pulling installing running stopped error].each do |status|
+        expect(build_app(status: status)).to be_valid
       end
     end
 
-    it "enforces unique identifier" do
+    it 'enforces a unique identifier' do
       build_app.save!
-      expect(build_app(name: "Other")).not_to be_valid
+      expect(build_app(name: 'Other')).not_to be_valid
     end
   end
 
-  describe "JSON accessors" do
-    it "serializes port_mappings" do
-      app = build_app
-      app.port_mappings = { "80" => "8080" }
-      app.save!
-      app.reload
-      expect(app.port_mappings).to eq({ "80" => "8080" })
-    end
-
-    it "serializes volume_mappings" do
-      app = build_app
-      app.volume_mappings = { "/data" => "/var/lib/amahi-kai/apps/test/data" }
-      app.save!
-      app.reload
-      expect(app.volume_mappings).to eq({ "/data" => "/var/lib/amahi-kai/apps/test/data" })
-    end
-
-    it "serializes environment" do
-      app = build_app
-      app.environment = { "PUID" => "1000" }
-      app.save!
-      app.reload
-      expect(app.environment).to eq({ "PUID" => "1000" })
-    end
-
-    it "returns empty hash for nil values" do
-      app = build_app
-      expect(app.port_mappings).to eq({})
-      expect(app.volume_mappings).to eq({})
-      expect(app.environment).to eq({})
-    end
-  end
-
-  describe "#effective_container_name" do
-    it "returns container_name if set" do
-      app = build_app(container_name: "my-container")
-      expect(app.effective_container_name).to eq("my-container")
-    end
-
-    it "returns amahi-identifier if container_name not set" do
-      app = build_app(identifier: "nextcloud")
-      expect(app.effective_container_name).to eq("amahi-nextcloud")
-    end
-  end
-
-  describe "scopes" do
+  describe 'scopes' do
     before do
-      build_app(identifier: "app1", status: "running").save!
-      build_app(identifier: "app2", name: "App 2", status: "stopped").save!
-      build_app(identifier: "app3", name: "App 3", status: "running", category: "media").save!
+      build_app(identifier: 'app1', status: 'running').save!
+      build_app(identifier: 'app2', status: 'stopped').save!
+      build_app(identifier: 'app3', status: 'running', category: 'media').save!
     end
 
-    it "running scope returns only running apps" do
+    it 'finds running apps and apps by category' do
       expect(DockerApp.running.count).to eq(2)
-    end
-
-    it "by_category filters by category" do
-      expect(DockerApp.by_category("media").count).to eq(1)
+      expect(DockerApp.by_category('media').count).to eq(1)
     end
   end
 
-  describe "#uninstall!" do
-    it "uninstalls and resets status" do
-      app = build_app(status: "running", container_name: "amahi-test-app")
-      app.save!
-      app.uninstall!
-      expect(app.reload.status).to eq("available")
-      expect(app.container_name).to be_nil
+  describe '#url' do
+    it "is the app's own port on the address the page was reached at" do
+      expect(build_app.url('192.168.1.111')).to eq('http://192.168.1.111:3300/')
+      expect(build_app(host_port: nil).url('192.168.1.111')).to be_nil
     end
   end
 
-  describe "#start!" do
-    it "starts and sets status to running", :docker do
-      app = build_app(status: "stopped", container_name: "amahi-test-app")
-      app.save!
+  describe 'start, stop and restart' do
+    let(:app) { build_app(status: 'stopped').tap(&:save!) }
+
+    it 'goes through the helper, naming only the app' do
       app.start!
-      expect(app.reload.status).to eq("running")
+      expect(app.reload.status).to eq('running')
+      app.stop!
+      expect(app.reload.status).to eq('stopped')
+      app.restart!
+      expect(app.reload.status).to eq('running')
+      expect(Privileged.calls).to eq([['apps.start', { app: 'gitea' }], ['apps.stop', { app: 'gitea' }],
+                                      ['apps.restart', { app: 'gitea' }]])
+    end
+
+    it "records the helper's reason when it fails" do
+      helper_fails('apps.start', 'docker exited 1: No such container: amahi-gitea')
+      expect { app.start! }.to raise_error(DockerApp::ContainerError, /No such container/)
+      expect(app.reload).to have_attributes(status: 'error', error_message: 'docker exited 1: No such container: amahi-gitea')
     end
   end
 
-  describe "#stop!" do
-    def docker_stop_returns(stdout: "", stderr: "", success:)
-      allow(Shell).to receive(:capture).with(/\Adocker stop/)
-        .and_return([stdout, stderr, double(success?: success)])
+  describe 'uninstalling' do
+    it 'removes the container, keeping the data, and forgets the app' do
+      build_app.save!
+      DockerApp.uninstall('gitea')
+      expect(Privileged.calls).to eq([['apps.uninstall', { app: 'gitea', delete_data: false }]])
+      expect(DockerApp.find_by(identifier: 'gitea')).to be_nil
     end
 
-    it "stops and sets status to stopped" do
-      docker_stop_returns(stdout: "amahi-test-app\n", success: true)
-      app = build_app(status: "running", container_name: "amahi-test-app")
-      app.save!
-      app.stop!
-      expect(app.reload.status).to eq("stopped")
+    it 'deletes the data when asked, installed or not' do
+      DockerApp.uninstall('gitea', delete_data: true)
+      expect(Privileged.calls).to eq([['apps.uninstall', { app: 'gitea', delete_data: true }]])
     end
 
-    it "treats a container that's already gone as stopped" do
-      docker_stop_returns(stderr: "Error response from daemon: No such container: amahi-test-app", success: false)
-      app = build_app(status: "running", container_name: "amahi-test-app")
-      app.save!
-      app.stop!
-      expect(app.reload.status).to eq("stopped")
+    it 'keeps the record, with the reason, when the helper fails' do
+      build_app.save!
+      helper_fails('apps.uninstall', "docker isn't installed")
+      expect { build_app.uninstall! }.to raise_error(DockerApp::ContainerError, "docker isn't installed")
+      expect(DockerApp.find_by(identifier: 'gitea')).to have_attributes(status: 'error', error_message: "docker isn't installed")
+    end
+  end
+
+  describe '.refresh_statuses!' do
+    def docker_reports(apps, docker: true)
+      allow(Privileged).to receive(:call).with('apps.status').and_return('ok' => true, 'docker' => docker, 'apps' => apps)
     end
 
-    it "records the error when docker can't stop it" do
-      docker_stop_returns(stderr: "permission denied", success: false)
-      app = build_app(status: "running", container_name: "amahi-test-app")
-      app.save!
-      expect { app.stop! }.to raise_error(/permission denied/)
-      expect(app.reload.status).to eq("error")
+    before do
+      build_app(identifier: 'gitea', status: 'running').save!
+      build_app(identifier: 'jellyfin', status: 'running').save!
+      build_app(identifier: 'vaultwarden', status: 'stopped').save!
+      build_app(identifier: 'transmission', status: 'installing').save!
+      build_app(identifier: 'uptimekuma', status: 'error', error_message: 'docker exited 1: pull access denied').save!
+    end
+
+    it "follows Docker: stopped, started, gone, and leaves installs and earlier errors alone" do
+      docker_reports({ 'gitea' => { 'state' => 'exited' }, 'vaultwarden' => { 'state' => 'running' } })
+      DockerApp.refresh_statuses!
+      statuses = DockerApp.all.to_h { |app| [app.identifier, [app.status, app.error_message]] }
+      expect(statuses).to eq('gitea' => ['stopped', nil], 'vaultwarden' => ['running', nil],
+                             'jellyfin' => ['error', 'Its container is gone: install it again'],
+                             'transmission' => ['installing', nil],
+                             'uptimekuma' => ['error', 'docker exited 1: pull access denied'])
+    end
+
+    it "changes nothing when Docker can't be asked" do
+      docker_reports({}, docker: false)
+      expect { DockerApp.refresh_statuses! }.not_to(change { DockerApp.pluck(:status) })
+      allow(Privileged).to receive(:call).with('apps.status').and_raise(Privileged::Error.new('apps.status', 'sudo failed'))
+      expect { DockerApp.refresh_statuses! }.not_to(change { DockerApp.pluck(:status) })
     end
   end
 end
