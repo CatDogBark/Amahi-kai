@@ -126,19 +126,12 @@ they're connected.
 
 ## Phase 4: Docker apps
 
-Starts with a design doc for the Docker app model, so built-in apps (bitShare first) follow it:
-
-- each app on its own port and tunnel hostname; retire the `/app/<id>` proxy (it buffers whole
-  bodies and shares the Amahi origin)
-- which apps the LAN can reach and which stay local-only; Docker network access stays opt-in
-- secrets generated per install (the catalog ships default passwords today); image versions pinned
-- data kept on uninstall; the shares each app may see chosen per app, read-only or read-write;
-  no `chmod 777`. **Never give an app a pooled (Greyhole) share to write into**: it would go around
-  Samba, so its files get no copies until Greyhole's weekly check and its deletes leave copies
-  behind. Apps that write their own data get a ZFS dataset on a pool (moved here from storage S4:
-  one per app, so an app gets exactly its own) or a share that isn't pooled.
-- a clear warning that access to the Docker socket is full control of the NAS
-- how bitShare authenticates (open)
+Planned with Troy (2026-10-05) in [`apps.md`](apps.md): Docker only through the root helper,
+apps defined by our own manifest (one container each), each app on its own port with an optional
+Cloudflare Tunnel hostname (remote use required), one user and folder per app, ZFS datasets for big
+data, shares read-only or read-write as chosen (never a pooled share read-write), uninstall keeps
+data, a curated catalog of six apps, bitShare as an ordinary app. PRs P4.1–P4.6; P4.1 (apps through
+the root helper) is first, its decisions made.
 
 ## Direction
 
