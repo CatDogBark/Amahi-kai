@@ -77,6 +77,32 @@ RSpec.describe ApplicationHelper, type: :helper do
     end
   end
 
+  # Written when the page loads; time_ago.js works them out again as time passes, so a page
+  # left open doesn't keep saying "less than a minute ago".
+  describe "#relative_time_tag" do
+    include ActiveSupport::Testing::TimeHelpers
+
+    let(:checked) { Time.utc(2026, 10, 5, 9, 0, 0) }
+
+    before { travel_to(checked + 3.hours) }
+    after { travel_back }
+
+    it "says how long ago, with the time for the page's script" do
+      expect(helper.relative_time_tag(checked)).to eq('<time datetime="2026-10-05T09:00:00Z" data-relative="ago">about 3 hours ago</time>')
+      expect(helper.relative_time_tag(checked, capitalize: true, clock: true))
+        .to eq('<time datetime="2026-10-05T09:00:00Z" data-relative="ago" data-capitalize="true" data-clock="true">About 3 hours ago</time>')
+    end
+
+    it "says how long until, or any moment once it's passed" do
+      expect(helper.relative_time_tag(checked + 5.hours, future: true)).to include('data-relative="in">in about 2 hours</time>')
+      expect(helper.relative_time_tag(checked, future: true)).to include('>any moment</time>')
+    end
+
+    it "is kept current by a script every page loads" do
+      expect(File.read(Rails.root.join('app/assets/javascripts/application.js'))).to include('//= require time_ago')
+    end
+  end
+
   describe "#formatted_date" do
     it "formats a valid date" do
       result = helper.formatted_date(1.hour.ago)

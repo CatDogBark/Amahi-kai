@@ -29,7 +29,9 @@ RSpec.describe "SettingsController extended", type: :request do
       update_status('checked_at' => 5.minutes.ago.utc.iso8601, 'current' => 'aaaaaaa1', 'latest' => 'aaaaaaa1',
                     'available' => false, 'behind' => 0)
       get "/settings/system_status"
-      expect(response.body).to include('Up to date (aaaaaaa)', 'Checked 5 minutes ago', 'repair-btn')
+      expect(response.body).to include('Up to date (aaaaaaa)', 'repair-btn')
+      # The page works out "5 minutes ago" again as time passes (time_ago.js), with the clock time.
+      expect(response.body).to match(%r{Checked <time datetime="[^"]+Z" data-relative="ago" data-clock="true">5 minutes ago</time>})
       expect(response.body).not_to include('update-now-btn')
     end
 

@@ -31,7 +31,7 @@
       - else
         p.mb-0.text-muted Not checked yet. Check now looks for an update.
       - if @update.checked?
-        p.small.text-muted.mb-0.mt-2 = "Checked #{time_ago_in_words(@update.checked_at)} ago. Amahi-kai checks every 6 hours."
+        p.small.text-muted.mb-0.mt-2 = safe_join(['Checked ', relative_time_tag(@update.checked_at, clock: true), '. Amahi-kai checks every 6 hours.'])
       - if @update.error
         p.small.text-warning.mb-0.mt-1 = "Last check: #{@update.error}"
 
