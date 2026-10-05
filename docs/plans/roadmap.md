@@ -86,7 +86,8 @@ touches the same code.
   The Docker app installer still does (Phase 4).
 - Duplicates: share toggles live in both `SharesController` and `ShareAccessManager`.
 - Data drives mount with PR #13's `defaults,nofail,...` options. `nosuid,nodev` would be safer for
-  drives brought from another machine; decide with the filesystem (below).
+  drives brought from another machine; share storage stays ext4 ([`storage.md`](storage.md)), so
+  this can be decided now.
 - Per-request overhead: 4–5 `Setting` queries in `before_action_hook`.
 - Long jobs (package installs, docker pull) run inside web requests and hold Puma threads.
   System Update moved to its own job in #31; the others could follow the same way (a systemd
@@ -109,10 +110,12 @@ VM 104's disks belong to Proxmox, so the disk-safety work (PR #13) is covered by
 - [ ] Greyhole pool and Samba binding on the same drives.
 - [ ] Preview an unmounted drive from Disks; install Greyhole from the setup wizard.
 
-Decide the filesystem before the drives are filled: today it's ext4 + Greyhole, which can't take
-snapshots. **RAID** is a future feature to decide with it: Troy wants the setup wizard to set up
-either basic Greyhole pooling or RAID for a basic file NAS (2026-10-04). Nothing in the code
-builds RAID today (mdadm, or a filesystem's own redundancy such as btrfs or ZFS).
+## Storage: ZFS pools for bitShare (after the drives arrive)
+
+Decided 2026-10-04, in [`storage.md`](storage.md): SMB shares stay on simple drives and Greyhole;
+new ZFS pools, with the layout the user chooses, hold bitShare's data, on other drives; Greyhole
+also handles files that don't arrive through Samba (web uploads). Built and tested once Troy's
+drives are in.
 
 ## Phase 4: Docker apps
 
