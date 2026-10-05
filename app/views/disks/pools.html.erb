@@ -81,6 +81,54 @@
         <% if pool.data_errors %>
           <p class="small text-danger mb-0 mt-1">Errors: <%= pool.data_errors %></p>
         <% end %>
+
+        <%# Snapshots: kept by the hourly job (amahi-kai-snapshots.timer), or taken now %>
+        <% snaps = pool.snapshot_list %>
+        <div class="pool-snapshots mt-3 pt-3 border-top" id="snapshots-<%= pool.name %>">
+          <div class="d-flex flex-wrap align-items-center gap-2 small">
+            <strong>Snapshots</strong>
+            <span class="text-muted"><%= pluralize(snaps.size, 'snapshot') %>, using <%= number_to_human_size(pool.snapshot_space.to_i) %></span>
+            <form class="d-flex flex-wrap align-items-center gap-1 ms-auto" data-snapshot-policy="" data-url="<%= disks_pool_snapshot_policy_path %>" data-name="<%= pool.name %>">
+              <label for="keep-hourly-<%= pool.name %>">Keep</label>
+              <input type="number" class="form-control form-control-sm" style="width: 5em;" id="keep-hourly-<%= pool.name %>" name="hourly" min="0" max="168" value="<%= pool.keeps['hourly'] %>">
+              <label for="keep-daily-<%= pool.name %>">hourly and</label>
+              <input type="number" class="form-control form-control-sm" style="width: 5em;" id="keep-daily-<%= pool.name %>" name="daily" min="0" max="366" value="<%= pool.keeps['daily'] %>">
+              <span>daily</span>
+              <button type="submit" class="btn btn-sm btn-outline-secondary">Save</button>
+            </form>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-storage-post="<%= disks_snapshot_pool_path %>" data-name="<%= pool.name %>">Take snapshot now</button>
+          </div>
+          <p class="small text-muted mb-1 mt-1">
+            Every hour, and once a day, the pool keeps a snapshot it can be rolled back to; the oldest go once there are more than it keeps.
+            0 turns a kind off and removes the ones kept. A snapshot taken now is kept until you delete it.
+          </p>
+          <% if snaps.any? %>
+            <details>
+              <summary class="small">Show the <%= pluralize(snaps.size, 'snapshot') %></summary>
+              <table class="table table-sm small mb-0 mt-2" data-snapshot-table="">
+                <thead><tr><th>Kind</th><th>Taken</th><th class="text-end">Space of its own</th><th></th></tr></thead>
+                <tbody>
+                  <% snaps.reverse_each.with_index do |snap, newer| %>
+                    <tr>
+                      <td><%= snapshot_kind(snap) %> <span class="text-muted ms-1"><%= snap['name'] %></span></td>
+                      <td class="text-nowrap"><span class="tip-text" tabindex="0" data-tip="<%= l(snap['created'], format: :long) %>"><%= time_ago_in_words(snap['created']) %> ago</span></td>
+                      <td class="text-end"><%= number_to_human_size(snap['used'].to_i) %></td>
+                      <td class="text-end text-nowrap">
+                        <% if snap['kind'] %>
+                          <button type="button" class="btn btn-sm btn-outline-secondary" data-pool-dialog="rollback" data-name="<%= pool.name %>"
+                                  data-snapshot="<%= snap['name'] %>" data-snapshot-label="<%= "#{snapshot_kind(snap).downcase} snapshot from #{l(snap['created'], format: :long)}" %>"
+                                  data-later="<%= newer.zero? ? '' : ", and so are the #{pluralize(newer, 'snapshot')} taken after it" %>">Roll back</button>
+                          <button type="button" class="btn btn-sm btn-outline-danger" data-storage-post="<%= disks_destroy_pool_snapshot_path %>"
+                                  data-name="<%= pool.name %>" data-snapshot="<%= snap['name'] %>" data-confirm="Delete the snapshot <%= snap['name'] %>?">Delete</button>
+                        <% end %>
+                      </td>
+                    </tr>
+                  <% end %>
+                </tbody>
+              </table>
+            </details>
+          <% end %>
+        </div>
       </div>
       <table class="table table-sm mb-0 small">
         <thead>

@@ -2,7 +2,7 @@
 // allow, with the space they'd give and how many may fail, then asks the server to create
 // the pool. data-storage-install buttons open the install window; data-storage-post buttons
 // (Scrub now, Check now) post to their URL, with their data-name, and reload.
-// data-pool-dialog buttons open the replace, add-drives and delete dialogs
+// data-pool-dialog buttons open the replace, add-drives, delete and roll-back dialogs
 // (disks/_pool_dialogs). While a scrub or resilver runs, the page reloads every 30 seconds.
 
 (function() {
@@ -148,7 +148,7 @@
         estimate.textContent = drives.length + ' of ' + width + ' drives chosen.';
       }
       ready = drives.length === width && erase.checked;
-    } else if (dialog.id === 'destroy-dialog') {
+    } else if (dialog.id === 'destroy-dialog' || dialog.id === 'rollback-dialog') {
       ready = dialog.querySelector('[data-confirm-name]').value === data.name;
     }
     dialog.querySelector('[data-dialog-submit]').disabled = !ready;
@@ -165,6 +165,7 @@
     } else if (dialog.id === 'add-dialog') {
       body.devices = chosen(dialog).map(function(d) { return d.value; });
     } else {
+      if (data.snapshot) body.snapshot = data.snapshot;
       body.confirm = dialog.querySelector('[data-confirm-name]').value;
     }
     button.disabled = true;
@@ -192,17 +193,34 @@
   });
 
   document.addEventListener('submit', function(event) {
+    var policy = event.target.closest('[data-snapshot-policy]');
+    if (policy) {
+      event.preventDefault();
+      var save = policy.querySelector('button[type=submit]');
+      save.disabled = true;
+      postJSON(policy.dataset.url, {
+        name: policy.dataset.name,
+        hourly: parseInt(policy.elements.hourly.value, 10),
+        daily: parseInt(policy.elements.daily.value, 10)
+      }, function(message) { alert(message); save.disabled = false; });
+      return;
+    }
     var form = event.target.closest('#pool-form');
     if (!form) return;
     event.preventDefault();
     submit(form);
   });
 
+  // data-name and data-snapshot go in the body; data-confirm asks first.
   function post(button) {
+    if (button.dataset.confirm && !confirm(button.dataset.confirm)) return;
     var label = button.textContent;
+    var body = {};
+    if (button.dataset.name) body.name = button.dataset.name;
+    if (button.dataset.snapshot) body.snapshot = button.dataset.snapshot;
     button.disabled = true;
     button.textContent = 'Working…';
-    postJSON(button.dataset.storagePost, button.dataset.name ? { name: button.dataset.name } : {}, function(message) {
+    postJSON(button.dataset.storagePost, body, function(message) {
       alert(message);
       button.disabled = false;
       button.textContent = label;

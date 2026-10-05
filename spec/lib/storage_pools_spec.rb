@@ -198,6 +198,34 @@ RSpec.describe StoragePools do
     end
   end
 
+  describe 'snapshots' do
+    it 'takes one now, sets what a pool keeps, deletes one and rolls back, through the helper' do
+      described_class.snapshot!('tank')
+      described_class.set_snapshot_policy!(name: 'tank', hourly: '12', daily: 7)
+      described_class.destroy_snapshot!(name: 'tank', snapshot: 'amahi-hourly-2026-10-05-1300')
+      described_class.rollback!(name: 'tank', snapshot: 'amahi-daily-2026-10-04-0010', confirm: 'tank')
+      expect(Privileged.calls - [['storage.check_health', {}]]).to eq([
+        ['pools.snapshot', { name: 'tank' }],
+        ['pools.snapshot_policy', { name: 'tank', hourly: 12, daily: 7 }],
+        ['pools.destroy_snapshot', { name: 'tank', snapshot: 'amahi-hourly-2026-10-05-1300' }],
+        ['pools.rollback', { name: 'tank', snapshot: 'amahi-daily-2026-10-04-0010', confirm: 'tank' }]
+      ])
+    end
+
+    it 'needs whole numbers to keep' do
+      expect { described_class.set_snapshot_policy!(name: 'tank', hourly: 'many', daily: 7) }.to raise_error(StoragePools::Error, 'Keep a whole number of snapshots')
+      expect { described_class.set_snapshot_policy!(name: 'tank', hourly: '2.5', daily: 7) }.to raise_error(StoragePools::Error)
+      expect(Privileged.calls).to be_empty
+    end
+
+    it "gives a pool's snapshots with their times, and what it keeps (the defaults when unset)" do
+      pool = StoragePools::Pool.new(snapshots: [{ 'name' => 'amahi-daily-2026-10-04-0010', 'kind' => 'daily', 'created' => 1_791_000_000, 'used' => 5 }])
+      expect(pool.snapshot_list.sole).to include('kind' => 'daily', 'created' => Time.at(1_791_000_000))
+      expect(pool.keeps).to eq('hourly' => 24, 'daily' => 30)
+      expect(StoragePools::Pool.new(snapshot_policy: { 'hourly' => 0, 'daily' => 7 }).keeps).to eq('hourly' => 0, 'daily' => 7)
+    end
+  end
+
   it 'scrubs a pool and checks the health through the helper' do
     described_class.scrub!('tank')
     described_class.check_health!

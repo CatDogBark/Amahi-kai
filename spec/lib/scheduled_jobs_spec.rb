@@ -41,6 +41,16 @@ RSpec.describe ScheduledJobs do
     expect(jobs['security-updates'].result).to eq(:running)
   end
 
+  it 'lists the hourly pool snapshots once ZFS is installed' do
+    allow(File).to receive(:exist?).with('/usr/sbin/zpool').and_return(true)
+    timers << { 'unit' => 'amahi-kai-snapshots.timer', 'last' => usec.call(now - 300), 'next' => usec.call(now + 3300) }
+    allow(Open3).to receive(:capture3).with('systemctl', 'list-timers', '--all', '--output=json', any_args).and_return([timers.to_json, '', ok])
+    services['amahi-kai-snapshots.service'] = { 'LoadState' => 'loaded', 'ActiveState' => 'inactive', 'Result' => 'success' }
+    jobs = described_class.all(health: health).index_by(&:key)
+    expect(jobs['snapshots']).to have_attributes(name: 'Pool snapshots', schedule: 'Every hour', next_run: now + 3300, result: :ok)
+    expect(jobs.keys.index('snapshots')).to eq(2)
+  end
+
   it "leaves out jobs that aren't installed, and keeps the rest when list-timers can't be read" do
     services.delete('amahi-kai-indexer.service')
     allow(File).to receive(:exist?).with('/usr/bin/unattended-upgrade').and_return(false)

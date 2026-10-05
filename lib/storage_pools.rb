@@ -31,7 +31,7 @@ module StoragePools
 
   # One pool, as pools.status reports it.
   Pool = Struct.new(:name, :health, :used, :available, :mountpoint, :state, :status, :action, :scan,
-                    :errors, :vdevs, :error, keyword_init: true) do
+                    :errors, :vdevs, :error, :snapshots, :snapshot_policy, :snapshot_space, keyword_init: true) do
     def healthy?
       health == 'ONLINE'
     end
@@ -55,6 +55,17 @@ module StoragePools
     def group_shape
       shapes = vdevs.map { |v| [v['name'].to_s[/\A(mirror|raidz[123])-\d+\z/, 1], Array(v['children']).size] }.uniq
       shapes.size == 1 && shapes.first.first ? shapes.first : nil
+    end
+
+    # The pool's snapshots, oldest first: { 'name', 'kind' (hourly, daily, manual, or nil for
+    # ones Amahi-kai didn't take), 'created' (Time), 'used' (bytes) }.
+    def snapshot_list
+      Array(snapshots).map { |snap| snap.merge('created' => Time.at(snap['created'].to_i)) }
+    end
+
+    # How many hourly and daily snapshots the pool keeps.
+    def keeps
+      { 'hourly' => 24, 'daily' => 30 }.merge(snapshot_policy.to_h)
     end
 
     # A scrub or resilver is running ("scrub in progress since ...").
@@ -179,6 +190,29 @@ module StoragePools
     def add_group!(name:, devices:)
       raise Error, 'Choose the drives to add' if devices.blank?
       changed { privileged('pools.add_group', name: name.to_s, devices: devices.map(&:to_s)) }
+    end
+
+    def snapshot!(name)
+      changed { privileged('pools.snapshot', name: name.to_s) }
+    end
+
+    # How many hourly and daily snapshots a pool keeps (0 turns a kind off).
+    def set_snapshot_policy!(name:, hourly:, daily:)
+      counts = { hourly: hourly, daily: daily }.transform_values do |value|
+        Integer(value.to_s, 10)
+      rescue ArgumentError
+        raise Error, 'Keep a whole number of snapshots'
+      end
+      changed { privileged('pools.snapshot_policy', name: name.to_s, **counts) }
+    end
+
+    def destroy_snapshot!(name:, snapshot:)
+      changed { privileged('pools.destroy_snapshot', name: name.to_s, snapshot: snapshot.to_s) }
+    end
+
+    # Rolls a pool back to a snapshot; +confirm+ must be its name.
+    def rollback!(name:, snapshot:, confirm:)
+      changed { privileged('pools.rollback', name: name.to_s, snapshot: snapshot.to_s, confirm: confirm.to_s) }
     end
 
     # Destroys a pool; +confirm+ must be its name.

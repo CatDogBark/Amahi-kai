@@ -1,0 +1,11 @@
+# Takes each ZFS pool's hourly and daily snapshots and removes the oldest beyond what the pool
+# keeps (the root helper's pools.run_snapshots). Started by amahi-kai-snapshots.timer.
+# Installed by bin/amahi-install-helper.
+[Unit]
+Description=Amahi-kai: take and prune pool snapshots
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/amahi-helper pools.run_snapshots
+StandardInput=null
+TimeoutStartSec=15min
