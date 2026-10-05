@@ -71,6 +71,25 @@ RSpec.describe StorageHealth do
     expect(h.drive_level('/dev/sdd')).to eq(:warning)
   end
 
+  it 'tells virtual disks by their model or virtio name, not real drives passed through to a VM' do
+    expect(described_class.virtual_disk?('/dev/sda', 'QEMU HARDDISK')).to be(true)
+    expect(described_class.virtual_disk?('/dev/sda', 'VBOX HARDDISK')).to be(true)
+    expect(described_class.virtual_disk?('/dev/sdb', 'VMware Virtual S')).to be(true)
+    expect(described_class.virtual_disk?('/dev/sdb', 'Virtual Disk')).to be(true)
+    expect(described_class.virtual_disk?('/dev/vda', nil)).to be(true)
+    expect(described_class.virtual_disk?('/dev/sdc', 'Samsung SSD 870 EVO 1TB')).to be(false)
+    expect(described_class.virtual_disk?('/dev/nvme0n1', 'PM981a NVMe SAMSUNG 2048GB')).to be(false)
+  end
+
+  it 'says why a drive has no SMART data' do
+    h = described_class.new('checked_at' => '2026-10-04T12:00:00Z', 'smartctl' => true, 'drives' => { '/dev/sda' => nil, '/dev/sdb' => nil })
+    expect(h.missing_reason('/dev/sda', 'QEMU HARDDISK')).to eq(:virtual)
+    expect(h.missing_reason('/dev/sdb', 'Some USB bridge')).to eq(:no_smart)
+    expect(h.missing_reason('/dev/sdz', 'New drive')).to eq(:not_checked)
+    no_tool = described_class.new('checked_at' => '2026-10-04T12:00:00Z', 'smartctl' => false, 'drives' => { '/dev/sda' => nil })
+    expect(no_tool.missing_reason('/dev/sda', 'QEMU HARDDISK')).to eq(:no_smartctl)
+  end
+
   it "takes an SSD's wear from NVMe's figure or the first ATA wear attribute, and says when a drive was asleep" do
     h = health
     expect(h.wear({ 'nvme' => { 'percentage_used' => 3 } })).to eq(3)

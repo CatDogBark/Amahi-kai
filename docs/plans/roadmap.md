@@ -37,6 +37,7 @@ so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 | Storage S1. ZFS pools | Disks → ZFS Pools: install ZFS (cache capped), create a pool in the chosen layout, pool status; every drive's use shown; ZFS drives kept away from share storage. Not yet tested on real drives | #44 |
 | Storage fix. lsblk tree | The helper's drive checks and ZFS Pools read lsblk as a tree (NAME first; a flat list is refused), so the system disk is recognised again; specs on the real lsblk; What's new without the dash | #45 |
 | Storage S2. Health | Health check every 15 minutes (pools + SMART, sleeping drives left asleep); alerts on the dashboard and Disks pages; drive health on ZFS Pools and Devices; Scrub now and Ubuntu's monthly scrub shown; smartmontools installed. Not yet tested on real drives | #46 |
+| Storage fix. Services and labels | ZFS's event daemon, smartd, Fail2ban and the VM guest agent in the services lists; drives without SMART data say why (virtual disk, none given, no smartmontools, not checked) | #47 |
 
 ## Next: Phase 3
 

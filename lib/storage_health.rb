@@ -19,7 +19,15 @@ class StorageHealth
 
   Alert = Struct.new(:level, :message, :path, keyword_init: true) # level: :danger or :warning
 
-  attr_reader :checked_at, :pools, :drives
+  # Virtual disks (QEMU, VirtualBox, VMware, Hyper-V, virtio) have no SMART data. Drives
+  # passed through to a VM are the real drives, with their own model names.
+  VIRTUAL_MODEL = /\A(?:QEMU|VBOX|VMware|Virtual)|\bVirtual Disk\b|\bvirtio\b/i
+
+  attr_reader :checked_at, :pools, :drives, :checked_drives
+
+  def self.virtual_disk?(path, model)
+    path.to_s.match?(%r{\A/dev/x?vd[a-z]+\z}) || model.to_s.match?(VIRTUAL_MODEL)
+  end
 
   def self.load(path = default_path)
     new(JSON.parse(File.read(path)))
@@ -37,6 +45,7 @@ class StorageHealth
     @checked_at = parse_time(data['checked_at'])
     @smartctl = data['smartctl'] == true
     @pools = Array(data['pools']).grep(Hash).map { |pool| StoragePools.pool(pool) }
+    @checked_drives = data['drives'].is_a?(Hash) ? data['drives'].keys : []
     @drives = data['drives'].is_a?(Hash) ? data['drives'].select { |_path, smart| smart.is_a?(Hash) } : {}
   end
 
@@ -52,6 +61,14 @@ class StorageHealth
   # The SMART data for a whole disk (/dev/sda), or nil.
   def drive(path)
     drives[path]
+  end
+
+  # Why a drive has no SMART data to show: :not_checked (it wasn't there at the last check),
+  # :no_smartctl, :virtual (a virtual disk) or :no_smart (the drive gave none).
+  def missing_reason(path, model)
+    return :not_checked unless checked_drives.include?(path)
+    return :no_smartctl unless smartctl?
+    self.class.virtual_disk?(path, model) ? :virtual : :no_smart
   end
 
   # Everything that needs looking at, worst first.

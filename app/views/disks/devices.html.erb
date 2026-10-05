@@ -11,7 +11,7 @@
           <strong><%= device[:path] %></strong>
           <span class="text-muted ms-2"><%= device[:model] %></span>
           <span class="text-muted ms-2"><%= device[:size] %></span>
-          <%= drive_health_badge(@health, device[:path]) %>
+          <%= drive_health_badge(@health, device[:path], model: device[:model]) %>
         </div>
         <% if device[:os_disk] %>
           <span class="badge bg-warning text-dark">
