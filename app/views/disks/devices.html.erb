@@ -15,6 +15,10 @@
           <span class="badge bg-warning text-dark">
             <%= lucide_icon('shield', size: 14) %> OS Disk
           </span>
+        <% elsif device[:zfs_pool] %>
+          <a href="<%= disks_pools_path %>" class="badge bg-info text-dark text-decoration-none">
+            <%= lucide_icon('database', size: 14) %> ZFS pool <%= device[:zfs_pool] %>
+          </a>
         <% end %>
       </div>
       <div class="card-body p-0">
@@ -47,7 +51,7 @@
                 </td>
                 <td><%= part[:mountpoint] || '—' %></td>
                 <td class="text-end">
-                  <% unless device[:os_disk] %>
+                  <% unless device[:os_disk] || device[:zfs_pool] %>
                     <% case part[:status] %>
                     <% when :unformatted %>
                       <%= button_to "Initialize",

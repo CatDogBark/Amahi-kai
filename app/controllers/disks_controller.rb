@@ -2,6 +2,7 @@ require 'greyhole'
 require 'disk_manager'
 require 'shell'
 require 'disk_service'
+require 'storage_pools'
 
 class DisksController < ApplicationController
   include SseStreaming
@@ -133,6 +134,33 @@ class DisksController < ApplicationController
     stream_sse do |sse|
       sse.emit("Starting Greyhole installation...")
       DiskService.stream_greyhole_install(sse)
+    end
+  end
+
+  # ZFS pools (docs/plans/storage.md): bitShare's storage, on drives of their own.
+  def pools
+    @page_title = t('disks')
+    @status = StoragePools.status
+    @drives = StoragePools.drives(@status[:pools])
+    names = @status[:pools].map(&:name)
+    @new_pool_name = (1..).lazy.map { |n| "pool#{n}" }.find { |name| names.exclude?(name) }
+  end
+
+  def create_pool
+    StoragePools.create!(name: params[:name], layout: params[:layout], devices: Array(params[:devices]))
+    render json: { status: 'ok' }
+  rescue StoragePools::Error => e
+    render json: { status: 'error', error: e.message }, status: :unprocessable_content
+  end
+
+  def install_zfs_stream
+    stream_sse do |sse|
+      StoragePools.install! { |line| sse.emit(line) }
+      sse.emit('✓ ZFS installed')
+      sse.done
+    rescue StoragePools::Error => e
+      sse.emit("✗ #{e.message}")
+      sse.done('error')
     end
   end
 end

@@ -14,11 +14,11 @@
   Select drives to add to your storage pool. <strong>OS drives cannot be selected.</strong>
 </p>
 
-<% if @devices.any? { |d| !d[:os_disk] } %>
+<% if @devices.any? { |d| !d[:os_disk] && !d[:zfs_pool] } %>
   <form id="storage-form" onsubmit="prepareDrives(event); return false;">
     <div class="drive-list">
       <% @devices.each do |device| %>
-        <% next if device[:os_disk] %>
+        <% next if device[:os_disk] || device[:zfs_pool] %>
         <% device[:partitions].each do |part| %>
           <div class="drive-item" style="flex-wrap: wrap;">
             <input type="checkbox" name="drives[]" value="<%= part[:path] %>"

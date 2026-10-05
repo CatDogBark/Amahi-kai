@@ -1,7 +1,7 @@
 # Privilege model
 
 How Amahi-kai gets root access on a NAS, and what keeps the web app from turning a bug into
-root. Last updated 2026-10-04 (PR O). Design and history: [`docs/plans/privileged-helper.md`](../plans/privileged-helper.md).
+root. Last updated 2026-10-04 (storage S1, ZFS pools). Design and history: [`docs/plans/privileged-helper.md`](../plans/privileged-helper.md).
 
 ## Summary
 
@@ -51,7 +51,9 @@ so passwords never appear on a command line. Each operation:
   and a hash.
 
 The areas it covers: Linux and Samba accounts, Samba's config, share folders, system services,
-reboot and power off, the hostname, dnsmasq, swap, data drives and fstab, Greyhole, package
+reboot and power off, the hostname, dnsmasq, swap, data drives and fstab, ZFS pools (created
+only on whole data disks with nothing in use on them; pools mount under `/srv/pools`, where no
+share folder may be made), Greyhole, package
 installs (from pinned apt repositories and a fixed package list), the Cloudflare Tunnel,
 Tailscale, the security audit's fixes, drive temperatures, and System Update (starting it, or
 checking for an update: `git fetch` as root, written to `/var/lib/amahi-kai/update-status.json`,

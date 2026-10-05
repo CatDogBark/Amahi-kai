@@ -176,6 +176,21 @@ RSpec.describe DiskManager do
     end
   end
 
+  describe 'drives with ZFS on them' do
+    it 'names the pool, so the Devices page and the setup wizard leave the drive alone' do
+      lsblk = { "blockdevices" => [
+        { "name" => "sdc", "type" => "disk", "children" => [
+          { "name" => "sdc1", "type" => "part", "fstype" => "zfs_member", "label" => "tank" },
+          { "name" => "sdc9", "type" => "part", "fstype" => nil }
+        ] },
+        { "name" => "sdd", "type" => "disk", "fstype" => "zfs_member", "label" => nil },
+        { "name" => "sde", "type" => "disk", "children" => [{ "name" => "sde1", "type" => "part", "fstype" => "ext4" }] }
+      ] }.to_json
+      allow(DiskManager).to receive(:execute_command).with(/\Alsblk -J -o .*,LABEL /).and_return(lsblk)
+      expect(DiskManager.devices.to_h { |d| [d[:path], d[:zfs_pool]] }).to eq('/dev/sdc' => 'tank', '/dev/sdd' => 'unnamed', '/dev/sde' => nil)
+    end
+  end
+
   describe '.auto_mount_point' do
     before do
       allow(File).to receive(:read).and_call_original
