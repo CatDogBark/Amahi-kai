@@ -43,6 +43,7 @@ so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 | Storage S3. Manage pools | Replace a drive (resilver, page refreshes while it runs), add a group shaped like the pool's, delete a pool behind its typed name (drives freed); autoexpand on new pools. Not yet tested on real drives | #50 |
 | Storage S4. Snapshots | Hourly and daily snapshots kept per pool (24 and 30 by default), taken and pruned by amahi-kai-snapshots.timer; take now, delete, roll back behind the pool's name; only Amahi-kai's own snapshots are touched. Datasets moved to Phase 4. Not yet tested on real drives | #51 |
 | Fix. Update window | A status check killed by the app's restart no longer reads as a finished (failed) update; the window waits for the restarted version | #52 |
+| Storage S5. Read-only file browser | The web file browser views and downloads only (upload, new folder, rename, delete removed), so shares change only through Samba; pooled files preview and download; folder zips work (the zip gem was missing), stream, and leave out links outside the share | #53 |
 
 ## Next: Phase 3
 
@@ -126,8 +127,8 @@ VM 104's disks belong to Proxmox, so the disk-safety work (PR #13) is covered by
 
 Decided 2026-10-04, in [`storage.md`](storage.md): SMB shares stay on simple drives and Greyhole;
 new ZFS pools, with the layout the user chooses, hold bitShare's data, on other drives; Greyhole
-also handles files that don't arrive through Samba (web uploads). Built now in five PRs (S1–S5,
-listed there; S1 is #44, S2 #46, S3 #50, S4 #51), then Phase 4, then bitShare. Tested on the physical drives once
+is basic SMB storage, changed only through Samba (the web file browser only views). Built now in five PRs (S1–S5,
+listed there; S1 is #44, S2 #46, S3 #50, S4 #51, S5 #53), then Phase 4, then bitShare. Tested on the physical drives once
 they're connected.
 
 ## Phase 4: Docker apps
@@ -139,7 +140,10 @@ Starts with a design doc for the Docker app model, so built-in apps (bitShare fi
 - which apps the LAN can reach and which stay local-only; Docker network access stays opt-in
 - secrets generated per install (the catalog ships default passwords today); image versions pinned
 - data kept on uninstall; the shares each app may see chosen per app, read-only or read-write;
-  no `chmod 777`
+  no `chmod 777`. **Never give an app a pooled (Greyhole) share to write into**: it would go around
+  Samba, so its files get no copies until Greyhole's weekly check and its deletes leave copies
+  behind. Apps that write their own data get a ZFS dataset on a pool (moved here from storage S4:
+  one per app, so an app gets exactly its own) or a share that isn't pooled.
 - a clear warning that access to the Docker socket is full control of the NAS
 - how bitShare authenticates (open)
 

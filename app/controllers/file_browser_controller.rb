@@ -1,17 +1,18 @@
 require 'file_browser_service'
 
+# The web file browser: browse, preview and download. It changes nothing. Files are added,
+# renamed and deleted over the SMB shares, so Samba, and Greyhole on pooled shares, sees
+# every change (docs/plans/storage.md, S5).
 class FileBrowserController < ApplicationController
   before_action :browse_required
   before_action :set_share
   before_action :check_share_access
-  before_action :check_write_access, only: [:upload, :new_folder, :rename, :delete]
   before_action :resolve_path
 
   # A name or path the service refuses gets a clear error, not a 500. (Handlers are
   # matched last-declared first, so InvalidName, a SecurityError, is checked first.)
   rescue_from SecurityError, with: :access_denied
   rescue_from FileBrowserService::InvalidName, with: :invalid_name
-  # CSRF tokens sent via csrfHeaders() in file_browser_controller.js
 
   # GET /files/:share_id/browse/*path
   def browse
@@ -40,70 +41,6 @@ class FileBrowserController < ApplicationController
     else
       send_file_download
     end
-  end
-
-  # POST /files/:share_id/upload
-  def upload
-    unless File.directory?(@full_path)
-      return render json: { error: "Target directory not found" }, status: :not_found
-    end
-
-    files = Array(params[:files])
-    if files.empty?
-      return render json: { error: "No files selected" }, status: :unprocessable_entity
-    end
-
-    uploaded = FileBrowserService.upload_files(@full_path, files, overwrite: !!params[:overwrite])
-    render json: { status: 'ok', uploaded: uploaded, count: uploaded.size }
-  rescue IOError, Errno::ENOENT, Errno::EACCES, Errno::ENOSPC, Errno::EPERM => e
-    Rails.logger.error("FileBrowser#upload ERROR: #{e.class}: #{e.message}\n#{e.backtrace&.first(5)&.join("\n")}")
-    render json: { error: e.message }, status: :internal_server_error
-  end
-
-  # POST /files/:share_id/new_folder
-  def new_folder
-    name = params[:name].to_s.strip
-    if name.blank?
-      return render json: { error: "Folder name required" }, status: :unprocessable_entity
-    end
-
-    created_name = FileBrowserService.create_folder(@full_path, name)
-    render json: { status: 'ok', name: created_name }
-  rescue IOError, Errno::ENOENT, Errno::EACCES, Errno::ENOSPC, Errno::EPERM, Shell::CommandError => e
-    Rails.logger.error("FileBrowser#new_folder ERROR: #{e.class}: #{e.message}\n#{e.backtrace&.first(5)&.join("\n")}")
-    render json: { error: e.message }, status: :internal_server_error
-  end
-
-  # PUT /files/:share_id/rename
-  def rename
-    old_name = params[:old_name].to_s.strip
-    new_name = params[:new_name].to_s.strip
-
-    if old_name.blank? || new_name.blank?
-      return render json: { error: "Names required" }, status: :unprocessable_entity
-    end
-
-    result = FileBrowserService.rename_entry(@full_path, old_name, new_name)
-    render json: { status: 'ok', old_name: result[:old_name], new_name: result[:new_name] }
-  rescue Errno::ENOENT, Errno::ENOTDIR => e
-    render json: { error: "Not found" }, status: :not_found
-  rescue Errno::EEXIST => e
-    render json: { error: "Name already taken" }, status: :conflict
-  rescue Errno::EACCES, Errno::EPERM => e
-    render json: { error: "Permission denied" }, status: :forbidden
-  rescue IOError, SystemCallError => e
-    render json: { error: e.message }, status: :internal_server_error
-  end
-
-  # DELETE /files/:share_id/delete
-  def delete
-    names = Array(params[:names]).map(&:to_s).reject(&:blank?)
-    if names.empty?
-      return render json: { error: "No items selected" }, status: :unprocessable_entity
-    end
-
-    deleted = FileBrowserService.delete_entries(@full_path, names)
-    render json: { status: 'ok', deleted: deleted, count: deleted.size }
   end
 
   # GET /files/:share_id/preview/*path
@@ -175,14 +112,17 @@ class FileBrowserController < ApplicationController
     end
   end
 
-  def check_write_access
-    unless current_user.can_write_share?(@share)
-      render json: { error: "Write access denied" }, status: :forbidden
+  # Where the share's files may really be: its folder and, when it's pooled, its folder on
+  # each Greyhole pool drive (a pooled share holds links to the copies there).
+  def share_roots
+    @share_roots ||= begin
+      pooled = @share.disk_pool_copies.to_i.positive? ? DiskPoolPartition.pluck(:path) : []
+      [@share.path, *pooled.map { |drive| File.join(drive, @share.name) }]
     end
   end
 
   def resolve_path
-    @relative_path, @full_path = FileBrowserService.resolve_path(@share.path, params[:path])
+    @relative_path, @full_path = FileBrowserService.resolve_path(share_roots, params[:path])
   rescue Errno::ENOENT, Errno::EACCES, Errno::EPERM, SecurityError
     flash[:error] = "Access denied"
     redirect_to file_browser_path(@share)
@@ -197,7 +137,7 @@ class FileBrowserController < ApplicationController
   end
 
   def send_directory_as_zip
-    temp_zip = FileBrowserService.create_zip(@full_path)
+    temp_zip = FileBrowserService.create_zip(@full_path, share_roots)
     dir_name = File.basename(@full_path)
     send_file temp_zip.path,
       type: 'application/zip',

@@ -78,7 +78,6 @@
   background: rgba(255, 255, 255, 0.04);
 }
 
-.fb-check-col { width: 36px; text-align: center; }
 .fb-icon-col { width: 36px; text-align: center; font-size: 1.1rem; }
 .fb-name-col { }
 .fb-size-col { width: 120px; text-align: right; color: var(--kai-muted, #6c757d); font-size: 0.85rem; }
@@ -108,34 +107,6 @@
 .fb-empty-icon {
   font-size: 4rem;
   margin-bottom: 1rem;
-}
-
-/* Drop zone */
-.fb-dropzone {
-  position: relative;
-  min-height: 300px;
-}
-
-.fb-drop-overlay {
-  display: none;
-  position: absolute;
-  inset: 0;
-  background: rgba(13, 202, 240, 0.08);
-  border: 2px dashed var(--kai-link, #7dd3e8);
-  border-radius: 8px;
-  z-index: 10;
-  align-items: center;
-  justify-content: center;
-}
-
-.fb-drop-overlay.fb-drop-active {
-  display: flex;
-}
-
-.fb-drop-message {
-  text-align: center;
-  color: var(--kai-link, #7dd3e8);
-  font-size: 1.1rem;
 }
 
 /* Status bar */

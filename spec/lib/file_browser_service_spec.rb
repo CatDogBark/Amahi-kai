@@ -54,115 +54,6 @@ RSpec.describe FileBrowserService do
     end
   end
 
-  describe '.upload_files' do
-    let(:dir) { Dir.mktmpdir }
-    after { FileUtils.rm_rf(dir) }
-
-    it 'writes the upload into the folder' do
-      file = double('upload', original_filename: 'test file.txt', read: 'content')
-      result = described_class.upload_files(dir, [file])
-      expect(result).to eq(['test file.txt'])
-      expect(File.read(File.join(dir, 'test file.txt'))).to eq('content')
-    end
-
-    it 'streams from the uploaded tempfile and keeps only the file name' do
-      tempfile = Tempfile.new('upload').tap { |f| f.write('big data'); f.flush }
-      file = double('upload', original_filename: 'C:\\Users\\troy\\report.pdf', tempfile: tempfile)
-      expect(described_class.upload_files(dir, [file])).to eq(['report.pdf'])
-      expect(File.read(File.join(dir, 'report.pdf'))).to eq('big data')
-    ensure
-      tempfile&.close!
-    end
-
-    it 'skips objects without original_filename' do
-      result = described_class.upload_files(dir, ['not a file'])
-      expect(result).to eq([])
-    end
-
-    it 'skips existing files without overwrite flag' do
-      FileUtils.touch(File.join(dir, 'exists.txt'))
-      file = double('upload', original_filename: 'exists.txt', read: 'new')
-      result = described_class.upload_files(dir, [file])
-      expect(result).to eq([])
-    end
-
-    it 'overwrites with overwrite flag' do
-      FileUtils.touch(File.join(dir, 'exists.txt'))
-      file = double('upload', original_filename: 'exists.txt', read: 'new')
-      result = described_class.upload_files(dir, [file], overwrite: true)
-      expect(result).to eq(['exists.txt'])
-    end
-  end
-
-  describe '.create_folder' do
-    let(:dir) { Dir.mktmpdir }
-    after { FileUtils.rm_rf(dir) }
-
-    it 'creates the folder' do
-      result = described_class.create_folder(dir, 'New Folder')
-      expect(result).to eq('New Folder')
-      expect(File.directory?(File.join(dir, 'New Folder'))).to be true
-    end
-
-    it 'refuses a folder named ..' do
-      expect { described_class.create_folder(dir, '..') }.to raise_error(FileBrowserService::InvalidName)
-    end
-
-    it 'raises if folder already exists' do
-      FileUtils.mkdir(File.join(dir, 'exists'))
-      expect { described_class.create_folder(dir, 'exists') }.to raise_error('Already exists')
-    end
-  end
-
-  describe '.rename_entry' do
-    let(:dir) { Dir.mktmpdir }
-    after { FileUtils.rm_rf(dir) }
-
-    before { FileUtils.touch(File.join(dir, 'old.txt')) }
-
-    it 'renames the entry' do
-      result = described_class.rename_entry(dir, 'old.txt', 'new.txt')
-      expect(result).to eq({ old_name: 'old.txt', new_name: 'new.txt' })
-      expect(File.exist?(File.join(dir, 'new.txt'))).to be true
-    end
-
-    it 'raises if source not found' do
-      expect { described_class.rename_entry(dir, 'missing.txt', 'new.txt') }.to raise_error('Not found')
-    end
-
-    it 'renames a file whose name contains two dots, not a different one' do
-      FileUtils.touch([File.join(dir, 'a..b.txt'), File.join(dir, 'ab.txt')])
-      described_class.rename_entry(dir, 'a..b.txt', 'renamed.txt')
-      expect(File.exist?(File.join(dir, 'ab.txt'))).to be true
-      expect(File.exist?(File.join(dir, 'renamed.txt'))).to be true
-    end
-
-    it 'raises if target exists' do
-      FileUtils.touch(File.join(dir, 'new.txt'))
-      expect { described_class.rename_entry(dir, 'old.txt', 'new.txt') }.to raise_error('Name already taken')
-    end
-  end
-
-  describe '.delete_entries' do
-    let(:dir) { Dir.mktmpdir }
-    after { FileUtils.rm_rf(dir) }
-
-    before do
-      FileUtils.touch(File.join(dir, 'file.txt'))
-      FileUtils.mkdir(File.join(dir, 'folder'))
-    end
-
-    it 'deletes files and folders' do
-      result = described_class.delete_entries(dir, ['file.txt', 'folder'])
-      expect(result).to contain_exactly('file.txt', 'folder')
-    end
-
-    it 'skips nonexistent entries' do
-      result = described_class.delete_entries(dir, ['missing'])
-      expect(result).to eq([])
-    end
-  end
-
   describe '.detect_mime_type' do
     it 'returns correct mime for known extensions' do
       expect(described_class.detect_mime_type('photo.jpg')).to eq('image/jpeg')
@@ -206,36 +97,6 @@ RSpec.describe FileBrowserService do
     end
   end
 
-  describe '.check_name!' do
-    it 'accepts ordinary names, including ones with dots' do
-      expect(described_class.check_name!('a..b.txt')).to eq('a..b.txt')
-      expect(described_class.check_name!(' notes 12:30.txt ')).to eq('notes 12:30.txt')
-    end
-
-    it 'refuses names it would otherwise have to rewrite' do
-      ['..', '.', '', 'a/b', 'a\\b', "nul\x00.txt", 'x' * 256].each do |name|
-        expect { described_class.check_name!(name) }.to raise_error(FileBrowserService::InvalidName), name.inspect
-      end
-    end
-  end
-
-  describe '.safe_join' do
-    let(:dir) { Dir.mktmpdir }
-    after { FileUtils.rm_rf(dir) }
-
-    it 'joins paths safely' do
-      FileUtils.touch(File.join(dir, 'file.txt'))
-      expect(described_class.safe_join(dir, 'file.txt')).to eq(File.join(dir, 'file.txt'))
-    end
-
-    it 'refuses a symlink to a sibling folder whose name starts the same' do
-      share = File.join(dir, 'movies')
-      FileUtils.mkdir_p([share, File.join(dir, 'movies-private')])
-      File.symlink(File.join(dir, 'movies-private'), File.join(share, 'peek'))
-      expect { described_class.safe_join(share, 'peek') }.to raise_error(SecurityError)
-    end
-  end
-
   describe '.resolve_path' do
     let(:dir) { Dir.mktmpdir }
     after { FileUtils.rm_rf(dir) }
@@ -258,6 +119,51 @@ RSpec.describe FileBrowserService do
     it 'collapses multiple slashes' do
       relative, _ = described_class.resolve_path(dir, 'a///b')
       expect(relative).to eq('a/b')
+    end
+
+    # A pooled share holds links to its files' copies on the Greyhole pool drives, in the
+    # share's folder there.
+    it "follows a pooled share's links into its folder on a pool drive, and nowhere else" do
+      pool = Dir.mktmpdir
+      FileUtils.mkdir_p(File.join(pool, 'Photos'))
+      File.write(File.join(pool, 'Photos', 'beach.jpg'), 'jpg')
+      File.write(File.join(pool, 'secret.txt'), 'no')
+      File.symlink(File.join(pool, 'Photos', 'beach.jpg'), File.join(dir, 'beach.jpg'))
+      File.symlink(File.join(pool, 'secret.txt'), File.join(dir, 'secret.txt'))
+      roots = [dir, File.join(pool, 'Photos')]
+
+      expect(described_class.resolve_path(roots, 'beach.jpg')).to eq(['beach.jpg', File.join(dir, 'beach.jpg')])
+      expect { described_class.resolve_path(roots, 'secret.txt') }.to raise_error(SecurityError)
+      expect { described_class.resolve_path(dir, 'beach.jpg') }.to raise_error(SecurityError)
+    ensure
+      FileUtils.rm_rf(pool)
+    end
+  end
+
+  describe '.create_zip' do
+    let(:dir) { Dir.mktmpdir }
+    let(:outside) { Dir.mktmpdir }
+    after { FileUtils.rm_rf([dir, outside]) }
+
+    it "zips the folder's files, leaving out links that point outside the share" do
+      FileUtils.mkdir_p(File.join(dir, 'sub'))
+      File.write(File.join(dir, 'a.txt'), 'A')
+      File.write(File.join(dir, 'sub', 'b.txt'), 'B' * 100_000)
+      File.write(File.join(outside, 'secret.env'), 'SECRET')
+      File.symlink(File.join(outside, 'secret.env'), File.join(dir, 'link.env'))
+
+      zip = described_class.create_zip(dir, [dir])
+      require 'zip'
+      entries = Zip::File.open(zip.path) { |z| z.entries.to_h { |e| [e.name, e.get_input_stream.read] } }
+      expect(entries).to eq('a.txt' => 'A', 'sub/b.txt' => 'B' * 100_000)
+    ensure
+      zip&.close
+    end
+
+    it 'copies each file in pieces rather than reading it whole' do
+      File.write(File.join(dir, 'big.bin'), 'x')
+      expect(File).not_to receive(:read)
+      described_class.create_zip(dir, [dir]).close
     end
   end
 end

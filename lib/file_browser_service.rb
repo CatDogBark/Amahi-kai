@@ -1,12 +1,11 @@
 require 'shell'
 require 'shellwords'
 
-# Service object for file browser operations.
-# Extracted from FileBrowserController — handles all file system
-# operations so the controller only deals with HTTP concerns.
+# What the web file browser reads: folder listings, breadcrumbs, file types and zips of
+# folders. It never changes a share (FileBrowserController).
 module FileBrowserService
-  # A file or folder name that can't be used as given ("..", one with a slash, and so on).
-  # It's a SecurityError so the path checks that rescue SecurityError catch it too.
+  # A path that can't be used as given (with "." or ".." in it). It's a SecurityError so the
+  # path checks that rescue SecurityError catch it too.
   class InvalidName < SecurityError; end
   MIME_TYPES = {
     # Images
@@ -89,81 +88,21 @@ module FileBrowserService
       crumbs
     end
 
-    def upload_files(full_path, files, overwrite: false)
-      uploaded = []
-      files.each do |file|
-        next unless file.respond_to?(:original_filename)
-        # Some browsers send a full client-side path; keep only the file name.
-        filename = check_name!(File.basename(file.original_filename.to_s.tr("\\", "/")))
-        dest = File.join(full_path, filename)
-
-        # Don't overwrite without flag
-        if File.exist?(dest) && !overwrite
-          next
-        end
-
-        # Write straight into the share; the app user can write share folders. (This used
-        # to copy from /tmp with `sudo cp`, which the sudoers allowlist doesn't permit,
-        # so the copy failed silently and the file was still reported as uploaded.)
-        source = file.respond_to?(:tempfile) ? file.tempfile : StringIO.new(file.read.to_s)
-        source.rewind if source.respond_to?(:rewind)
-        File.open(dest, 'wb') { |out| IO.copy_stream(source, out) }
-        File.chmod(0664, dest)
-        uploaded << filename
-      end
-      uploaded
-    end
-
-    def create_folder(full_path, name)
-      name = check_name!(name)
-      folder_path = File.join(full_path, name)
-      raise "Already exists" if File.exist?(folder_path)
-
-      FileUtils.mkdir(folder_path)
-      File.chmod(02775, folder_path)
-      name
-    end
-
-    def rename_entry(full_path, old_name, new_name)
-      new_name = check_name!(new_name)
-      old_path = safe_join(full_path, old_name)
-      new_path = File.join(full_path, new_name)
-
-      raise "Not found" unless File.exist?(old_path)
-      raise "Name already taken" if File.exist?(new_path)
-
-      File.rename(old_path, new_path)
-      { old_name: old_name, new_name: new_name }
-    end
-
-    def delete_entries(full_path, names)
-      deleted = []
-      names.each do |name|
-        target = safe_join(full_path, name)
-        next unless File.exist?(target)
-
-        if File.directory?(target)
-          FileUtils.rm_rf(target)
-        else
-          File.delete(target)
-        end
-        deleted << name
-      end
-      deleted
-    end
-
-    def create_zip(full_path)
+    # The folder as a zip, in a temporary file. Each file is copied in a piece at a time (a
+    # folder of videos used to be read into memory whole), and only files whose real path is
+    # in one of +roots+ go in: a link pointing anywhere else is left out, as it is for a
+    # single download.
+    def create_zip(full_path, roots = [full_path])
       require 'zip'
       dir_name = File.basename(full_path)
       temp_zip = Tempfile.new([dir_name, '.zip'])
 
       Zip::OutputStream.open(temp_zip.path) do |zos|
-        base = full_path
+        base = full_path.chomp('/') # the share's top folder comes with a trailing slash
         Dir.glob(File.join(base, '**', '*')).each do |file|
-          next if File.directory?(file)
-          relative = file.sub("#{base}/", '')
-          zos.put_next_entry(relative)
-          zos.write(File.read(file))
+          next unless File.file?(file) && inside_any?(roots, file)
+          zos.put_next_entry(file.delete_prefix("#{base}/"))
+          File.open(file, 'rb') { |io| IO.copy_stream(io, zos) }
         end
       end
 
@@ -194,33 +133,23 @@ module FileBrowserService
       FILE_ICONS[ext] || '📄'
     end
 
-    # +name+ if it works as a single file or folder name. Names are refused, not
-    # rewritten: stripping ".." turned "a..b.txt" into "ab.txt", so a rename or delete
-    # could hit a different file.
-    def check_name!(name)
-      name = name.to_s.strip
-      if name.empty? || name == "." || name == ".." || name.match?(%r{[/\\\x00]}) || name.bytesize > 255
-        raise InvalidName, "Invalid name: #{name.inspect}"
-      end
-      name
-    end
-
-    def safe_join(base, name)
-      path = File.join(base, check_name!(name))
-      raise SecurityError, "Access denied" unless inside?(base, path)
-      path
-    end
-
-    def resolve_path(share_path, raw_path)
+    # [relative path, full path] for +raw_path+ in a share. +roots+: the share's folder first,
+    # then anywhere else its files may really be (a pooled share's folders on the Greyhole pool
+    # drives). The path, with links followed, must be in one of them.
+    def resolve_path(roots, raw_path)
+      roots = Array(roots)
       segments = (raw_path || '').to_s.split('/').reject(&:empty?)
       raise InvalidName, "Invalid path" if segments.any? { |s| s == '.' || s == '..' }
       relative_path = segments.join('/')
-      full_path = File.join(share_path, relative_path)
+      full_path = File.join(roots.first, relative_path)
 
-      # Final security check: the resolved path (symlinks followed) must be in the share
-      raise SecurityError, "Access denied" unless inside?(share_path, full_path)
+      raise SecurityError, "Access denied" unless inside_any?(roots, full_path)
 
       [relative_path, full_path]
+    end
+
+    def inside_any?(roots, path)
+      roots.any? { |root| inside?(root, path) }
     end
 
     # Is +path+ (after following symlinks) +base+ itself or inside it? Compares whole

@@ -1,10 +1,6 @@
-<div class="file-browser" data-controller="file-browser"
-     data-file-browser-share-value="<%= @share.name %>"
-     data-file-browser-path-value="<%= @relative_path %>"
-     data-file-browser-upload-url-value="<%= file_browser_upload_path(@share) %>"
-     data-file-browser-new-folder-url-value="<%= file_browser_new_folder_path(@share) %>"
-     data-file-browser-rename-url-value="<%= file_browser_rename_path(@share) %>"
-     data-file-browser-delete-url-value="<%= file_browser_delete_path(@share) %>">
+<%# The web file browser only views and downloads. Files are added, renamed and deleted over
+    the SMB share, so Samba, and Greyhole on pooled shares, sees every change. %>
+<div class="file-browser" data-controller="file-browser">
 
   <%# ── Header ── %>
   <div class="fb-header">
@@ -19,29 +15,22 @@
       <% end %>
     </div>
     <div class="fb-actions">
-      <button class="btn btn-sm btn-outline-light" data-action="click->file-browser#newFolder">
-        <%= lucide_icon('folder-plus', size: 16) %> New Folder
-      </button>
-      <label class="btn btn-sm btn-outline-info mb-0 fb-upload-btn">
-        <%= lucide_icon('upload', size: 16) %> Upload
-        <input type="file" multiple class="d-none" data-action="change->file-browser#uploadFiles" data-file-browser-target="fileInput">
-      </label>
-      <button class="btn btn-sm btn-outline-danger d-none" data-file-browser-target="bulkDelete" data-action="click->file-browser#bulkDelete">
-        <%= lucide_icon('trash-2', size: 16) %> Delete Selected
-      </button>
+      <% if @entries.any? %>
+        <a class="btn btn-sm btn-outline-info" id="fb-download-folder" href="<%= @relative_path.present? ? file_browser_download_path(@share, path: @relative_path) : file_browser_download_root_path(@share) %>">
+          <%= lucide_icon('download', size: 16) %> Download this folder
+        </a>
+      <% end %>
     </div>
   </div>
 
-  <%# ── Drop Zone ── %>
-  <div class="fb-dropzone" data-file-browser-target="dropzone"
-       data-action="dragover->file-browser#dragOver dragenter->file-browser#dragEnter dragleave->file-browser#dragLeave drop->file-browser#drop">
+  <div class="fb-listing">
 
     <%# ── File Table ── %>
     <% if @entries.empty? && @relative_path.blank? %>
       <div class="fb-empty">
         <div class="fb-empty-icon">📂</div>
         <p>This share is empty</p>
-        <p class="text-muted">Upload files or create a folder to get started</p>
+        <p class="text-muted">Add files over the network share (SMB) and they show up here.</p>
       </div>
     <% elsif @entries.empty? %>
       <div class="fb-empty">
@@ -52,9 +41,6 @@
       <table class="table fb-table">
         <thead>
           <tr>
-            <th class="fb-check-col">
-              <input type="checkbox" data-action="change->file-browser#toggleAll" data-file-browser-target="selectAll" aria-label="Select all" data-tip="Select all">
-            </th>
             <th class="fb-icon-col"></th>
             <th class="fb-name-col">Name</th>
             <th class="fb-size-col">Size</th>
@@ -65,7 +51,6 @@
         <tbody>
           <% if @relative_path.present? %>
             <tr class="fb-row fb-row-parent">
-              <td></td>
               <td><%= lucide_icon('folder', size: 16) %></td>
               <td colspan="4">
                 <% parent = @relative_path.split('/')[0...-1].join('/') %>
@@ -75,9 +60,6 @@
           <% end %>
           <% @entries.each do |entry| %>
             <tr class="fb-row" data-name="<%= entry[:name] %>" data-directory="<%= entry[:directory] %>">
-              <td class="fb-check-col">
-                <input type="checkbox" class="fb-item-check" data-action="change->file-browser#updateSelection" value="<%= entry[:name] %>">
-              </td>
               <td class="fb-icon-col"><%= entry[:icon] %></td>
               <td class="fb-name-col">
                 <% if entry[:directory] %>
@@ -111,19 +93,11 @@
               </td>
               <td class="fb-action-col">
                 <div class="dropdown">
-                  <button class="btn btn-sm btn-link text-muted p-0" data-bs-toggle="dropdown" aria-label="Actions" data-tip="Actions">⋮</button>
+                  <button class="btn btn-sm btn-link text-muted text-decoration-none p-0" data-bs-toggle="dropdown" aria-label="Actions" data-tip="Actions">⋮</button>
                   <ul class="dropdown-menu dropdown-menu-end">
-                    <% unless entry[:directory] %>
-                      <li>
-                        <% dl_path = [@relative_path, entry[:name]].reject(&:blank?).join('/') %>
-                        <a class="dropdown-item" href="<%= file_browser_download_path(@share, path: dl_path) %>"><%= lucide_icon('download', size: 14) %> Download</a>
-                      </li>
-                    <% end %>
                     <li>
-                      <a class="dropdown-item" href="#" data-action="click->file-browser#renameItem" data-name="<%= entry[:name] %>"><%= lucide_icon('edit', size: 14) %> Rename</a>
-                    </li>
-                    <li>
-                      <a class="dropdown-item text-danger" href="#" data-action="click->file-browser#deleteItem" data-name="<%= entry[:name] %>"><%= lucide_icon('trash-2', size: 14) %> Delete</a>
+                      <% dl_path = [@relative_path, entry[:name]].reject(&:blank?).join('/') %>
+                      <a class="dropdown-item" href="<%= file_browser_download_path(@share, path: dl_path) %>"><%= lucide_icon('download', size: 14) %> <%= entry[:directory] ? 'Download as zip' : 'Download' %></a>
                     </li>
                   </ul>
                 </div>
@@ -133,14 +107,6 @@
         </tbody>
       </table>
     <% end %>
-
-    <%# Drop overlay %>
-    <div class="fb-drop-overlay" data-file-browser-target="dropOverlay">
-      <div class="fb-drop-message">
-        <div style="font-size: 3rem;"><%= lucide_icon('download', size: 48) %></div>
-        <div>Drop files here to upload</div>
-      </div>
-    </div>
   </div>
 
   <%# ── Preview Modal ── %>
