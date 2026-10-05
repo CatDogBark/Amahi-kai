@@ -53,6 +53,34 @@ describe DockerApp do
     end
   end
 
+  describe 'ports' do
+    it 'keeps the ports the helper gave, and sums them up for the Apps page' do
+      app = build_app
+      app.ports = [{ host: 3302, container: 3000, protocol: 'tcp', label: 'web' },
+                   { host: 2222, container: 2222, protocol: 'tcp', label: 'Git over SSH' }]
+      app.save!
+      expect(app.reload.ports.first).to eq(host: 3302, container: 3000, protocol: 'tcp', label: 'web')
+      expect(app.port_summary).to eq('3302 (web) · 2222 (Git over SSH)')
+    end
+
+    it 'says when a port is UDP too, and copes with old or missing values' do
+      app = build_app(port_mappings: [{ host: 9091, protocol: 'tcp', label: 'web' }, { host: 51_413, protocol: 'tcp', label: 'peers' },
+                                      { host: 51_413, protocol: 'udp', label: 'peers' }].to_json)
+      expect(app.port_summary).to eq('9091 (web) · 51413 (peers, TCP and UDP)')
+      expect(build_app(port_mappings: { '80' => '8080' }.to_json).ports).to eq([])
+      expect(build_app(port_mappings: 'nonsense').ports).to eq([])
+      expect(build_app(port_mappings: nil).port_summary).to eq('')
+    end
+
+    it "puts the helper's host ports on the catalog's, or keeps the catalog's" do
+      entry = AppCatalog.find('gitea')
+      given = [{ 'preferred' => 3300, 'host' => 3302, 'container' => 3000, 'protocol' => 'tcp' },
+               { 'preferred' => 2222, 'host' => 2222, 'container' => 2222, 'protocol' => 'tcp' }]
+      expect(DockerApp.assigned_ports(entry, given).map { |p| [p[:host], p[:label]] }).to eq([[3302, 'web'], [2222, 'Git over SSH']])
+      expect(DockerApp.assigned_ports(entry, nil).map { |p| p[:host] }).to eq([3300, 2222])
+    end
+  end
+
   describe 'start, stop and restart' do
     let(:app) { build_app(status: 'stopped').tap(&:save!) }
 

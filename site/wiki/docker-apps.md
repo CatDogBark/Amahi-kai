@@ -6,8 +6,9 @@ title: "Docker Apps"
 # Docker Apps
 
 Amahi-kai has a small catalog of apps that run in Docker containers. You install, start, stop
-and uninstall them from the **Apps** tab. Each app runs on its own port of the server, as its own
-user, with its own data folder, and keeps that data when it's uninstalled.
+and uninstall them from the **Apps** tab. Each app runs on its own port of the server, reachable
+from your LAN and Tailscale, as its own user, with its own data folder, and keeps that data when
+it's uninstalled.
 
 ---
 
@@ -30,13 +31,16 @@ against a pinned fingerprint), installs Docker and turns the service on.
 
 ## The catalog
 
-| App | What it's for | Open it at |
-|-----|---------------|------------|
+| App | What it's for | Usual address |
+|-----|---------------|---------------|
 | **Jellyfin** | Your own streaming service for movies, TV and music | `http://<server>:8096` |
 | **Vaultwarden** | A password manager server for the Bitwarden apps | `http://<server>:8880` |
 | **Uptime Kuma** | Watches websites and services, and tells you when one goes down | `http://<server>:3001` |
 | **Gitea** | Your own Git server, like a small GitHub | `http://<server>:3300` (Git over SSH on port 2222) |
 | **Transmission** | A BitTorrent client with a web interface | `http://<server>:9091` (peers on port 51413) |
+
+If an app's usual port is already used by something else on the server, it gets the next free one
+at install, and keeps it. The Apps page shows each installed app's ports.
 
 Each app is defined by a small file in `config/apps/` in Amahi-kai's code: the image and its
 exact version, its ports, its folders, its settings and a memory limit. Versions are pinned, so
@@ -56,7 +60,22 @@ own updates. More apps are added when they're wanted.
    - creates and starts its container
 4. The last line says where to open it, for example `http://192.168.1.111:8096/`
 
-Once it's installed, **Open** on the Apps page and on the dashboard goes straight to the app.
+Once it's installed, **Open** on the Apps page and on the dashboard goes straight to the app, on
+its port.
+
+## Reaching apps
+
+- **On your LAN**: `http://<server>:<port>`, which is where **Open** goes.
+- **Away from home: through [Tailscale](remote-access)**, at `http://<the server's Tailscale name
+  or address>:<port>`.
+- **Nowhere else.** Amahi-kai's firewall rules let connections into apps come only from the
+  server's own LAN and from Tailscale, so a port forwarded on your router doesn't expose them.
+- **Not through the Cloudflare Tunnel**: it carries Amahi-kai's own pages, not the apps'. There the
+  Apps page says to open apps on your LAN or Tailscale.
+
+Apps use plain HTTP, like Amahi-kai's own pages on the LAN. **Vaultwarden** needs HTTPS for its
+web vault, so it's usable once HTTPS through Tailscale is added (later); until then only its
+`/admin` page works.
 
 **Set the app up right away.** Jellyfin, Uptime Kuma and Gitea ask the first person who opens
 them to create the admin account, so open the app and do that as soon as it's installed.
@@ -135,8 +154,14 @@ Then start it again.
 
 ### App ports and the firewall
 
-Docker writes its own firewall rules for the ports apps publish, ahead of UFW's, so an app's port
-is reachable from your LAN even with UFW on. The [security audit](security) lists them.
+Docker writes its own firewall rules for the ports apps publish, ahead of UFW's, so UFW doesn't
+filter them. Amahi-kai adds its own rules in Docker's chain each time Docker starts: connections
+into an app from anywhere but the server's private networks and Tailscale are dropped. The
+[security audit](security)'s **Docker ports** check says whether they're in place. To see them:
+
+```bash
+sudo iptables -S AMAHI-APPS
+```
 
 ---
 
@@ -155,7 +180,8 @@ sudo tail -n 40 /var/log/amahi-kai/helper.log
 
 - Check the app shows **Open** (running) on the Apps page
 - Look at its log: `sudo docker logs amahi-<app>`
-- Make sure nothing else on the server uses its port: `sudo ss -ltnp | grep <port>`
+- Use the port on its row (it may not be the usual one)
+- From outside your LAN, use Tailscale: apps aren't reachable any other way
 
 ### An app that ran out of memory
 

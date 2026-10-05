@@ -184,11 +184,13 @@ class AppsController < ApplicationController
     app.update!(name: entry[:name], description: entry[:description], image: entry[:image],
                 category: entry[:category], logo_url: entry[:logo_url], host_port: entry[:web_port],
                 container_name: "amahi-#{entry[:identifier]}", status: 'installing', error_message: nil)
-    Privileged.call('apps.install', app: entry[:identifier]) { |line| sse.emit("  #{line}") }
-    app.update!(status: 'running')
+    reply = Privileged.call('apps.install', app: entry[:identifier]) { |line| sse.emit("  #{line}") }
+    ports = DockerApp.assigned_ports(entry, reply['ports'])
+    web = ports.find { |port| port[:label] == 'web' }
+    app.update!(status: 'running', host_port: web&.dig(:host), ports: ports)
     sse.emit('')
     sse.emit("✓ #{entry[:name]} is installed and running")
-    sse.emit("  Open it at http://#{host}:#{entry[:web_port]}/") if entry[:web_port]
+    sse.emit("  Open it at #{app.url(host)} (on your LAN or Tailscale)") if web
     sse.done
   rescue Privileged::Error => e
     app&.update(status: 'error', error_message: e.message)

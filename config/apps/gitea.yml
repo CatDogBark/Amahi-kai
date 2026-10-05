@@ -9,7 +9,7 @@ memory: 1g
 ports:
   # 3000 is Amahi-kai's own web page.
   - { host: 3300, container: 3000 }
-  - { host: 2222, container: 2222 }
+  - { host: 2222, container: 2222, label: Git over SSH }
 folders:
   - { name: data, path: /var/lib/gitea }
   - { name: config, path: /etc/gitea }

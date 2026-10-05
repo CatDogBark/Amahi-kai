@@ -86,7 +86,8 @@
             <div class="row g-2">
               <% @apps.each do |app| %>
                 <div class="col-4 col-md-3 col-lg-2">
-                  <a href="<%= app.url(request.host) %>" target="_blank" rel="noopener" class="d-flex flex-column align-items-center text-decoration-none p-3 rounded" style="color: var(--kai-text); transition: background 0.15s, transform 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.06)';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='';this.style.transform=''">
+                  <%# Apps' ports aren't on the Cloudflare Tunnel: from there, the tile goes to the Apps page. %>
+                  <a href="<%= via_tunnel? ? '/apps/installed_apps' : app.url(request.host) %>" <%= 'target=_blank rel=noopener' unless via_tunnel? %> class="d-flex flex-column align-items-center text-decoration-none p-3 rounded" style="color: var(--kai-text); transition: background 0.15s, transform 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.06)';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='';this.style.transform=''">
                     <div style="width: 48px; height: 48px; border-radius: 12px; background: rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: center; margin-bottom: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); overflow: hidden;">
                       <% if app.logo_url.present? %>
                         <img src="<%= app.logo_url %>" alt="<%= app.name %>" style="width: 36px; height: 36px; object-fit: contain;">
@@ -95,6 +96,7 @@
                       <% end %>
                     </div>
                     <span style="font-size: 0.8rem; font-weight: 500; text-align: center; line-height: 1.2;"><%= app.name %></span>
+                    <% if via_tunnel? %><span class="text-secondary" style="font-size: 0.7rem;">LAN or Tailscale</span><% end %>
                   </a>
                 </div>
               <% end %>

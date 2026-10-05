@@ -8,7 +8,7 @@ over plain HTTP, through a Cloudflare Tunnel, and through Tailscale. Troy owns t
 Current work: the storage plan, **`docs/plans/storage.md`** (ZFS pools for bitShare, PRs S1–S5,
 all built; tested on the drives once they're in, with
 **`docs/testing/storage-on-real-drives.md`**), then Phase 4, planned in **`docs/plans/apps.md`**
-(P4.1 done; P4.2 next). Read
+(P4.1 and P4.2 done, not yet tested on the NAS: `docs/testing/apps.md`; P4.4 next). Read
 **`docs/plans/roadmap.md`** first, then the plan for the PR you're on. Phase 3, the code review
 fix plan (**`docs/plans/privileged-helper.md`**), is done except Content-Security-Policy. The
 privilege model is in `docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`.

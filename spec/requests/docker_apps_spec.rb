@@ -37,6 +37,19 @@ describe "Docker Apps", type: :request do
       expect(response.body).to include("Its data stays in #{AppCatalog.apps_root}/gitea")
     end
 
+    it "shows each installed app's ports" do
+      gitea(port_mappings: [{ host: 3300, protocol: 'tcp', label: 'web' }, { host: 2222, protocol: 'tcp', label: 'Git over SSH' }].to_json)
+      get "/apps/installed_apps"
+      expect(CGI.unescapeHTML(response.body)).to include('Ports 3300 (web) · 2222 (Git over SSH)')
+    end
+
+    it "says to open apps on the LAN or Tailscale when the page came through the Cloudflare Tunnel" do
+      gitea
+      get "/apps/docker_apps", headers: { 'Host' => 'nas.example.com', 'CF-Connecting-IP' => '203.0.113.9' }
+      expect(response.body).not_to include('href="http://nas.example.com:3300/"')
+      expect(response.body).to include('Open it on your LAN or Tailscale')
+    end
+
     it "filters by category" do
       get "/apps/docker_apps", params: { category: "media" }
       expect(response.body).to include("Jellyfin")
@@ -74,9 +87,22 @@ describe "Docker Apps", type: :request do
       get "/apps/docker/install_stream/uptimekuma", headers: same_origin.merge('Host' => '192.168.1.111')
       expect(Privileged.calls).to include(['apps.install', { app: 'uptimekuma' }])
       expect(response.body).to include('✓ Uptime Kuma is installed and running')
-      expect(response.body).to include('Open it at http://192.168.1.111:3001/')
+      expect(response.body).to include('Open it at http://192.168.1.111:3001/ (on your LAN or Tailscale)')
       expect(DockerApp.find_by(identifier: 'uptimekuma')).to have_attributes(status: 'running', host_port: 3001,
                                                                              container_name: 'amahi-uptimekuma')
+    end
+
+    it "keeps the ports the helper gave when the catalog's were taken" do
+      allow(Privileged).to receive(:call).and_call_original
+      allow(Privileged).to receive(:call).with('apps.install', app: 'gitea').and_return(
+        'ok' => true, 'ports' => [{ 'preferred' => 3300, 'host' => 3302, 'container' => 3000, 'protocol' => 'tcp' },
+                                  { 'preferred' => 2222, 'host' => 2222, 'container' => 2222, 'protocol' => 'tcp' }]
+      )
+      get "/apps/docker/install_stream/gitea", headers: same_origin.merge('Host' => '192.168.1.111')
+      expect(response.body).to include('Open it at http://192.168.1.111:3302/')
+      app = DockerApp.find_by(identifier: 'gitea')
+      expect(app.host_port).to eq(3302)
+      expect(app.port_summary).to eq('3302 (web) · 2222 (Git over SSH)')
     end
 
     it "records and shows the helper's reason when it fails" do
@@ -134,11 +160,24 @@ describe "Docker Apps", type: :request do
     end
   end
 
+  it "no longer proxies apps at /app/<id>" do
+    gitea
+    get "/app/gitea"
+    expect(response).to have_http_status(:not_found)
+  end
+
   describe "the dashboard" do
     it "links each running app to its own port" do
       gitea(show_in_dashboard: true)
       get "/", headers: { 'Host' => '192.168.1.111' }
       expect(response.body).to include('href="http://192.168.1.111:3300/"')
+    end
+
+    it "links to the Apps page instead through the Cloudflare Tunnel" do
+      gitea(show_in_dashboard: true)
+      get "/", headers: { 'Host' => 'nas.example.com', 'CF-Connecting-IP' => '203.0.113.9' }
+      expect(response.body).not_to include(':3300/')
+      expect(response.body).to include('href="/apps/installed_apps"', 'LAN or Tailscale')
     end
   end
 

@@ -213,33 +213,39 @@ class SecurityAudit
     end
 
     # Docker writes its own iptables rules for published ports, ahead of UFW's, so UFW
-    # doesn't filter them. Ports published on 127.0.0.1 stay local.
+    # doesn't filter them. Amahi-kai's own rules (the helper's apps.firewall, from P4.2) keep
+    # them to the LAN and Tailscale. Ports published on 127.0.0.1 stay local.
     def docker_ports_check
-      ports = docker_published_ports
+      ports, limited = docker_published_ports
+      description = if ports.empty?
+                      'No Docker ports published past the firewall'
+                    elsif limited
+                      "Docker app ports #{ports.join(', ')} are reachable from the LAN and Tailscale only"
+                    else
+                      "Docker publishes #{ports.join(', ')}, which UFW doesn't filter"
+                    end
       Check.new(
         name: 'docker_ports',
-        description: if ports.empty?
-                       'No Docker ports published past the firewall'
-                     else
-                       "Docker publishes #{ports.join(', ')}, which UFW doesn't filter"
-                     end,
-        status: ports.empty? ? :pass : :warn,
+        description: description,
+        status: ports.empty? || limited ? :pass : :warn,
         severity: :warning,
         fix_command: nil
       )
     end
 
-    # The ports Docker publishes beyond the NAS itself, read by the root helper (the web app
-    # can't reach Docker): "8096/tcp", ...
+    # [ports, limited]: the ports Docker publishes beyond the NAS itself ("8096/tcp", ...), and
+    # whether Amahi-kai's rules limit them, read by the root helper (the web app can't reach
+    # Docker or the firewall).
     def docker_published_ports
-      return [] unless production? && File.executable?('/usr/bin/docker')
-      lines = Array(Privileged.call('docker.published_ports')['ports'])
-      lines.flat_map { |line| line.split("\t", 2).last.to_s.split(',') }.filter_map do |mapping|
+      return [[], false] unless production? && File.executable?('/usr/bin/docker')
+      reply = Privileged.call('docker.published_ports')
+      ports = Array(reply['ports']).flat_map { |line| line.split("\t", 2).last.to_s.split(',') }.filter_map do |mapping|
         host, port, proto = mapping.strip.match(%r{\A(.*):(\d+)(?:-\d+)?->[\d-]+/(tcp|udp)\z})&.captures
         "#{port}/#{proto}" if port && !host.start_with?('127.', '[::1]', '::1')
       end.uniq
+      [ports, reply['limited'] == true]
     rescue Privileged::Error
-      []
+      [[], false]
     end
 
     def open_ports_check

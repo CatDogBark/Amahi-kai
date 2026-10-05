@@ -22,6 +22,10 @@
             span.badge.bg-secondary.ms-2.small= category
       td.settings-col2.ps-2.apps-col2.text-secondary style="vertical-align:middle"
         = description.present? ? truncate(description, length: 120) : t('no_description_supplied')
+        - if installed && app.ports.any?
+          .small.mt-1
+            = app.ports.map { |port| port[:host] }.uniq.one? ? 'Port ' : 'Ports '
+            = app.port_summary
         - if status == 'error' && installed && app.error_message.present?
           .small.text-danger.mt-1 = app.error_message
         - if status == 'available' && AppCatalog.data_kept?(identifier)
@@ -39,7 +43,9 @@
             | Installing
         - when 'running'
           .d-flex.gap-1.justify-content-end
-            - if app.url(request.host)
+            - if app.url(request.host) && via_tunnel?
+              span.small.text-secondary.me-1.align-self-center Open it on your LAN or Tailscale
+            - elsif app.url(request.host)
               a.btn.btn-sm.btn-success href=app.url(request.host) target="_blank" rel="noopener" Open
             button.btn.btn-sm.btn-outline-danger onclick="dockerAppAction('/apps/docker/stop/#{identifier}', this)" Stop
             button.btn.btn-sm.btn-outline-secondary onclick="if(confirm(#{uninstall_note.to_json})){dockerAppAction('/apps/docker/uninstall/#{identifier}', this)}" Uninstall
