@@ -66,8 +66,8 @@ module Shell
     # Execute a single command, feeding +input+ on stdin. Returns true on success.
     # Use this for secrets such as passwords, so they never appear in argv or the log.
     def run_with_input(cmd, input)
-      if dummy?
-        log_cmd("[DUMMY] #{cmd} (stdin withheld)")
+      if simulated?
+        log_cmd("[SIMULATED] #{cmd} (stdin withheld)")
         return true
       end
 
@@ -94,32 +94,27 @@ module Shell
       REDACTIONS.reduce(text.to_s) { |out, (pattern, replacement)| out.gsub(pattern, replacement) }
     end
 
-    # Check if we're in dummy mode (dev/test without real system access)
-    def dummy?
-      return @dummy if defined?(@dummy)
-      @dummy = begin
-        require_relative 'yetting'
-        Yetting.dummy_mode
-      rescue StandardError
-        Rails.env.test? rescue true
-      end
+    # Outside production (development and tests) commands are only logged, never run, and
+    # Privileged.call records root helper calls instead of running the helper, so the specs
+    # and a laptop running Amahi-kai never change the computer. Production always runs them:
+    # no setting can turn this on there (it used to be "dummy mode", which a setting in
+    # amahi.env could switch on).
+    def simulated?
+      return @simulated unless @simulated.nil?
+      !(defined?(Rails) && Rails.env.production?)
     end
 
-    # Allow overriding dummy mode (useful for specific tests)
-    # Pass nil to reset to auto-detection.
-    def dummy=(val)
-      if val.nil?
-        remove_instance_variable(:@dummy) if defined?(@dummy)
-      else
-        @dummy = val
-      end
+    # For specs that test the real code paths with the system calls stubbed: false runs them,
+    # nil goes back to the rule above.
+    def simulated=(value)
+      @simulated = value
     end
 
     private
 
     def exec_one(cmd)
-      if dummy?
-        log_cmd("[DUMMY] #{cmd}")
+      if simulated?
+        log_cmd("[SIMULATED] #{cmd}")
         return [true, '', '', 0]
       end
 

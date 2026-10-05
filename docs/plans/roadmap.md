@@ -44,6 +44,7 @@ so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 | Storage S4. Snapshots | Hourly and daily snapshots kept per pool (24 and 30 by default), taken and pruned by amahi-kai-snapshots.timer; take now, delete, roll back behind the pool's name; only Amahi-kai's own snapshots are touched. Datasets moved to Phase 4. Not yet tested on real drives | #51 |
 | Fix. Update window | A status check killed by the app's restart no longer reads as a finished (failed) update; the window waits for the restarted version | #52 |
 | Storage S5. Read-only file browser | The web file browser views and downloads only (upload, new folder, rename, delete removed), so shares change only through Samba; pooled files preview and download; folder zips work (the zip gem was missing), stream, and leave out links outside the share | #53 |
+| Remove dummy mode | No AMAHI_DUMMY_MODE setting or System Status row: outside production commands and the root helper are only recorded (Shell.simulated?), production always runs them; specs simulate by default | #55 |
 
 ## Next: Phase 3
 

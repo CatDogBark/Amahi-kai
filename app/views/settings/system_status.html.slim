@@ -78,13 +78,6 @@
               tr
                 td.fw-bold Environment
                 td = Rails.env
-              tr
-                td.fw-bold Dummy Mode
-                td
-                  - if @system_info[:dummy_mode]
-                    span.badge.bg-warning.text-dark Enabled
-                  - else
-                    span.badge.bg-success Disabled
 
   /! ── Resource Usage ──
   .card.mb-4

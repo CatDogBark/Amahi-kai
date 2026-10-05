@@ -43,7 +43,7 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
 - **Ruby is 3.2 on the NAS (Ubuntu's `ruby3.2`, 3.2.3).** Change `Gemfile.lock` only under Ruby
   3.2.x with Bundler 2.4.19, so the resolver can't pick gems the NAS can't run. Update gems
   minimally (`bundle update --conservative --patch <gem>`).
-- In tests `Shell.dummy?` is true, so `Shell.run` commands don't execute, and `Privileged.call`
+- Outside production `Shell.simulated?` is true (no setting changes it), so `Shell.run` commands don't execute, and `Privileged.call`
   records calls in `Privileged.calls` (reset before each example) instead of running the helper.
   Code that runs commands as argument lists through `Open3` must be stubbed. Request specs log in with `login_as_admin`
   or `login_as(user)` (`spec/support/request_helpers.rb`).

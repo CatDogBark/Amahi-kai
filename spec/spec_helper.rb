@@ -22,14 +22,19 @@ RSpec.configure do |config|
   config.include FactoryBot::Syntax::Methods
 
   config.before(:each) do
+    # Specs never run system commands or the root helper, even those that stub
+    # Rails.env.production? to test production code; the few that test the real paths (with
+    # the system calls stubbed) set Shell.simulated = false.
+    Shell.simulated = true
     DatabaseCleaner.start
     # load the seed to get the minimum env going
     load "#{Rails.root}/db/seeds.rb"
-    # Root helper calls recorded in dummy mode (the seeds make some); start each example empty.
+    # Root helper calls recorded outside production (the seeds make some); start each example empty.
     Privileged.reset!
   end
 
   config.after(:each) do
+    Shell.simulated = nil
     DatabaseCleaner.clean
   end
 end

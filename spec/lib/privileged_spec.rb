@@ -1,7 +1,7 @@
 require 'rails_helper'
 
 RSpec.describe Privileged do
-  describe 'in dummy mode (tests)' do
+  describe 'outside production (Shell.simulated?)' do
     it 'records the call and answers ok' do
       expect(described_class.call('users.set_name', login: 'ann', name: 'Ann')).to eq('ok' => true)
       expect(described_class.calls).to eq([['users.set_name', { login: 'ann', name: 'Ann' }]])
@@ -15,8 +15,8 @@ RSpec.describe Privileged do
   describe 'running the helper' do
     let(:ok_status) { instance_double(Process::Status, success?: true, exitstatus: 0) }
 
-    before { Shell.dummy = false }
-    after { Shell.dummy = nil }
+    before { Shell.simulated = false }
+    after { Shell.simulated = nil }
 
     def status(code)
       instance_double(Process::Status, success?: code.zero?, exitstatus: code)

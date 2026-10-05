@@ -290,7 +290,6 @@ DATABASE_HOST=localhost
 DATABASE_NAME=amahi_production
 DATABASE_USER=amahi
 DATABASE_PASSWORD=$DB_PASS
-AMAHI_DUMMY_MODE=false
 
 # Extra host names the web UI answers to (comma-separated). Not needed for IP
 # addresses, localhost, this machine's hostname, its Tailscale name or a

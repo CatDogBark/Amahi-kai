@@ -11,8 +11,8 @@
 # With a block, each line the helper writes to stderr while it runs is yielded (apt's
 # output during packages.install, for a progress stream).
 #
-# In dummy mode (development and tests) nothing runs: calls are recorded in
-# Privileged.calls and answered with {"ok"=>true}.
+# Outside production (development and tests; Shell.simulated?) nothing runs: calls are
+# recorded in Privileged.calls and answered with {"ok"=>true}.
 
 require 'json'
 require 'open3'
@@ -42,7 +42,7 @@ module Privileged
 
   class << self
     def call(operation, **args, &progress)
-      return record(operation, args) if Shell.dummy?
+      return record(operation, args) if Shell.simulated?
 
       Rails.logger.info("Privileged: #{operation}")
       # A clean environment: Bundler's RUBYOPT must not reach a root Ruby process.
@@ -62,7 +62,7 @@ module Privileged
       raise Error.new(operation, "the privileged helper couldn't be run (#{e.message})")
     end
 
-    # Calls made in dummy mode, oldest first: [operation, args] pairs.
+    # Calls recorded outside production, oldest first: [operation, args] pairs.
     def calls
       @calls ||= []
     end
