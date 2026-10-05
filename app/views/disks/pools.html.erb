@@ -41,7 +41,14 @@
         <div class="d-flex align-items-center gap-2">
           <% scrubbing = pool.scan.to_s.start_with?('scrub in progress') %>
           <button type="button" class="btn btn-sm btn-outline-secondary" data-storage-post="<%= disks_scrub_pool_path %>" data-name="<%= pool.name %>"
-                  data-tip="Read every block and repair what can be repaired" <%= 'disabled' if scrubbing %>><%= scrubbing ? 'Scrubbing…' : 'Scrub now' %></button>
+                  data-tip="Read every block and repair what can be repaired" <%= 'disabled' if pool.scanning? %>><%= scrubbing ? 'Scrubbing…' : 'Scrub now' %></button>
+          <% if (shape = pool.group_shape) %>
+            <% layout = StoragePools::LAYOUTS.find { |l| l[:key] == shape.first } || StoragePools::LAYOUTS.first %>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-pool-dialog="add" data-name="<%= pool.name %>"
+                    data-layout="<%= shape.first %>" data-layout-name="<%= layout[:name] %>" data-width="<%= shape.last %>"
+                    data-parity="<%= shape.first == 'mirror' ? shape.last - 1 : layout[:parity] %>">Add drives</button>
+          <% end %>
+          <button type="button" class="btn btn-sm btn-outline-danger" data-pool-dialog="destroy" data-name="<%= pool.name %>">Delete pool</button>
           <%= pool_state_badge(pool.health) %>
         </div>
       </div>
@@ -68,13 +75,16 @@
           <% if pool.scan.blank? || pool.scan == 'none requested' %>No scrub has run yet.<% else %><%= pool.scan.upcase_first %>.<% end %>
           <% if @next_scrub %>Next automatic scrub: <%= @next_scrub.strftime('%A, %B %-d at %H:%M') %>.<% end %>
         </p>
+        <% if pool.scanning? %>
+          <p class="small text-info mb-0 mt-1" data-pool-scanning="">This page updates every 30 seconds until it's done.</p>
+        <% end %>
         <% if pool.data_errors %>
           <p class="small text-danger mb-0 mt-1">Errors: <%= pool.data_errors %></p>
         <% end %>
       </div>
       <table class="table table-sm mb-0 small">
         <thead>
-          <tr><th>Drive</th><th>Model and serial</th><th>State</th><th>Health</th><th class="text-end">Read / write / checksum errors</th></tr>
+          <tr><th>Drive</th><th>Model and serial</th><th>State</th><th>Health</th><th class="text-end">Read / write / checksum errors</th><th></th></tr>
         </thead>
         <tbody>
           <% pool.drives.each do |drive| %>
@@ -85,6 +95,11 @@
               <% disk = drive['device'] && DiskManager.base_device(drive['device']) %>
               <td><%= disk ? drive_health(@health, disk, model: @drives.find { |d| d[:path] == disk }&.dig(:model)) : '—' %></td>
               <td class="text-end"><%= [drive['read'], drive['write'], drive['cksum']].map { |n| n || '—' }.join(' / ') %></td>
+              <td class="text-end">
+                <% label = disk ? "#{disk} (#{pool_drive_id(drive['name'])})" : "the missing drive (#{drive['note'] || drive['name']})" %>
+                <button type="button" class="btn btn-sm <%= drive['state'] == 'ONLINE' ? 'btn-outline-secondary' : 'btn-warning' %>"
+                        data-pool-dialog="replace" data-name="<%= pool.name %>" data-old="<%= drive['name'] %>" data-old-label="<%= label %>">Replace</button>
+              </td>
             </tr>
           <% end %>
         </tbody>
@@ -165,4 +180,5 @@
   </div>
 </div>
 
+<%= render 'disks/pool_dialogs', free: @drives.select { |d| d[:free] } %>
 <%= render 'shared/install_terminal', id: 'storage-install', title: 'Installing storage tools', stream_url: disks_install_storage_tools_stream_path %>

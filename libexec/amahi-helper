@@ -454,8 +454,8 @@ module AmahiHelper
       plan: ->(_v) { [[:pool_status]] }
     },
     # A new pool on whole data disks, which are wiped first, in the layout the user chose:
-    # ashift=12, lz4 compression, autotrim when every drive is an SSD, mounted at
-    # POOL_ROOT/<name>. zpool records it in its cache file, so it's imported at every boot.
+    # ashift=12, lz4 compression, autotrim when every drive is an SSD, autoexpand (replacing
+    # every drive with a bigger one grows the pool), mounted at POOL_ROOT/<name>. zpool records it in its cache file, so it's imported at every boot.
     'pools.create' => {
       params: %w[name layout devices],
       validate: ->(a) { pool_request(a['name'], a['layout'], a['devices']) },
@@ -463,8 +463,48 @@ module AmahiHelper
         [*v[:wipe].map { |device| [WIPEFS, '-a', device] },
          ['/usr/bin/udevadm', 'settle', { allow_failure: true }],
          [:make_dir, POOL_ROOT, '0755'],
-         [ZPOOL, 'create', '-f', '-o', 'ashift=12', *(v[:ssd] ? %w[-o autotrim=on] : []),
+         [ZPOOL, 'create', '-f', '-o', 'ashift=12', '-o', 'autoexpand=on', *(v[:ssd] ? %w[-o autotrim=on] : []),
           '-O', 'compression=lz4', '-O', "mountpoint=#{POOL_ROOT}/#{v[:name]}", v[:name], *v[:vdevs]],
+         [:pool_status]]
+      }
+    },
+    # Replaces one of a pool's drives (old: its name in `zpool status -P`, a path or, for a
+    # missing drive, a number) with a free whole disk, wiped first. ZFS copies the pool's
+    # data onto it (a resilver) and keeps using the old drive, if it's there, until done.
+    'pools.replace' => {
+      params: %w[name old new],
+      validate: ->(a) { replace_request(a['name'], a['old'], a['new']) },
+      plan: lambda { |v|
+        [*v[:wipe].map { |device| [WIPEFS, '-a', device] },
+         ['/usr/bin/udevadm', 'settle', { allow_failure: true }],
+         [ZPOOL, 'replace', v[:name], v[:old], v[:new]],
+         [:pool_status]]
+      }
+    },
+    # Grows a pool by one group of free whole disks shaped like its groups: the same layout
+    # (mirror or RAIDZ level) and the same number of drives, so its redundancy stays even.
+    # zpool add checks that too (no -f).
+    'pools.add_group' => {
+      params: %w[name devices],
+      validate: ->(a) { add_group_request(a['name'], a['devices']) },
+      plan: lambda { |v|
+        [*v[:wipe].map { |device| [WIPEFS, '-a', device] },
+         ['/usr/bin/udevadm', 'settle', { allow_failure: true }],
+         [ZPOOL, 'add', '-o', 'ashift=12', v[:name], *v[:vdevs]],
+         [:pool_status]]
+      }
+    },
+    # Destroys a pool and everything on it; confirm must repeat its name. Its drives' ZFS
+    # labels are cleared and the drives wiped, so they're free for share storage or a new pool.
+    'pools.destroy' => {
+      params: %w[name confirm],
+      validate: ->(a) { destroy_request(a['name'], a['confirm']) },
+      plan: lambda { |v|
+        [[ZPOOL, 'destroy', v[:name]],
+         *v[:members].map { |part| [ZPOOL, 'labelclear', '-f', part, { allow_failure: true }] },
+         *v[:wipe].map { |device| [WIPEFS, '-a', device, { allow_failure: true }] },
+         ['/usr/bin/udevadm', 'settle', { allow_failure: true }],
+         [:remove_pool_dir, v[:name]],
          [:pool_status]]
       }
     },
@@ -927,6 +967,54 @@ module AmahiHelper
         raise Refused, "#{n['path']} is in /etc/fstab (#{listed}); unmount it on Disks → Devices first" if listed
       end
       [value, node]
+    end
+
+    def replace_request(name, old, new)
+      installed!(ZPOOL)
+      name = existing_pool(name)
+      old = string(old, 'old', max: 256)
+      leaves = pool_leaves(pool_vdevs(name))
+      raise Refused, "#{old.inspect} isn't a drive in the pool #{name}" unless leaves.any? { |leaf| leaf['name'] == old }
+      path, node = pool_disk(new, block_tree, pooled_devices)
+      { name: name, old: old, new: stable_path(path), wipe: wipe_targets(node) }
+    end
+
+    def add_group_request(name, devices)
+      installed!(ZPOOL)
+      name = existing_pool(name)
+      groups = pool_vdevs(name).map { |vdev| [vdev['name'].to_s[/\A(mirror|raidz[123])-\d+\z/, 1], vdev['children'].size] }
+      layout, width = groups.first
+      unless layout && groups.uniq.size == 1
+        raise Refused, "the pool #{name} isn't made of matching mirror or RAIDZ groups; grow it from the command line"
+      end
+      raise Refused, 'devices must be a list of disks' unless devices.is_a?(Array)
+      raise Refused, "a new #{layout} group in #{name} needs #{width} drives, like the others" unless devices.size == width
+      tree = block_tree
+      pooled = pooled_devices
+      disks = devices.map { |device| pool_disk(device, tree, pooled) }
+      paths = disks.map(&:first)
+      raise Refused, "#{paths.find { |p| paths.count(p) > 1 }} is listed twice" if paths.uniq.size != paths.size
+      { name: name, wipe: disks.flat_map { |_path, node| wipe_targets(node) },
+        vdevs: [layout, *paths.map { |path| stable_path(path) }] }
+    end
+
+    def destroy_request(name, confirm)
+      installed!(ZPOOL)
+      name = existing_pool(name)
+      raise Refused, "type the pool's name (#{name}) to destroy it" unless confirm == name
+      members = pool_leaves(pool_vdevs(name)).filter_map { |leaf| leaf['device'] }
+      tree = block_tree
+      disks = members.filter_map { |part| tree.find { |disk| subtree(disk).any? { |n| n['path'] == part } } }.uniq
+      { name: name, members: members, wipe: disks.flat_map { |disk| wipe_targets(disk) } }
+    end
+
+    def pool_vdevs(name)
+      parse_pool_status(capture([ZPOOL, 'status', '-P', name]))['vdevs']
+    end
+
+    # Every drive in a pool's vdev tree, missing ones (no 'device') included.
+    def pool_leaves(rows)
+      rows.flat_map { |row| row['children'].empty? ? [row] : pool_leaves(row['children']) }
     end
 
     def existing_pool(value)
@@ -1414,6 +1502,15 @@ module AmahiHelper
     end
 
     # --- ZFS pools ---
+
+    # The pool's empty mount point, once the pool is gone.
+    def do_remove_pool_dir(name)
+      dir = "#{POOL_ROOT}/#{name}"
+      Dir.rmdir(dir) if File.directory?(dir) && !File.symlink?(dir) && Dir.empty?(dir) && !mount_point?(dir)
+      nil
+    rescue SystemCallError
+      nil
+    end
 
     def do_set_arc_max(bytes)
       File.write(ZFS_ARC_MAX, bytes.to_s) if File.exist?(ZFS_ARC_MAX)

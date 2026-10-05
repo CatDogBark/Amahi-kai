@@ -78,7 +78,7 @@ RSpec.describe 'AmahiHelper ZFS pools' do
         [%w[/usr/sbin/wipefs -a /dev/sdc1], %w[/usr/sbin/wipefs -a /dev/sdc], %w[/usr/sbin/wipefs -a /dev/sdd],
          %w[/usr/sbin/wipefs -a /dev/sde], ['/usr/bin/udevadm', 'settle', { allow_failure: true }],
          [:make_dir, "#{dir}/pools", '0755'],
-         ['/usr/sbin/zpool', 'create', '-f', '-o', 'ashift=12', '-o', 'autotrim=on', '-O', 'compression=lz4',
+         ['/usr/sbin/zpool', 'create', '-f', '-o', 'ashift=12', '-o', 'autoexpand=on', '-o', 'autotrim=on', '-O', 'compression=lz4',
           '-O', "mountpoint=#{dir}/pools/tank", 'tank', 'raidz1',
           '/dev/disk/by-id/ata-SSD_sdc', '/dev/disk/by-id/ata-SSD_sdd', '/dev/disk/by-id/ata-SSD_sde'],
          [:pool_status]]
@@ -285,6 +285,96 @@ RSpec.describe 'AmahiHelper ZFS pools' do
       allow(helper).to receive(:pool_names).and_return(['tank'])
       allow(helper).to receive(:capture).with(%w[/usr/sbin/zpool status -P tank]).and_return(degraded)
       expect(helper.pooled_devices).to eq('/dev/sdc1' => 'tank', '/dev/sde1' => 'tank')
+    end
+  end
+
+  describe 'managing a pool' do
+    # The pool "old": a 3-drive RAIDZ1 with one drive missing. Its drive on sdh is in the tree.
+    let(:status) do
+      <<~STATUS
+          pool: old
+         state: DEGRADED
+        config:
+
+        \tNAME                                   STATE     READ WRITE CKSUM
+        \told                                    DEGRADED     0     0     0
+        \t  raidz1-0                             DEGRADED     0     0     0
+        \t    /dev/disk/by-id/ata-SSD_8-part1    ONLINE       0     0     0
+        \t    1234567890123456789                UNAVAIL      0     0     0  was /dev/disk/by-id/ata-SSD_7-part1
+        \t    /dev/disk/by-id/ata-SSD_9-part1    ONLINE       0     0     0
+
+        errors: No known data errors
+      STATUS
+    end
+
+    before do
+      allow(helper).to receive(:capture).and_call_original
+      allow(helper).to receive(:capture).with(%w[/usr/sbin/zpool status -P old]).and_return(status)
+      allow(File).to receive(:realpath).and_call_original
+      allow(File).to receive(:realpath).with('/dev/disk/by-id/ata-SSD_8-part1').and_return('/dev/sdh1')
+      allow(File).to receive(:realpath).with('/dev/disk/by-id/ata-SSD_9-part1').and_return('/dev/sdz1')
+    end
+
+    it 'replaces a drive, missing or not, with a free whole disk' do
+      expect(steps('pools.replace', { 'name' => 'old', 'old' => '1234567890123456789', 'new' => '/dev/sdd' })).to eq(
+        [%w[/usr/sbin/wipefs -a /dev/sdd], ['/usr/bin/udevadm', 'settle', { allow_failure: true }],
+         ['/usr/sbin/zpool', 'replace', 'old', '1234567890123456789', '/dev/disk/by-id/ata-SSD_sdd'], [:pool_status]]
+      )
+      expect(steps('pools.replace', { 'name' => 'old', 'old' => '/dev/disk/by-id/ata-SSD_8-part1', 'new' => '/dev/sdc' }).first(2))
+        .to eq([%w[/usr/sbin/wipefs -a /dev/sdc1], %w[/usr/sbin/wipefs -a /dev/sdc]])
+    end
+
+    it "refuses a drive that isn't in the pool, and a new one that isn't free" do
+      replace = ->(old, new) { refusal('pools.replace', { 'name' => 'old', 'old' => old, 'new' => new }) }
+      expect(replace.call('/dev/sdc1', '/dev/sdd')).to eq('"/dev/sdc1" isn\'t a drive in the pool old')
+      expect(replace.call('1234567890123456789', '/dev/sdb')).to include('unmount it first')
+      expect(replace.call('1234567890123456789', '/dev/sdh')).to eq('/dev/sdh is in the pool old')
+      expect(replace.call('1234567890123456789', '/dev/sda')).to include('a disk the system uses')
+      expect(refusal('pools.replace', { 'name' => 'tank', 'old' => 'x', 'new' => '/dev/sdd' })).to include("there's no pool named")
+    end
+
+    it "adds a group shaped like the pool's: same layout, same number of drives" do
+      expect(steps('pools.add_group', { 'name' => 'old', 'devices' => %w[/dev/sdc /dev/sdd /dev/sde] })).to eq(
+        [%w[/usr/sbin/wipefs -a /dev/sdc1], %w[/usr/sbin/wipefs -a /dev/sdc], %w[/usr/sbin/wipefs -a /dev/sdd],
+         %w[/usr/sbin/wipefs -a /dev/sde], ['/usr/bin/udevadm', 'settle', { allow_failure: true }],
+         ['/usr/sbin/zpool', 'add', '-o', 'ashift=12', 'old', 'raidz1',
+          '/dev/disk/by-id/ata-SSD_sdc', '/dev/disk/by-id/ata-SSD_sdd', '/dev/disk/by-id/ata-SSD_sde'],
+         [:pool_status]]
+      )
+      expect(refusal('pools.add_group', { 'name' => 'old', 'devices' => %w[/dev/sdc /dev/sdd] }))
+        .to eq('a new raidz1 group in old needs 3 drives, like the others')
+      expect(refusal('pools.add_group', { 'name' => 'old', 'devices' => %w[/dev/sdc /dev/sdd /dev/sdd] })).to eq('/dev/sdd is listed twice')
+      expect(refusal('pools.add_group', { 'name' => 'old', 'devices' => %w[/dev/sdc /dev/sdd /dev/sdb] })).to include('unmount it first')
+    end
+
+    it "won't add to a pool whose groups don't match" do
+      mixed = status.sub("\t  raidz1-0 ", "\t  mirror-0 ").sub("\nerrors:", "\t  raidz1-1  ONLINE 0 0 0\n\t    /dev/sdq1  ONLINE 0 0 0\n\nerrors:")
+      allow(helper).to receive(:capture).with(%w[/usr/sbin/zpool status -P old]).and_return(mixed)
+      expect(refusal('pools.add_group', { 'name' => 'old', 'devices' => %w[/dev/sdc /dev/sdd /dev/sde] })).to include("isn't made of matching")
+    end
+
+    it 'destroys a pool only when its name is typed again, then frees its drives' do
+      expect(refusal('pools.destroy', { 'name' => 'old', 'confirm' => 'OLD' })).to eq("type the pool's name (old) to destroy it")
+      expect(steps('pools.destroy', { 'name' => 'old', 'confirm' => 'old' })).to eq(
+        [%w[/usr/sbin/zpool destroy old],
+         ['/usr/sbin/zpool', 'labelclear', '-f', '/dev/sdh1', { allow_failure: true }],
+         ['/usr/sbin/zpool', 'labelclear', '-f', '/dev/sdz1', { allow_failure: true }],
+         ['/usr/sbin/wipefs', '-a', '/dev/sdh1', { allow_failure: true }],
+         ['/usr/sbin/wipefs', '-a', '/dev/sdh9', { allow_failure: true }],
+         ['/usr/sbin/wipefs', '-a', '/dev/sdh', { allow_failure: true }],
+         ['/usr/bin/udevadm', 'settle', { allow_failure: true }],
+         [:remove_pool_dir, 'old'], [:pool_status]]
+      )
+    end
+
+    it "removes the pool's mount point only when it's an empty folder" do
+      Dir.mkdir("#{dir}/pools")
+      Dir.mkdir("#{dir}/pools/old")
+      helper.do_remove_pool_dir('old')
+      expect(File.exist?("#{dir}/pools/old")).to be(false)
+      FileUtils.mkdir_p("#{dir}/pools/kept/data")
+      helper.do_remove_pool_dir('kept')
+      expect(File.exist?("#{dir}/pools/kept/data")).to be(true)
     end
   end
 

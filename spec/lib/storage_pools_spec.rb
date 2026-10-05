@@ -163,6 +163,41 @@ RSpec.describe StoragePools do
     end
   end
 
+  describe 'changing a pool' do
+    it 'replaces a drive, adds a group and destroys a pool through the helper, then checks the health' do
+      described_class.replace!(name: 'tank', old: '1234567890', new: '/dev/sdg')
+      described_class.add_group!(name: 'tank', devices: %w[/dev/sdg /dev/sdh /dev/sdi])
+      described_class.destroy!(name: 'tank', confirm: 'tank')
+      expect(Privileged.calls).to eq([
+        ['pools.replace', { name: 'tank', old: '1234567890', new: '/dev/sdg' }], ['storage.check_health', {}],
+        ['pools.add_group', { name: 'tank', devices: %w[/dev/sdg /dev/sdh /dev/sdi] }], ['storage.check_health', {}],
+        ['pools.destroy', { name: 'tank', confirm: 'tank' }], ['storage.check_health', {}]
+      ])
+    end
+
+    it "needs the drives, and doesn't fail a change when the health check after it does" do
+      expect { described_class.replace!(name: 'tank', old: 'x', new: '') }.to raise_error(StoragePools::Error, 'Choose the new drive')
+      expect { described_class.add_group!(name: 'tank', devices: []) }.to raise_error(StoragePools::Error, 'Choose the drives to add')
+      allow(Privileged).to receive(:call).and_call_original
+      allow(Privileged).to receive(:call).with('storage.check_health').and_raise(Privileged::Error.new('storage.check_health', 'busy'))
+      expect { described_class.destroy!(name: 'tank', confirm: 'tank') }.not_to raise_error
+    end
+
+    it "knows the shape of a pool's groups, and when a scrub or resilver runs" do
+      pool = lambda do |*groups, scan: nil|
+        StoragePools::Pool.new(scan: scan, vdevs: groups.map { |name, width| { 'name' => name, 'children' => Array.new(width) { {} } } })
+      end
+      expect(pool.call(['raidz1-0', 4], ['raidz1-1', 4]).group_shape).to eq(['raidz1', 4])
+      expect(pool.call(['mirror-0', 2]).group_shape).to eq(['mirror', 2])
+      expect(pool.call(['raidz1-0', 4], ['raidz1-1', 3]).group_shape).to be_nil
+      expect(pool.call(['mirror-0', 2], ['raidz2-1', 4]).group_shape).to be_nil
+      expect(pool.call(['/dev/sdc1', 0]).group_shape).to be_nil
+      expect(pool.call(scan: 'resilver in progress since Sun Oct  4 10:00:00 2026')).to be_scanning
+      expect(pool.call(scan: 'scrub in progress since Sun Oct  4 10:00:00 2026')).to be_scanning
+      expect(pool.call(scan: 'scrub repaired 0B in 00:01:02 with 0 errors on Sun Oct  4 02:41:08 2026')).not_to be_scanning
+    end
+  end
+
   it 'scrubs a pool and checks the health through the helper' do
     described_class.scrub!('tank')
     described_class.check_health!
@@ -172,7 +207,8 @@ RSpec.describe StoragePools do
   describe '.create!' do
     it 'passes the request to the helper' do
       described_class.create!(name: ' tank ', layout: 'raidz1', devices: %w[/dev/sdc /dev/sdd /dev/sde])
-      expect(Privileged.calls).to eq([['pools.create', { name: 'tank', layout: 'raidz1', devices: %w[/dev/sdc /dev/sdd /dev/sde] }]])
+      expect(Privileged.calls).to eq([['pools.create', { name: 'tank', layout: 'raidz1', devices: %w[/dev/sdc /dev/sdd /dev/sde] }],
+                                      ['storage.check_health', {}]])
     end
 
     it 'needs a known layout and some drives' do

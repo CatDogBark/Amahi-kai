@@ -50,6 +50,18 @@ module StoragePools
       leaves(vdevs)
     end
 
+    # The kind and size of the pool's groups when they all match (['raidz1', 4]), else nil.
+    # Adding drives takes one more group of that shape.
+    def group_shape
+      shapes = vdevs.map { |v| [v['name'].to_s[/\A(mirror|raidz[123])-\d+\z/, 1], Array(v['children']).size] }.uniq
+      shapes.size == 1 && shapes.first.first ? shapes.first : nil
+    end
+
+    # A scrub or resilver is running ("scrub in progress since ...").
+    def scanning?
+      scan.to_s.match?(/\A(?:scrub|resilver) in progress/)
+    end
+
     # Errors worth showing ("No known data errors" isn't).
     def data_errors
       errors unless errors.nil? || errors.start_with?('No known data errors')
@@ -154,10 +166,39 @@ module StoragePools
     def create!(name:, layout:, devices:)
       raise Error, 'Choose a layout' unless LAYOUTS.any? { |l| l[:key] == layout }
       raise Error, 'Choose the drives for the pool' if devices.blank?
-      privileged('pools.create', name: name.to_s.strip, layout: layout, devices: devices.map(&:to_s))
+      changed { privileged('pools.create', name: name.to_s.strip, layout: layout, devices: devices.map(&:to_s)) }
+    end
+
+    # Replaces a pool's drive (+old+: its name in the pool's status) with a free disk.
+    def replace!(name:, old:, new:)
+      raise Error, 'Choose the new drive' if new.blank?
+      changed { privileged('pools.replace', name: name.to_s, old: old.to_s, new: new.to_s) }
+    end
+
+    # Grows a pool by one group shaped like its others.
+    def add_group!(name:, devices:)
+      raise Error, 'Choose the drives to add' if devices.blank?
+      changed { privileged('pools.add_group', name: name.to_s, devices: devices.map(&:to_s)) }
+    end
+
+    # Destroys a pool; +confirm+ must be its name.
+    def destroy!(name:, confirm:)
+      changed { privileged('pools.destroy', name: name.to_s, confirm: confirm.to_s) }
     end
 
     private
+
+    # Runs a change to the pools, then the health check, so the alerts match it at once. A
+    # check that fails is left to the timer.
+    def changed
+      reply = yield
+      begin
+        check_health!
+      rescue Error => e
+        Rails.logger.warn("StoragePools: the health check after a change failed: #{e.message}")
+      end
+      reply
+    end
 
     def privileged(operation, **args, &block)
       Privileged.call(operation, **args, &block)

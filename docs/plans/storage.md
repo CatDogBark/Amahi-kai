@@ -13,7 +13,9 @@ tested on the physical drives ([Tests on real drives](#tests-on-real-drives)).
 - [x] **S2.** Health: a check every 15 minutes (`storage.check_health`, `amahi-kai-storage-check.timer`)
   of the pools and every drive's SMART data, alerts on the dashboard and Disks pages, Scrub now;
   the monthly scrub is Ubuntu's own (below) (#46).
-- [ ] **S3.** Replace a drive, grow a pool, destroy a pool.
+- [x] **S3.** Replace a drive (any drive, missing or failing; ZFS resilvers onto a free disk),
+  grow a pool by one group shaped like its others, destroy a pool behind its typed name (its
+  drives' ZFS labels are cleared, so they're free again); new pools get `autoexpand=on` (#50).
 - [ ] **S4.** Snapshots, and datasets per user of a pool.
 - [ ] **S5.** Greyhole handles files that don't arrive through Samba.
 
@@ -126,6 +128,8 @@ hours, wear, reallocated sectors, firmware) before it goes in a pool.
 - Create a RAIDZ1 pool from the 4 SSDs; it survives a reboot (imported at boot).
 - Pull a drive: the pool shows degraded and the alert appears; replace it and watch the resilver.
 - Run a scrub; take a snapshot and roll a test dataset back.
+- Grow a test pool by a second group; delete a test pool, and its drives show as free and can be
+  formatted for share storage.
 - Share storage (Greyhole) on the other drives works next to the pool, and neither offers the
   other's drives.
 - A file uploaded through the web file browser to a share with 2 copies ends up with 2 copies.

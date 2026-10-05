@@ -2,6 +2,8 @@
 // allow, with the space they'd give and how many may fail, then asks the server to create
 // the pool. data-storage-install buttons open the install window; data-storage-post buttons
 // (Scrub now, Check now) post to their URL, with their data-name, and reload.
+// data-pool-dialog buttons open the replace, add-drives and delete dialogs
+// (disks/_pool_dialogs). While a scrub or resilver runs, the page reloads every 30 seconds.
 
 (function() {
   // Sizes as Rails' number_to_human_size writes them (1024-based, "2.73 TB").
@@ -90,14 +92,103 @@
       .catch(function(err) { fail(err.message); });
   }
 
+  // Posts JSON to +url+ and reloads the page, or passes the error to +fail+.
+  function postJSON(url, body, fail) {
+    fetch(url, {
+      method: 'POST', credentials: 'same-origin',
+      headers: Object.assign({ 'Content-Type': 'application/json', 'Accept': 'application/json' }, csrfHeaders()),
+      body: JSON.stringify(body)
+    }).then(function(r) { return r.json().catch(function() { return {}; }); })
+      .then(function(data) {
+        if (data.status === 'ok') { window.location.reload(); return; }
+        fail(data.error || 'No answer from Amahi-kai');
+      })
+      .catch(function(err) { fail(err.message); });
+  }
+
+  // --- The pool dialogs ---
+
+  function camel(name) {
+    return name.replace(/-([a-z])/g, function(_m, c) { return c.toUpperCase(); });
+  }
+
+  function openDialog(button) {
+    var dialog = document.getElementById(button.dataset.poolDialog + '-dialog');
+    if (!dialog) return;
+    dialog.poolData = Object.assign({}, button.dataset);
+    dialog.querySelectorAll('[data-fill]').forEach(function(el) {
+      el.textContent = dialog.poolData[camel(el.dataset.fill)] || '';
+    });
+    dialog.querySelectorAll('input[type=checkbox], input[type=radio]').forEach(function(box) { box.checked = false; });
+    dialog.querySelectorAll('input[type=text]').forEach(function(text) { text.value = ''; });
+    dialog.querySelector('[data-dialog-error]').textContent = '';
+    updateDialog(dialog);
+    bootstrap.Modal.getOrCreateInstance(dialog).show();
+  }
+
+  function chosen(dialog) {
+    return Array.prototype.slice.call(dialog.querySelectorAll('.list-group input:checked'));
+  }
+
+  function updateDialog(dialog) {
+    var data = dialog.poolData || {};
+    var erase = dialog.querySelector('[data-confirm-erase]');
+    var ready = false;
+    if (dialog.id === 'replace-dialog') {
+      ready = chosen(dialog).length === 1 && erase.checked;
+    } else if (dialog.id === 'add-dialog') {
+      var drives = chosen(dialog);
+      var width = parseInt(data.width, 10);
+      var estimate = dialog.querySelector('[data-add-estimate]');
+      if (drives.length === width) {
+        var smallest = Math.min.apply(null, drives.map(function(d) { return parseInt(d.dataset.size, 10) || 0; }));
+        var usable = (width - parseInt(data.parity, 10)) * smallest;
+        estimate.textContent = 'Adds about ' + humanSize(usable) + ' of usable space.';
+      } else {
+        estimate.textContent = drives.length + ' of ' + width + ' drives chosen.';
+      }
+      ready = drives.length === width && erase.checked;
+    } else if (dialog.id === 'destroy-dialog') {
+      ready = dialog.querySelector('[data-confirm-name]').value === data.name;
+    }
+    dialog.querySelector('[data-dialog-submit]').disabled = !ready;
+  }
+
+  function submitDialog(dialog) {
+    var data = dialog.poolData;
+    var button = dialog.querySelector('[data-dialog-submit]');
+    var label = button.textContent;
+    var body = { name: data.name };
+    if (dialog.id === 'replace-dialog') {
+      body.old = data.old;
+      body.new = chosen(dialog)[0].value;
+    } else if (dialog.id === 'add-dialog') {
+      body.devices = chosen(dialog).map(function(d) { return d.value; });
+    } else {
+      body.confirm = dialog.querySelector('[data-confirm-name]').value;
+    }
+    button.disabled = true;
+    button.textContent = 'Working…';
+    dialog.querySelector('[data-dialog-error]').textContent = '';
+    postJSON(dialog.dataset.url, body, function(message) {
+      dialog.querySelector('[data-dialog-error]').textContent = message;
+      button.textContent = label;
+      updateDialog(dialog);
+    });
+  }
+
   document.addEventListener('change', function(event) {
     var form = event.target.closest('#pool-form');
-    if (form) update(form);
+    if (form) { form.dataset.touched = 'true'; update(form); }
+    var dialog = event.target.closest('.modal[id$="-dialog"]');
+    if (dialog && dialog.poolData) updateDialog(dialog);
   });
 
   document.addEventListener('input', function(event) {
     var form = event.target.closest('#pool-form');
-    if (form) update(form);
+    if (form) { form.dataset.touched = 'true'; update(form); }
+    var dialog = event.target.closest('.modal[id$="-dialog"]');
+    if (dialog && dialog.poolData) updateDialog(dialog);
   });
 
   document.addEventListener('submit', function(event) {
@@ -111,20 +202,11 @@
     var label = button.textContent;
     button.disabled = true;
     button.textContent = 'Working…';
-    fetch(button.dataset.storagePost, {
-      method: 'POST', credentials: 'same-origin',
-      headers: Object.assign({ 'Content-Type': 'application/json', 'Accept': 'application/json' }, csrfHeaders()),
-      body: JSON.stringify(button.dataset.name ? { name: button.dataset.name } : {})
-    }).then(function(r) { return r.json().catch(function() { return {}; }); })
-      .then(function(data) {
-        if (data.status === 'ok') { window.location.reload(); return; }
-        throw new Error(data.error || 'No answer from Amahi-kai');
-      })
-      .catch(function(err) {
-        alert(err.message);
-        button.disabled = false;
-        button.textContent = label;
-      });
+    postJSON(button.dataset.storagePost, button.dataset.name ? { name: button.dataset.name } : {}, function(message) {
+      alert(message);
+      button.disabled = false;
+      button.textContent = label;
+    });
   }
 
   document.addEventListener('click', function(event) {
@@ -132,10 +214,25 @@
     if (install) openInstallTerminal('storage-install', install.dataset.storageInstall);
     var action = event.target.closest('[data-storage-post]');
     if (action) post(action);
+    var opener = event.target.closest('[data-pool-dialog]');
+    if (opener) openDialog(opener);
+    var submit = event.target.closest('[data-dialog-submit]');
+    if (submit) submitDialog(submit.closest('.modal'));
   });
+
+  // While a scrub or resilver runs: reload every 30 seconds, unless a dialog is open or the
+  // create form has been touched.
+  function refreshWhileScanning() {
+    setTimeout(function() {
+      var form = document.getElementById('pool-form');
+      var busy = document.querySelector('.modal.show') || (form && form.dataset.touched);
+      if (busy) refreshWhileScanning(); else window.location.reload();
+    }, 30000);
+  }
 
   document.addEventListener('DOMContentLoaded', function() {
     var form = document.getElementById('pool-form');
     if (form) update(form);
+    if (document.querySelector('[data-pool-scanning]')) refreshWhileScanning();
   });
 })();

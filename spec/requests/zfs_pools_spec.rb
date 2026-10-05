@@ -75,8 +75,8 @@ RSpec.describe 'ZFS pools', type: :request do
       expect(card.text).to include('466 GB used', '1.82 TB free of 2.27 TB', 'One or more devices could not be used.',
                                    "What to do: Replace the device using 'zpool replace'.", '/srv/pools/tank', 'No scrub has run yet.')
       rows = card.css('tbody tr').map { |tr| tr.css('td').map { |td| td.text.strip } }
-      expect(rows).to eq([['/dev/sdc', 'Samsung_SSD_870_S1', 'ONLINE', 'Not checked yet', '0 / 0 / 0'],
-                          ['—', 'was /dev/disk/by-id/ata-Samsung_SSD_870_S2-part1', 'UNAVAIL', '—', '0 / 0 / 0']])
+      expect(rows).to eq([['/dev/sdc', 'Samsung_SSD_870_S1', 'ONLINE', 'Not checked yet', '0 / 0 / 0', 'Replace'],
+                          ['—', 'was /dev/disk/by-id/ata-Samsung_SSD_870_S2-part1', 'UNAVAIL', '—', '0 / 0 / 0', 'Replace']])
     end
 
     it 'offers only free drives to a new pool, with every layout, and a free name' do
@@ -108,10 +108,55 @@ RSpec.describe 'ZFS pools', type: :request do
       expect(page.at_css('.alert-warning').text.strip).to eq("Couldn't read the pools: The ZFS modules are not loaded.")
     end
 
-    it 'creates a pool through the helper' do
+    it 'creates a pool through the helper, then checks the health' do
       post '/disks/create_pool', params: { name: 'tank', layout: 'raidz1', devices: %w[/dev/sdc /dev/sdd /dev/sde] }, as: :json
       expect(response.parsed_body).to eq('status' => 'ok')
-      expect(Privileged.calls).to eq([['pools.create', { name: 'tank', layout: 'raidz1', devices: %w[/dev/sdc /dev/sdd /dev/sde] }]])
+      expect(Privileged.calls).to eq([['pools.create', { name: 'tank', layout: 'raidz1', devices: %w[/dev/sdc /dev/sdd /dev/sde] }],
+                                      ['storage.check_health', {}]])
+    end
+
+    it 'replaces a drive, adds drives and deletes a pool through the helper' do
+      post '/disks/replace_pool_drive', params: { name: 'tank', old: '1234', new: '/dev/sdd' }, as: :json
+      expect(response.parsed_body).to eq('status' => 'ok')
+      post '/disks/add_pool_group', params: { name: 'tank', devices: %w[/dev/sdd /dev/sde] }, as: :json
+      post '/disks/destroy_pool', params: { name: 'tank', confirm: 'tank' }, as: :json
+      expect(Privileged.calls.map(&:first) - ['storage.check_health']).to eq(%w[pools.replace pools.add_group pools.destroy])
+      expect(Privileged.calls).to include(['pools.destroy', { name: 'tank', confirm: 'tank' }])
+      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('pools.destroy', "type the pool's name (tank) to destroy it", refused: true))
+      post '/disks/destroy_pool', params: { name: 'tank', confirm: 'no' }, as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(response.parsed_body['error']).to eq("type the pool's name (tank) to destroy it")
+    end
+
+    it "offers Replace on every drive (highlighted when it isn't ONLINE), Add drives in the pool's shape, and Delete" do
+      stub_pools(installed: true, pools: [pool])
+      get '/disks/pools'
+      card = page.at_css('#pool-tank')
+      replace = card.css('[data-pool-dialog="replace"]')
+      expect(replace.map { |b| b['data-old'] }).to eq(['/dev/disk/by-id/ata-Samsung_SSD_870_S1-part1', '1234'])
+      expect(replace.map { |b| b['data-old-label'] }).to eq(['/dev/sdc (Samsung_SSD_870_S1)', 'the missing drive (was /dev/disk/by-id/ata-Samsung_SSD_870_S2-part1)'])
+      expect(replace.map { |b| b['class'][/btn-(warning|outline-secondary)/] }).to eq(%w[btn-outline-secondary btn-warning])
+      add = card.at_css('[data-pool-dialog="add"]')
+      expect(add.to_h.slice('data-layout', 'data-width', 'data-parity', 'data-layout-name')).to eq(
+        'data-layout' => 'raidz1', 'data-width' => '2', 'data-parity' => '1', 'data-layout-name' => 'RAIDZ1'
+      )
+      expect(card.at_css('[data-pool-dialog="destroy"]')['data-name']).to eq('tank')
+      dialogs = %w[replace-dialog add-dialog destroy-dialog].map { |id| page.at_css("##{id}") }
+      expect(dialogs.map { |d| d['data-url'] }).to eq(%w[/disks/replace_pool_drive /disks/add_pool_group /disks/destroy_pool])
+      expect(page.css('#replace-dialog input[name="new"]').map { |i| i['value'] }).to eq(%w[/dev/sdd /dev/sde /dev/sdf])
+      expect(page.css('#add-dialog input[name="devices[]"]').map { |i| i['value'] }).to eq(%w[/dev/sdd /dev/sde /dev/sdf])
+      expect(card.at_css('[data-pool-scanning]')).to be_nil
+    end
+
+    it 'says the page updates while a resilver runs, and offers no Add drives for a pool of mixed groups' do
+      resilvering = StoragePools::Pool.new(**pool.to_h, scan: 'resilver in progress since Sun Oct  4 10:00:00 2026',
+                                                        vdevs: pool.vdevs + [{ 'name' => 'mirror-1', 'children' => [{}, {}] }])
+      stub_pools(installed: true, pools: [resilvering])
+      get '/disks/pools'
+      card = page.at_css('#pool-tank')
+      expect(card.at_css('[data-pool-scanning]').text).to include('updates every 30 seconds')
+      expect(card.at_css('[data-pool-dialog="add"]')).to be_nil
+      expect(card.at_css('[data-storage-post="/disks/scrub_pool"]')['disabled']).not_to be_nil
     end
 
     it "passes on the helper's refusal" do
