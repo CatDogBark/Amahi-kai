@@ -17,7 +17,10 @@ RSpec.describe 'System Update', type: :request do
   after { log.close! }
 
   def job_states(*states)
-    results = states.map { |state| ["#{state}\n", '', instance_double(Process::Status, success?: state == 'active')] }
+    results = states.map do |state|
+      killed = state == :killed
+      ["#{state unless killed}\n", '', instance_double(Process::Status, success?: state == 'active', signaled?: killed)]
+    end
     allow(Open3).to receive(:capture3).with('systemctl', 'is-active', 'amahi-kai-update.service').and_return(*results)
   end
 
@@ -91,6 +94,36 @@ RSpec.describe 'System Update', type: :request do
       get '/settings/update_system_stream', headers: same_origin
 
       expect(events(response.body)).to eq([['data: Precompiling assets...'], ['data: Restarting Amahi-kai...']])
+    end
+
+    # Stopping amahi-kai.service signals every process in it, the stream's systemctl check
+    # included: an update that went fine once showed "The update didn't finish" (#52).
+    it "ends without \"done\" when the restart kills the check, so the page asks the new version" do
+      File.write(log.path, "Precompiling assets...\nRestarting Amahi-kai...\n")
+      job_states(:killed)
+      allow(Puma::Server).to receive(:current).and_return(instance_double(Puma::Server, shutting_down?: true))
+
+      get '/settings/update_system_stream', headers: same_origin
+
+      expect(events(response.body)).to eq([['data: Precompiling assets...'], ['data: Restarting Amahi-kai...']])
+    end
+
+    it 'treats a check with no answer as still running, and waits for a real one' do
+      File.write(log.path, "Restarting Amahi-kai...\n")
+      job_states(:killed, '', 'active', 'inactive')
+      allow(Puma::Server).to receive(:current).and_return(instance_double(Puma::Server, shutting_down?: false))
+      allow(File).to receive(:readlines).and_call_original
+      reads = 0
+      allow(File).to receive(:readlines).with(log.path, chomp: true) do
+        reads += 1
+        File.open(log.path, 'a') { |f| f.puts('✓ Amahi-kai updated and running!') } if reads == 3
+        File.read(log.path).lines.map(&:chomp)
+      end
+
+      get '/settings/update_system_stream', headers: same_origin
+
+      expect(events(response.body)).to eq([['data: Restarting Amahi-kai...'], ['data: ✓ Amahi-kai updated and running!'],
+                                           ['event: done', 'data: success']])
     end
 
     it 'keeps following the log while Puma runs' do
