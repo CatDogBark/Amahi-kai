@@ -70,7 +70,7 @@ These shape every PR after them.
 - [x] **O5. The catalog.** Recommended: **curated in this repo**, versions pinned, updated with
   Amahi-kai's own updates; no third-party catalogs for now. Apps that only work with root-level
   access (Portainer needs Docker's socket) leave the catalog. **Decided**, and the catalog is
-  pruned to six apps (A5); more are added when wanted.
+  pruned to five apps (A5); more are added when wanted.
 - [x] **O6. bitShare.** Recommended: **an app on this same model** (its own manifest, dataset, port
   and hostname), with no special path into Amahi-kai, so anything bitShare needs becomes a feature
   every app can use. **Decided**; bitShare is designed to run as a single container (A7).
@@ -110,17 +110,17 @@ Decisions for this PR:
   read another's data. Alternative: one shared `amahi-apps` user (simpler; apps can read each
   other's files). **Decided: one per app.**
 - [x] **A5. Which apps stay in the catalog.** **Decided (Troy, 2026-10-05): Jellyfin, Vaultwarden,
-  Uptime Kuma, Home Assistant, Gitea and Transmission.** Dropped: Portainer (Docker's socket is
-  root), Nextcloud and Syncthing (bitShare covers sync), Audiobookshelf, Pi-hole, Paperless-ngx
-  (broken as defined: no Redis, a `changeme` secret) and Grafana (empty without a metrics source).
-  Apps are added later when wanted. Home Assistant runs without host networking until P4.2
-  decides it (it works, without automatic device discovery). None of the six has been tested with
-  Amahi-kai yet; each is tested on the new model.
+  Uptime Kuma, Gitea and Transmission.** Dropped: Portainer (Docker's socket is root), Nextcloud
+  and Syncthing (bitShare covers sync), Home Assistant (its container version has no add-ons and
+  needs host networking to find devices; if wanted, Home Assistant OS runs better as its own
+  Proxmox VM), Audiobookshelf, Pi-hole, Paperless-ngx (broken as defined: no Redis, a `changeme`
+  secret) and Grafana (empty without a metrics source). Apps are added later when wanted. None of
+  the five has been tested with Amahi-kai yet; each is tested on the new model.
 - [x] **A6. Default memory limit** for apps whose manifest doesn't set one, on an 8 GB VM shared with
   ZFS's 2 GB cache. Recommended: 1 GB, with Jellyfin set higher in its manifest. **Decided** (Troy
   is raising the VM to 8 GB).
 - [x] **A7. One container per app.** **Decided (Troy, 2026-10-05):** the manifest describes a single
-  container. All six apps keep their data in a built-in database file (SQLite) or need none.
+  container. All five apps keep their data in a built-in database file (SQLite) or need none.
   Apps built from several containers (an app plus its database server and Redis, like Immich or
   a working Paperless-ngx) wait until one is wanted; companion support is designed then, with that
   app. Companions' advantage is updating each part from its official image; their cost is start
@@ -136,9 +136,10 @@ own address.
 - [ ] Ports: the catalog's usual port (8096 for Jellyfin) or picked automatically when it's taken.
 - [ ] Binding: all interfaces (today), or the LAN and Tailscale addresses only, given that Docker's
   rules come before UFW.
-- [ ] Host networking for the apps that want it (Home Assistant's discovery): allowed for named apps,
-  or never.
-- [ ] Pi-hole and port 53: allowed only when Amahi-kai's own dnsmasq is off.
+- [ ] Host networking (some apps want it to find devices on the LAN): allowed for named apps, or
+  never.
+- [ ] Keep router mode possible (roadmap, Direction): binding and firewall choices mustn't assume
+  the NAS only ever sits on someone else's LAN. Apps face the LAN side, never the internet side.
 - [ ] HTTPS on the LAN: plain HTTP like the admin UI, or certificates.
 - [ ] Apps' outgoing internet access: allowed by default (most need it for metadata and updates), or
   opt-in.

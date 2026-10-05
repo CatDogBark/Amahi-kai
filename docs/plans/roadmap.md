@@ -130,7 +130,7 @@ Planned with Troy (2026-10-05) in [`apps.md`](apps.md): Docker only through the 
 apps defined by our own manifest (one container each), each app on its own port with an optional
 Cloudflare Tunnel hostname (remote use required), one user and folder per app, ZFS datasets for big
 data, shares read-only or read-write as chosen (never a pooled share read-write), uninstall keeps
-data, a curated catalog of six apps, bitShare as an ordinary app. PRs P4.1–P4.6; P4.1 (apps through
+data, a curated catalog of five apps, bitShare as an ordinary app. PRs P4.1–P4.6; P4.1 (apps through
 the root helper) is first, its decisions made.
 
 ## Direction
@@ -139,3 +139,9 @@ Troy's long-term aim is a self-hosted personal platform: storage, identity, perm
 eventually local AI, with system actions exposed as narrow, audited capabilities rather than root
 access. That is why the helper's operations are named like an API (`users.create`,
 `shares.grant`) and log every call. Build the boring, reliable pieces first.
+
+**Router, for those who want it** (Troy, 2026-10-05): Amahi-kai can optionally act as the network's
+router. Part of it exists: Network → Gateway runs DHCP and DNS (dnsmasq). The rest (the internet
+connection on its own port, NAT, the firewall facing the internet) is its own feature, designed
+later. Until then, other work (Phase 4's networking above all) mustn't assume the NAS is only ever a
+host on someone else's LAN.
