@@ -64,7 +64,7 @@ RSpec.describe StoragePools do
 
     before do
       allow(Open3).to receive(:capture3)
-        .with('lsblk', '-J', '-b', '-o', 'PATH,TYPE,SIZE,MODEL,SERIAL,FSTYPE,LABEL,MOUNTPOINTS,ROTA')
+        .with('lsblk', '-J', '-b', '-o', 'NAME,PATH,TYPE,SIZE,MODEL,SERIAL,FSTYPE,LABEL,MOUNTPOINTS,ROTA')
         .and_return([lsblk, '', instance_double(Process::Status, success?: true)])
     end
 
@@ -78,6 +78,25 @@ RSpec.describe StoragePools do
       expect(drives.find { |d| d[:path] == '/dev/sde' }).to include(model: 'Samsung SSD 870 EVO 1TB', serial: 'S6P', size: 1_000_000, ssd: true)
       expect(drives.find { |d| d[:path] == '/dev/sdc' }[:pool]).to eq('tank')
       expect(drives.find { |d| d[:path] == '/dev/sdb' }[:mounts]).to eq(['/mnt/storage-1'])
+    end
+
+    # lsblk lists every device flat unless NAME is the first column, and then a disk seems
+    # to have nothing on it: the system disk showed as free.
+    it 'lists nothing rather than read a flat list' do
+      flat = { 'blockdevices' => [{ 'path' => '/dev/sda', 'type' => 'disk', 'mountpoints' => [nil] },
+                                  { 'path' => '/dev/sda1', 'type' => 'part', 'mountpoints' => ['/'] }] }.to_json
+      allow(Open3).to receive(:capture3).and_return([flat, '', instance_double(Process::Status, success?: true)])
+      expect(described_class.drives).to eq([])
+    end
+
+    it "never offers the disk this machine runs from (its real lsblk)" do
+      allow(Open3).to receive(:capture3).and_call_original
+      out, _err, status = Open3.capture3('lsblk', '-J', '-o', 'NAME,PATH,MOUNTPOINTS')
+      skip 'no lsblk here' unless status.success?
+      mounted = ->(node) { [*Array(node['mountpoints']), *Array(node['children']).flat_map { |c| mounted.call(c) }] }
+      root = JSON.parse(out)['blockdevices'].find { |disk| mounted.call(disk).include?('/') }
+      skip "/ isn't on a disk lsblk lists here" unless root
+      expect(described_class.drives.find { |d| d[:path] == root['path'] }).to include(role: :os, free: false)
     end
 
     it 'lists nothing when lsblk fails' do

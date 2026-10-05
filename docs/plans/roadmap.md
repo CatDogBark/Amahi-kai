@@ -35,6 +35,7 @@ so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 | 3. English only | 25 translations, the language picker, the language cookie and right-to-left styling removed (Troy's decision) | #40 |
 | 3. Update notice | A dot on the header's update button and a dashboard line when an update is waiting; the button opens a What's new window (changelog, pull requests, Update now or Later; else Check now and Repair) | #43 |
 | Storage S1. ZFS pools | Disks → ZFS Pools: install ZFS (cache capped), create a pool in the chosen layout, pool status; every drive's use shown; ZFS drives kept away from share storage. Not yet tested on real drives | #44 |
+| Storage fix. lsblk tree | The helper's drive checks and ZFS Pools read lsblk as a tree (NAME first; a flat list is refused), so the system disk is recognised again; specs on the real lsblk; What's new without the dash | #45 |
 
 ## Next: Phase 3
 
