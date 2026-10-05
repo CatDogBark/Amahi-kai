@@ -47,6 +47,19 @@ module ApplicationHelper
     content_tag('span', '', class: "spinner #{css_class}", style: "display: none")
   end
 
+  # A time shown as "3 hours ago", or "in 2 hours" when +future+ ("any moment" once it's
+  # passed). time_ago.js works it out again every minute, when a dialog opens and when the page
+  # comes back into view: written only when the page loads, a page left open would keep saying
+  # "less than a minute ago". +clock+ adds the time of day in the viewer's time zone.
+  def relative_time_tag(time, future: false, capitalize: false, clock: false)
+    text = if !future then "#{time_ago_in_words(time)} ago"
+           elsif time > Time.current then "in #{distance_of_time_in_words(Time.current, time)}"
+           else 'any moment'
+           end
+    content_tag(:time, capitalize ? text.upcase_first : text, datetime: time.utc.iso8601,
+                data: { relative: future ? 'in' : 'ago', capitalize: (true if capitalize), clock: (true if clock) })
+  end
+
   def formatted_date(date)
     date = date.localtime
     "#{date.to_formatted_s(:short)} (#{time_ago_in_words(date)})"

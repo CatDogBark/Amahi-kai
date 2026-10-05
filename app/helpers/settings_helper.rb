@@ -8,13 +8,13 @@ module SettingsHelper
     content_tag(:span, label, class: "badge #{css}")
   end
 
-  def job_last_run(job)
-    job.last_run ? "#{time_ago_in_words(job.last_run)} ago" : 'not yet'
+  def job_last_run(job, capitalize: false)
+    return(capitalize ? 'Not yet' : 'not yet') unless job.last_run
+    relative_time_tag(job.last_run, capitalize: capitalize)
   end
 
   def job_next_run(job)
-    return 'not scheduled' unless job.next_run
-    job.next_run > Time.current ? "in #{distance_of_time_in_words(Time.current, job.next_run)}" : 'any moment'
+    job.next_run ? relative_time_tag(job.next_run, future: true) : 'not scheduled'
   end
 
   # A change's title from the update check, its "(#NN)" linked to the pull request.

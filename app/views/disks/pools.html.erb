@@ -111,7 +111,7 @@
                   <% snaps.reverse_each.with_index do |snap, newer| %>
                     <tr>
                       <td><%= snapshot_kind(snap) %> <span class="text-muted ms-1"><%= snap['name'] %></span></td>
-                      <td class="text-nowrap"><span class="tip-text" tabindex="0" data-tip="<%= l(snap['created'], format: :long) %>"><%= time_ago_in_words(snap['created']) %> ago</span></td>
+                      <td class="text-nowrap"><span class="tip-text" tabindex="0" data-tip="<%= l(snap['created'], format: :long) %>"><%= relative_time_tag(snap['created']) %></span></td>
                       <td class="text-end"><%= number_to_human_size(snap['used'].to_i) %></td>
                       <td class="text-end text-nowrap">
                         <% if snap['kind'] %>
@@ -160,7 +160,7 @@
     <div class="card-header d-flex justify-content-between align-items-center">
       <strong><%= lucide_icon('hard-drive', size: 16) %> <%= @status[:installed] ? 'Create a pool' : 'Drives' %></strong>
       <span class="small text-muted" id="health-checked">
-        <%= @health.checked? ? "Health checked #{time_ago_in_words(@health.checked_at)} ago" : 'Health not checked yet' %>
+        <% if @health.checked? %>Health checked <%= relative_time_tag(@health.checked_at) %><% else %>Health not checked yet<% end %>
         <button type="button" class="btn btn-sm btn-outline-secondary ms-2" data-storage-post="<%= disks_check_health_path %>">Check now</button>
       </span>
     </div>

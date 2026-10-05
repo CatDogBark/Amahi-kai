@@ -16,6 +16,7 @@
 //= require ocean
 //= require toast
 //= require system_update
+//= require time_ago
 //= require storage_pools
 //= require tooltips
 //= require lib/application

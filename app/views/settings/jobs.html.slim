@@ -28,9 +28,9 @@
                 td.text-nowrap = job.schedule
                 td.text-nowrap
                   - if job.last_run
-                    span.tip-text tabindex="0" data-tip=l(job.last_run, format: :long) = job_last_run(job).upcase_first
+                    span.tip-text tabindex="0" data-tip=l(job.last_run, format: :long) = job_last_run(job, capitalize: true)
                   - else
-                    = job_last_run(job).upcase_first
+                    = job_last_run(job, capitalize: true)
                 td = job_result_badge(job)
                 td.text-nowrap
                   = job.next_run ? l(job.next_run, format: :short) : '—'
