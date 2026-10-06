@@ -33,6 +33,9 @@ class SystemServices
       process: 'greyhole --daemon', actions: %w[start stop restart] },
     { key: 'docker', name: 'Docker', unit: 'docker', package: %w[docker-ce docker.io], check: '/usr/bin/docker',
       actions: %w[start stop restart] },
+    # Announces the installed apps on the LAN (the helper's apps.announce), so devices find them.
+    { key: 'avahi-daemon', name: 'Avahi (apps on the network)', unit: 'avahi-daemon', package: 'avahi-daemon',
+      check: '/usr/sbin/avahi-daemon', actions: %w[start stop restart] },
     { key: 'cloudflared', name: 'Cloudflare Tunnel', unit: 'cloudflared', package: 'cloudflared',
       check: '/usr/bin/cloudflared', note: 'Managed on Remote Access' },
     { key: 'tailscaled', name: 'Tailscale VPN', unit: 'tailscaled', package: 'tailscale',
