@@ -1,6 +1,8 @@
 name: bitTube
 description: Your YouTube channels and streaming services in one place, with YouTube ad-free.
 category: media
+# Served by Amahi-kai itself (public/app-logos): bitTube's repo is private.
+logo: /app-logos/bittube.svg
 releases: https://github.com/CatDogBark/bitTube/releases/tag/v{version}
 image: ghcr.io/catdogbark/bittube:0.1.3@sha256:8f833fbe4aaf7437043394ea706b92cfb095bea8a69cd69cc2e13dac84f16c50
 run_as: app

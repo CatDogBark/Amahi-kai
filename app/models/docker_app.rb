@@ -31,6 +31,12 @@ class DockerApp < ApplicationRecord
     AppCatalog.tag(AppCatalog.find(identifier)&.dig(:image))
   end
 
+  # The catalog's logo, which may have changed (or arrived) since the install, else the one
+  # saved then.
+  def logo_url
+    AppCatalog.find(identifier)&.dig(:logo_url).presence || super
+  end
+
   # The app's page, on its own port of the NAS (docs/plans/apps.md, O3).
   def url(host)
     "http://#{host}:#{host_port}/" if host_port
