@@ -44,6 +44,13 @@ RSpec.describe 'install and update scripts' do
     expect(File.read(Rails.root.join('config/systemd/amahi-kai-update-check.timer'))).to include('OnUnitActiveSec=6h')
   end
 
+  it 'installs Avahi and announces the apps each time Docker starts' do
+    expect(File.read(Rails.root.join('bin/amahi-install'))).to include('  avahi-daemon \\')
+    expect(File.read(Rails.root.join('bin/amahi-update'))).to include('apt-get install -y -qq --no-install-recommends avahi-daemon')
+    expect(File.read(Rails.root.join('config/systemd/amahi-kai-app-firewall.service')))
+      .to include('ExecStart=/usr/local/sbin/amahi-helper apps.firewall', 'ExecStart=-/usr/local/sbin/amahi-helper apps.announce')
+  end
+
   it "installs and enables the app catalog's fetch" do
     text = File.read(Rails.root.join('bin/amahi-install-helper'))
     expect(text).to include('amahi-kai-catalog.service amahi-kai-catalog.timer', 'systemctl enable --now amahi-kai-catalog.timer')

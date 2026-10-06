@@ -253,6 +253,15 @@ fi
 log "Running database migrations..."
 as_app "RAILS_ENV=production bin/rails db:migrate" 2>&1 || rollback "Running database migrations"
 
+# Apps announce themselves on the LAN through Avahi (the helper's apps.announce, which the
+# helper step below runs): installed on new NASes, added here for the ones from before. Not
+# having it only means apps aren't announced, so it never fails the update.
+if ! dpkg-query -W -f='${Status}' avahi-daemon 2>/dev/null | grep -q 'install ok installed'; then
+  log "Installing avahi-daemon, so apps can be found on the network..."
+  { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends avahi-daemon; } >/dev/null 2>&1 \
+    || log "⚠ Couldn't install avahi-daemon; apps won't be announced on the network"
+fi
+
 # 3a. Install the root helper and the sudoers rules. Samba, user account and share folder
 #     changes go through the helper (3b and 3c use it), and the updater is the only thing
 #     that installs sudoers changes on an existing NAS. The sudoers file is replaced only

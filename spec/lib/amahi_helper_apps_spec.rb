@@ -36,6 +36,63 @@ RSpec.describe 'AmahiHelper apps' do
 
   # The catalog's own repo (CATALOG_REPO), fetched by apps.refresh_catalog. A local repo stands
   # in for GitHub, so the file protocol is let through.
+  # Each installed app with a web page announced on the LAN through Avahi (mDNS).
+  describe 'announcing apps' do
+    let(:avahi) { "#{dir}/avahi" }
+    let(:ran) { [] }
+
+    before do
+      FileUtils.mkdir_p(avahi)
+      stub_const('AmahiHelper::AVAHI_SERVICES', avahi)
+      stub_const('AmahiHelper::APP_PORTS', "#{dir}/app-ports.json")
+      stub_const('AmahiHelper::UFW', "#{dir}/ufw")
+      allow(helper).to receive(:do_install) { |path, content, *| File.write(path, content) }
+      allow(helper).to receive(:run_command) { |argv| ran << argv.reject { |a| a.is_a?(Hash) } }
+      allow(helper).to receive(:do_apps_status).and_return('docker' => true, 'apps' => { 'bittube' => {}, 'gitea' => {}, 'transmission' => {} })
+    end
+
+    it 'is its own operation, also run after installing and uninstalling' do
+      expect(steps('apps.announce', {})).to eq([[:announce_apps]])
+      expect(refusal('apps.announce', { 'app' => 'gitea' })).to eq('unexpected argument app')
+    end
+
+    it 'announces each installed app on the port it was given, and takes back what is no longer installed' do
+      File.write("#{dir}/app-ports.json", { 'gitea' => [{ 'preferred' => 3300, 'host' => 3302, 'container' => 3000, 'protocol' => 'tcp' }] }.to_json)
+      File.write("#{avahi}/amahi-app-jellyfin.service", 'from an uninstalled app')
+      File.write("#{avahi}/ssh.service", 'not ours')
+      expect(helper.do_announce_apps).to eq('announced' => %w[bittube gitea transmission])
+      expect(Dir.children(avahi).sort).to eq(%w[amahi-app-bittube.service amahi-app-gitea.service amahi-app-transmission.service ssh.service])
+
+      gitea = File.read("#{avahi}/amahi-app-gitea.service")
+      expect(gitea).to include('<name replace-wildcards="yes">Gitea on %h</name>', '<type>_http._tcp</type>',
+                               '<subtype>_gitea._sub._http._tcp</subtype>', '<port>3302</port>', '<txt-record>app=gitea</txt-record>')
+      expect(File.read("#{avahi}/amahi-app-bittube.service")).to include('<port>8484</port>', '<subtype>_bittube._sub._http._tcp</subtype>')
+      expect(ran).to include(['/usr/bin/systemctl', 'try-reload-or-restart', 'avahi-daemon.service'])
+
+      ran.clear
+      helper.do_announce_apps
+      expect(ran).to be_empty # nothing changed, nothing reloaded
+    end
+
+    it "escapes an app's name for Avahi's XML" do
+      expect(helper.xml_text('Tom & <Jerry>')).to eq('Tom &amp; &lt;Jerry&gt;')
+    end
+
+    it 'lets mDNS through UFW when it is on' do
+      File.write("#{dir}/ufw", "#!/bin/sh\necho 'Status: active'\n")
+      File.chmod(0o755, "#{dir}/ufw")
+      helper.do_announce_apps
+      expect(ran).to include(["#{dir}/ufw", 'allow', '5353/udp'])
+    end
+
+    it 'says why when it can announce nothing' do
+      allow(helper).to receive(:do_apps_status).and_return('docker' => false, 'apps' => {})
+      expect(helper.do_announce_apps).to eq('apps not announced on the LAN: Docker is not running')
+      stub_const('AmahiHelper::AVAHI_SERVICES', "#{dir}/none")
+      expect(helper.do_announce_apps).to eq('apps not announced on the LAN: avahi-daemon is not installed')
+    end
+  end
+
   describe 'the catalog repo' do
     let(:remote) { "#{dir}/remote" }
     let(:gitea) { File.read("#{catalog}/gitea.yml") }
@@ -199,10 +256,11 @@ RSpec.describe 'AmahiHelper apps' do
 
     it 'installs from the manifest, and uninstalls keeping the data unless asked' do
       # A reinstall (new shares) keeps the version the app runs: the last argument.
-      expect(steps('apps.install', { 'app' => 'vaultwarden' })).to eq([[:install_app, 'vaultwarden', helper.app_manifest('vaultwarden'), [], true]])
+      expect(steps('apps.install', { 'app' => 'vaultwarden' }))
+        .to eq([[:install_app, 'vaultwarden', helper.app_manifest('vaultwarden'), [], true], [:announce_apps]])
       image = helper.app_manifest('gitea')[:image]
-      expect(steps('apps.uninstall', { 'app' => 'gitea' })).to eq([[:uninstall_app, 'gitea', image, false]])
-      expect(steps('apps.uninstall', { 'app' => 'gitea', 'delete_data' => true })).to eq([[:uninstall_app, 'gitea', image, true]])
+      expect(steps('apps.uninstall', { 'app' => 'gitea' })).to eq([[:uninstall_app, 'gitea', image, false], [:announce_apps]])
+      expect(steps('apps.uninstall', { 'app' => 'gitea', 'delete_data' => true })).to eq([[:uninstall_app, 'gitea', image, true], [:announce_apps]])
       expect(refusal('apps.uninstall', { 'app' => 'gitea', 'delete_data' => 'yes' })).to include('delete_data')
     end
   end

@@ -114,6 +114,25 @@ touches the same code.
   directory).
 - Not yet tried in the UI because no shares or apps exist: file upload, raw preview, the app proxy.
 
+## Later: HTTPS on the LAN
+
+Troy (2026-10-06): the web UI and every app's page are plain HTTP on the LAN, so anyone on the
+network can read or change what passes (bitTube Desktop's updates come from the NAS this way:
+its installers are checked against hashes from the same server). To plan as its own phase,
+for Amahi-kai and its apps at once. The options:
+
+- **A real certificate for a real name**, Let's Encrypt through a DNS challenge (amahi-kai.com is
+  on Cloudflare), for a name like `nas.amahi-kai.com` that dnsmasq points at the NAS's LAN
+  address: trusted by every device with nothing to install; it needs a domain per NAS, or names
+  under amahi-kai.com handed out.
+- **Tailscale's certificates** (`tailscale cert`, for the NAS's `*.ts.net` name): free and
+  trusted, but only where Tailscale's name is used.
+- **A certificate authority of the NAS's own**: works offline, but each device has to install
+  and trust its root certificate.
+
+Then: a reverse proxy in front of the web UI and the apps' ports (one place for the
+certificate), HTTP redirected, and the apps (bitTube Desktop included) told the HTTPS address.
+
 ## Test on real drives (when the NAS hardware arrives)
 
 All the hardware tests are in one checklist, to run once the SSDs are in the Jonsbo and passed

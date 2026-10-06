@@ -241,6 +241,19 @@ Decided (Troy, 2026-10-06): app updates mustn't wait for an Amahi-kai update.
   more is listed with "Needs a newer Amahi-kai: run System Update first", and the helper refuses
   to install it. A new manifest field raises the format, so older NASes don't misread it.
 
+### P4.5c: Apps on the LAN
+
+Troy (2026-10-06): the NAS knows what it runs, so devices shouldn't have to be told its address.
+
+- [x] **Announced over mDNS** by Avahi (`avahi-daemon`, installed by `bin/amahi-install`, and by
+  `bin/amahi-update` on NASes from before): each installed app with a web page is an HTTP service
+  named "<App> on <hostname>" on the port it was given, with the subtype `_<id>._sub._http._tcp`
+  so one app can be asked for (bitTube Desktop asks for `_bittube._sub._http._tcp`). The helper's
+  `apps.announce` writes `/etc/avahi/services/amahi-app-<id>.service` for the installed apps and
+  removes the others of its own; it runs after every install and uninstall and each time Docker
+  starts (`amahi-kai-app-firewall.service`). UFW lets mDNS (5353/udp) in, both when the security
+  audit turns UFW on and at each announce when it's on already.
+
 ### P4.6: bitShare as the first built-in app
 
 - [ ] ZFS datasets for apps (from P4.4): one per app on the pool chosen at install; quotas or not;
