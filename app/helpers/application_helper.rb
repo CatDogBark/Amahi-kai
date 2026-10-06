@@ -47,6 +47,13 @@ module ApplicationHelper
     content_tag('span', '', class: "spinner #{css_class}", style: "display: none")
   end
 
+  # "bitTube 0.1.2 → 0.1.3", for the dashboard's app update notice (just the name when either
+  # version isn't known).
+  def app_update_label(app)
+    from, to = app.version, app.catalog_version
+    from.present? && to.present? ? "#{app.name} #{from} → #{to}" : app.name
+  end
+
   # A time shown as "3 hours ago", or "in 2 hours" when +future+ ("any moment" once it's
   # passed). time_ago.js works it out again every minute, when a dialog opens and when the page
   # comes back into view: written only when the page loads, a page left open would keep saying

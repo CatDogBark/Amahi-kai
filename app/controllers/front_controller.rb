@@ -22,7 +22,9 @@ class FrontController < ApplicationController
     @page_title = t('dashboard')
     @no_tabs = true
     @apps = DockerApp.dashboard.running
-    @app_updates = DockerApp.all.count(&:update_available?)
+    # Apps the catalog has a newer version of (System Update brings it), for the admins who
+    # can update them.
+    @app_updates = current_user.admin? ? DockerApp.all.select(&:update_available?).sort_by { |a| a.name.downcase } : []
     @stats = DashboardStats.summary
     if current_user.admin?
       @storage_health = StorageHealth.load
