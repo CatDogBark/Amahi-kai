@@ -129,16 +129,16 @@ class AppsController < ApplicationController
     @shares = Share.by_name
   end
 
-  # Check now: the helper fetches the catalog's repo, as amahi-kai-catalog.timer does every
-  # 6 hours, and the page says what it found.
+  # Check now: the update check, as the timer runs it every 6 hours (Amahi-kai and the app
+  # catalog's repo), and the page says what it found. It never installs anything.
   def refresh_catalog
-    Privileged.call('apps.refresh_catalog')
+    Privileged.call('system.check_update')
     AppCatalog.reload!
     status = AppCatalog.status
     if status&.dig(:error)
       redirect_back fallback_location: apps_index_path, alert: "Couldn't refresh the app catalog: #{status[:error]}"
     else
-      redirect_back fallback_location: apps_index_path, notice: 'The app catalog is up to date.'
+      redirect_back fallback_location: apps_index_path, notice: 'Checked Amahi-kai and the apps for updates.'
     end
   rescue Privileged::Error => e
     redirect_back fallback_location: apps_index_path, alert: "Couldn't refresh the app catalog: #{e.message}"

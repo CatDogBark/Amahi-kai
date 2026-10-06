@@ -19,7 +19,7 @@ describe "Docker Apps", type: :request do
     allow(Privileged).to receive(:call).with(operation, any_args).and_raise(Privileged::Error.new(operation, message))
   end
 
-  # The catalog fetched from its own repo (the helper's apps.refresh_catalog); outside
+  # The catalog fetched from its own repo (with the helper's update check); outside
   # production it lives in tmp/.
   describe "the catalog's own repo" do
     let(:fetched) { Rails.root.join('tmp', 'catalog', 'apps').to_s }
@@ -48,9 +48,9 @@ describe "Docker Apps", type: :request do
 
     it "fetches it on Check now, and says what happened" do
       post "/apps/refresh_catalog"
-      expect(Privileged.calls).to include(['apps.refresh_catalog', {}])
+      expect(Privileged.calls).to include(['system.check_update', {}]) # Amahi-kai and the catalog
       expect(response).to redirect_to('/apps')
-      expect(flash[:notice]).to eq('The app catalog is up to date.')
+      expect(flash[:notice]).to eq('Checked Amahi-kai and the apps for updates.')
 
       File.write(status_path, { checked_at: Time.now.utc.iso8601, error: 'GitHub is offline' }.to_json)
       post "/apps/refresh_catalog", headers: { 'Referer' => 'http://www.example.com/apps/installed_apps' }

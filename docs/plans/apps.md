@@ -224,8 +224,9 @@ Decided (Troy, 2026-10-06): app updates mustn't wait for an Amahi-kai update.
   helper on it (`amahi-helper --check-catalog apps`), so a manifest the NAS would refuse can't be
   merged. An app update is a PR there (`script/app-versions --catalog ../amahi-kai-apps/apps
   --update APP`).
-- [x] **Fetched by the root helper** (`apps.refresh_catalog`) every 6 hours
-  (`amahi-kai-catalog.timer`) and on the Apps page's **Check now**: main, over https only, into a
+- [x] **Fetched by the root helper with the update check** (`system.check_update`: every 6 hours
+  by `amahi-kai-update-check.timer`, and on System Update's and the Apps page's **Check now**,
+  so every check looks at Amahi-kai and its apps; none installs anything): main, over https only, into a
   bare repo of root's (`/var/lib/amahi-kai/catalog-src`), with git's hooks off. Every manifest is
   checked as an install would check it, plus what the pages show (name, description, category,
   logo and release notes on https); the ones that pass are written beside the current catalog

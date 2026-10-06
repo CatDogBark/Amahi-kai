@@ -250,8 +250,8 @@ module AmahiHelper
   APP_MEMORY = /\A[1-9][0-9]{0,4}[mg]\z/
   APP_DEFAULT_MEMORY = '1g'
   # The catalog has a repo of its own (docs/plans/apps.md), so app versions don't wait for an
-  # Amahi-kai update. apps.refresh_catalog fetches its main branch every 6 hours
-  # (amahi-kai-catalog.timer), over https only, into CATALOG_SRC (a bare repo, root's), and keeps
+  # Amahi-kai update. The update check (system.check_update, every 6 hours and on Check now)
+  # fetches its main branch too, over https only, into CATALOG_SRC (a bare repo, root's), and keeps
   # the manifests that pass every check below in APP_CATALOG/apps, which comes first;
   # APP_MANIFESTS, the copy in the code, is the fallback (before the first fetch, and for an app
   # the catalog no longer lists). A manifest's `requires` is the catalog format it needs: one
@@ -463,13 +463,16 @@ module AmahiHelper
         steps << %w[/usr/bin/systemctl start amahi-kai-update.service]
       end
     },
-    # Whether an update is waiting: fetches main, as System Update pulls it, and writes what's
-    # new (the merged changes and the changelog entries added) to UPDATE_STATUS. Skipped while
-    # an update runs. amahi-kai-update-check.timer runs it every 6 hours.
+    # Whether an update is waiting, for Amahi-kai and its apps: fetches main, as System Update
+    # pulls it, and writes what's new (the merged changes and the changelog entries added) to
+    # UPDATE_STATUS (skipped while an update runs); then fetches the app catalog's repo, keeping
+    # the manifests that pass every check (see CATALOG_REPO). It never installs anything.
+    # amahi-kai-update-check.timer runs it every 6 hours; System Update's and the Apps page's
+    # Check now too.
     'system.check_update' => {
       params: [],
       validate: ->(_a) { {} },
-      plan: ->(_v) { [[:check_update]] }
+      plan: ->(_v) { [[:check_update], [:refresh_catalog]] }
     },
     'system.create_swap' => {
       params: %w[size_gb],
@@ -770,14 +773,6 @@ module AmahiHelper
         installed!(DOCKER) && app_request(a['app']).then { |v| v.merge(shares: app_share_choices(a['shares'], v[:id], v[:manifest])) }
       },
       plan: ->(v) { [[:undo_app_update, v[:id], v[:manifest], v[:shares]]] }
-    },
-    # Fetches the catalog's repo and keeps the manifests that pass every check (see
-    # CATALOG_REPO). A fetch that fails, or finds no app that passes, keeps the catalog there
-    # was. Run every 6 hours by amahi-kai-catalog.timer, and by the Apps page's Check now.
-    'apps.refresh_catalog' => {
-      params: [],
-      validate: ->(_a) { {} },
-      plan: ->(_v) { [[:refresh_catalog]] }
     },
     # Deletes pre-update copies older than APP_BACKUP_DAYS. Run daily by amahi-kai-app-backups.timer.
     'apps.prune_backups' => {
@@ -1420,7 +1415,7 @@ module AmahiHelper
       "can't be read: #{e.message.lines.first.to_s.strip}"
     end
 
-    # --check-catalog DIR: every DIR/<id>.yml checked as apps.refresh_catalog would, and no host
+    # --check-catalog DIR: every DIR/<id>.yml checked as the update check's catalog fetch would, and no host
     # port listed by two apps. Prints a line per app; 0 when they all pass.
     def check_catalog(dir, output)
       paths = Dir[File.join(dir, '*.yml')].sort

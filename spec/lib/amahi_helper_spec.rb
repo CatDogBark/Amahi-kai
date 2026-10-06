@@ -465,7 +465,7 @@ RSpec.describe 'AmahiHelper' do
       after { FileUtils.rm_rf(repo) }
 
       it 'plans one action with no arguments' do
-        expect(steps('system.check_update', {})).to eq([[:check_update]])
+        expect(steps('system.check_update', {})).to eq([[:check_update], [:refresh_catalog]])
         expect(refusal('system.check_update', { 'branch' => 'x' })).to eq('unexpected argument branch')
       end
 
