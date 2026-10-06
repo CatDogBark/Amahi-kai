@@ -33,6 +33,7 @@ against a pinned fingerprint), installs Docker and turns the service on.
 
 | App | What it's for | Usual address |
 |-----|---------------|---------------|
+| **bitTube** | Your YouTube channels and streaming services in one place, YouTube ad-free | `http://<server>:8484` |
 | **Jellyfin** | Your own streaming service for movies, TV and music | `http://<server>:8096` |
 | **Vaultwarden** | A password manager server for the Bitwarden apps | `http://<server>:8880` |
 | **Uptime Kuma** | Watches websites and services, and tells you when one goes down | `http://<server>:3001` |

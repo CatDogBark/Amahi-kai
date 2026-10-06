@@ -10,8 +10,8 @@ RSpec.describe AppCatalog do
   after { FileUtils.rm_rf(dir) }
 
   describe ".all" do
-    it "lists the five apps, by name" do
-      expect(AppCatalog.all.map { |app| app[:identifier] }).to eq(%w[gitea jellyfin transmission uptimekuma vaultwarden])
+    it "lists the apps, by name" do
+      expect(AppCatalog.all.map { |app| app[:identifier] }).to eq(%w[bittube gitea jellyfin transmission uptimekuma vaultwarden])
     end
 
     it "gives each app what the pages show" do
@@ -33,7 +33,7 @@ RSpec.describe AppCatalog do
 
   describe "filters" do
     it "finds apps by category and by name or description" do
-      expect(AppCatalog.by_category("media").map { |app| app[:identifier] }).to eq(["jellyfin"])
+      expect(AppCatalog.by_category("media").map { |app| app[:identifier] }).to eq(%w[bittube jellyfin])
       expect(AppCatalog.by_category("gaming")).to eq([])
       expect(AppCatalog.search("GITEA").map { |app| app[:identifier] }).to eq(["gitea"])
       expect(AppCatalog.search("password").map { |app| app[:identifier] }).to eq(["vaultwarden"])

@@ -45,9 +45,15 @@ class AppVersions
     end
   end
 
-  def initialize(registry: DockerHub.new, dir: CATALOG_DIR)
+  # +registry+ answers for every image (tests); otherwise each image's own registry: Docker Hub,
+  # or GitHub's (ghcr.io).
+  def initialize(registry: nil, dir: CATALOG_DIR)
     @registry = registry
     @dir = dir
+  end
+
+  def registry_for(repo)
+    @registry || (repo.start_with?('ghcr.io/') ? Ghcr.new : DockerHub.new)
   end
 
   def ids
@@ -64,8 +70,9 @@ class AppVersions
     return Result.new(id: id, error: 'its image is not name:tag@sha256:digest') unless match
 
     repo, tag = match[:repo], match[:tag]
-    latest = self.class.newest(tag, @registry.tags(repo))
-    digest = @registry.digest(repo, latest || tag)
+    registry = registry_for(repo)
+    latest = self.class.newest(tag, registry.tags(repo))
+    digest = registry.digest(repo, latest || tag)
     kind = if latest then :newer
            elsif digest != match[:digest] then :rebuilt
            else :current
@@ -78,11 +85,26 @@ class AppVersions
     Result.new(id: id, repo: repo, tag: tag, error: e.message)
   end
 
+  INDEX_TYPES = %w[application/vnd.oci.image.index.v1+json application/vnd.docker.distribution.manifest.list.v2+json
+                   application/vnd.oci.image.manifest.v1+json application/vnd.docker.distribution.manifest.v2+json].join(',')
+
+  module Http
+    private
+
+    def request(url, method: :get, headers: {})
+      uri = URI(url)
+      req = (method == :head ? Net::HTTP::Head : Net::HTTP::Get).new(uri)
+      headers.each { |key, value| req[key] = value }
+      response = Net::HTTP.start(uri.host, uri.port, use_ssl: true, open_timeout: 15, read_timeout: 30) { |http| http.request(req) }
+      raise "#{uri.host} answered #{response.code}" unless response.is_a?(Net::HTTPSuccess)
+      response
+    end
+  end
+
   # Docker Hub: recent tags from its API, a tag's digest (the multi-architecture image's, as
   # the manifests pin) from the registry.
   class DockerHub
-    INDEX_TYPES = %w[application/vnd.oci.image.index.v1+json application/vnd.docker.distribution.manifest.list.v2+json
-                     application/vnd.oci.image.manifest.v1+json application/vnd.docker.distribution.manifest.v2+json].join(',')
+    include Http
     PAGES = 5
 
     def tags(repo)
@@ -109,14 +131,32 @@ class AppVersions
     def full(repo)
       repo.include?('/') ? repo : "library/#{repo}"
     end
+  end
 
-    def request(url, method: :get, headers: {})
-      uri = URI(url)
-      req = (method == :head ? Net::HTTP::Head : Net::HTTP::Get).new(uri)
-      headers.each { |key, value| req[key] = value }
-      response = Net::HTTP.start(uri.host, uri.port, use_ssl: true, open_timeout: 15, read_timeout: 30) { |http| http.request(req) }
-      raise "#{uri.host} answered #{response.code}" unless response.is_a?(Net::HTTPSuccess)
-      response
+  # GitHub's registry (ghcr.io), through the registry API with an anonymous token: it answers
+  # for public packages (a private one says 401).
+  class Ghcr
+    include Http
+
+    def tags(repo)
+      name = repo.delete_prefix('ghcr.io/')
+      JSON.parse(request("https://ghcr.io/v2/#{name}/tags/list", headers: auth(name)).body)['tags'] || []
+    end
+
+    def digest(repo, tag)
+      name = repo.delete_prefix('ghcr.io/')
+      response = request("https://ghcr.io/v2/#{name}/manifests/#{tag}", method: :head, headers: auth(name).merge('Accept' => INDEX_TYPES))
+      response['Docker-Content-Digest'] or raise "the registry gave no digest for #{repo}:#{tag}"
+    end
+
+    private
+
+    def auth(name)
+      token = JSON.parse(request("https://ghcr.io/token?scope=repository:#{name}:pull").body)['token']
+      { 'Authorization' => "Bearer #{token}" }
+    rescue RuntimeError => e
+      raise e unless e.message.include?('401')
+      raise "the package is private on ghcr.io (it must be public for a NAS to pull it)"
     end
   end
 end

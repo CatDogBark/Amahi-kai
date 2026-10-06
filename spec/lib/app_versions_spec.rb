@@ -78,9 +78,16 @@ RSpec.describe AppVersions do
     end
   end
 
+  it "asks each image's own registry: Docker Hub, or GitHub's for ghcr.io" do
+    versions = described_class.new
+    expect(versions.registry_for("ghcr.io/catdogbark/bittube")).to be_a(AppVersions::Ghcr)
+    expect(versions.registry_for("gitea/gitea")).to be_a(AppVersions::DockerHub)
+    expect(described_class.newest("0.1.0", %w[0.1.0 0.2.0 latest main sha-abc1234])).to eq("0.2.0")
+  end
+
   it "knows the real catalog's apps and their release notes" do
     versions = described_class.new
-    expect(versions.ids).to eq(%w[gitea jellyfin transmission uptimekuma vaultwarden])
+    expect(versions.ids).to eq(%w[bittube gitea jellyfin transmission uptimekuma vaultwarden])
     versions.ids.each do |id|
       notes = YAML.safe_load(File.read(versions.path(id)))['releases']
       expect(notes).to match(%r{\Ahttps://github\.com/.+\{version\}\z}), "#{id} has no releases link"

@@ -120,7 +120,9 @@ Decisions for this PR:
   needs host networking to find devices; if wanted, Home Assistant OS runs better as its own
   Proxmox VM), Audiobookshelf, Pi-hole, Paperless-ngx (broken as defined: no Redis, a `changeme`
   secret) and Grafana (empty without a metrics source). Apps are added later when wanted. None of
-  the five has been tested with Amahi-kai yet; each is tested on the new model.
+  the five has been tested with Amahi-kai yet; each is tested on the new model. **bitTube**
+  (Troy's own app, `CatDogBark/bitTube`, from GitHub's registry) joined the catalog on
+  2026-10-05, as the sixth.
 - [x] **A6. Default memory limit** for apps whose manifest doesn't set one, on an 8 GB VM shared with
   ZFS's 2 GB cache. Recommended: 1 GB, with Jellyfin set higher in its manifest. **Decided** (Troy
   is raising the VM to 8 GB).
