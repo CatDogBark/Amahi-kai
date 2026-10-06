@@ -21,6 +21,14 @@
               </a>
             </div>
           <% end %>
+          <% if @app_updates.any? %>
+            <%# Apps the catalog has a newer version of; each updates from its row on the Apps page %>
+            <div class="mt-1">
+              <a href="/apps/installed_apps" class="update-notice">
+                <span class="update-dot"></span><%= @app_updates.one? ? 'App update' : 'App updates' %>: <%= @app_updates.first(3).map { |app| app_update_label(app) }.join(' · ') %><% if @app_updates.size > 3 %> and <%= @app_updates.size - 3 %> more<% end %> — update on the Apps page
+              </a>
+            </div>
+          <% end %>
         </div>
         <div class="d-none d-md-block text-muted" style="font-size: 12px;">
           <%= Time.current.strftime('%A, %B %-d, %Y') %>
@@ -80,7 +88,7 @@
             <div class="d-flex justify-content-between align-items-center">
               <strong><%= lucide_icon('package', size: 16) %> Apps</strong>
               <span style="font-size: 12px;">
-                <% if @app_updates.to_i.positive? %><a href="/apps/installed_apps" class="text-warning text-decoration-none me-2"><%= pluralize(@app_updates, 'update') %></a><% end %>
+                <% if @app_updates.any? %><a href="/apps/installed_apps" class="text-warning text-decoration-none me-2"><%= pluralize(@app_updates.size, 'update') %></a><% end %>
                 <a href="/apps" class="text-white text-decoration-none">All Apps →</a>
               </span>
             </div>

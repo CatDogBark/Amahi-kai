@@ -28,6 +28,46 @@ describe "Front page", type: :request do
     end
   end
 
+  describe "app updates" do
+    # An app installed from an older image than the catalog's: System Update brought a newer one.
+    def installed(identifier, tag: 'old', **attrs)
+      entry = AppCatalog.find(identifier)
+      DockerApp.create!({ identifier: identifier, name: entry[:name], status: 'running',
+                          image: "#{entry[:image].split(/[:@]/).first}:#{tag}@sha256:#{'a' * 64}" }.merge(attrs))
+    end
+
+    it "tells admins which apps have an update, with their versions" do
+      login_as_admin
+      installed('gitea', tag: '1.0.0-rootless')
+      installed('jellyfin', image: AppCatalog.find('jellyfin')[:image]) # up to date
+      get root_path
+      expect(response.body).to include(
+        "App update: Gitea 1.0.0-rootless → #{AppCatalog.tag(AppCatalog.find('gitea')[:image])} — update on the Apps page"
+      )
+      expect(response.body).to include('href="/apps/installed_apps" class="update-notice"', '1 update')
+      expect(response.body).not_to include('Jellyfin 10')
+    end
+
+    it "names three and counts the rest" do
+      login_as_admin
+      %w[bittube gitea jellyfin transmission].each { |id| installed(id) }
+      get root_path
+      expect(response.body).to include('App updates:', 'bitTube old →', ' · Gitea old →', ' · Jellyfin old →', 'and 1 more', '4 updates')
+      expect(response.body).not_to include('Transmission old')
+    end
+
+    it "says nothing when every app is up to date, or to users who can't update them" do
+      login_as_admin
+      get root_path
+      expect(response.body).not_to include('App update')
+
+      installed('gitea')
+      login_as(create(:user, admin: false))
+      get root_path
+      expect(response.body).not_to include('App update', '1 update')
+    end
+  end
+
   describe "login flow" do
     it "logs in with valid credentials and shows dashboard" do
       ensure_setup_completed!
