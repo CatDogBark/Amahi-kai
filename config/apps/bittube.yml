@@ -1,0 +1,17 @@
+name: bitTube
+description: Your YouTube channels and streaming services in one place, with YouTube ad-free.
+category: media
+releases: https://github.com/CatDogBark/bitTube/releases/tag/v{version}
+image: ghcr.io/catdogbark/bittube:0.1.0@sha256:20ef4832e3738bbc109795ad09174a18bc4c66a08f6ac78e7595b39332808e47
+run_as: app
+web_port: 8484
+memory: 1g
+# Downloads go into a share given read and write (one Greyhole doesn't pool); bitTube's own
+# Settings then point at /shares/<name>. Its API keys and choices are asked for in its Settings.
+writes_shares: true
+ports:
+  - { host: 8484, container: 8080 }
+folders:
+  - { name: data, path: /data }
+environment:
+  TZ: "{{timezone}}"

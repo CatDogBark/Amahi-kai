@@ -20,7 +20,7 @@ describe "Docker Apps", type: :request do
   end
 
   describe "the catalog page" do
-    it "lists the five apps, with Install for the ones not installed" do
+    it "lists the catalog's apps, with Install for the ones not installed" do
       get "/apps/docker_apps"
       expect(response).to have_http_status(:ok)
       %w[Jellyfin Vaultwarden Gitea Transmission].each { |name| expect(response.body).to include(name) }

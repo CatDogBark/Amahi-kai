@@ -56,6 +56,12 @@ one up as soon as it's installed.
 - [ ] **Transmission** (ports 9091 and 51413): it asks for a login. The user is `admin`; the
   password is under **Passwords and keys Amahi-kai made for Transmission** on its row (**Copy**
   works).
+- [ ] **bitTube** (port 8484): make its account on the first visit, follow a channel on its
+  Channels page (`@veritasium`), and play a video: it starts within a few seconds, seeking works,
+  and a sponsor segment (if the video has one) is skipped. In its Settings, tick your streaming
+  services and paste a TMDB key: their tabs fill in. Give it a share with **Read and write**
+  (Change next to its shares), set its download folder to `/shares/<name>`, and download a video:
+  it appears in the share as an MP4.
 - [ ] **Vaultwarden** (port 8880): it installs and runs. Its `/admin` page
   (`http://192.168.1.111:8880/admin`) takes the token under **Passwords and keys**. The web vault
   itself needs HTTPS, which comes later through Tailscale, so creating an account there is
