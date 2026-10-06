@@ -66,7 +66,7 @@ module AmahiHelper
   # that list actions (spec/lib/amahi_helper_spec.rb checks the two lists match).
   SERVICES = {
     'smbd' => 'smbd.service', 'nmbd' => 'nmbd.service', 'dnsmasq' => 'dnsmasq.service',
-    'greyhole' => 'greyhole.service', 'docker' => 'docker.service'
+    'greyhole' => 'greyhole.service', 'docker' => 'docker.service', 'avahi-daemon' => 'avahi-daemon.service'
   }.freeze
 
   UPDATE_UNIT = '/etc/systemd/system/amahi-kai-update.service'

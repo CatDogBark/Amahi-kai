@@ -45,6 +45,13 @@ RSpec.describe SystemServices do
       expect(services['mariadb']).not_to be_idle
     end
 
+    it 'lists Avahi, which announces the apps on the LAN, with Start, Stop and Restart when installed' do
+      expect(services['avahi-daemon']).to have_attributes(name: 'Avahi (apps on the network)', unit: 'avahi-daemon',
+                                                          actions: %w[start stop restart])
+      allow(File).to receive(:exist?).with('/usr/sbin/avahi-daemon').and_return(false)
+      expect(described_class.all.map(&:key)).not_to include('avahi-daemon')
+    end
+
     it "lists ZFS's event daemon, SMART monitoring, Fail2ban and the VM guest agent when installed, without buttons" do
       %w[zfs-zed smartd fail2ban qemu-guest-agent].each do |key|
         expect(services[key]).to have_attributes(actions: [], note: be_present), key
