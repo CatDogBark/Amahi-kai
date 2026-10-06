@@ -27,11 +27,131 @@ RSpec.describe 'AmahiHelper apps' do
 
   before do
     stub_const('AmahiHelper::APP_MANIFESTS', catalog)
+    stub_const('AmahiHelper::APP_CATALOG', "#{dir}/catalog") # nothing fetched unless a test fetches it
     allow(File).to receive(:executable?).and_call_original
     allow(File).to receive(:executable?).with('/usr/bin/docker').and_return(true)
   end
 
   after { FileUtils.rm_rf(dir) }
+
+  # The catalog's own repo (CATALOG_REPO), fetched by apps.refresh_catalog. A local repo stands
+  # in for GitHub, so the file protocol is let through.
+  describe 'the catalog repo' do
+    let(:remote) { "#{dir}/remote" }
+    let(:gitea) { File.read("#{catalog}/gitea.yml") }
+    let(:jellyfin) { File.read("#{catalog}/jellyfin.yml") }
+    let(:future) { "name: Future\ndescription: Later.\ncategory: media\nrequires: #{AmahiHelper::CATALOG_FORMAT + 1}\nwidgets: [1]\n" }
+    let(:broken) { "name: Broken\ndescription: Unpinned.\ncategory: media\nimage: example/broken:latest\nrun_as: app\n" }
+
+    def git(*args)
+      out, err, status = Open3.capture3('git', '-c', 'user.name=Test', '-c', 'user.email=test@example.com', *args, chdir: remote)
+      raise "git #{args.join(' ')}: #{err}" unless status.success?
+
+      out.strip
+    end
+
+    # Makes the remote's apps/ exactly +files+, commits, and returns the commit.
+    def publish(files)
+      FileUtils.rm_rf("#{remote}/apps")
+      FileUtils.mkdir_p("#{remote}/apps")
+      files.each { |name, content| File.write("#{remote}/apps/#{name}", content) }
+      git('add', '-A')
+      git('commit', '-q', '--allow-empty', '-m', 'Catalog')
+      git('rev-parse', 'HEAD')
+    end
+
+    def kept
+      Dir.children("#{dir}/catalog/apps").sort
+    end
+
+    before do
+      FileUtils.mkdir_p(remote)
+      git('init', '-q', '-b', 'main')
+      stub_const('AmahiHelper::CATALOG_REPO', remote)
+      stub_const('AmahiHelper::CATALOG_PROTOCOLS', %w[file])
+      stub_const('AmahiHelper::CATALOG_SRC', "#{dir}/catalog-src")
+      stub_const('AmahiHelper::CATALOG_STATUS', "#{dir}/catalog-status.json")
+      stub_const('AmahiHelper::CATALOG_LOCK', "#{dir}/catalog.lock")
+      allow(helper).to receive(:do_install) { |path, content, *| File.write(path, content) }
+    end
+
+    it 'is fetched by its own operation, which takes no arguments' do
+      expect(steps('apps.refresh_catalog', {})).to eq([[:refresh_catalog]])
+      expect(refusal('apps.refresh_catalog', { 'url' => 'https://example.com' })).to eq('unexpected argument url')
+    end
+
+    it 'keeps the manifests that pass, says why the others were skipped, and is installed from first' do
+      commit = publish('gitea.yml' => gitea.sub('memory: 1g', 'memory: 3g'), 'future.yml' => future,
+                       'broken.yml' => broken, 'notes.md' => 'not a manifest')
+      reply = helper.do_refresh_catalog
+      expect(reply['catalog']).to include('commit' => commit, 'apps' => %w[future gitea], 'error' => nil,
+                                          'problems' => [{ 'app' => 'broken', 'problem' => 'image must be name:tag@sha256:digest' }])
+      expect(JSON.parse(File.read("#{dir}/catalog-status.json"))).to include('commit' => commit)
+      expect(kept).to eq(%w[future.yml gitea.yml])
+
+      expect(helper.app_manifest('gitea')[:memory]).to eq('3g')
+      expect(helper.app_manifest('jellyfin')[:image]).to eq(AppCatalog.find('jellyfin')[:image]) # not fetched: the code's copy
+      expect { helper.app_manifest('future') }
+        .to raise_error(AmahiHelper::Refused, 'future needs a newer Amahi-kai: run System Update first')
+      expect { helper.app_manifest('broken') }.to raise_error(AmahiHelper::Refused, /isn't in Amahi-kai's catalog/)
+    end
+
+    it 'takes a newer commit, and keeps what it has when the fetch fails or nothing passes' do
+      publish('gitea.yml' => gitea)
+      helper.do_refresh_catalog
+      second = publish('gitea.yml' => gitea, 'jellyfin.yml' => jellyfin)
+      expect(helper.do_refresh_catalog['catalog']).to include('commit' => second, 'apps' => %w[gitea jellyfin])
+
+      publish('broken.yml' => broken)
+      expect(helper.do_refresh_catalog['catalog'])
+        .to include('commit' => second, 'apps' => %w[gitea jellyfin], 'error' => 'no app in the fetched catalog passes the checks')
+      expect(kept).to eq(%w[gitea.yml jellyfin.yml])
+
+      stub_const('AmahiHelper::CATALOG_REPO', "#{dir}/nowhere")
+      status = helper.do_refresh_catalog['catalog']
+      expect(status['error']).to start_with("couldn't fetch the catalog from GitHub: ")
+      expect(status).to include('commit' => second)
+      expect(kept).to eq(%w[gitea.yml jellyfin.yml])
+    end
+
+    it 'fetches over the allowed protocols only, and once at a time' do
+      publish('gitea.yml' => gitea)
+      stub_const('AmahiHelper::CATALOG_PROTOCOLS', %w[https])
+      expect(helper.do_refresh_catalog['catalog']['error']).to include("transport 'file' not allowed")
+      expect(File.exist?("#{dir}/catalog")).to be(false)
+
+      File.open("#{dir}/catalog.lock", File::RDWR | File::CREAT) do |held|
+        held.flock(File::LOCK_EX)
+        expect(helper.do_refresh_catalog).to include('skipped' => 'the catalog is being fetched already')
+      end
+    end
+
+    it "checks what the Apps pages show, and only the listing of an app that needs a newer format" do
+      expect(helper.catalog_entry_problem('gitea', gitea)).to be_nil
+      expect(helper.catalog_entry_problem('future', future)).to be_nil
+      expect(helper.catalog_entry_problem('Gitea_2', gitea)).to eq('not an app id (lowercase letters and digits)')
+      expect(helper.catalog_entry_problem('gitea', gitea.sub(/^name: .*$/, 'name: ""'))).to eq('name must be one line of text')
+      expect(helper.catalog_entry_problem('gitea', gitea.sub('logo: https://', 'logo: http://'))).to eq('logo must be an https link')
+      expect(helper.catalog_entry_problem('gitea', "requires: two\n#{gitea}")).to eq('requires must be a whole number from 1 to 999')
+      expect(helper.catalog_entry_problem('gitea', 'name: [unclosed')).to start_with("can't be read")
+      expect(helper.catalog_entry_problem('gitea', "#{gitea}# #{'x' * AmahiHelper::CATALOG_MAX_BYTES}")).to eq("over #{AmahiHelper::CATALOG_MAX_BYTES} bytes")
+      expect(AmahiHelper::CATALOG_FORMAT).to eq(AppCatalog::FORMAT)
+    end
+
+    it "checks a whole catalog for its repo's CI, ports included" do
+      out = StringIO.new
+      expect(helper.check_catalog(catalog, out)).to eq(0)
+      expect(out.string.lines.size).to eq(Dir["#{catalog}/*.yml"].size)
+
+      FileUtils.mkdir_p("#{dir}/check")
+      File.write("#{dir}/check/gitea.yml", gitea)
+      File.write("#{dir}/check/forge.yml", gitea.sub('name: Gitea', 'name: Forge'))
+      File.write("#{dir}/check/broken.yml", broken)
+      out = StringIO.new
+      expect(helper.check_catalog("#{dir}/check", out)).to eq(1)
+      expect(out.string).to include('broken: image must be name:tag@sha256:digest', 'forge and gitea: both list host port 3300/tcp')
+    end
+  end
 
   describe 'the catalog' do
     let(:ids) { Dir[File.join(catalog, '*.yml')].map { |path| File.basename(path, '.yml') } }

@@ -1,0 +1,12 @@
+# Runs amahi-kai-catalog.service 5 minutes after boot, then every 6 hours.
+# Installed and enabled by bin/amahi-install-helper.
+[Unit]
+Description=Amahi-kai: fetch the app catalog every 6 hours
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=6h
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

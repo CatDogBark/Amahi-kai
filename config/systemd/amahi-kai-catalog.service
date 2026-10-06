@@ -1,0 +1,13 @@
+# Fetches the app catalog from its repo (the root helper's apps.refresh_catalog), so new app
+# versions reach the Apps page without an Amahi-kai update. It never updates an app.
+# Started by amahi-kai-catalog.timer. Installed by bin/amahi-install-helper.
+[Unit]
+Description=Amahi-kai: fetch the app catalog
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/amahi-helper apps.refresh_catalog
+StandardInput=null
+TimeoutStartSec=5min

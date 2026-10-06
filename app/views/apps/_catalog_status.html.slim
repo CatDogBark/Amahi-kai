@@ -1,0 +1,15 @@
+/ Where the catalog came from (AppCatalog.status): its repo, fetched every 6 hours by the root
+/ helper, or the copy that came with Amahi-kai. Check now fetches it again.
+- status = AppCatalog.status
+.catalog-status.small.text-secondary.mb-2.d-flex.flex-wrap.align-items-center.gap-1
+  - if status&.dig(:checked_at)
+    span
+      ' App catalog checked
+      = relative_time_tag(status[:checked_at])
+  - else
+    span App catalog: the copy that came with Amahi-kai
+  - if status&.dig(:error)
+    span.text-warning = "· the last check failed: #{status[:error]}"
+  - if status && status[:problems].any?
+    span.text-warning = "· skipped #{status[:problems].map { |p| "#{p[:app]} (#{p[:problem]})" }.join(', ')}"
+  = button_to 'Check now', apps_refresh_catalog_path, method: :post, class: 'btn btn-link btn-sm p-0 ms-1 align-baseline', form: { class: 'd-inline' }

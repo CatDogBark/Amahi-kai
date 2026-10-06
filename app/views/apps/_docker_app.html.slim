@@ -36,7 +36,9 @@
           - backup = AppCatalog.backup(identifier)
           .small.mt-1
             = "Version #{app.version}"
-            - if app.update_available?
+            - if app.update_available? && entry[:installable] == false
+              span.text-warning.ms-2 = "#{app.catalog_version} needs a newer Amahi-kai: run System Update first"
+            - elsif app.update_available?
               - target = app.catalog_version
               button.btn.btn-link.p-0.ms-2.align-baseline.fw-semibold type="button" style="font-size: inherit" data-app-stream=identifier data-url=apps_docker_update_stream_path(identifier) data-title="Updating #{name}..." data-confirm="Update #{name} to #{target}? It stops for a minute or two. A copy of its data is kept for #{AppCatalog::BACKUP_DAYS} days, and if #{target} doesn't come up, #{name} goes back to #{app.version} by itself." = "Update to #{target}"
               - releases = AppCatalog.releases_url(identifier, entry[:image])
@@ -57,8 +59,11 @@
       td.text-end.pe-3.text-nowrap style='width: 240px; vertical-align:middle'
         - case status
         - when 'available'
-          button.btn.btn-sm.btn-primary type="button" data=share_dialog.merge('verb' => 'Install')
-            = t('install', default: 'Install')
+          - if entry[:installable] == false
+            span.small.text-warning Needs a newer Amahi-kai: run System Update first
+          - else
+            button.btn.btn-sm.btn-primary type="button" data=share_dialog.merge('verb' => 'Install')
+              = t('install', default: 'Install')
         - when 'pulling', 'installing'
           span.badge.bg-warning.text-dark
             span.spinner-border.spinner-border-sm.me-1

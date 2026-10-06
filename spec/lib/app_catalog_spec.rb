@@ -23,15 +23,57 @@ RSpec.describe AppCatalog do
       expect(vaultwarden[:logo_url]).to start_with("https://")
     end
 
-    it "has a logo for each app: a link, or a file Amahi-kai serves" do
-      AppCatalog.all.each do |app|
-        logo = app[:logo_url].to_s
-        if logo.start_with?("/")
-          expect(File).to exist(File.join(__dir__, "../../public", logo)), "#{app[:identifier]}: #{logo}"
-        else
-          expect(logo).to start_with("https://"), app[:identifier]
-        end
-      end
+    it "has a logo for each app, on https" do
+      AppCatalog.all.each { |app| expect(app[:logo_url]).to start_with("https://"), app[:identifier] }
+    end
+  end
+
+  # The catalog fetched from its repo (the helper's apps.refresh_catalog) comes first; outside
+  # production it lives in tmp/catalog.
+  describe "the fetched catalog" do
+    let(:fetched) { Rails.root.join("tmp", "catalog", "apps").to_s }
+    let(:status_path) { Rails.root.join("tmp", "catalog-status.json").to_s }
+
+    before do
+      FileUtils.rm_rf([File.dirname(fetched), status_path])
+      FileUtils.mkdir_p(fetched)
+      FileUtils.cp(File.join(AppCatalog::CATALOG_DIR, "gitea.yml"), fetched)
+      AppCatalog.reload!
+    end
+
+    after do
+      FileUtils.rm_rf([File.dirname(fetched), status_path])
+      AppCatalog.reload!
+    end
+
+    it "is what the pages list, read again when the helper swaps in a new one" do
+      expect(AppCatalog.source_dir).to eq(fetched)
+      expect(AppCatalog.all.map { |app| app[:identifier] }).to eq(%w[gitea])
+
+      fresh = "#{File.dirname(fetched)}.new"
+      FileUtils.mkdir_p("#{fresh}/apps")
+      FileUtils.cp(File.join(AppCatalog::CATALOG_DIR, "gitea.yml"), "#{fresh}/apps")
+      FileUtils.cp(File.join(AppCatalog::CATALOG_DIR, "jellyfin.yml"), "#{fresh}/apps")
+      FileUtils.rm_rf(File.dirname(fetched))
+      File.rename(fresh, File.dirname(fetched))
+      expect(AppCatalog.all.map { |app| app[:identifier] }).to eq(%w[gitea jellyfin])
+    end
+
+    it "lists an app that needs a newer Amahi-kai, but not to install, and skips one it can't read" do
+      File.write("#{fetched}/future.yml", "name: Future\ndescription: Later.\ncategory: media\nrequires: #{AppCatalog::FORMAT + 1}\n")
+      File.write("#{fetched}/broken.yml", "name: [unclosed\n")
+      AppCatalog.reload!
+      expect(AppCatalog.all.map { |app| app[:identifier] }).to eq(%w[future gitea])
+      expect(AppCatalog.find("future")).to include(installable: false, requires: AppCatalog::FORMAT + 1)
+      expect(AppCatalog.find("gitea")).to include(installable: true, requires: 1)
+    end
+
+    it "says what the last fetch found" do
+      expect(AppCatalog.status).to be_nil
+      File.write(status_path, { checked_at: "2026-10-06T10:00:00Z", commit: "abc123", apps: %w[gitea],
+                                problems: [{ app: "broken", problem: "image must be name:tag@sha256:digest" }], error: nil }.to_json)
+      expect(AppCatalog.status).to include(checked_at: Time.utc(2026, 10, 6, 10), commit: "abc123", apps: %w[gitea], error: nil,
+                                           problems: [{ app: "broken", problem: "image must be name:tag@sha256:digest" }])
     end
   end
 

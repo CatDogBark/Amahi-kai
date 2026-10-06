@@ -2,11 +2,21 @@ require 'yaml'
 require 'json'
 require 'time'
 
-# The app catalog (docs/plans/apps.md): one manifest per app in config/apps/<id>.yml. The root
-# helper reads the same files to install an app (apps.install, which checks every field); this
-# is what the Apps pages show, plus where an app's data and secrets are.
+# The app catalog (docs/plans/apps.md): one manifest per app, <id>.yml. It has a repo of its
+# own (CatDogBark/amahi-kai-apps), which the root helper fetches every 6 hours (apps.refresh_catalog)
+# into FETCHED_DIR, keeping only the manifests that pass its checks; config/apps is the copy
+# that comes with Amahi-kai, used until the first fetch. The helper installs from the same files
+# (apps.install checks every field); this is what the Apps pages show, plus where an app's data
+# and secrets are.
 class AppCatalog
   CATALOG_DIR = File.expand_path('../config/apps', __dir__)
+  FETCHED_DIR = '/var/lib/amahi-kai/catalog/apps'.freeze
+  # What the last fetch found (written by the helper): when, which commit, the apps kept and the
+  # ones skipped, and why it failed if it did.
+  STATUS_PATH = '/var/lib/amahi-kai/catalog-status.json'.freeze
+  # The catalog format this Amahi-kai knows (the helper's CATALOG_FORMAT). An app whose
+  # `requires` is higher is listed, but installing it waits for System Update.
+  FORMAT = 1
   # Where the helper keeps each app's folders and generated secrets (outside production: tmp/).
   APPS_ROOT = '/var/lib/amahi-kai/apps'.freeze
   SECRETS_DIR = '/var/lib/amahi-kai/app-secrets'.freeze
@@ -16,8 +26,38 @@ class AppCatalog
   BACKUP_DAYS = 30
 
   class << self
+    # Read again whenever the helper swaps in a newly fetched catalog (a new folder).
     def all
-      @all ||= Dir[File.join(CATALOG_DIR, '*.yml')].map { |path| entry(path) }.sort_by { |app| app[:name].downcase }
+      dir = source_dir
+      stamp = [dir, (stat = File.stat(dir)).ino, stat.mtime]
+      @all = nil unless @stamp == stamp
+      @stamp = stamp
+      @all ||= Dir[File.join(dir, '*.yml')].filter_map { |path| entry(path) }.sort_by { |app| app[:name].downcase }
+    end
+
+    # The fetched catalog once there is one, else the copy in the code.
+    def source_dir
+      File.directory?(fetched_dir) ? fetched_dir : CATALOG_DIR
+    end
+
+    def fetched_dir
+      production? ? FETCHED_DIR : Rails.root.join('tmp', 'catalog', 'apps').to_s
+    end
+
+    # { checked_at: Time, commit:, apps: [ids], problems: [{ app:, problem: }], error: } from the
+    # last fetch, or nil before the first.
+    def status
+      data = JSON.parse(File.read(status_path))
+      { checked_at: (Time.iso8601(data['checked_at'].to_s) rescue nil), commit: data['commit'].presence,
+        apps: Array(data['apps']).grep(String),
+        problems: Array(data['problems']).select { |p| p.is_a?(Hash) }.map { |p| { app: p['app'].to_s, problem: p['problem'].to_s } },
+        error: data['error'].presence }
+    rescue SystemCallError, JSON::ParserError, TypeError
+      nil
+    end
+
+    def status_path
+      production? ? STATUS_PATH : Rails.root.join('tmp', 'catalog-status.json').to_s
     end
 
     def find(id)
@@ -39,6 +79,7 @@ class AppCatalog
 
     def reload!
       @all = nil
+      @stamp = nil
     end
 
     # The app's folders are still there from an earlier install (uninstall keeps them).
@@ -94,9 +135,13 @@ class AppCatalog
 
     private
 
+    # nil for a manifest that can't be read (the helper's checks make that a bug, but one
+    # broken entry mustn't take the Apps page down).
     def entry(path)
       data = YAML.safe_load(File.read(path))
-      { identifier: File.basename(path, '.yml'), name: data['name'], description: data['description'],
+      requires = data['requires'].is_a?(Integer) ? data['requires'] : 1
+      { identifier: File.basename(path, '.yml'), name: data['name'].to_s, description: data['description'],
+        requires: requires, installable: requires <= FORMAT,
         category: data['category'], logo_url: data['logo'], image: data['image'], web_port: data['web_port'],
         writes_shares: data['writes_shares'] == true, releases: data['releases'],
         ports: Array(data['ports']).map do |p|
@@ -104,6 +149,9 @@ class AppCatalog
             label: p['host'] == data['web_port'] ? 'web' : p['label'] }
         end,
         secrets: Array(data['secrets']).map { |s| { env: s['env'], label: s['label'] } } }
+    rescue Psych::Exception, SystemCallError, NoMethodError, TypeError => e
+      Rails.logger.warn("AppCatalog: #{path}: #{e.message}") if defined?(Rails.logger)
+      nil
     end
 
     def production?
