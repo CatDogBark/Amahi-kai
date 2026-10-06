@@ -52,8 +52,10 @@ describe "Front page", type: :request do
       login_as_admin
       %w[bittube gitea jellyfin transmission].each { |id| installed(id) }
       get root_path
-      expect(response.body).to include('App updates:', 'bitTube old →', ' · Gitea old →', ' · Jellyfin old →', 'and 1 more', '4 updates')
-      expect(response.body).not_to include('Transmission old')
+      notice = Nokogiri::HTML(response.body).at_css('a.update-notice[href="/apps/installed_apps"]').text
+      expect(notice).to include('App updates:', 'bitTube old →', ' · Gitea old →', ' · Jellyfin old →', 'and 1 more')
+      expect(notice).not_to include('Transmission old') # the System Update dialog lists all four
+      expect(response.body).to include('4 updates')
     end
 
     it "says nothing when every app is up to date, or to users who can't update them" do
