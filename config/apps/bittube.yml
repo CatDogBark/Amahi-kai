@@ -2,7 +2,7 @@ name: bitTube
 description: Your YouTube channels and streaming services in one place, with YouTube ad-free.
 category: media
 releases: https://github.com/CatDogBark/bitTube/releases/tag/v{version}
-image: ghcr.io/catdogbark/bittube:0.1.1@sha256:5fc71cef72d28f99ba7816e30a7d222750671bc3876c08a510f6ba1036131edd
+image: ghcr.io/catdogbark/bittube:0.1.2@sha256:9ecaaa1131205edb0bccb31f260a6f34113de19c05381a29669e4878662e42e3
 run_as: app
 web_port: 8484
 memory: 1g
