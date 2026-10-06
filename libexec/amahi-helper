@@ -2751,12 +2751,6 @@ module AmahiHelper
       raise Failed, "couldn't write the catalog to #{APP_CATALOG}: #{e.message}"
     end
 
-    def read_json(path)
-      JSON.parse(File.read(path))
-    rescue SystemCallError, JSON::ParserError
-      nil
-    end
-
     # --- Checking for updates ---
 
     def do_check_update
