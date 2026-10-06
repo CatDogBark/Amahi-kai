@@ -28,7 +28,7 @@ RSpec.describe AppCatalog do
     end
   end
 
-  # The catalog fetched from its repo (the helper's apps.refresh_catalog) comes first; outside
+  # The catalog fetched from its repo (with the helper's update check) comes first; outside
   # production it lives in tmp/catalog.
   describe "the fetched catalog" do
     let(:fetched) { Rails.root.join("tmp", "catalog", "apps").to_s }

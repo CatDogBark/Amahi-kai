@@ -3,8 +3,8 @@ require 'json'
 require 'time'
 
 # The app catalog (docs/plans/apps.md): one manifest per app, <id>.yml. It has a repo of its
-# own (CatDogBark/amahi-kai-apps), which the root helper fetches every 6 hours (apps.refresh_catalog)
-# into FETCHED_DIR, keeping only the manifests that pass its checks; config/apps is the copy
+# own (CatDogBark/amahi-kai-apps), which the root helper fetches with the update check
+# (system.check_update, every 6 hours and on Check now) into FETCHED_DIR, keeping only the manifests that pass its checks; config/apps is the copy
 # that comes with Amahi-kai, used until the first fetch. The helper installs from the same files
 # (apps.install checks every field); this is what the Apps pages show, plus where an app's data
 # and secrets are.

@@ -25,9 +25,7 @@ class ScheduledJobs
       check: '/usr/bin/docker',
       about: "Deletes each app's copy from before its last update once it's 30 days old (Undo update)" },
     { key: 'update-check', name: 'Check for updates', timer: 'amahi-kai-update-check', schedule: 'Every 6 hours',
-      about: 'Asks GitHub whether an update is waiting; never installs one' },
-    { key: 'catalog', name: 'App catalog', timer: 'amahi-kai-catalog', schedule: 'Every 6 hours',
-      about: "Fetches the app catalog from GitHub, so new app versions arrive on their own; never updates an app" },
+      about: 'Asks GitHub whether Amahi-kai or an app has an update waiting; never installs one' },
     { key: 'security-updates', name: 'Security updates', timer: 'apt-daily-upgrade', schedule: 'Daily',
       check: '/usr/bin/unattended-upgrade',
       about: "Ubuntu's unattended-upgrades installs security fixes, when the security audit has turned it on" }

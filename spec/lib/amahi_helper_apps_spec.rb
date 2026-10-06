@@ -34,7 +34,7 @@ RSpec.describe 'AmahiHelper apps' do
 
   after { FileUtils.rm_rf(dir) }
 
-  # The catalog's own repo (CATALOG_REPO), fetched by apps.refresh_catalog. A local repo stands
+  # The catalog's own repo (CATALOG_REPO), fetched by the update check. A local repo stands
   # in for GitHub, so the file protocol is let through.
   # Each installed app with a web page announced on the LAN through Avahi (mDNS).
   describe 'announcing apps' do
@@ -132,9 +132,9 @@ RSpec.describe 'AmahiHelper apps' do
       allow(helper).to receive(:do_install) { |path, content, *| File.write(path, content) }
     end
 
-    it 'is fetched by its own operation, which takes no arguments' do
-      expect(steps('apps.refresh_catalog', {})).to eq([[:refresh_catalog]])
-      expect(refusal('apps.refresh_catalog', { 'url' => 'https://example.com' })).to eq('unexpected argument url')
+    it "is fetched by the update check, after Amahi-kai's own" do
+      expect(steps('system.check_update', {})).to eq([[:check_update], [:refresh_catalog]])
+      expect(helper::OPERATIONS).not_to have_key('apps.refresh_catalog')
     end
 
     it 'keeps the manifests that pass, says why the others were skipped, and is installed from first' do

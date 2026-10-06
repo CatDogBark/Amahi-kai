@@ -31,6 +31,12 @@ module ApplicationHelper
     @update_status ||= UpdateStatus.load
   end
 
+  # Installed apps the catalog has a newer version of, for the admins who can update them
+  # (by name, case aside, so SQLite and MariaDB agree).
+  def app_updates
+    @app_updates ||= current_user&.admin? ? DockerApp.all.select(&:update_available?).sort_by { |app| app.name.downcase } : []
+  end
+
   def theme
     @theme
   end

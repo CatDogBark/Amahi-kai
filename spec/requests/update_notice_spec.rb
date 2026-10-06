@@ -25,6 +25,34 @@ RSpec.describe 'Update notice', type: :request do
       'available' => false, 'behind' => 0 }
   end
 
+  context 'as an admin, with an app update waiting and Amahi-kai up to date' do
+    before do
+      login_as_admin
+      update_status(up_to_date)
+      entry = AppCatalog.find('gitea')
+      DockerApp.create!(identifier: 'gitea', name: 'Gitea', status: 'running',
+                        image: "#{entry[:image].split(/[:@]/).first}:1.0.0-rootless@sha256:#{'a' * 64}")
+      get root_path
+    end
+
+    it 'puts the dot on the update button, and the dialog lists the app, to update from the Apps page' do
+      button = page.at_css('#update-btn')
+      expect(button['data-tip']).to eq('Update available: 1 app update')
+      expect(button.at_css('.update-dot')).not_to be_nil
+      dialog = page.at_css('#whats-new')
+      expect(dialog.at_css('.modal-title').text).to include("What's new")
+      expect(dialog.at_css('.whats-new-apps').text).to include('An app update', "Gitea 1.0.0-rootless → #{AppCatalog.tag(entry_image)}")
+      expect(dialog.at_css('.whats-new-apps a[href="/apps/installed_apps"]')).not_to be_nil
+      expect(dialog.text).to include('Up to date (aaaaaaa)', 'checks itself and its apps every 6 hours')
+      expect(dialog.at_css('#whats-new-install')).to be_nil # Update now is Amahi-kai's
+      expect(dialog.at_css('#whats-new-check')).not_to be_nil
+    end
+
+    def entry_image
+      AppCatalog.find('gitea')[:image]
+    end
+  end
+
   context 'as an admin, with an update waiting' do
     before do
       login_as_admin

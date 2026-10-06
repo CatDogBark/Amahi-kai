@@ -1,14 +1,16 @@
 /! System Update for admins, on every page. The header's update button (and the dashboard's
 /! notice) opens this dialog: what's new when an update is waiting, else the status with
-/! Check now and Repair. system_update.js runs its buttons; the update runs in the window below.
+/! Check now and Repair; and the apps with an update (installed from the Apps page: Update now
+/! here is Amahi-kai's). system_update.js runs its buttons; the update runs in the window below.
 - update = update_status
+- apps = app_updates
 #whats-new.modal.fade tabindex="-1" aria-labelledby="whats-new-title" aria-hidden="true" data-stream-url=settings_update_system_stream_path
   .modal-dialog.modal-lg.modal-dialog-centered.modal-dialog-scrollable
     .modal-content
       .modal-header
         h5.modal-title#whats-new-title
           span.me-2 = lucide_icon('refresh-cw', size: 18)
-          = update.available? ? "What's new" : 'System Update'
+          = update.available? || apps.any? ? "What's new" : 'System Update'
       .modal-body
         - if update.available?
           p
@@ -31,8 +33,15 @@
             = " Up to date (#{update.short(update.current)})."
         - else
           p.mb-0.text-muted Not checked yet. Check now looks for an update.
+        - if apps.any?
+          .whats-new-apps.mt-3
+            strong = apps.one? ? 'An app update' : "#{apps.size} app updates"
+            ul.mb-1.mt-1
+              - apps.each do |app|
+                li = app_update_label(app)
+            a href="/apps/installed_apps" Update on the Apps page →
         - if update.checked?
-          p.small.text-muted.mb-0.mt-3 = safe_join(['Checked ', relative_time_tag(update.checked_at, clock: true), '. Amahi-kai checks every 6 hours.'])
+          p.small.text-muted.mb-0.mt-3 = safe_join(['Checked ', relative_time_tag(update.checked_at, clock: true), '. Amahi-kai checks itself and its apps every 6 hours.'])
         - if update.error
           p.small.text-warning.mb-0.mt-1 = "Last check: #{update.error}"
       .modal-footer

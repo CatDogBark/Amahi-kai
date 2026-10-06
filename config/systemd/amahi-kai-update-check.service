@@ -1,5 +1,6 @@
-# Checks whether an update is waiting, for the web UI's "Update available" (the root
-# helper's system.check_update: fetches main and writes /var/lib/amahi-kai/update-status.json).
+# Checks whether an update is waiting, for Amahi-kai and its apps (the root helper's
+# system.check_update: fetches main and writes /var/lib/amahi-kai/update-status.json, then
+# fetches the app catalog's repo). It never installs anything.
 # Started by amahi-kai-update-check.timer. Installed by bin/amahi-install-helper.
 [Unit]
 Description=Amahi-kai: check for updates
