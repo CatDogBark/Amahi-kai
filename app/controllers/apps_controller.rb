@@ -129,6 +129,21 @@ class AppsController < ApplicationController
     @shares = Share.by_name
   end
 
+  # Check now: the helper fetches the catalog's repo, as amahi-kai-catalog.timer does every
+  # 6 hours, and the page says what it found.
+  def refresh_catalog
+    Privileged.call('apps.refresh_catalog')
+    AppCatalog.reload!
+    status = AppCatalog.status
+    if status&.dig(:error)
+      redirect_back fallback_location: apps_index_path, alert: "Couldn't refresh the app catalog: #{status[:error]}"
+    else
+      redirect_back fallback_location: apps_index_path, notice: 'The app catalog is up to date.'
+    end
+  rescue Privileged::Error => e
+    redirect_back fallback_location: apps_index_path, alert: "Couldn't refresh the app catalog: #{e.message}"
+  end
+
   # The install itself runs in the stream (the page opens it in the install window).
   def docker_install
     redirect_to apps_index_path

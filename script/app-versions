@@ -1,26 +1,34 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Which catalog apps (config/apps) have newer versions on their registry. A person runs it on a
-# development machine, reads the release notes, and opens a PR with the new versions; nothing
-# runs it on its own. Once System Update brings the PR to a NAS, the app's row offers Update.
+# Which catalog apps have newer versions on their registry. A person runs it on a development
+# machine, reads the release notes, and opens a PR with the new versions on the catalog's repo
+# (CatDogBark/amahi-kai-apps); nothing runs it on its own. Within 6 hours of the merge a NAS
+# fetches the catalog, and the app's row offers Update.
 #
-#   script/app-versions                   newer releases and builds, with release notes links
-#   script/app-versions --update gitea    write gitea's newest tag and digest into gitea.yml
-#   script/app-versions --update all      the same for every app with something newer
+#   script/app-versions --catalog ../amahi-kai-apps/apps                 the catalog's repo
+#   script/app-versions --catalog ../amahi-kai-apps/apps --update gitea  write gitea's newest tag and digest
+#   script/app-versions --update all      every app with something newer, in config/apps (the
+#                                         copy that comes with Amahi-kai) when there's no --catalog
 #
 # Ruby's standard library only; it needs to reach Docker Hub.
 
 require_relative '../lib/app_versions'
 
-versions = AppVersions.new
-update = ARGV[0] == '--update' ? ARGV[1].to_s : nil
-if ARGV.any? && (update.nil? || update.empty?)
-  warn 'usage: script/app-versions [--update APP|all]'
+args = ARGV.dup
+dir = AppVersions::CATALOG_DIR
+if (at = args.index('--catalog'))
+  dir = File.expand_path(args[at + 1].to_s)
+  args.slice!(at, 2)
+end
+update = args[0] == '--update' ? args[1].to_s : nil
+if (args.any? && (update.nil? || update.empty?)) || !File.directory?(dir)
+  warn 'usage: script/app-versions [--catalog DIR] [--update APP|all]'
   exit 2
 end
+versions = AppVersions.new(dir: dir)
 if update && update != 'all' && !versions.ids.include?(update)
-  warn "#{update} isn't in config/apps (#{versions.ids.join(', ')})"
+  warn "#{update} isn't in #{dir} (#{versions.ids.join(', ')})"
   exit 2
 end
 
@@ -44,6 +52,6 @@ ids.each do |id|
   next unless update && result.kind != :current
 
   AppVersions.write(versions.path(id), result.image)
-  puts format('%-14s %s', '', "wrote #{result.image} into config/apps/#{id}.yml")
+  puts format('%-14s %s', '', "wrote #{result.image} into #{versions.path(id)}")
 end
 exit(failed ? 1 : 0)

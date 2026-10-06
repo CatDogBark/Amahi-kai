@@ -45,6 +45,14 @@ RSpec.describe 'AmahiHelper' do
       expect(out).to eq("ok: #{AmahiHelper::OPERATIONS.size} operations\n")
     end
 
+    it "checks a catalog's manifests for the catalog repo's CI" do
+      out, _err, status = run_helper('--check-catalog', Rails.root.join('config/apps').to_s)
+      expect(status.exitstatus).to eq(0)
+      expect(out.lines.map(&:strip)).to all(end_with(': ok'))
+      _out, _err, status = run_helper('--check-catalog', Rails.root.join('app').to_s)
+      expect(status.exitstatus).to eq(1)
+    end
+
     it 'lists its operations' do
       out, _err, status = run_helper('--list')
       expect(status).to be_success

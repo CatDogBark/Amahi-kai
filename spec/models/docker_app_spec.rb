@@ -94,7 +94,7 @@ describe DockerApp do
 
   describe 'logo' do
     it "shows the catalog's logo, even one added after the install, else the one saved then" do
-      expect(build_app(identifier: 'bittube', logo_url: nil).logo_url).to eq('/app-logos/bittube.svg')
+      expect(build_app(identifier: 'bittube', logo_url: nil).logo_url).to eq('https://cdn.jsdelivr.net/gh/CatDogBark/amahi-kai-apps@main/logos/bittube.svg')
       expect(build_app(identifier: 'portainer', logo_url: 'https://example.com/p.png').logo_url).to eq('https://example.com/p.png')
     end
   end

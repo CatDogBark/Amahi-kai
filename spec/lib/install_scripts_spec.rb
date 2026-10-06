@@ -44,6 +44,14 @@ RSpec.describe 'install and update scripts' do
     expect(File.read(Rails.root.join('config/systemd/amahi-kai-update-check.timer'))).to include('OnUnitActiveSec=6h')
   end
 
+  it "installs and enables the app catalog's fetch" do
+    text = File.read(Rails.root.join('bin/amahi-install-helper'))
+    expect(text).to include('amahi-kai-catalog.service amahi-kai-catalog.timer', 'systemctl enable --now amahi-kai-catalog.timer')
+    expect(File.read(Rails.root.join('config/systemd/amahi-kai-catalog.service')))
+      .to include('ExecStart=/usr/local/sbin/amahi-helper apps.refresh_catalog')
+    expect(File.read(Rails.root.join('config/systemd/amahi-kai-catalog.timer'))).to include('OnUnitActiveSec=6h')
+  end
+
   it 'installs and enables the hourly pool snapshots' do
     text = File.read(Rails.root.join('bin/amahi-install-helper'))
     expect(text).to include('amahi-kai-snapshots.service amahi-kai-snapshots.timer', 'systemctl enable --now amahi-kai-snapshots.timer')

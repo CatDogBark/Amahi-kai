@@ -11,6 +11,7 @@
 
 - if @docker_installed
   = render 'docker_service_toggle'
+  = render 'catalog_status'
 
   - if @categories.any?
     .app-store-header.row

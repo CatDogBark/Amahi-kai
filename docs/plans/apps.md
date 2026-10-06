@@ -196,8 +196,8 @@ app needs a public hostname. HTTPS for apps through Tailscale (Vaultwarden needs
 
 **Done** (#62). Decisions (Troy, 2026-10-05):
 
-- [x] **Manual.** An installed app's row offers **Update to <version>** when the catalog (brought by
-  System Update) has another version than the one it runs. Installing again and changing shares
+- [x] **Manual.** An installed app's row offers **Update to <version>** when the catalog (fetched on
+  its own since P4.5b) has another version than the one it runs. Installing again and changing shares
   keep the version it runs; only Update changes it.
 - [x] **A copy first, and rollback.** The helper (`apps.update`) copies the app's folders (all but
   those the manifest marks `backup: false`: Jellyfin's cache, Transmission's downloads) after
@@ -214,6 +214,32 @@ app needs a public hostname. HTTPS for apps through Tailscale (Vaultwarden needs
   `--update APP` writes the new tag and digest. Someone reads the notes and opens a PR. No bot,
   no schedule, no Claude session runs it.
 - [x] **What's new** links to the new version's release notes (the manifest's `releases`).
+
+### P4.5b: The catalog's own repo
+
+Decided (Troy, 2026-10-06): app updates mustn't wait for an Amahi-kai update.
+
+- [x] **A repo of its own**, [CatDogBark/amahi-kai-apps](https://github.com/CatDogBark/amahi-kai-apps):
+  one manifest per app in `apps/<id>.yml`, the same fields as before. Its CI runs this repo's
+  helper on it (`amahi-helper --check-catalog apps`), so a manifest the NAS would refuse can't be
+  merged. An app update is a PR there (`script/app-versions --catalog ../amahi-kai-apps/apps
+  --update APP`).
+- [x] **Fetched by the root helper** (`apps.refresh_catalog`) every 6 hours
+  (`amahi-kai-catalog.timer`) and on the Apps page's **Check now**: main, over https only, into a
+  bare repo of root's (`/var/lib/amahi-kai/catalog-src`), with git's hooks off. Every manifest is
+  checked as an install would check it, plus what the pages show (name, description, category,
+  logo and release notes on https); the ones that pass are written beside the current catalog
+  and swapped in (`/var/lib/amahi-kai/catalog/apps`). One that fails is skipped and named on the
+  Apps page; a fetch that fails, or finds nothing that passes, keeps the catalog there was. What
+  happened is in `/var/lib/amahi-kai/catalog-status.json`. Trust is unchanged: System Update pulls
+  Amahi-kai's own code from the same GitHub account.
+- [x] **The fetched catalog comes first** for the helper and the pages; `config/apps` is the copy
+  that comes with Amahi-kai, for a NAS that hasn't fetched one yet, and for an app the catalog
+  no longer lists. Bring it up to date with the repo now and then.
+- [x] **Formats.** A manifest's `requires` (default 1) is the catalog format it needs. This
+  Amahi-kai knows format 1 (`CATALOG_FORMAT`, `AppCatalog::FORMAT`); an app or update that needs
+  more is listed with "Needs a newer Amahi-kai: run System Update first", and the helper refuses
+  to install it. A new manifest field raises the format, so older NASes don't misread it.
 
 ### P4.6: bitShare as the first built-in app
 

@@ -19,6 +19,68 @@ describe "Docker Apps", type: :request do
     allow(Privileged).to receive(:call).with(operation, any_args).and_raise(Privileged::Error.new(operation, message))
   end
 
+  # The catalog fetched from its own repo (the helper's apps.refresh_catalog); outside
+  # production it lives in tmp/.
+  describe "the catalog's own repo" do
+    let(:fetched) { Rails.root.join('tmp', 'catalog', 'apps').to_s }
+    let(:status_path) { Rails.root.join('tmp', 'catalog-status.json').to_s }
+
+    before do
+      FileUtils.rm_rf([File.dirname(fetched), status_path])
+      AppCatalog.reload!
+    end
+
+    after do
+      FileUtils.rm_rf([File.dirname(fetched), status_path])
+      AppCatalog.reload!
+    end
+
+    it "says where the catalog came from, with Check now" do
+      get "/apps/docker_apps"
+      expect(response.body).to include('App catalog: the copy that came with Amahi-kai', 'action="/apps/refresh_catalog"')
+
+      File.write(status_path, { checked_at: 1.hour.ago.utc.iso8601, commit: 'abc1234', apps: %w[gitea], error: 'GitHub is offline',
+                                problems: [{ app: 'broken', problem: 'image must be name:tag@sha256:digest' }] }.to_json)
+      get "/apps/installed_apps"
+      expect(response.body).to include('App catalog checked', 'the last check failed: GitHub is offline',
+                                       'skipped broken (image must be name:tag@sha256:digest)')
+    end
+
+    it "fetches it on Check now, and says what happened" do
+      post "/apps/refresh_catalog"
+      expect(Privileged.calls).to include(['apps.refresh_catalog', {}])
+      expect(response).to redirect_to('/apps')
+      expect(flash[:notice]).to eq('The app catalog is up to date.')
+
+      File.write(status_path, { checked_at: Time.now.utc.iso8601, error: 'GitHub is offline' }.to_json)
+      post "/apps/refresh_catalog", headers: { 'Referer' => 'http://www.example.com/apps/installed_apps' }
+      expect(response).to redirect_to('http://www.example.com/apps/installed_apps')
+      expect(flash[:alert]).to eq("Couldn't refresh the app catalog: GitHub is offline")
+    end
+
+    it "lists an app that needs a newer Amahi-kai, without Install" do
+      FileUtils.mkdir_p(fetched)
+      FileUtils.cp(Dir[Rails.root.join('config/apps/*.yml')], fetched)
+      File.write("#{fetched}/future.yml", "name: Future\ndescription: Later.\ncategory: media\nrequires: #{AppCatalog::FORMAT + 1}\n")
+      AppCatalog.reload!
+      get "/apps/docker_apps"
+      expect(response.body).to include('Future', 'Needs a newer Amahi-kai: run System Update first', 'data-app-shares="gitea"')
+      expect(response.body).not_to include('data-app-shares="future"')
+    end
+
+    it "holds back an update that needs a newer Amahi-kai" do
+      FileUtils.mkdir_p(fetched)
+      newer = File.read(Rails.root.join('config/apps/gitea.yml'))
+                  .sub(/^image: .*$/, "image: gitea/gitea:9.9.9-rootless@sha256:#{'c' * 64}") + "requires: #{AppCatalog::FORMAT + 1}\n"
+      File.write("#{fetched}/gitea.yml", newer)
+      AppCatalog.reload!
+      gitea(image: YAML.safe_load(File.read(Rails.root.join('config/apps/gitea.yml')))['image']) # what came with Amahi-kai
+      get "/apps/installed_apps"
+      expect(response.body).to include('9.9.9-rootless needs a newer Amahi-kai: run System Update first')
+      expect(response.body).not_to include('Update to 9.9.9-rootless')
+    end
+  end
+
   describe "the catalog page" do
     it "lists the catalog's apps, with Install for the ones not installed" do
       get "/apps/docker_apps"

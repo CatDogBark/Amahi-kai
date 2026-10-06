@@ -25,6 +25,7 @@
 #   amahi-helper --self-test            check the operation table and exit
 #   amahi-helper --list                 print the operation names
 #   amahi-helper --dry-run OP           validate stdin and print the planned steps; changes nothing
+#   amahi-helper --check-catalog DIR    check every app manifest in DIR (the catalog repo's CI)
 
 require 'json'
 require 'etc'
@@ -248,6 +249,23 @@ module AmahiHelper
   APP_ENV_NAME = /\A[A-Z][A-Z0-9_]{0,63}\z/
   APP_MEMORY = /\A[1-9][0-9]{0,4}[mg]\z/
   APP_DEFAULT_MEMORY = '1g'
+  # The catalog has a repo of its own (docs/plans/apps.md), so app versions don't wait for an
+  # Amahi-kai update. apps.refresh_catalog fetches its main branch every 6 hours
+  # (amahi-kai-catalog.timer), over https only, into CATALOG_SRC (a bare repo, root's), and keeps
+  # the manifests that pass every check below in APP_CATALOG/apps, which comes first;
+  # APP_MANIFESTS, the copy in the code, is the fallback (before the first fetch, and for an app
+  # the catalog no longer lists). A manifest's `requires` is the catalog format it needs: one
+  # above CATALOG_FORMAT is listed but can't be installed until System Update brings an
+  # Amahi-kai that knows it.
+  CATALOG_REPO = 'https://github.com/CatDogBark/amahi-kai-apps.git'
+  CATALOG_PROTOCOLS = %w[https].freeze
+  CATALOG_SRC = '/var/lib/amahi-kai/catalog-src'
+  APP_CATALOG = '/var/lib/amahi-kai/catalog'
+  CATALOG_STATUS = '/var/lib/amahi-kai/catalog-status.json'
+  CATALOG_LOCK = '/run/amahi-kai-catalog.lock'
+  CATALOG_FORMAT = 1
+  CATALOG_MAX_APPS = 200
+  CATALOG_MAX_BYTES = 64 * 1024
   # Host ports apps can't take: the NAS's own services (SSH, DNS, DHCP, HTTP(S), Samba,
   # Amahi-kai's web UI).
   APP_RESERVED_PORTS = [22, 53, 67, 68, 80, 137, 138, 139, 443, 445, 3000].freeze
@@ -747,6 +765,14 @@ module AmahiHelper
       },
       plan: ->(v) { [[:undo_app_update, v[:id], v[:manifest], v[:shares]]] }
     },
+    # Fetches the catalog's repo and keeps the manifests that pass every check (see
+    # CATALOG_REPO). A fetch that fails, or finds no app that passes, keeps the catalog there
+    # was. Run every 6 hours by amahi-kai-catalog.timer, and by the Apps page's Check now.
+    'apps.refresh_catalog' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:refresh_catalog]] }
+    },
     # Deletes pre-update copies older than APP_BACKUP_DAYS. Run daily by amahi-kai-app-backups.timer.
     'apps.prune_backups' => {
       params: [],
@@ -864,9 +890,10 @@ module AmahiHelper
       in ['--self-test'] then self_test(output)
       in ['--list'] then output.puts(OPERATIONS.keys) || 0
       in ['--dry-run', String => op] then respond(output) { dry_run(op, read_args(input)) }
+      in ['--check-catalog', String => dir] then check_catalog(dir, output)
       in [String => op] unless op.start_with?('-') then respond(output) { execute(op, input) }
       else
-        warn 'usage: amahi-helper OPERATION < args.json | --dry-run OPERATION | --list | --self-test'
+        warn 'usage: amahi-helper OPERATION < args.json | --dry-run OPERATION | --check-catalog DIR | --list | --self-test'
         2
       end
     end
@@ -1304,13 +1331,33 @@ module AmahiHelper
       "amahi-#{id}"
     end
 
-    # An app's manifest, from the code, checked field by field. A manifest that fails a check
-    # is a bug in the catalog, so it fails rather than being refused.
+    # Where an app's manifest is: the fetched catalog's, else the code's (see CATALOG_REPO).
+    def app_manifest_path(id)
+      [File.join(APP_CATALOG, 'apps', "#{id}.yml"), File.join(APP_MANIFESTS, "#{id}.yml")].find { |path| File.file?(path) }
+    end
+
+    # An app's manifest, checked field by field. A manifest that fails a check is a bug in the
+    # catalog, so it fails rather than being refused; one that needs a newer Amahi-kai is refused.
     def app_manifest(id)
-      path = File.join(APP_MANIFESTS, "#{id}.yml")
-      raise Refused, "app #{id.inspect} isn't in Amahi-kai's catalog" unless File.file?(path)
+      path = app_manifest_path(id)
+      raise Refused, "app #{id.inspect} isn't in Amahi-kai's catalog" unless path
       data = YAML.safe_load(File.read(path))
       raise Failed, "#{path} isn't an app manifest" unless data.is_a?(Hash)
+      raise Refused, "#{id} needs a newer Amahi-kai: run System Update first" if manifest_requires(id, data) > CATALOG_FORMAT
+      check_manifest(id, data)
+    rescue Psych::Exception => e
+      raise Failed, "#{id}'s manifest can't be read: #{e.message}"
+    end
+
+    # The catalog format a manifest needs (`requires`, 1 when it doesn't say).
+    def manifest_requires(id, data)
+      needs = data.fetch('requires', 1)
+      raise Failed, "#{id}'s manifest: requires must be a whole number from 1 to 999" unless needs.is_a?(Integer) && needs.between?(1, 999)
+      needs
+    end
+
+    # What installing an app takes from its manifest, every field checked.
+    def check_manifest(id, data)
       bad = ->(why) { raise Failed, "#{id}'s manifest: #{why}" }
       image = data['image'].to_s
       bad.call('image must be name:tag@sha256:digest') unless image.match?(APP_IMAGE)
@@ -1327,8 +1374,64 @@ module AmahiHelper
       { image: image, run_as: run_as, memory: memory, ports: ports, web_port: web_port,
         folders: app_folders(data['folders'], bad), environment: environment,
         secrets: app_secret_names(data['secrets'], environment, bad), writes_shares: writes_shares }
+    end
+
+    # What the Apps pages show besides: a name, a description and a category, each one line,
+    # and a logo and release notes on https, or none.
+    def check_listing(id, data)
+      bad = ->(why) { raise Failed, "#{id}'s manifest: #{why}" }
+      %w[name description category].each do |field|
+        value = data[field]
+        ok = value.is_a?(String) && !value.strip.empty? && value.length <= 300 && !value.match?(/[\r\n\0]/)
+        bad.call("#{field} must be one line of text") unless ok
+      end
+      %w[logo releases].each do |field|
+        value = data[field]
+        bad.call("#{field} must be an https link") unless value.nil? || (value.is_a?(String) && value.match?(%r{\Ahttps://[^\s"'<>]{1,500}\z}))
+      end
+    end
+
+    # nil when a catalog manifest passes every check, else why not. One that needs a newer
+    # catalog format only has its listing checked: this Amahi-kai doesn't know its other fields.
+    def catalog_entry_problem(id, content)
+      return 'not an app id (lowercase letters and digits)' unless id.match?(APP_ID)
+      return "over #{CATALOG_MAX_BYTES} bytes" if content.bytesize > CATALOG_MAX_BYTES
+      data = YAML.safe_load(content)
+      return 'not an app manifest' unless data.is_a?(Hash)
+      check_listing(id, data)
+      check_manifest(id, data) if manifest_requires(id, data) <= CATALOG_FORMAT
+      nil
+    rescue Failed => e
+      e.message.delete_prefix("#{id}'s manifest: ")
     rescue Psych::Exception => e
-      raise Failed, "#{id}'s manifest can't be read: #{e.message}"
+      "can't be read: #{e.message.lines.first.to_s.strip}"
+    end
+
+    # --check-catalog DIR: every DIR/<id>.yml checked as apps.refresh_catalog would, and no host
+    # port listed by two apps. Prints a line per app; 0 when they all pass.
+    def check_catalog(dir, output)
+      paths = Dir[File.join(dir, '*.yml')].sort
+      return output.puts("no app manifests in #{dir}") || 1 if paths.empty?
+
+      ports = Hash.new { |h, k| h[k] = [] }
+      failed = false
+      paths.each do |path|
+        id = File.basename(path, '.yml')
+        content = File.read(path)
+        problem = catalog_entry_problem(id, content)
+        output.puts(problem ? "#{id}: #{problem}" : "#{id}: ok")
+        failed ||= !problem.nil?
+        next if problem
+
+        Array(YAML.safe_load(content)['ports']).each { |port| ports[[port['host'], port['protocol'] || 'tcp']] << id }
+      end
+      ports.each do |(host, protocol), ids|
+        next if ids.size < 2
+
+        output.puts("#{ids.join(' and ')}: both list host port #{host}/#{protocol}")
+        failed = true
+      end
+      failed ? 1 : 0
     end
 
     def app_ports(list, bad)
@@ -2548,6 +2651,112 @@ module AmahiHelper
       nil
     end
 
+    # --- The app catalog's repo (see CATALOG_REPO) ---
+
+    def do_refresh_catalog
+      status = with_lock(CATALOG_LOCK) { refresh_catalog }
+      return { 'catalog' => read_json(CATALOG_STATUS), 'skipped' => 'the catalog is being fetched already' } unless status
+
+      do_install(CATALOG_STATUS, "#{JSON.pretty_generate(status)}\n", nil, '0640', APP_USER)
+      { 'catalog' => status }
+    end
+
+    # The new status: what was fetched and kept, or, when the fetch failed or nothing in it
+    # passed, the last status with the error (the catalog there was stays).
+    def refresh_catalog
+      checked = Time.now.utc.iso8601
+      error = fetch_catalog
+      fetched = error ? nil : read_fetched_catalog
+      error ||= fetched[:error]
+      return (read_json(CATALOG_STATUS) || {}).merge('checked_at' => checked, 'error' => error) if error
+
+      install_catalog(fetched[:files])
+      { 'checked_at' => checked, 'commit' => fetched[:commit], 'apps' => fetched[:files].keys.sort,
+        'problems' => fetched[:problems], 'error' => nil }
+    end
+
+    # nil when main was fetched (it's then FETCH_HEAD in CATALOG_SRC), else why not.
+    def fetch_catalog
+      unless File.file?(File.join(CATALOG_SRC, 'HEAD'))
+        _out, err, status = catalog_git('init', '--quiet', '--bare', CATALOG_SRC, repo: false)
+        return "couldn't set up #{CATALOG_SRC}: #{last_lines(err, 1)}" unless status.success?
+      end
+      _out, err, status = catalog_git('fetch', '--quiet', '--depth', '1', '--no-tags', CATALOG_REPO, 'main', timeout: 60)
+      return nil if status.success?
+
+      reason = err.lines.map(&:strip).find { |line| line.start_with?('fatal:') } || last_lines(err, 1)
+      "couldn't fetch the catalog from GitHub: #{reason.delete_prefix('fatal: ')}"
+    rescue SystemCallError => e
+      "couldn't run git: #{e.message}"
+    end
+
+    # git with hooks off and only CATALOG_PROTOCOLS allowed, in CATALOG_SRC (unless +repo+ is
+    # false). [stdout, stderr, status].
+    def catalog_git(*args, repo: true, timeout: nil)
+      argv = [GIT, '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'protocol.allow=never',
+              *CATALOG_PROTOCOLS.flat_map { |name| ['-c', "protocol.#{name}.allow=always"] },
+              *(repo ? ['-C', CATALOG_SRC] : []), *args]
+      argv = ['/usr/bin/timeout', timeout.to_s, *argv] if timeout
+      Open3.capture3(ENV_MIN.merge('GIT_TERMINAL_PROMPT' => '0'), [argv[0], argv[0]], *argv.drop(1),
+                     unsetenv_others: true, chdir: '/')
+    end
+
+    # { commit:, files: { id => manifest }, problems: [{ 'app' =>, 'problem' => }] } for the
+    # apps/ of what was fetched, or { error: } when none of them passes.
+    def read_fetched_catalog
+      out, _err, status = catalog_git('rev-parse', '--verify', '--quiet', 'FETCH_HEAD^{commit}')
+      return { error: 'the fetched catalog has no commit' } unless status.success?
+
+      commit = out.strip
+      listing, _err, status = catalog_git('ls-tree', '-l', commit, 'apps/')
+      return { error: "the fetched catalog can't be read" } unless status.success?
+
+      files = {}
+      problems = []
+      listing.lines(chomp: true).first(CATALOG_MAX_APPS).each do |line|
+        meta, path = line.split("\t", 2)
+        _mode, type, object, size = meta.to_s.split
+        next unless type == 'blob' && path.to_s.end_with?('.yml')
+
+        id = File.basename(path, '.yml')
+        problem = "over #{CATALOG_MAX_BYTES} bytes" if size.to_i > CATALOG_MAX_BYTES
+        unless problem
+          content, _err, status = catalog_git('cat-file', 'blob', object)
+          content = content.dup.force_encoding('UTF-8')
+          problem = status.success? && content.valid_encoding? ? catalog_entry_problem(id, content) : "can't be read"
+        end
+        problem ? problems << { 'app' => id, 'problem' => problem } : files[id] = content
+      end
+      return { error: 'no app in the fetched catalog passes the checks', problems: problems } if files.empty?
+
+      { commit: commit, files: files, problems: problems }
+    end
+
+    # The checked manifests become APP_CATALOG/apps: written beside it, then swapped in.
+    def install_catalog(files)
+      fresh = "#{APP_CATALOG}.new"
+      old = "#{APP_CATALOG}.old"
+      FileUtils.rm_rf([fresh, old])
+      FileUtils.mkdir_p(File.join(fresh, 'apps'), mode: 0o755)
+      File.chmod(0o755, fresh)
+      files.each do |id, content|
+        File.open(File.join(fresh, 'apps', "#{id}.yml"), File::WRONLY | File::CREAT | File::EXCL | File::NOFOLLOW, 0o644) do |f|
+          f.write(content)
+        end
+      end
+      File.rename(APP_CATALOG, old) if File.exist?(APP_CATALOG)
+      File.rename(fresh, APP_CATALOG)
+      FileUtils.rm_rf(old)
+    rescue SystemCallError => e
+      raise Failed, "couldn't write the catalog to #{APP_CATALOG}: #{e.message}"
+    end
+
+    def read_json(path)
+      JSON.parse(File.read(path))
+    rescue SystemCallError, JSON::ParserError
+      nil
+    end
+
     # --- Checking for updates ---
 
     def do_check_update
@@ -2559,8 +2768,12 @@ module AmahiHelper
     end
 
     # Runs the block holding the update lock, or returns nil if an update holds it.
-    def with_update_lock
-      File.open(UPDATE_LOCK, File::RDWR | File::CREAT, 0o644) do |lock|
+    def with_update_lock(&block)
+      with_lock(UPDATE_LOCK, &block)
+    end
+
+    def with_lock(path)
+      File.open(path, File::RDWR | File::CREAT, 0o644) do |lock|
         return nil unless lock.flock(File::LOCK_EX | File::LOCK_NB)
 
         yield
