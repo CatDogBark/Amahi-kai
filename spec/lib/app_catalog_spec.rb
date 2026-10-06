@@ -22,6 +22,17 @@ RSpec.describe AppCatalog do
       expect(vaultwarden[:image]).to start_with("vaultwarden/server:1.37.3@sha256:")
       expect(vaultwarden[:logo_url]).to start_with("https://")
     end
+
+    it "has a logo for each app: a link, or a file Amahi-kai serves" do
+      AppCatalog.all.each do |app|
+        logo = app[:logo_url].to_s
+        if logo.start_with?("/")
+          expect(File).to exist(File.join(__dir__, "../../public", logo)), "#{app[:identifier]}: #{logo}"
+        else
+          expect(logo).to start_with("https://"), app[:identifier]
+        end
+      end
+    end
   end
 
   describe ".find" do
