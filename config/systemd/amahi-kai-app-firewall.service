@@ -10,6 +10,8 @@ PartOf=docker.service
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/usr/local/sbin/amahi-helper apps.firewall
+# And announces the apps on the LAN (mDNS); a failure there doesn't count against the firewall.
+ExecStart=-/usr/local/sbin/amahi-helper apps.announce
 StandardInput=null
 TimeoutStartSec=1min
 

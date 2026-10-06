@@ -98,6 +98,7 @@ apt-get install -y --no-install-recommends \
   zlib1g-dev \
   mariadb-server \
   samba \
+  avahi-daemon \
   samba-common-bin \
   samba-vfs-modules \
   ntfs-3g \

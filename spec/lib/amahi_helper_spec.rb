@@ -1128,11 +1128,12 @@ RSpec.describe 'AmahiHelper' do
       allow(File).to receive(:executable?).with('/usr/sbin/ufw').and_return(true)
     end
 
-    it 'turns UFW on with SSH, the web UI, HTTPS and Samba let in, and DNS and DHCP once dnsmasq is configured' do
+    it 'turns UFW on with SSH, the web UI, HTTPS, Samba and mDNS let in, and DNS and DHCP once dnsmasq is configured' do
       stub_const('AmahiHelper::DNSMASQ_CONF', "#{dir}/amahi.conf")
       ufw = '/usr/sbin/ufw'
       base = [[ufw, 'default', 'deny', 'incoming'], [ufw, 'allow', '22/tcp'], [ufw, 'allow', '3000/tcp'],
-              [ufw, 'allow', '443/tcp'], [ufw, 'allow', '445/tcp'], [ufw, 'allow', '139/tcp'], [ufw, 'allow', '137:138/udp']]
+              [ufw, 'allow', '443/tcp'], [ufw, 'allow', '445/tcp'], [ufw, 'allow', '139/tcp'], [ufw, 'allow', '137:138/udp'],
+              [ufw, 'allow', '5353/udp']]
       expect(steps('security.enable_firewall', {})).to eq([*base, [ufw, '--force', 'enable']])
       File.write("#{dir}/amahi.conf", "bind-interfaces\n")
       expect(steps('security.enable_firewall', {})).to eq([*base, [ufw, 'allow', '53'], [ufw, 'allow', '67/udp'], [ufw, '--force', 'enable']])

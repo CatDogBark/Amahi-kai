@@ -203,7 +203,7 @@ module AmahiHelper
   # Packages the helper may install.
   PACKAGES = %w[
     greyhole php8.3-mbstring php8.3-mysql cloudflared tailscale docker-ce docker-ce-cli containerd.io
-    dnsmasq fail2ban unattended-upgrades zfsutils-linux smartmontools
+    dnsmasq fail2ban unattended-upgrades zfsutils-linux smartmontools avahi-daemon
   ].freeze
   APT_ENV = ENV_MIN.merge('DEBIAN_FRONTEND' => 'noninteractive').freeze
 
@@ -266,6 +266,12 @@ module AmahiHelper
   CATALOG_FORMAT = 1
   CATALOG_MAX_APPS = 200
   CATALOG_MAX_BYTES = 64 * 1024
+  # Apps on the LAN (mDNS). Avahi announces each installed app with a web page as an HTTP
+  # service, "<App> on <hostname>", with a subtype of its own, _<id>._sub._http._tcp, so a device
+  # can ask for one app (bitTube Desktop finds bitTube that way). The amahi-app-*.service files
+  # in AVAHI_SERVICES are Amahi-kai's; the others aren't touched. UFW lets mDNS in.
+  AVAHI_SERVICES = '/etc/avahi/services'
+  MDNS_PORT = '5353/udp'
   # Host ports apps can't take: the NAS's own services (SSH, DNS, DHCP, HTTP(S), Samba,
   # Amahi-kai's web UI).
   APP_RESERVED_PORTS = [22, 53, 67, 68, 80, 137, 138, 139, 443, 445, 3000].freeze
@@ -303,10 +309,10 @@ module AmahiHelper
   APP_BACKUP_MARGIN = 1024**3 # free space to leave after copying
   APP_HEALTH_TIMEOUT = 300
 
-  # The security audit's fixes. UFW lets in SSH, the web UI, HTTPS and Samba, plus DNS and
-  # DHCP once Amahi-kai has configured dnsmasq.
+  # The security audit's fixes. UFW lets in SSH, the web UI, HTTPS, Samba and mDNS (apps
+  # announced on the LAN), plus DNS and DHCP once Amahi-kai has configured dnsmasq.
   UFW = '/usr/sbin/ufw'
-  FIREWALL_PORTS = %w[22/tcp 3000/tcp 443/tcp 445/tcp 139/tcp 137:138/udp].freeze
+  FIREWALL_PORTS = %w[22/tcp 3000/tcp 443/tcp 445/tcp 139/tcp 137:138/udp 5353/udp].freeze
   DNSMASQ_PORTS = %w[53 67/udp].freeze
   # sshd uses the first value it reads for a setting, and sshd_config includes
   # sshd_config.d/*.conf first, in name order: 10-amahi-kai.conf comes before Ubuntu's
@@ -731,7 +737,7 @@ module AmahiHelper
       validate: lambda { |a|
         installed!(DOCKER) && app_request(a['app']).then { |v| v.merge(shares: app_share_choices(a['shares'], v[:id], v[:manifest])) }
       },
-      plan: ->(v) { [[:install_app, v[:id], v[:manifest], v[:shares], true]] }
+      plan: ->(v) { [[:install_app, v[:id], v[:manifest], v[:shares], true], [:announce_apps]] }
     },
     'apps.start' => {
       params: %w[app],
@@ -786,7 +792,14 @@ module AmahiHelper
       validate: lambda { |a|
         installed!(DOCKER) && app_request(a['app']).merge(delete_data: a.key?('delete_data') ? boolean(a, 'delete_data') : false)
       },
-      plan: ->(v) { [[:uninstall_app, v[:id], v[:manifest][:image], v[:delete_data]]] }
+      plan: ->(v) { [[:uninstall_app, v[:id], v[:manifest][:image], v[:delete_data]], [:announce_apps]] }
+    },
+    # Announces the installed apps on the LAN (see AVAHI_SERVICES). Run at every install and
+    # uninstall, and by amahi-kai-app-firewall.service each time Docker starts.
+    'apps.announce' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:announce_apps]] }
     },
     # Limits the apps' ports to the LAN and Tailscale (APP_CHAIN). Run by
     # amahi-kai-app-firewall.service each time Docker starts, and at every install.
@@ -2647,6 +2660,79 @@ module AmahiHelper
       return nil unless File.executable?(DOCKER)
       out, _err, status = Open3.capture3(ENV_MIN, [DOCKER, DOCKER], *args, unsetenv_others: true, chdir: '/')
       status.success? ? out : nil
+    rescue SystemCallError
+      nil
+    end
+
+    # --- Apps on the LAN (see AVAHI_SERVICES) ---
+
+    def do_announce_apps
+      return 'apps not announced on the LAN: avahi-daemon is not installed' unless File.directory?(AVAHI_SERVICES)
+
+      status = do_apps_status
+      return 'apps not announced on the LAN: Docker is not running' unless status['docker']
+
+      wanted = status['apps'].keys.sort.filter_map { |id| app_announcement(id) }.to_h
+      changed = false
+      Dir[File.join(AVAHI_SERVICES, 'amahi-app-*.service')].each do |path|
+        next if wanted.key?(File.basename(path))
+
+        File.unlink(path)
+        changed = true
+      end
+      wanted.each do |file, content|
+        path = File.join(AVAHI_SERVICES, file)
+        next if File.file?(path) && File.read(path) == content
+
+        do_install(path, content, nil, '0644')
+        changed = true
+      end
+      run_command(['/usr/bin/systemctl', 'try-reload-or-restart', 'avahi-daemon.service', { allow_failure: true }]) if changed
+      allow_mdns
+      { 'announced' => wanted.keys.map { |file| file.delete_prefix('amahi-app-').delete_suffix('.service') } }
+    end
+
+    # [file name, Avahi service file] for an installed app with a web page, on the host port it
+    # was given (APP_PORTS), or nil.
+    def app_announcement(id)
+      return nil unless id.match?(APP_ID) && (path = app_manifest_path(id))
+
+      data = YAML.safe_load(File.read(path))
+      web = data['web_port']
+      return nil unless data.is_a?(Hash) && web.is_a?(Integer)
+
+      given = Array((read_json(APP_PORTS) || {})[id]).grep(Hash).find { |port| port['preferred'] == web }
+      port = given && given['host'].is_a?(Integer) ? given['host'] : web
+      name = data['name'].is_a?(String) && !data['name'].strip.empty? ? data['name'].strip : id
+      ["amahi-app-#{id}.service", <<~XML]
+        <?xml version="1.0" standalone="no"?>
+        <!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+        <!-- Written by Amahi-kai's root helper (apps.announce); replaced when apps change. -->
+        <service-group>
+          <name replace-wildcards="yes">#{xml_text(name[0, 40])} on %h</name>
+          <service>
+            <type>_http._tcp</type>
+            <subtype>_#{id}._sub._http._tcp</subtype>
+            <port>#{port}</port>
+            <txt-record>path=/</txt-record>
+            <txt-record>app=#{id}</txt-record>
+          </service>
+        </service-group>
+      XML
+    rescue Psych::Exception, SystemCallError
+      nil
+    end
+
+    def xml_text(text)
+      text.gsub('&', '&amp;').gsub('<', '&lt;').gsub('>', '&gt;').gsub(/[^[:print:]]/, '')
+    end
+
+    # Lets mDNS through UFW when the security audit has turned it on.
+    def allow_mdns
+      return unless File.executable?(UFW)
+
+      out, _err, status = Open3.capture3(ENV_MIN, [UFW, UFW], 'status', unsetenv_others: true, chdir: '/')
+      run_command([UFW, 'allow', MDNS_PORT, { allow_failure: true }]) if status.success? && out.match?(/^Status: active/)
     rescue SystemCallError
       nil
     end
