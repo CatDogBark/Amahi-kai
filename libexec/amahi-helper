@@ -706,6 +706,15 @@ module AmahiHelper
       validate: ->(_a) { {} },
       plan: ->(_v) { [[:greyhole_database]] }
     },
+    # Tells Greyhole the drive mounted at one of its pool folders is the one to use there
+    # (greyhole --replaced): it forgets the filesystem it recorded for that folder, and
+    # restarts, recording this one. For a drive that was swapped or formatted, which
+    # Greyhole otherwise refuses to use.
+    'greyhole.replace_drive' => {
+      params: %w[path],
+      validate: ->(a) { installed!(GREYHOLE_BIN) && { path: mounted_greyhole_drive(a['path']) } },
+      plan: ->(v) { [[GREYHOLE_BIN, "--replaced=#{v[:path]}"]] }
+    },
     # Removes Greyhole (Disks → Storage Pool) when its config lists no drives and no share
     # keeping copies: the package, its config and its apt repository. Its database stays, so
     # installing it again picks up where it was.
@@ -1145,6 +1154,10 @@ module AmahiHelper
       device, node = data_device(device)
       mounted = mountpoints(node)
       raise Refused, "#{device} isn't mounted" if mounted.empty?
+      # Greyhole keeps files there: out from under it, its copies would be missing, and a
+      # drive formatted and mounted back is a stranger to it.
+      pooled = (mounted & greyhole_drives).first
+      raise Refused, "#{pooled} is one of Greyhole's drives; remove it from the pool on Disks → Storage Pool first" if pooled
       { device: device, mount_points: mounted, uuid: probe(device)['UUID'] }
     end
 
@@ -1680,11 +1693,24 @@ module AmahiHelper
 
     # The folders holding a pooled share's copies, one per Greyhole drive (<drive>/<share>).
     def greyhole_copies(share)
+      greyhole_drives.map { |drive| "#{drive}/#{share}" }.select { |dir| File.directory?(dir) && !File.symlink?(dir) }.uniq
+    end
+
+    # Greyhole's storage pool drives, as greyhole.conf lists them (folders under DRIVES_ROOT).
+    def greyhole_drives
+      return [] unless File.exist?(GREYHOLE_CONF)
       drives = File.read(GREYHOLE_CONF).scan(/^\s*storage_pool_drive\s*=\s*([^,\n]+)/).flatten.map(&:strip)
-      drives.select { |drive| normalized_path?(drive) && drive.start_with?("#{DRIVES_ROOT}/") && !drive.include?(',') }
-            .map { |drive| "#{drive}/#{share}" }.select { |dir| File.directory?(dir) && !File.symlink?(dir) }.uniq
+      drives.select { |drive| normalized_path?(drive) && drive.start_with?("#{DRIVES_ROOT}/") && !drive.include?(',') }.uniq
     rescue SystemCallError
       []
+    end
+
+    # A Greyhole pool drive with a filesystem mounted there now: the drive Greyhole is to use.
+    def mounted_greyhole_drive(value)
+      value = string(value, 'path', max: 256)
+      raise Refused, "#{value} isn't one of Greyhole's drives" unless greyhole_drives.include?(value)
+      raise Refused, "nothing is mounted at #{value}: mount the drive on Disks → Devices first" unless mount_point?(value)
+      value
     end
 
     # --- Greyhole and packages ---

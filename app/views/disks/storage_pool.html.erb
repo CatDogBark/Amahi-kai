@@ -114,13 +114,28 @@
           </thead>
           <tbody>
             <% @pool_drives.each do |drive| %>
-              <tr>
-                <td><%= drive[:path] %></td>
+              <tr class="<%= 'table-warning' if %i[changed not_mounted].include?(drive[:state]) %>" id="pool-drive-<%= drive[:path].parameterize %>">
+                <td>
+                  <%= drive[:path] %>
+                  <% case drive[:state] %>
+                  <% when :changed %>
+                    <div class="small text-warning">Greyhole isn't using this drive: it isn't the one Greyhole had here (it was swapped or formatted). Use this drive tells Greyhole to take it.</div>
+                  <% when :not_mounted %>
+                    <div class="small text-warning">Nothing is mounted here, so Greyhole can't use it. Mount the drive on <%= link_to 'Devices', disks_devices_path %>, or remove it from the pool.</div>
+                  <% end %>
+                </td>
                 <td><%= number_to_human_size(drive[:total]) %></td>
                 <td><%= number_to_human_size(drive[:free]) %></td>
                 <td><%= number_to_human_size(drive[:used]) %></td>
                 <td><%= drive[:minimum_free] %> GB</td>
-                <td>
+                <td class="text-nowrap">
+                  <% if drive[:state] == :changed %>
+                    <%= button_to 'Use this drive', disks_accept_pool_drive_path,
+                          params: { path: drive[:path] }, method: :post, form: { class: 'd-inline-block' },
+                          class: 'btn btn-sm btn-warning',
+                          data: { confirm: "Use the drive now mounted at #{drive[:path]} in Greyhole's pool? Greyhole forgets the drive it had here; files that were only there come back from their other copies, if they have any.",
+                                  disable_with: 'Working...' } %>
+                  <% end %>
                   <%= button_to(t('remove', default: 'Remove'),
                         disks_toggle_disk_pool_partition_path(path: drive[:path]),
                         method: :put,

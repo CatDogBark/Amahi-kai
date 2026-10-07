@@ -112,6 +112,7 @@ Rails.application.routes.draw do
     post 'preview_disk', action: 'preview_disk'
     post 'mount_as_share', action: 'mount_as_share'
     put 'toggle_disk_pool_partition', action: 'toggle_disk_pool_partition'
+    post 'accept_pool_drive', action: 'accept_pool_drive'
     post 'toggle_greyhole', action: 'toggle_greyhole'
     post 'install_greyhole', action: 'install_greyhole'
     get 'install_greyhole_stream', action: 'install_greyhole_stream'

@@ -909,6 +909,28 @@ RSpec.describe 'AmahiHelper' do
       expect(helper.describe([:install, '/etc/greyhole.conf', conf, nil, '0640', 'amahi']).to_s).not_to include('s3cret')
     end
 
+    it "tells Greyhole to use the drive mounted at one of its folders, and won't unmount its drives" do
+      conf = Tempfile.new('greyhole.conf')
+      stub_const('AmahiHelper::GREYHOLE_CONF', conf.path)
+      File.write(conf.path, "storage_pool_drive = /mnt/storage-1, min_free: 10gb\nstorage_pool_drive = /mnt/storage-2, min_free: 10gb\n")
+      allow(AmahiHelper).to receive(:installed!).and_return(true)
+      allow(AmahiHelper).to receive(:mount_point?).and_return(false)
+      expect(refusal('greyhole.replace_drive', { 'path' => '/etc' })).to eq("/etc isn't one of Greyhole's drives")
+      expect(refusal('greyhole.replace_drive', { 'path' => '/mnt/storage-1' }))
+        .to eq('nothing is mounted at /mnt/storage-1: mount the drive on Disks → Devices first')
+      allow(AmahiHelper).to receive(:mount_point?).with('/mnt/storage-1').and_return(true)
+      expect(steps('greyhole.replace_drive', { 'path' => '/mnt/storage-1' })).to eq([['/usr/bin/greyhole', '--replaced=/mnt/storage-1']])
+
+      allow(AmahiHelper).to receive(:probe).and_return('UUID' => 'u-1')
+      allow(AmahiHelper).to receive(:data_device) { |device| [device, { 'path' => device, 'mountpoints' => ['/mnt/storage-2'] }] }
+      expect(refusal('disks.unmount', { 'device' => '/dev/sdb' }))
+        .to eq("/mnt/storage-2 is one of Greyhole's drives; remove it from the pool on Disks → Storage Pool first")
+      allow(AmahiHelper).to receive(:data_device) { |device| [device, { 'path' => device, 'mountpoints' => ['/mnt/storage-3'] }] }
+      expect(refusal('disks.unmount', { 'device' => '/dev/sdc' })).to be_nil
+    ensure
+      conf&.close!
+    end
+
     it 'uninstalls Greyhole only when its config lists no drives and no share keeping copies' do
       conf = Tempfile.new('greyhole.conf')
       stub_const('AmahiHelper::GREYHOLE_CONF', conf.path)

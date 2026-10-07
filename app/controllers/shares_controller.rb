@@ -264,7 +264,9 @@ class SharesController < ApplicationController
   def save_disk_pool_copies
     @share.save
     begin
-      Greyhole.configure! if Greyhole.enabled?
+      # Stopped or not, Greyhole reads this config when it next starts: a share left out of it
+      # gets no copies, and Greyhole uses no drive for it.
+      Greyhole.configure! if Greyhole.installed?
     rescue Greyhole::GreyholeError, Shell::CommandError => e
       Rails.logger.error("Greyhole configure failed: #{e.message}")
     end
