@@ -236,7 +236,7 @@ class SharesController < ApplicationController
       if PartitionUtils.new.info.select { |p| p[:path] == path }.empty? || !Pathname.new(path).mountpoint?
         render partial: 'shares/disk_pooling_partition_checkbox', locals: { checked: false, path: path }
       else
-        DiskPoolPartition.create(path: path, minimum_free: DiskPoolPartition.default_minimum_free(path))
+        DiskPoolPartition.create(path: path, minimum_free: DiskPoolPartition::MINIMUM_FREE_GB)
         render partial: 'shares/disk_pooling_partition_checkbox', locals: { checked: true, path: path }
       end
     end

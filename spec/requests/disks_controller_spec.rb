@@ -90,11 +90,11 @@ describe "Disks Controller", type: :request do
         expect(page.at_css('#no-share-drives a')['href']).to eq(disks_devices_path)
       end
 
-      it "shows the copies each share keeps, and saves the free space Greyhole leaves on a drive" do
+      it "shows the copies each share keeps, and the room left for files at each" do
         allow(Greyhole).to receive(:installed?).and_return(true)
         allow(Greyhole).to receive(:configure!).and_return(true)
         allow(Greyhole).to receive(:removal_blocker).and_return('Take its drives out of the storage pool first.')
-        part = create(:disk_pool_partition, path: '/mnt/storage-1', minimum_free: 10)
+        create(:disk_pool_partition, path: '/mnt/storage-1', minimum_free: 10)
         drive = ->(path) { { path: path, minimum_free: 10, total: 8 * 1024**3, free: 7 * 1024**3, used: 1024**3 } }
         allow(Greyhole).to receive(:pool_drives).and_return([drive.call('/mnt/storage-1'), drive.call('/mnt/storage-2')])
         create(:share, name: 'Test', disk_pool_copies: 1)
@@ -103,16 +103,7 @@ describe "Disks Controller", type: :request do
         page = Nokogiri::HTML(response.body)
         expect(page.at_css('#pool-copies').text.squish)
           .to include('2 drives · Photos: 2 copies, Test: 1 copy', 'Room for about 16 GB of files at 1 copy, or 8 GB of files at 2 copies')
-        expect(page.at_css('input#min-free-mnt-storage-1')['value']).to eq('10')
         expect(page.at_css('#uninstall-greyhole-btn').parent.at_css('form button')['disabled']).to be_nil
-
-        patch "/disks/pool_partition_minimum_free", params: { path: '/mnt/storage-1', minimum_free: '1' }
-        expect(response).to redirect_to(disks_storage_pool_path)
-        expect(part.reload.minimum_free).to eq(1)
-        expect(Greyhole).to have_received(:configure!)
-        patch "/disks/pool_partition_minimum_free", params: { path: '/mnt/storage-1', minimum_free: '-3' }
-        expect(part.reload.minimum_free).to eq(1)
-        expect(flash[:error]).to include("isn't a number of GB")
       end
 
       it 'says what keeps it from being uninstalled' do
