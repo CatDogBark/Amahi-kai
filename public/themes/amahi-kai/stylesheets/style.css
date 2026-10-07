@@ -1026,6 +1026,16 @@ body:has(> #footer) > #footer {
   margin-top: auto;
 }
 
+/* A Greyhole pool drive Greyhole can't use (Disks → Storage Pool): a stripe and a note in
+   the theme's warning colours, rather than Bootstrap's table-warning, whose light yellow
+   washes out a dark page */
+.pool-drive-flagged > td:first-child {
+  box-shadow: inset 3px 0 0 var(--kai-alert-warning-border);
+}
+.pool-drive-note {
+  color: var(--kai-alert-warning-text);
+}
+
 /* ─── Login page ─── */
 #login {
   background: var(--kai-dark);
