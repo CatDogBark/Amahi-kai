@@ -31,6 +31,13 @@ module ApplicationHelper
     @update_status ||= UpdateStatus.load
   end
 
+  # Amahi-kai's own address on +host+ (the web UI's port). Every address of Amahi-kai is made
+  # here, as every address of an app is made by DockerApp#url, so HTTPS (an optional front
+  # door, later: docs/plans/roadmap.md) can change them in one place. A spec checks.
+  def amahi_url(host)
+    "http://#{host}:#{ENV.fetch('PORT', '3000')}/"
+  end
+
   # Installed apps the catalog has a newer version of, for the admins who can update them
   # (by name, case aside, so SQLite and MariaDB agree).
   def app_updates

@@ -100,6 +100,11 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
   specs run the real `lsblk`. Check fixtures against a real command's output.
 - Build commands from names as argument lists (`Open3.capture3('systemctl', 'show', unit)`), not
   strings through a shell.
+- **Addresses are made in one place.** Every link to an app goes through `DockerApp#url`, every
+  link to Amahi-kai itself through `ApplicationHelper#amahi_url`; never hand-build
+  `http://host:port` (`spec/lib/addresses_spec.rb` fails CI if you do). HTTPS is planned as an
+  optional front door, with plain HTTP staying fully working (Troy, 2026-10-06; roadmap), and it
+  depends on this.
 - **App versions and new apps are PRs on the catalog's repo** (`amahi-kai-apps`), not here:
   `script/app-versions --catalog ../amahi-kai-apps/apps --update <app>`. `config/apps` is only the
   copy that comes with Amahi-kai (`config/apps/README.md`); the wiki's `site/wiki/making-apps.md`

@@ -188,9 +188,9 @@
         </div>
 
         <p class="text-muted small mb-3">
-          Access your NAS at <strong>http://<%= @tailscale_status[:tailscale_ip] %>:3000</strong>
+          Access your NAS at <strong><%= amahi_url(@tailscale_status[:tailscale_ip]) %></strong>
           <% if @tailscale_status[:magic_dns] %>
-            or <strong>http://<%= @tailscale_status[:magic_dns] %>:3000</strong>
+            or <strong><%= amahi_url(@tailscale_status[:magic_dns]) %></strong>
           <% end %>
           from any device on your Tailnet.
         </p>
