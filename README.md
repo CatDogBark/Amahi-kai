@@ -36,7 +36,9 @@ network, drives, storage pool and a first share. More in [docs/NATIVE-INSTALL.md
 
 - **File sharing:** Samba shares with per-user access, a web file browser, and Greyhole storage
   pooling across drives
-- **Docker apps:** one-click installs from a catalog (Jellyfin, Nextcloud, Syncthing and more)
+- **Docker apps:** one-click installs from a catalog of its own, [amahi-kai-apps](https://github.com/CatDogBark/amahi-kai-apps)
+  (Jellyfin, Vaultwarden, Gitea, Uptime Kuma, Transmission, bitTube), with updates that copy the
+  app's data first and roll back by themselves; [make your own](https://amahi-kai.com/wiki/making-apps)
 - **Remote access:** Cloudflare Tunnel (no port forwarding) and Tailscale
 - **Dashboard:** CPU, memory, per-drive storage and services; Settings → Servers for each service's
   version, uptime and controls

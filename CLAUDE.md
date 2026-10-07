@@ -8,7 +8,9 @@ over plain HTTP, through a Cloudflare Tunnel, and through Tailscale. Troy owns t
 Current work: the storage plan, **`docs/plans/storage.md`** (ZFS pools for bitShare, PRs S1–S5,
 all built; tested on the drives once they're in, with
 **`docs/testing/storage-on-real-drives.md`**), then Phase 4, planned in **`docs/plans/apps.md`**
-(P4.1, P4.2, P4.4 and P4.5 done, not yet tested on the NAS: `docs/testing/apps.md`; P4.6 next). Read
+(P4.1, P4.2, P4.4, P4.5, P4.5b and P4.5c done: the app catalog is its own repo,
+[CatDogBark/amahi-kai-apps](https://github.com/CatDogBark/amahi-kai-apps), fetched with the update
+check, and apps are announced over mDNS; `docs/testing/apps.md`; P4.6 next). Read
 **`docs/plans/roadmap.md`** first, then the plan for the PR you're on. Phase 3, the code review
 fix plan (**`docs/plans/privileged-helper.md`**), is done except Content-Security-Policy. The
 privilege model is in `docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`.
@@ -98,6 +100,10 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
   specs run the real `lsblk`. Check fixtures against a real command's output.
 - Build commands from names as argument lists (`Open3.capture3('systemctl', 'show', unit)`), not
   strings through a shell.
+- **App versions and new apps are PRs on the catalog's repo** (`amahi-kai-apps`), not here:
+  `script/app-versions --catalog ../amahi-kai-apps/apps --update <app>`. `config/apps` is only the
+  copy that comes with Amahi-kai (`config/apps/README.md`); the wiki's `site/wiki/making-apps.md`
+  is the guide to making one.
 - `lib/system_services.rb` is the one list of system services (dashboard, System Status and
   Settings → Servers). The services it gives `actions` to must match the helper's `SERVICES` list
   (a spec checks).

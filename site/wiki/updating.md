@@ -30,7 +30,9 @@ Amahi-kai checks 10 minutes after the server starts and then every 6 hours (the
 `amahi-kai-update-check.timer` systemd timer). **Check now** checks straight away. The card says
 when it last checked, and why if a check failed (for example, GitHub couldn't be reached).
 
-The check only looks; it never installs anything.
+The check only looks; it never installs anything. It looks at the apps too: it fetches the app
+catalog, so a newer version of an installed app shows on the dashboard, on the update button, and
+in this dialog, with a link to the Apps page, where you update it (see [Docker Apps](docker-apps)).
 
 ---
 

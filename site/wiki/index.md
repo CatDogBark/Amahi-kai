@@ -21,6 +21,7 @@ web UI to manage it all, from one install command.
 | [File Sharing](file-sharing) | Shares, per-user permissions, the web file browser, Samba |
 | [Storage Pooling](storage-pooling) | Adding drives safely, Greyhole, copies per share |
 | [Docker Apps](docker-apps) | The app catalog, installing apps, their ports and data |
+| [Making Apps](making-apps) | Packaging an app of your own for the catalog |
 | [Remote Access](remote-access) | Cloudflare Tunnel and Tailscale |
 | [Security](security) | The security audit and its fixes, how Amahi-kai uses root |
 | [Networking](networking) | DNS aliases, static hosts, the DHCP/DNS gateway |
@@ -37,6 +38,7 @@ Amahi-kai runs as a systemd service (`amahi-kai.service`, Puma on port 3000) as 
 - **Samba** (`smbd`/`nmbd`) for file sharing on your LAN
 - **MariaDB** for its own data
 - **Docker** (optional) for apps
+- **Avahi** for announcing the apps on your LAN (mDNS)
 - **Greyhole** (optional) for storage pooling
 - **dnsmasq** (optional) for local DNS and DHCP
 - **Cloudflare Tunnel** and **Tailscale** (optional) for remote access
@@ -61,7 +63,7 @@ Amahi-kai runs as a systemd service (`amahi-kai.service`, Puma on port 3000) as 
 systemctl status amahi-kai                         # the web app
 systemctl status mariadb                           # its database
 systemctl status smbd nmbd                         # Samba
-systemctl list-timers amahi-kai-update-check.timer # update check, every 6 hours
+systemctl list-timers amahi-kai-update-check.timer # update check (Amahi-kai and its apps), every 6 hours
 systemctl list-timers amahi-kai-indexer.timer      # file search index, every 10 minutes
 ```
 
