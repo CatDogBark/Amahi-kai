@@ -1,8 +1,9 @@
 document.addEventListener("DOMContentLoaded", function() {
   // Stretch-toggle: expand/collapse settings panels
   document.addEventListener("click", function(event) {
-    // Don't intercept clicks on buttons, links, inputs, or labels
-    if (event.target.closest("a, button, input, select, textarea, label")) return;
+    // Don't intercept clicks on buttons, links, inputs, or labels, or inside a <details> (its
+    // <summary> opens it, which preventDefault below would stop: an app's passwords never showed)
+    if (event.target.closest("a, button, input, select, textarea, label, details")) return;
     var toggle = event.target.closest(".stretchtoggle");
     if (!toggle) return;
     event.preventDefault();
