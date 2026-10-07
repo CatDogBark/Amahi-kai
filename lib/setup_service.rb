@@ -85,7 +85,7 @@ module SetupService
           can_pool = supported_fs.include?(fs_after)
 
           if can_pool
-            DiskPoolPartition.find_or_create_by!(path: mount_point) { |p| p.minimum_free = 10 }
+            DiskPoolPartition.find_or_create_by!(path: mount_point) { |p| p.minimum_free = DiskPoolPartition.default_minimum_free(mount_point) }
             sse.emit("  ✓ Added to storage pool")
           else
             create_standalone_share(mount_point, part[:fstype], sse)

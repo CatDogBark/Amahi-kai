@@ -19,6 +19,7 @@
                 disks_toggle_greyhole_path,
                 method: :post,
                 form: { class: 'd-inline-flex' },
+                disabled: !@greyhole_status[:running] && @pool_drives.empty?,
                 class: "btn btn-sm #{@greyhole_status[:running] ? 'btn-outline-danger' : 'btn-outline-success'}") %>
           <button type="button" class="btn btn-sm btn-outline-secondary" id="uninstall-greyhole-btn" <%= 'disabled' if @greyhole_removal_blocker %>
                   onclick="if (confirm('Uninstall Greyhole? Shares stay as they are; installing it again later brings pooling back.')) openInstallTerminal('greyhole-uninstall')">Uninstall</button>
@@ -26,7 +27,7 @@
             <% if @greyhole_status[:running] %>
               <%= t('pending_operations', default: 'Pending operations') %>: <%= @greyhole_status.dig(:queue, :pending).to_i %>
             <% elsif @pool_drives.empty? %>
-              Stopped: it has nothing to do until drives are in its pool (below).
+              Stopped: it has nothing to do until drives are in its pool (below), and starts when the first one goes in.
             <% else %>
               Stopped: Start sets it working on the pool again.
             <% end %>
@@ -51,9 +52,10 @@
       pool_used = @pool_drives.sum { |d| d[:used].to_i }
       pool_free = @pool_drives.sum { |d| d[:free].to_i }
       pool_pct = pool_total > 0 ? (pool_used.to_f / pool_total * 100).round(1) : 0
-      default_copies = (Setting.get('default_pool_copies') rescue '2').to_i
-      default_copies = 2 if default_copies < 1
-      effective_capacity = default_copies > 0 ? pool_total / default_copies : pool_total
+      # Each share keeps its own number of copies (max: one on every drive), and a file
+      # can't have more copies than there are drives.
+      pooled = Share.where('disk_pool_copies > 0').order(:name).to_a
+      copies_of = ->(share) { share.disk_pool_copies >= 99 ? @pool_drives.size : [share.disk_pool_copies, @pool_drives.size].min }
       bar_color = pool_pct > 90 ? '#dc3545' : pool_pct > 70 ? '#ffc107' : '#0d8aa8'
     %>
     <div class="card mb-3">
@@ -72,9 +74,21 @@
         <div style="height: 12px; background: var(--kai-card-bg, #1a1a2e); border-radius: 6px; overflow: hidden;">
           <div style="height: 100%; width: <%= pool_pct %>%; background: <%= bar_color %>; border-radius: 6px; transition: width 0.3s;"></div>
         </div>
-        <div class="d-flex justify-content-between mt-2 text-muted" style="font-size: 0.85em;">
-          <span><%= @pool_drives.size %> drives · <%= default_copies %> copies per share</span>
-          <span>Effective capacity: ~<%= number_to_human_size(effective_capacity) %></span>
+        <div class="d-flex flex-wrap justify-content-between gap-2 mt-2 text-muted" style="font-size: 0.85em;" id="pool-copies">
+          <span>
+            <%= pluralize(@pool_drives.size, 'drive') %> ·
+            <% if pooled.any? %>
+              <%= pooled.map { |share| "#{share.name}: #{pluralize(copies_of.call(share), 'copy')}" }.join(', ') %>
+            <% else %>
+              no share keeps copies here yet (set a share's Disk Pool copies on Shares)
+            <% end %>
+          </span>
+          <% if pooled.any? %>
+            <span>
+              Room for about
+              <%= pooled.map { |share| copies_of.call(share) }.uniq.sort.map { |n| "#{number_to_human_size(pool_total / n)} of files at #{pluralize(n, 'copy')}" }.join(', or ') %>
+            </span>
+          <% end %>
         </div>
       </div>
     </div>
@@ -105,7 +119,16 @@
                 <td><%= number_to_human_size(drive[:total]) %></td>
                 <td><%= number_to_human_size(drive[:free]) %></td>
                 <td><%= number_to_human_size(drive[:used]) %></td>
-                <td><%= drive[:minimum_free] %> GB</td>
+                <td>
+                  <%= form_with url: disks_pool_partition_minimum_free_path, method: :patch, local: true, class: 'd-inline-flex align-items-center gap-1' do %>
+                    <%= hidden_field_tag :path, drive[:path], id: nil %>
+                    <% field = "min-free-#{drive[:path].parameterize}" %>
+                    <label class="visually-hidden" for="<%= field %>">Free space Greyhole leaves on <%= drive[:path] %>, in GB</label>
+                    <input type="number" class="form-control form-control-sm" style="width: 5em;" id="<%= field %>" name="minimum_free" min="0" max="10000" value="<%= drive[:minimum_free] %>">
+                    <span>GB</span>
+                    <button type="submit" class="btn btn-sm btn-outline-secondary">Save</button>
+                  <% end %>
+                </td>
                 <td>
                   <%= button_to(t('remove', default: 'Remove'),
                         disks_toggle_disk_pool_partition_path(path: drive[:path]),

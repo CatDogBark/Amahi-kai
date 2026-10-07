@@ -18,8 +18,6 @@ class SharesController < ApplicationController
   ]
 
   VALID_NAME = /\A\w[\w ]+\z/
-  DP_MIN_FREE_DEFAULT = 10
-  DP_MIN_FREE_ROOT = 20
 
   # --- CRUD ---
 
@@ -238,8 +236,7 @@ class SharesController < ApplicationController
       if PartitionUtils.new.info.select { |p| p[:path] == path }.empty? || !Pathname.new(path).mountpoint?
         render partial: 'shares/disk_pooling_partition_checkbox', locals: { checked: false, path: path }
       else
-        min_free = path == '/' ? DP_MIN_FREE_ROOT : DP_MIN_FREE_DEFAULT
-        DiskPoolPartition.create(path: path, minimum_free: min_free)
+        DiskPoolPartition.create(path: path, minimum_free: DiskPoolPartition.default_minimum_free(path))
         render partial: 'shares/disk_pooling_partition_checkbox', locals: { checked: true, path: path }
       end
     end

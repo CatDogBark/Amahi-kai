@@ -53,4 +53,21 @@ describe DiskPoolPartition do
       expect(DiskPoolPartition.pool_paths).to match_array(['/mnt/a', '/mnt/b'])
     end
   end
+
+  describe '.default_minimum_free' do
+    def drive_of(gigabytes)
+      instance_double(Sys::Filesystem::Stat, block_size: 4096, blocks: (gigabytes * 1024**3 / 4096).to_i)
+    end
+
+    it 'leaves 10 GB free on a big drive, 5% of a smaller one, and 1 GB at least' do
+      allow(Sys::Filesystem).to receive(:stat).and_call_original
+      allow(Sys::Filesystem).to receive(:stat).with('/mnt/big').and_return(drive_of(931))
+      allow(Sys::Filesystem).to receive(:stat).with('/mnt/mid').and_return(drive_of(100))
+      allow(Sys::Filesystem).to receive(:stat).with('/mnt/small').and_return(drive_of(7.78))
+      expect(DiskPoolPartition.default_minimum_free('/mnt/big')).to eq(10)
+      expect(DiskPoolPartition.default_minimum_free('/mnt/mid')).to eq(5)
+      expect(DiskPoolPartition.default_minimum_free('/mnt/small')).to eq(1)
+      expect(DiskPoolPartition.default_minimum_free('/mnt/not-mounted-here')).to eq(10)
+    end
+  end
 end

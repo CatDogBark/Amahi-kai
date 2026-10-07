@@ -36,6 +36,17 @@ RSpec.describe DiskService do
         described_class.toggle_pool_partition(path)
         expect(Greyhole).to have_received(:configure!)
       end
+
+      it "starts Greyhole when its first drive goes in, leaving free space sized to the drive" do
+        allow(Greyhole).to receive(:running?).and_return(false)
+        allow(Greyhole).to receive(:start!).and_return(true)
+        allow(DiskPoolPartition).to receive(:default_minimum_free).and_return(1)
+        described_class.toggle_pool_partition(path)
+        expect(Greyhole).to have_received(:start!).once
+        expect(DiskPoolPartition.find_by(path: path).minimum_free).to eq(1)
+        described_class.toggle_pool_partition('/mnt/data2')
+        expect(Greyhole).to have_received(:start!).once
+      end
     end
 
     context 'when Greyhole.configure! raises' do

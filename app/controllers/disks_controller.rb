@@ -118,7 +118,20 @@ class DisksController < ApplicationController
   end
 
   def toggle_greyhole
-    DiskService.toggle_greyhole
+    running = Greyhole.running?
+    flash[:error] = "Greyhole didn't #{running ? 'stop' : 'start'}. Its reason is in: journalctl -u greyhole" unless DiskService.toggle_greyhole
+    redirect_to disks_storage_pool_path
+  end
+
+  # The free space Greyhole leaves on one of its drives (GB).
+  def pool_partition_minimum_free
+    part = DiskPoolPartition.find_by(path: params[:path])
+    if part&.update(minimum_free: params[:minimum_free])
+      Greyhole.configure! if Greyhole.installed?
+      flash[:notice] = "Greyhole leaves #{part.minimum_free} GB free on #{part.path}."
+    else
+      flash[:error] = part ? "That isn't a number of GB: #{part.errors.full_messages.to_sentence}" : "#{params[:path]} isn't in the pool"
+    end
     redirect_to disks_storage_pool_path
   end
 

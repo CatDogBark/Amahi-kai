@@ -12,14 +12,18 @@ module DiskService
         part.destroy
         checked = false
       else
-        min_free = 10
-        DiskPoolPartition.create!(path: path, minimum_free: min_free)
+        first = !DiskPoolPartition.exists?
+        DiskPoolPartition.add!(path)
         checked = true
       end
 
-      # Regenerate Greyhole config whenever pool membership changes
+      # Regenerate Greyhole config whenever pool membership changes. With its first drive in,
+      # Greyhole has something to do: start it (it can't run without one).
       begin
-        Greyhole.configure! if Greyhole.installed?
+        if Greyhole.installed?
+          Greyhole.configure!
+          Greyhole.start! if first && !Greyhole.running?
+        end
       rescue StandardError => e
         Rails.logger.error("Greyhole configure failed: #{e.message}")
       end
@@ -27,6 +31,7 @@ module DiskService
       { checked: checked, path: path }
     end
 
+    # Starts or stops Greyhole; true if that worked.
     def toggle_greyhole
       if Greyhole.running?
         Greyhole.stop!
