@@ -102,6 +102,9 @@ environment:
 - **`secrets`** (`{ env: ADMIN_TOKEN, label: Admin page token }`) are generated at install.
 - **`folders`** with `backup: false` (caches, downloads) aren't copied before an update.
 - **`logo`** is an `https` link. A logo of your own goes in the catalog's `logos/` folder.
+- **`web_tls: true`** says the app's page is HTTPS with its own certificate (as bitShare's is):
+  **Open** goes to `https://`, and the app is announced on the LAN as HTTPS. It needs
+  `requires: 2`, since older Amahi-kai versions don't know it.
 
 Every field is in the catalog's [README](https://github.com/CatDogBark/amahi-kai-apps#readme).
 

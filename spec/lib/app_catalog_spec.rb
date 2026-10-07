@@ -21,6 +21,7 @@ RSpec.describe AppCatalog do
                                      secrets: [{ env: "ADMIN_TOKEN", label: "Admin page token (the /admin page)" }])
       expect(vaultwarden[:image]).to start_with("vaultwarden/server:1.37.3@sha256:")
       expect(vaultwarden[:logo_url]).to start_with("https://")
+      expect(vaultwarden[:web_tls]).to be(false)
     end
 
     it "has a logo for each app, on https" do

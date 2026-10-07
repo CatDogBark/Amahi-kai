@@ -37,11 +37,15 @@ class DockerApp < ApplicationRecord
     AppCatalog.find(identifier)&.dig(:logo_url).presence || super
   end
 
-  # The app's page, on its own port of the NAS (docs/plans/apps.md, O3). Every address of an app
-  # is made here (and Amahi-kai's by ApplicationHelper#amahi_url), so HTTPS can change them in
-  # one place later. A spec checks.
+  # The app's page, on its own port of the NAS (docs/plans/apps.md, O3): HTTPS when its manifest
+  # says its page is (`web_tls`, with its own certificate). Every address of an app is made here
+  # (and Amahi-kai's by ApplicationHelper#amahi_url), so HTTPS can change them in one place
+  # later. A spec checks.
   def url(host)
-    "http://#{host}:#{host_port}/" if host_port
+    return unless host_port
+
+    scheme = AppCatalog.find(identifier)&.dig(:web_tls) ? 'https' : 'http'
+    "#{scheme}://#{host}:#{host_port}/"
   end
 
   # [{ host:, container:, protocol:, label: }]: the ports the app was given at install.

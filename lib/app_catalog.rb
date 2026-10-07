@@ -15,8 +15,9 @@ class AppCatalog
   # ones skipped, and why it failed if it did.
   STATUS_PATH = '/var/lib/amahi-kai/catalog-status.json'.freeze
   # The catalog format this Amahi-kai knows (the helper's CATALOG_FORMAT). An app whose
-  # `requires` is higher is listed, but installing it waits for System Update.
-  FORMAT = 1
+  # `requires` is higher is listed, but installing it waits for System Update. Format 2 adds
+  # `web_tls`.
+  FORMAT = 2
   # Where the helper keeps each app's folders and generated secrets (outside production: tmp/).
   APPS_ROOT = '/var/lib/amahi-kai/apps'.freeze
   SECRETS_DIR = '/var/lib/amahi-kai/app-secrets'.freeze
@@ -143,6 +144,7 @@ class AppCatalog
       { identifier: File.basename(path, '.yml'), name: data['name'].to_s, description: data['description'],
         requires: requires, installable: requires <= FORMAT,
         category: data['category'], logo_url: data['logo'], image: data['image'], web_port: data['web_port'],
+        web_tls: data['web_tls'] == true,
         writes_shares: data['writes_shares'] == true, releases: data['releases'],
         ports: Array(data['ports']).map do |p|
           { host: p['host'], container: p['container'], protocol: p['protocol'] || 'tcp',

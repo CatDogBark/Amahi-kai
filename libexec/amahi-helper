@@ -256,14 +256,15 @@ module AmahiHelper
   # APP_MANIFESTS, the copy in the code, is the fallback (before the first fetch, and for an app
   # the catalog no longer lists). A manifest's `requires` is the catalog format it needs: one
   # above CATALOG_FORMAT is listed but can't be installed until System Update brings an
-  # Amahi-kai that knows it.
+  # Amahi-kai that knows it. Format 2 adds `web_tls` (the app's page is HTTPS, its certificate its
+  # own).
   CATALOG_REPO = 'https://github.com/CatDogBark/amahi-kai-apps.git'
   CATALOG_PROTOCOLS = %w[https].freeze
   CATALOG_SRC = '/var/lib/amahi-kai/catalog-src'
   APP_CATALOG = '/var/lib/amahi-kai/catalog'
   CATALOG_STATUS = '/var/lib/amahi-kai/catalog-status.json'
   CATALOG_LOCK = '/run/amahi-kai-catalog.lock'
-  CATALOG_FORMAT = 1
+  CATALOG_FORMAT = 2
   CATALOG_MAX_APPS = 200
   CATALOG_MAX_BYTES = 64 * 1024
   # Apps on the LAN (mDNS). Avahi announces each installed app with a web page as an HTTP
@@ -1379,7 +1380,10 @@ module AmahiHelper
       ports = app_ports(data['ports'], bad)
       web_port = data['web_port']
       bad.call("web_port #{web_port.inspect} must be one of its ports") unless web_port.nil? || ports.any? { |p| p[:host] == web_port }
-      { image: image, run_as: run_as, memory: memory, ports: ports, web_port: web_port,
+      web_tls = data.fetch('web_tls', false)
+      bad.call('web_tls must be true or false') unless [true, false].include?(web_tls)
+      bad.call('web_tls needs a web_port') if web_tls && web_port.nil?
+      { image: image, run_as: run_as, memory: memory, ports: ports, web_port: web_port, web_tls: web_tls,
         folders: app_folders(data['folders'], bad), environment: environment,
         secrets: app_secret_names(data['secrets'], environment, bad), writes_shares: writes_shares }
     end
@@ -2699,6 +2703,7 @@ module AmahiHelper
       given = Array((read_json(APP_PORTS) || {})[id]).grep(Hash).find { |port| port['preferred'] == web }
       port = given && given['host'].is_a?(Integer) ? given['host'] : web
       name = data['name'].is_a?(String) && !data['name'].strip.empty? ? data['name'].strip : id
+      scheme = data['web_tls'] == true ? 'https' : 'http'
       ["amahi-app-#{id}.service", <<~XML]
         <?xml version="1.0" standalone="no"?>
         <!DOCTYPE service-group SYSTEM "avahi-service.dtd">
@@ -2706,8 +2711,8 @@ module AmahiHelper
         <service-group>
           <name replace-wildcards="yes">#{xml_text(name[0, 40])} on %h</name>
           <service>
-            <type>_http._tcp</type>
-            <subtype>_#{id}._sub._http._tcp</subtype>
+            <type>_#{scheme}._tcp</type>
+            <subtype>_#{id}._sub._#{scheme}._tcp</subtype>
             <port>#{port}</port>
             <txt-record>path=/</txt-record>
             <txt-record>app=#{id}</txt-record>
