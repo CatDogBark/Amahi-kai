@@ -54,6 +54,20 @@ describe "Disks Controller", type: :request do
         get "/disks/storage_pool"
         expect(response).to have_http_status(:ok)
       end
+
+      it "opens Install Greyhole on Greyhole's own stream, not System Update's" do
+        allow(Greyhole).to receive(:status).and_return({ installed: false, running: false })
+        allow(Greyhole).to receive(:pool_drives).and_return([])
+        get "/disks/storage_pool"
+        page = Nokogiri::HTML(response.body)
+        expect(page.at_css('#greyhole-install-modal')['data-stream-url']).to eq(disks_install_greyhole_stream_path)
+        expect(page.at_css('#system-update-install-modal')['data-stream-url']).to eq(settings_update_system_stream_path)
+        # The shared opener reads the window's own address; no window's address is baked into it.
+        opener = page.css('script').map(&:text).find { |js| js.include?('function openInstallTerminal') }
+        expect(opener).to include("dataset.streamUrl")
+        expect(opener).not_to include(disks_install_greyhole_stream_path)
+        expect(opener).not_to include(settings_update_system_stream_path)
+      end
     end
 
     describe "POST /disks/toggle_greyhole" do
