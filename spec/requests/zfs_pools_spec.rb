@@ -367,5 +367,22 @@ RSpec.describe 'ZFS pools', type: :request do
       expect(cards[0].css('form')).to be_empty
       expect(cards[1].css('form').size).to eq(1) # Initialize
     end
+
+    it 'lists the OS disk first, and offers Format, after a warning, on a formatted data drive' do
+      allow(DiskManager).to receive(:devices).and_return([
+        { name: 'sda', path: '/dev/sda', model: 'QEMU HARDDISK', size: '20G', os_disk: false, zfs_pool: nil,
+          partitions: [{ name: 'sda', path: '/dev/sda', size: '20G', fstype: 'ext4', status: :unmounted }] },
+        { name: 'sdd', path: '/dev/sdd', model: 'QEMU HARDDISK', size: '55G', os_disk: true, zfs_pool: nil,
+          partitions: [{ name: 'sdd2', path: '/dev/sdd2', size: '2G', fstype: 'ext4', status: :mounted, mountpoint: '/boot' }] }
+      ])
+      get '/disks/devices'
+      cards = page.css('#disks-table .card')
+      expect(cards[0].text).to include('/dev/sdd', 'OS Disk')
+      expect(cards[0].css('form')).to be_empty
+      format = cards[1].css('form').find { |f| f.at_css('button').text == 'Format' }
+      expect(format['action']).to eq('/disks/format_disk')
+      expect(format.at_css('button')['data-confirm']).to include('Format /dev/sda?', 'erases everything on it: its ext4', 'all 20G')
+      expect(format.at_css('button')['data-disable-with']).to eq('Formatting...')
+    end
   end
 end
