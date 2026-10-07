@@ -64,8 +64,10 @@ class DashboardStats
       used = drives.sum { |d| d[:used].to_i }
       free = drives.sum { |d| d[:free].to_i }
       pct = total > 0 ? (used.to_f / total * 100).round(1) : 0
-      copies = (Setting.get('default_pool_copies') rescue '2').to_i
-      copies = 2 if copies < 1
+      # The most copies any share keeps (max: one on every drive), as many as there are drives
+      # at most: what's left is room for that share's files.
+      most = Share.where('disk_pool_copies > 0').maximum(:disk_pool_copies).to_i
+      copies = (most >= 99 ? drives.size : most).clamp(1, drives.size)
       pending = begin
         q = Greyhole.queue_status
         q[:pending] || 0

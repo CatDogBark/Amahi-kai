@@ -10,6 +10,22 @@ class DiskPoolPartition < ApplicationRecord
     pluck(:path)
   end
 
+  # The free space Greyhole leaves on a drive, in GB: 10, or 5% of a smaller drive (at least
+  # 1), so a small drive isn't full from the start (min_free larger than the drive left an
+  # 8 GB drive unused).
+  def self.default_minimum_free(path)
+    stat = Sys::Filesystem.stat(path)
+    gigabytes = stat.block_size * stat.blocks / 1024.0**3
+    (gigabytes * 0.05).floor.clamp(1, 10)
+  rescue Errno::ENOENT, Errno::EACCES, Sys::Filesystem::Error
+    10
+  end
+
+  # Adds a drive to Greyhole's pool, leaving the default free space for its size.
+  def self.add!(path)
+    create!(path: path, minimum_free: default_minimum_free(path))
+  end
+
   def usage
     begin
       stat = Sys::Filesystem.stat(path)
