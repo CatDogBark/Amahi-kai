@@ -119,16 +119,7 @@
                 <td><%= number_to_human_size(drive[:total]) %></td>
                 <td><%= number_to_human_size(drive[:free]) %></td>
                 <td><%= number_to_human_size(drive[:used]) %></td>
-                <td>
-                  <%= form_with url: disks_pool_partition_minimum_free_path, method: :patch, local: true, class: 'd-inline-flex align-items-center gap-1' do %>
-                    <%= hidden_field_tag :path, drive[:path], id: nil %>
-                    <% field = "min-free-#{drive[:path].parameterize}" %>
-                    <label class="visually-hidden" for="<%= field %>">Free space Greyhole leaves on <%= drive[:path] %>, in GB</label>
-                    <input type="number" class="form-control form-control-sm" style="width: 5em;" id="<%= field %>" name="minimum_free" min="0" max="10000" value="<%= drive[:minimum_free] %>">
-                    <span>GB</span>
-                    <button type="submit" class="btn btn-sm btn-outline-secondary">Save</button>
-                  <% end %>
-                </td>
+                <td><%= drive[:minimum_free] %> GB</td>
                 <td>
                   <%= button_to(t('remove', default: 'Remove'),
                         disks_toggle_disk_pool_partition_path(path: drive[:path]),
