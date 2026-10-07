@@ -909,6 +909,24 @@ RSpec.describe 'AmahiHelper' do
       expect(helper.describe([:install, '/etc/greyhole.conf', conf, nil, '0640', 'amahi']).to_s).not_to include('s3cret')
     end
 
+    it 'uninstalls Greyhole only when its config lists no drives and no share keeping copies' do
+      conf = Tempfile.new('greyhole.conf')
+      stub_const('AmahiHelper::GREYHOLE_CONF', conf.path)
+      allow(AmahiHelper).to receive(:installed!).and_return(true)
+      File.write(conf.path, "db_name = greyhole\nstorage_pool_drive = /mnt/storage-1/gh, min_free: 10gb\n")
+      expect(refusal('greyhole.uninstall', {})).to eq('Greyhole still has drives in its pool; take them out on Disks → Storage Pool first')
+      File.write(conf.path, "db_name = greyhole\nnum_copies[Photos] = 2\n")
+      expect(refusal('greyhole.uninstall', {})).to eq('the share Photos still keeps copies with Greyhole; turn that off on Shares first')
+      File.write(conf.path, "db_name = greyhole\n")
+      expect(steps('greyhole.uninstall', {})).to eq(
+        [['/usr/bin/systemctl', 'disable', '--now', 'greyhole.service', { allow_failure: true }],
+         ['/usr/bin/apt-get', '-y', '-o', 'DPkg::Lock::Timeout=300', 'purge', 'greyhole', { env: AmahiHelper::APT_ENV, stream: true }],
+         [:remove_files, conf.path, '/etc/apt/sources.list.d/greyhole.list', '/usr/share/keyrings/greyhole-archive-keyring.asc']]
+      )
+    ensure
+      conf&.close!
+    end
+
     it 'installs files with the mode and group asked for' do
       skip 'chown to root needs root' unless Process.euid.zero?
       Dir.mktmpdir do |dir|

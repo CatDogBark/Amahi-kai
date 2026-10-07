@@ -184,13 +184,25 @@ Use the other two SSDs (here `/dev/sdd` and `/dev/sde`).
   The pool resilvers (the page updates every 30 seconds) and goes back to **ONLINE**, and the
   alert clears.
 
-## 10. Delete the test pool, tear down share storage
+## 9a. Taking a pool offline
+
+- [ ] **Take offline** on `test`: the card moves to an Offline card with **Bring online**, its two
+  drives show as **ZFS pool test (offline)**, and they aren't offered for a new pool.
+- [ ] Reboot the VM: `test` is still offline.
+- [ ] **Bring online**: the pool comes back **ONLINE**, mounted at `/srv/pools/test`, with its
+  files and snapshots.
+
+
 
 - [ ] **Delete pool** on `test` (type `test`): the pool is gone, `/srv/pools/test` is gone, and its
   two drives show as **Free** on ZFS Pools and as plain drives on Devices (Initialize offered).
 - [ ] Remove the Greyhole test share, turn both drives off in **Disks → Storage Pool**, and
   **Unmount** them on **Devices**. Their fstab lines are gone. Greyhole can stay installed for
   the drives you'll add later.
+- [ ] Optional: with the drives out of its pool and no share keeping copies, **Uninstall** on
+  Disks → Storage Pool removes Greyhole (the dashboard's Services no longer list it); Install
+  Greyhole puts it back. With no pool left, **Uninstall ZFS** on ZFS Pools does the same for
+  ZFS, and Install ZFS puts it back.
 
 ## 11. The real pool
 

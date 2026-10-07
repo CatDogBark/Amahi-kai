@@ -98,6 +98,7 @@ class DisksController < ApplicationController
   def storage_pool
     @page_title = t('disks')
     @greyhole_status = Greyhole.status
+    @greyhole_removal_blocker = Greyhole.removal_blocker if @greyhole_status[:installed]
     @pool_drives = Greyhole.pool_drives
     @partitions = DiskService.partition_list
     @pool_partitions = DiskPoolPartition.all
@@ -140,11 +141,23 @@ class DisksController < ApplicationController
     end
   end
 
+  def uninstall_greyhole_stream
+    stream_sse do |sse|
+      Greyhole.uninstall! { |line| sse.emit(line) }
+      sse.emit('✓ Greyhole is uninstalled')
+      sse.done
+    rescue Greyhole::GreyholeError => e
+      sse.emit("✗ #{e.message}")
+      sse.done('error')
+    end
+  end
+
   # ZFS pools (docs/plans/storage.md): bitShare's storage, on drives of their own.
   def pools
     @page_title = t('disks')
     @status = StoragePools.status
-    @drives = StoragePools.drives(@status[:pools])
+    @drives = StoragePools.drives(@status[:pools], Array(@status[:offline]))
+    @zfs_removal_blocker = StoragePools.removal_blocker(@status) if @status[:installed]
     names = @status[:pools].map(&:name)
     @new_pool_name = (1..).lazy.map { |n| "pool#{n}" }.find { |name| names.exclude?(name) }
     @smart_installed = StoragePools.smart_installed?
@@ -166,6 +179,14 @@ class DisksController < ApplicationController
 
   def destroy_pool
     pool_change { StoragePools.destroy!(name: params[:name], confirm: params[:confirm]) }
+  end
+
+  def pool_offline
+    pool_change { StoragePools.take_offline!(params[:name]) }
+  end
+
+  def pool_online
+    pool_change { StoragePools.bring_online!(params[:name]) }
   end
 
   def scrub_pool
@@ -193,6 +214,17 @@ class DisksController < ApplicationController
   end
 
   # Installs what's missing of ZFS and the drive health tools.
+  def uninstall_zfs_stream
+    stream_sse do |sse|
+      StoragePools.uninstall! { |line| sse.emit(line) }
+      sse.emit('✓ ZFS is uninstalled')
+      sse.done
+    rescue StoragePools::Error => e
+      sse.emit("✗ #{e.message}")
+      sse.done('error')
+    end
+  end
+
   def install_storage_tools_stream
     stream_sse do |sse|
       StoragePools.install! { |line| sse.emit(line) }

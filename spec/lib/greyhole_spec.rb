@@ -123,6 +123,32 @@ RSpec.describe Greyhole do
       expect(SambaService).to have_received(:push_config)
     end
 
+    it "looks for Greyhole's daemon without a shell, whose own command line would match" do
+      allow(Greyhole).to receive(:running?).and_call_original
+      allow(Open3).to receive(:capture3).with('pgrep', '-f', 'greyhole --daemon')
+                                        .and_return(['', '', instance_double(Process::Status, success?: false)])
+      expect(Greyhole.running?).to be false
+      allow(Open3).to receive(:capture3).with('pgrep', '-f', 'greyhole --daemon')
+                                        .and_return(["4242\n", '', instance_double(Process::Status, success?: true)])
+      expect(Greyhole.running?).to be true
+    end
+
+    it 'uninstalls only when no drive is in its pool and no share keeps copies with it' do
+      create(:disk_pool_partition, path: '/mnt/storage-1', minimum_free: 10)
+      expect(Greyhole.removal_blocker).to eq('Take its drives out of the storage pool first.')
+      expect { Greyhole.uninstall! }.to raise_error(Greyhole::GreyholeError, 'Take its drives out of the storage pool first.')
+      DiskPoolPartition.delete_all
+      create(:share, name: 'Photos', disk_pool_copies: 2)
+      expect(Greyhole.removal_blocker).to eq('The share Photos keeps copies with Greyhole: turn that off on Shares first.')
+      Share.update_all(disk_pool_copies: 0)
+      expect(Greyhole.removal_blocker).to be_nil
+      Privileged.reset! # saving the share above may have written Greyhole's config
+
+      expect(Greyhole.uninstall!).to be true
+      expect(Privileged.calls.map(&:first)).to eq(%w[greyhole.uninstall services.restart])
+      expect(SambaService).to have_received(:push_config)
+    end
+
     it "stops with the helper's reason" do
       allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('packages.add_repository', 'fingerprint not pinned'))
       expect { Greyhole.install! }.to raise_error(Greyhole::GreyholeError, 'fingerprint not pinned')

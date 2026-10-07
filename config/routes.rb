@@ -115,18 +115,22 @@ Rails.application.routes.draw do
     post 'toggle_greyhole', action: 'toggle_greyhole'
     post 'install_greyhole', action: 'install_greyhole'
     get 'install_greyhole_stream', action: 'install_greyhole_stream'
+    get 'uninstall_greyhole_stream', action: 'uninstall_greyhole_stream'
     get 'pools', action: 'pools'
     post 'create_pool', action: 'create_pool'
     post 'scrub_pool', action: 'scrub_pool'
     post 'replace_pool_drive', action: 'replace_pool_drive'
     post 'add_pool_group', action: 'add_pool_group'
     post 'destroy_pool', action: 'destroy_pool'
+    post 'pool_offline', action: 'pool_offline'
+    post 'pool_online', action: 'pool_online'
     post 'snapshot_pool', action: 'snapshot_pool'
     post 'pool_snapshot_policy', action: 'pool_snapshot_policy'
     post 'destroy_pool_snapshot', action: 'destroy_pool_snapshot'
     post 'rollback_pool', action: 'rollback_pool'
     post 'check_health', action: 'check_health'
     get 'install_storage_tools_stream', action: 'install_storage_tools_stream'
+    get 'uninstall_zfs_stream', action: 'uninstall_zfs_stream'
   end
 
   match 'login' => 'user_sessions#new', :as => :login, via: [:get]

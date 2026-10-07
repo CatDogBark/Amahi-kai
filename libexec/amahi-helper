@@ -151,6 +151,15 @@ module AmahiHelper
   SMART_ASLEEP = 9 # smartctl's exit status for a spun-down drive, which it doesn't wake (-n standby,9)
 
   GREYHOLE_CONF = '/etc/greyhole.conf'
+  GREYHOLE_BIN = '/usr/bin/greyhole'
+  # Uninstalling Greyhole or ZFS removes these packages (and nothing else; the PHP modules and
+  # smartmontools other things use stay).
+  GREYHOLE_PACKAGES = %w[greyhole].freeze
+  ZFS_PACKAGES = %w[zfsutils-linux zfs-zed].freeze
+  # Pools taken offline on Disks → ZFS Pools (pools.export), as { name => GUID }: their drives
+  # stay theirs, and only these can be brought back (pools.import), by GUID, so a pool from
+  # another server is never mounted here with a click.
+  OFFLINE_POOLS = '/var/lib/amahi-kai/offline-pools.json'
   GREYHOLE_SCHEMA = '/usr/share/greyhole/schema-mysql.sql'
   MYSQL = '/usr/bin/mysql'
   # Greyhole reaches its database as the app's MariaDB user, which already exists.
@@ -540,6 +549,17 @@ module AmahiHelper
          [:set_arc_max, v[:arc_max]]]
       }
     },
+    # Removes ZFS (Disks → ZFS Pools) when there's no pool, online or offline: its packages,
+    # Amahi-kai's setting for its cache, and the module, now.
+    'zfs.uninstall' => {
+      params: [],
+      validate: ->(_a) { installed!(ZPOOL) && zfs_removable! },
+      plan: lambda { |_v|
+        [['/usr/bin/apt-get', '-y', '-o', 'DPkg::Lock::Timeout=300', 'purge', *ZFS_PACKAGES, { env: APT_ENV, stream: true }],
+         [:remove_files, ZFS_MODPROBE, OFFLINE_POOLS],
+         ['/usr/sbin/modprobe', '-r', 'zfs', { allow_failure: true }]]
+      }
+    },
     # The pools, with their drives, health and last scrub (Disks → ZFS Pools). Read-only.
     'pools.status' => {
       params: [],
@@ -601,6 +621,20 @@ module AmahiHelper
          [:remove_pool_dir, v[:name]],
          [:pool_status]]
       }
+    },
+    # Takes a pool offline: unmounted and out of ZFS's cache file, so it stays offline after a
+    # reboot, and recorded in OFFLINE_POOLS so its drives stay its own. Fails while something
+    # has files open on it.
+    'pools.export' => {
+      params: %w[name],
+      validate: ->(a) { installed!(ZPOOL) && export_request(a['name']) },
+      plan: ->(v) { [[:export_pool, v[:name], v[:guid]], [:pool_status]] }
+    },
+    # Brings back a pool taken offline here, by the GUID recorded then, at its own mount point.
+    'pools.import' => {
+      params: %w[name],
+      validate: ->(a) { installed!(ZPOOL) && import_request(a['name']) },
+      plan: ->(v) { [[:make_dir, POOL_ROOT, '0755'], [:import_pool, v[:name], v[:guid]], [:pool_status]] }
     },
     # Takes a snapshot of a pool now (all its datasets), kept until it's deleted.
     'pools.snapshot' => {
@@ -671,6 +705,19 @@ module AmahiHelper
       params: [],
       validate: ->(_a) { {} },
       plan: ->(_v) { [[:greyhole_database]] }
+    },
+    # Removes Greyhole (Disks → Storage Pool) when its config lists no drives and no share
+    # keeping copies: the package, its config and its apt repository. Its database stays, so
+    # installing it again picks up where it was.
+    'greyhole.uninstall' => {
+      params: [],
+      validate: ->(_a) { installed!(GREYHOLE_BIN) && greyhole_removable! },
+      plan: lambda { |_v|
+        repository = APT_REPOSITORIES.fetch('greyhole')
+        [['/usr/bin/systemctl', 'disable', '--now', 'greyhole.service', { allow_failure: true }],
+         ['/usr/bin/apt-get', '-y', '-o', 'DPkg::Lock::Timeout=300', 'purge', *GREYHOLE_PACKAGES, { env: APT_ENV, stream: true }],
+         [:remove_files, GREYHOLE_CONF, repository[:list], repository[:keyring]]]
+      }
     },
     'packages.add_repository' => {
       params: %w[repository],
@@ -1137,7 +1184,8 @@ module AmahiHelper
       raise Refused, "#{layout} needs an even number of drives" if rule[:pairs] && devices.size.odd?
       tree = block_tree
       pooled = pooled_devices
-      disks = devices.map { |device| pool_disk(device, tree, pooled) }
+      offline = offline_devices
+      disks = devices.map { |device| pool_disk(device, tree, pooled, offline) }
       paths = disks.map(&:first)
       raise Refused, "#{paths.find { |p| paths.count(p) > 1 }} is listed twice" if paths.uniq.size != paths.size
       { name: name, wipe: disks.flat_map { |_path, node| wipe_targets(node) },
@@ -1162,7 +1210,7 @@ module AmahiHelper
     # A whole data disk with nothing on it in use: not the system's, nothing mounted, no
     # LVM, RAID or encryption on it, nothing of it in fstab, and not in a pool.
     # Returns [path, its lsblk node].
-    def pool_disk(value, tree, pooled)
+    def pool_disk(value, tree, pooled, offline_drives = offline_devices)
       value = string(value, 'device', max: 64)
       raise Refused, "#{value.inspect} is not a whole disk" unless value.match?(WHOLE_DISK)
       raise Refused, "#{value} doesn't exist" unless File.blockdev?(value)
@@ -1176,6 +1224,8 @@ module AmahiHelper
       raise Refused, "#{value} holds #{other['path']} (#{other['type']}), which is in use" if other
       pool = nodes.map { |n| pooled[n['path']] }.compact.first
       raise Refused, "#{value} is in the pool #{pool}" if pool
+      offline = nodes.map { |n| offline_drives[n['path']] }.compact.first
+      raise Refused, "#{value} is in the pool #{offline}, which is offline; bring it online on Disks → ZFS Pools, or delete it there" if offline
       sources = fstab_entries.map(&:first)
       nodes.each do |n|
         info = probe(n['path'])
@@ -1208,7 +1258,8 @@ module AmahiHelper
       raise Refused, "a new #{layout} group in #{name} needs #{width} drives, like the others" unless devices.size == width
       tree = block_tree
       pooled = pooled_devices
-      disks = devices.map { |device| pool_disk(device, tree, pooled) }
+      offline = offline_devices
+      disks = devices.map { |device| pool_disk(device, tree, pooled, offline) }
       paths = disks.map(&:first)
       raise Refused, "#{paths.find { |p| paths.count(p) > 1 }} is listed twice" if paths.uniq.size != paths.size
       { name: name, wipe: disks.flat_map { |_path, node| wipe_targets(node) },
@@ -1223,6 +1274,88 @@ module AmahiHelper
       tree = block_tree
       disks = members.filter_map { |part| tree.find { |disk| subtree(disk).any? { |n| n['path'] == part } } }.uniq
       { name: name, members: members, wipe: disks.flat_map { |disk| wipe_targets(disk) } }
+    end
+
+    def export_request(name)
+      name = existing_pool(name)
+      { name: name, guid: capture([ZPOOL, 'get', '-H', '-o', 'value', 'guid', name]).strip }
+    end
+
+    def import_request(value)
+      value = string(value, 'name', max: 32)
+      guid = offline_records[value]
+      raise Refused, "#{value.inspect} isn't a pool taken offline here" unless value.match?(POOL_NAME) && guid
+      raise Refused, "a pool named #{value} is already online" if pool_names.include?(value)
+      { name: value, guid: guid.to_s }
+    end
+
+    def zfs_removable!
+      pool = pool_names.first
+      raise Refused, "the pool #{pool} is still here; delete it on Disks → ZFS Pools first" if pool
+      offline = offline_records.keys.first
+      raise Refused, "the pool #{offline} is offline; bring it online and delete it first" if offline
+      {}
+    end
+
+    def greyhole_removable!
+      lines = File.exist?(GREYHOLE_CONF) ? File.readlines(GREYHOLE_CONF, chomp: true) : []
+      if lines.any? { |line| line.match?(/\A\s*storage_pool_drive\s*=/) }
+        raise Refused, 'Greyhole still has drives in its pool; take them out on Disks → Storage Pool first'
+      end
+      if (share = lines.filter_map { |line| line[/\A\s*num_copies\[([^\]]+)\]/, 1] }.first)
+        raise Refused, "the share #{share} still keeps copies with Greyhole; turn that off on Shares first"
+      end
+      {}
+    end
+
+    # { name => GUID } of the pools taken offline here.
+    def offline_records
+      records = read_json(OFFLINE_POOLS)
+      records.is_a?(Hash) ? records.select { |name, guid| name.is_a?(String) && guid.to_s.match?(/\A\d+\z/) } : {}
+    end
+
+    # The pools taken offline here and not back yet, as a scan of the drives finds them:
+    # [{ 'name', 'state' (ZFS's, or 'MISSING' when none of its drives is found), 'devices' =>
+    # the partitions of it found, by kernel name }].
+    def offline_pools
+      records = offline_records
+      return [] if records.empty?
+      imported = pool_names
+      found = importable_pools
+      records.reject { |name, _guid| imported.include?(name) }.map do |name, guid|
+        pool = found.find { |p| p['id'] == guid.to_s }
+        { 'name' => name, 'state' => pool ? pool['state'] : 'MISSING', 'devices' => pool ? pool['devices'] : [] }
+      end
+    end
+
+    # { '/dev/sdc1' => 'test', ... }: every partition of a pool taken offline here.
+    def offline_devices
+      offline_pools.each_with_object({}) { |pool, found| pool['devices'].each { |device| found[device] = pool['name'] } }
+    end
+
+    # What `zpool import` finds on the drives: [{ 'name', 'id', 'state', 'devices' }]. It lists
+    # each pool that could be imported, its config naming the drives as in BY_ID.
+    def importable_pools
+      out, _err, status = Open3.capture3(ENV_MIN, ZPOOL, 'import', '-d', BY_ID, unsetenv_others: true, chdir: '/')
+      return [] unless status.success?
+      parse_importable(out)
+    rescue SystemCallError
+      []
+    end
+
+    def parse_importable(text)
+      text.split(/^\s*pool: /).drop(1).map do |block|
+        name = block.lines.first.strip
+        config = block.split(/^\s*config:\s*$/, 2)[1].to_s
+        devices = config.lines.filter_map do |line|
+          token = line.strip.split(/\s+/).first.to_s
+          path = token.start_with?('/') ? token : File.join(BY_ID, token)
+          File.realpath(path) if !token.empty? && File.exist?(path) && File.dirname(File.realpath(path)) == '/dev'
+        rescue SystemCallError
+          nil
+        end
+        { 'name' => name, 'id' => block[/^\s*id: (\d+)/, 1], 'state' => block[/^\s*state: (\S+)/, 1], 'devices' => devices.uniq }
+      end
     end
 
     def snapshot_request(name, snapshot)
@@ -2032,6 +2165,29 @@ module AmahiHelper
       nil
     end
 
+    def do_export_pool(name, guid)
+      capture([ZPOOL, 'export', name])
+      records = offline_records.merge(name => guid)
+      do_make_dir(File.dirname(OFFLINE_POOLS), '0755')
+      do_install(OFFLINE_POOLS, "#{JSON.pretty_generate(records)}\n", nil, '0640', APP_USER)
+      nil
+    end
+
+    def do_import_pool(name, guid)
+      capture([ZPOOL, 'import', '-d', BY_ID, guid])
+      records = offline_records.except(name)
+      do_install(OFFLINE_POOLS, "#{JSON.pretty_generate(records)}\n", nil, '0640', APP_USER)
+      nil
+    end
+
+    # Files a plan names (never a path from the request).
+    def do_remove_files(*paths)
+      paths.each { |path| File.unlink(path) if File.exist?(path) || File.symlink?(path) }
+      nil
+    rescue SystemCallError => e
+      raise Failed, "couldn't remove #{e.message}"
+    end
+
     def do_set_arc_max(bytes)
       File.write(ZFS_ARC_MAX, bytes.to_s) if File.exist?(ZFS_ARC_MAX)
       { 'arc_max' => bytes }
@@ -2061,9 +2217,9 @@ module AmahiHelper
           pool.merge('error' => e.message)
         end
       end
-      { 'zfs' => true, 'pools' => pools }
+      { 'zfs' => true, 'pools' => pools, 'offline' => offline_pools }
     rescue Failed => e
-      { 'zfs' => true, 'pools' => [], 'error' => e.message } # e.g. the ZFS module isn't loaded
+      { 'zfs' => true, 'pools' => [], 'offline' => [], 'error' => e.message } # e.g. the ZFS module isn't loaded
     end
 
     # { 'checked_at', 'smartctl' (installed?), 'drives' => { '/dev/sda' => SMART summary or

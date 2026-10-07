@@ -63,6 +63,12 @@ A pool grows by adding another group of drives with the same layout (another mir
 another RAIDZ group). Ubuntu 24.04 ships OpenZFS 2.2, which can't add a single drive to an existing
 RAIDZ group (that came in 2.3); the UI should say so when it matters.
 
+- [x] **Controls** (Troy, 2026-10-07): Greyhole and ZFS install and uninstall from their own
+  pages, Greyhole starts and stops there, and ZFS pools go offline and come back one at a time
+  (`pools.export` records the pool's GUID in `/var/lib/amahi-kai/offline-pools.json`, which
+  keeps its drives its own; `pools.import` brings back only those). Uninstalling is offered
+  only once nothing uses it.
+
 ## Troy's first build
 
 - Jonsbo N3, 8 hot-swap bays, as the Proxmox host. **The drive controller (HBA) is passed through

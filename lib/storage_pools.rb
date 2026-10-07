@@ -5,8 +5,8 @@ require 'privileged'
 # ZFS pools (docs/plans/storage.md): bitShare's storage, on drives of their own, next to the
 # share storage (simple drives and Greyhole) that SMB shares live on. The root helper installs
 # ZFS's settings, reads the pools and creates them (zfs.setup, pools.status, pools.create) and
-# checks every drive itself; this lists the pools, says what each drive is used for, and
-# installs ZFS.
+# checks every drive itself; this lists the pools, says what each drive is used for, installs
+# and uninstalls ZFS, and takes pools offline and back (pools.export, pools.import).
 module StoragePools
   PACKAGE = 'zfsutils-linux'.freeze
   SMART_PACKAGE = 'smartmontools'.freeze
@@ -85,13 +85,27 @@ module StoragePools
     end
   end
 
+  # A pool taken offline here (pools.export): its drives stay its own until it's brought back.
+  # state: ZFS's word for it as its drives are found (ONLINE when they all are), or MISSING
+  # when none is connected; devices: the partitions of it found.
+  OfflinePool = Struct.new(:name, :state, :devices, keyword_init: true) do
+    def found?
+      state != 'MISSING'
+    end
+  end
+
   class << self
-    # { installed: true/false, pools: [Pool], error: nil or why the pools couldn't be read }.
+    # { installed: true/false, pools: [Pool], offline: [OfflinePool], error: nil or why the
+    # pools couldn't be read }.
     def status
       reply = Privileged.call('pools.status')
-      { installed: reply['zfs'] == true, pools: Array(reply['pools']).map { |pool| pool(pool) }, error: reply['error'] }
+      offline = Array(reply['offline']).map do |pool|
+        OfflinePool.new(name: pool['name'].to_s, state: pool['state'].to_s, devices: Array(pool['devices']))
+      end
+      { installed: reply['zfs'] == true, pools: Array(reply['pools']).map { |pool| pool(pool) }, offline: offline,
+        error: reply['error'] }
     rescue Privileged::Error => e
-      { installed: false, pools: [], error: e.message }
+      { installed: false, pools: [], offline: [], error: e.message }
     end
 
     # A Pool from one entry of the helper's 'pools' list.
@@ -132,17 +146,19 @@ module StoragePools
     # Every whole disk, with what it's used for (:role) and whether a new pool may take it
     # (:free). Roles: :os (the system runs from it), :share (mounted as share storage),
     # :in_use (mounted elsewhere, or LVM, RAID or encryption on it), :pool (in an imported
-    # pool), :old_zfs (a ZFS label from a pool that isn't imported here; a new pool
-    # erases it), :free.
-    def drives(pools = [])
+    # pool), :offline (in a pool taken offline here), :old_zfs (a ZFS label from a pool that
+    # isn't on this server; a new pool erases it), :free.
+    def drives(pools = [], offline = [])
       lsblk.select { |d| d['type'] == 'disk' }.map do |disk|
         nodes = subtree(disk)
         mounts = nodes.flat_map { |n| Array(n['mountpoints']).compact }
         label = nodes.find { |n| n['fstype'] == 'zfs_member' }&.dig('label')
         pool = pools.find { |p| p.drives.any? { |d| nodes.any? { |n| n['path'] == d['device'] } } }&.name
+        pool ||= (away = offline.find { |p| p.devices.any? { |d| nodes.any? { |n| n['path'] == d } } || p.name == label })&.name
         role = if mounts.any? { |m| !m.start_with?('/mnt/') } then :os
                elsif mounts.any? then :share
                elsif nodes.any? { |n| !%w[disk part].include?(n['type']) } then :in_use
+               elsif away then :offline
                elsif pool then :pool
                elsif label then :old_zfs
                else :free
@@ -171,6 +187,37 @@ module StoragePools
       end
       progress.call('Checking the drives...')
       check_health!
+    end
+
+    # Why ZFS can't be uninstalled now, or nil when it can: no pool may be left, online or
+    # offline.
+    def removal_blocker(status)
+      if (pool = Array(status[:pools]).first)
+        "Delete the pool #{pool.name} first."
+      elsif (pool = Array(status[:offline]).first)
+        "The pool #{pool.name} is offline: bring it online and delete it first."
+      end
+    end
+
+    # Removes ZFS when there's no pool, passing apt's output to +progress+ line by line. The
+    # drive health tools stay.
+    def uninstall!(&progress)
+      progress ||= ->(_line) {}
+      progress.call('Removing ZFS (zfsutils-linux)...')
+      privileged('zfs.uninstall') { |line| progress.call("  #{line}") }
+      progress.call('Checking the drives...')
+      check_health!
+    end
+
+    # Takes a pool offline: unmounted, and staying offline after a restart, with its drives
+    # kept for it.
+    def take_offline!(name)
+      changed { privileged('pools.export', name: name.to_s) }
+    end
+
+    # Brings back a pool taken offline here.
+    def bring_online!(name)
+      changed { privileged('pools.import', name: name.to_s) }
     end
 
     # Creates a pool. The helper checks the name, the layout and every drive, and wipes them.
