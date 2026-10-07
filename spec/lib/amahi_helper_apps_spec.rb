@@ -85,6 +85,18 @@ RSpec.describe 'AmahiHelper apps' do
       expect(ran).to include(["#{dir}/ufw", 'allow', '5353/udp'])
     end
 
+    it "announces an app whose page is HTTPS (web_tls) as HTTPS" do
+      manifests = "#{dir}/manifests"
+      FileUtils.mkdir_p(manifests)
+      File.write("#{manifests}/bitshare.yml", { 'name' => 'bitShare', 'web_port' => 8443, 'web_tls' => true }.to_yaml)
+      stub_const('AmahiHelper::APP_MANIFESTS', manifests)
+      stub_const('AmahiHelper::APP_CATALOG', "#{dir}/no-catalog")
+      allow(helper).to receive(:do_apps_status).and_return('docker' => true, 'apps' => { 'bitshare' => {} })
+      expect(helper.do_announce_apps).to eq('announced' => %w[bitshare])
+      expect(File.read("#{avahi}/amahi-app-bitshare.service"))
+        .to include('<type>_https._tcp</type>', '<subtype>_bitshare._sub._https._tcp</subtype>', '<port>8443</port>')
+    end
+
     it 'says why when it can announce nothing' do
       allow(helper).to receive(:do_apps_status).and_return('docker' => false, 'apps' => {})
       expect(helper.do_announce_apps).to eq('apps not announced on the LAN: Docker is not running')
@@ -300,6 +312,8 @@ RSpec.describe 'AmahiHelper apps' do
       expect(failure('folders' => [{ 'name' => '../x', 'path' => '/data' }])).to include('folder name')
       expect(failure('folders' => [{ 'name' => 'data', 'path' => '/data', 'backup' => 'no' }])).to include("backup must be true or false")
       expect(failure('web_port' => 9999)).to include('web_port 9999 must be one of its ports')
+      expect(failure('web_port' => 8500, 'web_tls' => 'yes')).to include('web_tls must be true or false')
+      expect(failure('web_tls' => true)).to include('web_tls needs a web_port')
       expect(failure('environment' => { 'bad name' => 'x' })).to include("isn't valid")
       expect(failure('environment' => { 'X' => "a\nb" })).to include('one line')
       expect(failure('environment' => { 'TOKEN' => 'fixed' })).to include('set in environment too')

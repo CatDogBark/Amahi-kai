@@ -21,4 +21,11 @@ RSpec.describe 'Addresses of Amahi-kai and its apps' do
     expect(ApplicationController.helpers.amahi_url('100.101.102.103')).to eq('http://100.101.102.103:3000/')
     expect(DockerApp.new(host_port: 8484).url('192.168.1.111')).to eq('http://192.168.1.111:8484/')
   end
+
+  it "makes an app's address HTTPS when its manifest says its page is (web_tls)" do
+    allow(AppCatalog).to receive(:find).and_call_original
+    allow(AppCatalog).to receive(:find).with('bitshare').and_return({ web_tls: true })
+    expect(DockerApp.new(identifier: 'bitshare', host_port: 8443).url('192.168.1.111')).to eq('https://192.168.1.111:8443/')
+    expect(DockerApp.new(identifier: 'gitea', host_port: 3300).url('192.168.1.111')).to eq('http://192.168.1.111:3300/')
+  end
 end
