@@ -982,13 +982,11 @@ select:focus, input[type="text"]:focus, input[type="password"]:focus {
   border-color: var(--kai-primary);
 }
 
-/* ─── Footer: a glass bar pinned to the bottom of the window, so it stays put
-   when the page height changes ─── */
+/* ─── Footer: the glass bar that ends every page. The page is at least as tall as the window,
+   so on a short page the footer sits at the bottom of it; on a long page it comes after the
+   content, so it never covers a card ─── */
 #footer, .footer-area {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  position: relative;
   z-index: 1020;
   background: var(--kai-card-bg-opaque);
   backdrop-filter: blur(12px);
@@ -1016,14 +1014,16 @@ select:focus, input[type="text"]:focus, input[type="password"]:focus {
 #footer .footer-link:hover {
   color: var(--kai-primary);
 }
-/* Room under the page content so the fixed footer never covers it */
+/* html and body are height: 100% (above), which a long page overflows: let the body grow with
+   its content instead, and push the footer to the end of it */
 body:has(> #footer) {
-  padding-bottom: 56px;
+  height: auto;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
 }
-@media (max-width: 767.98px) {
-  body:has(> #footer) {
-    padding-bottom: 84px;
-  }
+body:has(> #footer) > #footer {
+  margin-top: auto;
 }
 
 /* ─── Login page ─── */
