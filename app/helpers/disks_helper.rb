@@ -56,6 +56,7 @@ module DisksHelper
     when :share then "Share storage (#{drive[:mounts].join(', ')})"
     when :in_use then 'In use (LVM, RAID or encryption)'
     when :pool then "ZFS pool #{drive[:pool]}"
+    when :offline then "ZFS pool #{drive[:pool]} (offline)"
     when :old_zfs then "Free: has an old ZFS label (pool #{drive[:pool]}, not on this server), which a new pool erases"
     else 'Free'
     end

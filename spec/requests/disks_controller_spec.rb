@@ -70,6 +70,43 @@ describe "Disks Controller", type: :request do
       end
     end
 
+    describe "Greyhole's controls" do
+      before do
+        allow(Greyhole).to receive(:status).and_return({ installed: true, running: false, queue: { pending: 0 } })
+        allow(Greyhole).to receive(:pool_drives).and_return([])
+        allow(DiskService).to receive(:partition_list).and_return([])
+      end
+
+      it "offers Start and Uninstall in one row, says why it's stopped, and points to Devices for drives" do
+        allow(Greyhole).to receive(:removal_blocker).and_return(nil)
+        get "/disks/storage_pool"
+        page = Nokogiri::HTML(response.body)
+        row = page.at_css('#uninstall-greyhole-btn').parent
+        expect(row.at_css('form button').text.strip).to eq('Start')
+        expect(row.text).to include('it has nothing to do until drives are in its pool')
+        expect(page.at_css('#uninstall-greyhole-btn')['disabled']).to be_nil
+        expect(page.at_css('#greyhole-uninstall-install-modal')['data-stream-url']).to eq(disks_uninstall_greyhole_stream_path)
+        expect(page.at_css('#no-share-drives a')['href']).to eq(disks_devices_path)
+      end
+
+      it 'says what keeps it from being uninstalled' do
+        allow(Greyhole).to receive(:removal_blocker).and_return('Take its drives out of the storage pool first.')
+        get "/disks/storage_pool"
+        page = Nokogiri::HTML(response.body)
+        expect(page.at_css('#uninstall-greyhole-btn')['disabled']).not_to be_nil
+        expect(page.at_css('#greyhole-removal-blocker').text).to include('Take its drives out of the storage pool first.')
+      end
+
+      it 'streams the uninstall, or the reason it stopped' do
+        allow(Greyhole).to receive(:uninstall!) { |&progress| progress.call('Stopping Greyhole and removing it...') }
+        get "/disks/uninstall_greyhole_stream", headers: same_origin
+        expect(response.body).to include('data: Stopping Greyhole and removing it...', 'data: ✓ Greyhole is uninstalled', "event: done\ndata: success")
+        allow(Greyhole).to receive(:uninstall!).and_raise(Greyhole::GreyholeError, 'Take its drives out of the storage pool first.')
+        get "/disks/uninstall_greyhole_stream", headers: same_origin
+        expect(response.body).to include('data: ✗ Take its drives out of the storage pool first.', "event: done\ndata: error")
+      end
+    end
+
     describe "POST /disks/toggle_greyhole" do
       it "stops greyhole when running" do
         allow(Greyhole).to receive(:running?).and_return(true)

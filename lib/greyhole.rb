@@ -1,3 +1,4 @@
+require 'open3'
 require 'shell'
 
 # Greyhole storage pooling. Installing it, its config and its service go through the
@@ -25,9 +26,12 @@ class Greyhole
     def running?
       return false unless production?
       # Greyhole uses an LSB init script — systemctl is-active returns "active"
-      # even when the daemon has exited. Check for the actual process instead.
-      stdout, _stderr, status = Shell.capture('pgrep -f "greyhole --daemon"')
+      # even when the daemon has exited. Check for the actual process instead, with pgrep
+      # run directly: through a shell, the shell's own command line matches the pattern.
+      stdout, _stderr, status = Open3.capture3('pgrep', '-f', 'greyhole --daemon')
       status.success? && stdout.strip.present?
+    rescue SystemCallError
+      false
     end
 
     def status
@@ -67,6 +71,31 @@ class Greyhole
 
       progress.call("Enabling and starting Greyhole...")
       privileged('services.enable', service: 'greyhole')
+      true
+    end
+
+    # Why Greyhole can't be uninstalled now, or nil when it can: nothing may still use it.
+    def removal_blocker
+      return 'Take its drives out of the storage pool first.' if DiskPoolPartition.exists?
+      share = Share.where('disk_pool_copies > 0').order(:name).first
+      return "The share #{share.name} keeps copies with Greyhole: turn that off on Shares first." if share
+      nil
+    end
+
+    # Removes Greyhole when nothing uses it (removal_blocker), through the root helper, with
+    # apt's output passed to the block, then takes its settings out of Samba's config.
+    # Raises GreyholeError.
+    def uninstall!(&progress)
+      progress ||= proc { |_msg| }
+      return true unless production?
+      blocker = removal_blocker
+      raise GreyholeError, blocker if blocker
+
+      progress.call("Stopping Greyhole and removing it...")
+      privileged('greyhole.uninstall') { |line| progress.call("  #{line}") }
+      progress.call("Updating Samba's configuration...")
+      SambaService.push_config
+      privileged('services.restart', service: 'smbd')
       true
     end
 

@@ -26,8 +26,8 @@ RSpec.describe 'ZFS pools', type: :request do
      drive('/dev/sdc', :pool, pool: 'tank'), drive('/dev/sdd', :free), drive('/dev/sde', :free), drive('/dev/sdf', :old_zfs, pool: 'old')]
   end
 
-  def stub_pools(installed:, pools: [], drives: self.drives, error: nil)
-    allow(StoragePools).to receive(:status).and_return(installed: installed, pools: pools, error: error)
+  def stub_pools(installed:, pools: [], offline: [], drives: self.drives, error: nil)
+    allow(StoragePools).to receive(:status).and_return(installed: installed, pools: pools, offline: offline, error: error)
     allow(StoragePools).to receive(:drives).and_return(drives)
   end
 
@@ -126,6 +126,43 @@ RSpec.describe 'ZFS pools', type: :request do
       post '/disks/destroy_pool', params: { name: 'tank', confirm: 'no' }, as: :json
       expect(response).to have_http_status(:unprocessable_content)
       expect(response.parsed_body['error']).to eq("type the pool's name (tank) to destroy it")
+    end
+
+    it 'takes a pool offline and brings one back through the helper' do
+      post '/disks/pool_offline', params: { name: 'tank' }, as: :json
+      expect(response.parsed_body).to eq('status' => 'ok')
+      post '/disks/pool_online', params: { name: 'away' }, as: :json
+      expect(response.parsed_body).to eq('status' => 'ok')
+      expect(Privileged.calls.map(&:first) - ['storage.check_health']).to eq(%w[pools.export pools.import])
+      expect(Privileged.calls).to include(['pools.export', { name: 'tank' }], ['pools.import', { name: 'away' }])
+    end
+
+    it "shows the pools taken offline with Bring online, keeps their drives, and won't uninstall ZFS while a pool is left" do
+      offline = [StoragePools::OfflinePool.new(name: 'away', state: 'ONLINE', devices: ['/dev/sdg1']),
+                 StoragePools::OfflinePool.new(name: 'gone', state: 'MISSING', devices: [])]
+      stub_pools(installed: true, pools: [pool], offline: offline, drives: drives + [drive('/dev/sdg', :offline, pool: 'away')])
+      get '/disks/pools'
+      expect(page.at_css('#pool-tank [data-storage-post="/disks/pool_offline"]')['data-confirm']).to include('stays offline after a restart')
+      away = page.at_css('#pool-away')
+      expect(away.text).to include('Offline', '/dev/sdg', 'nothing can format them or put them in another pool')
+      expect(away.at_css('[data-storage-post="/disks/pool_online"]')['disabled']).to be_nil
+      gone = page.at_css('#pool-gone')
+      expect(gone.at_css('[data-storage-post="/disks/pool_online"]')['disabled']).not_to be_nil
+      expect(gone.text).to include('None of its drives is connected')
+      expect(page.at_css('input[name="devices[]"][value="/dev/sdg"]')).to be_nil
+      expect(page.at_css('#pool-drives').text).to include('ZFS pool away (offline)')
+      expect(page.at_css('#uninstall-zfs-btn')['disabled']).not_to be_nil
+      expect(page.at_css('#zfs-software').text).to include('To uninstall it: Delete the pool tank first.')
+    end
+
+    it 'offers Uninstall ZFS once no pool is left, and streams it' do
+      stub_pools(installed: true)
+      get '/disks/pools'
+      expect(page.at_css('#uninstall-zfs-btn')['disabled']).to be_nil
+      expect(page.at_css('#zfs-uninstall-install-modal')['data-stream-url']).to eq('/disks/uninstall_zfs_stream')
+      get '/disks/uninstall_zfs_stream', headers: same_origin
+      expect(response.body).to include('data: Removing ZFS (zfsutils-linux)...', 'data: ✓ ZFS is uninstalled', "event: done\ndata: success")
+      expect(Privileged.calls).to eq([['zfs.uninstall', {}], ['storage.check_health', {}]])
     end
 
     it "offers Replace on every drive (highlighted when it isn't ONLINE), Add drives in the pool's shape, and Delete" do

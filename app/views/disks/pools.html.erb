@@ -48,6 +48,9 @@
                     data-layout="<%= shape.first %>" data-layout-name="<%= layout[:name] %>" data-width="<%= shape.last %>"
                     data-parity="<%= shape.first == 'mirror' ? shape.last - 1 : layout[:parity] %>">Add drives</button>
           <% end %>
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-storage-post="<%= disks_pool_offline_path %>" data-name="<%= pool.name %>"
+                  data-confirm="Take the pool <%= pool.name %> offline? Its files at <%= pool.mountpoint %> are out of reach until you bring it back online, and it stays offline after a restart. Its drives stay its own."
+                  data-tip="Unmount it and stop using it, keeping everything on its drives">Take offline</button>
           <button type="button" class="btn btn-sm btn-outline-danger" data-pool-dialog="destroy" data-name="<%= pool.name %>">Delete pool</button>
           <%= pool_state_badge(pool.health) %>
         </div>
@@ -155,6 +158,38 @@
     </div>
   <% end %>
 
+  <%# Pools taken offline here: their drives stay theirs until they're brought back %>
+  <% Array(@status[:offline]).each do |pool| %>
+    <% disks = @drives.select { |d| d[:role] == :offline && d[:pool] == pool.name }.map { |d| d[:path] } %>
+    <div class="card mb-3 pool-card" id="pool-<%= pool.name %>">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+          <strong><%= lucide_icon('database', size: 16) %> <%= pool.name %></strong>
+          <span class="text-muted ms-2">Offline</span>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <button type="button" class="btn btn-sm btn-outline-success" data-storage-post="<%= disks_pool_online_path %>" data-name="<%= pool.name %>"
+                  <%= 'disabled' unless pool.found? %>>Bring online</button>
+          <span class="badge bg-secondary">OFFLINE</span>
+        </div>
+      </div>
+      <div class="card-body small">
+        <% if !pool.found? %>
+          <p class="mb-0 text-warning">None of its drives is connected. Connect them, and it can be brought back online.</p>
+        <% else %>
+          <p class="mb-1">
+            Taken offline: its files are out of reach, and it stays offline after a restart. Its drives
+            (<%= disks.any? ? disks.join(', ') : pluralize(pool.devices.size, 'partition') %>) are kept for it: nothing can format them or put them in another pool.
+          </p>
+          <% unless pool.state == 'ONLINE' %>
+            <p class="mb-1 text-warning">ZFS finds it <%= pool.state %>: some of its drives may be missing.</p>
+          <% end %>
+          <p class="mb-0 text-muted">Bring it online to use it again, or to delete it.</p>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+
   <% free = @drives.select { |d| d[:free] } %>
   <div class="card mb-3">
     <div class="card-header d-flex justify-content-between align-items-center">
@@ -226,7 +261,21 @@
       </div>
     <% end %>
   </div>
+  <% if @status[:installed] %>
+    <div class="card mb-3" id="zfs-software">
+      <div class="card-body d-flex flex-wrap align-items-center gap-2 small">
+        <span class="flex-grow-1">
+          ZFS is installed.
+          <% if @zfs_removal_blocker %>To uninstall it: <%= @zfs_removal_blocker %><% else %>No pool uses it, so it can be uninstalled.<% end %>
+        </span>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="uninstall-zfs-btn" <%= 'disabled' if @zfs_removal_blocker %>
+                onclick="if (confirm('Uninstall ZFS? There are no pools, so nothing is lost; install it again here whenever you need a pool.')) openInstallTerminal('zfs-uninstall')">Uninstall ZFS</button>
+      </div>
+    </div>
+  <% end %>
+
 </div>
 
 <%= render 'disks/pool_dialogs', free: @drives.select { |d| d[:free] } %>
 <%= render 'shared/install_terminal', id: 'storage-install', title: 'Installing storage tools', stream_url: disks_install_storage_tools_stream_path %>
+<%= render 'shared/install_terminal', id: 'zfs-uninstall', title: 'Uninstalling ZFS', stream_url: disks_uninstall_zfs_stream_path %>

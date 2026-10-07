@@ -14,19 +14,26 @@
     </div>
     <div class="card-body">
       <% if @greyhole_status[:installed] %>
-        <%= button_to(@greyhole_status[:running] ? t('stop', default: 'Stop') : t('start', default: 'Start'),
-              disks_toggle_greyhole_path,
-              method: :post,
-              class: "btn btn-sm #{@greyhole_status[:running] ? 'btn-outline-danger' : 'btn-outline-success'}") %>
-
-        <% if @greyhole_status[:running] %>
-          <% if @greyhole_status[:queue] %>
-            <span class="ms-3 text-muted">
-              <%= t('pending_operations', default: 'Pending operations') %>: <%= @greyhole_status[:queue][:pending] %>
-            </span>
-          <% end %>
-        <% else %>
-          <span class="ms-3 text-muted">Stopped — add drives to the storage pool below, then click Start</span>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+          <%= button_to(@greyhole_status[:running] ? t('stop', default: 'Stop') : t('start', default: 'Start'),
+                disks_toggle_greyhole_path,
+                method: :post,
+                form: { class: 'd-inline-flex' },
+                class: "btn btn-sm #{@greyhole_status[:running] ? 'btn-outline-danger' : 'btn-outline-success'}") %>
+          <button type="button" class="btn btn-sm btn-outline-secondary" id="uninstall-greyhole-btn" <%= 'disabled' if @greyhole_removal_blocker %>
+                  onclick="if (confirm('Uninstall Greyhole? Shares stay as they are; installing it again later brings pooling back.')) openInstallTerminal('greyhole-uninstall')">Uninstall</button>
+          <span class="text-muted small">
+            <% if @greyhole_status[:running] %>
+              <%= t('pending_operations', default: 'Pending operations') %>: <%= @greyhole_status.dig(:queue, :pending).to_i %>
+            <% elsif @pool_drives.empty? %>
+              Stopped: it has nothing to do until drives are in its pool (below).
+            <% else %>
+              Stopped: Start sets it working on the pool again.
+            <% end %>
+          </span>
+        </div>
+        <% if @greyhole_removal_blocker %>
+          <p class="small text-muted mb-0 mt-2" id="greyhole-removal-blocker">To uninstall Greyhole: <%= @greyhole_removal_blocker %></p>
         <% end %>
       <% else %>
         <p class="text-muted mb-2"><%= t('greyhole_not_installed_msg', default: 'Greyhole is not installed. Install it to enable storage pooling and drive replication.') %></p>
@@ -151,7 +158,10 @@
           </tbody>
         </table>
       <% else %>
-        <p class="text-muted mb-0"><%= t('no_partitions', default: 'No partitions detected.') %></p>
+        <p class="text-muted mb-0" id="no-share-drives">
+          No share storage yet. Greyhole pools drives mounted as share storage: initialize and mount them on
+          <%= link_to 'Disks → Devices', disks_devices_path %>, and they show up here to add.
+        </p>
       <% end %>
     </div>
   </div>
@@ -159,6 +169,7 @@
 
 
 
+<%= render 'shared/install_terminal', id: 'greyhole-uninstall', title: 'Uninstalling Greyhole', stream_url: disks_uninstall_greyhole_stream_path %>
 <%= render 'shared/install_terminal',
      id: 'greyhole',
      title: 'Installing Greyhole',

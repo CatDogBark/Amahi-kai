@@ -283,7 +283,7 @@ RSpec.describe 'AmahiHelper ZFS pools' do
       expect(helper.do_pool_status).to eq('zfs' => false, 'pools' => [])
       allow(File).to receive(:executable?).with('/usr/sbin/zpool').and_return(true)
       allow(helper).to receive(:capture).and_raise(AmahiHelper::Failed, 'zpool exited 1: The ZFS modules are not loaded.')
-      expect(helper.do_pool_status).to eq('zfs' => true, 'pools' => [], 'error' => 'zpool exited 1: The ZFS modules are not loaded.')
+      expect(helper.do_pool_status).to eq('zfs' => true, 'pools' => [], 'offline' => [], 'error' => 'zpool exited 1: The ZFS modules are not loaded.')
     end
 
     it 'maps every device in an imported pool to its pool' do
@@ -291,6 +291,92 @@ RSpec.describe 'AmahiHelper ZFS pools' do
       allow(helper).to receive(:pool_names).and_return(['tank'])
       allow(helper).to receive(:capture).with(%w[/usr/sbin/zpool status -P tank]).and_return(degraded)
       expect(helper.pooled_devices).to eq('/dev/sdc1' => 'tank', '/dev/sde1' => 'tank')
+    end
+  end
+
+  describe 'taking a pool offline, and uninstalling ZFS' do
+    let(:offline_file) { "#{dir}/offline-pools.json" }
+
+    before do
+      stub_const('AmahiHelper::OFFLINE_POOLS', offline_file)
+      allow(helper).to receive(:do_install) { |target, content, *| File.write(target, content) }
+    end
+
+    it 'takes an existing pool offline, recording its GUID, and only brings back pools it recorded' do
+      allow(helper).to receive(:capture).with(%w[/usr/sbin/zpool get -H -o value guid old]).and_return("987654321\n")
+      expect(steps('pools.export', { 'name' => 'old' })).to eq([[:export_pool, 'old', '987654321'], [:pool_status]])
+      expect(refusal('pools.export', { 'name' => 'nope' })).to eq(%(there's no pool named "nope"))
+
+      expect(refusal('pools.import', { 'name' => 'away' })).to eq(%("away" isn't a pool taken offline here))
+      File.write(offline_file, { 'away' => '1234', 'junk' => 'x' }.to_json)
+      expect(steps('pools.import', { 'name' => 'away' })).to eq(
+        [[:make_dir, "#{dir}/pools", '0755'], [:import_pool, 'away', '1234'], [:pool_status]]
+      )
+      expect(refusal('pools.import', { 'name' => 'junk' })).to eq(%("junk" isn't a pool taken offline here))
+      allow(helper).to receive(:pool_names).and_return(['away'])
+      expect(refusal('pools.import', { 'name' => 'away' })).to eq('a pool named away is already online')
+    end
+
+    it 'records the pool after exporting it, and forgets it once imported' do
+      allow(helper).to receive(:capture).with(%w[/usr/sbin/zpool export old]).and_return('')
+      helper.do_export_pool('old', '987654321')
+      expect(helper.offline_records).to eq('old' => '987654321')
+      allow(helper).to receive(:capture).with(['/usr/sbin/zpool', 'import', '-d', '/dev/disk/by-id', '987654321']).and_return('')
+      helper.do_import_pool('old', '987654321')
+      expect(helper.offline_records).to eq({})
+    end
+
+    it "keeps an offline pool's drives out of new pools" do
+      allow(helper).to receive(:offline_devices).and_return('/dev/sdd' => 'away')
+      expect(refusal('pools.create', { 'name' => 'tank', 'layout' => 'mirror', 'devices' => %w[/dev/sdd /dev/sde] }))
+        .to eq('/dev/sdd is in the pool away, which is offline; bring it online on Disks → ZFS Pools, or delete it there')
+    end
+
+    it 'finds the offline pools on the drives, by their by-id names' do
+      by_id = "#{dir}/by-id"
+      Dir.mkdir(by_id)
+      File.symlink('/dev/null', "#{by_id}/scsi-0QEMU_QEMU_HARDDISK_drive-scsi2-part1")
+      File.symlink('/dev/zero', "#{by_id}/scsi-0QEMU_QEMU_HARDDISK_drive-scsi4-part1")
+      stub_const('AmahiHelper::BY_ID', by_id)
+      scan = <<~SCAN
+           pool: away
+             id: 1234
+          state: ONLINE
+         action: The pool can be imported using its name or numeric identifier.
+         config:
+
+        \taway                                            ONLINE
+        \t  mirror-0                                      ONLINE
+        \t    scsi-0QEMU_QEMU_HARDDISK_drive-scsi2-part1  ONLINE
+        \t    scsi-0QEMU_QEMU_HARDDISK_drive-scsi4-part1  ONLINE
+        \t    scsi-0QEMU_QEMU_HARDDISK_drive-scsi9-part1  UNAVAIL
+      SCAN
+      expect(helper.parse_importable(scan)).to eq([{ 'name' => 'away', 'id' => '1234', 'state' => 'ONLINE', 'devices' => %w[/dev/null /dev/zero] }])
+      File.write(offline_file, { 'away' => '1234', 'gone' => '99' }.to_json)
+      allow(helper).to receive(:pool_names).and_return([])
+      allow(helper).to receive(:importable_pools).and_return(helper.parse_importable(scan))
+      expect(helper.offline_pools).to eq([{ 'name' => 'away', 'state' => 'ONLINE', 'devices' => %w[/dev/null /dev/zero] },
+                                          { 'name' => 'gone', 'state' => 'MISSING', 'devices' => [] }])
+    end
+
+    it 'uninstalls ZFS only when no pool is left, online or offline' do
+      expect(refusal('zfs.uninstall', {})).to eq('the pool old is still here; delete it on Disks → ZFS Pools first')
+      allow(helper).to receive(:pool_names).and_return([])
+      File.write(offline_file, { 'away' => '1234' }.to_json)
+      expect(refusal('zfs.uninstall', {})).to eq('the pool away is offline; bring it online and delete it first')
+      File.write(offline_file, '{}')
+      expect(steps('zfs.uninstall', {})).to eq(
+        [['/usr/bin/apt-get', '-y', '-o', 'DPkg::Lock::Timeout=300', 'purge', 'zfsutils-linux', 'zfs-zed',
+          { env: AmahiHelper::APT_ENV, stream: true }],
+         [:remove_files, '/etc/modprobe.d/zfs-amahi.conf', offline_file],
+         ['/usr/sbin/modprobe', '-r', 'zfs', { allow_failure: true }]]
+      )
+    end
+
+    it 'removes only the files a plan names' do
+      File.write("#{dir}/a", 'x')
+      helper.do_remove_files("#{dir}/a", "#{dir}/not-there")
+      expect(File.exist?("#{dir}/a")).to be(false)
     end
   end
 

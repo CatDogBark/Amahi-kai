@@ -37,9 +37,21 @@ RSpec.describe StoragePools do
 
     it "reports ZFS as not installed, and the helper's error" do
       reply('zfs' => false, 'pools' => [])
-      expect(described_class.status).to eq(installed: false, pools: [], error: nil)
+      expect(described_class.status).to eq(installed: false, pools: [], offline: [], error: nil)
       allow(Privileged).to receive(:call).with('pools.status').and_raise(Privileged::Error.new('pools.status', 'boom'))
-      expect(described_class.status).to eq(installed: false, pools: [], error: 'boom')
+      expect(described_class.status).to eq(installed: false, pools: [], offline: [], error: 'boom')
+    end
+
+    it 'lists the pools taken offline, and says what keeps ZFS from being uninstalled' do
+      reply('zfs' => true, 'pools' => [], 'offline' => [{ 'name' => 'away', 'state' => 'ONLINE', 'devices' => ['/dev/sdd1'] },
+                                                        { 'name' => 'gone', 'state' => 'MISSING', 'devices' => [] }])
+      status = described_class.status
+      expect(status[:offline].map { |p| [p.name, p.found?] }).to eq([['away', true], ['gone', false]])
+      expect(described_class.removal_blocker(status)).to eq('The pool away is offline: bring it online and delete it first.')
+      reply('zfs' => true, 'pools' => [raidz])
+      expect(described_class.removal_blocker(described_class.status)).to eq('Delete the pool tank first.')
+      reply('zfs' => true, 'pools' => [])
+      expect(described_class.removal_blocker(described_class.status)).to be_nil
     end
   end
 
@@ -78,6 +90,14 @@ RSpec.describe StoragePools do
       expect(drives.find { |d| d[:path] == '/dev/sde' }).to include(model: 'Samsung SSD 870 EVO 1TB', serial: 'S6P', size: 1_000_000, ssd: true)
       expect(drives.find { |d| d[:path] == '/dev/sdc' }[:pool]).to eq('tank')
       expect(drives.find { |d| d[:path] == '/dev/sdb' }[:mounts]).to eq(['/mnt/storage-1'])
+    end
+
+    it "keeps an offline pool's drives for it, by the drives found or by their label" do
+      offline = [StoragePools::OfflinePool.new(name: 'oldpool', state: 'ONLINE', devices: [])]
+      drives = described_class.drives([], offline)
+      expect(drives.find { |d| d[:path] == '/dev/sdd' }).to include(role: :offline, pool: 'oldpool', free: false)
+      offline = [StoragePools::OfflinePool.new(name: 'away', state: 'ONLINE', devices: ['/dev/sde'])]
+      expect(described_class.drives([], offline).find { |d| d[:path] == '/dev/sde' }).to include(role: :offline, pool: 'away', free: false)
     end
 
     # lsblk lists every device flat unless NAME is the first column, and then a disk seems
