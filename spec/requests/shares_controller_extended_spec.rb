@@ -81,6 +81,13 @@ RSpec.describe "SharesController extended", type: :request do
         expect(Greyhole).to have_received(:configure!)
       end
 
+      it "writes Greyhole's config even while Greyhole is stopped, so it has the share when it starts" do
+        allow(Greyhole).to receive(:enabled?).and_return(false)
+        allow(Greyhole).to receive(:installed?).and_return(true)
+        put toggle_disk_pool_enabled_share_path(share), as: :json
+        expect(Greyhole).to have_received(:configure!)
+      end
+
       it "handles Greyhole errors gracefully" do
         allow(Greyhole).to receive(:configure!).and_raise(Shell::CommandError.new("greyhole", "failed", 1))
         put toggle_disk_pool_enabled_share_path(share), as: :json

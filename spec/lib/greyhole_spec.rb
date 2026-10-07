@@ -123,6 +123,17 @@ RSpec.describe Greyhole do
       expect(SambaService).to have_received(:push_config)
     end
 
+    it "reads Greyhole's record of its drives, and says which drive it won't use" do
+      records = 'a:3:{s:14:"/mnt/storage-1";s:4:"uuid";s:14:"/mnt/storage-2";s:3:"old";s:14:"/mnt/storage-3";b:0;}'
+      parsed = Greyhole.parse_drive_records(records)
+      expect(parsed).to eq('/mnt/storage-1' => 'uuid', '/mnt/storage-2' => 'old', '/mnt/storage-3' => nil)
+      allow(Greyhole).to receive(:mounted_uuid) { |path| { '/mnt/storage-1' => 'uuid', '/mnt/storage-2' => 'new', '/mnt/storage-4' => 'x' }[path] }
+      expect(%w[/mnt/storage-1 /mnt/storage-2 /mnt/storage-4 /mnt/storage-5].map { |path| Greyhole.drive_state(path, parsed) })
+        .to eq(%i[ok changed new not_mounted])
+      expect(Greyhole.accept_drive!('/mnt/storage-2')).to be true
+      expect(Privileged.calls).to include(['greyhole.replace_drive', { path: '/mnt/storage-2' }])
+    end
+
     it "looks for Greyhole's daemon without a shell, whose own command line would match" do
       allow(Greyhole).to receive(:running?).and_call_original
       allow(Open3).to receive(:capture3).with('pgrep', '-f', 'greyhole --daemon')

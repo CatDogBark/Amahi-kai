@@ -114,8 +114,10 @@ class Greyhole
       service('services.restart')
     end
 
+    # The pool's drives, with their space and how Greyhole stands with each (drive_state).
     def pool_drives
       return dummy_pool_drives unless production?
+      records = drive_records
       DiskPoolPartition.all.map do |part|
         usage = part.usage
         {
@@ -123,9 +125,49 @@ class Greyhole
           minimum_free: part.minimum_free,
           total: usage[:total],
           free: usage[:free],
-          used: usage[:used]
+          used: usage[:used],
+          state: drive_state(part.path, records)
         }
       end
+    end
+
+    # How Greyhole stands with the drive at a pool folder: :ok; :not_mounted (nothing is
+    # mounted there, so Greyhole can't use it); :changed (a different filesystem than the one
+    # Greyhole recorded there: the drive was swapped or formatted, and Greyhole won't use it
+    # until it's told to, with accept_drive!); or :new (no record yet: Greyhole records this
+    # one when it next starts).
+    def drive_state(path, records = drive_records)
+      uuid = mounted_uuid(path)
+      return :not_mounted unless uuid
+      return :new unless records.key?(path)
+      records[path] == uuid ? :ok : :changed
+    end
+
+    # Greyhole's own record of the filesystem it uses at each pool folder, { path => UUID }
+    # (blkid's): its sp_drives_definitions setting, a PHP-serialized array in its database,
+    # which the app's database user may read. {} when it can't be read.
+    def drive_records
+      return {} unless production?
+      value = ActiveRecord::Base.connection.select_value(
+        "SELECT value FROM greyhole.settings WHERE name = 'sp_drives_definitions'"
+      )
+      parse_drive_records(value.to_s)
+    rescue ActiveRecord::ActiveRecordError
+      {}
+    end
+
+    # a:2:{s:14:"/mnt/storage-1";s:36:"<uuid>";...}: the paths, and their UUIDs (nil for a
+    # drive recorded as gone, b:0).
+    def parse_drive_records(text)
+      text.scan(/s:\d+:"([^"]*)";(?:s:\d+:"([^"]*)"|b:0|i:\d+);/).to_h
+    end
+
+    # Tells Greyhole the drive mounted at +path+ (one of its pool folders) is the one to use
+    # there, through the root helper (greyhole --replaced). It restarts Greyhole.
+    def accept_drive!(path)
+      return true unless production?
+      privileged('greyhole.replace_drive', path: path.to_s)
+      true
     end
 
     def queue_status
@@ -198,6 +240,14 @@ class Greyhole
       defined?(Rails) && Rails.env.production?
     end
 
+    # The UUID of the filesystem mounted at +path+, or nil if nothing is.
+    def mounted_uuid(path)
+      out, _err, status = Open3.capture3('findmnt', '-n', '-o', 'UUID', '--mountpoint', path)
+      status.success? ? out.strip.presence : nil
+    rescue SystemCallError
+      nil
+    end
+
     def dummy_status
       {
         installed: false,
@@ -214,7 +264,8 @@ class Greyhole
           minimum_free: part.minimum_free,
           total: 500_000_000_000,
           free: 250_000_000_000,
-          used: 250_000_000_000
+          used: 250_000_000_000,
+          state: :ok
         }
       end
     end

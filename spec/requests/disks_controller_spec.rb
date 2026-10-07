@@ -106,6 +106,31 @@ describe "Disks Controller", type: :request do
         expect(page.at_css('#uninstall-greyhole-btn').parent.at_css('form button')['disabled']).to be_nil
       end
 
+      it "flags a drive Greyhole won't use, offers Use this drive, and passes it to Greyhole" do
+        allow(Greyhole).to receive(:removal_blocker).and_return('Take its drives out of the storage pool first.')
+        drive = ->(path, state) { { path: path, minimum_free: 10, total: 20 * 1024**3, free: 19 * 1024**3, used: 1024**3, state: state } }
+        allow(Greyhole).to receive(:pool_drives).and_return([drive.call('/mnt/storage-1', :changed), drive.call('/mnt/storage-2', :not_mounted),
+                                                             drive.call('/mnt/storage-3', :ok)])
+        get "/disks/storage_pool"
+        page = Nokogiri::HTML(response.body)
+        changed = page.at_css('#pool-drive-mnt-storage-1')
+        expect(changed.text).to include("Greyhole isn't using this drive", 'swapped or formatted')
+        use = changed.css('form').find { |f| f.at_css('button').text == 'Use this drive' }
+        expect(use['action']).to eq(disks_accept_pool_drive_path)
+        expect(use.at_css('button')['data-confirm']).to include('Use the drive now mounted at /mnt/storage-1')
+        expect(page.at_css('#pool-drive-mnt-storage-2').text).to include('Nothing is mounted here')
+        expect(page.at_css('#pool-drive-mnt-storage-3').text).not_to include('Use this drive')
+
+        allow(Greyhole).to receive(:accept_drive!).and_return(true)
+        post "/disks/accept_pool_drive", params: { path: '/mnt/storage-1' }
+        expect(response).to redirect_to(disks_storage_pool_path)
+        expect(Greyhole).to have_received(:accept_drive!).with('/mnt/storage-1')
+        expect(flash[:notice]).to eq('Greyhole uses the drive at /mnt/storage-1 now.')
+        allow(Greyhole).to receive(:accept_drive!).and_raise(Greyhole::GreyholeError, 'nothing is mounted at /mnt/storage-1')
+        post "/disks/accept_pool_drive", params: { path: '/mnt/storage-1' }
+        expect(flash[:error]).to include("didn't take the drive at /mnt/storage-1: nothing is mounted")
+      end
+
       it 'says what keeps it from being uninstalled' do
         allow(Greyhole).to receive(:removal_blocker).and_return('Take its drives out of the storage pool first.')
         get "/disks/storage_pool"

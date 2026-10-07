@@ -124,6 +124,18 @@ class DisksController < ApplicationController
     redirect_to disks_storage_pool_path
   end
 
+  # Tells Greyhole to use the drive now mounted at one of its pool folders (swapped or
+  # formatted, so Greyhole refused it).
+  def accept_pool_drive
+    path = params[:path].to_s
+    Greyhole.accept_drive!(path)
+    flash[:notice] = "Greyhole uses the drive at #{path} now."
+    redirect_to disks_storage_pool_path
+  rescue Greyhole::GreyholeError => e
+    flash[:error] = "Greyhole didn't take the drive at #{path}: #{e.message}"
+    redirect_to disks_storage_pool_path
+  end
+
   def install_greyhole
     begin
       Greyhole.install!
