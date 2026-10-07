@@ -43,10 +43,12 @@ against a pinned fingerprint), installs Docker and turns the service on.
 If an app's usual port is already used by something else on the server, it gets the next free one
 at install, and keeps it. The Apps page shows each installed app's ports.
 
-Each app is defined by a small file in `config/apps/` in Amahi-kai's code: the image and its
-exact version, its ports, its folders, its settings and a memory limit. Versions are pinned, so
-installing an app always gets the version that was tested; newer versions come with Amahi-kai's
-own updates. More apps are added when they're wanted.
+Each app is defined by a small file, its manifest, in the app catalog,
+[CatDogBark/amahi-kai-apps](https://github.com/CatDogBark/amahi-kai-apps): the image and its exact
+version, its ports, its folders, its settings and a memory limit. Versions are pinned, so
+installing an app always gets the version that was tested. Amahi-kai fetches the catalog with its
+update check, every 6 hours, so new apps and new versions arrive without an Amahi-kai update. To
+make an app of your own, see [Making Apps](making-apps).
 
 ---
 
@@ -63,6 +65,12 @@ own updates. More apps are added when they're wanted.
 
 Once it's installed, **Open** on the Apps page and on the dashboard goes straight to the app, on
 its port.
+
+### Apps on your network
+
+Each installed app is announced on your LAN (mDNS, through Avahi), as "bitTube on <your server>",
+"Jellyfin on <your server>" and so on, so devices and apps can find it without being told the
+server's address: bitTube Desktop finds bitTube that way. **Settings → Servers** lists Avahi.
 
 ## Reaching apps
 
@@ -123,9 +131,10 @@ is kept).
 
 ### Updating an app
 
-Each installed app's row says which version it runs. When an Amahi-kai update brings a newer
-version of an app into the catalog, its row offers **Update to <version>**, next to **What's
-new** (the release notes). Nothing updates on its own.
+Each installed app's row says which version it runs. When the update check (every 6 hours, or
+**Check now**) finds a newer version of an app in the catalog, the dashboard says so, the update
+button in the header gets its dot, and the app's row offers **Update to <version>**, next to
+**What's new** (the release notes). Nothing updates on its own.
 
 **Update**:
 
@@ -139,8 +148,10 @@ version back, with the app's data as it was before the update; anything changed 
 A later update replaces the copy, and it's deleted after 30 days (Settings → Jobs: **App update
 copies**).
 
-New versions reach the catalog by hand: someone runs `script/app-versions`, reads the release
-notes, and makes the change in Amahi-kai's code (see `config/apps/README.md`).
+New versions reach the catalog by hand: someone reads the release notes and changes the app's
+manifest in the catalog (see [Making Apps](making-apps)). An app that needs a newer Amahi-kai than
+yours says "Needs a newer Amahi-kai: run System Update first" instead of offering Install or
+Update.
 
 ### From the command line
 
