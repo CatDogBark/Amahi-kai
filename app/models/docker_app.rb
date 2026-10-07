@@ -37,7 +37,9 @@ class DockerApp < ApplicationRecord
     AppCatalog.find(identifier)&.dig(:logo_url).presence || super
   end
 
-  # The app's page, on its own port of the NAS (docs/plans/apps.md, O3).
+  # The app's page, on its own port of the NAS (docs/plans/apps.md, O3). Every address of an app
+  # is made here (and Amahi-kai's by ApplicationHelper#amahi_url), so HTTPS can change them in
+  # one place later. A spec checks.
   def url(host)
     "http://#{host}:#{host_port}/" if host_port
   end

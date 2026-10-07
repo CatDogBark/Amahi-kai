@@ -110,6 +110,8 @@ All notable changes to Amahi-kai are documented here.
 
 ### 🔧 Architecture & Code Quality
 
+- **Addresses in one place** — Every address of Amahi-kai or one of its apps is made in one place (a spec checks), so HTTPS can be added later as an optional front door without hunting through the code; plain HTTP stays fully working. Remote Access shows the Tailscale address that way too.
+
 - **Dummy mode is gone.** It was a developer switch that made Amahi-kai skip every change to the system, and a setting in `amahi.env` (`AMAHI_DUMMY_MODE`) could turn it on, even on a real NAS, where every button would then silently do nothing. Now there's a fixed rule with no setting: outside production (development and the tests) system commands and the root helper are only recorded; production always runs them. The Dummy Mode row on System Status is gone, and the installer no longer writes the setting (an old line in `amahi.env` is ignored).
 - **No Sass compiler any more.** The stylesheets are plain CSS, and Bootstrap is its official 5.3.8 build (CSS and JavaScript), so System Update no longer compiles LibSass, which is unmaintained, and builds assets faster. Pages look exactly as before (compared screenshot by screenshot). The `sassc`, `sass-rails` and `bootstrap` gems are gone. Theme sources are rebuilt by hand with Dart Sass (`public/themes/README.md`).
 - **System Status shows the deployed commit** in its Amahi-kai row (it showed the word "amahi-kai"). The update window no longer lists every gem and every compiled asset file.

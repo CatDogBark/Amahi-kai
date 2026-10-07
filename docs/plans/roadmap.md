@@ -131,7 +131,18 @@ for Amahi-kai and its apps at once. The options:
   and trust its root certificate.
 
 Then: a reverse proxy in front of the web UI and the apps' ports (one place for the
-certificate), HTTP redirected, and the apps (bitTube Desktop included) told the HTTPS address.
+certificate), and the apps (bitTube Desktop included) told the HTTPS address.
+
+Decided (Troy, 2026-10-06): **not now**, and when it comes, **optional**. Nothing on the NAS needs
+it yet (remote access is already encrypted: the Cloudflare Tunnel and Tailscale), and users mustn't
+need a domain for Amahi-kai to work. So HTTPS will be a toggle that adds a front door, with plain
+HTTP staying fully working underneath (it's also the way in when the internet is down and the
+names don't resolve). Apps don't change; the proxy's config is generated from the installed apps;
+apps that need their own address (Vaultwarden, Gitea) get it from a placeholder. To keep that
+cheap, every address of Amahi-kai or an app is made in one place (`DockerApp#url`, `amahi_url`;
+`spec/lib/addresses_spec.rb`). Do it when an app needs HTTPS (Vaultwarden's web vault) or other
+people's networks call for it. A token for the DNS challenge mustn't be able to change
+amahi-kai.com: a separate zone, or a delegated `_acme-challenge` record.
 
 ## Test on real drives (when the NAS hardware arrives)
 
