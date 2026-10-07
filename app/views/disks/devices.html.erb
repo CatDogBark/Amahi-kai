@@ -84,9 +84,15 @@
                                 params: { device: part[:path] },
                                 method: :post,
                                 class: "btn btn-sm btn-outline-success",
-                                data: { tip: "Mount and create a network share (#{part[:fstype]} — not pooled)" },
-                                data: { disable_with: "Mounting..." } %>
+                                data: { tip: "Mount and create a network share (#{part[:fstype]} — not pooled)", disable_with: "Mounting..." } %>
                         <% end %>
+                        <%= button_to "Format",
+                              disks_format_disk_path,
+                              params: { device: part[:path] },
+                              method: :post,
+                              class: "btn btn-sm btn-outline-danger",
+                              data: { confirm: "Format #{part[:path]}? This erases everything on it: its #{part[:fstype] || 'filesystem'} and every file on it, for good. It gets a new, empty ext4 filesystem across all #{part[:size]}.",
+                                      disable_with: "Formatting..." } %>
                       </div>
                     <% when :mounted %>
                       <% unless ['/', '/boot', '/boot/efi'].include?(part[:mountpoint]) %>

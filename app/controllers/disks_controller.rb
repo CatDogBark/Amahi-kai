@@ -24,7 +24,8 @@ class DisksController < ApplicationController
 
   def devices
     @page_title = t('disks')
-    @devices = DiskManager.devices
+    # The disk the system runs from first, then the others in the kernel's order.
+    @devices = DiskManager.devices.each_with_index.sort_by { |device, i| [device[:os_disk] ? 0 : 1, i] }.map(&:first)
   end
 
   def format_disk
@@ -158,6 +159,7 @@ class DisksController < ApplicationController
     @page_title = t('disks')
     @status = StoragePools.status
     @drives = StoragePools.drives(@status[:pools], Array(@status[:offline]))
+                          .each_with_index.sort_by { |drive, i| [drive[:role] == :os ? 0 : 1, i] }.map(&:first)
     @zfs_removal_blocker = StoragePools.removal_blocker(@status) if @status[:installed]
     names = @status[:pools].map(&:name)
     @new_pool_name = (1..).lazy.map { |n| "pool#{n}" }.find { |name| names.exclude?(name) }
