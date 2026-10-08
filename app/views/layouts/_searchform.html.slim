@@ -1,8 +1,3 @@
-form.d-none.d-md-flex.align-items-center.ms-3 action="/search/files" method="get" id="searchform"
-  .input-group.input-group-sm style="width: 200px;"
-    input.form-control.bg-dark.text-white.border-secondary aria-label="Search files" name="query" placeholder="Search files…" maxlength="45" type="search" style="font-size: 13px;"
-    button.btn.btn-outline-secondary type="submit"
-      = lucide_icon('search', size: 14)
-
-button.navbar-toggler.navbar-dark data-bs-target="#amahi-nav" data-bs-toggle="collapse"
-  span.navbar-toggler-icon
+form.kai-search.d-none.d-md-flex action="/search/files" method="get" id="searchform" role="search"
+  = lucide_icon('search', size: 15)
+  input aria-label="Search files" name="query" placeholder="Search files" maxlength="45" type="search"

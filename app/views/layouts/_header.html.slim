@@ -1,59 +1,55 @@
-nav.navbar.navbar-expand-md.bg-dark.navbar-inverse
-  .container.position-relative
-    a.nav-item.nav-link.text-white.nav_hover href="/"  
-     = t('home')
+/! The header: Amahi-kai, its sections (the current one marked), search, and the tools. On a
+/! phone the sections and Help fold into the menu below.
+- section = page_section
+nav.navbar.navbar-expand-md.kai-header
+  .container.kai-header-inner
+    a.kai-brand href="/"
+      = lucide_icon('waves', size: 22)
+      span Amahi-kai
+
+    - if current_user
+      .kai-mainnav.d-none.d-md-flex
+        a.kai-navlink href="/" aria-current=("page" if section == :dashboard) = t('dashboard')
+        - if current_user.can_browse?
+          a.kai-navlink#files-link href=file_browser_index_path aria-current=("page" if section == :files) Files
+        - if current_user_is_admin?
+          a.kai-navlink href=apps_index_path aria-current=("page" if section == :apps) = t('apps')
+          a.kai-navlink href=users_path aria-current=("page" if section == :setup) = t('setup')
 
     - if current_user&.can_browse?
       = render 'layouts/searchform'
-      /! The shares this person can open, in the file browser (on a phone, in the menu below)
-      a.nav-item.nav-link.text-white.nav_hover.d-none.d-md-flex.align-items-center.ms-2#shares-link href=file_browser_index_path
-        span.me-1 = lucide_icon('folder', size: 15)
-        = t('shares')
 
-    /! Theme toggle — absolutely centered in header
-    .theme-switcher
-      .theme-track
-        .theme-indicator
-        button.theme-opt.theme-opt-light onclick="setTheme('light', event)" aria-label="Light" data-tip="Light" data-tip-placement="bottom"
-          = lucide_icon('sun', size: 16)
-        button.theme-opt.theme-opt-dark onclick="setTheme('dark', event)" aria-label="Dark" data-tip="Dark" data-tip-placement="bottom"
-          = lucide_icon('moon', size: 16)
-        button.theme-opt.theme-opt-system onclick="setTheme('system', event)" aria-label="System" data-tip="Follow the system" data-tip-placement="bottom"
-          = lucide_icon('monitor', size: 16)
-        span style="width: 1px; height: 20px; background: rgba(255,255,255,0.15); margin: 0 2px;"
-        button.theme-opt.ocean-toggle type="button" data-ocean-panel="" data-tip="Water background" data-tip-placement="bottom" aria-label="Water background" aria-expanded="false"
-          = lucide_icon('waves', size: 16)
-
-    #amahi-nav.collapse.navbar-collapse.justify-content-end    
+    .kai-header-tools
       - if current_user_is_admin?
-        .navbar-nav
-          a.nav-item.nav-link.text-white.text-center.nav_hover.d-md-none href=file_browser_index_path
-            = t('shares')
-          a.nav-item.nav-link.text-white.text-center.nav_hover href="/"
-            = t('dashboard')
-          a.nav-item.nav-link.text-white.text-center.nav_hover href=users_path
-            = t('setup')
-          a.nav-item.nav-link.text-white.text-center.nav_hover href=apps_index_path
-            = t('apps')
-          a.nav-item.nav-link.text-white.text-center.nav_hover href="https://amahi-kai.com/wiki/" target='_blank'  
-            = t('help')
-          /! Opens the System Update dialog (layouts/_system_update); the dot says an update is
-          /! waiting, for Amahi-kai or an app.
-          - waiting = []
-          - waiting << pluralize(update_status.behind, 'change') if update_status.available?
-          - waiting << pluralize(app_updates.size, 'app update') if app_updates.any?
-          - update_label = waiting.any? ? "Update available: #{waiting.join(' and ')}" : 'System Update'
-          a.nav-item.nav-link.text-white.text-center.nav_hover#update-btn href="#" data-tip=update_label data-tip-placement="bottom" aria-label=update_label data-whats-new=""
-            = lucide_icon('refresh-cw', size: 16)
-            - if waiting.any?
-              span.update-dot
-          a.nav-item.nav-link.text-white.text-center.nav_hover#advanced-toggle href="#" data-tip="#{t('advanced_settings')}" data-tip-placement="bottom" aria-label="#{t('advanced_settings')}" style="opacity: #{@advanced ? '1' : '0.5'}" onclick="fetch('#{toggle_advanced_path}', {method:'POST', headers:{'X-CSRF-Token':document.querySelector('meta[name=csrf-token]').content}}).then(function(){location.reload()});return false;"
-            = lucide_icon('wrench', size: 16)
-      - else
-        .navbar-nav
-          - if current_user&.can_browse?
-            a.nav-item.nav-link.text-white.text-center.nav_hover.d-md-none href=file_browser_index_path
-              = t('shares')
-          a.nav-item.nav-link.text-white.text-center.nav_hover href="https://amahi-kai.com/wiki/" target='_blank'  
-            = t('help')
+        /! Opens the System Update dialog (layouts/_system_update); the dot says an update is
+        /! waiting, for Amahi-kai or an app.
+        - waiting = []
+        - waiting << pluralize(update_status.behind, 'change') if update_status.available?
+        - waiting << pluralize(app_updates.size, 'app update') if app_updates.any?
+        - update_label = waiting.any? ? "Update available: #{waiting.join(' and ')}" : 'System Update'
+        a.kai-iconbtn#update-btn href="#" data-tip=update_label data-tip-placement="bottom" aria-label=update_label data-whats-new=""
+          = lucide_icon('refresh-cw', size: 17)
+          - if waiting.any?
+            span.update-dot
+      /! The water background's settings (ocean.js opens its panel)
+      button.kai-iconbtn.ocean-toggle type="button" data-ocean-panel="" data-tip="Water background" data-tip-placement="bottom" aria-label="Water background" aria-expanded="false"
+        = lucide_icon('waves', size: 17)
+      a.kai-iconbtn.d-none.d-md-inline-flex href="https://amahi-kai.com/wiki/" target="_blank" rel="noopener" data-tip=t('help') data-tip-placement="bottom" aria-label=t('help')
+        = lucide_icon('help-circle', size: 17)
+      - if current_user_is_admin?
+        a.kai-iconbtn#advanced-toggle href="#" class=("active" if @advanced) data-tip=t('advanced_settings') data-tip-placement="bottom" aria-label=t('advanced_settings') aria-pressed=(@advanced ? 'true' : 'false') onclick="fetch('#{toggle_advanced_path}', {method:'POST', headers:{'X-CSRF-Token':document.querySelector('meta[name=csrf-token]').content}}).then(function(){location.reload()});return false;"
+          = lucide_icon('wrench', size: 17)
+      - if current_user
+        button.navbar-toggler.kai-iconbtn.d-md-none type="button" data-bs-target="#amahi-nav" data-bs-toggle="collapse" aria-controls="amahi-nav" aria-expanded="false" aria-label="Menu"
+          span.navbar-toggler-icon
 
+    - if current_user
+      #amahi-nav.collapse.kai-mobile-collapse
+        .kai-mobilenav
+          a.kai-navlink href="/" aria-current=("page" if section == :dashboard) = t('dashboard')
+          - if current_user.can_browse?
+            a.kai-navlink href=file_browser_index_path aria-current=("page" if section == :files) Files
+          - if current_user_is_admin?
+            a.kai-navlink href=apps_index_path aria-current=("page" if section == :apps) = t('apps')
+            a.kai-navlink href=users_path aria-current=("page" if section == :setup) = t('setup')
+          a.kai-navlink href="https://amahi-kai.com/wiki/" target="_blank" rel="noopener" = t('help')

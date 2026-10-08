@@ -25,7 +25,7 @@ RSpec.describe 'Trash', type: :request do
     it "lists the trash's files, with Restore for the ones whose share is pooled, Delete and Empty trash" do
       get '/files/trash'
       page = Nokogiri::HTML(response.body)
-      expect(page.at_css('.fb-breadcrumbs').text.squish).to eq('Shares / Trash')
+      expect(page.at_css('.fb-breadcrumbs').text.squish).to eq('Shares Trash')
       expect(page.at_css('#trash-summary-bar').text.squish).to include('2 files', '4 KB')
       rows = page.css('tr.trash-item')
       expect(rows.first.text.squish).to include('Photos/2026/beach.jpg', '(2 copies)', '2 KB')
@@ -83,9 +83,9 @@ RSpec.describe 'Trash', type: :request do
     it "is below the shares in the file browser, apart from them, and on a pooled share's Features" do
       get '/files'
       page = Nokogiri::HTML(response.body)
-      expect(page.at_css('#trash-entry a')['href']).to eq('/files/trash')
+      expect(page.at_css('a#trash-entry')['href']).to eq('/files/trash')
       expect(page.at_css('#trash-entry-summary').text.squish).to eq('2 files · 4 KB')
-      expect(page.css('#share-list a').map(&:text).map(&:strip)).not_to include('Trash')
+      expect(page.css('#share-list .fb-card-name').map(&:text)).not_to include('Trash')
 
       get '/shares'
       share = Share.find_by(name: 'Photos')

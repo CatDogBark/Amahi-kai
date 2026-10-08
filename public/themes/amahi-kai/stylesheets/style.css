@@ -1394,3 +1394,369 @@ nav.preftab li ul {
   vertical-align: middle;
   flex-shrink: 0;
 }
+
+/* ═══ The refresh (October 2026): dark for everyone, Space Grotesk, mint on the water ═══
+   Every page is dark (the layouts set data-theme="dark"); these rules come last, so they win
+   over the light and dark rules above. Space Grotesk ships with Amahi-kai (public/fonts,
+   SIL Open Font License), so nothing loads from elsewhere. */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 300 700;
+  src: url('/fonts/space-grotesk/space-grotesk-latin-ext-wght-normal.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 300 700;
+  src: url('/fonts/space-grotesk/space-grotesk-latin-wght-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root, :root[data-theme="dark"] {
+  color-scheme: dark;
+  --kai-font: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* The accent, and the near-black glass the water shows through */
+  --kai-mint: #4fe0b0;
+  --kai-mint-text: #86f0cb;
+  --kai-mint-soft: rgba(79, 224, 176, 0.14);
+  --kai-mint-ring: rgba(79, 224, 176, 0.55);
+  --kai-on-mint: #032016;
+  --kai-glass: rgba(8, 13, 12, 0.72);
+  --kai-glass-strong: rgba(4, 8, 8, 0.82);
+  --kai-line: rgba(255, 255, 255, 0.09);
+  --kai-title: #f5f7f8;
+  --kai-link: #86f0cb;
+
+  --kai-primary: #4fe0b0;
+  --kai-secondary: #86f0cb;
+  --kai-accent: #ffc56e;
+  --kai-dark: rgba(4, 8, 8, 0.82);
+  --kai-darker: #020506;
+  --kai-light: rgba(255, 255, 255, 0.04);
+  --kai-text: #dfe5e8;
+  --kai-muted: #9eabb2;
+  --kai-border: rgba(255, 255, 255, 0.09);
+  --kai-card-bg: rgba(8, 13, 12, 0.72);
+  --kai-card-bg-opaque: rgba(8, 13, 12, 0.72);
+  --kai-shadow: rgba(0, 0, 0, 0.35);
+  --kai-input-bg: rgba(255, 255, 255, 0.05);
+  --kai-input-text: #dfe5e8;
+  --kai-input-border: rgba(255, 255, 255, 0.14);
+  --kai-placeholder: #8a979e;
+  --kai-hover-bg: rgba(255, 255, 255, 0.05);
+  --kai-tab-data-bg: rgba(8, 13, 12, 0.6);
+  --kai-subtab-bg: transparent;
+  --kai-subtab-border: rgba(255, 255, 255, 0.09);
+  --kai-tab-link-bg: transparent;
+  --kai-tab-link-text: #9eabb2;
+  --kai-tab-link-border: transparent;
+  --kai-tab-link-hover-bg: rgba(255, 255, 255, 0.07);
+  --kai-tab-link-hover-text: #f5f7f8;
+  --kai-modal-bg: #0b1211;
+  --kai-modal-border: rgba(255, 255, 255, 0.12);
+  --kai-modal-text: #dfe5e8;
+  --kai-list-group-bg: rgba(8, 13, 12, 0.72);
+  --kai-list-group-border: rgba(255, 255, 255, 0.09);
+  --kai-list-group-text: #dfe5e8;
+  --kai-bg-light: rgba(255, 255, 255, 0.04);
+  --kai-bg-white: rgba(8, 13, 12, 0.72);
+  --kai-table-hover-bg: rgba(255, 255, 255, 0.04);
+  --kai-nav-tab-border: rgba(255, 255, 255, 0.09);
+  --kai-nav-tab-text: #9eabb2;
+  --kai-hr-border: rgba(255, 255, 255, 0.12);
+  --kai-btn-outline-text: #c4cdd2;
+  --kai-btn-outline-border: rgba(255, 255, 255, 0.16);
+  --kai-btn-outline-hover-bg: rgba(255, 255, 255, 0.08);
+  --kai-btn-outline-hover-text: #f5f7f8;
+  --kai-alert-info-bg: rgba(79, 224, 176, 0.08);
+  --kai-alert-info-border: #4fe0b0;
+  --kai-alert-info-text: #86f0cb;
+  --kai-code-bg: rgba(0, 0, 0, 0.35);
+  --kai-pre-bg: rgba(0, 0, 0, 0.35);
+  --kai-pre-color: #dfe5e8;
+  --bs-body-font-family: var(--kai-font);
+  --bs-body-color: #dfe5e8;
+  --bs-border-color: rgba(255, 255, 255, 0.12);
+}
+
+body {
+  font-family: var(--kai-font);
+  font-size: 14px;
+}
+h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6 {
+  font-family: var(--kai-font);
+  letter-spacing: -0.01em;
+}
+a { color: var(--kai-mint-text); }
+a:hover { color: #b5f7df; }
+
+/* The header */
+.navbar.kai-header {
+  background: var(--kai-glass-strong) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--kai-line);
+  padding: 10px 0;
+}
+.kai-header-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.kai-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-right: 8px;
+  color: var(--kai-title);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+.kai-brand svg { color: var(--kai-mint); }
+.kai-brand:hover { color: #fff; text-decoration: none; }
+.kai-mainnav { gap: 4px; }
+.kai-navlink {
+  padding: 7px 14px;
+  border-radius: 999px;
+  color: var(--kai-muted);
+  font-weight: 600;
+  font-size: 14px;
+}
+.kai-navlink:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--kai-title);
+  text-decoration: none;
+}
+.kai-navlink[aria-current="page"] {
+  background: var(--kai-mint-soft);
+  color: var(--kai-mint-text);
+}
+.kai-search {
+  flex: 1 1 240px;
+  max-width: 420px;
+  margin: 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 0 0 1px var(--kai-line);
+  color: var(--kai-muted);
+}
+.kai-search:focus-within { box-shadow: inset 0 0 0 1px var(--kai-mint-ring); }
+.kai-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--kai-text);
+  font: inherit;
+}
+.kai-search input::placeholder { color: var(--kai-placeholder); }
+.kai-header-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+.kai-iconbtn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--kai-muted);
+}
+.kai-iconbtn:hover, .kai-iconbtn[aria-expanded="true"] {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--kai-title);
+  text-decoration: none;
+}
+.kai-iconbtn.active, .kai-iconbtn.ocean-toggle.active { color: var(--kai-mint-text); }
+.kai-header .navbar-toggler-icon {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28223, 229, 232, 0.85%29' stroke-linecap='round' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+  width: 20px;
+  height: 20px;
+}
+.kai-header .navbar-toggler:focus { box-shadow: 0 0 0 2px var(--kai-mint-ring); }
+#update-btn .update-dot {
+  top: 8px;
+  right: 8px;
+  box-shadow: 0 0 0 2px #050a0a;
+}
+.kai-mobile-collapse { flex-basis: 100%; }
+@media (min-width: 768px) {
+  .kai-mobile-collapse { display: none !important; }
+}
+.kai-mobilenav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 0 4px;
+}
+
+/* The page's title, with its section above it */
+.kai-pagehead { padding-top: 36px; padding-bottom: 6px; }
+.kai-eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--kai-mint-text);
+}
+.kai-page-title {
+  margin: 4px 0 0;
+  font-size: 44px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  color: var(--kai-title);
+}
+@media (max-width: 576px) {
+  .kai-page-title { font-size: 34px; }
+}
+
+/* Setup's tabs: a bar of pills, the current one mint; its sub-tabs underlined */
+ul.setup-main-tab {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 10px 0 18px;
+  padding: 5px;
+  border: 0 !important;
+  border-radius: 16px;
+  background: var(--kai-glass);
+  box-shadow: inset 0 0 0 1px var(--kai-line);
+}
+ul.setup-main-tab .nav-item { margin: 0; }
+ul.setup-main-tab .nav-link.tab-link-style {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 !important;
+  padding: 9px 15px !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  background: transparent !important;
+  color: var(--kai-muted) !important;
+  font-weight: 600;
+  font-size: 14px;
+}
+ul.setup-main-tab .nav-link.tab-link-style:hover {
+  background: rgba(255, 255, 255, 0.07) !important;
+  color: var(--kai-title) !important;
+}
+ul.setup-main-tab .nav-link.active-tab-link-style,
+ul.setup-main-tab .nav-link.active-tab-link-style:hover {
+  background: var(--kai-mint) !important;
+  color: var(--kai-on-mint) !important;
+  font-weight: 700;
+}
+.setup-subtab-container {
+  margin-bottom: 16px;
+  background: transparent !important;
+  border-bottom: 1px solid var(--kai-line) !important;
+}
+ul.setup-subtab {
+  gap: 22px;
+  border: 0 !important;
+}
+.setup-subtab .active-subtab-link, .setup-subtab .subtab-link {
+  padding: 10px 0 9px !important;
+  border-bottom: 3px solid transparent;
+  font-weight: 600;
+  font-size: 14px;
+}
+.setup-subtab .active-subtab-link {
+  color: var(--kai-title) !important;
+  border-bottom-color: var(--kai-mint) !important;
+  font-weight: 700;
+}
+.setup-subtab .subtab-link { color: var(--kai-muted) !important; }
+.setup-subtab .subtab-link:hover { color: var(--kai-title) !important; }
+
+/* Panels, tables and cards: near-black glass */
+.settings-table, .card {
+  border-radius: 18px;
+  background: var(--kai-glass);
+  border: 1px solid var(--kai-line);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+.card-header, .card-header.bg-dark {
+  background: rgba(0, 0, 0, 0.25) !important;
+  border-bottom: 1px solid var(--kai-line);
+}
+.card-header:first-child { border-radius: 17px 17px 0 0; }
+table.settings thead tr { background: transparent; color: var(--kai-muted); }
+table.settings thead th {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+table.settings tbody tr { border-bottom-color: var(--kai-line); }
+
+/* Buttons: mint with dark text (white on mint is too faint) */
+.btn-info, .btn-primary, .btn-create, .btnn.btn-create {
+  background-color: var(--kai-mint) !important;
+  border-color: var(--kai-mint) !important;
+  color: var(--kai-on-mint) !important;
+  font-weight: 700;
+  border-radius: 10px;
+}
+.btn-info:hover, .btn-primary:hover, .btn-create:hover, .btnn.btn-create:hover {
+  background-color: var(--kai-mint-text) !important;
+  border-color: var(--kai-mint-text) !important;
+  color: var(--kai-on-mint) !important;
+}
+.btn-outline-primary, .btn-outline-info {
+  color: var(--kai-mint-text);
+  border-color: var(--kai-mint-ring);
+}
+.btn-outline-primary:hover, .btn-outline-info:hover {
+  background-color: var(--kai-mint-soft);
+  border-color: var(--kai-mint);
+  color: var(--kai-mint-text);
+}
+.btn { border-radius: 10px; }
+.badge.bg-info, .badge.bg-primary {
+  background-color: var(--kai-mint) !important;
+  color: var(--kai-on-mint) !important;
+}
+.form-control, .form-select {
+  background-color: var(--kai-input-bg);
+  border-color: var(--kai-input-border);
+  color: var(--kai-input-text);
+}
+.form-control:focus, .form-select:focus {
+  background-color: rgba(255, 255, 255, 0.07);
+  border-color: var(--kai-mint);
+  box-shadow: 0 0 0 3px var(--kai-mint-soft);
+  color: var(--kai-input-text);
+}
+.form-check-input:checked {
+  background-color: var(--kai-mint);
+  border-color: var(--kai-mint);
+}
+#footer, .footer-area {
+  background: var(--kai-glass-strong);
+  border-top: 1px solid var(--kai-line);
+}
+.progress-bar.bg-info { background-color: var(--kai-mint) !important; }
+.form-check-input:checked[type="checkbox"] {
+  --bs-form-check-bg-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3e%3cpath fill='none' stroke='%23032016' stroke-linecap='round' stroke-linejoin='round' stroke-width='3' d='m6 10 3 3 6-6'/%3e%3c/svg%3e");
+}

@@ -29,11 +29,20 @@ module FileBrowserService
     '.pdf' => 'application/pdf',
     '.doc' => 'application/msword', '.docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     '.xls' => 'application/vnd.ms-excel', '.xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    '.odt' => 'application/vnd.oasis.opendocument.text', '.ods' => 'application/vnd.oasis.opendocument.spreadsheet',
+    '.odp' => 'application/vnd.oasis.opendocument.presentation',
     # Archives
     '.zip' => 'application/zip', '.tar' => 'application/x-tar',
     '.gz' => 'application/gzip', '.7z' => 'application/x-7z-compressed',
     '.rar' => 'application/x-rar-compressed',
   }.freeze
+
+  # What the file browser shows an entry as (kind): its icon, its name, and how it previews.
+  KIND_ICONS = { folder: 'folder', image: 'image', video: 'video', audio: 'music', pdf: 'file-text', text: 'file-text',
+                 document: 'file-text', archive: 'archive', other: 'file' }.freeze
+  KIND_NAMES = { folder: 'Folder', image: 'Picture', video: 'Video', audio: 'Audio', pdf: 'PDF', text: 'Text',
+                 document: 'Document', archive: 'Archive', other: 'File' }.freeze
+  ARCHIVES = %w[application/zip application/x-tar application/gzip application/x-7z-compressed application/x-rar-compressed].freeze
 
   FILE_ICONS = {
     # Folders
@@ -74,7 +83,8 @@ module FileBrowserService
           size: stat.directory? ? nil : stat.size,
           modified: stat.mtime,
           mime: stat.directory? ? nil : detect_mime_type(full),
-          icon: file_icon(name, stat.directory?)
+          icon: file_icon(name, stat.directory?),
+          kind: kind(stat.directory? ? nil : detect_mime_type(full), stat.directory?)
         }
       end.compact
     end
@@ -108,6 +118,20 @@ module FileBrowserService
         end
       rescue SystemCallError
         next
+      end
+    end
+
+    def kind(mime, directory)
+      return :folder if directory
+      case mime.to_s
+      when %r{\Aimage/} then :image
+      when %r{\Avideo/} then :video
+      when %r{\Aaudio/} then :audio
+      when 'application/pdf' then :pdf
+      when %r{\Atext/}, 'application/json', 'application/xml' then :text
+      when *ARCHIVES then :archive
+      when /msword|officedocument|opendocument|ms-excel/ then :document
+      else :other
       end
     end
 

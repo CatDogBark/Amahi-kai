@@ -1,61 +1,49 @@
-<%# The header's Shares link: the shares this person can open, each browsed in the file browser %>
-<div class="file-browser">
-  <div class="fb-header">
-    <div class="fb-breadcrumbs">
-      <span class="fb-crumb-current"><%= t('shares') %></span>
+<%# Files → Shares: the shares this person can open, as cards, and (admins) the Trash below them %>
+<div class="file-browser fb-root">
+  <% if @shares.empty? %>
+    <div class="fb-empty">
+      <div class="fb-empty-icon"><%= lucide_icon('folder', size: 44) %></div>
+      <p>There are no shares you can open.</p>
+      <% if current_user_is_admin? %>
+        <p class="text-muted">Make one on Setup → Shares.</p>
+      <% else %>
+        <p class="text-muted">An administrator can give you access to one.</p>
+      <% end %>
     </div>
-  </div>
-
-  <div class="fb-listing">
-    <% if @shares.empty? %>
-      <div class="fb-empty">
-        <div class="fb-empty-icon">📂</div>
-        <p>There are no shares you can open.</p>
-        <% if current_user_is_admin? %>
-          <p class="text-muted">Make one on Setup → Shares.</p>
-        <% else %>
-          <p class="text-muted">An administrator can give you access to one.</p>
-        <% end %>
-      </div>
-    <% else %>
-      <table class="table fb-table" id="share-list">
-        <thead>
-          <tr>
-            <th class="fb-icon-col"></th>
-            <th class="fb-name-col">Share</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <% @shares.each do |share| %>
-            <tr class="fb-row">
-              <td class="fb-icon-col">📁</td>
-              <td class="fb-name-col">
-                <a href="<%= file_browser_path(share) %>" class="fb-link fb-folder-link"><%= share.name %></a>
-              </td>
-              <td class="small text-muted text-end">
-                <% if share.rdonly %>Read only<% end %>
-              </td>
-            </tr>
-          <% end %>
-        </tbody>
-      </table>
-    <% end %>
-  </div>
-
-  <% if @trash %>
-    <%# Kept apart from the shares: every share's deleted files %>
-    <div class="fb-trash-entry" id="trash-entry">
-      <a href="<%= trash_path %>" class="fb-link fb-trash-link">
-        <span class="fb-trash-icon">🗑</span>
-        <span class="fw-semibold"><%= t('trash') %></span>
-        <span class="small text-muted ms-2" id="trash-entry-summary">
-          <%= @trash[:count].zero? ? 'empty' : "#{pluralize(@trash[:count], 'file')} · #{number_to_human_size(@trash[:space])}" %>
-        </span>
-      </a>
-      <div class="small text-muted">Files deleted from the shares, kept for a while in case they're wanted back</div>
+  <% else %>
+    <div class="fb-cards" id="share-list">
+      <% @shares.each do |share| %>
+        <% copies = share.disk_pool_copies.to_i %>
+        <a class="fb-card" href="<%= file_browser_path(share) %>">
+          <span class="fb-card-top">
+            <span class="fb-card-icon<%= ' fb-accent' if copies.positive? %>"><%= lucide_icon('folder', size: 24) %></span>
+            <% if copies.positive? %>
+              <span class="fb-chip fb-chip-accent">Pool · <%= pluralize(copies, 'copy') %></span>
+            <% elsif share.rdonly %>
+              <span class="fb-chip">Read only</span>
+            <% end %>
+          </span>
+          <span class="fb-card-name"><%= share.name %></span>
+          <span class="fb-card-meta">
+            <%= @counts[share.id] ? pluralize(@counts[share.id], 'item') : '' %>
+          </span>
+          <span class="fb-card-address"><%= path2location(share.name) %></span>
+        </a>
+      <% end %>
     </div>
   <% end %>
 
-  <div class="fb-statusbar"><%= pluralize(@shares.size, 'share') %></div>
+  <% if @trash %>
+    <%# Set apart from the shares: every share's deleted files %>
+    <a class="fb-trash-strip" href="<%= trash_path %>" id="trash-entry">
+      <span class="fb-card-icon"><%= lucide_icon('trash-2', size: 22) %></span>
+      <span class="fb-trash-text">
+        <span class="fb-trash-title"><%= t('trash') %>
+          <span class="fb-trash-count" id="trash-entry-summary"><%= @trash[:count].zero? ? 'empty' : "#{pluralize(@trash[:count], 'file')} · #{number_to_human_size(@trash[:space])}" %></span>
+        </span>
+        <span class="fb-trash-about">Deleted files wait here for <%= Trash.days.zero? ? 'as long as you like' : pluralize(Trash.days, 'day') %>, in case you want them back.</span>
+      </span>
+      <span class="fb-trash-open">Open Trash</span>
+    </a>
+  <% end %>
 </div>

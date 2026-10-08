@@ -12,7 +12,6 @@
 //= require controllers/file_browser_controller
 
 //= require stream_token
-//= require theme
 //= require ocean
 //= require toast
 //= require system_update

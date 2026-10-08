@@ -52,6 +52,23 @@ module ApplicationHelper
     @page_title
   end
 
+  # The header's section for this page, whose link is marked current, and the line above the
+  # page title: the dashboard, Files (the file browser, the Trash and search), Apps, or Setup.
+  def page_section
+    case controller_name
+    when 'front' then :dashboard
+    when 'file_browser', 'trash', 'search' then :files
+    when 'apps' then :apps
+    else :setup
+    end
+  end
+
+  # A folder in a share's file browser: the share's top for an empty path. (The share's own
+  # route takes no path, and quietly drops one given to it.)
+  def browse_path(share, path = nil)
+    path.present? ? file_browser_path_path(share, path: path) : file_browser_path(share)
+  end
+
   def full_page_title
     page_title ? "Amahi-kai › #{page_title}" : "Amahi-kai Home Server"
   end

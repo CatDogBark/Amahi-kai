@@ -114,6 +114,21 @@ touches the same code.
   directory).
 - Not yet tried in the UI because no shares or apps exist: file upload, raw preview, the app proxy.
 
+## Later: the phone layout
+
+Troy will use Amahi-kai on his phone (2026-10-08). The October refresh (dark, mint, Space Grotesk)
+stacks at phone width: the header's sections fold into a menu, cards and panels go one column,
+and the file browser's list drops its dates. It hasn't been designed for a phone yet. To do:
+
+- Mock up the phone screens first (the refresh's mockup is the [UI refresh canvas](https://claude.ai/artifact/1HcudH31cvF9dUzqrGGXQk)):
+  the header and its menu, Setup's tab bar (it wraps), the file browser's folder view (the
+  selected file's panel likely becomes a sheet from the bottom) and the share card.
+- Touch: rows and buttons at least 44 px, the row's download button always shown (no hover).
+- Check the water background's cost on a phone (it has a battery saver setting).
+
+Also later: the light theme's styles in the theme are no longer used (every page is dark since
+the refresh) and can go, with the theme's out-of-date `src/` Sass.
+
 ## Later: HTTPS on the LAN
 
 Troy (2026-10-06): the web UI and every app's page are plain HTTP on the LAN, so anyone on the

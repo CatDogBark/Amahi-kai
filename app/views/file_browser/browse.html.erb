@@ -1,26 +1,30 @@
 <%# The web file browser only views and downloads. Files are added, renamed and deleted over
-    the SMB share, so Samba, and Greyhole on pooled shares, sees every change. %>
+    the SMB share, so Samba, and Greyhole on pooled shares, sees every change. A whole row is
+    the link: a folder opens, a file shows in the panel beside the list (file_browser_controller.js). %>
+<% folder_path = ->(name) { [@relative_path, name].reject(&:blank?).join('/') } %>
 <div class="file-browser" data-controller="file-browser">
 
-  <%# ── Header ── %>
-  <div class="fb-header">
-    <div class="fb-breadcrumbs">
+  <div class="fb-toolbar">
+    <nav class="fb-breadcrumbs" aria-label="Folder">
       <a href="<%= file_browser_index_path %>" class="fb-crumb" id="fb-shares-crumb"><%= t('shares') %></a>
-      <span class="fb-crumb-sep">/</span>
       <% @breadcrumbs.each_with_index do |crumb, i| %>
+        <span class="fb-crumb-sep"><%= lucide_icon('chevron-right', size: 18) %></span>
         <% if i == @breadcrumbs.length - 1 %>
-          <span class="fb-crumb-current"><%= crumb[:name] %></span>
+          <span class="fb-crumb-current" aria-current="page"><%= crumb[:name] %></span>
         <% else %>
-          <a href="<%= file_browser_path(@share, path: crumb[:path]) %>" class="fb-crumb"><%= crumb[:name] %></a>
-          <span class="fb-crumb-sep">/</span>
+          <a href="<%= browse_path(@share, crumb[:path]) %>" class="fb-crumb"><%= crumb[:name] %></a>
         <% end %>
       <% end %>
-    </div>
+    </nav>
     <div class="fb-actions">
       <% if @entries.any? %>
-        <a class="btn btn-sm btn-outline-info" id="fb-download-folder" href="<%= @relative_path.present? ? file_browser_download_path(@share, path: @relative_path) : file_browser_download_root_path(@share) %>"
+        <div class="fb-viewtoggle" role="group" aria-label="View">
+          <button type="button" class="fb-viewbtn" data-view="list" aria-pressed="true" aria-label="List" data-action="click->file-browser#setView"><%= lucide_icon('list', size: 17) %></button>
+          <button type="button" class="fb-viewbtn" data-view="grid" aria-pressed="false" aria-label="Grid" data-action="click->file-browser#setView"><%= lucide_icon('layout-grid', size: 17) %></button>
+        </div>
+        <a class="btn btn-sm btn-outline-info fb-download-folder" id="fb-download-folder" href="<%= @relative_path.present? ? file_browser_download_path(@share, path: @relative_path) : file_browser_download_root_path(@share) %>"
            data-action="click->file-browser#downloadZip" data-zip-name="<%= @breadcrumbs.last[:name] %>">
-          <%= lucide_icon('download', size: 16) %> Download this folder
+          <%= lucide_icon('download', size: 16) %> Download folder
         </a>
       <% end %>
       <%# Says the zip is being made until the download starts (the browser then shows its progress) %>
@@ -28,121 +32,87 @@
     </div>
   </div>
 
-  <div class="fb-listing">
-
-    <%# ── File Table ── %>
-    <% if @entries.empty? && @relative_path.blank? %>
-      <div class="fb-empty">
-        <div class="fb-empty-icon">📂</div>
-        <p>This share is empty</p>
-        <p class="text-muted">Add files over the network share (SMB) and they show up here.</p>
-      </div>
-    <% elsif @entries.empty? %>
-      <div class="fb-empty">
-        <div class="fb-empty-icon">📂</div>
-        <p>This folder is empty</p>
-      </div>
-    <% else %>
-      <table class="table fb-table">
-        <thead>
-          <tr>
-            <th class="fb-icon-col"></th>
-            <th class="fb-name-col">Name</th>
-            <th class="fb-size-col">Size</th>
-            <th class="fb-date-col">Modified</th>
-            <th class="fb-action-col"></th>
-          </tr>
-        </thead>
-        <tbody>
+  <div class="fb-body">
+    <section class="fb-panel fb-listing" data-file-browser-target="listing" aria-label="Files">
+      <% if @entries.empty? %>
+        <div class="fb-empty">
+          <div class="fb-empty-icon"><%= lucide_icon('folder', size: 44) %></div>
+          <% if @relative_path.blank? %>
+            <p>This share is empty</p>
+            <p class="text-muted">Add files over the network share (SMB) and they show up here.</p>
+          <% else %>
+            <p>This folder is empty</p>
+          <% end %>
+        </div>
+      <% else %>
+        <div class="fb-list-head" aria-hidden="true">
+          <span></span><span>Name</span><span class="fb-item-size">Size</span><span class="fb-item-date">Modified</span><span></span>
+        </div>
+        <div class="fb-items" role="list">
           <% if @relative_path.present? %>
-            <tr class="fb-row fb-row-parent">
-              <td><%= lucide_icon('folder', size: 16) %></td>
-              <td colspan="4">
-                <% parent = @relative_path.split('/')[0...-1].join('/') %>
-                <a href="<%= file_browser_path(@share, path: parent) %>" class="fb-link">..</a>
-              </td>
-            </tr>
+            <div class="fb-item fb-item-parent" role="listitem">
+              <a class="fb-item-main" href="<%= browse_path(@share, @relative_path.split('/')[0...-1].join('/')) %>">
+                <span class="fb-item-icon"><%= lucide_icon('folder', size: 18) %></span>
+                <span class="fb-item-name">..</span>
+                <span class="fb-item-size"></span><span class="fb-item-date">Up a folder</span>
+              </a>
+            </div>
           <% end %>
           <% @entries.each do |entry| %>
-            <tr class="fb-row" data-name="<%= entry[:name] %>" data-directory="<%= entry[:directory] %>">
-              <td class="fb-icon-col"><%= entry[:icon] %></td>
-              <td class="fb-name-col">
-                <% if entry[:directory] %>
-                  <a href="<%= file_browser_path(@share, path: [@relative_path, entry[:name]].reject(&:blank?).join('/')) %>" class="fb-link fb-folder-link">
-                    <%= entry[:name] %>
-                  </a>
-                <% else %>
-                  <% entry_path = [@relative_path, entry[:name]].reject(&:blank?).join('/') %>
-                  <%# Text opens as it is; images, video, audio and PDFs preview in the dialog, and
-                      anything else says there's no preview there, with Download. %>
-                  <% text = entry[:mime].to_s.start_with?('text/') || %w[application/json application/xml].include?(entry[:mime]) %>
-                  <a href="<%= file_browser_raw_path(@share, path: entry_path) %>"
-                     class="fb-link fb-file-link"
-                     <% unless text %>
-                       data-action="click->file-browser#previewFile"
-                       data-preview-url="<%= file_browser_raw_path(@share, path: entry_path) %>"
-                       data-preview-mime="<%= entry[:mime] %>"
-                       data-preview-name="<%= entry[:name] %>"
-                       data-preview-size="<%= number_to_human_size(entry[:size]) if entry[:size] %>"
-                     <% end %>
-                  >
-                    <%= entry[:name] %>
-                  </a>
-                <% end %>
-              </td>
-              <td class="fb-size-col">
-                <% if entry[:size] %>
-                  <%= number_to_human_size(entry[:size]) %>
-                <% else %>
-                  —
-                <% end %>
-              </td>
-              <td class="fb-date-col">
-                <%= entry[:modified]&.strftime('%b %d, %Y %H:%M') %>
-              </td>
-              <td class="fb-action-col">
-                <div class="dropdown">
-                  <button class="btn btn-sm btn-link text-muted text-decoration-none p-0" data-bs-toggle="dropdown" aria-label="Actions" data-tip="Actions">⋮</button>
-                  <ul class="dropdown-menu dropdown-menu-end">
-                    <li>
-                      <% dl_path = [@relative_path, entry[:name]].reject(&:blank?).join('/') %>
-                      <a class="dropdown-item" href="<%= file_browser_download_path(@share, path: dl_path) %>"
-                         <% if entry[:directory] %>data-action="click->file-browser#downloadZip" data-zip-name="<%= entry[:name] %>"<% end %>><%= lucide_icon('download', size: 14) %> <%= entry[:directory] ? 'Download as zip' : 'Download' %></a>
-                    </li>
-                  </ul>
-                </div>
-              </td>
-            </tr>
+            <% path = folder_path.call(entry[:name]) %>
+            <% kind = entry[:kind] %>
+            <div class="fb-item" role="listitem" data-name="<%= entry[:name] %>" data-directory="<%= entry[:directory] %>">
+              <% if entry[:directory] %>
+                <a class="fb-item-main fb-folder-link" href="<%= browse_path(@share, path) %>" data-kind="folder">
+              <% else %>
+                <a class="fb-item-main fb-file-link" href="<%= file_browser_raw_path(@share, path: path) %>" data-kind="<%= kind %>"
+                   data-action="click->file-browser#select"
+                   data-name="<%= entry[:name] %>" data-kind-name="<%= FileBrowserService::KIND_NAMES[kind] %>"
+                   data-raw-url="<%= file_browser_raw_path(@share, path: path) %>"
+                   data-download-url="<%= file_browser_download_path(@share, path: path) %>"
+                   data-size="<%= number_to_human_size(entry[:size]) if entry[:size] %>"
+                   data-modified="<%= entry[:modified]&.strftime('%b %-d, %Y · %H:%M') %>">
+              <% end %>
+                <span class="fb-item-icon fb-kind-<%= kind %>"><%= lucide_icon(FileBrowserService::KIND_ICONS[kind], size: 18) %></span>
+                <span class="fb-item-name"><%= entry[:name] %></span>
+                <span class="fb-item-size"><%= entry[:size] ? number_to_human_size(entry[:size]) : '' %></span>
+                <span class="fb-item-date"><%= entry[:modified]&.strftime('%b %-d, %Y · %H:%M') %></span>
+              </a>
+              <a class="fb-item-download" href="<%= file_browser_download_path(@share, path: path) %>"
+                 aria-label="<%= entry[:directory] ? "Download #{entry[:name]} as a zip" : "Download #{entry[:name]}" %>"
+                 <% if entry[:directory] %>data-action="click->file-browser#downloadZip" data-zip-name="<%= entry[:name] %>"<% end %>>
+                <%= lucide_icon('download', size: 16) %>
+              </a>
+            </div>
           <% end %>
-        </tbody>
-      </table>
-    <% end %>
+        </div>
+      <% end %>
+      <div class="fb-statusbar">
+        <%= pluralize(@entries.count { |e| e[:directory] }, 'folder') %>,
+        <%= pluralize(@entries.count { |e| !e[:directory] }, 'file') %>
+        <% total = @entries.sum { |e| e[:size] || 0 } %>
+        <% if total > 0 %>(<%= number_to_human_size(total) %>)<% end %>
+      </div>
+    </section>
+
+    <aside class="fb-panel fb-details" data-file-browser-target="details" aria-label="Selected file" aria-live="polite">
+      <p class="fb-details-empty">Click a file to see it here. Clicking a folder opens it.</p>
+    </aside>
   </div>
 
-  <%# ── Preview Modal ── %>
+  <%# ── Full-screen preview ── %>
   <div class="modal fade" id="previewModal" tabindex="-1" data-file-browser-target="previewModal">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-      <div class="modal-content" style="background: var(--kai-card-bg, #1a2332);">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+      <div class="modal-content fb-modal">
         <div class="modal-header border-0">
           <h5 class="modal-title" data-file-browser-target="previewTitle"></h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
-        <div class="modal-body text-center p-2" data-file-browser-target="previewBody">
-        </div>
+        <div class="modal-body text-center p-2" data-file-browser-target="previewBody"></div>
         <div class="modal-footer border-0">
-          <a href="#" class="btn btn-sm btn-outline-info" data-file-browser-target="previewDownload"><%= lucide_icon('download', size: 14) %> Download</a>
+          <a href="#" class="btn btn-sm btn-info" data-file-browser-target="previewDownload"><%= lucide_icon('download', size: 14) %> Download</a>
         </div>
       </div>
     </div>
-  </div>
-
-  <%# ── Status Bar ── %>
-  <div class="fb-statusbar">
-    <%= @entries.count { |e| e[:directory] } %> folders,
-    <%= @entries.count { |e| !e[:directory] } %> files
-    <% total = @entries.sum { |e| e[:size] || 0 } %>
-    <% if total > 0 %>
-      (<%= number_to_human_size(total) %>)
-    <% end %>
   </div>
 </div>
