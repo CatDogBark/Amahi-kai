@@ -59,9 +59,6 @@ class SearchController < ApplicationController
     render 'files'
   end
 
-  def web
-  end
-
   protected
 
   # Page 1 or later (page 0 made a negative OFFSET, a 500), and at most MAX_PER_PAGE results.

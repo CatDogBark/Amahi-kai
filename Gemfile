@@ -1,10 +1,7 @@
 source 'https://rubygems.org'
 
-gem 'rake'
 gem 'rails', '~> 8.1.0'
-
-# gem 'dalli' # removed — no memcached
-# gem 'actionpack-action_caching' # removed — unused
+gem 'rake'
 
 # Sprockets 4.2 passes json an option json 3 removed, so a production boot crashed as soon
 # as compiled assets existed. 4.3 is the first release that works with json 3.
@@ -15,13 +12,10 @@ gem 'sprockets-rails', '~> 3.5'
 # gem 'propshaft'  # TODO: Replace sprockets with propshaft (requires full asset pipeline migration)
 # gem 'terser' # JS minification — requires Node.js runtime, not worth the dependency
 
-gem 'slim'
 gem 'jbuilder'
+gem 'slim'
 
-# Stimulus controllers (app/assets/javascripts/controllers)
-gem 'stimulus-rails'
-
-# gem 'rails-observers' # removed — unused
+# Stimulus is vendored (vendor/assets/javascripts/stimulus-iife.js), so it needs no gem.
 
 gem 'bcrypt'
 
@@ -35,21 +29,21 @@ gem 'rack-attack'
 gem 'puma'
 
 group :development do
-  gem 'listen'
   gem 'better_errors'
   gem 'binding_of_caller', '~> 2.0'
   gem 'bullet'
+  gem 'listen'
   # rubocop + brakeman installed directly in CI (not bundled)
 end
 
 gem 'rspec-rails', group: [:test, :development]
 
 group :test do
-  gem 'factory_bot_rails'
   gem 'database_cleaner'
-  gem 'simplecov', require: false
+  gem 'factory_bot_rails'
   # Reads the folder zips in specs
   gem 'rubyzip', '~> 3.4', require: false
+  gem 'simplecov', require: false
 end
 
 group :development, :production do

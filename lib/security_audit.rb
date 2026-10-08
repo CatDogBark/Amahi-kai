@@ -30,10 +30,6 @@ class SecurityAudit
       run_all.select { |c| c.status == :fail && c.severity == :blocker }
     end
 
-    def has_blockers?
-      blockers.any?
-    end
-
     # Applies one fix; true if it worked. Why it didn't is logged and kept in last_error
     # (the helper refuses to turn off SSH password login while no account has a key).
     def fix!(check_name)

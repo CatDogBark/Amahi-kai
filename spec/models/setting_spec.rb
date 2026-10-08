@@ -25,14 +25,15 @@ describe Setting do
     end
   end
 
-  describe ".value_by_name" do
-    it "should return the value for a setting" do
-      Setting.set("mykey", "myval")
-      expect(Setting.value_by_name("mykey")).to eq("myval")
+  describe ".get" do
+    it "should return nil for missing settings" do
+      expect(Setting.get("missing")).to be_nil
     end
 
-    it "should return nil for missing settings" do
-      expect(Setting.value_by_name("missing")).to be_nil
+    it "reads within a kind when scoped to it" do
+      Setting.set("debug", "1", Setting::SHARES)
+      expect(Setting.shares.get("debug")).to eq("1")
+      expect(Setting.network.get("debug")).to be_nil
     end
   end
 

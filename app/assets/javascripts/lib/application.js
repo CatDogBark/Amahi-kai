@@ -1,6 +1,6 @@
 // Forms whose button says data-confirm (button_to's data: { confirm: }) ask before they're
 // sent, and a data-disable-with button shows that text while the request runs: Rails' own
-// script for these isn't loaded, and Turbo is off, so without this they did neither (and
+// script for these isn't loaded (nor Turbo), so without this they did neither (and
 // Initialize erased a drive without asking).
 document.addEventListener('submit', function(event) {
   var form = event.target;

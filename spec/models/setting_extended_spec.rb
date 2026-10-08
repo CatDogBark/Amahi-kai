@@ -45,15 +45,6 @@ RSpec.describe Setting, type: :model do
     end
   end
 
-  describe ".get_by_name" do
-    it "returns the setting object" do
-      Setting.set("test_obj_key", "val123")
-      obj = Setting.get_by_name("test_obj_key")
-      expect(obj).to be_a(Setting)
-      expect(obj.value).to eq("val123")
-    end
-  end
-
   describe "constants" do
     it "defines kind constants as strings" do
       expect(Setting::GENERAL).to eq("general")

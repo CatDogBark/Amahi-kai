@@ -46,6 +46,9 @@ All notable changes to Amahi-kai are documented here.
 - **bitTube 0.1.1** — Find channels by name or topic and follow them; import your subscriptions from NewPipe or Google Takeout; new videos keep arriving when YouTube's channel feeds are down (they were on 2026-10-05); the sign-in and Settings forms line up; TMDB and JustWatch are credited as TMDB's terms ask. Update it from its row on the Apps page.
 ### 🔒 Security & Fixes
 
+- **Drive temperatures in °F** — Disks shows each drive's temperature in Fahrenheit (it showed Celsius, with a hidden Fahrenheit nothing could show), amber from 104 °F and red from 122 °F. Those colours were set but never styled before.
+- **The sign-in page shows its messages as plain text.**
+
 - **System Update's dialog stays current on a page left open** — The dialog was filled in when the page loaded, so a tab left open overnight still showed that check, with its "Checked … ago" counting up past the checks the NAS had made since (every 6 hours). It now fetches its content, and the header button's label and dot, when it opens and when the tab comes back into view.
 - **Two labels the translation cleanup broke** — Apps' sub-tab read "Available Any data associated with this application WILL BE DELETED.", and a share's empty raw settings placeholder had a stray paragraph after it. Both are back as they were, and a spec now catches a translation that spans lines it shouldn't.
 
@@ -145,6 +148,12 @@ All notable changes to Amahi-kai are documented here.
   - Adding a user through a JSON request no longer fails with a server error, and the Apps page still loads when checking Docker fails.
 
 ### 🔧 Architecture & Code Quality
+
+- **The last leftovers** — A final sweep for code nothing uses:
+  - **Gone:** an empty search page with no route, two unused methods, two scripts nothing loaded (one only comments), Turbo's copy (189 KB, unused since Turbo went), the `stimulus-rails` gem (Stimulus is bundled with Amahi-kai), six unused translations, an old DHCP-lease reader from the ISC DHCP days, and a lease filter that would have crashed if anything had called it.
+  - **Browser search:** the original Amahi's "add as a search engine" file went to an address that doesn't exist (`http://hda/...`); it and its link on every page are gone.
+  - **Tidier code:** helper methods that were meant to be private are now, and two controller methods Rails treated as actions on every page aren't. Settings had three ways to read a value; there's one.
+  - **CI:** RuboCop's list of old offenses is empty, so it's gone and any offense fails. Every spec runs; the filters for specs CI skipped had nothing left to skip.
 
 - **The last of the old command runner goes** — With everything that changes the system going through the root helper, and everything that reads it running as argument lists, the old way of running command strings (with its log masking and its error type) had nothing left to run. It's gone, with 13 places that still caught its error, and the cloudflared check runs the same way as the rest.
 

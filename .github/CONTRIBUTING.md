@@ -20,19 +20,20 @@ RAILS_ENV=test bundle exec rails db:schema:load
 
 ## Tests
 
-Tests use SQLite and never run system commands: `Shell` runs in dummy mode and
-`Privileged.call` records calls instead of running the root helper. CI runs these groups (and
-the first two again on MariaDB):
+Tests use SQLite and never change the system: outside production `Privileged.call` records
+calls instead of running the root helper. Commands that only read the system (`Shell.output`,
+`Shell.success?`) do run, so specs stub them. CI runs these groups (and the first and third again
+on MariaDB):
 
 ```bash
-bundle exec rspec spec/models/ spec/services/ spec/helpers/ --tag ~docker
-bundle exec rspec spec/lib/ --tag ~integration
-bundle exec rspec spec/requests/ --tag ~integration
+bundle exec rspec spec/models/ spec/services/ spec/helpers/
+bundle exec rspec spec/lib/
+bundle exec rspec spec/requests/
 ```
 
 Lint and security checks (installed as gems, not in the bundle): RuboCop 1.91.0 with
 rubocop-rails 2.38.0 and rubocop-rspec 3.10.2, Brakeman 8.1.0, bundle-audit 0.9.3. RuboCop fails
-only on new offenses (`.rubocop_todo.yml` holds the old ones); Brakeman fails on anything not in
+on any offense; Brakeman fails on anything not in
 `config/brakeman.ignore`, and every entry there needs a note.
 
 ## Making a change

@@ -36,7 +36,6 @@
   delete: Delete
 
   # default layout and dashboard
-  home: Home
   setup: Setup
   web: Web
   apps: Apps
@@ -54,7 +53,6 @@
   # setup panel tabs
   users: Users
   shares: Shares
-  storage: Storage
   settings: Settings
 
   # misc common stuff
@@ -124,10 +122,6 @@
 
   # disk pooling, greyhole
   disk_pool_copies: Extra copies
-  pooled: Pooled
-
-  # networking -> dhcp
-  dhcp: DHCP
 
   # networking -> aliases
   dns_alias: DNS Alias
@@ -141,7 +135,6 @@
   installed: Installed
   docker_apps: Docker Apps
   no_description_supplied: No description supplied!
-  uninstall: Uninstall
   install: Install
 
   # networking -> settings
@@ -199,7 +192,6 @@
 
   # server model
   dhcp_server: DHCP Server
-  dns_server: DNS Server
 
   # debug area
   system: System

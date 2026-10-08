@@ -60,9 +60,9 @@ class Platform
     end
   end
 
-  private
-
   class << self
+    private
+
     def privileged(operation, **args)
       Privileged.call(operation, **args)
       true

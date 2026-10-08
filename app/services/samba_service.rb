@@ -11,7 +11,7 @@ class SambaService
   # Generate and deploy Samba configuration, then reload services.
   # Returns whether a new smb.conf was installed.
   def self.push_config
-    domain = Setting.value_by_name("domain")
+    domain = Setting.get("domain")
 
     written = write_smb_conf(Share.samba_conf(domain))
     lmhosts = write_lmhosts(Share.samba_lmhosts(domain))

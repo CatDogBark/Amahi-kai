@@ -28,12 +28,6 @@ class Leases
     read_lease(LEASEFILE)
   end
 
-  def self.active(leases)
-    leases.delete_if { |lease| Time.at(lease{:expiration}) < Time.now }
-  end
-
-  private
-
   def self.read_lease(file)
     res = []
     return res unless File.exist?(file)
@@ -49,55 +43,5 @@ class Leases
     res.sort { |x, y| x[:expiration] <=> y[:expiration] }
   end
 
-  # the code below was for the ISC DHCP server, for historical purposes
-  module IscDhcpServer
-    def self.all
-      leases = read_lease("#{LEASEFILE}~")
-      new_leases = read_lease(LEASEFILE)
-      new_leases.each{|mac, entry| leases[mac] || leases[mac] = {}; leases[mac].merge!(entry)}
-      leases
-    end
-
-    def self.active(leases)
-      leases.delete_if { |lease| lease{:state} == 'free' }
-    end
-
-
-    # ISC DHCP server
-    def self.read_lease(file)
-      res = {}
-      return res unless File.exist?(file)
-      current = {}
-      File.foreach(file) do |l|
-        next if l =~ /^\s*\#/
-        if l =~ /^\s*lease\s+(([0-9]+)\.([0-9]+)\.([0-9]+)\.([0-9]+))\s*\{\s*$/
-          current = {}
-          current[:ip] = $1
-          current[:name] = sprintf("h%03d", $5)
-          current[:mac] = nil
-          # puts "lease: #{l}"
-        elsif l =~ /^\s*client-hostname\s*\"([^"]*)\"/
-          current[:name] = $1
-        elsif l =~ /^\s*binding\s+state\s+(\w+)/
-          current[:state] = $1
-        elsif l =~ /^\s*cltt\s+\d\s+(.+);/
-          current[:last_seen] = Date.parse($1)
-        elsif l =~ /^\s*hardware\s+ethernet\s+(..:..:..:..:..:..)/
-          current[:mac] = $1
-        elsif l =~ /^\s*\}\s*$/
-          # Leases file has entries in chronological order — later entries override earlier ones
-          # Create the entry for this device if it does not exist and there is something in the mac
-          if current[:mac]
-            res[current[:mac]] = {} unless res[current[:mac]]
-            # for each field in the current lease, update the resulting hash
-            current.each{|k,v| res[current[:mac]][k] = v }
-            # puts "lease end: #{l}"
-          end
-        end
-      end
-      res
-    end
-  end
-
-
+  private_class_method :read_lease
 end

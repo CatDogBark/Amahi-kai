@@ -2,10 +2,6 @@ plugins:
   - rubocop-rails
   - rubocop-rspec
 
-# Existing offenses, recorded so CI fails only on new ones. Fix and regenerate with
-# `rubocop --auto-gen-config --no-exclude-limit --no-offense-counts --no-auto-gen-timestamp`.
-inherit_from: .rubocop_todo.yml
-
 AllCops:
   TargetRubyVersion: 3.2
   NewCops: disable

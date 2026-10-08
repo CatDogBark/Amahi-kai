@@ -215,24 +215,24 @@ RSpec.describe DiskManager do
 
     it 'lists the drives (not optical drives) with their temperatures' do
       expect(DiskManager.stats).to eq([
-        { device: '/dev/sda', model: 'Samsung SSD', size: '500G', temp_c: '30', temp_f: '86', tempcolor: 'cool' }
+        { device: '/dev/sda', model: 'Samsung SSD', size: '500G', temp_f: 86, tempcolor: 'cool' }
       ])
     end
 
     it 'shows a dash for a drive with no temperature' do
       allow(Privileged).to receive(:call).with('disks.temperatures')
         .and_return('ok' => true, 'temperatures' => { '/dev/sda' => nil })
-      expect(DiskManager.stats.first.values_at(:temp_c, :temp_f)).to eq(%w[- -])
+      expect(DiskManager.stats.first[:temp_f]).to be_nil
     end
 
     it 'still lists the drives when the helper fails' do
       allow(Privileged).to receive(:call).with('disks.temperatures')
         .and_raise(Privileged::Error.new('disks.temperatures', 'smartctl went away'))
-      expect(DiskManager.stats.first.values_at(:device, :temp_c)).to eq(['/dev/sda', '-'])
+      expect(DiskManager.stats.first.values_at(:device, :temp_f)).to eq(['/dev/sda', nil])
     end
 
     it 'colours temperatures: cool to 39, warm to 49, then hot' do
-      expect([0, 39, 40, 49, 50].map { |t| DiskManager.temp_color(t) }).to eq(%w[cool cool warm warm hot])
+      expect([0, 39, 40, 49, 50].map { |t| DiskManager.send(:temp_color, t) }).to eq(%w[cool cool warm warm hot])
     end
   end
 
@@ -287,12 +287,12 @@ RSpec.describe DiskManager do
     it 'skips a slot fstab still claims for an unplugged drive' do
       allow(File).to receive(:read).with('/etc/fstab')
         .and_return("UUID=gone /mnt/storage-1 ext4 defaults,nofail 0 2\n")
-      expect(DiskManager.auto_mount_point).to eq('/mnt/storage-2')
+      expect(DiskManager.send(:auto_mount_point)).to eq('/mnt/storage-2')
     end
 
     it 'never rewrites fstab' do
       allow(File).to receive(:read).with('/etc/fstab').and_return("")
-      DiskManager.auto_mount_point
+      DiskManager.send(:auto_mount_point)
       expect(Privileged.calls).to be_empty
     end
   end
