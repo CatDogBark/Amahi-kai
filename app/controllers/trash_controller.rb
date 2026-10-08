@@ -6,7 +6,7 @@ class TrashController < ApplicationController
   before_action :admin_required
 
   def index
-    @page_title = t('trash')
+    @page_title = t('shares') # it's part of the file browser, below the shares
     @trash = Trash.contents
     @days = Trash.days
     # A pooled share's file goes back through Greyhole, which needs the share still pooled

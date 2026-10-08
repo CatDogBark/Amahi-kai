@@ -36,6 +36,7 @@ class FileBrowserController < ApplicationController
       return redirect_to file_browser_path(@share)
     end
 
+    @page_title = t('shares') # the title under the logo, as on the Shares page above
     @entries = FileBrowserService.list_directory(@full_path)
     @breadcrumbs = FileBrowserService.build_breadcrumbs(@share.name, @relative_path)
   end

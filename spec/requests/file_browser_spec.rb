@@ -55,6 +55,14 @@ describe "FileBrowser Controller", type: :request do
         expect(response).to have_http_status(:ok)
       end
 
+      it "keeps the Shares title under the logo inside a share, as on the Shares page and the Trash" do
+        FileUtils.mkdir_p(File.join(tmpdir, "album"))
+        ["/files", "/files/#{share.name}/browse", "/files/#{share.name}/browse/album", "/files/trash"].each do |page|
+          get page
+          expect(Nokogiri::HTML(response.body).at_css("title").text).to include("Shares"), page
+        end
+      end
+
       it "serves a file when path points to a file" do
         File.write(File.join(tmpdir, "hello.txt"), "content")
         get "/files/#{share.name}/browse/hello.txt"
