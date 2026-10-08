@@ -1,0 +1,47 @@
+<%# The header's Shares link: the shares this person can open, each browsed in the file browser %>
+<div class="file-browser">
+  <div class="fb-header">
+    <div class="fb-breadcrumbs">
+      <span class="fb-crumb-current"><%= t('shares') %></span>
+    </div>
+  </div>
+
+  <div class="fb-listing">
+    <% if @shares.empty? %>
+      <div class="fb-empty">
+        <div class="fb-empty-icon">📂</div>
+        <p>There are no shares you can open.</p>
+        <% if current_user_is_admin? %>
+          <p class="text-muted">Make one on Setup → Shares.</p>
+        <% else %>
+          <p class="text-muted">An administrator can give you access to one.</p>
+        <% end %>
+      </div>
+    <% else %>
+      <table class="table fb-table" id="share-list">
+        <thead>
+          <tr>
+            <th class="fb-icon-col"></th>
+            <th class="fb-name-col">Share</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% @shares.each do |share| %>
+            <tr class="fb-row">
+              <td class="fb-icon-col">📁</td>
+              <td class="fb-name-col">
+                <a href="<%= file_browser_path(share) %>" class="fb-link fb-folder-link"><%= share.name %></a>
+              </td>
+              <td class="small text-muted text-end">
+                <% if share.rdonly %>Read only<% end %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    <% end %>
+  </div>
+
+  <div class="fb-statusbar"><%= pluralize(@shares.size, 'share') %></div>
+</div>
