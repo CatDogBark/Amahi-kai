@@ -48,10 +48,11 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
 - **Ruby is 3.2 on the NAS (Ubuntu's `ruby3.2`, 3.2.3).** Change `Gemfile.lock` only under Ruby
   3.2.x with Bundler 2.4.19, so the resolver can't pick gems the NAS can't run. Update gems
   minimally (`bundle update --conservative --patch <gem>`).
-- Outside production `Shell.simulated?` is true (no setting changes it), so `Shell.run` commands don't execute, and `Privileged.call`
+- Outside production `Shell.simulated?` is true (no setting changes it), so `Privileged.call`
   records calls in `Privileged.calls` (reset before each example) instead of running the helper.
-  Code that runs commands as argument lists through `Open3` must be stubbed. Request specs log in with `login_as_admin`
-  or `login_as(user)` (`spec/support/request_helpers.rb`).
+  Commands that only read the system (`Shell.output`, `Shell.success?`, `Open3`) do run in tests,
+  so stub them. Request specs log in with `login_as_admin` or `login_as(user)`
+  (`spec/support/request_helpers.rb`).
 - Migrations must be safe to rerun (`if_exists`, `column_exists?`): MariaDB can't roll back DDL.
 
 ## Things that have bitten us
@@ -95,13 +96,14 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
   look and no themes: `app/assets/stylesheets/theme.css` is the last file `application.css`
   joins, so it wins; its October 2026 refresh block (mint, Space Grotesk, the glass panels) is at
   its end. Every page is dark (`data-theme="dark"` in the layouts).
-- `Shell.capture` and `Open3` don't set `$?`; use the status they return.
+- `Open3` doesn't set `$?`; use the status it returns (or `Shell.success?`).
 - **`lsblk -J` only nests partitions and volumes under their disk when NAME is the first
   column**; with PATH first it lists every device flat, and a disk looks empty (#45: the helper's
   system-disk check didn't hold). Ask for `NAME,PATH,...`; the helper refuses a flat list, and
   specs run the real `lsblk`. Check fixtures against a real command's output.
-- Build commands from names as argument lists (`Open3.capture3('systemctl', 'show', unit)`), not
-  strings through a shell.
+- Build commands from names as argument lists (`Shell.output('systemctl', 'show', unit)`), never
+  backticks or strings through a shell. Read what Ruby or `/proc` can give directly
+  (`SystemInfo`).
 - **Addresses are made in one place.** Every link to an app goes through `DockerApp#url`, every
   link to Amahi-kai itself through `ApplicationHelper#amahi_url`; never hand-build
   `http://host:port` (`spec/lib/addresses_spec.rb` fails CI if you do). HTTPS is planned as an

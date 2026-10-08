@@ -35,7 +35,7 @@ class DisksController < ApplicationController
       flash[:notice] = "Successfully formatted #{device} as ext4"
     rescue DiskManager::DiskError => e
       flash[:error] = "Format failed: #{e.message}"
-    rescue Shell::CommandError, Errno::ENOENT => e
+    rescue Errno::ENOENT => e
       flash[:error] = "Unexpected error: #{e.message}"
     end
     redirect_to disks_devices_path
@@ -49,7 +49,7 @@ class DisksController < ApplicationController
       flash[:notice] = "Mounted #{device} at #{mp}"
     rescue DiskManager::DiskError => e
       flash[:error] = "Mount failed: #{e.message}"
-    rescue Shell::CommandError, Errno::ENOENT => e
+    rescue Errno::ENOENT => e
       flash[:error] = "Unexpected error: #{e.message}"
     end
     redirect_to disks_devices_path
@@ -64,7 +64,7 @@ class DisksController < ApplicationController
     rescue DiskManager::DiskError => e
       flash[:error] = "Preview failed: #{e.message}"
       redirect_to disks_devices_path
-    rescue Shell::CommandError, Errno::ENOENT => e
+    rescue Errno::ENOENT => e
       flash[:error] = "Unexpected error: #{e.message}"
       redirect_to disks_devices_path
     end
@@ -77,7 +77,7 @@ class DisksController < ApplicationController
       flash[:notice] = "Mounted #{device} at #{result[:mount_point]} and created share '#{result[:share_name]}'"
     rescue DiskManager::DiskError => e
       flash[:error] = "Mount failed: #{e.message}"
-    rescue ActiveRecord::RecordInvalid, Shell::CommandError => e
+    rescue ActiveRecord::RecordInvalid => e
       flash[:error] = "Error: #{e.message}"
     end
     redirect_to disks_devices_path
@@ -90,7 +90,7 @@ class DisksController < ApplicationController
       flash[:notice] = "Unmounted #{device}"
     rescue DiskManager::DiskError => e
       flash[:error] = "Unmount failed: #{e.message}"
-    rescue Shell::CommandError, Errno::ENOENT => e
+    rescue Errno::ENOENT => e
       flash[:error] = "Unexpected error: #{e.message}"
     end
     redirect_to disks_devices_path
@@ -124,7 +124,7 @@ class DisksController < ApplicationController
       end
       format.any { render json: { status: 'error', message: e.message }, status: :unprocessable_content }
     end
-  rescue ActiveRecord::RecordInvalid, Shell::CommandError => e
+  rescue ActiveRecord::RecordInvalid => e
     Rails.logger.error("Toggle disk pool error: #{e.message}\n#{e.backtrace.first(5).join("\n")}")
     render json: { status: 'error', message: e.message }, status: :internal_server_error
   end

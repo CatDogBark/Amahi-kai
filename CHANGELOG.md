@@ -146,6 +146,8 @@ All notable changes to Amahi-kai are documented here.
 
 ### 🔧 Architecture & Code Quality
 
+- **The last of the old command runner goes** — With everything that changes the system going through the root helper, and everything that reads it running as argument lists, the old way of running command strings (with its log masking and its error type) had nothing left to run. It's gone, with 13 places that still caught its error, and the cloudflared check runs the same way as the rest.
+
 - **More dead code out** — Nothing in the app used these either:
   - **Settings and platform leftovers:** the settings file nothing read (`config/yetting.yml`, with its loader), and the platform's service names and file paths for Apache, monit and the DHCP server.
   - **Unused methods:** on shares (the old default shares, the Samba domain name), users (share write checks), settings and DNS, two do-nothing steps on every request, and a few helpers.
