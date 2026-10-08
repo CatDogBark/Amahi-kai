@@ -1,0 +1,12 @@
+# Runs amahi-kai-trash.service once a day, and at boot if a run was missed while the server
+# was off. Installed and enabled by bin/amahi-install-helper.
+[Unit]
+Description=Amahi-kai: empty the Trash of old files daily
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=1h
+
+[Install]
+WantedBy=timers.target

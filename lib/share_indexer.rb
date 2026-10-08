@@ -166,6 +166,8 @@ class ShareIndexer
         # Skip . and .. entries
         basename = File.basename(path)
         next if basename == '.' || basename == '..'
+        # The share's Trash (Samba's recycle bin) isn't searched
+        next if path == File.join(root, Trash::RECYCLE) || path.start_with?(File.join(root, Trash::RECYCLE, ''))
         yield path
       end
     rescue Errno::EACCES => e

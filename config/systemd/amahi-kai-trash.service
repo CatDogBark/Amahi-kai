@@ -1,0 +1,11 @@
+# Deletes files that have been in the Trash longer than it keeps them (Shares → Trash; the
+# root helper's trash.expire). Started by amahi-kai-trash.timer. Installed by
+# bin/amahi-install-helper.
+[Unit]
+Description=Amahi-kai: delete files kept in the Trash too long
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/amahi-helper trash.expire
+StandardInput=null
+TimeoutStartSec=30min

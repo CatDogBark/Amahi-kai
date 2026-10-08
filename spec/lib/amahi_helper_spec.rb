@@ -1093,7 +1093,33 @@ RSpec.describe 'AmahiHelper' do
         expect(Dir.children("#{drives[0]}/.amahi-restore")).to be_empty
       end
 
-      it "won't stage a file it reaches through a link" do
+      it 'keeps the Trash setting, and deletes what has been in a trash longer, without following links' do
+      expect(steps('trash.set_days', { 'days' => 14 })).to eq([[:install, '/etc/amahi-kai/trash-days', "14\n", nil, '0644']])
+      expect(refusal('trash.set_days', { 'days' => -1 })).to include('whole number from 0 to 3650')
+      expect(steps('trash.expire', {})).to eq([[:expire_trash]])
+
+      bin = "#{dir}/docs/.recycle"
+      FileUtils.mkdir_p("#{bin}/old")
+      File.write("#{bin}/old/fresh.txt", 'kept: just deleted')
+      stub_const('AmahiHelper::TRASH_DAYS', "#{dir}/trash-days")
+      allow(helper).to receive(:samba_shares)
+        .and_return('docs' => { name: 'Docs', path: "#{dir}/docs", pooled: false }, 'photos' => { name: 'Photos', path: folder, pooled: true })
+      ran = []
+      allow(helper).to receive(:run_command).and_wrap_original { |original, argv| ran << argv; original.call(argv) }
+      helper.do_expire_trash # 30 days unless set
+      expect(ran).to include(['/usr/bin/find', "#{drives[0]}/.gh_trash", '-type', 'f', '-cmin', '+43200', '-delete'],
+                             ['/usr/bin/find', bin, '-type', 'f', '-cmin', '+43200', '-delete'],
+                             ['/usr/bin/find', bin, '-mindepth', '1', '-type', 'd', '-empty', '-delete'])
+      expect(ran.map { |argv| argv[1] }).not_to include("#{folder}/.recycle") # a pooled share's is Greyhole's
+      expect(File.read("#{bin}/old/fresh.txt")).to eq('kept: just deleted')
+
+      File.write("#{dir}/trash-days", "0\n")
+      ran.clear
+      helper.do_expire_trash
+      expect(ran).to be_empty
+    end
+
+    it "won't stage a file it reaches through a link" do
         copy = "#{drives[0]}/.gh_trash/Photos/2026/beach [1].jpg"
         File.unlink(copy)
         File.symlink("#{dir}/greyhole.conf", copy)

@@ -24,6 +24,8 @@ class ScheduledJobs
     { key: 'app-backups', name: 'App update copies', timer: 'amahi-kai-app-backups', schedule: 'Daily',
       check: '/usr/bin/docker',
       about: "Deletes each app's copy from before its last update once it's 30 days old (Undo update)" },
+    { key: 'trash', name: 'Trash', timer: 'amahi-kai-trash', schedule: 'Daily',
+      about: 'Deletes files that have been in the Trash (Shares → Trash) longer than it keeps them' },
     { key: 'update-check', name: 'Check for updates', timer: 'amahi-kai-update-check', schedule: 'Every 6 hours',
       about: 'Asks GitHub whether Amahi-kai or an app has an update waiting; never installs one' },
     { key: 'security-updates', name: 'Security updates', timer: 'apt-daily-upgrade', schedule: 'Daily',

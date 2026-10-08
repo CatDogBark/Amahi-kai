@@ -33,6 +33,15 @@ RSpec.describe ShareIndexer, integration: true do
       expect(ShareFile.where(share_id: share.id).count).to eq(2)
     end
 
+    it "leaves out the share's Trash (Samba's recycle bin)" do
+      create_file(tmpdir, 'kept.txt')
+      create_file(tmpdir, '.recycle/deleted.txt')
+      create_file(tmpdir, '.recycled-notes.txt')
+
+      ShareIndexer.index_share(share)
+      expect(ShareFile.where(share_id: share.id).pluck(:name)).to contain_exactly('kept.txt', '.recycled-notes.txt')
+    end
+
     it 'indexes subdirectories and nested files' do
       create_file(tmpdir, 'subdir/nested.txt')
 
