@@ -18,37 +18,17 @@
 # Likewise, all the methods added will be available for all controllers.
 
 class ApplicationController < ActionController::Base
-  require 'ipaddr'
   protect_from_forgery with: :exception
 
   before_action :set_user_session_controller
   before_action :before_action_hook
   before_action :check_setup_completed
-  before_action :initialize_validators
-  before_action :accessed_from_ip
 
   helper_method :current_user
-
-  def accessed_from_ip
-    # Legacy DNS nag removed — users access via IP and that's fine
-  end
-
-  def initialize_validators
-    @validators_string = ''
-  end
 
   def before_action_hook
     adv = Setting.where(:name=>'advanced').first
     @advanced = adv && adv.value == '1'
-  end
-
-  class Helper
-    include Singleton
-    include ActionView::Helpers::NumberHelper
-  end
-
-  def number_helpers
-    Helper.instance
   end
 
   # Sanitizes the String or a Hash by removing the

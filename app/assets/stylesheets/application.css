@@ -13,11 +13,6 @@
  *= require theme
  */
 
-.nav_hover:hover {
-  background: #eeeeee2e;
-  border-radius: 5px;
-}
-
 footer a {
   color: #eee;
   text-decoration: none;

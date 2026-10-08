@@ -83,14 +83,6 @@ class User < ApplicationRecord
     share.users_with_share_access.include?(self)
   end
 
-  # Can this user write to a specific share via the web UI?
-  def can_write_share?(share)
-    return true if admin?
-    return false if guest?
-    return !share.rdonly if share.everyone?
-    share.users_with_write_access.include?(self)
-  end
-
   class << self
     # True while the seeded admin account still accepts the seeded password.
     def seed_admin_password_in_use?
@@ -157,16 +149,6 @@ class User < ApplicationRecord
     everyone_ids = Share.where(everyone: true).pluck(:id)
     granted_ids = CapAccess.where(user_id: id).pluck(:share_id)
     Share.where(id: (everyone_ids + granted_ids).uniq).by_name
-  end
-
-  # Writable share IDs for this user
-  def writable_share_ids
-    return Share.pluck(:id) if admin?
-    return [] if guest?
-
-    everyone_writable = Share.where(everyone: true, rdonly: false).pluck(:id)
-    granted_write = CapWriter.where(user_id: id).pluck(:share_id)
-    (everyone_writable + granted_write).uniq
   end
 
   protected

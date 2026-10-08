@@ -126,6 +126,20 @@ and the file browser's list drops its dates. It hasn't been designed for a phone
 - Touch: rows and buttons at least 44 px, the row's download button always shown (no hover).
 - Check the water background's cost on a phone (it has a battery saver setting).
 
+## Later: the debug pages as a Settings tab
+
+The debug pages (`/tab/debug`: App Logs, Logs and System Info) are from the original Amahi. They
+have their own old layout, outside the October look, read logs through shell strings, and their
+"Submit for Debug" button only counts log lines (the report service it sent to is gone). Troy
+wants them rebuilt as a tab in Settings (2026-10-08); until then they stay as they are. To do:
+
+- A tab on Settings in the current look, for admins, replacing `/tab/debug` and
+  `layouts/debug.html.slim`.
+- Amahi-kai's log, the helper's log and the system journal, read without a shell (the Logs page
+  reads `/var/log/syslog`, which a journald-only system doesn't have).
+- System info from System Status's sources rather than raw `/proc/cpuinfo` and `/proc/meminfo`.
+- Drop Submit for Debug, or make it a download of the logs to attach to an issue.
+
 ## Later: HTTPS on the LAN
 
 Troy (2026-10-06): the web UI and every app's page are plain HTTP on the LAN, so anyone on the

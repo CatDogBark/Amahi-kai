@@ -1,7 +1,7 @@
 require 'spec_helper'
 
 # A share's pool copies, from the Shares page (shares.js updatePoolCopies).
-describe "Disk Pool Actions", type: :request, integration: true do
+describe "Disk Pool Actions", type: :request do
   describe "admin" do
     before { login_as_admin }
 

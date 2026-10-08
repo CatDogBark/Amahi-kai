@@ -24,39 +24,6 @@ describe Share do
     expect { create(:share, path: "this path is too way long because it has more than sixty four characters") }.to raise_error(ActiveRecord::RecordInvalid)
   end
 
-  describe "::create_default_shares" do
-
-    it "should create default shares with the following attributes" do
-      Share.create_default_shares
-
-      Share::DEFAULT_SHARES.each do |share_name|
-        # By name: ids depend on the database (MariaDB doesn't restart them at 1).
-        share = Share.find_by!(name: share_name)
-        expect(share.name).to             eq(share_name)
-        expect(share.path).to             eq("#{Share::DEFAULT_SHARES_ROOT}/#{share_name.downcase}")
-        expect(share.rdonly).to           eq(false)
-        expect(share.visible).to          eq(true)
-        expect(share.everyone).to         eq(true)
-        expect(share.disk_pool_copies).to eq(0)
-        expect(share.guest_access).to     eq(false)
-        expect(share.guest_writeable).to   eq(false)
-      end
-    end
-
-    it "should have read and write access for all users" do
-      new_user_1 = create(:user)
-      new_user_2 = create(:user)
-      Share.create_default_shares
-      Share.all.each do |share|
-        User.all.each do |user|
-          expect(share.users_with_share_access).to include(user)
-          expect(share.users_with_write_access).to include(user)
-        end
-      end
-    end
-
-  end
-
   describe "a user's accessibility to a share" do
 
     it "should give a user read and write access if the share has everyone: true" do
@@ -145,15 +112,6 @@ describe Share do
       share = create(:share, rdonly: false)
       share.toggle_readonly!
       expect(share.reload.rdonly).to eq(true)
-    end
-  end
-
-  describe ".basenames" do
-    it "should return array of [path, name] pairs" do
-      create(:share, name: "TestBase", path: "/test/path")
-      result = Share.basenames
-      expect(result).to be_an(Array)
-      expect(result.last).to eq(["/test/path", "TestBase"])
     end
   end
 

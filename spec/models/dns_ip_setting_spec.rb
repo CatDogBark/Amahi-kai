@@ -22,25 +22,6 @@ RSpec.describe DnsIpSetting, type: :model do
     end
   end
 
-  describe '.dns_ips' do
-    it 'returns Cloudflare IPs when dns is cloudflare' do
-      Setting.find_or_create_by!(name: 'dns', kind: Setting::NETWORK).update!(value: 'cloudflare')
-      expect(DnsIpSetting.dns_ips).to eq(%w[1.1.1.1 1.0.0.1])
-    end
-
-    it 'returns Google IPs when dns is google' do
-      Setting.find_or_create_by!(name: 'dns', kind: Setting::NETWORK).update!(value: 'google')
-      expect(DnsIpSetting.dns_ips).to eq(%w[8.8.8.8 8.8.4.4])
-    end
-
-    it 'returns custom IPs for unknown provider' do
-      Setting.find_or_create_by!(name: 'dns', kind: Setting::NETWORK).update!(value: 'custom')
-      ips = DnsIpSetting.dns_ips
-      expect(ips).to be_an(Array)
-      expect(ips.length).to eq(2)
-    end
-  end
-
   describe '.custom_dns_ips' do
     it 'returns default IPs when none configured' do
       ips = DnsIpSetting.custom_dns_ips

@@ -419,7 +419,7 @@ select:focus, input[type="text"]:focus, input[type="password"]:focus {
 /* ─── Footer: the glass bar that ends every page. The page is at least as tall as the window,
    so on a short page the footer sits at the bottom of it; on a long page it comes after the
    content, so it never covers a card ─── */
-#footer, .footer-area {
+#footer {
   position: relative;
   z-index: 1020;
   background: var(--kai-card-bg-opaque);
@@ -485,7 +485,6 @@ body:has(> #footer) > #footer {
 
 .top-margin-10 { margin-top: 10px; }
 .left-margin-10 { margin-left: 10px; }
-.left-margin-40 { margin-left: 40px; }
 .right-margin-10 { margin-right: 10px; }
 
 .spinner, .theme-image[data-toggle-target="spinner"] {
@@ -500,12 +499,7 @@ body:has(> #footer) > #footer {
   margin-top: 10px;
 }
 
-.more-info {
-  margin-left: 5px;
-  color: var(--kai-muted);
-}
-
-.no-users h2, .no-shares h2 {
+.no-users h2 {
   color: var(--kai-muted);
   font-size: 16px;
   padding: 20px;
@@ -648,9 +642,6 @@ table.settings tbody tr:hover {
 }
 /* card, card-body, card-header, fieldset, legend — defined earlier in base styles */
 .hover-style:hover {
-  background: var(--kai-hover-bg);
-}
-.search-results .result-item:hover {
   background: var(--kai-hover-bg);
 }
 code {
@@ -1145,7 +1136,7 @@ table.settings tbody tr { border-bottom-color: var(--kai-line); }
   background-color: var(--kai-mint);
   border-color: var(--kai-mint);
 }
-#footer, .footer-area {
+#footer {
   background: var(--kai-glass-strong);
   border-top: 1px solid var(--kai-line);
 }

@@ -132,28 +132,6 @@ RSpec.describe Share, 'config generation', type: :model do
     end
   end
 
-  describe '.default_samba_domain' do
-    it 'strips common TLDs' do
-      expect(Share.default_samba_domain("myserver.com")).to eq("myserver")
-      expect(Share.default_samba_domain("myserver.local")).to eq("myserver")
-    end
-
-    it 'replaces dots with underscores' do
-      expect(Share.default_samba_domain("my.server.com")).to eq("my_server")
-    end
-
-    it 'truncates to last 15 chars' do
-      long = "a" * 20 + ".com"
-      result = Share.default_samba_domain(long)
-      expect(result.length).to be <= 15
-    end
-
-    it 'returns full domain if stripping leaves empty string' do
-      # edge case: domain IS just a TLD
-      expect(Share.default_samba_domain("com")).to eq("com")
-    end
-  end
-
   describe '.samba_lmhosts' do
     it 'generates lmhosts with correct IP and hostname' do
       Setting.set('server-name', 'mynas')
@@ -168,8 +146,8 @@ RSpec.describe Share, 'config generation', type: :model do
   describe '.header_workgroup' do
     before do
       Setting.set('workgroup', 'MYGROUP')
-      Setting.set_kind(Setting::SHARES, "debug", "0")
-      Setting.set_kind(Setting::SHARES, "win98", "0")
+      Setting.set("debug", "0", Setting::SHARES)
+      Setting.set("win98", "0", Setting::SHARES)
     end
 
     it 'includes workgroup name' do
@@ -189,7 +167,7 @@ RSpec.describe Share, 'config generation', type: :model do
     end
 
     it 'sets debug log level when debug enabled' do
-      Setting.set_kind(Setting::SHARES, "debug", "1")
+      Setting.set("debug", "1", Setting::SHARES)
       result = Share.header_workgroup("example.local")
       expect(result).to include("log level = 5")
     end

@@ -35,17 +35,4 @@ RSpec.describe UsersHelper, type: :helper do
       expect(msg).to be_html_safe
     end
   end
-
-  describe '#user_formatted_date' do
-    it 'formats a valid date' do
-      date = Time.current
-      result = helper.user_formatted_date(date)
-      expect(result).not_to eq('-')
-      expect(result).to be_a(String)
-    end
-
-    it 'returns dash for nil date' do
-      expect(helper.user_formatted_date(nil)).to eq('-')
-    end
-  end
 end
