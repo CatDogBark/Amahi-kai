@@ -147,18 +147,6 @@ class DisksController < ApplicationController
     redirect_to disks_storage_pool_path
   end
 
-  def install_greyhole
-    begin
-      Greyhole.install!
-      flash[:notice] = "Greyhole installed successfully!"
-    rescue Greyhole::GreyholeError => e
-      flash[:error] = "Failed to install Greyhole: #{e.message}"
-    rescue Shell::CommandError, Errno::ENOENT, Errno::EACCES, IOError => e
-      flash[:error] = "Installation error: #{e.message}"
-    end
-    redirect_to disks_storage_pool_path
-  end
-
   def install_greyhole_stream
     stream_sse do |sse|
       sse.emit("Starting Greyhole installation...")

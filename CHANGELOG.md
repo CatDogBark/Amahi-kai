@@ -144,6 +144,17 @@ All notable changes to Amahi-kai are documented here.
 
 ### 🔧 Architecture & Code Quality
 
+- **Dead code out** — Nothing in the app called these, so they go:
+  - **A leftover pool toggle (the one that mattered):** an old share-side "toggle disk pool partition" took a drive's record out of the pool directly, skipping the safe removal that moves its files first. An old share copies toggle likewise bypassed turning a share Off safely.
+  - **Unused routes and actions:** an any-setting toggle, the old one-shot installs of dnsmasq, Greyhole and apps (their install windows replaced them), the old tunnel set-up and cloudflared install, app restart and status, the generated routes for user and share pages that don't exist, and a page with no view at all (`/shares/disk_pooling`).
+  - **Tags:** their code (the database column goes in a later update).
+  - **Unused translations:** 293 of the 453 English strings.
+- **Missing labels filled in** — A spec now fails if a page asks for a translation that isn't there. That turned up labels that had never existed, which those pages showed as stand-in text:
+  - **Hosts:** the hosts page's headings, button, form and remove prompt.
+  - **DNS aliases:** the page's form, and its remove prompt.
+  - **Network settings:** the DNS servers fields and button, the DHCP range's "Starts at" and "Ends at", and the lease time.
+  - **Elsewhere:** the DNS provider list's Cloudflare entry (the default), and search's Previous page link.
+
 - **Lighter: only the parts of Rails it uses, and no Turbo** — Amahi-kai loaded all of Rails, including mail, file attachments, rich text, inbound email and websockets, none of which it uses. Now it loads only the parts it does use. It also loaded Turbo, then switched it off on every page. Booted for production, the app takes about 93 MB instead of about 112 MB (18 MB, or 16%, less per app process), and loads 357 fewer files.
 
 - **One look, no themes** — With every page dark and one look, the theme system goes. That's the Settings → Themes page, the second "vertical" theme, the loader that read each theme's `init.rb` on every request, the light theme's colours, the old theme switcher's styles, and the theme's out-of-date Sass. The look is `app/assets/stylesheets/theme.css`, joined last into the one stylesheet every page loads, and it's about a third shorter. Search results use the file browser's icons, so the old set of PNG file icons is gone, as are a few unused helpers and icons.

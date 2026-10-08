@@ -144,11 +144,6 @@ class AppsController < ApplicationController
     redirect_back fallback_location: apps_index_path, alert: "Couldn't refresh the app catalog: #{e.message}"
   end
 
-  # The install itself runs in the stream (the page opens it in the install window).
-  def docker_install
-    redirect_to apps_index_path
-  end
-
   def docker_install_stream
     entry = AppCatalog.find(params[:id])
     host = request.host
@@ -204,17 +199,6 @@ class AppsController < ApplicationController
 
   def docker_stop
     app_action(&:stop!)
-  end
-
-  def docker_restart
-    app_action(&:restart!)
-  end
-
-  def docker_status
-    docker_app = DockerApp.find_by!(identifier: params[:id])
-    render json: { status: docker_app.status, host_port: docker_app.host_port, error_message: docker_app.error_message }
-  rescue ActiveRecord::RecordNotFound
-    render json: { status: 'available' }
   end
 
   private

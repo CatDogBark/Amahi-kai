@@ -132,23 +132,6 @@ RSpec.describe Share, 'config generation', type: :model do
     end
   end
 
-  describe '#tag_list' do
-    it 'returns empty array for nil tags' do
-      share = create(:share, tags: nil)
-      expect(share.tag_list).to eq([])
-    end
-
-    it 'returns empty array for blank tags' do
-      share = create(:share, tags: "")
-      expect(share.tag_list).to eq([])
-    end
-
-    it 'splits comma-separated tags' do
-      share = create(:share, tags: "music, video, photos")
-      expect(share.tag_list).to eq(["music", "video", "photos"])
-    end
-  end
-
   describe '.default_samba_domain' do
     it 'strips common TLDs' do
       expect(Share.default_samba_domain("myserver.com")).to eq("myserver")
@@ -266,37 +249,4 @@ RSpec.describe Share, 'config generation', type: :model do
     end
   end
 
-  describe '#update_tags!' do
-    it 'toggles a tag off when already present' do
-      share = create(:share, tags: "music, video")
-      share.update_tags!(tags: "music")
-      expect(share.reload.tag_list).not_to include("music")
-      expect(share.reload.tag_list).to include("video")
-    end
-
-    it 'adds a new tag' do
-      share = create(:share, tags: "music")
-      share.update_tags!(tags: "photos")
-      expect(share.reload.tag_list).to include("music", "photos")
-    end
-
-    it 'updates path when path param present' do
-      share = create(:share, path: "/old/path")
-      share.update_tags!(path: "/new/path", tags: "ignored")
-      expect(share.reload.path).to eq("/new/path")
-    end
-
-    it 'rejects blank tag names' do
-      share = create(:share, tags: "music")
-      result = share.update_tags!(tags: "  ")
-      expect(result).to be false
-    end
-
-    it 'strips HTML tags from input' do
-      share = create(:share, tags: "music")
-      share.update_tags!(tags: "<script>alert</script>video")
-      tags = share.reload.tag_list
-      expect(tags.join).not_to include("<script>")
-    end
-  end
 end

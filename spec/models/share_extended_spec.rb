@@ -110,14 +110,6 @@ RSpec.describe Share, type: :model do
     end
   end
 
-  describe "#update_tags!" do
-    it "adds a tag via toggle" do
-      share = create(:share, tags: "music")
-      share.update_tags!(tags: "video")
-      expect(share.reload.tags).to include("video")
-    end
-  end
-
   describe "#update_extras!" do
     it "updates extras" do
       share = create(:share, extras: "")
@@ -138,20 +130,6 @@ RSpec.describe Share, type: :model do
     it "executes chmod command" do
       share = create(:share)
       expect { share.make_guest_non_writeable }.not_to raise_error
-    end
-  end
-
-  describe "#toggle_disk_pool!" do
-    it "toggles from 0 to 1" do
-      share = create(:share, disk_pool_copies: 0)
-      share.toggle_disk_pool!
-      expect(share.reload.disk_pool_copies).to eq(1)
-    end
-
-    it "toggles from positive to 0" do
-      share = create(:share, disk_pool_copies: 2)
-      share.toggle_disk_pool!
-      expect(share.reload.disk_pool_copies).to eq(0)
     end
   end
 

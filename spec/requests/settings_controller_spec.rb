@@ -36,21 +36,6 @@ describe "Settings Controller", type: :request do
       expect(I18n.available_locales).to eq([:en])
     end
 
-    describe "toggle_setting" do
-      it "toggles a setting value" do
-        setting = Setting.create!(name: "advanced", value: "0", kind: 0)
-        post "/settings/toggle_setting", params: { id: setting.id }, as: :json
-        expect(response).to have_http_status(:ok)
-        expect(setting.reload.value).to eq("1")
-      end
-
-      it "toggles back" do
-        setting = Setting.create!(name: "advanced", value: "1", kind: 0)
-        post "/settings/toggle_setting", params: { id: setting.id }, as: :json
-        expect(setting.reload.value).to eq("0")
-      end
-    end
-
     describe "servers" do
       before do
         Setting.create!(name: "advanced", value: "1", kind: 0)
