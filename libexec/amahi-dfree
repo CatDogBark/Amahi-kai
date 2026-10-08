@@ -1,0 +1,49 @@
+#!/bin/sh
+# Samba's "dfree command" for the shares Greyhole pools (Share#samba_conf): the pool's size and
+# free space in 1K blocks, the free space divided by the share's copies, as greyhole-dfree
+# answers it. Samba runs it as the person connected, and greyhole-dfree reads greyhole.conf,
+# which holds the database password and so isn't theirs to read: it answered "0 0 1024" (no
+# space), and every copy into a pooled share was refused. This reads the same drives and
+# copies from greyhole-pool.conf, the root helper's copy of greyhole.conf without the database
+# lines, and the share's folder from smb.conf. A pool folder with no drive mounted is left out.
+#
+# Samba runs it in the share's folder, with a path relative to it ("." for the folder itself).
+POOL=${AMAHI_DFREE_POOL:-/etc/amahi-kai/greyhole-pool.conf}
+SMB_CONF=${AMAHI_DFREE_SMB_CONF:-/etc/samba/smb.conf}
+
+case "$1" in
+  /*) dir=$1 ;;
+  *) dir=$(pwd)/$1 ;;
+esac
+dir=$(cd "$dir" 2>/dev/null && pwd -P) || dir=$(pwd -P)
+
+total=0
+free=0
+drives=0
+for drive in $(sed -n 's/^[[:space:]]*storage_pool_drive[[:space:]]*=[[:space:]]*\([^,[:space:]]*\).*/\1/p' "$POOL" 2>/dev/null); do
+  mountpoint -q "$drive" 2>/dev/null || continue
+  set -- $(df -Pk "$drive" 2>/dev/null | awk 'NR == 2 { print $2, $4 }')
+  [ $# -eq 2 ] || continue
+  total=$((total + $1))
+  free=$((free + $2))
+  drives=$((drives + 1))
+done
+
+# The share whose folder holds this one (the longest match), then its copies.
+share=$(awk -v dir="$dir" '
+  /^[[:space:]]*\[/ { name = $0; sub(/^[[:space:]]*\[/, "", name); sub(/\].*/, "", name); next }
+  /^[[:space:]]*path[[:space:]]*=/ {
+    path = $0; sub(/^[^=]*=[[:space:]]*/, "", path); sub(/[[:space:]]+$/, "", path)
+    if ((dir == path || index(dir, path "/") == 1) && length(path) > best) { best = length(path); found = name }
+  }
+  END { print found }' "$SMB_CONF" 2>/dev/null)
+copies=$(awk -F= -v share="$share" '
+  { key = $1; gsub(/[[:space:]]/, "", key); want = share; gsub(/[[:space:]]/, "", want) }
+  key == "num_copies[" want "]" { value = $2; gsub(/[[:space:]]/, "", value); print value; exit }' "$POOL" 2>/dev/null)
+case "$copies" in
+  max) copies=$drives ;;
+  ''|*[!0-9]*) copies=1 ;;
+esac
+[ "$copies" -ge 1 ] 2>/dev/null || copies=1
+
+echo "$total $((free / copies)) 1024"

@@ -20,6 +20,10 @@ require 'shellwords'
 require 'ipaddr'
 
 class Share < ApplicationRecord
+  # Samba's free-space answer for a pooled share (libexec/amahi-dfree): Greyhole's own
+  # greyhole-dfree can't read greyhole.conf as the person connected, and answered no space.
+  DFREE_COMMAND = '/opt/amahi-kai/libexec/amahi-dfree'.freeze
+
 
   def to_param
     name
@@ -129,7 +133,7 @@ class Share < ApplicationRecord
     if disk_pool_copies > 0
       tmp = e.gsub /\tdfree command.*\n/, ''
       e = tmp.gsub /\tvfs objects.*greyhole.*\n/, ''
-      e += "\n\t" + 'dfree command = /usr/bin/greyhole-dfree' + "\n"
+      e += "\n\t" + "dfree command = #{DFREE_COMMAND}" + "\n"
       e += "\t" + 'vfs objects = greyhole' + "\n"
     end
     ret % [name, name, path, wr, br, allowed, writes, masks, e]
