@@ -146,8 +146,6 @@ All notable changes to Amahi-kai are documented here.
 
 ### 🔧 Architecture & Code Quality
 
-- **Users' old SSH-key column goes** — Amahi-kai stopped saving and installing users' SSH keys long ago (web users get no shell), so the database column that held them is dropped.
-
 - **The last of the old command runner goes** — With everything that changes the system going through the root helper, and everything that reads it running as argument lists, the old way of running command strings (with its log masking and its error type) had nothing left to run. It's gone, with 13 places that still caught its error, and the cloudflared check runs the same way as the rest.
 
 - **More dead code out** — Nothing in the app used these either:
@@ -157,6 +155,8 @@ All notable changes to Amahi-kai are documented here.
 - **Tests CI skipped now run** — Search's share indexing, the Apps page's requests and the storage pool's requests were marked as needing a real NAS, so CI never ran them. They don't need one, so CI runs them now.
 
 - **Share tags' column goes** — The last of tags: their database column is dropped.
+
+- **Users' old SSH-key column goes** — Amahi-kai stopped saving and installing users' SSH keys long ago (web users get no shell), so the database column that held them is dropped.
 
 - **The themes table goes** — With the theme system gone (#102), its database table and its setting are dropped. The last code that still wrote share tags is gone too, so their column can be dropped in the next update.
 
