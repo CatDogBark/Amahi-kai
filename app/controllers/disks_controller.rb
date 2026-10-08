@@ -110,7 +110,7 @@ class DisksController < ApplicationController
     @page_title = t('disks')
     @greyhole_installed = Greyhole.installed?
     @trash = GreyholeTrash.contents
-    @pooled_shares = Share.where('disk_pool_copies > 0').pluck(:name)
+    @pooled_shares = Share.where('disk_pool_copies > 0').where(pool_removing: false).pluck(:name) # not ones turning off
   end
 
   def trash_restore
