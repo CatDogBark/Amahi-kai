@@ -104,7 +104,7 @@ class CloudflareService
 
     def token_configured?
       return true unless production?
-      File.exist?(TOKEN_FILE) || system('systemctl', 'is-enabled', '--quiet', 'cloudflared', err: File::NULL)
+      File.exist?(TOKEN_FILE) || Shell.success?('systemctl', 'is-enabled', '--quiet', 'cloudflared')
     end
 
     private

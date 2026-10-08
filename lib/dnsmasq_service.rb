@@ -1,5 +1,5 @@
 # Manages dnsmasq DHCP/DNS service lifecycle and configuration.
-# Extracted from NetworkController to keep Shell.run out of controllers.
+# Extracted from NetworkController to keep the service handling out of controllers.
 #
 # The root helper writes the config (network.write_dnsmasq_config, only lines this
 # module generates) and starts, stops and restarts the service (services.*).

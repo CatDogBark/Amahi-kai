@@ -1,5 +1,5 @@
 # Manages swap file creation.
-# Extracted from SetupController to keep Shell.run out of controllers.
+# Extracted from SetupController to keep the swap handling out of controllers.
 
 module SwapService
   SWAP_PATH = '/swapfile'

@@ -92,7 +92,7 @@ class SetupController < ApplicationController
     require 'disk_manager'
     @devices = begin
       DiskManager.devices
-    rescue DiskManager::DiskError, Shell::CommandError => e
+    rescue DiskManager::DiskError => e
       Rails.logger.error("SetupController#storage: #{e.message}")
       []
     end
@@ -105,7 +105,7 @@ class SetupController < ApplicationController
     begin
       preview = DiskManager.preview(device)
       render json: { status: 'ok', device: device, entries: preview[:entries], total_used: preview[:total_used], file_count: preview[:file_count] }
-    rescue DiskManager::DiskError, Shell::CommandError => e
+    rescue DiskManager::DiskError => e
       render json: { status: 'error', message: e.message }, status: :unprocessable_entity
     end
   end
@@ -162,7 +162,7 @@ class SetupController < ApplicationController
     begin
       SetupService.create_first_share(name)
       session[:first_share_created] = name
-    rescue ActiveRecord::RecordInvalid, Errno::ENOENT, Errno::EACCES, Shell::CommandError => e
+    rescue ActiveRecord::RecordInvalid, Errno::ENOENT, Errno::EACCES => e
       flash[:error] = e.message
       render :share; return
     end

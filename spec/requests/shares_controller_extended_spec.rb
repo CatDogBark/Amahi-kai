@@ -77,7 +77,7 @@ RSpec.describe "SharesController extended", type: :request do
       end
 
       it "handles Greyhole error gracefully" do
-        allow(Greyhole).to receive(:configure!).and_raise(Shell::CommandError.new("greyhole", "boom", 1))
+        allow(Greyhole).to receive(:configure!).and_raise(Greyhole::GreyholeError, "boom")
         put update_disk_pool_copies_share_path(share), params: { value: "2" }, as: :json
         expect(response).to have_http_status(:ok)
       end

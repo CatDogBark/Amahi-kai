@@ -313,7 +313,7 @@ class Share < ApplicationRecord
 
   def push_samba_config
     Share.push_shares
-  rescue Shell::CommandError, Errno::ENOENT, Errno::EACCES, IOError => e
+  rescue Errno::ENOENT, Errno::EACCES, IOError => e
     Rails.logger.error("Failed to push Samba config: #{e.message}")
   end
 
