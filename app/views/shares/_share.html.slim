@@ -9,115 +9,122 @@ div.share[id="whole_share_#{share.id}"]
         = link_to path2location(share.name), path2uri(share.name)
 
   .settings-stretcher[style="display:none;"]
-    .share-manage.collapsed-div-style
-      fieldset
-        legend
-          | &nbsp; #{t('edit_share')} &nbsp;
-          b= share.name
-          | &nbsp;&mdash;&nbsp;
-          small= "#{t('created')} #{formatted_date(share.created_at)}"
+    /! One share's settings, by what they decide, each with what it does underneath.
+    .share-manage.collapsed-div-style.share-card
+      .share-card-title
+        span.fw-semibold= share.name
+        span.small.text-muted.ms-2= "#{t('created')} #{formatted_date(share.created_at)}"
 
-        .settings-actions
-          span.delete data-controller="delete" data-delete-url-value=share_path(share) data-delete-confirm-value=confirm_share_destroy_message(share.name) data-delete-remove-selector-value="#whole_share_#{share.id}"
-            a.btn-delete.remote-btn.navbar-right.btn.btn-sm href="#" data-action="click->delete#destroy"
-              = t('delete') + ' ' + share.name
+      section.share-section id="share-section-access-#{share.id}"
+        h6.share-section-title Access
+        .share-row
+          .share-row-label Who can use it
+          .share-row-body
+            = render :partial => 'shares/access', :object => share
+            .share-help
+              | With All users on, everyone with an account can open the share, and Writeable lets them change its files.
+              |  Turn All users off to choose people one by one, and whether guests (no account) get in.
+        .share-row
+          .share-row-label Visible
+          .share-row-body
+            span data-controller="toggle" data-toggle-url-value=toggle_visible_share_path(id: share.id)
+              input.share_visible_checkbox.form-check-input type="checkbox" id="share_visible_#{share.id}" checked=share.visible data-toggle-target="checkbox" data-action="click->toggle#toggle"
+              |  Shown on the network
+            .share-help
+              | Computers browsing the network see it. Turned off, it's hidden from the list but still opens at #{path2location(share.name)}.
+        .share-row
+          .share-row-label People
+          .share-row-body
+            = render :partial => 'shares/permissions', :object => share
+            .share-help Takes everyone off the share's list of people (used when All users is off), so only the people you tick again can open it.
 
-        .settings-fields
-          table
-            tr
-              td
-                label #{t('access')}
-              td= render :partial => 'shares/access', :object => share
+      section.share-section id="share-section-storage-#{share.id}"
+        h6.share-section-title Storage
+        .share-row
+          .share-row-label Folder
+          .share-row-body data-controller="inline-edit" data-inline-edit-url-value=update_path_share_path(id: share.id) data-inline-edit-method-value="PUT"
+            a.open-update-path-area.focus href="#" data-inline-edit-target="display" data-action="click->inline-edit#edit"
+              = share.path
+            form.update-path-form style="display:none" action=update_path_share_path(id: share.id) method="post" data-inline-edit-target="form" data-action="submit->inline-edit#submit"
+              input type="hidden" name="_method" value="put"
+              input type="hidden" name="authenticity_token" value=form_authenticity_token
+              input.form-control.input-sm type="text" name="share[path]" value=share.path data-inline-edit-target="input"
+              |  
+              button.btnn.btn.btn-info.btn-sm type="submit"
+                = t('change')
+              a.cancel-btn-style.left-margin-10 href="#" data-action="click->inline-edit#cancel"
+                | Cancel
+            span.messages data-inline-edit-target="message"
+            .share-help Where the share's files are kept on the NAS. Click it to change it.
+        .share-row
+          .share-row-label Size
+          .share-row-body
+            span.update-size-area id="size-area-#{share.id}"
+              a.focus.remote-bt href="#" onclick="getShareSize(#{share.id}); return false;"
+                span= t('get_the_size')
+              span.spinner-border.spinner-border-sm.ms-1 id="size-spinner-#{share.id}" style="display:none"
+            .share-help How much its files take up. Counting a big share takes a moment.
+        .share-row
+          .share-row-label Pool copies
+          .share-row-body
+            - copies = share.disk_pool_copies
+            - if share.pool_removing?
+              .small.text-info id="pool-removing-#{share.id}" data-reload-after="30"
+                | Turning off: Greyhole is moving the share's files from the pool drives back into its folder. This page updates by itself when it's done.
+            - else
+              .d-flex.align-items-center.gap-2 id="pool-controls-#{share.id}"
+                button.btn.btn-sm.btn-outline-secondary data-pool-action="minus" onclick="updatePoolCopies(#{share.id}, #{[copies - 1, 0].max})" disabled=(copies <= 0) aria-label="Fewer copies"
+                  | −
+                span.fw-bold.mx-1 id="pool-copies-#{share.id}"
+                  = copies == 0 ? 'Off' : "#{copies} #{copies == 1 ? 'copy' : 'copies'}"
+                button.btn.btn-sm.btn-outline-secondary data-pool-action="plus" onclick="updatePoolCopies(#{share.id}, #{[copies + 1, 2].min})" disabled=(copies >= 2) aria-label="More copies"
+                  | +
+                span.spinner-border.spinner-border-sm.ms-1 id="pool-spinner-#{share.id}" style="display:none"
+              .share-help id="pool-help-#{share.id}"
+                | Off: the files stay in the share's folder, on the system disk.
+                |  1 copy: Greyhole keeps them on the storage pool's drives, which adds up their space, but a drive that fails loses its files.
+                |  2 copies: each file is kept on two drives, so one can fail and nothing is lost.
+                - unless Greyhole.installed?
+                  |  Install Greyhole on
+                  =< link_to 'Disks → Storage Pool', disks_storage_pool_path
+                  |  to use the pool.
 
-            tr
-              td
-                label #{t('visibility')}
-              td
-                span data-controller="toggle" data-toggle-url-value=toggle_visible_share_path(id: share.id)
-                  input.share_visible_checkbox.form-check-input type="checkbox" id="share_visible_#{share.id}" checked=share.visible data-toggle-target="checkbox" data-action="click->toggle#toggle"
-                  |  #{t('visible')}
+      section.share-section id="share-section-trash-#{share.id}"
+        h6.share-section-title= t('trash')
+        .share-row
+          .share-row-label Deleted files
+          .share-row-body
+            div
+              - days = Trash.days
+              | Kept in the
+              =< link_to t('trash'), trash_path, id: "share-trash-#{share.id}"
+              = days.zero? ? ' until it is emptied.' : " for #{pluralize(days, 'day')}, then deleted for good."
+            .share-help
+              - if copies.positive?
+                | Greyhole keeps them on the pool drives. Restore them from the Trash, below the shares in the file browser; how long they're kept is set there.
+              - else
+                | They're kept in a hidden .recycle folder in the share. Restore them from the Trash, below the shares in the file browser; how long they're kept is set there.
 
-            tr
-              td
-                label Disk Pool
-              td
-                - if share.pool_removing?
-                  .small.text-info id="pool-removing-#{share.id}" data-reload-after="30"
-                    | Turning off: Greyhole is moving the share's files from the pool drives back into its folder. This page updates by itself when it's done.
-                - else
-                  .d-flex.align-items-center.gap-2 id="pool-controls-#{share.id}"
-                    - copies = share.disk_pool_copies
-                    button.btn.btn-sm.btn-outline-secondary data-pool-action="minus" onclick="updatePoolCopies(#{share.id}, #{[copies - 1, 0].max})" disabled=(copies <= 0)
-                      | −
-                    span.fw-bold.mx-1 id="pool-copies-#{share.id}"
-                      = copies == 0 ? 'Off' : "#{copies} #{copies == 1 ? 'copy' : 'copies'}"
-                    button.btn.btn-sm.btn-outline-secondary data-pool-action="plus" onclick="updatePoolCopies(#{share.id}, #{[copies + 1, 2].min})" disabled=(copies >= 2)
-                      | +
-                    span.spinner-border.spinner-border-sm.ms-1 id="pool-spinner-#{share.id}" style="display:none"
-
-            tr
-              td
-                label #{t('permissions')}
-              td= render :partial => 'shares/permissions', :object => share
-
-            - if advanced?
-              tr
-                td.top
-                  label #{t('tags')}
-                td.top[colspan='8']= render :partial => 'shares/tags', :object => share
-
-            tr
-              td
-                label #{t('location')}
-              td data-controller="inline-edit" data-inline-edit-url-value=update_path_share_path(id: share.id) data-inline-edit-method-value="PUT"
-                a.open-update-path-area.focus href="#" data-inline-edit-target="display" data-action="click->inline-edit#edit"
-                  = share.path
-                form.update-path-form style="display:none" action=update_path_share_path(id: share.id) method="post" data-inline-edit-target="form" data-action="submit->inline-edit#submit"
+      - if advanced?
+        section.share-section id="share-section-advanced-#{share.id}"
+          h6.share-section-title Advanced
+          .share-row
+            .share-row-label Samba settings
+            .share-row-body
+              .extras-editor id="extras-editor-#{share.id}"
+                form action=update_extras_share_path(id: share.id) method="post" onsubmit="submitExtras(#{share.id}, this); return false;"
                   input type="hidden" name="_method" value="put"
                   input type="hidden" name="authenticity_token" value=form_authenticity_token
-                  input.form-control.input-sm type="text" name="share[path]" value=share.path data-inline-edit-target="input"
-                  |  
-                  button.btnn.btn.btn-info.btn-sm type="submit"
-                    = t('change')
-                  a.cancel-btn-style.left-margin-10 href="#" data-action="click->inline-edit#cancel"
-                    | Cancel
-                span.messages data-inline-edit-target="message"
+                  textarea.form-control.form-control-sm.font-monospace name="share[extras]" rows="3" placeholder="key = value (one per line)" id="extras-textarea-#{share.id}" style="font-size: 0.8rem;"
+                    = share.extras
+                  .mt-1
+                    button.btn.btn-info.btn-sm type="submit" style="font-size: 0.8rem;" Save
+                    span.ms-2.text-success.small id="extras-msg-#{share.id}" style="display:none" Saved!
+              .share-help
+                | Extra settings for Samba, one per line, as smb.conf writes them. Amahi-kai checks them before Samba uses them, and refuses ones that could run programs.
 
-            tr
-              td
-                label #{t('size')}
-              td
-                span.update-size-area id="size-area-#{share.id}"
-                  a.focus.remote-bt href="#" onclick="getShareSize(#{share.id}); return false;"
-                    span= t('get_the_size')
-                  span.spinner-border.spinner-border-sm.ms-1 id="size-spinner-#{share.id}" style="display:none"
-
-            tr
-              td.top
-                label Features
-              td.top
-                /! data-extras: the share's Samba settings, which the features change (shares.js)
-                .share-presets.d-flex.flex-wrap.align-items-center.gap-1 id="share-presets-#{share.id}" data-extras=share.extras.to_s
-                  - presets = { 'recycle_bin' => { icon: "\u{1F5D1}", label: 'Recycle Bin', params: "vfs objects = recycle\nrecycle:repository = .recycle\nrecycle:keeptree = yes\nrecycle:versions = yes" }, 'macos' => { icon: "\u{1F34E}", label: 'macOS', params: "vfs objects = fruit streams_xattr\nfruit:metadata = stream\nfruit:model = MacSamba\nfruit:posix_rename = yes\nfruit:veto_appledouble = no\nfruit:nfs_aces = no\nfruit:wipe_intentionally_left_blank_rfork = yes\nfruit:delete_empty_adfiles = yes" }, 'hide_dotfiles' => { icon: "\u{1F441}", label: 'Hide Dotfiles', params: "hide dot files = yes\nveto files = /._*/.DS_Store/" }, 'time_machine' => { icon: "\u{23F0}", label: 'Time Machine', params: "vfs objects = fruit streams_xattr\nfruit:time machine = yes\nfruit:metadata = stream\nfruit:model = TimeCapsule" } }
-                  - presets.each do |key, preset|
-                    - if key == 'recycle_bin' && share.disk_pool_copies.positive?
-                      /! A pooled share's deleted files go to Greyhole's trash, in the file browser
-                      a.btn.btn-sm.btn-outline-secondary.rounded-pill href=trash_path id="share-trash-#{share.id}" style="font-size: 0.8rem; padding: 0.2rem 0.6rem;"
-                        | #{preset[:icon]} Trash: Greyhole keeps deleted files
-                      - next
-                    - active = share.extras.present? && preset[:params].split("\n").all? { |line| share.extras.include?(line) }
-                    button.btn.btn-sm.rounded-pill class=("#{active ? 'btn-info' : 'btn-outline-secondary'}") onclick="toggleSharePreset(#{share.id}, '#{key}')" data-preset=key style="font-size: 0.8rem; padding: 0.2rem 0.6rem;"
-                      | #{preset[:icon]} #{preset[:label]}
-                  - if advanced?
-                    a.text-muted.ms-2 href="#" onclick="document.getElementById('extras-editor-#{share.id}').style.display = document.getElementById('extras-editor-#{share.id}').style.display === 'none' ? '' : 'none'; return false;" data-tip="Edit raw parameters" aria-label="Edit raw parameters" style="font-size: 0.9rem;"
-                      = lucide_icon('settings', size: 14)
-                - if advanced?
-                  .extras-editor.mt-2 id="extras-editor-#{share.id}" style="display:none"
-                    form action=update_extras_share_path(id: share.id) method="post" onsubmit="submitExtras(#{share.id}, this); return false;"
-                      input type="hidden" name="_method" value="put"
-                      input type="hidden" name="authenticity_token" value=form_authenticity_token
-                      textarea.form-control.form-control-sm.font-monospace name="share[extras]" rows="3" placeholder="key = value (one per line)" id="extras-textarea-#{share.id}" style="font-size: 0.8rem;"
-                        = share.extras
-                      .mt-1
-                        button.btn.btn-info.btn-sm type="submit" style="font-size: 0.8rem;" Save
-                        span.ms-2.text-success.small id="extras-msg-#{share.id}" style="display:none" Saved!
+      .share-card-footer
+        span.delete data-controller="delete" data-delete-url-value=share_path(share) data-delete-confirm-value=confirm_share_destroy_message(share.name) data-delete-remove-selector-value="#whole_share_#{share.id}"
+          a.btn-delete.remote-btn.btn.btn-sm href="#" data-action="click->delete#destroy"
+            = t('delete') + ' ' + share.name
+        span.share-help.ms-2 Deletes the share and every file in it. There's no undo.
