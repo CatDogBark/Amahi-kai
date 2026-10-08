@@ -158,6 +158,9 @@ module AmahiHelper
   TRASH_STAGING = '.amahi-restore'
   # greyhole.conf without its database lines, for amahi-dfree: anyone may read it.
   GREYHOLE_POOL_CONF = '/etc/amahi-kai/greyhole-pool.conf'
+  # Greyhole's weekly job: its file check, and a report of its usage stats to greyhole.net,
+  # which Amahi-kai takes out (do_stop_greyhole_stats).
+  GREYHOLE_WEEKLY_CRON = '/etc/cron.weekly/greyhole'
   # Uninstalling Greyhole or ZFS removes these packages (and nothing else; the PHP modules and
   # smartmontools other things use stay).
   GREYHOLE_PACKAGES = %w[greyhole].freeze
@@ -422,7 +425,7 @@ module AmahiHelper
     'samba.write_config' => {
       params: %w[content],
       validate: ->(a) { { content: smb_conf(a['content']) } },
-      plan: ->(v) { [[:install, SMB_CONF, v[:content], :smb_conf], [:refresh_greyhole_pool]] }
+      plan: ->(v) { [[:install, SMB_CONF, v[:content], :smb_conf], [:refresh_greyhole_pool], [:stop_greyhole_stats]] }
     },
     'samba.write_lmhosts' => {
       params: %w[content],
@@ -2511,6 +2514,21 @@ module AmahiHelper
         run_command(['/usr/bin/find', top, '-mindepth', '1', '-type', 'd', '-empty', '-delete'])
       end
       nil
+    end
+
+    # Greyhole's weekly job without the report of its usage stats to greyhole.net (the
+    # package's own line and its comments), keeping the file check. Run with Samba's config,
+    # so a System Update, Greyhole's install and every share change see to it. The job is a
+    # dpkg conffile, so Greyhole's updates keep this version (they keep changed config files).
+    def do_stop_greyhole_stats
+      return nil unless File.file?(GREYHOLE_WEEKLY_CRON) && !File.symlink?(GREYHOLE_WEEKLY_CRON)
+      content = File.read(GREYHOLE_WEEKLY_CRON)
+      return nil unless content.include?('usage_stats')
+      kept = content.lines.reject do |line|
+        line.include?('usage_stats') || line.match?(/\A#.*(calls home|greyhole --stats|leave this here)/i)
+      end
+      kept = kept.join.rstrip
+      do_install(GREYHOLE_WEEKLY_CRON, "#{kept}\n\n# Amahi-kai took out the weekly report of Greyhole's usage stats to greyhole.net.\n", nil, '0755')
     end
 
     # Files a plan names (never a path from the request).

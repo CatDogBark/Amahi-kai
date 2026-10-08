@@ -204,7 +204,7 @@ RSpec.describe 'AmahiHelper' do
 
     it 'plans an install checked by testparm' do
       planned = steps('samba.write_config', { 'content' => base })
-      expect(planned).to eq([[:install, '/etc/samba/smb.conf', base, :smb_conf], [:refresh_greyhole_pool]])
+      expect(planned).to eq([[:install, '/etc/samba/smb.conf', base, :smb_conf], [:refresh_greyhole_pool], [:stop_greyhole_stats]])
     end
 
     it 'accepts the config the app generates' do
@@ -910,6 +910,39 @@ RSpec.describe 'AmahiHelper' do
       expect(helper).to have_received(:do_install).once
     ensure
       file&.close!
+    end
+
+    it "takes the usage report to greyhole.net out of Greyhole's weekly job, keeping its file check" do
+      Dir.mktmpdir do |dir|
+        cron = "#{dir}/greyhole"
+        stub_const('AmahiHelper::GREYHOLE_WEEKLY_CRON', cron)
+        helper.do_stop_greyhole_stats # no job: nothing to do
+        expect(File.exist?(cron)).to be false
+        File.write(cron, <<~CRON)
+          #!/bin/sh
+
+          # Weekly fsck
+          /usr/bin/greyhole --fsck --email-report --dont-walk-metadata-store --disk-usage-report > /dev/null
+
+          # This calls home to report anonymous data about Greyhole usage.
+          # It sends the output of 'greyhole --stats' to the greyhole.net server.
+          # Please leave this here... We use it to get usage stats for Greyhole.
+          /usr/bin/greyhole --getuid > /tmp/greyhole.stats ; /usr/bin/greyhole --stats --json >> /tmp/greyhole.stats; curl -s --data @/tmp/greyhole.stats https://www.greyhole.net/usage_stats.php > /dev/null ; rm /tmp/greyhole.stats
+        CRON
+        allow(helper).to receive(:do_install) { |path, content, *| File.write(path, content) }
+        helper.do_stop_greyhole_stats
+        expect(File.read(cron)).to eq(<<~CRON)
+          #!/bin/sh
+
+          # Weekly fsck
+          /usr/bin/greyhole --fsck --email-report --dont-walk-metadata-store --disk-usage-report > /dev/null
+
+          # Amahi-kai took out the weekly report of Greyhole's usage stats to greyhole.net.
+        CRON
+        expect(helper).to have_received(:do_install).with(cron, anything, nil, '0755').once
+        helper.do_stop_greyhole_stats # already done
+        expect(helper).to have_received(:do_install).once
+      end
     end
 
     it 'refuses lines Amahi-kai does not write, and pool drives outside /mnt' do
