@@ -8,6 +8,7 @@ class FileBrowserController < ApplicationController
   include ZipKit::RailsStreaming
 
   before_action :browse_required
+  before_action { @no_tabs = true } # Files is its own section; Setup is in the header
   before_action :set_share, except: :index
   before_action :check_share_access, except: :index
   before_action :resolve_path, except: :index
@@ -21,6 +22,8 @@ class FileBrowserController < ApplicationController
   def index
     @page_title = t('shares')
     @shares = Share.by_name.select { |share| current_user.can_access_share?(share) }
+    # How many things each share holds at its top, for its card
+    @counts = @shares.to_h { |share| [share.id, (Dir.children(share.path).count { |e| !e.start_with?('.') } rescue nil)] }
     # Admins also get the Trash, below the shares
     @trash = Trash.contents if current_user.admin?
   end
@@ -36,6 +39,9 @@ class FileBrowserController < ApplicationController
       return redirect_to file_browser_path(@share)
     end
 
+    # Its heading is the breadcrumbs (Shares › the share › its folders), under Files
+    @page_title = @share.name
+    @page_heading = false
     @entries = FileBrowserService.list_directory(@full_path)
     @breadcrumbs = FileBrowserService.build_breadcrumbs(@share.name, @relative_path)
   end
@@ -44,7 +50,8 @@ class FileBrowserController < ApplicationController
   def download
     unless File.exist?(@full_path)
       flash[:error] = "File not found"
-      return redirect_to file_browser_path(@share, path: @relative_path)
+      parent = File.dirname(@relative_path.to_s)
+      return redirect_to helpers.browse_path(@share, parent == '.' ? nil : parent) # the folder it was in
     end
 
     if File.directory?(@full_path)

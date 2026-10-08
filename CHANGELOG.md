@@ -6,6 +6,16 @@ All notable changes to Amahi-kai are documented here.
 
 ### 🚀 Major Features
 
+- **A new look** — Every page is dark now, with the water behind near-black glass panels, one mint accent, and Space Grotesk, which ships with Amahi-kai, so nothing loads from elsewhere. The theme switcher is gone.
+  - **The header:** Amahi-kai, then Dashboard, Files, Apps and Setup, with the current one marked, search, and System Update, the water background's settings, Help and Advanced. On a phone, they fold into a menu.
+  - **Page titles:** each sits under its section (Setup, Files).
+  - **Setup's tabs:** a bar of pills with icons, and its sub-tabs underlined.
+- **The file browser, redone** (Files in the header) — Shares are cards, with a pool or read-only badge, how many things they hold and their address, and the Trash is set apart below them.
+  - **Inside a share:** a whole row is the link. A folder opens, and a file shows in a panel beside the list, with a preview for pictures, video and audio, its kind, size and date, Download, and Open full screen. Files with no preview say so.
+  - **List or grid:** the grid shows pictures as themselves, and the choice is remembered.
+  - **Headings:** the breadcrumbs (Shares › the share › its folders) are the page's heading, and Setup's tabs no longer show here.
+  - **Fixed:** a folder inside a share now opens. Its link used to lead back to the share's top.
+
 - **Role-Based Access Control (RBAC)** — Three roles: admin (full access), user (dashboard + file browser + search), guest (Samba-only). Per-share access and write permissions.
 - **Native File Browser** — Browse, preview images/video/audio/PDF, download files or a whole folder as a zip. View-only: files change over the SMB shares.
 - **Tailscale VPN Integration** — Install, connect, disconnect from the web UI. Auth URL parsing (no blocking `tailscale login`).

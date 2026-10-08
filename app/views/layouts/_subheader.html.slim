@@ -1,10 +1,10 @@
-.container
-	.row.p-4
-		.col-2
-			- if File.exist?(Rails.public_path.join('themes', @theme.path, 'images', 'logo.svg'))
-				img src="/themes/#{@theme.path}/images/logo.svg" alt="Amahi-kai" style="max-height: 55px"
-			- else
-				= theme_image_tag("logo.png")
-		.col-
-			h2.display-4.page-title
-	    		= page_title
+/! The page's title, with its section above it (Setup, Files) where it has one. The dashboard
+/! has its own welcome instead.
+- unless page_section == :dashboard
+  - section = { setup: 'Setup', files: 'Files' }[page_section]
+  .container.kai-pagehead
+    - if section
+      .kai-eyebrow = section
+    /! A page with its own heading (the file browser's breadcrumbs) sets @page_heading = false
+    - if page_title && @page_heading != false
+      h1.kai-page-title = page_title

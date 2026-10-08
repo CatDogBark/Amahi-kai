@@ -50,12 +50,14 @@ ruby:
     end
   end
 
+- tab_icons = { 'users' => 'users', 'shares' => 'folder', 'disks' => 'hard-drive', 'network' => 'globe', 'apps' => 'package', 'settings' => 'settings' }
 ul.nav.nav-tabs.setup-main-tab
   - visible_tabs.each do |tab|
     - is_active = (tab == active_tab)
     li.nav-item
-      a.nav-link.text-capitalize.tab-link-style href=tab[:url] class=("active active-tab-link-style" if is_active)
-        = t(tab[:label])
+      a.nav-link.text-capitalize.tab-link-style href=tab[:url] class=("active active-tab-link-style" if is_active) aria-current=("page" if is_active)
+        = lucide_icon(tab_icons.fetch(tab[:id], 'folder'), size: 15)
+        span= t(tab[:label])
 
 - if active_tab && active_tab[:subtabs]&.any?
   - visible_subtabs = @advanced ? active_tab[:subtabs] : active_tab[:subtabs].reject { |s| s[:advanced] }

@@ -31,7 +31,7 @@ describe "Settings Controller", type: :request do
     # English only: no language picker.
     it "serves pages in English, whatever language the browser asks for" do
       get "/settings", headers: { 'HTTP_ACCEPT_LANGUAGE' => 'de-DE,de;q=0.9' }
-      expect(response.body).to include('<html lang="en">')
+      expect(Nokogiri::HTML(response.body).at('html')['lang']).to eq('en')
       expect(response.body).not_to include('change_language')
       expect(I18n.available_locales).to eq([:en])
     end

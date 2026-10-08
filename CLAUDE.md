@@ -91,8 +91,10 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
   `bin/rails` and `rails runner` step goes through `as_app` (a spec checks). Anything the app writes at
   runtime must go in one of those folders or outside the tree.
 - **Stylesheets are plain CSS** (no Sass compiler since Q). Bootstrap is the official 5.3.8 build
-  in `vendor/assets` (CSS, and JS with Popper); update it by replacing those files. Theme CSS in
-  `public/themes/*/stylesheets` is built by hand from `src/` with Dart Sass.
+  in `vendor/assets` (CSS, and JS with Popper); update it by replacing those files. The amahi-kai
+  theme's `public/themes/amahi-kai/stylesheets/style.css` is edited directly (its `src/` Sass is
+  out of date; `public/themes/README.md`). Every page is dark (`data-theme="dark"` in the
+  layouts); the October 2026 refresh's rules are the block at the end of `style.css`.
 - `Shell.capture` and `Open3` don't set `$?`; use the status they return.
 - **`lsblk -J` only nests partitions and volumes under their disk when NAME is the first
   column**; with PATH first it lists every device flat, and a disk looks empty (#45: the helper's

@@ -1,9 +1,9 @@
 <%# The Trash (TrashController): every share's deleted files %>
 <div class="file-browser" id="trash">
-  <div class="fb-header">
+  <div class="fb-toolbar">
     <div class="fb-breadcrumbs">
       <a href="<%= file_browser_index_path %>" class="fb-crumb"><%= t('shares') %></a>
-      <span class="fb-crumb-sep">/</span>
+      <span class="fb-crumb-sep"><%= lucide_icon('chevron-right', size: 18) %></span>
       <span class="fb-crumb-current"><%= t('trash') %></span>
     </div>
     <div class="fb-actions">
@@ -36,9 +36,9 @@
     <% end %>
   </div>
 
-  <div class="fb-listing">
+  <div class="fb-panel">
     <% if @trash[:count].zero? %>
-      <div class="fb-empty" id="trash-summary"><div class="fb-empty-icon">🗑</div><p>The trash is empty.</p></div>
+      <div class="fb-empty" id="trash-summary"><div class="fb-empty-icon"><%= lucide_icon('trash-2', size: 44) %></div><p>The trash is empty.</p></div>
     <% else %>
       <table class="table fb-table">
         <thead>
@@ -54,7 +54,7 @@
           <% @trash[:items].each do |item| %>
             <% item_params = { kind: item.kind, share: item.share, path: item.path } %>
             <tr class="fb-row trash-item">
-              <td class="fb-icon-col"><%= FileBrowserService.file_icon(item.path, false) %></td>
+              <td class="fb-icon-col"><span class="fb-item-icon"><%= lucide_icon(FileBrowserService::KIND_ICONS[FileBrowserService.kind(FileBrowserService.detect_mime_type(item.path), false)], size: 18) %></span></td>
               <td class="fb-name-col text-break">
                 <span class="text-muted"><%= item.share %>/</span><%= item.path %>
                 <% if item.copies > 1 %><span class="small text-muted ms-1">(<%= item.copies %> copies)</span><% end %>
@@ -78,11 +78,11 @@
         </tbody>
       </table>
     <% end %>
-  </div>
 
   <div class="fb-statusbar" id="trash-summary-bar">
     <% if @trash[:count].positive? %>
       <%= pluralize(@trash[:count], 'file') %>, using <%= number_to_human_size(@trash[:space]) %> (every copy counted)<% if @trash[:count] > @trash[:items].size %>; the newest <%= @trash[:items].size %> are listed<% end %>
     <% end %>
+  </div>
   </div>
 </div>

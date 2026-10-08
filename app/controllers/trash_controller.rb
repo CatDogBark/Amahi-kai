@@ -4,9 +4,12 @@ require 'file_browser_service'
 # (Trash), to restore or delete for good, and how long it keeps them.
 class TrashController < ApplicationController
   before_action :admin_required
+  before_action { @no_tabs = true } # part of Files, not Setup
 
   def index
+    # Part of Files: its heading is the breadcrumbs, Shares › Trash
     @page_title = t('trash')
+    @page_heading = false
     @trash = Trash.contents
     @days = Trash.days
     # A pooled share's file goes back through Greyhole, which needs the share still pooled

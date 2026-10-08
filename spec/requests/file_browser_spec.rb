@@ -34,14 +34,28 @@ describe "FileBrowser Controller", type: :request do
       login_as(create(:user))
       get "/files"
       page = Nokogiri::HTML(response.body)
-      expect(page.css("#share-list a").map { |a| [a.text.strip, a["href"]] }).to eq([["Photos", "/files/Photos/browse"]])
-      expect(page.at_css("#shares-link")["href"]).to eq("/files")
+      expect(page.css("#share-list a.fb-card").map { |a| [a.at_css(".fb-card-name").text, a["href"]] }).to eq([["Photos", "/files/Photos/browse"]])
+      expect(page.at_css("#share-list .fb-card-address").text).to eq("\\\\amahi-kai\\Photos")
+      expect(page.at_css("#files-link")["href"]).to eq("/files")
     end
 
     it "lists every share for an admin" do
       login_as_admin
       get "/files"
-      expect(Nokogiri::HTML(response.body).css("#share-list a").map(&:text).map(&:strip)).to eq(%w[Finance Photos])
+      expect(Nokogiri::HTML(response.body).css("#share-list .fb-card-name").map(&:text)).to eq(%w[Finance Photos])
+    end
+
+    it "shows each share's item count, and badges a pooled or read-only one" do
+      File.write(File.join(open_share.path, "a.jpg"), "x")
+      File.write(File.join(open_share.path, ".hidden"), "x")
+      open_share.update_column(:disk_pool_copies, 2)
+      private_share.update_column(:rdonly, true)
+      login_as_admin
+      get "/files"
+      cards = Nokogiri::HTML(response.body).css("#share-list .fb-card").to_h { |c| [c.at_css(".fb-card-name").text, c] }
+      expect(cards["Photos"].at_css(".fb-card-meta").text.squish).to eq("1 item")
+      expect(cards["Photos"].at_css(".fb-chip").text).to eq("Pool · 2 copies")
+      expect(cards["Finance"].at_css(".fb-chip").text).to eq("Read only")
     end
   end
 
@@ -49,6 +63,17 @@ describe "FileBrowser Controller", type: :request do
     before { @admin = login_as_admin }
 
     describe "GET /files/:share_id/browse" do
+      it "opens a folder from its row and its breadcrumb, nested ones too" do
+        FileUtils.mkdir_p(File.join(tmpdir, "album", "2026"))
+        File.write(File.join(tmpdir, "album", "2026", "beach.jpg"), "x")
+        get "/files/#{share.name}/browse"
+        expect(Nokogiri::HTML(response.body).at_css(".fb-item[data-name='album'] a.fb-item-main")["href"]).to eq("/files/#{share.name}/browse/album")
+        get "/files/#{share.name}/browse/album/2026"
+        page = Nokogiri::HTML(response.body)
+        expect(page.css(".fb-breadcrumbs a").map { |a| a["href"] }).to eq(["/files", "/files/#{share.name}/browse", "/files/#{share.name}/browse/album"])
+        expect(page.at_css(".fb-item-parent a")["href"]).to eq("/files/#{share.name}/browse/album")
+      end
+
       it "shows directory listing" do
         FileUtils.touch(File.join(tmpdir, "hello.txt"))
         get "/files/#{share.name}/browse"
@@ -108,7 +133,7 @@ describe "FileBrowser Controller", type: :request do
 
       it "returns error for missing file" do
         get "/files/#{share.name}/download/nonexistent.txt"
-        expect(response).to redirect_to(file_browser_path(share.name, path: "nonexistent.txt"))
+        expect(response).to redirect_to("/files/#{share.name}/browse")
       end
     end
 
@@ -126,8 +151,8 @@ describe "FileBrowser Controller", type: :request do
         page = Nokogiri::HTML(response.body)
         expect(page.text).not_to include("Upload", "New Folder", "Rename", "Delete")
         expect(page.css('input[type=file], input[type=checkbox]')).to be_empty
-        menus = page.css('.fb-row .dropdown-item').map { |a| a.text.squish }
-        expect(menus).to eq(['Download as zip', 'Download'])
+        downloads = page.css('.fb-item-download').map { |a| a['aria-label'] }
+        expect(downloads).to eq(['Download album as a zip', 'Download hello.txt'])
         expect(page.at_css('#fb-download-folder')['href']).to eq("/files/#{share.name}/download")
       end
 
@@ -160,15 +185,22 @@ describe "FileBrowser Controller", type: :request do
         expect(response.cookies["fb_download"]).to be_nil
       end
 
-      it "previews media, opens text as it is, and says other files have no preview, with their size" do
+      it "makes each row one link: a folder opens, a file is shown in the panel with its kind and size" do
+        FileUtils.mkdir_p(File.join(tmpdir, "album"))
         %w[pic.jpg notes.txt doc.odt].each { |name| File.write(File.join(tmpdir, name), "x" * 2048) }
         get "/files/#{share.name}/browse"
         page = Nokogiri::HTML(response.body)
-        link = ->(name) { page.at_xpath("//tr[@data-name='#{name}']//a[contains(@class, 'fb-file-link')]") }
-        expect(link.call("pic.jpg")["data-action"]).to eq("click->file-browser#previewFile")
-        expect(link.call("notes.txt")["data-action"]).to be_nil
-        expect(link.call("doc.odt")["data-action"]).to eq("click->file-browser#previewFile")
-        expect(link.call("doc.odt")["data-preview-size"]).to eq("2 KB")
+        link = ->(name) { page.at_css(".fb-item[data-name='#{name}'] a.fb-item-main") }
+        expect(link.call("album")["href"]).to eq("/files/#{share.name}/browse/album")
+        expect(link.call("album")["data-action"]).to be_nil
+        expect(link.call("pic.jpg")["data-action"]).to eq("click->file-browser#select")
+        expect(%w[pic.jpg notes.txt doc.odt].map { |n| link.call(n)["data-kind"] }).to eq(%w[image text document])
+        expect(link.call("doc.odt")["data-kind-name"]).to eq("Document")
+        expect(link.call("doc.odt")["data-size"]).to eq("2 KB")
+        expect(link.call("doc.odt")["data-download-url"]).to eq("/files/#{share.name}/download/doc.odt")
+        expect(link.call("pic.jpg")["href"]).to eq("/files/#{share.name}/raw/pic.jpg") # without the script, the file opens
+        expect(page.at_css("[data-file-browser-target=details]").text).to include("Click a file to see it here")
+        expect(page.css(".fb-viewbtn").map { |b| b["data-view"] }).to eq(%w[list grid])
         expect(page.at_css("#fb-download-folder")["data-action"]).to eq("click->file-browser#downloadZip")
         expect(page.at_css("#fb-download-status")).to be_present
         expect(page.at_css("#fb-shares-crumb")["href"]).to eq("/files")

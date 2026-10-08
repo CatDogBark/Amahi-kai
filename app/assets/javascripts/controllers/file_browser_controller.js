@@ -1,14 +1,173 @@
 // File Browser Controller
 //
 // The web file browser only views: files are added, renamed and deleted over the SMB shares,
-// so Samba (and Greyhole on pooled shares) sees every change. This previews images, video,
-// audio and PDFs in a dialog (other files say there's no preview, with Download), and says
-// a folder's zip is being made until its download starts.
+// so Samba (and Greyhole on pooled shares) sees every change. A row is one link: a folder opens
+// (the link's own job), a file is shown in the panel beside the list (select), with Download and,
+// for pictures, video, audio, PDFs and text, Open full screen. The list can be a grid of tiles
+// (setView, remembered in this browser), and a folder's zip says it's coming until its download
+// starts (downloadZip).
 
 (function() {
+  var VIEW_KEY = 'amahi-kai.fileBrowserView';
+  var PREVIEWS = ['image', 'video', 'audio', 'pdf', 'text'];
+
+  function svgIcon(paths) {
+    var ns = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(ns, 'svg');
+    ['width', 'height'].forEach(function(a) { svg.setAttribute(a, '44'); });
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '1.6');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    paths.forEach(function(d) {
+      var p = document.createElementNS(ns, 'path');
+      p.setAttribute('d', d);
+      svg.appendChild(p);
+    });
+    return svg;
+  }
+
+  function el(tag, className, text) {
+    var node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text != null) node.textContent = text;
+    return node;
+  }
+
   var FileBrowserController = class extends Stimulus.Controller {
     static get targets() {
-      return ["previewModal", "previewTitle", "previewBody", "previewDownload", "downloadStatus"];
+      return ["previewModal", "previewTitle", "previewBody", "previewDownload", "downloadStatus", "listing", "details"];
+    }
+
+    connect() {
+      var view = 'list';
+      try { view = localStorage.getItem(VIEW_KEY) || 'list'; } catch (e) { /* no storage: the list */ }
+      this.applyView(view);
+    }
+
+    // ── List or grid ──
+
+    setView(event) {
+      var view = event.currentTarget.dataset.view;
+      try { localStorage.setItem(VIEW_KEY, view); } catch (e) { /* kept for this page only */ }
+      this.applyView(view);
+    }
+
+    applyView(view) {
+      if (!this.hasListingTarget) return;
+      var grid = view === 'grid';
+      this.listingTarget.classList.toggle('fb-grid', grid);
+      this.element.querySelectorAll('.fb-viewbtn').forEach(function(btn) {
+        btn.setAttribute('aria-pressed', String(btn.dataset.view === view));
+      });
+      // Pictures show as themselves in the grid (loaded only once it's shown)
+      if (grid) {
+        this.listingTarget.querySelectorAll('.fb-file-link[data-kind="image"]').forEach(function(link) {
+          var icon = link.querySelector('.fb-item-icon');
+          if (!icon || icon.querySelector('img')) return;
+          var img = document.createElement('img');
+          img.loading = 'lazy';
+          img.alt = '';
+          img.src = link.dataset.rawUrl;
+          icon.appendChild(img);
+        });
+      }
+    }
+
+    // ── A file, in the panel ──
+
+    select(event) {
+      if (!this.hasDetailsTarget) return; // no panel: the link opens the file
+      event.preventDefault();
+      var link = event.currentTarget;
+      this.element.querySelectorAll('.fb-item.selected').forEach(function(item) { item.classList.remove('selected'); });
+      link.closest('.fb-item').classList.add('selected');
+      this.selected = link.dataset;
+
+      var d = link.dataset;
+      var panel = this.detailsTarget;
+      panel.replaceChildren();
+
+      var preview = el('div', 'fb-details-preview');
+      if (d.kind === 'image') {
+        var img = document.createElement('img');
+        img.src = d.rawUrl;
+        img.alt = d.name;
+        preview.appendChild(img);
+      } else if (d.kind === 'video') {
+        var video = document.createElement('video');
+        video.src = d.rawUrl;
+        video.controls = true;
+        video.preload = 'metadata';
+        preview.appendChild(video);
+      } else if (d.kind === 'audio') {
+        var audio = document.createElement('audio');
+        audio.src = d.rawUrl;
+        audio.controls = true;
+        preview.appendChild(audio);
+      } else {
+        preview.classList.add('fb-details-none');
+        preview.appendChild(svgIcon(['M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z', 'M14 2v4a2 2 0 0 0 2 2h4']));
+        preview.appendChild(el('span', null, PREVIEWS.indexOf(d.kind) !== -1
+          ? 'Open it full screen to read it.'
+          : 'There\'s no preview for this kind of file. Download it to open it on your computer.'));
+      }
+      panel.appendChild(preview);
+
+      panel.appendChild(el('div', 'fb-details-name', d.name));
+      panel.appendChild(el('div', 'fb-details-kind', d.kindName));
+
+      var facts = el('dl', 'fb-details-facts');
+      [['Size', d.size], ['Modified', d.modified]].forEach(function(pair) {
+        if (!pair[1]) return;
+        facts.appendChild(el('dt', null, pair[0]));
+        facts.appendChild(el('dd', null, pair[1]));
+      });
+      panel.appendChild(facts);
+
+      var actions = el('div', 'fb-details-actions');
+      var download = el('a', 'btn btn-info', 'Download');
+      download.href = d.downloadUrl;
+      actions.appendChild(download);
+      if (PREVIEWS.indexOf(d.kind) !== -1) {
+        var open = el('button', 'btn btn-outline-info', 'Open full screen');
+        open.type = 'button';
+        open.addEventListener('click', this.openFull.bind(this));
+        actions.appendChild(open);
+      }
+      panel.appendChild(actions);
+    }
+
+    // The selected file in the full-screen dialog; text opens in its own tab.
+    openFull() {
+      var d = this.selected;
+      if (!d) return;
+      if (d.kind === 'text') { window.open(d.rawUrl, '_blank', 'noopener'); return; }
+      if (this.hasPreviewTitleTarget) this.previewTitleTarget.textContent = d.name;
+      if (this.hasPreviewDownloadTarget) this.previewDownloadTarget.href = d.downloadUrl;
+      var body = this.previewBodyTarget;
+      body.replaceChildren();
+      var media;
+      if (d.kind === 'image') {
+        media = document.createElement('img');
+        media.alt = d.name;
+      } else if (d.kind === 'video') {
+        media = document.createElement('video');
+        media.controls = true;
+      } else if (d.kind === 'audio') {
+        media = document.createElement('audio');
+        media.controls = true;
+      } else if (d.kind === 'pdf') {
+        media = document.createElement('iframe');
+        media.title = d.name;
+      }
+      if (!media) return;
+      media.src = d.rawUrl;
+      media.className = 'fb-modal-media fb-modal-' + d.kind;
+      body.appendChild(media);
+      new bootstrap.Modal(this.previewModalTarget).show();
     }
 
     // ── Folder downloads ──
@@ -47,65 +206,7 @@
         }
       }, 400);
     }
-
-    // ── Preview ──
-
-    previewFile(event) {
-      event.preventDefault();
-      var url = event.currentTarget.dataset.previewUrl;
-      var mime = event.currentTarget.dataset.previewMime;
-      var name = event.currentTarget.dataset.previewName;
-
-      if (this.hasPreviewTitleTarget) this.previewTitleTarget.textContent = name;
-      if (this.hasPreviewDownloadTarget) this.previewDownloadTarget.href = url.replace('/raw/', '/download/');
-
-      var body = this.previewBodyTarget;
-      body.innerHTML = '';
-
-      if (mime.startsWith('image/')) {
-        var img = document.createElement('img');
-        img.src = url;
-        img.alt = name;
-        img.style.cssText = 'max-width:100%;max-height:70vh;border-radius:4px;';
-        body.appendChild(img);
-      } else if (mime.startsWith('video/')) {
-        var video = document.createElement('video');
-        video.src = url;
-        video.controls = true;
-        video.style.cssText = 'max-width:100%;max-height:70vh;';
-        body.appendChild(video);
-      } else if (mime.startsWith('audio/')) {
-        var audio = document.createElement('audio');
-        audio.src = url;
-        audio.controls = true;
-        audio.style.cssText = 'width:100%;margin-top:2rem;';
-        body.appendChild(audio);
-      } else if (mime === 'application/pdf') {
-        var iframe = document.createElement('iframe');
-        iframe.src = url;
-        iframe.style.cssText = 'width:100%;height:70vh;border:none;border-radius:4px;';
-        body.appendChild(iframe);
-      } else {
-        // A kind of file the browser can't show (an .odt, a .zip...): Download opens it.
-        var none = document.createElement('div');
-        none.className = 'fb-no-preview py-4';
-        var title = document.createElement('p');
-        title.className = 'mb-1';
-        title.textContent = 'There\'s no preview for this kind of file.';
-        var hint = document.createElement('p');
-        hint.className = 'small text-muted mb-0';
-        var size = event.currentTarget.dataset.previewSize;
-        hint.textContent = 'Download it to open it in an app on your computer' + (size ? ' (' + size + ').' : '.');
-        none.appendChild(title);
-        none.appendChild(hint);
-        body.appendChild(none);
-      }
-
-      var modal = new bootstrap.Modal(this.previewModalTarget);
-      modal.show();
-    }
   };
-
 
   registerStimulusController("file-browser", FileBrowserController);
 })();
