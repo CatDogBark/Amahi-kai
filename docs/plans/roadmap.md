@@ -126,9 +126,6 @@ and the file browser's list drops its dates. It hasn't been designed for a phone
 - Touch: rows and buttons at least 44 px, the row's download button always shown (no hover).
 - Check the water background's cost on a phone (it has a battery saver setting).
 
-Also later: the light theme's styles in the theme are no longer used (every page is dark since
-the refresh) and can go, with the theme's out-of-date `src/` Sass.
-
 ## Later: HTTPS on the LAN
 
 Troy (2026-10-06): the web UI and every app's page are plain HTTP on the LAN, so anyone on the

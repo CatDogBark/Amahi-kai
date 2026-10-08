@@ -1,218 +1,9 @@
-/* Amahi-kai Theme
- * A modern ocean-inspired theme for the Amahi-kai home server platform.
- * Forked from the Amahi default theme with respect to the original.
- *
- * Color palette:
- *   Primary:    #0a6e8a (deep ocean teal)
- *   Secondary:  #0d8aa8 (lighter teal)
- *   Accent:     #f0a030 (warm amber — contrast)
- *   Dark:       #1a2332 (deep navy)
- *   Light:      #f4f7fa (cool white)
- *   Text:       #2c3e50 (readable dark)
- *   Muted:      #7f8c9b (soft gray-blue)
- */
+/* Amahi-kai's look: dark, near-black glass over the water, one mint accent, Space Grotesk.
+ * Every page is dark. The colours are the tokens below; the refresh block at the end (October
+ * 2026) sets most of them again, with the header, tabs, panels and buttons. */
 
+/* The colours */
 :root {
-  --kai-primary: #0a6e8a;
-  --kai-secondary: #0d8aa8;
-  --kai-accent: #f0a030;
-  --kai-dark: #1a2332;
-  --kai-darker: #131b27;
-  --kai-light: #f4f7fa;
-  --kai-text: #2c3e50;
-  --kai-muted: #7f8c9b;
-  --kai-success: #27ae60;
-  --kai-danger: #c0392b;
-  --kai-warning: #f39c12;
-  --kai-border: #dce3eb;
-  --kai-card-bg: rgba(255, 255, 255, 0.88);
-  --kai-shadow: rgba(26, 35, 50, 0.08);
-
-  /* Inputs / forms */
-  --kai-input-bg: #fff;
-  --kai-input-text: #2c3e50;
-  --kai-input-border: #dce3eb;
-  --kai-placeholder: #7f8c9b;
-
-  /* Hover */
-  --kai-hover-bg: #f8f9fa;
-
-  /* Tab data area */
-  --kai-tab-data-bg: #eaeef2;
-
-  /* Subtab container */
-  --kai-subtab-bg: rgba(255, 255, 255, 0.88);
-  --kai-subtab-border: #dce3eb;
-
-  /* Tab link styles (tab-link-style class) */
-  --kai-tab-link-bg: #f4f7fa;
-  --kai-tab-link-text: #7f8c9b;
-  --kai-tab-link-border: #dce3eb;
-  --kai-tab-link-hover-bg: #eaeef2;
-  --kai-tab-link-hover-text: #2c3e50;
-
-  /* Preftab (sub-subtabs) */
-  --kai-preftab-bg: #f4f7fa;
-  --kai-preftab-border: #dce3eb;
-  --kai-preftab-link-text: #7f8c9b;
-  --kai-preftab-link-hover-bg: #eaeef2;
-  --kai-preftab-link-hover-text: #2c3e50;
-  --kai-preftab-active-bg: #fff;
-  --kai-preftab-active-text: #2c3e50;
-  --kai-preftab-dropdown-bg: #fff;
-
-  /* Alerts */
-  --kai-alert-danger-bg: #fdf0ef;
-  --kai-alert-danger-border: #f5c6cb;
-  --kai-alert-danger-text: #c0392b;
-  --kai-alert-success-bg: #e8f5e9;
-  --kai-alert-success-border: #27ae60;
-  --kai-alert-success-text: #27ae60;
-  --kai-alert-warning-bg: #fff8e1;
-  --kai-alert-warning-border: #f39c12;
-  --kai-alert-warning-text: #f39c12;
-  --kai-alert-info-bg: #e3f2fd;
-  --kai-alert-info-border: #0a6e8a;
-  --kai-alert-info-text: #0a6e8a;
-
-  /* Code */
-  --kai-code-color: #e06c75;
-  --kai-code-bg: #f4f7fa;
-  --kai-pre-color: #2c3e50;
-  --kai-pre-bg: #f4f7fa;
-
-  /* Modals */
-  --kai-modal-bg: #fff;
-  --kai-modal-border: #dce3eb;
-  --kai-modal-text: #2c3e50;
-
-  /* List groups */
-  --kai-list-group-bg: #fff;
-  --kai-list-group-border: #dce3eb;
-  --kai-list-group-text: #2c3e50;
-
-  /* Badges */
-  --kai-badge-secondary-bg: #7f8c9b;
-  --kai-badge-secondary-text: #fff;
-
-  /* Progress */
-  --kai-progress-bg: #e9ecef;
-
-  /* Bootstrap overrides */
-  --kai-bg-light: #f4f7fa;
-  --kai-bg-white: #fff;
-
-  /* Table */
-  --kai-table-striped-bg: rgba(0, 0, 0, 0.035);
-  --kai-table-hover-bg: #f8f9fa;
-
-  /* Nav tabs */
-  --kai-nav-tab-border: #dce3eb;
-  --kai-nav-tab-text: #7f8c9b;
-  --kai-nav-tab-active-border: #dce3eb #dce3eb rgba(255,255,255,0.88);
-
-  /* HR */
-  --kai-hr-border: #dce3eb;
-  --kai-hr-opacity: 0.5;
-
-  /* Delete button */
-  --kai-delete-color: #dc3545;
-  --kai-delete-hover-text: #f85149;
-
-  /* Btn outline secondary */
-  --kai-btn-outline-text: #7f8c9b;
-  --kai-btn-outline-border: #dce3eb;
-  --kai-btn-outline-hover-bg: #eaeef2;
-  --kai-btn-outline-hover-text: #2c3e50;
-
-  /* Card glassmorphism dark override */
-  --kai-card-bg-opaque: rgba(255, 255, 255, 0.6);
-}
-
-/* Dark mode via system preference (default) */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --kai-primary: #1a9fc2;
-    --kai-secondary: #22b8d6;
-    --kai-accent: #f0a030;
-    --kai-dark: #0d1117;
-    --kai-darker: #080c10;
-    --kai-light: #161b22;
-    --kai-text: #c9d1d9;
-    --kai-muted: #8b949e;
-    --kai-success: #2ea043;
-    --kai-danger: #da3633;
-    --kai-warning: #d29922;
-    --kai-border: #30363d;
-    --kai-card-bg: #0d1117;
-    --kai-shadow: rgba(0, 0, 0, 0.3);
-    --kai-input-bg: #161b22;
-    --kai-input-text: #c9d1d9;
-    --kai-input-border: #30363d;
-    --kai-placeholder: #8b949e;
-    --kai-hover-bg: #1c2128;
-    --kai-tab-data-bg: rgba(28, 33, 40, 0.85);
-    --kai-subtab-bg: #161b22;
-    --kai-subtab-border: #30363d;
-    --kai-tab-link-bg: #1c2128;
-    --kai-tab-link-text: #8b949e;
-    --kai-tab-link-border: #30363d;
-    --kai-tab-link-hover-bg: #262c36;
-    --kai-tab-link-hover-text: #c9d1d9;
-    --kai-preftab-bg: #161b22;
-    --kai-preftab-border: #30363d;
-    --kai-preftab-link-text: #8b949e;
-    --kai-preftab-link-hover-bg: #1c2128;
-    --kai-preftab-link-hover-text: #c9d1d9;
-    --kai-preftab-active-bg: #0d1117;
-    --kai-preftab-active-text: #c9d1d9;
-    --kai-preftab-dropdown-bg: #0d1117;
-    --kai-alert-danger-bg: #2d1214;
-    --kai-alert-danger-border: #da3633;
-    --kai-alert-danger-text: #f85149;
-    --kai-alert-success-bg: #122117;
-    --kai-alert-success-border: #2ea043;
-    --kai-alert-success-text: #3fb950;
-    --kai-alert-warning-bg: #2d2208;
-    --kai-alert-warning-border: #d29922;
-    --kai-alert-warning-text: #e3b341;
-    --kai-alert-info-bg: #0c2d3f;
-    --kai-alert-info-border: #1a9fc2;
-    --kai-alert-info-text: #58a6ff;
-    --kai-code-color: #e06c75;
-    --kai-code-bg: #1c2128;
-    --kai-pre-color: #c9d1d9;
-    --kai-pre-bg: #161b22;
-    --kai-modal-bg: #0d1117;
-    --kai-modal-border: #30363d;
-    --kai-modal-text: #c9d1d9;
-    --kai-list-group-bg: #0d1117;
-    --kai-list-group-border: #30363d;
-    --kai-list-group-text: #c9d1d9;
-    --kai-badge-secondary-bg: #30363d;
-    --kai-badge-secondary-text: #c9d1d9;
-    --kai-progress-bg: #30363d;
-    --kai-bg-light: #161b22;
-    --kai-bg-white: #0d1117;
-    --kai-table-striped-bg: rgba(255, 255, 255, 0.04);
-    --kai-table-hover-bg: #1c2128;
-    --kai-nav-tab-border: #30363d;
-    --kai-nav-tab-text: #8b949e;
-    --kai-nav-tab-active-border: #30363d #30363d #0d1117;
-    --kai-hr-border: #30363d;
-    --kai-hr-opacity: 0.3;
-    --kai-delete-color: #f85149;
-    --kai-delete-hover-text: #fff;
-    --kai-btn-outline-text: #8b949e;
-    --kai-btn-outline-border: #30363d;
-    --kai-btn-outline-hover-bg: #30363d;
-    --kai-btn-outline-hover-text: #c9d1d9;
-    --kai-card-bg-opaque: rgba(13, 17, 23, 0.58);
-  }
-}
-
-/* Forced dark mode */
-:root[data-theme="dark"] {
   --kai-primary: #1a9fc2;
   --kai-secondary: #22b8d6;
   --kai-accent: #f0a030;
@@ -289,192 +80,6 @@
   --kai-btn-outline-hover-bg: #30363d;
   --kai-btn-outline-hover-text: #c9d1d9;
   --kai-card-bg-opaque: rgba(13, 17, 23, 0.58);
-}
-
-/* Forced light mode — uses :root defaults, just ensure specificity */
-:root[data-theme="light"] {
-  --kai-primary: #0a6e8a;
-  --kai-secondary: #0d8aa8;
-  --kai-accent: #f0a030;
-  --kai-dark: #1a2332;
-  --kai-darker: #131b27;
-  --kai-light: #f4f7fa;
-  --kai-text: #2c3e50;
-  --kai-muted: #7f8c9b;
-  --kai-success: #27ae60;
-  --kai-danger: #c0392b;
-  --kai-warning: #f39c12;
-  --kai-border: #dce3eb;
-  --kai-card-bg: rgba(255, 255, 255, 0.88);
-  --kai-shadow: rgba(26, 35, 50, 0.08);
-  --kai-input-bg: #fff;
-  --kai-input-text: #2c3e50;
-  --kai-input-border: #dce3eb;
-  --kai-placeholder: #7f8c9b;
-  --kai-hover-bg: #f8f9fa;
-  --kai-tab-data-bg: #eaeef2;
-  --kai-subtab-bg: rgba(255, 255, 255, 0.88);
-  --kai-subtab-border: #dce3eb;
-  --kai-tab-link-bg: #f4f7fa;
-  --kai-tab-link-text: #7f8c9b;
-  --kai-tab-link-border: #dce3eb;
-  --kai-tab-link-hover-bg: #eaeef2;
-  --kai-tab-link-hover-text: #2c3e50;
-  --kai-preftab-bg: #f4f7fa;
-  --kai-preftab-border: #dce3eb;
-  --kai-preftab-link-text: #7f8c9b;
-  --kai-preftab-link-hover-bg: #eaeef2;
-  --kai-preftab-link-hover-text: #2c3e50;
-  --kai-preftab-active-bg: #fff;
-  --kai-preftab-active-text: #2c3e50;
-  --kai-preftab-dropdown-bg: #fff;
-  --kai-alert-danger-bg: #fdf0ef;
-  --kai-alert-danger-border: #f5c6cb;
-  --kai-alert-danger-text: #c0392b;
-  --kai-alert-success-bg: #e8f5e9;
-  --kai-alert-success-border: #27ae60;
-  --kai-alert-success-text: #27ae60;
-  --kai-alert-warning-bg: #fff8e1;
-  --kai-alert-warning-border: #f39c12;
-  --kai-alert-warning-text: #f39c12;
-  --kai-alert-info-bg: #e3f2fd;
-  --kai-alert-info-border: #0a6e8a;
-  --kai-alert-info-text: #0a6e8a;
-  --kai-code-color: #e06c75;
-  --kai-code-bg: #f4f7fa;
-  --kai-pre-color: #2c3e50;
-  --kai-pre-bg: #f4f7fa;
-  --kai-modal-bg: #fff;
-  --kai-modal-border: #dce3eb;
-  --kai-modal-text: #2c3e50;
-  --kai-list-group-bg: #fff;
-  --kai-list-group-border: #dce3eb;
-  --kai-list-group-text: #2c3e50;
-  --kai-badge-secondary-bg: #7f8c9b;
-  --kai-badge-secondary-text: #fff;
-  --kai-progress-bg: #e9ecef;
-  --kai-bg-light: #f4f7fa;
-  --kai-bg-white: #fff;
-  --kai-table-striped-bg: rgba(0, 0, 0, 0.035);
-  --kai-table-hover-bg: #f8f9fa;
-  --kai-nav-tab-border: #dce3eb;
-  --kai-nav-tab-text: #7f8c9b;
-  --kai-nav-tab-active-border: #dce3eb #dce3eb rgba(255,255,255,0.88);
-  --kai-hr-border: #dce3eb;
-  --kai-hr-opacity: 0.5;
-  --kai-delete-color: #dc3545;
-  --kai-delete-hover-text: #f85149;
-  --kai-btn-outline-text: #7f8c9b;
-  --kai-btn-outline-border: #dce3eb;
-  --kai-btn-outline-hover-bg: #eaeef2;
-  --kai-btn-outline-hover-text: #2c3e50;
-  --kai-card-bg-opaque: rgba(255, 255, 255, 0.6);
-}
-
-/* ── View Transition: Ocean Ripple 🌊 ── */
-
-/* The main circle reveal — expands from click point like a slow wave */
-@keyframes theme-ripple-reveal {
-  from { clip-path: circle(0% at var(--ripple-x, 50%) var(--ripple-y, 50%)); }
-  to   { clip-path: circle(150% at var(--ripple-x, 50%) var(--ripple-y, 50%)); }
-}
-
-/* Old snapshot just sits still */
-html.theme-ripple::view-transition-old(root) {
-  animation: none;
-  z-index: 1;
-  mix-blend-mode: normal;
-}
-
-/* New snapshot expands as a circle from click point — slow ocean wave */
-html.theme-ripple::view-transition-new(root) {
-  animation: theme-ripple-reveal 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  z-index: 2;
-  mix-blend-mode: normal;
-}
-
-/* Theme switcher — centered in header */
-.theme-switcher {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 10;
-}
-
-.theme-track {
-  display: flex;
-  align-items: center;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 50px;
-  padding: 3px;
-  position: relative;
-  gap: 0;
-}
-
-.theme-indicator {
-  position: absolute;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--kai-primary);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  left: 3px;
-  top: 3px;
-  z-index: 0;
-  opacity: 0;
-}
-
-/* Show indicator only after JS has positioned it */
-.theme-track.ready .theme-indicator {
-  opacity: 1;
-}
-
-/* Only animate after user interacts — prevents slide on page load */
-.theme-track.ready .theme-indicator {
-  transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Indicator positions */
-.theme-track[data-active="light"] .theme-indicator { left: 3px; }
-.theme-track[data-active="dark"] .theme-indicator { left: 35px; }
-.theme-track[data-active="system"] .theme-indicator { left: 67px; }
-
-.theme-opt {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: none;
-  background: none;
-  font-size: 14px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  z-index: 1;
-  opacity: 0.5;
-  transition: opacity 0.25s, transform 0.15s;
-  padding: 0;
-  line-height: 1;
-}
-
-.theme-opt:hover {
-  opacity: 0.8;
-  transform: scale(1.1);
-}
-
-.theme-opt.active {
-  opacity: 1;
-}
-
-/* Hide on very small screens */
-@media (max-width: 767px) {
-  .theme-switcher {
-    position: static;
-    transform: none;
-    margin: 8px auto;
-  }
 }
 
 * {
@@ -601,171 +206,7 @@ legend {
   letter-spacing: 0.3px;
 }
 
-/* ─── Header ─── */
-#header {
-  width: 100%;
-  margin: 0 auto;
-  border-top: 3px solid var(--kai-accent);
-  background: var(--kai-dark);
-  overflow: hidden;
-  height: 59px;
-}
-#header a {
-  color: #fff;
-  font-weight: bold;
-  font-size: 12px;
-  text-decoration: none;
-}
-#header a:hover {
-  text-decoration: underline;
-}
-#header #logo-two, #header #pagetitle, #header #search-form {
-  display: none;
-}
-
-/* Navbar override */
-.navbar.bg-dark, .navbar-inverse {
-  background-color: var(--kai-dark) !important;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-}
-
-.nav_hover {
-  transition: background-color 0.15s ease;
-  border-radius: 4px;
-  padding: 6px 12px !important;
-}
-.nav_hover:hover {
-  background-color: rgba(255,255,255,0.1) !important;
-  text-decoration: none !important;
-}
-
-#head-left {
-  float: left;
-  margin-top: 17px;
-  margin-left: 0;
-  display: inline;
-}
-#head-left ul {
-  list-style: none;
-  *zoom: 1;
-}
-#head-left ul:before, #head-left ul:after {
-  display: table;
-  content: "";
-  line-height: 0;
-}
-#head-left ul:after {
-  clear: both;
-}
-#head-left li {
-  list-style-type: none;
-  float: left;
-  margin-left: 15px;
-}
-
-#head-right {
-  float: right;
-  padding-top: 5px;
-  margin-top: 8px;
-  display: inline;
-}
-#head-right ul {
-  list-style: none;
-  padding-bottom: 4px;
-  *zoom: 1;
-}
-#head-right ul:before, #head-right ul:after {
-  display: table;
-  content: "";
-  line-height: 0;
-}
-#head-right ul:after {
-  clear: both;
-}
-#head-right li {
-  list-style-type: none;
-  float: left;
-  padding: 0px 12px;
-  border-right: 1px solid #666;
-}
-
-/* ─── Search ─── */
-.searchbutton {
-  border: 1px solid var(--kai-primary) !important;
-  border-radius: 4px;
-  cursor: pointer;
-  background: var(--kai-primary);
-  color: white;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 2px 10px;
-  transition: background 0.15s ease;
-}
-.searchbutton:hover {
-  background: var(--kai-secondary);
-}
-
-/* ─── Subheader / Logo area ─── */
-#subheader {
-  background: var(--kai-card-bg);
-  border-bottom: 1px solid var(--kai-border);
-  box-shadow: 0 1px 3px var(--kai-shadow);
-}
-#subheader ul {
-  list-style: none;
-}
-#subheader li {
-  display: inline-block;
-}
-
-.page-title {
-  color: var(--kai-muted) !important;
-  font-weight: 300 !important;
-  font-size: 1.8rem !important;
-}
-
-/* ─── Tabs ─── */
-.setup-tab-container {
-  background: var(--kai-dark);
-  padding: 0;
-}
-
-.setup-tab {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.setup-tab .active-tab-link {
-  display: block;
-  padding: 10px 18px;
-  background: var(--kai-primary);
-  color: white;
-  font-weight: 600;
-  text-decoration: none;
-  border-radius: 4px 4px 0 0;
-}
-
-.setup-tab .tab-link {
-  display: block;
-  padding: 10px 18px;
-  color: rgba(255,255,255,0.7);
-  text-decoration: none;
-  transition: all 0.15s ease;
-}
-.setup-tab .tab-link:hover {
-  color: white;
-  background: rgba(255,255,255,0.1);
-  text-decoration: none;
-}
-
 /* ─── Subtabs ─── */
-.all-subtab-container {
-  display: none;
-}
-.single-subtab-container {
-  display: block;
-}
 .setup-subtab-container {
   background: var(--kai-subtab-bg);
   border-bottom: 1px solid var(--kai-subtab-border);
@@ -796,13 +237,6 @@ legend {
 .setup-subtab .subtab-link:hover {
   color: var(--kai-primary);
   text-decoration: none;
-}
-
-/* ─── Content area ─── */
-.tab_data {
-  background: var(--kai-tab-data-bg);
-  padding: 15px;
-  min-height: 400px;
 }
 
 /* ─── Settings Tables ─── */
@@ -1036,11 +470,6 @@ body:has(> #footer) > #footer {
   color: var(--kai-alert-warning-text);
 }
 
-/* ─── Login page ─── */
-#login {
-  background: var(--kai-dark);
-}
-
 /* ─── Misc ─── */
 .settings-wrap {
   background: var(--kai-card-bg-opaque);
@@ -1084,33 +513,16 @@ body:has(> #footer) > #footer {
 }
 
 /* ─── Search Results ─── */
-.result-heading {
-  margin: 10px 0;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--kai-border);
-}
-
 .search-results {
   padding: 10px 0;
 }
 
-.search-results .result-item {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--kai-border);
-  transition: background 0.1s ease;
-}
-.search-results .result-item:hover {
-  background: var(--kai-hover-bg);
-}
 
 /* ─── Responsive ─── */
 @media (max-width: 768px) {
   .inside {
     width: 100%;
     padding: 0 10px;
-  }
-  .tab_data {
-    padding: 10px;
   }
 }
 
@@ -1208,17 +620,6 @@ body:has(> #footer) > #footer {
 #shares-table th.shares-col2 {
   text-align: left;
   padding-left: 32px;
-}
-
-/* ─── Amahi-kai branding footer note ─── */
-.kai-lineage {
-  text-align: center;
-  padding: 8px;
-  font-size: 11px;
-  color: var(--kai-muted);
-}
-.kai-lineage a {
-  color: rgba(255,255,255,0.6);
 }
 
 /* ─── Var-driven element styles (work in all modes) ─── */
@@ -1359,13 +760,6 @@ nav.preftab li ul {
   border-bottom-color: var(--kai-border) !important;
 }
 
-/* ─── Dark Mode ─── */
-@media (prefers-color-scheme: dark) {
-  body {
-    color-scheme: dark;
-  }
-}
-
 /* ── Delete button ── */
 .btn-delete {
   display: inline-block;
@@ -1395,9 +789,8 @@ nav.preftab li ul {
   flex-shrink: 0;
 }
 
-/* ═══ The refresh (October 2026): dark for everyone, Space Grotesk, mint on the water ═══
-   Every page is dark (the layouts set data-theme="dark"); these rules come last, so they win
-   over the light and dark rules above. Space Grotesk ships with Amahi-kai (public/fonts,
+/* ═══ The refresh (October 2026): Space Grotesk, mint on the water ═══
+   These rules come last, so they win over the older ones above. Space Grotesk ships with Amahi-kai (public/fonts,
    SIL Open Font License), so nothing loads from elsewhere. */
 @font-face {
   font-family: 'Space Grotesk';
@@ -1416,7 +809,7 @@ nav.preftab li ul {
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
-:root, :root[data-theme="dark"] {
+:root {
   color-scheme: dark;
   --kai-font: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
   /* The accent, and the near-black glass the water shows through */

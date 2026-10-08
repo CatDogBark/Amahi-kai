@@ -44,26 +44,6 @@ module FileBrowserService
                  document: 'Document', archive: 'Archive', other: 'File' }.freeze
   ARCHIVES = %w[application/zip application/x-tar application/gzip application/x-7z-compressed application/x-rar-compressed].freeze
 
-  FILE_ICONS = {
-    # Folders
-    :directory => '📁',
-    # Images
-    '.jpg' => '🖼️', '.jpeg' => '🖼️', '.png' => '🖼️', '.gif' => '🖼️',
-    '.webp' => '🖼️', '.svg' => '🖼️', '.bmp' => '🖼️',
-    # Video
-    '.mp4' => '🎬', '.webm' => '🎬', '.mkv' => '🎬', '.avi' => '🎬', '.mov' => '🎬',
-    # Audio
-    '.mp3' => '🎵', '.ogg' => '🎵', '.wav' => '🎵', '.flac' => '🎵', '.m4a' => '🎵',
-    # Documents
-    '.pdf' => '📄', '.doc' => '📄', '.docx' => '📄',
-    '.xls' => '📊', '.xlsx' => '📊',
-    # Code/Text
-    '.txt' => '📝', '.md' => '📝', '.json' => '📝', '.xml' => '📝',
-    '.rb' => '💎', '.py' => '🐍', '.js' => '📜', '.sh' => '⚙️',
-    '.yml' => '📝', '.yaml' => '📝', '.log' => '📋',
-    # Archives
-    '.zip' => '📦', '.tar' => '📦', '.gz' => '📦', '.7z' => '📦', '.rar' => '📦',
-  }.freeze
 
   class << self
     def list_directory(path)
@@ -83,7 +63,6 @@ module FileBrowserService
           size: stat.directory? ? nil : stat.size,
           modified: stat.mtime,
           mime: stat.directory? ? nil : detect_mime_type(full),
-          icon: file_icon(name, stat.directory?),
           kind: kind(stat.directory? ? nil : detect_mime_type(full), stat.directory?)
         }
       end.compact
@@ -153,11 +132,6 @@ module FileBrowserService
       end
     end
 
-    def file_icon(name, is_dir)
-      return FILE_ICONS[:directory] if is_dir
-      ext = File.extname(name).downcase
-      FILE_ICONS[ext] || '📄'
-    end
 
     # [relative path, full path] for +raw_path+ in a share. +roots+: the share's folder first,
     # then anywhere else its files may really be (a pooled share's folders on the Greyhole pool

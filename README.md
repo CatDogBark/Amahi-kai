@@ -79,7 +79,6 @@ See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for how changes are made, and
 | `bin/` | `amahi-install`, `amahi-update` and the scripts they run |
 | `config/` | Rails config, the Docker app catalog, sudoers rules, systemd units |
 | `docs/` | Install guide, security model, plans |
-| `public/themes/` | Themes (plain CSS) |
 | `site/` | The amahi-kai.com website and wiki |
 
 ## Credits

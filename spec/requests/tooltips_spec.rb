@@ -7,7 +7,7 @@ require 'rails_helper'
 RSpec.describe 'Tooltips', type: :request do
   def pages
     %w[/ /disks /disks/devices /disks/mounts /disks/storage_pool /disks/pools /settings /settings/system_status
-       /settings/servers /settings/jobs /settings/themes /shares /users]
+       /settings/servers /settings/jobs /shares /users]
   end
 
   before do

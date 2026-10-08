@@ -54,7 +54,6 @@
   tracker: Tracker
   live_help: Live Help
   about: About
-  theme_by: Theme by
 
   # login
   log_in: Log In
@@ -68,7 +67,6 @@
   shares: Shares
   storage: Storage
   networking: Networking
-  themes: Themes
   settings: Settings
 
   # misc common stuff
@@ -282,7 +280,6 @@
   docker_apps: Docker Apps
   is_now_installed: is now Installed
   is_now_uninstalled: is now Uninstalled
-  manage_themes: Manage Themes
   no_description_supplied: No description supplied!
   preparing_to_install: Preparing to install ...
   preparing_to_uninstall: Preparing to uninstall ...
@@ -433,8 +430,6 @@
   devices: Devices
   temperature: Temperature
 
-  # themes area
-  theme: Theme
 
   # applications -> webapps area
   create_a_new_webapp: Create a New Web App

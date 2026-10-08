@@ -1,6 +1,5 @@
 defaults: &defaults
 
-  default_theme: 'amahi-kai'
   valid_dhcp_address_range: 100
 
 

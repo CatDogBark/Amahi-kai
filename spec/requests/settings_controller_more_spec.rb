@@ -62,36 +62,6 @@ RSpec.describe "SettingsController more", type: :request do
     end
   end
 
-  # --- Theme activation ---
-
-  describe "POST /settings/activate_theme" do
-    it "updates theme and redirects" do
-      Setting.find_or_create_by!(name: "theme") { |s| s.value = "default"; s.kind = Setting::GENERAL }
-      post '/settings/activate_theme', params: { id: 'vertical' }
-      expect(response).to redirect_to('/settings/themes')
-      expect(Setting.find_by(name: 'theme').value).to eq('vertical')
-    end
-
-    it "rejects a theme that isn't installed" do
-      Setting.find_or_create_by!(name: "theme") { |s| s.value = "amahi-kai"; s.kind = Setting::GENERAL }
-      ['dark-mode', '../../tmp/evil'].each do |name|
-        post '/settings/activate_theme', params: { id: name }
-        expect(response).to redirect_to('/settings/themes')
-        expect(Setting.find_by(name: 'theme').value).to eq('amahi-kai')
-      end
-    end
-  end
-
-  # --- Themes index ---
-
-  describe "GET /settings/themes" do
-    it "shows available themes" do
-      allow(Theme).to receive(:available).and_return([])
-      get '/settings/themes'
-      expect(response).to have_http_status(:ok)
-    end
-  end
-
   # --- Settings index ---
 
   describe "GET /settings" do

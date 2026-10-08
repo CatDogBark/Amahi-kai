@@ -9,18 +9,7 @@ html[lang="en" data-theme="dark" data-bs-theme="dark"]
 
     = stylesheet_link_tag 'application'
 
-    - if !theme.default? && !theme.disable_inheritance
-      = stylesheet_link_tag(theme_stylesheet_path('style', theme.default))
-
-    = theme_stylesheet_link_tag 'style'
-
-
-    = javascript_tag {render 'shared/js_vars'}
     = javascript_include_tag 'application'
-
-    = javascript_tag {'$.fx.off = true;' if Rails.env.test?}
-    - for header in theme.headers do
-      = header =~ /\.js$/ ? javascript_include_tag(header) : header
 
     link rel="search" type="application/opensearchdescription+xml" title="File Search" href="/search.xml"
     = csrf_meta_tags
@@ -45,4 +34,3 @@ html[lang="en" data-theme="dark" data-bs-theme="dark"]
     - if current_user_is_admin?
       == render 'layouts/system_update'
 
-    #js-templates[style="display:none"]

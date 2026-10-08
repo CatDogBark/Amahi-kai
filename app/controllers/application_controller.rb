@@ -17,8 +17,6 @@
 # Filters added to this controller apply to all controllers in the application.
 # Likewise, all the methods added will be available for all controllers.
 
-require 'set_theme'
-
 class ApplicationController < ActionController::Base
   require 'ipaddr'
   protect_from_forgery with: :exception
@@ -40,14 +38,8 @@ class ApplicationController < ActionController::Base
   end
 
   def before_action_hook
-    prepare_theme
     adv = Setting.where(:name=>'advanced').first
     @advanced = adv && adv.value == '1'
-  end
-
-  def prepare_theme
-    @theme = SetTheme.find
-    prepend_view_path("public/themes/#{@theme.path}/views")
   end
 
   class Helper

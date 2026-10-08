@@ -5,7 +5,7 @@ SimpleCov.start('rails') do
   command_name ENV.fetch('SIMPLECOV_COMMAND_NAME', 'default')
 
   # Filter out files we don't need coverage for
-  %w(webapp.rb theme.rb system_utils.rb).each do |file|
+  %w(webapp.rb system_utils.rb).each do |file|
     add_filter file
   end
 

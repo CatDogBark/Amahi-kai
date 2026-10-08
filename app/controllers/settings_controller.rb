@@ -92,7 +92,6 @@ class SettingsController < ApplicationController
     redirect_to settings_servers_path
   end
 
-  # index of all themes
   # The jobs that run on their own (ScheduledJobs): what each does, when it last ran and how
   # that went, and when it runs next.
   def jobs
@@ -159,24 +158,6 @@ class SettingsController < ApplicationController
       sse.emit("✗ #{e.message}")
       sse.done('error')
     end
-  end
-
-  def themes
-    @page_title = t 'settings'
-    @themes = Theme.available
-  end
-
-  def activate_theme
-    unless Theme.installed?(params[:id])
-      flash[:error] = "Unknown theme"
-      redirect_to settings_themes_path
-      return
-    end
-    s = Setting.where(:name=> "theme").first_or_create
-    s.value = params[:id]
-    s.save!
-    # redirect rather than render, so that it re-displays with the new theme
-    redirect_to settings_themes_path
   end
 
   # System Update runs as its own job (amahi-kai-update.service, started by the root
