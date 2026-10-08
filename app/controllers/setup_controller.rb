@@ -25,9 +25,9 @@ class SetupController < ApplicationController
 
     stream_sse do |sse|
       sse.emit("Checking current swap status...")
-      existing = `swapon --show --noheadings 2>/dev/null`.strip
-      unless existing.empty?
-        sse.emit("⚠ Swap already active (#{existing.split.first}). Skipping.")
+      existing = SystemInfo.swaps.first
+      if existing
+        sse.emit("⚠ Swap already active (#{existing[:name]}). Skipping.")
         sse.done
         next
       end
@@ -73,8 +73,8 @@ class SetupController < ApplicationController
   end
 
   def network
-    @hostname = `hostname`.strip rescue "amahi"
-    @ip = `hostname -I`.strip.split.first rescue "unknown"
+    @hostname = SystemInfo.hostname
+    @ip = SystemInfo.ip_address
     @server_name = Setting.get('server-name') || @hostname
   end
 

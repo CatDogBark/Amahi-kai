@@ -122,15 +122,14 @@ RSpec.describe DiskService do
   end
 
   describe '.partition_list' do
-    it 'returns partition info from PartitionUtils' do
-      info = [{ path: '/dev/sda1' }]
-      partition_utils = instance_double('PartitionUtils', info: info)
-      allow(PartitionUtils).to receive(:new).and_return(partition_utils)
+    it 'lists the share storage drives' do
+      info = [{ device: '/dev/sda', path: '/mnt/storage-1', bytes_total: 1000, bytes_free: 400 }]
+      allow(DiskManager).to receive(:share_storage).and_return(info)
       expect(described_class.partition_list).to eq(info)
     end
 
     it 'returns empty array on error' do
-      allow(PartitionUtils).to receive(:new).and_raise(StandardError)
+      allow(DiskManager).to receive(:share_storage).and_raise(StandardError)
       expect(described_class.partition_list).to eq([])
     end
   end

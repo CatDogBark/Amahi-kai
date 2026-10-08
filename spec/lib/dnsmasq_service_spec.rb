@@ -16,7 +16,7 @@ RSpec.describe DnsmasqService do
   describe '.running?' do
     it 'returns true when active' do
       allow(described_class).to receive(:installed?).and_return(true)
-      allow(described_class).to receive(:`).with('systemctl is-active dnsmasq 2>/dev/null').and_return("active\n")
+      allow(Shell).to receive(:output).with('systemctl', 'is-active', 'dnsmasq').and_return("active\n")
       expect(described_class.running?).to be true
     end
 
@@ -27,7 +27,7 @@ RSpec.describe DnsmasqService do
 
     it 'returns false when inactive' do
       allow(described_class).to receive(:installed?).and_return(true)
-      allow(described_class).to receive(:`).with('systemctl is-active dnsmasq 2>/dev/null').and_return("inactive\n")
+      allow(Shell).to receive(:output).with('systemctl', 'is-active', 'dnsmasq').and_return("inactive\n")
       expect(described_class.running?).to be false
     end
   end

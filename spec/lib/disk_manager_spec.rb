@@ -3,7 +3,7 @@ require 'rails_helper'
 RSpec.describe DiskManager do
   # Use the built-in sample devices, not the disks of whatever machine runs the
   # specs: lsblk on a CI runner varies between runs, which made these flaky.
-  before { allow(DiskManager).to receive(:execute_command).and_return("") }
+  before { allow(DiskManager).to receive(:lsblk_json).and_return("") }
 
   describe '.devices' do
     it 'returns an array of device hashes' do
@@ -169,7 +169,7 @@ RSpec.describe DiskManager do
     end
 
     it 'finds / on an LVM volume inside a partition' do
-      allow(DiskManager).to receive(:execute_command).with(/\Alsblk -J/).and_return(lsblk)
+      allow(DiskManager).to receive(:lsblk_json).and_return(lsblk)
       devices = DiskManager.devices
       expect(devices.find { |d| d[:path] == '/dev/sda' }[:os_disk]).to be true
       expect(devices.find { |d| d[:path] == '/dev/sdb' }[:os_disk]).to be false
@@ -186,8 +186,94 @@ RSpec.describe DiskManager do
         { "name" => "sdd", "type" => "disk", "fstype" => "zfs_member", "label" => nil },
         { "name" => "sde", "type" => "disk", "children" => [{ "name" => "sde1", "type" => "part", "fstype" => "ext4" }] }
       ] }.to_json
-      allow(DiskManager).to receive(:execute_command).with(/\Alsblk -J -o .*,LABEL /).and_return(lsblk)
+      allow(DiskManager).to receive(:lsblk_json).and_return(lsblk)
       expect(DiskManager.devices.to_h { |d| [d[:path], d[:zfs_pool]] }).to eq('/dev/sdc' => 'tank', '/dev/sdd' => 'unnamed', '/dev/sde' => nil)
+    end
+  end
+
+  it 'asks lsblk with NAME first, as an argument list, so partitions nest under their disk' do
+    allow(DiskManager).to receive(:lsblk_json).and_call_original
+    allow(Shell).to receive(:output).and_return('')
+    DiskManager.devices
+    expect(Shell).to have_received(:output).with('lsblk', '-J', '-o', start_with('NAME,'))
+  end
+
+  describe '.stats' do
+    let(:lsblk) do
+      { "blockdevices" => [
+        { "name" => "sda", "type" => "disk", "model" => "Samsung SSD", "size" => "500G" },
+        { "name" => "sr0", "type" => "rom", "model" => nil, "size" => "1024M" }
+      ] }.to_json
+    end
+
+    before do
+      allow(DiskManager).to receive(:lsblk_json).and_return(lsblk)
+      # SMART data needs root, so the temperatures come from the helper.
+      allow(Privileged).to receive(:call).with('disks.temperatures')
+        .and_return('ok' => true, 'temperatures' => { '/dev/sda' => 30 })
+    end
+
+    it 'lists the drives (not optical drives) with their temperatures' do
+      expect(DiskManager.stats).to eq([
+        { device: '/dev/sda', model: 'Samsung SSD', size: '500G', temp_c: '30', temp_f: '86', tempcolor: 'cool' }
+      ])
+    end
+
+    it 'shows a dash for a drive with no temperature' do
+      allow(Privileged).to receive(:call).with('disks.temperatures')
+        .and_return('ok' => true, 'temperatures' => { '/dev/sda' => nil })
+      expect(DiskManager.stats.first.values_at(:temp_c, :temp_f)).to eq(%w[- -])
+    end
+
+    it 'still lists the drives when the helper fails' do
+      allow(Privileged).to receive(:call).with('disks.temperatures')
+        .and_raise(Privileged::Error.new('disks.temperatures', 'smartctl went away'))
+      expect(DiskManager.stats.first.values_at(:device, :temp_c)).to eq(['/dev/sda', '-'])
+    end
+
+    it 'colours temperatures: cool to 39, warm to 49, then hot' do
+      expect([0, 39, 40, 49, 50].map { |t| DiskManager.temp_color(t) }).to eq(%w[cool cool warm warm hot])
+    end
+  end
+
+  describe '.mounts' do
+    it "lists df's filesystems in bytes, without tmpfs, sorted, keeping spaces in mount points" do
+      allow(Shell).to receive(:output).with('df', '-BK').and_return(
+        "Filesystem     1K-blocks    Used Available Use% Mounted on\n" \
+        "/dev/sdb1      100000000 50000000  50000000  50% /mnt/my data\n" \
+        "tmpfs           4000000        0   4000000   0% /dev/shm\n" \
+        "/dev/sda1      50000000 20000000  30000000  40% /\n"
+      )
+      expect(DiskManager.mounts).to eq([
+        { filesystem: '/dev/sda1', bytes: 50_000_000 * 1024, used: 20_000_000 * 1024, available: 30_000_000 * 1024, use_percent: '40%', mount: '/' },
+        { filesystem: '/dev/sdb1', bytes: 100_000_000 * 1024, used: 50_000_000 * 1024, available: 50_000_000 * 1024, use_percent: '50%', mount: '/mnt/my data' }
+      ])
+    end
+  end
+
+  describe '.share_storage' do
+    it 'lists the drives mounted under /mnt, with their space, and nothing else' do
+      mounts = Tempfile.new('mounts')
+      mounts.write(<<~MOUNTS)
+        /dev/mapper/ubuntu--vg-ubuntu--lv / ext4 rw,relatime 0 0
+        /dev/sdd2 /boot ext4 rw,relatime 0 0
+        tmpfs /run tmpfs rw,nosuid 0 0
+        /dev/sda /mnt/storage-1 ext4 rw,relatime 0 0
+        /dev/nvme0n1p1 /mnt/my\\040drive ext4 rw,relatime 0 0
+        /dev/sde1 /media/usb vfat rw 0 0
+      MOUNTS
+      mounts.close
+      allow(DiskManager).to receive(:filesystem_space).and_return([1000, 400])
+      expect(DiskManager.share_storage(mounts.path)).to eq([
+        { device: '/dev/sda', path: '/mnt/storage-1', bytes_total: 1000, bytes_free: 400 },
+        { device: '/dev/nvme0n1p1', path: '/mnt/my drive', bytes_total: 1000, bytes_free: 400 }
+      ])
+    ensure
+      mounts&.unlink
+    end
+
+    it 'is empty when the mounts list can\'t be read' do
+      expect(DiskManager.share_storage('/nonexistent/mounts')).to eq([])
     end
   end
 
@@ -207,7 +293,6 @@ RSpec.describe DiskManager do
     it 'never rewrites fstab' do
       allow(File).to receive(:read).with('/etc/fstab').and_return("")
       DiskManager.auto_mount_point
-      expect(DiskManager).not_to have_received(:execute_command).with(%r{/etc/fstab})
       expect(Privileged.calls).to be_empty
     end
   end

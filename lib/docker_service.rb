@@ -10,10 +10,7 @@ class DockerService
   class << self
     def installed?
       return false unless production?
-      output = `dpkg-query -W -f='${Status}' docker-ce 2>/dev/null`.strip
-      return true if output == 'install ok installed'
-      output = `dpkg-query -W -f='${Status}' docker.io 2>/dev/null`.strip
-      output == 'install ok installed'
+      %w[docker-ce docker.io].any? { |package| SystemInfo.package_installed?(package) }
     end
 
     # Docker's service is up (systemctl answers any user; the web app can't reach Docker's
@@ -42,7 +39,7 @@ class DockerService
     def version
       return 'Docker 24.0.7 (stub)' unless production?
       return nil unless installed?
-      `docker --version 2>/dev/null`.strip
+      Shell.output('docker', '--version').strip
     end
 
     # Installs Docker Engine from Docker's apt repository (key fingerprint pinned) and starts

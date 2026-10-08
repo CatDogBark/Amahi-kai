@@ -265,22 +265,18 @@ class SettingsController < ApplicationController
   end
 
   def gather_system_info
-    hostname = `hostname`.strip rescue 'unknown'
-    ip = `hostname -I`.strip.split.first rescue 'unknown'
     os = if File.exist?('/etc/os-release')
       File.readlines('/etc/os-release').find { |l| l.start_with?('PRETTY_NAME=') }&.split('=', 2)&.last&.tr('"', '')&.strip || 'Unknown'
     else
       'Unknown'
     end
-    kernel = `uname -r`.strip rescue 'unknown'
-    uptime_raw = `uptime -p`.strip rescue 'unknown'
 
     {
-      hostname: hostname,
-      ip_address: ip,
+      hostname: SystemInfo.hostname,
+      ip_address: SystemInfo.ip_address,
       os: os,
-      kernel: kernel,
-      uptime: uptime_raw,
+      kernel: SystemInfo.kernel,
+      uptime: "up #{SystemInfo.uptime}",
       ruby_version: RUBY_VERSION,
       rails_version: Rails::VERSION::STRING,
       app_version: SystemServices.app_commit || 'unknown'
@@ -293,8 +289,7 @@ class SettingsController < ApplicationController
     cpu_detail = 'unavailable'
     if File.exist?('/proc/loadavg')
       load1, load5, load15 = File.read('/proc/loadavg').split[0..2].map(&:to_f)
-      cores = `nproc`.strip.to_i rescue 1
-      cores = 1 if cores < 1
+      cores = SystemInfo.cores
       cpu = ((load1 / cores) * 100).round
       cpu_detail = "Load: #{load1} / #{load5} / #{load15} (#{cores} cores)"
     end
@@ -316,14 +311,9 @@ class SettingsController < ApplicationController
     # Disk
     disk_percent = 0
     disk_detail = 'unavailable'
-    begin
-      df = `df -h / 2>/dev/null`.lines.last
-      if df
-        parts = df.split
-        disk_percent = parts[4].to_i  # "42%" -> 42
-        disk_detail = "#{parts[2]} used / #{parts[1]} total (#{parts[3]} free)"
-      end
-    rescue Errno::ENOENT, IOError
+    if (disk = SystemInfo.root_disk)
+      disk_percent = disk[:percent]
+      disk_detail = "#{disk[:used]} used / #{disk[:size]} total (#{disk[:free]} free)"
     end
 
     {

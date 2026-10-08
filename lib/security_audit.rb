@@ -165,8 +165,7 @@ class SecurityAudit
 
     def fail2ban_installed?
       return false unless production?
-      output = `dpkg-query -W -f='${Status}' fail2ban 2>/dev/null`.strip
-      output == 'install ok installed'
+      SystemInfo.package_installed?('fail2ban')
     end
 
     # Security updates get installed: by themselves when automatic updates are on, or from
@@ -256,7 +255,7 @@ class SecurityAudit
 
     def open_ports
       return ['22/ssh', '3000/amahi-kai', '445/samba'] unless production?
-      output = `ss -tlnp 2>/dev/null`.strip
+      output = Shell.output('ss', '-tlnp').strip
       ports = []
       output.each_line do |line|
         next if line.start_with?('State')

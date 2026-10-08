@@ -16,7 +16,6 @@
 
 require 'shell'
 require 'platform'
-require 'shellwords'
 require 'ipaddr'
 
 class Share < ApplicationRecord
@@ -289,13 +288,13 @@ class Share < ApplicationRecord
 
   # The interface of the default route, such as ens18.
   def self.primary_interface
-    `ip -4 route show default 2>/dev/null`[/\bdev\s+(\S+)/, 1]
+    Shell.output('ip', '-4', 'route', 'show', 'default')[/\bdev\s+(\S+)/, 1]
   end
 
   # Global IPv6 prefixes on the LAN interface, so IPv6 clients on the LAN are allowed too.
   def self.lan_ipv6_prefixes(iface)
     return [] if iface.blank?
-    out = `ip -6 -o addr show dev #{Shellwords.escape(iface)} scope global 2>/dev/null`
+    out = Shell.output('ip', '-6', '-o', 'addr', 'show', 'dev', iface, 'scope', 'global')
     out.scan(%r{inet6\s+([0-9a-f:]+)/(\d+)}).map { |addr, len| "#{IPAddr.new(addr).mask(len.to_i)}/#{len}" }.uniq
   rescue IPAddr::InvalidAddressError
     []
