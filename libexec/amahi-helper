@@ -152,6 +152,10 @@ module AmahiHelper
 
   GREYHOLE_CONF = '/etc/greyhole.conf'
   GREYHOLE_BIN = '/usr/bin/greyhole'
+  # Greyhole's trash folder on each pool drive, and the root-only folder beside it where a file
+  # being restored is staged.
+  GREYHOLE_TRASH = '.gh_trash'
+  TRASH_STAGING = '.amahi-restore'
   # greyhole.conf without its database lines, for amahi-dfree: anyone may read it.
   GREYHOLE_POOL_CONF = '/etc/amahi-kai/greyhole-pool.conf'
   # Uninstalling Greyhole or ZFS removes these packages (and nothing else; the PHP modules and
@@ -750,6 +754,28 @@ module AmahiHelper
       params: %w[share],
       validate: ->(a) { installed!(GREYHOLE_BIN) && share_pool_removal(a['share']) },
       plan: ->(v) { [[GREYHOLE_BIN, "--remove-share=#{v[:share]}"]] }
+    },
+    # Greyhole's trash (Disks → Pool Trash): it keeps a file deleted from a pooled share, or
+    # the old version of one changed, in <drive>/.gh_trash/<share>/<path> on each drive that
+    # had a copy. Restore puts it back into its share through Greyhole (greyhole --cp, which
+    # makes its copies again), when the share is still pooled and has no file by that name
+    # now; then the trash's copies go.
+    'greyhole.trash_restore' => {
+      params: %w[share path],
+      validate: ->(a) { installed!(GREYHOLE_BIN) && trash_restore(a['share'], a['path']) },
+      plan: ->(v) { [[:restore_from_trash, v[:share], v[:path], v[:copies]]] }
+    },
+    # Deletes one file from Greyhole's trash, every copy of it.
+    'greyhole.trash_delete' => {
+      params: %w[share path],
+      validate: ->(a) { installed!(GREYHOLE_BIN) && trash_item(a['share'], a['path']) },
+      plan: ->(v) { [[:remove_trash_copies, v[:share], v[:copies]]] }
+    },
+    # Empties Greyhole's trash on every pool drive (greyhole --empty-trash).
+    'greyhole.trash_empty' => {
+      params: [],
+      validate: ->(_a) { installed!(GREYHOLE_BIN) && {} },
+      plan: ->(_v) { [[GREYHOLE_BIN, '--empty-trash']] }
     },
     # Removes Greyhole (Disks → Storage Pool) when its config lists no drives and no share
     # keeping copies: the package, its config and its apt repository. Its database stays, so
@@ -1879,6 +1905,36 @@ module AmahiHelper
       total
     end
 
+    # A file in Greyhole's trash: its share and path there, and its copies, one per pool
+    # drive that has it (<drive>/.gh_trash/<share>/<path>, a file reached through no link).
+    def trash_item(share_value, path_value)
+      share = string(share_value, 'share', max: 64)
+      raise Refused, "#{share.inspect} isn't a share name" if share.include?('/') || share.start_with?('.')
+      path = string(path_value, 'path', max: 4096)
+      raise Refused, 'path must be relative, without . or .. or //' unless normalized_path?("/#{path}") && !path.start_with?('/')
+      copies = greyhole_drives.filter_map do |drive|
+        trash = "#{drive}/#{GREYHOLE_TRASH}"
+        copy = "#{trash}/#{share}/#{path}"
+        copy if File.file?(copy) && !File.symlink?(copy) && File.realpath(copy) == "#{File.realpath(trash)}/#{share}/#{path}"
+      rescue SystemCallError
+        nil
+      end
+      raise Refused, "#{share}/#{path} isn't in the pool's trash" if copies.empty?
+      { share: share, path: path, copies: copies }
+    end
+
+    # A trash file that can go back into its share: the share is still pooled, and has no file
+    # by that name now.
+    def trash_restore(share_value, path_value)
+      item = trash_item(share_value, path_value)
+      share = item[:share]
+      raise Refused, "#{share} isn't in the pool any more: turn its copies back on to restore its files" unless greyhole_shares.include?(share)
+      folder = samba_shares.dig(share.downcase, :path) or raise Refused, "#{share} isn't in Samba's config"
+      target = "#{folder}/#{item[:path]}"
+      raise Refused, "#{share} has a #{item[:path]} now: rename or move it, then restore" if File.exist?(target) || File.symlink?(target)
+      item
+    end
+
     # One of Greyhole's pool drives, as greyhole.conf lists it.
     def listed_greyhole_drive(value)
       value = string(value, 'path', max: 256)
@@ -2410,6 +2466,51 @@ module AmahiHelper
     def do_refresh_greyhole_pool
       return nil unless File.exist?(GREYHOLE_CONF)
       do_install(GREYHOLE_POOL_CONF, greyhole_pool_lines(File.read(GREYHOLE_CONF)), nil, '0644')
+    end
+
+    # Puts a file from Greyhole's trash back into its share: a copy of it, opened without
+    # following links and checked to be the trash's file, is staged in a root-only folder on
+    # its drive, and greyhole --cp puts that into the share, making its copies. Then the
+    # trash's copies go.
+    def do_restore_from_trash(share, path, copies)
+      source = copies.first
+      drive = greyhole_drives.find { |d| source.start_with?("#{d}/#{GREYHOLE_TRASH}/") } or raise Failed, "#{source} isn't in a pool drive's trash"
+      root = "#{drive}/#{TRASH_STAGING}"
+      Dir.mkdir(root, 0o700) unless File.exist?(root) || File.symlink?(root)
+      raise Failed, "#{root} isn't a folder" if File.symlink?(root) || !File.directory?(root)
+      stage = "#{root}/#{SecureRandom.hex(8)}"
+      Dir.mkdir(stage, 0o700)
+      staged = "#{stage}/#{File.basename(path)}"
+      File.open(source, File::RDONLY | File::NOFOLLOW) do |src|
+        raise Failed, "#{share}/#{path} moved while it was being restored" unless File.readlink("/proc/self/fd/#{src.fileno}") == source
+        stat = src.stat
+        raise Failed, "#{share}/#{path} isn't a file" unless stat.file?
+        File.open(staged, File::WRONLY | File::CREAT | File::EXCL | File::NOFOLLOW, 0o600) do |dst|
+          IO.copy_stream(src, dst)
+          dst.chown(stat.uid, stat.gid)
+          dst.chmod(stat.mode & 0o777)
+        end
+        File.utime(stat.atime, stat.mtime, staged)
+      end
+      dir = File.dirname(path)
+      run_command([GREYHOLE_BIN, '--cp', staged, dir == '.' ? "#{share}/" : "#{share}/#{dir}/"])
+      do_remove_trash_copies(share, copies)
+    rescue SystemCallError => e
+      raise Failed, "couldn't restore #{share}/#{path}: #{e.message}"
+    ensure
+      FileUtils.rm_rf(stage) if stage
+    end
+
+    # Deletes a trash file's copies, and the trash folders left empty, with find, which
+    # doesn't follow links.
+    def do_remove_trash_copies(share, copies)
+      copies.each do |copy|
+        drive = greyhole_drives.find { |d| copy.start_with?("#{d}/#{GREYHOLE_TRASH}/") } or next
+        top = "#{drive}/#{GREYHOLE_TRASH}/#{share}"
+        run_command(['/usr/bin/find', top, '-path', copy.gsub(/[\\*?\[\]]/) { |c| "\\#{c}" }, '-type', 'f', '-delete'])
+        run_command(['/usr/bin/find', top, '-mindepth', '1', '-type', 'd', '-empty', '-delete'])
+      end
+      nil
     end
 
     # Files a plan names (never a path from the request).

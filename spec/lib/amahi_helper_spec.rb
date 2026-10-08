@@ -990,6 +990,86 @@ RSpec.describe 'AmahiHelper' do
       end
     end
 
+    describe 'the pool trash' do
+      let(:dir) { Dir.mktmpdir }
+      let(:drives) { ["#{dir}/storage-1", "#{dir}/storage-2"] }
+      let(:folder) { "#{dir}/photos" }
+
+      before do
+        drives.each do |drive|
+          FileUtils.mkdir_p("#{drive}/.gh_trash/Photos/2026")
+          File.write("#{drive}/.gh_trash/Photos/2026/beach [1].jpg", 'picture')
+        end
+        FileUtils.mkdir_p(folder)
+        File.write("#{dir}/greyhole.conf", "num_copies[Photos] = 2\n")
+        stub_const('AmahiHelper::GREYHOLE_CONF', "#{dir}/greyhole.conf")
+        allow(helper).to receive(:greyhole_drives).and_return(drives)
+        allow(helper).to receive(:installed!).and_return(true)
+        allow(helper).to receive(:samba_shares).and_return('photos' => { name: 'Photos', path: folder, pooled: true })
+      end
+
+      after { FileUtils.rm_rf(dir) }
+
+      it 'finds a file by share and path, every copy, reached through no link' do
+        copies = drives.map { |d| "#{d}/.gh_trash/Photos/2026/beach [1].jpg" }
+        expect(steps('greyhole.trash_delete', { 'share' => 'Photos', 'path' => '2026/beach [1].jpg' }))
+          .to eq([[:remove_trash_copies, 'Photos', copies]])
+        expect(steps('greyhole.trash_restore', { 'share' => 'Photos', 'path' => '2026/beach [1].jpg' }))
+          .to eq([[:restore_from_trash, 'Photos', '2026/beach [1].jpg', copies]])
+        expect(steps('greyhole.trash_empty', {})).to eq([%w[/usr/bin/greyhole --empty-trash]])
+
+        FileUtils.mkdir_p("#{dir}/elsewhere")
+        File.write("#{dir}/elsewhere/secret", 'x')
+        File.symlink("#{dir}/elsewhere", "#{drives[0]}/.gh_trash/Photos/out")
+        File.symlink("#{dir}/elsewhere/secret", "#{drives[1]}/.gh_trash/Photos/secret")
+        expect(refusal('greyhole.trash_restore', { 'share' => 'Photos', 'path' => 'out/secret' })).to eq("Photos/out/secret isn't in the pool's trash")
+        expect(refusal('greyhole.trash_delete', { 'share' => 'Photos', 'path' => 'secret' })).to eq("Photos/secret isn't in the pool's trash")
+        ['../x', '/etc/passwd', 'a//b', './a', ''].each do |path|
+          expect(refusal('greyhole.trash_delete', { 'share' => 'Photos', 'path' => path })).not_to be_nil, path
+        end
+        expect(refusal('greyhole.trash_delete', { 'share' => '../Photos', 'path' => '2026/beach [1].jpg' })).to include("isn't a share name")
+      end
+
+      it "restores only into a share that's still pooled and has no file by that name" do
+        File.write("#{dir}/greyhole.conf", "num_copies[Other] = 2\n")
+        expect(refusal('greyhole.trash_restore', { 'share' => 'Photos', 'path' => '2026/beach [1].jpg' }))
+          .to eq("Photos isn't in the pool any more: turn its copies back on to restore its files")
+        File.write("#{dir}/greyhole.conf", "num_copies[Photos] = 2\n")
+        FileUtils.mkdir_p("#{folder}/2026")
+        File.symlink('/somewhere', "#{folder}/2026/beach [1].jpg")
+        expect(refusal('greyhole.trash_restore', { 'share' => 'Photos', 'path' => '2026/beach [1].jpg' }))
+          .to eq('Photos has a 2026/beach [1].jpg now: rename or move it, then restore')
+      end
+
+      it 'stages a copy for greyhole --cp, then deletes the copies and the folders they leave empty' do
+        copies = drives.map { |d| "#{d}/.gh_trash/Photos/2026/beach [1].jpg" }
+        File.write("#{drives[0]}/.gh_trash/Photos/2026/keep.jpg", 'other')
+        staged = nil
+        allow(helper).to receive(:run_command).and_call_original
+        allow(helper).to receive(:run_command).with(array_including('/usr/bin/greyhole')) do |argv|
+          staged = File.read(argv[2])
+          expect(argv).to eq(['/usr/bin/greyhole', '--cp', argv[2], 'Photos/2026/'])
+          expect(argv[2]).to start_with("#{drives[0]}/.amahi-restore/").and end_with('/beach [1].jpg')
+          nil
+        end
+        helper.do_restore_from_trash('Photos', '2026/beach [1].jpg', copies)
+        expect(staged).to eq('picture')
+        expect(copies.map { |copy| File.exist?(copy) }).to eq([false, false])
+        expect(File.exist?("#{drives[0]}/.gh_trash/Photos/2026/keep.jpg")).to be true
+        expect(File.directory?("#{drives[1]}/.gh_trash/Photos/2026")).to be false
+        expect(Dir.children("#{drives[0]}/.amahi-restore")).to be_empty
+      end
+
+      it "won't stage a file it reaches through a link" do
+        copy = "#{drives[0]}/.gh_trash/Photos/2026/beach [1].jpg"
+        File.unlink(copy)
+        File.symlink("#{dir}/greyhole.conf", copy)
+        allow(helper).to receive(:run_command)
+        expect { helper.do_restore_from_trash('Photos', '2026/beach [1].jpg', [copy]) }.to raise_error(AmahiHelper::Failed, /couldn't restore/)
+        expect(helper).not_to have_received(:run_command)
+      end
+    end
+
     it "refreshes apt's package lists, installing nothing" do
       expect(steps('packages.refresh', {})).to eq([['/usr/bin/apt-get', 'update', { env: AmahiHelper::APT_ENV, stream: true }],
                                                    [:check_security_updates]])
