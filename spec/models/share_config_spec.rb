@@ -65,6 +65,37 @@ RSpec.describe Share, 'config generation', type: :model do
       expect(conf.scan("dfree command").length).to eq(1)
     end
 
+    it "puts every feature's vfs modules on one line, Greyhole's first on a pooled share, without recycle" do
+      share = create(:share, name: "Mixed", disk_pool_copies: 0,
+                             extras: "vfs objects = recycle\nrecycle:repository = .recycle\nvfs objects = fruit streams_xattr\nfruit:time machine = yes")
+      conf = share.share_conf
+      expect(conf.scan(/vfs objects = .*/)).to eq(['vfs objects = recycle fruit streams_xattr'])
+      expect(conf).to include("\trecycle:repository = .recycle\n", "\tfruit:time machine = yes\n")
+
+      share.update_column(:disk_pool_copies, 2)
+      conf = share.reload.share_conf
+      expect(conf.scan(/vfs objects = .*/)).to eq(['vfs objects = greyhole fruit streams_xattr'])
+      expect(conf.scan('dfree command').length).to eq(1)
+
+      share.update_columns(extras: "hide dot files = yes")
+      expect(share.reload.share_conf.scan(/vfs objects = .*/)).to eq(['vfs objects = greyhole'])
+      share.update_columns(disk_pool_copies: 0)
+      expect(share.reload.share_conf).not_to include('vfs objects')
+    end
+
+    it 'gives Samba a config it accepts, with every feature on a pooled share', if: File.executable?('/usr/bin/testparm') do
+      share = create(:share, name: "AllOn", path: '/tmp', disk_pool_copies: 2,
+                             extras: "vfs objects = recycle\nrecycle:repository = .recycle\nvfs objects = fruit streams_xattr\n" \
+                                     "fruit:metadata = stream\nhide dot files = yes\nvfs objects = fruit streams_xattr\nfruit:time machine = yes")
+      Tempfile.create('smb.conf') do |file|
+        file.write("[global]\n\tworkgroup = TEST\n\n#{share.share_conf}")
+        file.flush
+        out, err, status = Open3.capture3('/usr/bin/testparm', '-s', '--section-name=AllOn', '--parameter-name=vfs objects', file.path)
+        expect(status).to be_success, err
+        expect(out.strip).to eq('greyhole fruit streams_xattr')
+      end
+    end
+
     it 'includes create/directory masks' do
       share = create(:share)
       conf = share.share_conf

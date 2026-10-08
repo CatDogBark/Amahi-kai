@@ -93,25 +93,36 @@ function toggleSharePreset(shareId, presetKey) {
   var preset = SHARE_PRESETS[presetKey];
   if (!preset) return;
 
+  var container = document.getElementById('share-presets-' + shareId);
   var btn = document.querySelector('#share-presets-' + shareId + ' [data-preset="' + presetKey + '"]');
   var isActive = btn && btn.classList.contains('btn-info');
 
-  // Get current extras via textarea if visible, otherwise fetch
+  // The share's settings: the raw editor's when it's open (Advanced), else the page's copy.
+  // Starting from nothing would replace every other setting the share has.
   var textarea = document.getElementById('extras-textarea-' + shareId);
-  var current = textarea ? textarea.value : '';
+  var current = textarea ? textarea.value : (container ? container.dataset.extras || '' : '');
 
   var newExtras;
   if (isActive) {
-    // Remove preset lines
+    // Remove the preset's lines, but not ones another feature that's on also uses
+    // (macOS and Time Machine share some).
+    var keep = [];
+    if (container) {
+      container.querySelectorAll('[data-preset].btn-info').forEach(function(other) {
+        if (other.dataset.preset !== presetKey && SHARE_PRESETS[other.dataset.preset]) {
+          keep = keep.concat(SHARE_PRESETS[other.dataset.preset].split('\n'));
+        }
+      });
+    }
     var lines = current.split('\n');
     var presetLines = preset.split('\n');
     newExtras = lines.filter(function(line) {
-      return presetLines.indexOf(line.trim()) === -1;
+      return presetLines.indexOf(line.trim()) === -1 || keep.indexOf(line.trim()) !== -1;
     }).join('\n').replace(/\n{3,}/g, '\n\n').trim();
   } else {
-    // Add preset lines (avoid duplicates)
+    // Add the preset's lines it doesn't have yet. Each feature's vfs objects line can stay
+    // its own: Amahi-kai puts their modules on one line in Samba's config (Share#share_conf).
     var existing = current.trim();
-    // Check for vfs objects conflict — merge if both use vfs objects
     var presetLines = preset.split('\n');
     var existingLines = existing.split('\n');
     var mergedLines = existingLines.slice();
@@ -141,8 +152,9 @@ function toggleSharePreset(shareId, presetKey) {
           btn.classList.toggle('btn-info');
           btn.classList.toggle('btn-outline-secondary');
         }
-        // Update textarea if visible
+        // Update textarea if visible, and the page's copy
         if (textarea) textarea.value = newExtras;
+        if (container) container.dataset.extras = newExtras;
       }
     })
     .catch(function(err) { console.error('Preset toggle failed:', err); })
@@ -169,6 +181,7 @@ function submitExtras(shareId, form) {
       // Update preset button states
       var container = document.getElementById('share-presets-' + shareId);
       if (container) {
+        container.dataset.extras = extras;
         container.querySelectorAll('[data-preset]').forEach(function(btn) {
           var preset = SHARE_PRESETS[btn.dataset.preset];
           if (!preset) return;
