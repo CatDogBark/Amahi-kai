@@ -121,6 +121,8 @@ All notable changes to Amahi-kai are documented here.
 
 ### 🔧 Architecture & Code Quality
 
+- **Drive removal's database change is safe to rerun** — If a System Update stops partway and runs again, adding the Removing column to the pool drives' table no longer fails because the column is already there.
+
 - **Addresses in one place** — Every address of Amahi-kai or one of its apps is made in one place (a spec checks), so HTTPS can be added later as an optional front door without hunting through the code; plain HTTP stays fully working. Remote Access shows the Tailscale address that way too.
 
 - **Dummy mode is gone.** It was a developer switch that made Amahi-kai skip every change to the system, and a setting in `amahi.env` (`AMAHI_DUMMY_MODE`) could turn it on, even on a real NAS, where every button would then silently do nothing. Now there's a fixed rule with no setting: outside production (development and the tests) system commands and the root helper are only recorded; production always runs them. The Dummy Mode row on System Status is gone, and the installer no longer writes the setting (an old line in `amahi.env` is ignored).
