@@ -1,4 +1,3 @@
-//= require turbo-iife
 //= require stimulus-iife
 
 //= require controllers/application_controller

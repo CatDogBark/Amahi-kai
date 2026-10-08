@@ -1,8 +1,7 @@
 // Stimulus Application Setup
 //
-// Since we're using Sprockets (not importmap), we manually register controllers.
-// Turbo Drive is disabled globally via data-turbo="false" on <body>.
-// We only use Turbo Frames/Streams where explicitly opted in.
+// Since we're using Sprockets (not importmap), we manually register controllers. Pages are
+// plain page loads (there's no Turbo).
 
 (function() {
   window.StimulusApp = Stimulus.Application.start();
