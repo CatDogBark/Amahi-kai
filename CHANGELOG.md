@@ -165,6 +165,8 @@ All notable changes to Amahi-kai are documented here.
 
 - **Share tags' column goes** — The last of tags: their database column is dropped.
 
+- **Users' old SSH-key column goes** — Amahi-kai stopped saving and installing users' SSH keys long ago (web users get no shell), so the database column that held them is dropped.
+
 - **The themes table goes** — With the theme system gone (#102), its database table and its setting are dropped. The last code that still wrote share tags is gone too, so their column can be dropped in the next update.
 
 - **Dead code out** — Nothing in the app called these, so they go:
