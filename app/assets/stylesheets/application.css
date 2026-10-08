@@ -1,7 +1,8 @@
 /*
  * The stylesheet every page loads. Sprockets joins the files below into application.css:
  * Bootstrap 5.3.8 (vendor/assets/stylesheets/bootstrap.min.css, the official build), then
- * this file's own rules, then the app's stylesheets. All plain CSS, no Sass.
+ * this file's own rules, the app's stylesheets, and last the theme (theme.css: the look, which
+ * wins over the rest). All plain CSS, no Sass.
  *
  *= require bootstrap.min
  *= require_self
@@ -9,6 +10,7 @@
  *= require file_browser
  *= require shares
  *= require ocean-bg
+ *= require theme
  */
 
 .nav_hover:hover {

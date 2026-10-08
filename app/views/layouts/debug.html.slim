@@ -7,17 +7,9 @@ html[lang="en" data-theme="dark" data-bs-theme="dark"]
 
     = stylesheet_link_tag 'application'
 
-    - if theme.name != "default" and theme.disable_inheritance == false
-      = stylesheet_link_tag(theme_stylesheet_path('style', theme.default))
-
-    = theme_stylesheet_link_tag 'style'
     /! Plugin stylesheets omitted — debug/error page should not depend on plugin assets
 
-
-    = javascript_tag {render 'shared/js_vars'}
     = javascript_include_tag 'application'
-    - for header in theme.headers do
-      = header =~ /\.js$/ ? javascript_include_tag(header) : header
 
     link rel="search" type="application/opensearchdescription+xml" title="File Search" href="/search.xml"
     link rel="shortcut icon" href="/favicon.ico" type="image/x-icon"
@@ -55,4 +47,3 @@ html[lang="en" data-theme="dark" data-bs-theme="dark"]
     - if current_user_is_admin?
       == render 'layouts/system_update'
 
-    #js-templates[style="display:none"]

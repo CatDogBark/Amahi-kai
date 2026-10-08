@@ -62,22 +62,6 @@ RSpec.describe "ApplicationController features", type: :request do
     end
   end
 
-  describe "theme handling" do
-    before { login_as_admin }
-
-    it "sets theme from settings" do
-      Setting.find_or_create_by!(name: "theme") { |s| s.value = "amahi-kai"; s.kind = 0 }
-      get root_path
-      expect(response).to have_http_status(:ok)
-    end
-
-    it "falls back to default theme" do
-      Setting.where(name: "theme").delete_all
-      get root_path
-      expect(response).to have_http_status(:ok)
-    end
-  end
-
   describe "RTL direction" do
     before { login_as_admin }
 

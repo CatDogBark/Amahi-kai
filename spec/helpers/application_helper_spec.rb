@@ -118,18 +118,4 @@ RSpec.describe ApplicationHelper, type: :helper do
     end
   end
 
-  describe "#theme_stylesheet_path" do
-    it "returns correct path" do
-      path = helper.theme_stylesheet_path("style", "amahi-kai")
-      # The ?v= cache-buster changes with the file, so match the path before it.
-      expect(path).to match(%r{\A/themes/amahi-kai/stylesheets/style\.css(\?v=\d+)?\z})
-    end
-  end
-
-  describe "#theme_image_path" do
-    it "returns correct path with explicit theme" do
-      path = helper.theme_image_path("logo.png", "amahi-kai")
-      expect(path).to eq("/themes/amahi-kai/images/logo.png")
-    end
-  end
 end

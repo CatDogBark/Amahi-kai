@@ -10,7 +10,7 @@ RSpec.describe Yetting do
 
   describe "method-style access" do
     it "returns configured values" do
-      expect(Yetting.default_theme).to eq('amahi-kai')
+      expect(Yetting.valid_dhcp_address_range).to eq(100)
     end
 
     it "raises NoMethodError for unknown keys" do
@@ -20,7 +20,7 @@ RSpec.describe Yetting do
 
   describe ".respond_to_missing?" do
     it "responds to configured keys" do
-      expect(Yetting.respond_to?(:default_theme)).to be true
+      expect(Yetting.respond_to?(:valid_dhcp_address_range)).to be true
     end
 
     it "does not respond to unknown keys" do

@@ -9,32 +9,4 @@ module SharesHelper
     tags.blank? ? '(add tags)' : tags
   end
 
-
-  def warning_greyhole(path)
-    title, wiki_path = warning_greyhole_on_root(path)
-    if title and wiki_path
-      danger_image = theme_image_tag('danger.png', :class => 'theme-image')
-      link_to_wiki = link_to(theme_image_tag('more.png', :title => title, :class => 'theme-image'), "https://amahi-kai.com/wiki/storage-pooling")
-      content_tag(:span, safe_join([danger_image, " » ", link_to_wiki]), style: 'float:right;')
-    else
-      ''
-    end
-  end
-
-    def warning_greyhole_on_root(path)
-      return ['Greyhole not on root', '/Greyhole_not_on_root' ] if path == '/'
-      return ['Greyhole not on /media', '/Greyhole#.2Fmedia' ] if path =~ /^\/media/
-    end
-
-  def space_color(total_space, free_space)
-    space_color_class = "cool"
-    space_color_class = "warm" if free_space < (total_space * 0.20)
-    space_color_class = "hot" if free_space < (total_space * 0.10)
-    space_color_class
-  end
-
-  def disk_pooling_area?
-    advanced? && DiskPoolPartition.count > 0 && Greyhole.enabled?
-  end
-
 end

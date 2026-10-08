@@ -83,20 +83,6 @@ RSpec.describe FileBrowserService do
     end
   end
 
-  describe '.file_icon' do
-    it 'returns folder icon for directories' do
-      expect(described_class.file_icon('anything', true)).to eq('📁')
-    end
-
-    it 'returns correct icon for known extension' do
-      expect(described_class.file_icon('song.mp3', false)).to eq('🎵')
-    end
-
-    it 'returns default icon for unknown extension' do
-      expect(described_class.file_icon('file.xyz', false)).to eq('📄')
-    end
-  end
-
   describe '.resolve_path' do
     let(:dir) { Dir.mktmpdir }
     after { FileUtils.rm_rf(dir) }

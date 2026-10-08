@@ -97,11 +97,5 @@ describe "Settings Controller", type: :request do
       end
     end
 
-    describe "themes" do
-      it "shows themes page" do
-        get "/settings/themes"
-        expect(response).to have_http_status(:ok)
-      end
-    end
   end
 end

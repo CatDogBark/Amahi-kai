@@ -44,10 +44,6 @@ module ApplicationHelper
     @app_updates ||= current_user&.admin? ? DockerApp.all.select(&:update_available?).sort_by { |app| app.name.downcase } : []
   end
 
-  def theme
-    @theme
-  end
-
   def page_title
     @page_title
   end
@@ -129,34 +125,6 @@ module ApplicationHelper
 
 
 
-
-  # theme helpers
-  def theme_stylesheet_link_tag(a)
-    css_path = File.join('/themes', @theme.path, 'stylesheets', "#{a}.css")
-    full_path = Rails.public_path.join('themes', @theme.path, 'stylesheets', "#{a}.css")
-    mtime = File.exist?(full_path) ? File.mtime(full_path).to_i : AmahiKai::VERSION.tr('.', '')
-    tag.link(
-      href: "#{css_path}?v=#{mtime}",
-      rel: "stylesheet",
-      media: "screen"
-    )
-  end
-
-  def theme_stylesheet_path(a, theme)
-    css_path = File.join('/themes', theme, 'stylesheets', "#{a}.css")
-    full_path = Rails.public_path.join('themes', theme, 'stylesheets', "#{a}.css")
-    mtime = File.exist?(full_path) ? File.mtime(full_path).to_i : AmahiKai::VERSION.tr('.', '')
-    "#{css_path}?v=#{mtime}"
-  end
-
-  def theme_image_tag(a, options = {})
-    s = File.join('/themes', @theme.path, 'images', a)
-    tag('img', {src: s}.merge(options))
-  end
-
-  def theme_image_path(a, theme=nil)
-    File.join('/themes', theme || @theme.path, 'images', a)
-  end
 
   def advanced?
     (s = Setting.where(:name=>'advanced').first) && s.set?
