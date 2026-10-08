@@ -96,7 +96,8 @@ div.share[id="whole_share_#{share.id}"]
               td.top
                 label Features
               td.top
-                .share-presets.d-flex.flex-wrap.align-items-center.gap-1 id="share-presets-#{share.id}"
+                /! data-extras: the share's Samba settings, which the features change (shares.js)
+                .share-presets.d-flex.flex-wrap.align-items-center.gap-1 id="share-presets-#{share.id}" data-extras=share.extras.to_s
                   - presets = { 'recycle_bin' => { icon: "\u{1F5D1}", label: 'Recycle Bin', params: "vfs objects = recycle\nrecycle:repository = .recycle\nrecycle:keeptree = yes\nrecycle:versions = yes" }, 'macos' => { icon: "\u{1F34E}", label: 'macOS', params: "vfs objects = fruit streams_xattr\nfruit:metadata = stream\nfruit:model = MacSamba\nfruit:posix_rename = yes\nfruit:veto_appledouble = no\nfruit:nfs_aces = no\nfruit:wipe_intentionally_left_blank_rfork = yes\nfruit:delete_empty_adfiles = yes" }, 'hide_dotfiles' => { icon: "\u{1F441}", label: 'Hide Dotfiles', params: "hide dot files = yes\nveto files = /._*/.DS_Store/" }, 'time_machine' => { icon: "\u{23F0}", label: 'Time Machine', params: "vfs objects = fruit streams_xattr\nfruit:time machine = yes\nfruit:metadata = stream\nfruit:model = TimeCapsule" } }
                   - presets.each do |key, preset|
                     - if key == 'recycle_bin' && share.disk_pool_copies.positive?

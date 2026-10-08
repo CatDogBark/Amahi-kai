@@ -80,5 +80,14 @@ describe "Shares Toggle Actions", type: :request do
         expect(response).to have_http_status(:ok)
       end
     end
+
+    describe "the share's features" do
+      it "carry the share's settings on the page, so a feature changes only its own lines" do
+        share = create(:share, name: "Macs", extras: "hide dot files = yes\nlog level = 1")
+        get shares_path
+        presets = Nokogiri::HTML(response.body).at_css("#share-presets-#{share.id}")
+        expect(presets["data-extras"]).to eq("hide dot files = yes\nlog level = 1")
+      end
+    end
   end
 end

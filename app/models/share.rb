@@ -130,12 +130,18 @@ class Share < ApplicationRecord
     end
     e = ""
     e = "\t" + (extras.gsub /\n/, "\n\t") unless extras.nil?
+    e = "#{e.chomp}\n" unless e.empty?
+    # Samba takes one vfs objects line per share (a later one replaces an earlier), so the
+    # modules the share's features ask for go on one line. A pooled share has Greyhole's first,
+    # as Greyhole's own tools put it, and no recycle: Greyhole's trash keeps deleted files.
+    modules = e.scan(/^\s*vfs objects\s*=\s*(.*)$/i).flatten.flat_map(&:split).uniq
+    e = e.gsub(/^\s*vfs objects\s*=.*\n?/i, '')
     if disk_pool_copies > 0
-      tmp = e.gsub /\tdfree command.*\n/, ''
-      e = tmp.gsub /\tvfs objects.*greyhole.*\n/, ''
-      e += "\n\t" + "dfree command = #{DFREE_COMMAND}" + "\n"
-      e += "\t" + 'vfs objects = greyhole' + "\n"
+      e = e.gsub(/^\s*dfree command.*\n?/, '')
+      e += "\tdfree command = #{DFREE_COMMAND}\n"
+      modules = ['greyhole', *(modules - %w[greyhole recycle])]
     end
+    e += "\tvfs objects = #{modules.join(' ')}\n" if modules.any?
     ret % [name, name, path, wr, br, allowed, writes, masks, e]
   end
 
