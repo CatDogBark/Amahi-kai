@@ -1,0 +1,53 @@
+/* A share's settings on Shares (shares/_share): full width, by section, with what each does. */
+.share-card {
+  padding: 1rem 1.25rem;
+}
+
+.share-card-title {
+  margin-bottom: 0.75rem;
+}
+
+.share-section {
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--kai-border, rgba(255, 255, 255, 0.08));
+}
+
+.share-section-title {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--kai-muted, #8a96a8);
+  margin-bottom: 0.5rem;
+}
+
+.share-row {
+  display: grid;
+  grid-template-columns: 11rem 1fr;
+  gap: 0.25rem 1rem;
+  padding: 0.35rem 0;
+}
+
+.share-row-label {
+  font-weight: 500;
+}
+
+.share-help {
+  font-size: 0.8rem;
+  color: var(--kai-muted, #8a96a8);
+  margin-top: 0.25rem;
+  max-width: 48rem;
+}
+
+.share-card-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--kai-border, rgba(255, 255, 255, 0.08));
+}
+
+@media (max-width: 576px) {
+  .share-row {
+    grid-template-columns: 1fr;
+  }
+}
