@@ -1,4 +1,4 @@
-<%# The Trash (TrashController): what Greyhole keeps of files deleted or changed in pooled shares %>
+<%# The Trash (TrashController): every share's deleted files %>
 <div class="file-browser" id="trash">
   <div class="fb-header">
     <div class="fb-breadcrumbs">
@@ -7,25 +7,37 @@
       <span class="fb-crumb-current"><%= t('trash') %></span>
     </div>
     <div class="fb-actions">
-      <% if @greyhole_installed && @trash[:count].positive? %>
+      <% if @trash[:count].positive? %>
         <%= button_to 'Empty trash', trash_empty_path, method: :post, form: { class: 'd-inline-flex' },
               class: 'btn btn-sm btn-outline-danger', id: 'empty-trash',
-              data: { confirm: "Delete all #{pluralize(@trash[:count], 'file')} in the trash for good? This frees #{number_to_human_size(@trash[:space])} on the pool drives.",
+              data: { confirm: "Delete all #{pluralize(@trash[:count], 'file')} in the trash for good? This frees #{number_to_human_size(@trash[:space])}.",
                       disable_with: 'Emptying…' } %>
       <% end %>
     </div>
   </div>
 
-  <p class="small text-muted px-2 pt-2 mb-2" id="trash-about">
-    When a file in a pooled share is deleted, or changed, Greyhole keeps the old copy here until the trash is emptied.
-    Restore puts a file back where it was, and Greyhole makes its copies again. Shares that aren't pooled have no trash:
-    what's deleted from them is gone.
-  </p>
+  <div class="d-flex flex-wrap align-items-center gap-2 px-2 pt-2 mb-2 small" id="trash-about">
+    <span class="text-muted flex-grow-1">
+      What's deleted from a share comes here. Restore puts a file back where it was.
+      <% if @days.zero? %>
+        Files stay until the trash is emptied.
+      <% else %>
+        Files are deleted for good after <%= pluralize(@days, 'day') %> here.
+      <% end %>
+    </span>
+    <%= form_with url: trash_keep_path, method: :post, class: 'd-inline-flex align-items-center gap-1', id: 'trash-keep' do %>
+      <label for="trash-days" class="text-muted">Keep files</label>
+      <select name="days" id="trash-days" class="form-select form-select-sm w-auto" onchange="this.form.requestSubmit()">
+        <% Trash::DAY_CHOICES.each do |choice| %>
+          <option value="<%= choice %>" <%= 'selected' if choice == @days %>><%= choice.zero? ? 'until emptied' : "for #{choice} days" %></option>
+        <% end %>
+      </select>
+      <noscript><button type="submit" class="btn btn-sm btn-outline-secondary">Save</button></noscript>
+    <% end %>
+  </div>
 
   <div class="fb-listing">
-    <% if !@greyhole_installed %>
-      <div class="fb-empty"><div class="fb-empty-icon">🗑</div><p>Greyhole isn't installed, so there's no trash.</p></div>
-    <% elsif @trash[:count].zero? %>
+    <% if @trash[:count].zero? %>
       <div class="fb-empty" id="trash-summary"><div class="fb-empty-icon">🗑</div><p>The trash is empty.</p></div>
     <% else %>
       <table class="table fb-table">
@@ -40,6 +52,7 @@
         </thead>
         <tbody>
           <% @trash[:items].each do |item| %>
+            <% item_params = { kind: item.kind, share: item.share, path: item.path } %>
             <tr class="fb-row trash-item">
               <td class="fb-icon-col"><%= FileBrowserService.file_icon(item.path, false) %></td>
               <td class="fb-name-col text-break">
@@ -49,14 +62,14 @@
               <td class="fb-size-col"><%= number_to_human_size(item.bytes) %></td>
               <td class="fb-date-col"><%= relative_time_tag(item.trashed_at, capitalize: true) %></td>
               <td class="text-end text-nowrap">
-                <% if @pooled_shares.include?(item.share) %>
-                  <%= button_to 'Restore', trash_restore_path, method: :post, params: { share: item.share, path: item.path },
+                <% if item.kind == :share || @pooled_shares.include?(item.share) %>
+                  <%= button_to 'Restore', trash_restore_path, method: :post, params: item_params,
                         form: { class: 'd-inline-flex' }, class: 'btn btn-sm btn-outline-primary me-1',
                         data: { disable_with: 'Restoring…' } %>
                 <% else %>
                   <span class="small text-muted me-2">Its share isn't pooled now</span>
                 <% end %>
-                <%= button_to 'Delete', trash_delete_path, method: :post, params: { share: item.share, path: item.path },
+                <%= button_to 'Delete', trash_delete_path, method: :post, params: item_params,
                       form: { class: 'd-inline-flex' }, class: 'btn btn-sm btn-outline-secondary',
                       data: { confirm: "Delete #{item.share}/#{item.path} for good?", disable_with: 'Deleting…' } %>
               </td>
@@ -68,8 +81,8 @@
   </div>
 
   <div class="fb-statusbar" id="trash-summary-bar">
-    <% if @greyhole_installed && @trash[:count].positive? %>
-      <%= pluralize(@trash[:count], 'file') %>, using <%= number_to_human_size(@trash[:space]) %> on the pool drives (every copy counted)<% if @trash[:count] > @trash[:items].size %>; the newest <%= @trash[:items].size %> are listed<% end %>
+    <% if @trash[:count].positive? %>
+      <%= pluralize(@trash[:count], 'file') %>, using <%= number_to_human_size(@trash[:space]) %> (every copy counted)<% if @trash[:count] > @trash[:items].size %>; the newest <%= @trash[:items].size %> are listed<% end %>
     <% end %>
   </div>
 </div>

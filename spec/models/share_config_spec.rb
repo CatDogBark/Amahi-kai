@@ -56,6 +56,17 @@ RSpec.describe Share, 'config generation', type: :model do
       expect(conf).not_to include("greyhole")
     end
 
+    it "keeps a share's deleted files in its recycle bin, the Trash, unless it's pooled (Greyhole's trash)" do
+      share = create(:share, name: "Plain", disk_pool_copies: 0, extras: "recycle:repository = elsewhere\nhide dot files = yes")
+      conf = share.share_conf
+      expect(conf.scan(/vfs objects = .*/)).to eq(['vfs objects = recycle'])
+      Share::RECYCLE_PARAMS.each { |param| expect(conf).to include("\t#{param}\n") }
+      expect(conf).not_to include('elsewhere')
+      expect(conf).to include("\thide dot files = yes\n")
+      share.update_column(:disk_pool_copies, 1)
+      expect(share.reload.share_conf).not_to include('recycle')
+    end
+
     it 'strips existing greyhole entries from extras before re-adding' do
       share = create(:share, name: "RePool", disk_pool_copies: 1,
         extras: "\tdfree command = /opt/amahi-kai/libexec/amahi-dfree\n\tvfs objects = greyhole\n")
@@ -80,7 +91,7 @@ RSpec.describe Share, 'config generation', type: :model do
       share.update_columns(extras: "hide dot files = yes")
       expect(share.reload.share_conf.scan(/vfs objects = .*/)).to eq(['vfs objects = greyhole'])
       share.update_columns(disk_pool_copies: 0)
-      expect(share.reload.share_conf).not_to include('vfs objects')
+      expect(share.reload.share_conf.scan(/vfs objects = .*/)).to eq(['vfs objects = recycle'])
     end
 
     it 'gives Samba a config it accepts, with every feature on a pooled share', if: File.executable?('/usr/bin/testparm') do
@@ -93,6 +104,21 @@ RSpec.describe Share, 'config generation', type: :model do
         out, err, status = Open3.capture3('/usr/bin/testparm', '-s', '--section-name=AllOn', '--parameter-name=vfs objects', file.path)
         expect(status).to be_success, err
         expect(out.strip).to eq('greyhole fruit streams_xattr')
+      end
+    end
+
+    it "gives Samba a recycle bin it accepts on a share that isn't pooled, which the root helper allows" do
+      share = create(:share, name: "Plain", path: Share.default_full_path('plain'), disk_pool_copies: 0, extras: "")
+      Privileged.operations # loads libexec/amahi-helper
+      expect(AmahiHelper.samba_problems(share.share_conf)).to eq([])
+      next unless File.executable?('/usr/bin/testparm')
+
+      Tempfile.create('smb.conf') do |file|
+        file.write("[global]\n\tworkgroup = TEST\n\n#{share.share_conf}")
+        file.flush
+        out, err, status = Open3.capture3('/usr/bin/testparm', '-s', '--section-name=Plain', '--parameter-name=recycle:repository', file.path)
+        expect(status).to be_success, err
+        expect(out.strip).to eq('.recycle')
       end
     end
 

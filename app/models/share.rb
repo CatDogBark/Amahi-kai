@@ -23,6 +23,12 @@ class Share < ApplicationRecord
   # Samba's free-space answer for a pooled share (libexec/amahi-dfree): Greyhole's own
   # greyhole-dfree can't read greyhole.conf as the person connected, and answered no space.
   DFREE_COMMAND = '/opt/amahi-kai/libexec/amahi-dfree'.freeze
+  # Samba's recycle bin, the Trash of a share that isn't pooled (share_conf; Trash).
+  RECYCLE_PARAMS = [
+    'recycle:repository = .recycle', 'recycle:keeptree = yes', 'recycle:versions = yes',
+    'recycle:directory_mode = 0770', 'recycle:subdir_mode = 0770', 'recycle:exclude_dir = .recycle',
+    'recycle:exclude = *.tmp,*.temp,~$*,.~lock.*,Thumbs.db,.DS_Store'
+  ].freeze
 
 
   def to_param
@@ -140,6 +146,16 @@ class Share < ApplicationRecord
       e = e.gsub(/^\s*dfree command.*\n?/, '')
       e += "\tdfree command = #{DFREE_COMMAND}\n"
       modules = ['greyhole', *(modules - %w[greyhole recycle])]
+    end
+    # Amahi-kai sets the recycle bin's settings itself (a pooled share has none).
+    e = e.gsub(/^\s*recycle:.*\n?/, '')
+    unless disk_pool_copies > 0
+      # The Trash: Samba moves what's deleted here into the share's .recycle folder (hidden, a
+      # dot folder), in folders the users group can change, so Amahi-kai can restore and delete
+      # them; amahi-kai-trash.timer deletes what's been there too long. Temporary and lock files
+      # aren't kept.
+      e += RECYCLE_PARAMS.map { |param| "\t#{param}\n" }.join
+      modules |= ['recycle']
     end
     e += "\tvfs objects = #{modules.join(' ')}\n" if modules.any?
     ret % [name, name, path, wr, br, allowed, writes, masks, e]

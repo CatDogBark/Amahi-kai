@@ -155,6 +155,11 @@ module AmahiHelper
   # Greyhole's trash folder on each pool drive, and the root-only folder beside it where a file
   # being restored is staged.
   GREYHOLE_TRASH = '.gh_trash'
+  # Samba's recycle bin in each share that isn't pooled (Share#share_conf), and how many days
+  # the Trash keeps files (written by trash.set_days; 30 when it isn't there).
+  RECYCLE_BIN = '.recycle'
+  TRASH_DAYS = '/etc/amahi-kai/trash-days'
+  TRASH_DEFAULT_DAYS = 30
   TRASH_STAGING = '.amahi-restore'
   # greyhole.conf without its database lines, for amahi-dfree: anyone may read it.
   GREYHOLE_POOL_CONF = '/etc/amahi-kai/greyhole-pool.conf'
@@ -773,6 +778,19 @@ module AmahiHelper
       params: %w[share path],
       validate: ->(a) { installed!(GREYHOLE_BIN) && trash_item(a['share'], a['path']) },
       plan: ->(v) { [[:remove_trash_copies, v[:share], v[:copies]]] }
+    },
+    # How many days the Trash keeps deleted files (0: until it's emptied), for trash.expire.
+    'trash.set_days' => {
+      params: %w[days],
+      validate: ->(a) { { days: integer(a, 'days', 0..3650) } },
+      plan: ->(v) { [[:install, TRASH_DAYS, "#{v[:days]}\n", nil, '0644']] }
+    },
+    # Deletes files that have been in the Trash longer than it keeps them: Greyhole's on each
+    # pool drive, and each other share's recycle bin. Run daily by amahi-kai-trash.timer.
+    'trash.expire' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:expire_trash]] }
     },
     # Empties Greyhole's trash on every pool drive (greyhole --empty-trash).
     'greyhole.trash_empty' => {
@@ -2502,6 +2520,22 @@ module AmahiHelper
       raise Failed, "couldn't restore #{share}/#{path}: #{e.message}"
     ensure
       FileUtils.rm_rf(stage) if stage
+    end
+
+    # The files in the Trash longer than it keeps them, deleted (find, which doesn't follow
+    # links, by when each went in: a move into the trash sets its change time), and the
+    # folders left empty. Nothing when it keeps them until it's emptied.
+    def do_expire_trash
+      days = File.exist?(TRASH_DAYS) ? File.read(TRASH_DAYS).strip : TRASH_DEFAULT_DAYS.to_s
+      days = days.match?(/\A\d{1,4}\z/) ? days.to_i : TRASH_DEFAULT_DAYS
+      return nil if days.zero?
+      bins = greyhole_drives.map { |drive| "#{drive}/#{GREYHOLE_TRASH}" } +
+             samba_shares.values.reject { |share| share[:pooled] }.map { |share| "#{share[:path]}/#{RECYCLE_BIN}" }
+      bins.select { |bin| File.directory?(bin) && !File.symlink?(bin) }.each do |bin|
+        run_command(['/usr/bin/find', bin, '-type', 'f', '-cmin', "+#{days * 1440}", '-delete'])
+        run_command(['/usr/bin/find', bin, '-mindepth', '1', '-type', 'd', '-empty', '-delete'])
+      end
+      nil
     end
 
     # Deletes a trash file's copies, and the trash folders left empty, with find, which

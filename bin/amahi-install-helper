@@ -11,6 +11,7 @@
 #   /etc/systemd/system/amahi-kai-snapshots.{service,timer}      pool snapshots, every hour
 #   /etc/systemd/system/amahi-kai-app-firewall.service   app ports kept to the LAN and Tailscale, with Docker
 #   /etc/systemd/system/amahi-kai-app-backups.{service,timer}    app update copies deleted after 30 days, daily
+#   /etc/systemd/system/amahi-kai-trash.{service,timer}          files kept in the Trash too long deleted, daily
 #   /etc/sudoers.d/amahi-kai        from config/sudoers/amahi-kai, only if visudo accepts it
 #
 # It also takes the app's user out of the docker group (Docker runs only through the helper).
@@ -39,7 +40,8 @@ fi
 for unit in amahi-kai-update.service amahi-kai-update-check.service amahi-kai-update-check.timer \
             amahi-kai-storage-check.service amahi-kai-storage-check.timer \
             amahi-kai-snapshots.service amahi-kai-snapshots.timer amahi-kai-app-firewall.service \
-            amahi-kai-app-backups.service amahi-kai-app-backups.timer; do
+            amahi-kai-app-backups.service amahi-kai-app-backups.timer \
+            amahi-kai-trash.service amahi-kai-trash.timer; do
   install -o root -g root -m 0644 "$APP_DIR/config/systemd/$unit" "/etc/systemd/system/$unit"
 done
 # The app catalog had a timer of its own; the update check fetches it now.
@@ -57,6 +59,8 @@ if [[ -d /run/systemd/system ]]; then
     || echo "Couldn't enable amahi-kai-snapshots.timer; pools won't take snapshots on their own" >&2
   systemctl enable --now amahi-kai-app-backups.timer >/dev/null 2>&1 \
     || echo "Couldn't enable amahi-kai-app-backups.timer; app update copies won't be deleted after 30 days" >&2
+  systemctl enable --now amahi-kai-trash.timer >/dev/null 2>&1 \
+    || echo "Couldn't enable amahi-kai-trash.timer; the Trash won't delete old files on its own" >&2
   # Starts with Docker from now on, and now if Docker is running (an update applies the rules).
   systemctl enable amahi-kai-app-firewall.service >/dev/null 2>&1 \
     || echo "Couldn't enable amahi-kai-app-firewall.service; app ports aren't limited to the LAN" >&2

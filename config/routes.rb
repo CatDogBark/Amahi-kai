@@ -207,6 +207,7 @@ Rails.application.routes.draw do
   post 'files/trash/restore',          to: 'trash#restore',        as: :trash_restore
   post 'files/trash/delete',           to: 'trash#delete',         as: :trash_delete
   post 'files/trash/empty',            to: 'trash#empty',          as: :trash_empty
+  post 'files/trash/keep',             to: 'trash#keep',           as: :trash_keep
   get  'files/:share_id/browse',       to: 'file_browser#browse',  as: :file_browser, defaults: { path: '' }
   get  'files/:share_id/browse/*path', to: 'file_browser#browse',  as: :file_browser_path
   get  'files/:share_id/download',       to: 'file_browser#download', as: :file_browser_download_root, defaults: { path: '' }
