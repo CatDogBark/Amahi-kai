@@ -10,7 +10,7 @@ class DisksController < ApplicationController
 
   before_action :admin_required
   # The storage health alerts at the top of every Disks page.
-  before_action(only: %i[index mounts devices storage_pool pools]) { @health = StorageHealth.load }
+  before_action(only: %i[index mounts devices storage_pool trash pools]) { @health = StorageHealth.load }
 
   def index
     @page_title = t('disks')
@@ -103,6 +103,41 @@ class DisksController < ApplicationController
     @pool_drives = Greyhole.pool_drives
     @partitions = DiskService.partition_list
     @pool_partitions = DiskPoolPartition.all
+  end
+
+  # Disks → Pool Trash: what Greyhole keeps of files deleted from pooled shares.
+  def trash
+    @page_title = t('disks')
+    @greyhole_installed = Greyhole.installed?
+    @trash = GreyholeTrash.contents
+    @pooled_shares = Share.where('disk_pool_copies > 0').pluck(:name)
+  end
+
+  def trash_restore
+    GreyholeTrash.restore!(params[:share], params[:path])
+    flash[:notice] = "#{params[:share]}/#{params[:path]} is back in its share. Greyhole makes its copies again."
+    redirect_to disks_trash_path
+  rescue Privileged::Error => e
+    flash[:error] = "Couldn't restore #{params[:share]}/#{params[:path]}: #{e.message}"
+    redirect_to disks_trash_path
+  end
+
+  def trash_delete
+    GreyholeTrash.delete!(params[:share], params[:path])
+    flash[:notice] = "Deleted #{params[:share]}/#{params[:path]} for good."
+    redirect_to disks_trash_path
+  rescue Privileged::Error => e
+    flash[:error] = "Couldn't delete #{params[:share]}/#{params[:path]}: #{e.message}"
+    redirect_to disks_trash_path
+  end
+
+  def trash_empty
+    GreyholeTrash.empty!
+    flash[:notice] = 'The trash is empty.'
+    redirect_to disks_trash_path
+  rescue Privileged::Error => e
+    flash[:error] = "Couldn't empty the trash: #{e.message}"
+    redirect_to disks_trash_path
   end
 
   def toggle_disk_pool_partition
