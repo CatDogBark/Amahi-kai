@@ -134,4 +134,29 @@ RSpec.describe 'Update notice', type: :request do
     expect(page.at_css('#whats-new')).to be_nil
     expect(page.at_css('.update-notice')).to be_nil
   end
+
+  describe 'a page left open' do
+    it "gets the dialog's content as it stands now, with the header button's label (admins only)" do
+      status = UpdateStatus.new('checked_at' => '2026-10-08T16:21:09Z', 'current' => 'a' * 40, 'latest' => 'b' * 40, 'behind' => 1,
+                                'available' => true, 'commits' => [{ 'sha' => 'bbbbbbb', 'subject' => 'Drop the themes table (#105)' }],
+                                'changelog' => ['**The themes table goes**'])
+      allow(UpdateStatus).to receive(:load).and_return(status)
+      login_as_admin
+      get '/settings/update_dialog', headers: { 'Accept' => 'application/json' }
+      data = response.parsed_body
+      expect(data['checked_at']).to eq('2026-10-08T16:21:09Z')
+      expect(data['waiting']).to eq('label' => 'Update available: 1 change', 'dot' => true)
+      expect(Nokogiri::HTML(data['html']).at_css('.modal-header').text).to include("What's new")
+      expect(data['html']).to include('1 change ready to install', 'Checked ')
+
+      get '/'
+      content = Nokogiri::HTML(response.body).at_css('#whats-new .modal-content')
+      expect(content['data-update-checked-at']).to eq('2026-10-08T16:21:09Z')
+      expect(content.parent.parent['data-refresh-url']).to eq('/settings/update_dialog')
+
+      login_as(create(:user))
+      get '/settings/update_dialog'
+      expect(response).to redirect_to(new_user_session_url)
+    end
+  end
 end

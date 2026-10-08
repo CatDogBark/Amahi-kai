@@ -74,6 +74,7 @@ Rails.application.routes.draw do
     get 'system_status', action: 'system_status'
     post 'update_system', action: 'update_system'
     post 'check_updates', action: 'check_updates'
+    get 'update_dialog', action: 'update_dialog'
     get 'update_system_stream', action: 'update_system_stream'
   end
 

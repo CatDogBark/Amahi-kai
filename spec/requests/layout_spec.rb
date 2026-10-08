@@ -30,6 +30,11 @@ RSpec.describe 'The layout', type: :request do
     expect(page.at_css('.kai-brand').text.strip).to eq('Amahi-kai')
   end
 
+  it "labels Apps' sub-tabs Available and Installed" do
+    login_as_admin
+    expect(page_at('/apps').css('.setup-subtab a').map { |a| a.text.strip }).to eq(%w[Available Installed])
+  end
+
   it 'gives a user Dashboard and Files only' do
     login_as(create(:user))
     page = page_at('/files')

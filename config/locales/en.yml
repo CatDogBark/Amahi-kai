@@ -114,16 +114,6 @@
   size: Size
   get_the_size: Get the size
   add_extra_parameters: (add extra parameters)
-        
-        This is a MAJOR change in the way the shares operate. This is meant for home networks (check the wiki for more).
-        
-        Are you sure you want to disable PDC mode?
-        
-        This will enable Domain mode and disable Workgroup mode and require that ALL machines be enterprise (or "PRO") machines, using proper credentials. It is meant for enterprise networks.
-        
-        Are you sure you want to enable PDC mode?
-
-        Are you sure you want to enable Windows 95/98 LanManager authentication?
   there_are_no_shares_created: There are no shares created in your system at this time.
   workgroup_name: Workgroup Name
   are_you_sure_share: Are you sure you want to delete share '%{share}' ?
@@ -147,8 +137,6 @@
   # applications and servers area
   application: Application
   available: Available
-
-        Any data associated with this application WILL BE DELETED.
   description: Description
   installed: Installed
   docker_apps: Docker Apps

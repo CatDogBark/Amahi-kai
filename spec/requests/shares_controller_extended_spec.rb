@@ -33,8 +33,6 @@ RSpec.describe "SharesController extended", type: :request do
     end
   end
 
-  # --- Update tags ---
-
   # --- Disk pool operations ---
 
   describe "disk pool operations" do
