@@ -72,6 +72,8 @@ Rails.application.routes.draw do
          constraints: { verb: /start|stop|restart/ }
     get 'themes', action: 'themes'
     get 'jobs', action: 'jobs'
+    get 'dependencies', action: 'dependencies'
+    get 'dependencies_refresh_stream', action: 'dependencies_refresh_stream'
     post 'activate_theme', action: 'activate_theme'
     put 'revoke_app', action: 'revoke_app'
     get 'system_status', action: 'system_status'

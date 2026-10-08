@@ -1,0 +1,126 @@
+/ Settings → System Dependencies (SystemDependencies): what this NAS runs that Amahi-kai depends
+/ on, its versions, and the updates waiting. Updates are installed only from here, when you
+/ choose to.
+- deps = @status[:dependencies]
+- waiting = deps.flat_map(&:updates) + @status[:other]
+- security = waiting.count(&:security)
+
+.card.mb-4 id="dependencies"
+  .card-header.bg-dark.text-white.d-flex.flex-wrap.align-items-center.gap-2
+    h5.mb-0.me-auto
+      span.me-2 = lucide_icon('package', size: 18)
+      = t 'dependencies'
+    span.small id="dependencies-checked"
+      - if @status[:checked_at]
+        ' Package lists refreshed
+        = relative_time_tag(@status[:checked_at])
+      - else
+        | Package lists not refreshed yet
+    button.btn.btn-sm.btn-outline-light type="button" id="check-dependencies" onclick="openInstallTerminal('deps-refresh')" Check now
+  .card-body
+    p.mb-3 id="dependencies-summary"
+      - if waiting.empty?
+        | Everything is up to date, as of the last check.
+      - else
+        strong = pluralize(waiting.size, 'update')
+        |  waiting
+        - if security.positive?
+          | ,
+          span.badge.bg-warning.text-dark = pluralize(security, 'security update')
+        | . Nothing updates by itself: each is installed from here when you choose.
+    .table-responsive
+      table.table.table-sm.align-middle.mb-0
+        thead
+          tr
+            th Software
+            th Installed
+            th Update
+            th From
+        tbody
+          - deps.each do |dep|
+            tr id="dependency-#{dep.key}" class=("text-muted" unless dep.installed?)
+              td
+                .fw-bold = dep.name
+                .small.text-muted = dep.role
+              td
+                - if dep.installed?
+                  code = dep.version
+                - else
+                  | Not installed
+              td
+                - if dep.updates.any?
+                  - dep.updates.each do |update|
+                    div
+                      code = update.available
+                      - if dep.updates.size > 1
+                        span.small.text-muted.ms-1 = update.package
+                      - if update.security
+                        span.badge.bg-warning.text-dark.ms-1 Security
+                - elsif dep.installed?
+                  span.small.text-muted Up to date
+                - else
+                  span &mdash;
+              td.small = dep.source
+
+.card.mb-4 id="operating-system"
+  .card-header
+    h6.mb-0 Operating system
+  .card-body.small
+    p.mb-1
+      = @status[:os] || 'Linux'
+      - if @status[:kernel]
+        | , kernel
+        code = @status[:kernel]
+    - if @status[:restart]
+      p.mb-0.text-warning id="restart-needed"
+        | A restart is needed to finish installing
+        - if @status[:restart].any?
+          |  (#{@status[:restart].join(', ')})
+        | : Settings → Details has Restart.
+    - else
+      p.mb-0.text-muted No restart is waiting.
+
+.card.mb-4 id="other-updates"
+  .card-header
+    h6.mb-0
+      | Other Ubuntu updates
+      span.text-muted.ms-2 = @status[:other].size
+      - if @status[:other].any?(&:security)
+        span.badge.bg-warning.text-dark.ms-2 = pluralize(@status[:other].count(&:security), 'security update')
+  .card-body.small
+    - if @status[:other].empty?
+      p.mb-0.text-muted None.
+    - else
+      details
+        summary Show the #{pluralize(@status[:other].size, 'package')}
+        .table-responsive
+          table.table.table-sm.mb-0.mt-2
+            thead
+              tr
+                th Package
+                th Installed
+                th Update
+            tbody
+              - @status[:other].each do |update|
+                tr
+                  td = update.package
+                  td
+                    code = update.installed
+                  td
+                    code = update.available
+                    - if update.security
+                      span.badge.bg-warning.text-dark.ms-1 Security
+
+.card.mb-4 id="runtime"
+  .card-header
+    h6.mb-0 Amahi-kai and what it runs on
+  .card-body.small
+    - runtime = @status[:runtime]
+    p.mb-1
+      | Amahi-kai #{runtime[:amahi_kai] || '(no checkout)'} · Rails #{runtime[:rails]} · #{pluralize(runtime[:gems], 'gem')} · running on Ruby #{runtime[:ruby]}
+    p.mb-0.text-muted
+      | Rails and the gems update with Amahi-kai itself (Ruby is Ubuntu's, above):
+      =< link_to 'System Status', settings_system_status_path
+      | .
+
+== render 'shared/install_terminal', id: 'deps-refresh', title: 'Checking for updates', stream_url: settings_dependencies_refresh_stream_path
