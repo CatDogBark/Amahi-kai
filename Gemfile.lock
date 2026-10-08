@@ -264,9 +264,6 @@ GEM
     tilt (2.7.0)
     timeout (0.6.0)
     tsort (0.2.0)
-    turbo-rails (2.0.23)
-      actionpack (>= 7.1.0)
-      railties (>= 7.1.0)
     tzinfo (2.0.6)
       concurrent-ruby (~> 1.0)
     uniform_notifier (1.18.0)
@@ -306,7 +303,6 @@ DEPENDENCIES
   sqlite3 (~> 2.0)
   stimulus-rails
   sys-filesystem
-  turbo-rails
   zip_kit (~> 6.3)
 
 BUNDLED WITH

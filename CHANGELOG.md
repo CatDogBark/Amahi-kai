@@ -144,6 +144,8 @@ All notable changes to Amahi-kai are documented here.
 
 ### 🔧 Architecture & Code Quality
 
+- **Lighter: only the parts of Rails it uses, and no Turbo** — Amahi-kai loaded all of Rails, including mail, file attachments, rich text, inbound email and websockets, none of which it uses. Now it loads only the parts it does use. It also loaded Turbo, then switched it off on every page. Booted for production, the app takes about 93 MB instead of about 112 MB (18 MB, or 16%, less per app process), and loads 357 fewer files.
+
 - **One look, no themes** — With every page dark and one look, the theme system goes. That's the Settings → Themes page, the second "vertical" theme, the loader that read each theme's `init.rb` on every request, the light theme's colours, the old theme switcher's styles, and the theme's out-of-date Sass. The look is `app/assets/stylesheets/theme.css`, joined last into the one stylesheet every page loads, and it's about a third shorter. Search results use the file browser's icons, so the old set of PNG file icons is gone, as are a few unused helpers and icons.
 
 - **Drive removal's database change is safe to rerun** — If a System Update stops partway and runs again, adding the Removing column to the pool drives' table no longer fails because the column is already there.

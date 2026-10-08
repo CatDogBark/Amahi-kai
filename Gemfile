@@ -18,8 +18,7 @@ gem 'sprockets-rails', '~> 3.5'
 gem 'slim'
 gem 'jbuilder'
 
-# Modern Rails frontend
-gem 'turbo-rails'
+# Stimulus controllers (app/assets/javascripts/controllers)
 gem 'stimulus-rails'
 
 # gem 'rails-observers' # removed — unused

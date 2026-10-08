@@ -1,6 +1,14 @@
 require_relative 'boot'
 
-require 'rails/all'
+# Only the parts of Rails Amahi-kai uses (no mail, file attachments, rich text, inbound email
+# or websockets): less to load, and less memory on the NAS.
+require 'rails'
+require 'active_model/railtie'
+require 'active_job/railtie'
+require 'active_record/railtie'
+require 'action_controller/railtie'
+require 'action_view/railtie'
+require 'sprockets/railtie'
 
 Bundler.require(*Rails.groups)
 Bundler.require(:default, :assets, Rails.env)
