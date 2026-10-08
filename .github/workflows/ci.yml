@@ -28,7 +28,7 @@ jobs:
           mkdir -p tmp/cache/tmpfiles tmp/pids log
           bundle exec rails db:schema:load
       # spec/services and spec/helpers had no job, so they never ran
-      - run: bundle exec rspec spec/models/ spec/services/ spec/helpers/ --tag ~docker --format documentation
+      - run: bundle exec rspec spec/models/ spec/services/ spec/helpers/ --format documentation
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -58,7 +58,7 @@ jobs:
           mkdir -p tmp/cache/tmpfiles tmp/pids log
           bundle exec rails db:schema:load
       - name: Run request specs
-        run: bundle exec rspec spec/requests/ --tag ~integration --format documentation --format json --out tmp/rspec-requests.json 2>&1 | tee tmp/rspec-requests.log
+        run: bundle exec rspec spec/requests/ --format documentation --format json --out tmp/rspec-requests.json 2>&1 | tee tmp/rspec-requests.log
         continue-on-error: true
       - uses: actions/upload-artifact@v4
         if: always()
@@ -104,7 +104,7 @@ jobs:
           mkdir -p tmp/cache/tmpfiles tmp/pids log
           bundle exec rails db:schema:load
       - name: Run lib specs
-        run: bundle exec rspec spec/lib/ --tag ~integration --format documentation --format json --out tmp/rspec-lib.json 2>&1 | tee tmp/rspec-lib.log
+        run: bundle exec rspec spec/lib/ --format documentation --format json --out tmp/rspec-lib.json 2>&1 | tee tmp/rspec-lib.log
         continue-on-error: true
       - uses: actions/upload-artifact@v4
         if: always()
@@ -276,9 +276,9 @@ jobs:
           mkdir -p tmp/cache/tmpfiles tmp/pids log
           bundle exec rails db:create db:schema:load
       - name: Model, service and helper specs
-        run: bundle exec rspec spec/models/ spec/services/ spec/helpers/ --tag ~docker
+        run: bundle exec rspec spec/models/ spec/services/ spec/helpers/
       - name: Request specs
-        run: bundle exec rspec spec/requests/ --tag ~integration
+        run: bundle exec rspec spec/requests/
 
   lint:
     name: Lint & Security
@@ -294,7 +294,7 @@ jobs:
         run: |
           gem install --no-document rubocop:1.91.0 rubocop-rails:2.38.0 rubocop-rspec:3.10.2
           gem install --no-document brakeman:8.1.0 bundler-audit:0.9.3
-      # Fails on new offenses; existing ones are listed in .rubocop_todo.yml.
+      # Fails on any offense.
       - name: RuboCop
         run: rubocop --parallel --format github
       # Fails on any warning not in config/brakeman.ignore (each entry there has a note).

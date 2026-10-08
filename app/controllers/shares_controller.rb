@@ -210,7 +210,7 @@ class SharesController < ApplicationController
     std_out, status = Open3.capture2e('du', '-sbL', '--', @share.path)
     size = std_out.split(' ').first
     is_integer = Integer(size) rescue false
-    if is_integer && status
+    if is_integer && status.success?
       helper = Object.new.extend(ActionView::Helpers::NumberHelper)
       size = helper.number_to_human_size(size)
     else
@@ -255,10 +255,10 @@ class SharesController < ApplicationController
   def find_share
     return unless params[:id]
     @share = if params[:id].to_s =~ /\A\d+\z/
-      Share.find(params[:id])
-    else
-      Share.find_by!(name: params[:id])
-    end
+               Share.find(params[:id])
+             else
+               Share.find_by!(name: params[:id])
+             end
   end
 
   def params_create_share

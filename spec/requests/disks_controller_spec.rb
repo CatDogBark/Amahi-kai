@@ -26,6 +26,18 @@ describe "Disks Controller", type: :request do
         get "/disks/"
         expect(response).to have_http_status(:ok)
       end
+
+      it "shows each drive's temperature in °F, coloured once it's warm" do
+        allow(DiskManager).to receive(:stats).and_return([
+          { device: '/dev/sda', model: 'QEMU HARDDISK', size: '1T', temp_f: 113, tempcolor: 'warm' },
+          { device: '/dev/sdb', model: 'QEMU HARDDISK', size: '1T', temp_f: nil, tempcolor: 'cool' }
+        ])
+        get "/disks/"
+        temps = Nokogiri::HTML(response.body).css('#disks-table td.disk-temp')
+        expect(temps.map { |td| td.text.strip }).to eq(['113 °F', '–'])
+        expect(temps.first['class']).to include('warm')
+        expect(response.body).not_to include('°C')
+      end
     end
 
     describe "GET /disks/mounts" do

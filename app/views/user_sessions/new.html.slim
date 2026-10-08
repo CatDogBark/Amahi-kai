@@ -4,7 +4,7 @@
       = image_tag 'logo.svg', alt: 'Amahi-kai', style: 'max-height: 55px;'
 
   - flash.each do |name, msg|
-    div[class="alert alert-#{name}"]= msg.html_safe
+    div[class="alert alert-#{name}"]= msg
 
   = form_for @user_session do |f|
     p

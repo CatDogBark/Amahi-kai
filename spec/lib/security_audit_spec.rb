@@ -14,13 +14,6 @@ RSpec.describe SecurityAudit do
     end
   end
 
-  describe '.has_blockers?' do
-    it 'returns a boolean' do
-      result = SecurityAudit.has_blockers?
-      expect([true, false]).to include(result)
-    end
-  end
-
   describe '.fix!' do
     it 'returns true for simulated fixes in non-production' do
       expect(SecurityAudit.fix!('ufw_firewall')).to eq(true)

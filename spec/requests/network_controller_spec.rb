@@ -150,8 +150,6 @@ describe "Network Controller", type: :request do
     end
 
     describe "PUT /network/update_dns" do
-      before { allow_any_instance_of(Kernel).to receive(:system) }
-
       it "updates dns to google" do
         put "/network/update_dns", params: { setting_dns: "google" }, as: :json
         body = JSON.parse(response.body)
@@ -178,8 +176,6 @@ describe "Network Controller", type: :request do
     end
 
     describe "PUT /network/update_dns_ips" do
-      before { allow_any_instance_of(Kernel).to receive(:system) }
-
       it "updates custom DNS IPs" do
         put "/network/update_dns_ips", params: { dns_ip_1: "8.8.8.8", dns_ip_2: "8.8.4.4" }, as: :json
         body = JSON.parse(response.body)
@@ -194,8 +190,6 @@ describe "Network Controller", type: :request do
     end
 
     describe "PUT /network/update_lease_time" do
-      before { allow_any_instance_of(Kernel).to receive(:system) }
-
       it "updates lease time with valid value" do
         put "/network/update_lease_time", params: { lease_time: "7200" }, as: :json
         body = JSON.parse(response.body)
@@ -223,7 +217,6 @@ describe "Network Controller", type: :request do
 
     describe "PUT /network/update_gateway" do
       it "updates gateway with valid value" do
-        allow_any_instance_of(Kernel).to receive(:system)
         Setting.create!(name: "net", value: "192.168.1", kind: Setting::NETWORK) unless Setting.find_by(name: "net")
         put "/network/update_gateway", params: { gateway: "1" }, as: :json
         body = JSON.parse(response.body)
@@ -251,8 +244,6 @@ describe "Network Controller", type: :request do
     end
 
     describe "PUT /network/toggle_setting/:id" do
-      before { allow_any_instance_of(Kernel).to receive(:system) }
-
       it "toggles a network setting from 1 to 0" do
         setting = Setting.create!(name: "dnsmasq_dhcp", value: "1", kind: Setting::NETWORK)
         put "/network/toggle_setting/#{setting.id}", as: :json
@@ -270,7 +261,6 @@ describe "Network Controller", type: :request do
 
     describe "PUT /network/update_dhcp_range/:id" do
       before do
-        allow_any_instance_of(Kernel).to receive(:system)
         Setting.create!(name: "dyn_lo", value: "100", kind: Setting::NETWORK)
         Setting.create!(name: "dyn_hi", value: "254", kind: Setting::NETWORK)
       end
@@ -349,16 +339,18 @@ describe "Network Controller", type: :request do
     describe "GET /network/security" do
       it "renders the security page" do
         allow(SecurityAudit).to receive(:run_all).and_return([])
-        allow(SecurityAudit).to receive(:has_blockers?).and_return(false)
         get "/network/security"
         expect(response).to have_http_status(:ok)
+        expect(response.body).not_to include("Security blockers found!")
       end
 
-      it "renders with blockers present" do
-        allow(SecurityAudit).to receive(:run_all).and_return([])
-        allow(SecurityAudit).to receive(:has_blockers?).and_return(true)
+      it "says so when a blocker fails" do
+        blocker = SecurityAudit::Check.new(name: 'ufw_firewall', description: 'UFW firewall enabled',
+                                           status: :fail, severity: :blocker)
+        allow(SecurityAudit).to receive(:run_all).and_return([blocker])
         get "/network/security"
         expect(response).to have_http_status(:ok)
+        expect(response.body).to include("Security blockers found!")
       end
     end
 

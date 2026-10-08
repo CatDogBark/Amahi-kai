@@ -1144,3 +1144,6 @@ table.settings tbody tr { border-bottom-color: var(--kai-line); }
 .form-check-input:checked[type="checkbox"] {
   --bs-form-check-bg-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3e%3cpath fill='none' stroke='%23032016' stroke-linecap='round' stroke-linejoin='round' stroke-width='3' d='m6 10 3 3 6-6'/%3e%3c/svg%3e");
 }
+/* Disks: a drive's temperature, amber from 40 °C (104 °F), red from 50 °C (122 °F) */
+#disks-table .disk-temp.warm { color: var(--kai-alert-warning-text); }
+#disks-table .disk-temp.hot { color: var(--kai-alert-danger-text); font-weight: 600; }

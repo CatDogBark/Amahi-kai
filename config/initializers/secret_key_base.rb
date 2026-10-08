@@ -6,11 +6,11 @@
 
 Rails.application.configure do
   config.secret_key_base = if ENV['SECRET_KEY_BASE'].present?
-    ENV['SECRET_KEY_BASE']
-  elsif Rails.env.production?
-    raise "SECRET_KEY_BASE environment variable must be set in production!"
-  else
+                             ENV['SECRET_KEY_BASE']
+                           elsif Rails.env.production?
+                             raise "SECRET_KEY_BASE environment variable must be set in production!"
+                           else
     # Deterministic keys for dev/test (not secret, not used in production)
-    Digest::SHA512.hexdigest("amahi-kai-#{Rails.env}-secret-key-base")
-  end
+                             Digest::SHA512.hexdigest("amahi-kai-#{Rails.env}-secret-key-base")
+                           end
 end

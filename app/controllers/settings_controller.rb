@@ -266,10 +266,10 @@ class SettingsController < ApplicationController
 
   def gather_system_info
     os = if File.exist?('/etc/os-release')
-      File.readlines('/etc/os-release').find { |l| l.start_with?('PRETTY_NAME=') }&.split('=', 2)&.last&.tr('"', '')&.strip || 'Unknown'
-    else
-      'Unknown'
-    end
+           File.readlines('/etc/os-release').find { |l| l.start_with?('PRETTY_NAME=') }&.split('=', 2)&.last&.tr('"', '')&.strip || 'Unknown'
+         else
+           'Unknown'
+         end
 
     {
       hostname: SystemInfo.hostname,

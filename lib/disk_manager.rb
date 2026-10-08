@@ -136,7 +136,8 @@ class DiskManager
     dev[:os_disk]
   end
 
-  # The drives with their temperatures, for Disks' overview.
+  # The drives with their temperatures in °F, for Disks' overview (nil: the drive doesn't say).
+  # The colour follows the drive's own °C: warm from 40, hot from 50.
   def self.stats
     temperatures = drive_temperatures
     devices.map do |disk|
@@ -145,8 +146,7 @@ class DiskManager
         device: disk[:path],
         model: disk[:model],
         size: disk[:size],
-        temp_c: temp > 0 ? temp.to_s : '-',
-        temp_f: temp > 0 ? (temp * 1.8 + 32).to_i.to_s : '-',
+        temp_f: temp > 0 ? ((temp * 1.8) + 32).round : nil,
         tempcolor: temp_color(temp)
       }
     end
@@ -186,7 +186,10 @@ class DiskManager
     []
   end
 
-  private
+  # The whole disk a device belongs to: /dev/sda1 -> /dev/sda, /dev/nvme0n1p2 -> /dev/nvme0n1.
+  def self.base_device(device)
+    device.match?(VALID_NVME_PATTERN) ? device.sub(/p\d+\z/, '') : device.sub(/\d+\z/, '')
+  end
 
   OS_MOUNTPOINTS = ['/', '/boot', '/boot/efi'].freeze
 
@@ -205,11 +208,6 @@ class DiskManager
       return found if found
     end
     nil
-  end
-
-  # The whole disk a device belongs to: /dev/sda1 -> /dev/sda, /dev/nvme0n1p2 -> /dev/nvme0n1.
-  def self.base_device(device)
-    device.match?(VALID_NVME_PATTERN) ? device.sub(/p\d+\z/, '') : device.sub(/\d+\z/, '')
   end
 
   def self.partition_status(part)
@@ -368,4 +366,9 @@ class DiskManager
       }
     ]
   end
+
+  private_class_method :mountpoints_in, :zfs_pool_in, :partition_status, :validate_device!,
+                       :privileged, :auto_mount_point, :fstab_mount_points, :mount_point_active?,
+                       :production?, :lsblk_json, :drive_temperatures, :temp_color,
+                       :filesystem_space, :read_directory_summary, :sample_preview, :sample_devices
 end

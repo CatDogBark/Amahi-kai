@@ -33,14 +33,6 @@ class Setting < ApplicationRecord
 
   class << self
 
-    def value_by_name(name)
-      get_by_name(name).try(:value)
-    end
-
-    def get_by_name(name)
-      by_name(name).first
-    end
-
     def get(name)
       s = by_name(name).first
       s && s.value

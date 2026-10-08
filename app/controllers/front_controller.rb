@@ -32,10 +32,10 @@ class FrontController < ApplicationController
       @jobs = ScheduledJobs.all(health: @storage_health)
     end
     @shares = if current_user.admin?
-                 Share.where(visible: true).order(:name)
-               else
-                 current_user.accessible_shares.where(visible: true)
-               end
+                Share.where(visible: true).order(:name)
+              else
+                current_user.accessible_shares.where(visible: true)
+              end
   end
 
   def toggle_advanced

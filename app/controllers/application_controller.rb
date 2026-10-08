@@ -26,29 +26,17 @@ class ApplicationController < ActionController::Base
 
   helper_method :current_user
 
+  private
+
   def before_action_hook
     adv = Setting.where(:name=>'advanced').first
     @advanced = adv && adv.value == '1'
   end
 
-  # Sanitizes the String or a Hash by removing the
-  # escape characters like ^M which is originated from
-  # end-of-line on Windows platform.
-  # Expects either a Hash or a String,
-  # and returns the same
-  def sanitize_text(arg)
-    arg = arg.to_h
-    if arg.is_a? Hash
-      Hash[arg.to_a.map do |x, y|
-        [x, y.lines.map(&:chomp).join("\n")]
-      end]
-    else
-      #arg is a String
-      arg.lines.map(&:chomp).join("\n")
-    end
+  # The values of +params+ with Windows line endings (\r\n, a ^M at each line's end) made \n.
+  def sanitize_text(params)
+    params.to_h.transform_values { |value| value.lines.map(&:chomp).join("\n") }
   end
-
-  private
 
   def check_setup_completed
     return if setup_completed?
@@ -130,10 +118,6 @@ class ApplicationController < ActionController::Base
 
   def set_title(title)
     @page_title = title
-  end
-
-  def no_subtabs
-    @no_subtabs = true
   end
 
 

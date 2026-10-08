@@ -36,15 +36,17 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
 
 | Job | Command |
 | --- | --- |
-| Models | `bundle exec rspec spec/models/ spec/services/ spec/helpers/ --tag ~docker` |
-| Lib | `bundle exec rspec spec/lib/ --tag ~integration` |
-| Requests | `bundle exec rspec spec/requests/ --tag ~integration` |
+| Models | `bundle exec rspec spec/models/ spec/services/ spec/helpers/` |
+| Lib | `bundle exec rspec spec/lib/` |
+| Requests | `bundle exec rspec spec/requests/` |
 | MariaDB | models + requests again on MariaDB 10.11 (`DATABASE_URL`), the production database |
 | Lint & Security | RuboCop 1.91.0 (+ rails 2.38.0, rspec 3.10.2), Brakeman 8.1.0, bundle-audit 0.9.3, installed as gems, not bundled |
 
 - Prepare the test DB with `RAILS_ENV=test bundle exec rails db:schema:load`. Tests use SQLite.
-- RuboCop fails only on new offenses; old ones are in `.rubocop_todo.yml`. Brakeman fails on
+- RuboCop fails on any offense (there's no list of old ones to skip). Brakeman fails on
   anything not in `config/brakeman.ignore`, and every entry there needs a `note`.
+- Every spec runs in CI: there are no tags that CI skips. A spec that needs root
+  skips itself (`skip 'needs root' unless Process.euid.zero?`).
 - **Ruby is 3.2 on the NAS (Ubuntu's `ruby3.2`, 3.2.3).** Change `Gemfile.lock` only under Ruby
   3.2.x with Bundler 2.4.19, so the resolver can't pick gems the NAS can't run. Update gems
   minimally (`bundle update --conservative --patch <gem>`).

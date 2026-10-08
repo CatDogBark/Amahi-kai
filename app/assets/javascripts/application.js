@@ -4,7 +4,6 @@
 //= require controllers/toggle_controller
 //= require controllers/delete_controller
 //= require controllers/inline_edit_controller
-//= require controllers/progress_controller
 //= require controllers/user_controller
 //= require controllers/create_form_controller
 //= require controllers/pool_toggle_controller

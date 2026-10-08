@@ -15,10 +15,7 @@
           <td><%= disk[:model] %></td>
           <td><%= disk[:device] %></td>
           <td><%= disk[:size] %></td>
-          <td class="<%= disk[:tempcolor] %>">
-            <span class="temp-celsius"><%= disk[:temp_c] %>&deg;C</span>
-            <span class="temp-fahrenheit d-none"><%= disk[:temp_f] %>&deg;F</span>
-          </td>
+          <td class="disk-temp <%= disk[:tempcolor] %>"><%= disk[:temp_f] ? "#{disk[:temp_f]} °F" : '–' %></td>
         </tr>
       <% end %>
       <% if @disks.empty? %>
