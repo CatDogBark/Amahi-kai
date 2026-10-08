@@ -81,12 +81,35 @@ describe "Shares Toggle Actions", type: :request do
       end
     end
 
-    describe "the share's features" do
-      it "carry the share's settings on the page, so a feature changes only its own lines" do
-        share = create(:share, name: "Macs", extras: "hide dot files = yes\nlog level = 1")
+    describe "a share's card" do
+      it "is laid out by what it decides, with what each setting does, and Delete at the bottom" do
+        Setting.set("advanced", "0")
+        share = create(:share, name: "Docs", disk_pool_copies: 0)
         get shares_path
-        presets = Nokogiri::HTML(response.body).at_css("#share-presets-#{share.id}")
-        expect(presets["data-extras"]).to eq("hide dot files = yes\nlog level = 1")
+        card = Nokogiri::HTML(response.body).at_css("#whole_share_#{share.id} .share-card")
+        expect(card.css("h6.share-section-title").map(&:text)).to eq(%w[Access Storage Trash])
+        expect(card.css(".share-row-label").map(&:text)).to eq(["Who can use it", "Visible", "People", "Folder", "Size", "Pool copies", "Deleted files"])
+        expect(card.at_css("#pool-help-#{share.id}").text.squish).to include("2 copies: each file is kept on two drives")
+        expect(card.at_css("#share-section-trash-#{share.id}").text.squish).to include("for 30 days", "hidden .recycle folder")
+        expect(card.at_css("#share-trash-#{share.id}")["href"]).to eq("/files/trash")
+        expect(card.at_css(".share-card-footer").text.squish).to include("Delete Docs", "There's no undo")
+        expect(card.text).not_to include("Features", "Tags", "Recycle Bin", "Time Machine")
+        expect(card.at_css("#extras-textarea-#{share.id}")).to be_nil
+      end
+
+      it "has Samba settings under Advanced, in advanced mode" do
+        Setting.set("advanced", "1")
+        share = create(:share, name: "Docs", extras: "log level = 1")
+        get shares_path
+        card = Nokogiri::HTML(response.body).at_css("#whole_share_#{share.id} .share-card")
+        expect(card.css("h6.share-section-title").map(&:text)).to eq(%w[Access Storage Trash Advanced])
+        expect(card.at_css("#extras-textarea-#{share.id}").text).to eq("log level = 1")
+      end
+
+      it "says a pooled share's Trash is Greyhole's" do
+        share = create(:share, name: "Photos", disk_pool_copies: 2)
+        get shares_path
+        expect(Nokogiri::HTML(response.body).at_css("#share-section-trash-#{share.id}").text).to include("Greyhole keeps them on the pool drives")
       end
     end
   end

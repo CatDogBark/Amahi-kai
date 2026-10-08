@@ -82,85 +82,7 @@ document.addEventListener("toggle:success", function(e) {
   if (writeCb) writeCb.disabled = !cb.checked;
 });
 
-var SHARE_PRESETS = {
-  recycle_bin: "vfs objects = recycle\nrecycle:repository = .recycle\nrecycle:keeptree = yes\nrecycle:versions = yes",
-  macos: "vfs objects = fruit streams_xattr\nfruit:metadata = stream\nfruit:model = MacSamba\nfruit:posix_rename = yes\nfruit:veto_appledouble = no\nfruit:nfs_aces = no\nfruit:wipe_intentionally_left_blank_rfork = yes\nfruit:delete_empty_adfiles = yes",
-  hide_dotfiles: "hide dot files = yes\nveto files = /._*/.DS_Store/",
-  time_machine: "vfs objects = fruit streams_xattr\nfruit:time machine = yes\nfruit:metadata = stream\nfruit:model = TimeCapsule"
-};
-
-function toggleSharePreset(shareId, presetKey) {
-  var preset = SHARE_PRESETS[presetKey];
-  if (!preset) return;
-
-  var container = document.getElementById('share-presets-' + shareId);
-  var btn = document.querySelector('#share-presets-' + shareId + ' [data-preset="' + presetKey + '"]');
-  var isActive = btn && btn.classList.contains('btn-info');
-
-  // The share's settings: the raw editor's when it's open (Advanced), else the page's copy.
-  // Starting from nothing would replace every other setting the share has.
-  var textarea = document.getElementById('extras-textarea-' + shareId);
-  var current = textarea ? textarea.value : (container ? container.dataset.extras || '' : '');
-
-  var newExtras;
-  if (isActive) {
-    // Remove the preset's lines, but not ones another feature that's on also uses
-    // (macOS and Time Machine share some).
-    var keep = [];
-    if (container) {
-      container.querySelectorAll('[data-preset].btn-info').forEach(function(other) {
-        if (other.dataset.preset !== presetKey && SHARE_PRESETS[other.dataset.preset]) {
-          keep = keep.concat(SHARE_PRESETS[other.dataset.preset].split('\n'));
-        }
-      });
-    }
-    var lines = current.split('\n');
-    var presetLines = preset.split('\n');
-    newExtras = lines.filter(function(line) {
-      return presetLines.indexOf(line.trim()) === -1 || keep.indexOf(line.trim()) !== -1;
-    }).join('\n').replace(/\n{3,}/g, '\n\n').trim();
-  } else {
-    // Add the preset's lines it doesn't have yet. Each feature's vfs objects line can stay
-    // its own: Amahi-kai puts their modules on one line in Samba's config (Share#share_conf).
-    var existing = current.trim();
-    var presetLines = preset.split('\n');
-    var existingLines = existing.split('\n');
-    var mergedLines = existingLines.slice();
-    presetLines.forEach(function(pl) {
-      var found = false;
-      for (var i = 0; i < mergedLines.length; i++) {
-        if (mergedLines[i].trim() === pl.trim()) { found = true; break; }
-      }
-      if (!found) mergedLines.push(pl);
-    });
-    newExtras = mergedLines.join('\n').trim();
-  }
-
-  // Save via API
-  if (btn) btn.disabled = true;
-  fetch('/shares/' + shareId + '/update_extras', {
-    method: 'PUT',
-    headers: Object.assign(csrfHeaders(), {'Content-Type': 'application/x-www-form-urlencoded'}),
-    credentials: 'same-origin',
-    body: 'share[extras]=' + encodeURIComponent(newExtras)
-  })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (data.status === 'ok' || data.status === 'not_acceptable') {
-        // Update button state
-        if (btn) {
-          btn.classList.toggle('btn-info');
-          btn.classList.toggle('btn-outline-secondary');
-        }
-        // Update textarea if visible, and the page's copy
-        if (textarea) textarea.value = newExtras;
-        if (container) container.dataset.extras = newExtras;
-      }
-    })
-    .catch(function(err) { console.error('Preset toggle failed:', err); })
-    .finally(function() { if (btn) btn.disabled = false; });
-}
-
+// Advanced → Samba settings: saves the share's raw settings.
 function submitExtras(shareId, form) {
   var textarea = document.getElementById('extras-textarea-' + shareId);
   var msg = document.getElementById('extras-msg-' + shareId);
@@ -175,22 +97,10 @@ function submitExtras(shareId, form) {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (msg) {
+        msg.textContent = data.status === 'ok' ? 'Saved!' : 'Not saved: ' + (data.message || 'Samba refused it');
+        msg.className = 'ms-2 small ' + (data.status === 'ok' ? 'text-success' : 'text-danger');
         msg.style.display = '';
-        setTimeout(function() { msg.style.display = 'none'; }, 2000);
-      }
-      // Update preset button states
-      var container = document.getElementById('share-presets-' + shareId);
-      if (container) {
-        container.dataset.extras = extras;
-        container.querySelectorAll('[data-preset]').forEach(function(btn) {
-          var preset = SHARE_PRESETS[btn.dataset.preset];
-          if (!preset) return;
-          var allPresent = preset.split('\n').every(function(line) {
-            return extras.indexOf(line.trim()) !== -1;
-          });
-          btn.classList.toggle('btn-info', allPresent);
-          btn.classList.toggle('btn-outline-secondary', !allPresent);
-        });
+        setTimeout(function() { msg.style.display = 'none'; }, 4000);
       }
     })
     .catch(function(err) { console.error('Save extras failed:', err); });
