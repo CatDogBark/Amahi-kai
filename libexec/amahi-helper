@@ -748,6 +748,13 @@ module AmahiHelper
       validate: ->(a) { { repository: listed(a['repository'], 'repository', APT_REPOSITORIES.keys) } },
       plan: ->(v) { [[:add_apt_repository, v[:repository]]] }
     },
+    # Refreshes apt's package lists (Settings → System Dependencies' Check now), with its
+    # output streamed. Installs nothing.
+    'packages.refresh' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [['/usr/bin/apt-get', 'update', { env: APT_ENV, stream: true }]] }
+    },
     # Installs packages from PACKAGES, with apt's output streamed as it runs. recommends:
     # false leaves out the packages they only recommend (smartmontools' would bring a mail
     # server).

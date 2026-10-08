@@ -100,6 +100,25 @@ class SettingsController < ApplicationController
     @jobs = ScheduledJobs.all
   end
 
+  # What this NAS runs that Amahi-kai depends on, its versions, and the updates waiting.
+  def dependencies
+    @page_title = t 'settings'
+    @status = SystemDependencies.status
+  end
+
+  # Check now: apt's package lists refreshed, in the install window.
+  def dependencies_refresh_stream
+    stream_sse do |sse|
+      sse.emit('Refreshing the package lists...')
+      SystemDependencies.refresh! { |line| sse.emit("  #{line}") }
+      sse.emit('✓ Package lists refreshed')
+      sse.done
+    rescue Privileged::Error => e
+      sse.emit("✗ #{e.message}")
+      sse.done('error')
+    end
+  end
+
   def themes
     @page_title = t 'settings'
     @themes = Theme.available

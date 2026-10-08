@@ -939,6 +939,10 @@ RSpec.describe 'AmahiHelper' do
       conf&.close!
     end
 
+    it "refreshes apt's package lists, installing nothing" do
+      expect(steps('packages.refresh', {})).to eq([['/usr/bin/apt-get', 'update', { env: AmahiHelper::APT_ENV, stream: true }]])
+    end
+
     it 'uninstalls Greyhole only when its config lists no drives and no share keeping copies' do
       conf = Tempfile.new('greyhole.conf')
       stub_const('AmahiHelper::GREYHOLE_CONF', conf.path)

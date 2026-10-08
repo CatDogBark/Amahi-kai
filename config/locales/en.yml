@@ -11,6 +11,7 @@
   storage_pool: Storage Pool
   zfs_pools: ZFS Pools
   jobs: Jobs
+  dependencies: System Dependencies
   leases: Leases
   hosts: Hosts
   gateway: Gateway
