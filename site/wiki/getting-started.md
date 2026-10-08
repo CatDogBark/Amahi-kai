@@ -132,7 +132,7 @@ systemctl status mariadb        # Amahi-kai needs the database
 
 ### Something about the install looks broken
 
-Run **Settings > System Status > Repair**, or over SSH:
+Run **Settings → System Status → Repair**, or over SSH:
 
 ```bash
 sudo /opt/amahi-kai/bin/amahi-update --repair

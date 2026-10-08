@@ -5,8 +5,8 @@ title: "File Sharing"
 
 # File Sharing
 
-Amahi-kai manages Samba file shares from the **Shares** tab, and has a file browser for using
-shares from a web browser. When you create, change or delete a share, Amahi-kai regenerates
+Amahi-kai manages Samba file shares on **Setup → Shares**, and has a file browser (**Files** in the
+header) for using shares from a web browser. When you create, change or delete a share, Amahi-kai regenerates
 `/etc/samba/smb.conf` and reloads Samba.
 
 ---
@@ -15,17 +15,18 @@ shares from a web browser. When you create, change or delete a share, Amahi-kai 
 
 - **Share**: a named folder exposed over SMB, under `/var/lib/amahi-kai/files/` or on a data drive
   mounted under `/mnt/`
-- **Everyone**: all users can read and write (the default for new shares)
-- **Per-user access**: with Everyone off, you choose who can see the share and who can write to it
-- **Guest access**: lets people in without an account
-- **Tags**: comma-separated labels for organizing shares
+- **All users**: everyone with an account can open the share (the default for new shares), and
+  **Writeable** lets them change its files
+- **Per-user access**: with All users off, you choose who can open the share and who can write to it
+- **Guests**: lets people in without an account
+- **Trash**: what's deleted from a share is kept for a while, so it can be restored
 
 ---
 
 ## Creating a share
 
-1. Go to the **Shares** tab.
-2. Enter a name and click **Create**.
+1. Go to **Setup → Shares**.
+2. Under **Create a New Share**, enter a name and click **Create**.
 
 Amahi-kai creates the folder (owner `amahi`, group `users`, so share users can write to it), adds
 the share to Samba's configuration and reloads Samba. A share's folder must be inside
@@ -33,27 +34,30 @@ the share to Samba's configuration and reloads Samba. A share's folder must be i
 
 ### Share settings
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| Visible | Yes | Whether the share shows up when browsing the network |
-| Read-only | No | Nobody can write (overrides per-user write access) |
-| Everyone | Yes | All users get read and write access |
-| Guest access | No | Allow access without an account (when Everyone is off) |
-| Guest writeable | No | Allow guests to write too |
-| Tags | the share's name | Labels |
-| Path | `/var/lib/amahi-kai/files/<name>` | The folder on disk |
-| Extras | empty | Extra Samba lines for this share (Advanced mode) |
+Click a share's name to open its settings. Each says what it does underneath.
+
+| Section | Setting | Default | What it does |
+|---------|---------|---------|--------------|
+| Access | Who can use it | All users, Writeable | All users and Writeable, or (with All users off) each user's access and write, and guests |
+| | Visible | On | Whether the share shows up when browsing the network; hidden, it still opens by its address |
+| | People | | **Clear the list** takes everyone off the share's list of people |
+| Storage | Folder | `/var/lib/amahi-kai/files/<name>` | The folder on disk; click it to change it |
+| | Size | | How much the share's files take up, counted when you ask |
+| | Pool copies | Off | Whether Greyhole pools the share, and how many copies it keeps (see [Storage Pooling](storage-pooling)) |
+| Trash | Deleted files | 30 days | Where the share's deleted files are kept, and for how long (see [Trash](#trash)) |
+| Advanced | Samba settings | empty | Extra Samba settings for this share (Advanced mode only) |
 
 ---
 
 ## Permissions
 
-- **Everyone on:** every Amahi-kai user can read and write.
-- **Everyone off:** use **access** and **write** for each user. They become Samba's `valid users`
-  and `write list`.
-- **Guest access** (with Everyone off): read-only for guests unless **Guest writeable** is on.
-- **Clear permissions** removes every per-user access and write grant on the share, so you can
-  start over.
+- **All users on:** every Amahi-kai user can open the share, and change its files if **Writeable**
+  is on.
+- **All users off:** tick **Access** and **Writeable** for each user. They become Samba's
+  `valid users` and `write list`.
+- **Guests** (with All users off): read-only for guests unless their **Writeable** is on.
+- **Clear the list** removes every per-user access and write grant on the share, so you can start
+  over.
 
 Users are managed on the **Users** tab. Each user gets a Linux account (used only for Samba; it
 can't log in to the server) and a Samba password, kept in step with their web password.
@@ -68,20 +72,20 @@ shares offline.
 
 The global settings include:
 
-- **Workgroup** (default `WORKGROUP`), changeable on **Shares > Settings** (Advanced mode)
+- **Workgroup** (default `WORKGROUP`), changeable on **Setup → Shares → Settings** (Advanced mode)
 - **Who can connect:** the server itself, your LAN and Tailscale only (`hosts allow`), on the LAN
   interface (and Tailscale's, if it's installed). Docker containers can't reach Samba.
 - **Printer sharing off**
 - **Greyhole settings** when Greyhole is installed (see [Storage Pooling](storage-pooling))
 
-### Extras
+### Advanced Samba settings
 
-The **Extras** field adds Samba lines to one share. For example, for Apple Time Machine:
-
-```
-vfs objects = catia fruit streams_xattr
-fruit:time machine = yes
-```
+With Advanced mode on, a share's **Advanced** section takes extra Samba settings for that share,
+one per line, as `smb.conf` writes them. Amahi-kai checks them before Samba uses them, and refuses
+ones that could run programs. Samba takes one `vfs objects` line per share, so the modules you add
+there are joined with the ones Amahi-kai sets itself (Greyhole's on a pooled share, the recycle bin
+for the Trash on any other). Amahi-kai sets the recycle bin's own settings, so `recycle:` lines are
+left out.
 
 ---
 
@@ -102,12 +106,20 @@ Each user also has a private home share, `\\<server-ip>\username`.
 
 ## File browser
 
-Click **Browse** on a share (or on the dashboard) to look through it in your web browser. You can:
+Click **Files** in the header (or a share on the dashboard). The Shares page has a card for each
+share you can open, with a pool or read-only badge, how many things it holds and its network
+address. For admins, the [Trash](#trash) sits below them.
 
-- move through folders, with a breadcrumb trail
-- preview images, video, audio and PDFs
-- download files, or a whole folder as a zip (**Download this folder**, or **Download as zip** on a
-  folder)
+Inside a share:
+
+- **A whole row is the link.** A folder opens. A file shows in the panel beside the list, with a
+  preview for pictures, video and audio, its kind, size and date, **Download**, and **Open full
+  screen** for pictures, video, audio, PDFs and text. Files with no preview say so.
+- **The breadcrumbs** (Shares › the share › its folders) take you back up.
+- **List or grid:** the grid shows pictures as themselves. The choice is remembered in that browser.
+- **Download folder** zips the folder you're in, and the download button on a folder's row zips that
+  one. The page says the zip is coming until the download starts; then the browser shows its
+  progress.
 
 The file browser only views: it doesn't upload, rename, move or delete. Files change over the
 network share (SMB, above), so Samba, and [Greyhole](storage-pooling) on pooled shares, sees every
@@ -118,6 +130,24 @@ Users only see the shares they have access to. HTML, JavaScript and XML files ar
 text, and files open sandboxed (scripts in them can't run), so a file someone puts in a share
 can't act on your Amahi-kai session. A folder download only includes the files that are in the
 share.
+
+---
+
+## Trash
+
+Every share keeps what's deleted from it over the network share. A pooled share's deleted files
+stay on the pool drives, in Greyhole's trash; any other share's go to a hidden `.recycle` folder in
+the share, which search leaves out. Temporary and lock files aren't kept.
+
+For admins, **Trash** sits below the shares on the file browser's Shares page. It lists every
+share's deleted files, newest first, with their size and the space they use.
+
+- **Restore** puts a file back where it was (a pooled share's through Greyhole, which makes its
+  copies again).
+- **Delete** removes one for good, and **Empty trash** removes all of them.
+- **Keep files** sets how long the Trash keeps them: 7, 14, 30 (the default), 60 or 90 days, or
+  until emptied. A daily job (`amahi-kai-trash.timer`, on **Settings → Jobs**) deletes the older
+  ones.
 
 ---
 

@@ -65,9 +65,10 @@ systemctl status mariadb                           # its database
 systemctl status smbd nmbd                         # Samba
 systemctl list-timers amahi-kai-update-check.timer # update check (Amahi-kai and its apps), every 6 hours
 systemctl list-timers amahi-kai-indexer.timer      # file search index, every 10 minutes
+systemctl list-timers amahi-kai-trash.timer        # the Trash: deletes what's been kept too long, daily
 ```
 
-**Settings > Servers** in the web UI shows each service's status, version and uptime, with
+**Settings → Servers** in the web UI shows each service's status, version and uptime, with
 start, stop and restart where that's safe.
 
 ---
@@ -76,4 +77,5 @@ start, stop and restart where that's safe.
 
 - **GitHub Issues**: [github.com/CatDogBark/Amahi-kai/issues](https://github.com/CatDogBark/Amahi-kai/issues)
 - **Logs**: `journalctl -u amahi-kai -f`
-- **Debug tab**: in the web UI at `/tab/debug`
+- **Debug pages**: in the web UI at `/tab/debug`, for admins: Amahi-kai's log, the system log and
+  system info

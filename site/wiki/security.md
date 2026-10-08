@@ -13,7 +13,7 @@ while the audit reports a blocker.
 
 ## Security Audit
 
-Go to **Network > Security** (Advanced mode) and run the audit. Each check is one of:
+Go to **Network → Security** (Advanced mode) and run the audit. Each check is one of:
 
 | Result | Meaning |
 |--------|---------|
