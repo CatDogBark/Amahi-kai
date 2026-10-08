@@ -144,6 +144,8 @@ All notable changes to Amahi-kai are documented here.
 
 ### 🔧 Architecture & Code Quality
 
+- **The themes table goes** — With the theme system gone (#102), its database table and its setting are dropped. The last code that still wrote share tags is gone too, so their column can be dropped in the next update.
+
 - **Dead code out** — Nothing in the app called these, so they go:
   - **A leftover pool toggle (the one that mattered):** an old share-side "toggle disk pool partition" took a drive's record out of the pool directly, skipping the safe removal that moves its files first. An old share copies toggle likewise bypassed turning a share Off safely.
   - **Unused routes and actions:** an any-setting toggle, the old one-shot installs of dnsmasq, Greyhole and apps (their install windows replaced them), the old tunnel set-up and cloudflared install, app restart and status, the generated routes for user and share pages that don't exist, and a page with no view at all (`/shares/disk_pooling`).

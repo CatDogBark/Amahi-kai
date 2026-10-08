@@ -53,7 +53,6 @@ module DiskService
           visible: true,
           rdonly: false,
           everyone: true,
-          tags: "storage",
           extras: "",
           disk_pool_copies: 0
         )
