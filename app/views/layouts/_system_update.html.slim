@@ -4,53 +4,9 @@
 /! here is Amahi-kai's). system_update.js runs its buttons; the update runs in the window below.
 - update = update_status
 - apps = app_updates
-#whats-new.modal.fade tabindex="-1" aria-labelledby="whats-new-title" aria-hidden="true" data-stream-url=settings_update_system_stream_path
+#whats-new.modal.fade tabindex="-1" aria-labelledby="whats-new-title" aria-hidden="true" data-stream-url=settings_update_system_stream_path data-refresh-url=settings_update_dialog_path
   .modal-dialog.modal-lg.modal-dialog-centered.modal-dialog-scrollable
-    .modal-content
-      .modal-header
-        h5.modal-title#whats-new-title
-          span.me-2 = lucide_icon('refresh-cw', size: 18)
-          = update.available? || apps.any? ? "What's new" : 'System Update'
-      .modal-body
-        - if update.available?
-          p
-            strong = "#{pluralize(update.behind, 'change')} ready to install"
-            = " (#{update.short(update.current)} → #{update.short(update.latest)}). Amahi-kai restarts at the end."
-          - if update.changelog.any?
-            ul.whats-new-changelog
-              - update.changelog.each do |entry|
-                li = changelog_entry(entry)
-          details.small open=update.changelog.empty?
-            summary = "#{pluralize(update.commits.size, 'pull request')} merged"
-            ul.mb-0.mt-1
-              - update.commits.first(10).each do |change|
-                li = update_change_link(change['subject'])
-              - if update.commits.size > 10
-                li.text-muted = "and #{update.commits.size - 10} more"
-        - elsif update.checked?
-          p.mb-0
-            span.text-success ✓
-            = " Up to date (#{update.short(update.current)})."
-        - else
-          p.mb-0.text-muted Not checked yet. Check now looks for an update.
-        - if apps.any?
-          .whats-new-apps.mt-3
-            strong = apps.one? ? 'An app update' : "#{apps.size} app updates"
-            ul.mb-1.mt-1
-              - apps.each do |app|
-                li = app_update_label(app)
-            a href="/apps/installed_apps" Update on the Apps page →
-        - if update.checked?
-          p.small.text-muted.mb-0.mt-3 = safe_join(['Checked ', relative_time_tag(update.checked_at, clock: true), '. Amahi-kai checks itself and its apps every 6 hours.'])
-        - if update.error
-          p.small.text-warning.mb-0.mt-1 = "Last check: #{update.error}"
-      .modal-footer
-        - if update.available?
-          button.btn.btn-outline-secondary type="button" data-bs-dismiss="modal" Later
-          button#whats-new-install.btn.btn-info type="button" data-update-action="install" data-url=settings_update_system_path Update now
-        - else
-          button#whats-new-check.btn.btn-outline-secondary type="button" data-update-action="check" data-url=settings_check_updates_path Check now
-          button#whats-new-repair.btn.btn-outline-secondary type="button" data-tip="Runs every update step again on the version you have" data-update-action="repair" data-url=settings_update_system_path(repair: 1) data-confirm="Repair runs every update step again on the version you have (dependencies, database, root helper, Samba config, assets) and restarts Amahi-kai. Go ahead?" Repair
-          button.btn.btn-secondary type="button" data-bs-dismiss="modal" Close
+    .modal-content data-update-checked-at=update.checked_at&.utc&.iso8601
+      == render 'layouts/system_update_content', update: update, apps: apps
 
 == render 'shared/install_terminal', id: 'system-update', title: 'Updating Amahi-kai', stream_url: settings_update_system_stream_path

@@ -10,8 +10,8 @@ describe CapWriter do
 
   def create_share_via_sql
     ActiveRecord::Base.connection.execute(
-      "INSERT INTO shares (name, path, rdonly, visible, everyone, tags, disk_pool_copies, guest_access, guest_writeable) " \
-      "VALUES ('testshare#{rand(99999)}', '/tmp/test#{rand(99999)}', 0, 1, 1, 'test', 0, 0, 0)"
+      "INSERT INTO shares (name, path, rdonly, visible, everyone, disk_pool_copies, guest_access, guest_writeable) " \
+      "VALUES ('testshare#{rand(99999)}', '/tmp/test#{rand(99999)}', 0, 1, 1, 0, 0, 0)"
     )
     Share.last
   end

@@ -98,7 +98,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_09_000000) do
     t.boolean "rdonly"
     t.boolean "visible"
     t.boolean "everyone", default: true
-    t.string "tags", default: ""
     t.text "extras"
     t.integer "disk_pool_copies", default: 0
     t.boolean "guest_access", default: false

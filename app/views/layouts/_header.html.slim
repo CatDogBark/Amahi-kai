@@ -23,13 +23,10 @@ nav.navbar.navbar-expand-md.kai-header
       - if current_user_is_admin?
         /! Opens the System Update dialog (layouts/_system_update); the dot says an update is
         /! waiting, for Amahi-kai or an app.
-        - waiting = []
-        - waiting << pluralize(update_status.behind, 'change') if update_status.available?
-        - waiting << pluralize(app_updates.size, 'app update') if app_updates.any?
-        - update_label = waiting.any? ? "Update available: #{waiting.join(' and ')}" : 'System Update'
-        a.kai-iconbtn#update-btn href="#" data-tip=update_label data-tip-placement="bottom" aria-label=update_label data-whats-new=""
+        - waiting = update_waiting
+        a.kai-iconbtn#update-btn href="#" data-tip=waiting[:label] data-tip-placement="bottom" aria-label=waiting[:label] data-whats-new=""
           = lucide_icon('refresh-cw', size: 17)
-          - if waiting.any?
+          - if waiting[:dot]
             span.update-dot
       /! The water background's settings (ocean.js opens its panel)
       button.kai-iconbtn.ocean-toggle type="button" data-ocean-panel="" data-tip="Water background" data-tip-placement="bottom" aria-label="Water background" aria-expanded="false"

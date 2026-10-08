@@ -81,7 +81,6 @@ FactoryBot.define do
       share.instance_variable_set(:@access_manager, null_am)
 
       # Stub other callbacks
-      def share.normalize_tags; end
       def share.push_samba_config; end
       def share.index_share_files; end
     end

@@ -114,13 +114,6 @@ touches the same code.
   directory).
 - Not yet tried in the UI because no shares or apps exist: file upload, raw preview, the app proxy.
 
-## Next PR: drop `shares.tags`
-
-Tags' code went in #104, but `DiskService` still wrote the column until #105, so the column
-can't go in #105 itself (a rolled-back update would run code that writes it). Drop it with a
-rerun-safe migration in the next PR, whatever that is (`remove_column :shares, :tags if
-column_exists?`).
-
 ## Later: the phone layout
 
 Troy will use Amahi-kai on his phone (2026-10-08). The October refresh (dark, mint, Space Grotesk)
