@@ -35,25 +35,6 @@ RSpec.describe "SharesController extended", type: :request do
 
   # --- Update tags ---
 
-  describe "PUT /shares/:id/update_tags" do
-    let!(:share) { create(:share) }
-
-    it "updates tags via name param" do
-      put update_tags_share_path(share), params: { name: "movies" }, as: :json
-      expect(response).to have_http_status(:ok)
-    end
-
-    it "updates tags via value param (lowercased)" do
-      put update_tags_share_path(share), params: { value: "MUSIC" }, as: :json
-      expect(response).to have_http_status(:ok)
-    end
-
-    it "updates tags via share[tags] param" do
-      put update_tags_share_path(share), params: { share: { tags: "docs" } }, as: :json
-      expect(response).to have_http_status(:ok)
-    end
-  end
-
   # --- Disk pool operations ---
 
   describe "disk pool operations" do
@@ -64,34 +45,12 @@ RSpec.describe "SharesController extended", type: :request do
       allow(Greyhole).to receive(:configure!)
     end
 
-    describe "PUT toggle_disk_pool_enabled" do
-      it "enables disk pool (sets copies to 1)" do
-        put toggle_disk_pool_enabled_share_path(share), as: :json
-        expect(share.reload.disk_pool_copies).to eq(1)
-      end
-
-      it "disables disk pool when already enabled" do
-        share.update_column(:disk_pool_copies, 2)
-        put toggle_disk_pool_enabled_share_path(share), as: :json
-        expect(share.reload.disk_pool_copies).to eq(0)
-      end
-
-      it "calls Greyhole.configure! when enabled" do
-        put toggle_disk_pool_enabled_share_path(share), as: :json
-        expect(Greyhole).to have_received(:configure!)
-      end
-
+    describe "turning pool copies on" do
       it "writes Greyhole's config even while Greyhole is stopped, so it has the share when it starts" do
         allow(Greyhole).to receive(:enabled?).and_return(false)
         allow(Greyhole).to receive(:installed?).and_return(true)
-        put toggle_disk_pool_enabled_share_path(share), as: :json
+        put update_disk_pool_copies_share_path(share), params: { copies: "1" }
         expect(Greyhole).to have_received(:configure!)
-      end
-
-      it "handles Greyhole errors gracefully" do
-        allow(Greyhole).to receive(:configure!).and_raise(Shell::CommandError.new("greyhole", "failed", 1))
-        put toggle_disk_pool_enabled_share_path(share), as: :json
-        expect(response).to have_http_status(:ok)
       end
     end
 

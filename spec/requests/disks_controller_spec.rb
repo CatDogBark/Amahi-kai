@@ -187,29 +187,6 @@ describe "Disks Controller", type: :request do
       end
     end
 
-    describe "POST /disks/install_greyhole" do
-      it "installs greyhole and redirects with notice" do
-        allow(Greyhole).to receive(:install!)
-        post "/disks/install_greyhole"
-        expect(response).to redirect_to("/disks/storage_pool")
-        expect(flash[:notice]).to include("successfully")
-      end
-
-      it "handles GreyholeError during install" do
-        allow(Greyhole).to receive(:install!).and_raise(Greyhole::GreyholeError, "apt failed")
-        post "/disks/install_greyhole"
-        expect(response).to redirect_to("/disks/storage_pool")
-        expect(flash[:error]).to include("apt failed")
-      end
-
-      it "handles generic errors during install" do
-        allow(Greyhole).to receive(:install!).and_raise(Shell::CommandError.new("greyhole", "unexpected", 1))
-        post "/disks/install_greyhole"
-        expect(response).to redirect_to("/disks/storage_pool")
-        expect(flash[:error]).to include("unexpected")
-      end
-    end
-
     describe "GET /disks/install_greyhole_stream" do
       it "returns SSE content type" do
         get "/disks/install_greyhole_stream", headers: same_origin

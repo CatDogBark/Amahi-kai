@@ -37,7 +37,6 @@ describe Share do
         expect(share.rdonly).to           eq(false)
         expect(share.visible).to          eq(true)
         expect(share.everyone).to         eq(true)
-        expect(share.tags).to             eq(share_name.downcase)
         expect(share.disk_pool_copies).to eq(0)
         expect(share.guest_access).to     eq(false)
         expect(share.guest_writeable).to   eq(false)
@@ -146,27 +145,6 @@ describe Share do
       share = create(:share, rdonly: false)
       share.toggle_readonly!
       expect(share.reload.rdonly).to eq(true)
-    end
-  end
-
-  describe "#toggle_disk_pool!" do
-    it "should toggle disk_pool_copies from 0 to 1" do
-      share = create(:share, disk_pool_copies: 0)
-      share.toggle_disk_pool!
-      expect(share.reload.disk_pool_copies).to eq(1)
-    end
-
-    it "should toggle disk_pool_copies from positive to 0" do
-      share = create(:share, disk_pool_copies: 2)
-      share.toggle_disk_pool!
-      expect(share.reload.disk_pool_copies).to eq(0)
-    end
-  end
-
-  describe "#tag_list" do
-    it "should parse tags" do
-      share = create(:share, tags: "music, video")
-      expect(share.tag_list).to be_an(Array)
     end
   end
 

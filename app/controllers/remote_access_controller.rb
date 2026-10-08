@@ -10,7 +10,7 @@ class RemoteAccessController < ApplicationController
   include SseStreaming
 
   before_action :admin_required
-  before_action :require_no_security_blockers, only: %i[configure_tunnel start_tunnel restart_tunnel stage_tunnel_token]
+  before_action :require_no_security_blockers, only: %i[start_tunnel restart_tunnel stage_tunnel_token]
 
   def index
     @page_title = t('network')
@@ -20,20 +20,6 @@ class RemoteAccessController < ApplicationController
   end
 
   # --- Cloudflare Tunnel ---
-
-  def configure_tunnel
-    token = params[:tunnel_token].to_s.strip
-    if token.blank?
-      render json: { status: :not_acceptable, error: 'Token is required' }
-      return
-    end
-    begin
-      CloudflareService.configure!(token)
-      render json: { status: :ok }
-    rescue CloudflareService::CloudflareError => e
-      render json: { status: :error, error: e.message }, status: :unprocessable_entity
-    end
-  end
 
   def start_tunnel
     tunnel_action(CloudflareService.start!, 'start', 'Tunnel started')
@@ -45,45 +31,6 @@ class RemoteAccessController < ApplicationController
 
   def stop_tunnel
     tunnel_action(CloudflareService.stop!, 'stop', 'Tunnel stopped')
-  end
-
-  def install_cloudflared_stream
-    stream_sse do |sse|
-      sse.emit("Starting cloudflared installation...")
-
-      unless Rails.env.production?
-        lines = [
-          "Adding Cloudflare apt repository...",
-          "  Downloading signing key...",
-          "  Adding source list...",
-          "Updating package lists...",
-          "  Hit:1 http://archive.ubuntu.com/ubuntu noble InRelease",
-          "  Get:2 https://pkg.cloudflare.com/cloudflared any InRelease",
-          "  Fetched 8.2 kB in 1s (6,100 B/s)",
-          "Installing cloudflared...",
-          "  Reading package lists...",
-          "  Building dependency tree...",
-          "  The following NEW packages will be installed:",
-          "    cloudflared",
-          "  Setting up cloudflared (2024.12.1) ...",
-          "✓ cloudflared installed successfully!"
-        ]
-        lines.each do |line|
-          sleep 0.3
-          sse.emit(line)
-        end
-        sse.emit("", event: "done")
-        next
-      end
-
-      begin
-        CloudflareService.install! { |line| sse.emit("  #{line}") }
-        sse.emit("✓ cloudflared installed successfully!")
-      rescue CloudflareService::CloudflareError => e
-        sse.emit("✗ Installation failed: #{e.message}")
-      end
-      sse.emit("", event: "done")
-    end
   end
 
   # POST: the page sends the token here first, then opens setup_tunnel_stream.

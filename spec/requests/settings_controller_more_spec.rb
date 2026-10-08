@@ -85,23 +85,6 @@ RSpec.describe "SettingsController more", type: :request do
 
   # --- Toggle setting ---
 
-  describe "POST /settings/toggle_setting" do
-    it "toggles a setting value" do
-      setting = Setting.find_or_create_by!(name: 'advanced') { |s| s.value = '0'; s.kind = Setting::GENERAL }
-      setting.update!(value: '0')
-      post "/settings/toggle_setting", params: { id: setting.id }, as: :json
-      expect(response).to have_http_status(:ok)
-      expect(setting.reload.value).to eq('1')
-    end
-
-    it "toggles back from 1 to 0" do
-      setting = Setting.find_or_create_by!(name: 'advanced') { |s| s.value = '1'; s.kind = Setting::GENERAL }
-      setting.update!(value: '1')
-      post "/settings/toggle_setting", params: { id: setting.id }, as: :json
-      expect(setting.reload.value).to eq('0')
-    end
-  end
-
   # --- Service actions (Settings → Servers) ---
 
   describe "POST /settings/servers/:key/:verb" do

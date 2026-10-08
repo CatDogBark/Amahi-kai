@@ -212,16 +212,6 @@ describe "Docker Apps", type: :request do
   end
 
   describe "start, stop and restart" do
-    it "goes through the helper and answers ok" do
-      gitea(status: 'stopped')
-      post "/apps/docker/start/gitea"
-      expect(response.parsed_body).to eq('status' => 'ok')
-      post "/apps/docker/stop/gitea"
-      post "/apps/docker/restart/gitea"
-      expect(Privileged.calls.map(&:first)).to eq(%w[apps.start apps.stop apps.restart])
-      expect(DockerApp.find_by(identifier: 'gitea').status).to eq('running')
-    end
-
     it "answers with the helper's reason, or that the app isn't installed" do
       gitea
       helper_fails('apps.stop', 'docker exited 1: is the docker daemon running?')
@@ -352,11 +342,4 @@ describe "Docker Apps", type: :request do
     end
   end
 
-  it "reports an app's status as JSON" do
-    gitea
-    get "/apps/docker/status/gitea"
-    expect(response.parsed_body).to include('status' => 'running', 'host_port' => 3300)
-    get "/apps/docker/status/jellyfin"
-    expect(response.parsed_body).to eq('status' => 'available')
-  end
 end

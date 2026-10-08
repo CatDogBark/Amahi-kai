@@ -5,8 +5,4 @@ module SharesHelper
      t('this_shares_files_deleted'), "", t('there_is_no_undo'), ""].join("\n")
   end
 
-  def tags_to_str(tags)
-    tags.blank? ? '(add tags)' : tags
-  end
-
 end

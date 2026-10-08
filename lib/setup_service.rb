@@ -132,7 +132,6 @@ module SetupService
         visible: true,
         rdonly: false,
         everyone: true,
-        tags: name.downcase,
         extras: "",
         disk_pool_copies: pool_copies
       )
@@ -159,7 +158,7 @@ module SetupService
       unless Share.exists?(path: mount_point)
         share = Share.new(
           name: share_name, path: mount_point, visible: true, rdonly: false,
-          everyone: true, tags: "storage", extras: "", disk_pool_copies: 0
+          everyone: true, extras: "", disk_pool_copies: 0
         )
         null_fs = ShareFileSystem.new(share)
         def null_fs.setup_directory; end

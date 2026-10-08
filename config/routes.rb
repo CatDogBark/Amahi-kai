@@ -1,7 +1,7 @@
 Rails.application.routes.draw do
 
   # Users (consolidated from plugin)
-  resources :users do
+  resources :users, except: %i[new edit show] do
     member do
       put 'toggle_admin'
       put 'update_role'
@@ -13,7 +13,6 @@ Rails.application.routes.draw do
   # Network (consolidated from plugin)
   scope '/network', controller: 'network', as: 'network' do
     get '/', action: 'index', as: 'index'
-    get 'leases', action: 'index'
     get 'hosts', action: 'hosts'
     post 'hosts', action: 'create_host'
     delete 'host/:id', action: 'destroy_host', as: 'destroy_host'
@@ -28,7 +27,6 @@ Rails.application.routes.draw do
     put 'toggle_setting/:id', action: 'toggle_setting', as: 'toggle_setting'
     put 'update_dhcp_range/:id', action: 'update_dhcp_range', as: 'update_dhcp_range'
     get 'gateway', action: 'gateway'
-    post 'install_dnsmasq', action: 'install_dnsmasq'
     get 'install_dnsmasq_stream', action: 'install_dnsmasq_stream'
     post 'start_dnsmasq', action: 'start_dnsmasq'
     post 'stop_dnsmasq', action: 'stop_dnsmasq'
@@ -38,12 +36,10 @@ Rails.application.routes.draw do
   # Remote Access (Cloudflare Tunnel) — split from network
   scope '/network/remote_access', controller: 'remote_access', as: 'remote_access' do
     get '/', action: 'index', as: 'index'
-    post 'configure_tunnel', action: 'configure_tunnel'
     post 'stage_tunnel_token', action: 'stage_tunnel_token'
     post 'start_tunnel', action: 'start_tunnel'
     post 'restart_tunnel', action: 'restart_tunnel'
     post 'stop_tunnel', action: 'stop_tunnel'
-    get 'install_cloudflared_stream', action: 'install_cloudflared_stream'
     get 'setup_tunnel_stream', action: 'setup_tunnel_stream'
     # Tailscale VPN
     get 'install_tailscale_stream', action: 'install_tailscale_stream'
@@ -64,7 +60,6 @@ Rails.application.routes.draw do
   scope '/settings', controller: 'settings', as: 'settings' do
     get '/', action: 'index', as: 'index'
     # Actions that change something are POST-only, so a link can't trigger them.
-    post 'toggle_setting', action: 'toggle_setting'
     post 'reboot', action: 'reboot'
     post 'poweroff', action: 'poweroff'
     get 'servers', action: 'servers'
@@ -76,7 +71,6 @@ Rails.application.routes.draw do
     get 'dependencies_upgrade_stream', action: 'dependencies_upgrade_stream'
     post 'dependencies_hold', action: 'dependencies_hold'
     post 'dependencies_automatic', action: 'dependencies_automatic'
-    put 'revoke_app', action: 'revoke_app'
     get 'system_status', action: 'system_status'
     post 'update_system', action: 'update_system'
     post 'check_updates', action: 'check_updates'
@@ -92,15 +86,12 @@ Rails.application.routes.draw do
     get 'docker_apps', action: 'docker_apps'
     get 'installed_apps', action: 'installed_apps'
     post 'refresh_catalog', action: 'refresh_catalog'
-    post 'docker/install/:id', action: 'docker_install', as: 'docker_install'
     get 'docker/install_stream/:id', action: 'docker_install_stream', as: 'docker_install_stream'
     get 'docker/update_stream/:id', action: 'docker_update_stream', as: 'docker_update_stream'
     get 'docker/undo_update_stream/:id', action: 'docker_undo_update_stream', as: 'docker_undo_update_stream'
     post 'docker/uninstall/:id', action: 'docker_uninstall', as: 'docker_uninstall'
     post 'docker/start/:id', action: 'docker_start', as: 'docker_start'
     post 'docker/stop/:id', action: 'docker_stop', as: 'docker_stop'
-    post 'docker/restart/:id', action: 'docker_restart', as: 'docker_restart'
-    get 'docker/status/:id', action: 'docker_status', as: 'docker_status'
   end
 
   # Disks (consolidated from plugin)
@@ -117,7 +108,6 @@ Rails.application.routes.draw do
     put 'toggle_disk_pool_partition', action: 'toggle_disk_pool_partition'
     post 'accept_pool_drive', action: 'accept_pool_drive'
     post 'toggle_greyhole', action: 'toggle_greyhole'
-    post 'install_greyhole', action: 'install_greyhole'
     get 'install_greyhole_stream', action: 'install_greyhole_stream'
     get 'uninstall_greyhole_stream', action: 'uninstall_greyhole_stream'
     get 'pools', action: 'pools'
@@ -145,11 +135,9 @@ Rails.application.routes.draw do
   get '/tab/debug/system'=>'debug#system'
   get '/tab/debug/logs'=>'debug#logs'
 
-  resources :shares do
+  resources :shares, except: %i[new edit show update] do
     collection do
-      get 'disk_pooling'
       get 'settings'
-      put 'toggle_disk_pool_partition'
     end
 
     member do
@@ -160,10 +148,8 @@ Rails.application.routes.draw do
       put 'toggle_write'
       put 'toggle_guest_access'
       put 'toggle_guest_writeable'
-      put 'update_tags'
       put 'update_path'
       put 'update_workgroup'
-      put 'toggle_disk_pool_enabled'
       put 'update_disk_pool_copies'
       put 'update_extras'
       put 'clear_permissions'

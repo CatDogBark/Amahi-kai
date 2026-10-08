@@ -325,38 +325,6 @@ describe "Network Controller", type: :request do
       end
     end
 
-    describe "POST /network/configure_tunnel" do
-      before { allow(SecurityAudit).to receive(:blockers).and_return([]) }
-
-      it "configures and starts tunnel with valid token" do
-        allow(CloudflareService).to receive(:configure!).and_return(true)
-        post "/network/remote_access/configure_tunnel", params: { tunnel_token: "eyJhIjoiYWJjMTIzIn0=" }, as: :json
-        body = JSON.parse(response.body)
-        expect(body["status"]).to eq("ok")
-      end
-
-      it "rejects blank token" do
-        post "/network/remote_access/configure_tunnel", params: { tunnel_token: "" }, as: :json
-        body = JSON.parse(response.body)
-        expect(body["status"]).to eq("not_acceptable")
-        expect(body["error"]).to eq("Token is required")
-      end
-
-      it "rejects whitespace-only token" do
-        post "/network/remote_access/configure_tunnel", params: { tunnel_token: "   " }, as: :json
-        body = JSON.parse(response.body)
-        expect(body["status"]).to eq("not_acceptable")
-      end
-
-      it "handles configuration errors gracefully" do
-        allow(CloudflareService).to receive(:configure!).and_raise(CloudflareService::CloudflareError, "Invalid token format")
-        post "/network/remote_access/configure_tunnel", params: { tunnel_token: "bad-token" }, as: :json
-        body = JSON.parse(response.body)
-        expect(body["status"]).to eq("error")
-        expect(body["error"]).to include("Invalid token format")
-      end
-    end
-
     describe "POST /network/start_tunnel" do
       it "starts the tunnel" do
         allow(SecurityAudit).to receive(:blockers).and_return([])
@@ -373,13 +341,6 @@ describe "Network Controller", type: :request do
         post "/network/remote_access/stop_tunnel", as: :json
         body = JSON.parse(response.body)
         expect(body["status"]).to eq("ok")
-      end
-    end
-
-    describe "GET /network/install_cloudflared_stream" do
-      it "returns SSE content type" do
-        get "/network/remote_access/install_cloudflared_stream", headers: same_origin
-        expect(response.headers['Content-Type']).to include('text/event-stream')
       end
     end
 

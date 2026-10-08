@@ -35,5 +35,7 @@ Rails.application.configure do
   config.active_support.deprecation = :stderr
 
   # Raises error for missing translations
-  # config.action_view.raise_on_missing_translations = true
+  # A page asking for a translation en.yml doesn't have fails its spec (not a quiet
+  # "translation missing" on the page).
+  config.i18n.raise_on_missing_translations = true
 end

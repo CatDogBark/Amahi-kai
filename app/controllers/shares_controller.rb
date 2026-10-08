@@ -12,8 +12,8 @@ class SharesController < ApplicationController
   before_action :admin_required
   before_action :find_share, only: %i[
     destroy toggle_visible toggle_everyone toggle_readonly toggle_access
-    toggle_write toggle_guest_access toggle_guest_writeable update_tags
-    update_path update_extras clear_permissions toggle_disk_pool_enabled
+    toggle_write toggle_guest_access toggle_guest_writeable
+    update_path update_extras clear_permissions
     update_disk_pool_copies update_size update_name
   ]
 
@@ -146,18 +146,6 @@ class SharesController < ApplicationController
     end
   end
 
-  def update_tags
-    tag_params = if params[:name].present?
-      { tags: params[:name] }
-    elsif params[:value].present?
-      { tags: params[:value].to_s.downcase }
-    else
-      params_update_tags_path
-    end
-    @saved = @share.update_tags!(tag_params.respond_to?(:to_unsafe_h) ? tag_params : tag_params.with_indifferent_access)
-    render json: { status: @saved ? :ok : :not_acceptable }
-  end
-
   def update_path
     if params[:value].present?
       @share.path = params[:value]
@@ -168,7 +156,7 @@ class SharesController < ApplicationController
         render plain: @share.errors.full_messages.join(", "), status: :unprocessable_entity
       end
     else
-      @saved = @share.update(params_update_tags_path)
+      @saved = @share.update(params_update_path)
       Share.push_shares if @saved
       render json: { status: @saved ? :ok : :not_acceptable }
     end
@@ -212,33 +200,9 @@ class SharesController < ApplicationController
 
   # --- Disk Pool ---
 
-  def disk_pooling
-    # Collection action — no @share needed
-  end
-
-  def toggle_disk_pool_enabled
-    set_disk_pool_copies(@share.disk_pool_copies > 0 ? 0 : 1)
-  end
-
   # The shares page sends `copies` and expects JSON back (shares.js updatePoolCopies).
   def update_disk_pool_copies
     set_disk_pool_copies([(params[:copies] || params[:value]).to_i, 0].max)
-  end
-
-  def toggle_disk_pool_partition
-    path = params[:path]
-    part = DiskPoolPartition.where(path: path).first
-    if part
-      part.destroy
-      render partial: 'shares/disk_pooling_partition_checkbox', locals: { checked: false, path: path }
-    else
-      if PartitionUtils.new.info.select { |p| p[:path] == path }.empty? || !Pathname.new(path).mountpoint?
-        render partial: 'shares/disk_pooling_partition_checkbox', locals: { checked: false, path: path }
-      else
-        DiskPoolPartition.create(path: path, minimum_free: DiskPoolPartition::MINIMUM_FREE_GB)
-        render partial: 'shares/disk_pooling_partition_checkbox', locals: { checked: true, path: path }
-      end
-    end
   end
 
   # --- Size ---
@@ -302,12 +266,8 @@ class SharesController < ApplicationController
     params.require(:share).permit(:name, :visible, :rdonly).merge(path: Share.default_full_path(params[:share][:name]))
   end
 
-  def params_update_tags_path
-    if params[:share].present?
-      params.require(:share).permit(:path, :tags)
-    else
-      params.permit(:name)
-    end
+  def params_update_path
+    params.require(:share).permit(:path)
   end
 
   def params_update_workgroup

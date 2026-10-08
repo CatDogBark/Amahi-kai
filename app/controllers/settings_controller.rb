@@ -49,18 +49,6 @@ class SettingsController < ApplicationController
     end
   end
 
-  def toggle_setting
-    
-    id = params[:id]
-    s = Setting.find id
-    s.value = (1 - s.value.to_i).to_s
-    if s.save
-      render json: { status: 'ok' }
-    else
-      render json: { status: 'error' }
-    end
-  end
-
   def reboot
     if Platform.reboot!
       render plain: t('rebooting')

@@ -48,20 +48,6 @@ describe "RemoteAccess Controller", type: :request do
       end
     end
 
-    describe "POST configure_tunnel" do
-      it "configures and starts the tunnel" do
-        post '/network/remote_access/configure_tunnel', params: { tunnel_token: "mytoken" }, as: :json
-        expect(response).to have_http_status(:ok)
-        expect(response.parsed_body['status']).to eq('ok')
-      end
-
-      it "rejects blank token" do
-        post '/network/remote_access/configure_tunnel', params: { tunnel_token: "" }, as: :json
-        expect(response).to have_http_status(:ok)
-        expect(response.parsed_body['status']).to eq('not_acceptable')
-      end
-    end
-
     describe "POST start_tailscale" do
       it "starts tailscale" do
         post '/network/remote_access/start_tailscale', as: :json

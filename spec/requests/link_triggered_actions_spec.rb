@@ -11,7 +11,6 @@ RSpec.describe "Link-triggered actions", type: :request do
     %w[
       /settings/reboot
       /settings/poweroff
-      /settings/toggle_setting
       /settings/check_updates
       /settings/servers/smbd/start
       /settings/servers/smbd/stop

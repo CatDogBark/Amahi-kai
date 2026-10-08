@@ -174,10 +174,6 @@ class NetworkController < ApplicationController
     @dns = Setting.find_or_create_by(KIND, 'dns', 'cloudflare')
   end
 
-  def install_dnsmasq
-    redirect_to network_gateway_path
-  end
-
   def install_dnsmasq_stream
     stream_sse do |sse|
       sse.emit("Installing dnsmasq...")

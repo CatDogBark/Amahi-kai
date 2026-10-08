@@ -53,27 +53,6 @@ RSpec.describe "RemoteAccess extended", type: :request do
 
   # --- Cloudflare tunnel ---
 
-  describe "POST configure_tunnel" do
-    it "configures and starts with valid token" do
-      post '/network/remote_access/configure_tunnel', params: { tunnel_token: 'valid-token' }, as: :json
-      expect(response.parsed_body['status']).to eq('ok')
-      expect(CloudflareService).to have_received(:configure!).with('valid-token')
-    end
-
-    it "rejects blank token" do
-      post '/network/remote_access/configure_tunnel', params: { tunnel_token: '  ' }, as: :json
-      expect(response.parsed_body['status']).to eq('not_acceptable')
-    end
-
-    it "returns the helper's reason on failure" do
-      allow(CloudflareService).to receive(:configure!)
-        .and_raise(CloudflareService::CloudflareError, "the tunnel token doesn't look like one Cloudflare gives")
-      post '/network/remote_access/configure_tunnel', params: { tunnel_token: 'tok' }, as: :json
-      expect(response).to have_http_status(:unprocessable_entity)
-      expect(response.parsed_body['error']).to include("doesn't look like one Cloudflare gives")
-    end
-  end
-
   describe "POST restart_tunnel" do
     it "restarts the tunnel and says so on the reloaded page" do
       post '/network/remote_access/restart_tunnel', as: :json
@@ -100,11 +79,9 @@ RSpec.describe "RemoteAccess extended", type: :request do
     after { FileUtils.rm_f(CloudflareService.staged_token_path) }
 
     it "refuses to set up, start or restart the tunnel" do
-      post '/network/remote_access/configure_tunnel', params: { tunnel_token: 'valid-token' }, as: :json
-      expect(response).to have_http_status(:forbidden)
-      expect(response.parsed_body['error']).to include('UFW firewall is active')
       post '/network/remote_access/start_tunnel', as: :json
       expect(response).to have_http_status(:forbidden)
+      expect(response.parsed_body['error']).to include('UFW firewall is active')
       post '/network/remote_access/restart_tunnel', as: :json
       expect(response).to have_http_status(:forbidden)
       post '/network/remote_access/stage_tunnel_token', params: { token: 'test-token' }
@@ -143,13 +120,6 @@ RSpec.describe "RemoteAccess extended", type: :request do
   end
 
   # --- SSE streams ---
-
-  describe "GET install_cloudflared_stream" do
-    it "returns SSE content type" do
-      get '/network/remote_access/install_cloudflared_stream', headers: same_origin
-      expect(response.content_type).to include('text/event-stream')
-    end
-  end
 
   describe "setting up a tunnel" do
     after { FileUtils.rm_f(CloudflareService.staged_token_path) }

@@ -38,7 +38,7 @@ class Share < ApplicationRecord
   DEFAULT_SHARES_ROOT = '/var/lib/amahi-kai/files'
 
   SIGNATURE = "Amahi configuration"
-  DEFAULT_SHARES = [ "Books", "Pictures", "Movies", "Videos", "Music", "Docs", "Public", "TV" ].each {|s| I18n.t s }
+  DEFAULT_SHARES = %w[Books Pictures Movies Videos Music Docs Public TV].freeze
 
   scope :by_name, -> { order(:name) }
 
@@ -51,7 +51,6 @@ class Share < ApplicationRecord
   has_many :share_files, dependent: :destroy
 
   # --- Callbacks (delegate to services) ---
-  before_save :normalize_tags, if: :tags_changed?
   # Folder first: guest write access is set on the folder setup_directory creates.
   before_save -> { file_system.setup_directory }
   before_save -> { file_system.update_guest_permissions }
@@ -96,7 +95,6 @@ class Share < ApplicationRecord
       sh.name = s
       sh.rdonly = false
       sh.visible = true
-      sh.tags = s.downcase
       sh.extras = ""
       sh.disk_pool_copies = 0
       sh.save!
@@ -161,10 +159,6 @@ class Share < ApplicationRecord
     ret % [name, name, path, wr, br, allowed, writes, masks, e]
   end
 
-  def tag_list
-    (tags || '').split(',').map(&:strip).reject(&:blank?)
-  end
-
   def self.basenames
     all.map { |s| [s.path, s.name] }
   end
@@ -207,33 +201,6 @@ class Share < ApplicationRecord
 
   def toggle_guest_writeable!
     access_manager.toggle_guest_writeable!
-  end
-
-  def update_tags!(params)
-    unless params[:path].blank?
-      self.update(params)
-    else
-      # Strip any HTML tags and whitespace from input
-      name = ActionController::Base.helpers.strip_tags(params[:tags]).strip.downcase
-      return false if name.blank?
-
-      # Parse existing tags into a clean array
-      current = (self.tags || '').split(',').map { |t| ActionController::Base.helpers.strip_tags(t).strip.downcase }.reject(&:blank?).uniq
-
-      if current.include?(name)
-        current.delete(name)
-      else
-        current << name
-      end
-
-      self.tags = current.join(', ')
-      self.save
-    end
-  end
-
-  def toggle_disk_pool!
-    self.disk_pool_copies = (self.disk_pool_copies > 0) ? 0 : 1
-    self.save
   end
 
   def update_extras!(params)
@@ -371,14 +338,6 @@ class Share < ApplicationRecord
   end
 
   private
-
-  def normalize_tags
-    self.tags = (self.tags || '').split(/\s*,\s*|\s+/)
-      .map { |t| ActionController::Base.helpers.strip_tags(t).strip.downcase }
-      .reject(&:blank?)
-      .uniq
-      .join(', ')
-  end
 
   def push_samba_config
     Share.push_shares
