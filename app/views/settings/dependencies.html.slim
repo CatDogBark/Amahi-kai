@@ -4,6 +4,7 @@
 - deps = @status[:dependencies]
 - waiting = deps.flat_map(&:updates) + @status[:other]
 - security = waiting.count(&:security)
+- upgrade_url = ->(packages) { settings_dependencies_upgrade_stream_path(packages: packages) }
 
 .card.mb-4 id="dependencies"
   .card-header.bg-dark.text-white.d-flex.flex-wrap.align-items-center.gap-2
@@ -17,6 +18,8 @@
       - else
         | Package lists not refreshed yet
     button.btn.btn-sm.btn-outline-light type="button" id="check-dependencies" onclick="openInstallTerminal('deps-refresh')" Check now
+    - if waiting.any?
+      button.btn.btn-sm.btn-light type="button" id="update-all" onclick="if (confirm(#{"Install all #{pluralize(waiting.size, 'update')} waiting? Held packages stay as they are. Services keep their old version until they restart.".to_json})) openInstallTerminal('deps-upgrade', #{settings_dependencies_upgrade_stream_path(all: 1).to_json})" Update all
   .card-body
     p.mb-3 id="dependencies-summary"
       - if waiting.empty?
@@ -27,7 +30,10 @@
         - if security.positive?
           | ,
           span.badge.bg-warning.text-dark = pluralize(security, 'security update')
-        | . Nothing updates by itself: each is installed from here when you choose.
+        - if @status[:automatic]
+          | . Automatic updates are on, so Ubuntu installs them by itself.
+        - else
+          | . Nothing updates by itself: each is installed from here when you choose.
     .table-responsive
       table.table.table-sm.align-middle.mb-0
         thead
@@ -36,6 +42,7 @@
             th Installed
             th Update
             th From
+            th
         tbody
           - deps.each do |dep|
             tr id="dependency-#{dep.key}" class=("text-muted" unless dep.installed?)
@@ -60,7 +67,35 @@
                   span.small.text-muted Up to date
                 - else
                   span &mdash;
+                - if dep.held?
+                  div
+                    span.badge.bg-secondary Held
+                    span.small.text-muted.ms-1 no update changes it until it's released
               td.small = dep.source
+              td.text-end.text-nowrap
+                - if dep.updates.any? && !dep.held?
+                  - names = dep.updates.map(&:package)
+                  button.btn.btn-sm.btn-outline-primary.me-1 type="button" onclick="if (confirm(#{"Update #{dep.name} (#{names.join(', ')})?".to_json})) openInstallTerminal('deps-upgrade', #{upgrade_url.call(names).to_json})" Update
+                - if dep.installed?
+                  = button_to (dep.held? ? 'Release' : 'Hold'), settings_dependencies_hold_path,
+                        params: { packages: dep.packages, held: dep.held? ? '0' : '1' }, method: :post, form: { class: 'd-inline' },
+                        class: 'btn btn-sm btn-outline-secondary',
+                        data: { confirm: (dep.held? ? "Release #{dep.name}, so updates can change it again?" : "Hold #{dep.name} at #{dep.version}? No update, not even Update all, changes it until you release it."),
+                                tip: (dep.held? ? 'Let updates change it again' : 'Keep it at this version until you release it') }
+
+.card.mb-4 id="automatic-updates"
+  .card-body.d-flex.flex-wrap.align-items-center.gap-2.small
+    span.flex-grow-1
+      - if @status[:automatic]
+        strong Automatic updates are on:
+        |  Ubuntu installs its updates by itself every day.
+      - else
+        strong Automatic updates are off:
+        |  updates install only from this page. The dashboard says when a security update has waited #{SystemDependencies::NOTICE_DAYS} days.
+    = button_to (@status[:automatic] ? 'Turn off' : 'Turn on'), settings_dependencies_automatic_path,
+          params: { enabled: @status[:automatic] ? '0' : '1' }, method: :post, form: { class: 'd-inline' },
+          class: 'btn btn-sm btn-outline-secondary', id: 'automatic-updates-switch',
+          data: { confirm: (@status[:automatic] ? 'Turn automatic updates off? Updates then install only from this page.' : 'Turn automatic updates on? Ubuntu then installs its updates by itself, every day.') }
 
 .card.mb-4 id="operating-system"
   .card-header
@@ -100,6 +135,7 @@
                 th Package
                 th Installed
                 th Update
+                th
             tbody
               - @status[:other].each do |update|
                 tr
@@ -110,6 +146,9 @@
                     code = update.available
                     - if update.security
                       span.badge.bg-warning.text-dark.ms-1 Security
+                  td.text-end
+                    - unless @status[:held].include?(update.package)
+                      button.btn.btn-sm.btn-outline-primary type="button" onclick="if (confirm(#{"Update #{update.package}?".to_json})) openInstallTerminal('deps-upgrade', #{upgrade_url.call([update.package]).to_json})" Update
 
 .card.mb-4 id="runtime"
   .card-header
@@ -124,3 +163,4 @@
       | .
 
 == render 'shared/install_terminal', id: 'deps-refresh', title: 'Checking for updates', stream_url: settings_dependencies_refresh_stream_path
+== render 'shared/install_terminal', id: 'deps-upgrade', title: 'Installing updates', stream_url: ''

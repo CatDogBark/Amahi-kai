@@ -3,15 +3,18 @@ require 'rails_helper'
 RSpec.describe 'Settings → System Dependencies', type: :request do
   let(:update) { ->(package, security) { SystemDependencies::Update.new(package: package, installed: '1.0', available: '1.1', security: security) } }
 
+  let(:automatic) { false }
+
   before do
     allow(SystemDependencies).to receive(:status).and_return(
       dependencies: [SystemDependencies::Dependency.new(key: 'samba', name: 'Samba', role: 'Network shares (SMB)', source: 'Ubuntu',
-                                                        version: '1.0', updates: [update.call('samba', true)]),
+                                                        version: '1.0', updates: [update.call('samba', true)], packages: ['samba'], held: []),
                      SystemDependencies::Dependency.new(key: 'greyhole', name: 'Greyhole', role: 'Storage pool', source: 'Greyhole',
-                                                        version: '0.15.28-1', updates: []),
+                                                        version: '0.15.28-1', updates: [], packages: ['greyhole'], held: ['greyhole']),
                      SystemDependencies::Dependency.new(key: 'tailscale', name: 'Tailscale', role: 'Remote access (VPN)', source: 'Tailscale',
-                                                        version: nil, updates: [])],
-      other: [update.call('apparmor', false), update.call('libssl3t64', true)], os: 'Ubuntu 24.04.3 LTS', kernel: '6.8.0-142-generic',
+                                                        version: nil, updates: [], packages: [], held: [])],
+      other: [update.call('apparmor', false), update.call('libssl3t64', true)], held: ['greyhole'], automatic: automatic,
+      os: 'Ubuntu 24.04.3 LTS', kernel: '6.8.0-142-generic',
       restart: ['linux-image-6.8.0-143-generic'], runtime: { amahi_kai: 'abc1234', ruby: '3.2.3', rails: '8.1.4', gems: 120 },
       checked_at: 2.hours.ago
     )
@@ -45,5 +48,75 @@ RSpec.describe 'Settings → System Dependencies', type: :request do
     get '/settings/dependencies_refresh_stream', headers: same_origin
     expect(response.body).to include('data: Refreshing the package lists...', 'data: ✓ Package lists refreshed', "event: done\ndata: success")
     expect(Privileged.calls).to eq([['packages.refresh', {}]])
+  end
+
+  describe 'updating' do
+    before { login_as_admin }
+
+    def page
+      get '/settings/dependencies'
+      Nokogiri::HTML(response.body)
+    end
+
+    it 'offers Update for software with an update, Hold or Release for what is installed, and Update all' do
+      samba = page.at_css('#dependency-samba')
+      expect(samba.at_xpath(".//button[text()='Update']")['onclick']).to include("openInstallTerminal('deps-upgrade'",
+                                                                                  '/settings/dependencies_upgrade_stream?packages%5B%5D=samba')
+      expect(samba.at_xpath(".//form//button[text()='Hold']")).to be_present
+      greyhole = page.at_css('#dependency-greyhole')
+      expect(greyhole.text).to include('Held')
+      expect(greyhole.at_xpath(".//form//button[text()='Release']")).to be_present
+      expect(page.at_css('#dependency-tailscale form')).to be_nil
+      expect(page.at_css('#update-all')['onclick']).to include('/settings/dependencies_upgrade_stream?all=1')
+      expect(page.at_css('#other-updates').css('button').map(&:text)).to eq(%w[Update Update])
+      expect(page.at_css('#deps-upgrade-install-modal')).to be_present
+    end
+
+    it 'says automatic updates are off, with Turn on' do
+      expect(page.at_css('#automatic-updates').text.squish).to include('Automatic updates are off', '2 days')
+      expect(page.at_css('#automatic-updates-switch').text).to eq('Turn on')
+    end
+
+    context 'with automatic updates on' do
+      let(:automatic) { true }
+
+      it 'says so, with Turn off' do
+        expect(page.at_css('#dependencies-summary').text.squish).to include('Automatic updates are on')
+        expect(page.at_css('#automatic-updates-switch').text).to eq('Turn off')
+      end
+    end
+
+    it 'holds, releases and switches automatic updates through the helper' do
+      post '/settings/dependencies_hold', params: { packages: ['samba'], held: '1' }
+      expect(response).to redirect_to('/settings/dependencies')
+      expect(flash[:notice]).to eq('Held at their versions: samba.')
+      post '/settings/dependencies_hold', params: { packages: ['greyhole'], held: '0' }
+      post '/settings/dependencies_automatic', params: { enabled: '0' }
+      expect(flash[:notice]).to start_with('Automatic updates are off')
+      expect(Privileged.calls).to eq([['packages.hold', { packages: ['samba'], held: true }],
+                                      ['packages.hold', { packages: ['greyhole'], held: false }],
+                                      ['updates.set_automatic', { enabled: false }]])
+    end
+
+    it 'shows what the helper refused' do
+      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('updates.set_automatic', 'unattended-upgrades is not installed'))
+      post '/settings/dependencies_automatic', params: { enabled: '1' }
+      expect(flash[:error]).to include('unattended-upgrades is not installed')
+    end
+
+    it 'updates software, or everything, in a stream' do
+      get '/settings/dependencies_upgrade_stream', params: { packages: ['samba'] }, headers: same_origin
+      expect(response.body).to include('data: Updating samba...', 'data: ✓ Updated.', "event: done\ndata: success")
+      get '/settings/dependencies_upgrade_stream', params: { all: '1' }, headers: same_origin
+      expect(response.body).to include('data: Installing every update waiting')
+      expect(Privileged.calls).to eq([['packages.upgrade', { packages: ['samba'] }], ['packages.upgrade_all', {}]])
+    end
+
+    it 'is for admins only' do
+      login_as(create(:user))
+      post '/settings/dependencies_automatic', params: { enabled: '1' }
+      get '/settings/dependencies_upgrade_stream', params: { all: '1' }, headers: same_origin
+      expect(Privileged.calls).to eq([])
+    end
   end
 end

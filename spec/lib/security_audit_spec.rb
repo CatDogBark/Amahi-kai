@@ -94,8 +94,8 @@ RSpec.describe SecurityAudit do
       expect(check.severity).to eq(:warning)
     end
 
-    it 'includes unattended_upgrades check' do
-      check = checks.find { |c| c.name == 'unattended_upgrades' }
+    it 'includes security_updates check' do
+      check = checks.find { |c| c.name == 'security_updates' }
       expect(check).not_to be_nil
       expect(check.severity).to eq(:warning)
     end
@@ -116,10 +116,6 @@ RSpec.describe SecurityAudit do
   describe '.fix!' do
     it 'returns true for ssh_password_auth' do
       expect(SecurityAudit.fix!('ssh_password_auth')).to eq(true)
-    end
-
-    it 'returns true for unattended_upgrades' do
-      expect(SecurityAudit.fix!('unattended_upgrades')).to eq(true)
     end
 
     it 'returns true for samba_lan_binding' do
@@ -164,13 +160,15 @@ RSpec.describe SecurityAudit do
       expect(SecurityAudit.blockers.map(&:name)).to include('ufw_firewall')
     end
 
-    it 'needs automatic updates turned on, not just the package' do
-      allow(SecurityAudit).to receive(:`).with(/unattended-upgrades/).and_return('install ok installed')
-      allow(File).to receive(:read).and_call_original
-      allow(File).to receive(:read).with(SecurityAudit::AUTO_UPGRADES).and_return(%(APT::Periodic::Unattended-Upgrade "0";\n))
-      expect(checks['unattended_upgrades'].status).to eq(:warn)
-      allow(File).to receive(:read).with(SecurityAudit::AUTO_UPGRADES).and_return(%(APT::Periodic::Unattended-Upgrade "1";\n))
-      expect(SecurityAudit.run_all.find { |c| c.name == 'unattended_upgrades' }.status).to eq(:pass)
+    it 'warns when a security update has waited more than a week, and has no fix of its own' do
+      allow(SystemDependencies).to receive(:overdue_security_updates).with(days: 7).and_return([])
+      expect(checks['security_updates'].status).to eq(:pass)
+      allow(SystemDependencies).to receive(:overdue_security_updates).with(days: 7)
+                                                                      .and_return([{ package: 'samba', available: '1.1', since: 9.days.ago }])
+      check = SecurityAudit.run_all.find { |c| c.name == 'security_updates' }
+      expect(check.status).to eq(:warn)
+      expect(check.description).to eq('1 security update has waited more than a week: install on Settings → System Dependencies')
+      expect(check.fix_command).to be_nil
     end
 
     it "warns about ports Docker publishes past UFW, but not ones kept on localhost" do
@@ -197,14 +195,12 @@ RSpec.describe SecurityAudit do
     end
 
     it 'applies each fix through the root helper' do
-      %w[ufw_firewall ssh_root_login ssh_password_auth fail2ban unattended_upgrades].each { |name| SecurityAudit.fix!(name) }
+      %w[ufw_firewall ssh_root_login ssh_password_auth fail2ban].each { |name| SecurityAudit.fix!(name) }
       expect(Privileged.calls).to eq([
                                        ['security.enable_firewall', {}],
                                        ['security.harden_ssh', { setting: 'root_login' }],
                                        ['security.harden_ssh', { setting: 'password_login' }],
-                                       ['packages.install', { packages: ['fail2ban'] }],
-                                       ['packages.install', { packages: ['unattended-upgrades'] }],
-                                       ['security.enable_auto_updates', {}]
+                                       ['packages.install', { packages: ['fail2ban'] }]
                                      ])
     end
 

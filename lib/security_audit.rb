@@ -9,7 +9,6 @@ class SecurityAudit
   # status: :pass, :warn, :fail
   # severity: :blocker, :warning, :info
 
-  AUTO_UPGRADES = '/etc/apt/apt.conf.d/20auto-upgrades'
 
   class << self
     def run_all
@@ -20,7 +19,7 @@ class SecurityAudit
         ssh_root_login_check(report),
         ssh_password_auth_check(report),
         fail2ban_check,
-        unattended_upgrades_check,
+        security_updates_check,
         samba_lan_binding_check,
         docker_ports_check,
         open_ports_check
@@ -50,8 +49,6 @@ class SecurityAudit
         privileged('security.harden_ssh', setting: 'password_login')
       when 'fail2ban'
         privileged('packages.install', packages: ['fail2ban'])
-      when 'unattended_upgrades'
-        privileged('packages.install', packages: ['unattended-upgrades']) && privileged('security.enable_auto_updates')
       when 'samba_lan_binding'
         fix_samba_lan_binding!
       else
@@ -172,25 +169,23 @@ class SecurityAudit
       output == 'install ok installed'
     end
 
-    def unattended_upgrades_check
-      enabled = unattended_upgrades_enabled?
+    # Security updates get installed: by themselves when automatic updates are on, or from
+    # Settings → System Dependencies, where none should wait more than a week. Updating is the
+    # admin's choice to make there, so this has no fix of its own.
+    def security_updates_check
+      waiting = SystemDependencies.overdue_security_updates(days: 7)
       Check.new(
-        name: 'unattended_upgrades',
-        description: 'Automatic security updates enabled',
-        status: enabled ? :pass : :warn,
+        name: 'security_updates',
+        description: if waiting.empty?
+                       'Security updates installed (none waiting more than a week)'
+                     else
+                       "#{waiting.size} security #{waiting.size == 1 ? 'update has' : 'updates have'} waited more than a week: " \
+                         'install on Settings → System Dependencies'
+                     end,
+        status: waiting.empty? ? :pass : :warn,
         severity: :warning,
-        fix_command: 'Install and turn on unattended-upgrades'
+        fix_command: nil
       )
-    end
-
-    # Installed, and turned on in 20auto-upgrades.
-    def unattended_upgrades_enabled?
-      return false unless production?
-      output = `dpkg-query -W -f='${Status}' unattended-upgrades 2>/dev/null`.strip
-      return false unless output == 'install ok installed'
-      File.read(AUTO_UPGRADES).match?(/^\s*APT::Periodic::Unattended-Upgrade\s+"1"/)
-    rescue SystemCallError
-      false
     end
 
     def samba_lan_binding_check

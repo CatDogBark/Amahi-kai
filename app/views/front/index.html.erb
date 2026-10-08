@@ -21,6 +21,14 @@
               </a>
             </div>
           <% end %>
+          <% if @security_overdue.present? %>
+            <%# Security updates waiting NOTICE_DAYS or more; they install from Settings → System Dependencies %>
+            <div class="mt-1" id="security-updates-notice">
+              <a href="/settings/dependencies" class="update-notice">
+                <span class="update-dot"></span><%= pluralize(@security_overdue.size, 'security update') %> waiting since <%= @security_overdue.first[:since].strftime('%B %-d, %Y') %> — install on System Dependencies
+              </a>
+            </div>
+          <% end %>
           <% if @app_updates.any? %>
             <%# Apps the catalog has a newer version of; each updates from its row on the Apps page %>
             <div class="mt-1">

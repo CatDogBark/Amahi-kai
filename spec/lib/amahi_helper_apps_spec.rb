@@ -145,7 +145,7 @@ RSpec.describe 'AmahiHelper apps' do
     end
 
     it "is fetched by the update check, after Amahi-kai's own" do
-      expect(steps('system.check_update', {})).to eq([[:check_update], [:refresh_catalog]])
+      expect(steps('system.check_update', {})).to eq([[:check_update], [:refresh_catalog], [:check_security_updates]])
       expect(helper::OPERATIONS).not_to have_key('apps.refresh_catalog')
     end
 

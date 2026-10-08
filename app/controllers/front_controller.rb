@@ -26,6 +26,8 @@ class FrontController < ApplicationController
     @app_updates = helpers.app_updates
     @stats = DashboardStats.summary
     if current_user.admin?
+      # Security updates that have waited a couple of days (nothing installs them by itself).
+      @security_overdue = SystemDependencies.overdue_security_updates
       @storage_health = StorageHealth.load
       @jobs = ScheduledJobs.all(health: @storage_health)
     end
