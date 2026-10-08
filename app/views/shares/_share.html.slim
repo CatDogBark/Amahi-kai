@@ -41,15 +41,19 @@ div.share[id="whole_share_#{share.id}"]
               td
                 label Disk Pool
               td
-                .d-flex.align-items-center.gap-2 id="pool-controls-#{share.id}"
-                  - copies = share.disk_pool_copies
-                  button.btn.btn-sm.btn-outline-secondary data-pool-action="minus" onclick="updatePoolCopies(#{share.id}, #{[copies - 1, 0].max})" disabled=(copies <= 0)
-                    | −
-                  span.fw-bold.mx-1 id="pool-copies-#{share.id}"
-                    = copies == 0 ? 'Off' : "#{copies} #{copies == 1 ? 'copy' : 'copies'}"
-                  button.btn.btn-sm.btn-outline-secondary data-pool-action="plus" onclick="updatePoolCopies(#{share.id}, #{[copies + 1, 2].min})" disabled=(copies >= 2)
-                    | +
-                  span.spinner-border.spinner-border-sm.ms-1 id="pool-spinner-#{share.id}" style="display:none"
+                - if share.pool_removing?
+                  .small.text-info id="pool-removing-#{share.id}" data-reload-after="30"
+                    | Turning off: Greyhole is moving the share's files from the pool drives back into its folder. This page updates by itself when it's done.
+                - else
+                  .d-flex.align-items-center.gap-2 id="pool-controls-#{share.id}"
+                    - copies = share.disk_pool_copies
+                    button.btn.btn-sm.btn-outline-secondary data-pool-action="minus" onclick="updatePoolCopies(#{share.id}, #{[copies - 1, 0].max})" disabled=(copies <= 0)
+                      | −
+                    span.fw-bold.mx-1 id="pool-copies-#{share.id}"
+                      = copies == 0 ? 'Off' : "#{copies} #{copies == 1 ? 'copy' : 'copies'}"
+                    button.btn.btn-sm.btn-outline-secondary data-pool-action="plus" onclick="updatePoolCopies(#{share.id}, #{[copies + 1, 2].min})" disabled=(copies >= 2)
+                      | +
+                    span.spinner-border.spinner-border-sm.ms-1 id="pool-spinner-#{share.id}" style="display:none"
 
             tr
               td

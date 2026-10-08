@@ -216,14 +216,19 @@ class Greyhole
       true
     end
 
-    # Drives Greyhole has finished removing (it takes them out of greyhole.conf itself) leave
-    # the pool here too. Runs before the config is written, so they aren't put back.
+    # Drives and shares Greyhole has finished removing (it takes them out of greyhole.conf
+    # itself) leave the pool here too: a drive's record goes, a share's copies turn Off. Runs
+    # before the config is written, so they aren't put back.
     def sync_removals!
       return unless production?
       removing = DiskPoolPartition.where(removing: true).to_a
-      return if removing.empty?
-      listed = configured_drives
-      removing.reject { |part| listed.include?(part.path) }.each(&:destroy) if listed
+      if removing.any? && (listed = configured_drives)
+        removing.reject { |part| listed.include?(part.path) }.each(&:destroy)
+      end
+      shares = Share.where(pool_removing: true).to_a
+      if shares.any? && (listed = configured_shares)
+        shares.reject { |share| listed.include?(share.name) }.each { |share| share.update!(disk_pool_copies: 0, pool_removing: false) }
+      end
     end
 
     # The pool drives greyhole.conf lists now (the app may read it), or nil if it can't be read.
@@ -231,6 +236,41 @@ class Greyhole
       File.read(CONFIG_PATH).scan(/^\s*storage_pool_drive\s*=\s*([^,\n]+)/).flatten.map(&:strip)
     rescue SystemCallError
       nil
+    end
+
+    # The shares greyhole.conf keeps copies of now, or nil if it can't be read.
+    def configured_shares
+      File.read(CONFIG_PATH).scan(/^\s*num_copies\[([^\]]+)\]/).flatten.map(&:strip)
+    rescue SystemCallError
+      nil
+    end
+
+    # Turns a share's pool off without losing files: Greyhole moves the share's files from the
+    # pool drives back into its folder, and the share stays pooled, marked removing, until
+    # it's done (sync_removals!). A share with no files on the drives turns Off at once.
+    # Returns :removed or :removing; raises GreyholeError when it can't now (the helper
+    # refuses when the folder's disk has no room for the files).
+    def remove_share!(share)
+      return :removing if share.pool_removing?
+      unless installed? && share_on_drives?(share)
+        share.update!(disk_pool_copies: 0)
+        configure! if installed?
+        return :removed
+      end
+      raise GreyholeError, "Start Greyhole first: it's what moves the share's files back into its folder." unless running?
+      privileged('greyhole.remove_share', share: share.name)
+      share.update!(pool_removing: true)
+      :removing
+    end
+
+    # Whether the share has files on a pool drive. A folder that can't be read counts.
+    def share_on_drives?(share)
+      DiskPoolPartition.pluck(:path).any? do |drive|
+        dir = File.join(drive, share.name)
+        File.directory?(dir) && Dir.children(dir).any?
+      end
+    rescue SystemCallError
+      true
     end
 
     # Tells Greyhole the drive mounted at +path+ (one of its pool folders) is the one to use

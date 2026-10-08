@@ -23,6 +23,7 @@ class SharesController < ApplicationController
 
   def index
     @page_title = t('shares')
+    Greyhole.sync_removals! # shares Greyhole has finished moving off the pool turn Off
     @shares = Share.by_name
   end
 
@@ -216,14 +217,12 @@ class SharesController < ApplicationController
   end
 
   def toggle_disk_pool_enabled
-    @share.disk_pool_copies = @share.disk_pool_copies > 0 ? 0 : 1
-    save_disk_pool_copies
+    set_disk_pool_copies(@share.disk_pool_copies > 0 ? 0 : 1)
   end
 
   # The shares page sends `copies` and expects JSON back (shares.js updatePoolCopies).
   def update_disk_pool_copies
-    @share.disk_pool_copies = [(params[:copies] || params[:value]).to_i, 0].max
-    save_disk_pool_copies
+    set_disk_pool_copies([(params[:copies] || params[:value]).to_i, 0].max)
   end
 
   def toggle_disk_pool_partition
@@ -260,6 +259,23 @@ class SharesController < ApplicationController
   end
 
   private
+
+  # Off for a share with files in the pool waits for Greyhole to move them back into the
+  # share's folder (removing: true); nothing changes while it does.
+  def set_disk_pool_copies(copies)
+    if @share.pool_removing?
+      return render json: { status: :error, message: "Greyhole is still moving this share's files back into its folder.",
+                            disk_pool_copies: @share.disk_pool_copies, removing: true }
+    end
+    if copies.zero? && @share.disk_pool_copies.positive?
+      removing = Greyhole.remove_share!(@share) == :removing
+      return render json: { status: :ok, disk_pool_copies: @share.reload.disk_pool_copies, removing: removing }
+    end
+    @share.disk_pool_copies = copies
+    save_disk_pool_copies
+  rescue Greyhole::GreyholeError, Shell::CommandError => e
+    render json: { status: :error, message: e.message, disk_pool_copies: @share.reload.disk_pool_copies }
+  end
 
   def save_disk_pool_copies
     @share.save

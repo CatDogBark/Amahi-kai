@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_08_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_09_000000) do
   create_table "cap_accesses", force: :cascade do |t|
     t.integer "user_id"
     t.integer "share_id"
@@ -105,6 +105,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_08_000000) do
     t.boolean "guest_writeable", default: false
     t.datetime "created_at", precision: nil
     t.datetime "updated_at", precision: nil
+    t.boolean "pool_removing", default: false, null: false
   end
 
   create_table "themes", force: :cascade do |t|

@@ -180,6 +180,65 @@ RSpec.describe Greyhole do
       end
     end
 
+    describe 'turning a share off' do
+      let!(:share) { create(:share, name: 'Photos') }
+
+      before do
+        share.update_column(:disk_pool_copies, 2)
+        create(:disk_pool_partition, path: '/mnt/storage-1', minimum_free: 10)
+        allow(Greyhole).to receive(:installed?).and_return(true)
+        allow(Greyhole).to receive(:configure!).and_return(true)
+        allow(Greyhole).to receive(:share_on_drives?).and_return(true)
+      end
+
+      it 'turns a share with no files on the drives off at once' do
+        allow(Greyhole).to receive(:share_on_drives?).and_return(false)
+        expect(Greyhole.remove_share!(share)).to eq(:removed)
+        expect(share.reload).to have_attributes(disk_pool_copies: 0, pool_removing?: false)
+        expect(Greyhole).to have_received(:configure!)
+        expect(Privileged.calls.map(&:first)).not_to include('greyhole.remove_share')
+      end
+
+      it "has Greyhole move its files back, keeping it pooled until Greyhole has taken it out of greyhole.conf" do
+        expect(Greyhole.remove_share!(share)).to eq(:removing)
+        expect(Privileged.calls).to eq([['greyhole.remove_share', { share: 'Photos' }]])
+        expect(share.reload).to have_attributes(disk_pool_copies: 2, pool_removing?: true)
+        expect(Greyhole.remove_share!(share)).to eq(:removing) # asked again: already under way
+        expect(Privileged.calls.size).to eq(1)
+
+        allow(Greyhole).to receive(:configured_drives).and_return(['/mnt/storage-1'])
+        allow(Greyhole).to receive(:configured_shares).and_return(['Photos'])
+        Greyhole.sync_removals!
+        expect(share.reload).to be_pool_removing
+        allow(Greyhole).to receive(:configured_shares).and_return([])
+        Greyhole.sync_removals!
+        expect(share.reload).to have_attributes(disk_pool_copies: 0, pool_removing?: false)
+        expect(DiskPoolPartition.exists?(path: '/mnt/storage-1')).to be true
+      end
+
+      it "won't while Greyhole is stopped, and passes on the helper's reason" do
+        allow(Greyhole).to receive(:running?).and_return(false)
+        expect { Greyhole.remove_share!(share) }.to raise_error(Greyhole::GreyholeError, /Start Greyhole first/)
+        allow(Greyhole).to receive(:running?).and_return(true)
+        allow(Privileged).to receive(:call).with('greyhole.remove_share', anything)
+                                           .and_raise(Privileged::Error.new('greyhole.remove_share', "the share's folder doesn't have room"))
+        expect { Greyhole.remove_share!(share) }.to raise_error(Greyhole::GreyholeError, /doesn't have room/)
+        expect(share.reload).to have_attributes(disk_pool_copies: 2, pool_removing?: false)
+      end
+
+      it 'counts a share as on the drives when a pool folder of it has files' do
+        allow(Greyhole).to receive(:share_on_drives?).and_call_original
+        Dir.mktmpdir do |drive|
+          DiskPoolPartition.update_all(path: drive)
+          expect(Greyhole.share_on_drives?(share)).to be false
+          FileUtils.mkdir_p("#{drive}/Photos")
+          expect(Greyhole.share_on_drives?(share)).to be false
+          File.write("#{drive}/Photos/a.jpg", 'x')
+          expect(Greyhole.share_on_drives?(share)).to be true
+        end
+      end
+    end
+
     it "reads Greyhole's record of its drives, and says which drive it won't use" do
       records = 'a:3:{s:14:"/mnt/storage-1";s:4:"uuid";s:14:"/mnt/storage-2";s:3:"old";s:14:"/mnt/storage-3";b:0;}'
       parsed = Greyhole.parse_drive_records(records)

@@ -9,6 +9,7 @@
 function updatePoolCopies(shareId, copies) {
   var spinner = document.getElementById('pool-spinner-' + shareId);
   var container = document.getElementById('pool-controls-' + shareId);
+  if (copies === 0 && !confirm("Turn the pool off for this share? If it has files on the pool drives, Greyhole first moves them back into the share's folder on the system disk, which needs room for them.")) return;
   if (spinner) spinner.style.display = '';
 
   fetch('/shares/' + shareId + '/update_disk_pool_copies', {
@@ -19,6 +20,9 @@ function updatePoolCopies(shareId, copies) {
   })
     .then(function(r) { return r.json(); })
     .then(function(data) {
+      if (data.status === 'error') alert(data.message);
+      // Turning off while Greyhole moves the files back: the page shows it, and updates itself.
+      if (data.removing) { window.location.reload(); return; }
       var c = data.disk_pool_copies;
       // Update label
       var label = document.getElementById('pool-copies-' + shareId);

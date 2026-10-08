@@ -957,6 +957,39 @@ RSpec.describe 'AmahiHelper' do
       conf&.close!
     end
 
+    describe 'taking a share out of the pool' do
+      let(:dir) { Dir.mktmpdir }
+      let(:folder) { "#{dir}/photos" }
+
+      before do
+        FileUtils.mkdir_p([folder, "#{dir}/drive/Photos"])
+        File.write("#{dir}/drive/Photos/a.jpg", 'x' * 3000)
+        File.symlink("#{dir}/drive/Photos/a.jpg", "#{folder}/a.jpg")
+        File.write("#{folder}/landed.txt", 'x' * 500)
+        File.write("#{dir}/greyhole.conf", "num_copies[Photos] = 2\nnum_copies[Odd's] = 1\n")
+        stub_const('AmahiHelper::GREYHOLE_CONF', "#{dir}/greyhole.conf")
+        allow(helper).to receive(:installed!).and_return(true)
+        allow(helper).to receive(:samba_shares)
+          .and_return('photos' => { name: 'Photos', path: folder, pooled: true }, "odd's" => { name: "Odd's", path: folder, pooled: true })
+        allow(helper).to receive(:free_space).with(folder).and_return(10_000)
+      end
+
+      after { FileUtils.rm_rf(dir) }
+
+      it 'has Greyhole move the files back when the folder has room for them, counting the ones on the drives' do
+        expect(helper.folder_size(folder)).to eq(3500)
+        expect(steps('greyhole.remove_share', { 'share' => 'Photos' })).to eq([['/usr/bin/greyhole', '--remove-share=Photos']])
+        allow(helper).to receive(:free_space).with(folder).and_return(3000)
+        expect(refusal('greyhole.remove_share', { 'share' => 'Photos' })).to start_with("the share's folder doesn't have room for its files")
+      end
+
+      it "refuses shares Greyhole doesn't pool, and names Greyhole can't take out safely" do
+        expect(refusal('greyhole.remove_share', { 'share' => 'Movies' })).to eq("Movies isn't a share Greyhole pools")
+        expect(refusal('greyhole.remove_share', { 'share' => "Odd's" })).to include('letters, digits, spaces, - and _')
+        expect(refusal('greyhole.remove_share', { 'share' => nil })).to eq('share is missing')
+      end
+    end
+
     it "refreshes apt's package lists, installing nothing" do
       expect(steps('packages.refresh', {})).to eq([['/usr/bin/apt-get', 'update', { env: AmahiHelper::APT_ENV, stream: true }],
                                                    [:check_security_updates]])

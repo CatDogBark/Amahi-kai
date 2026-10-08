@@ -742,6 +742,15 @@ module AmahiHelper
       },
       plan: ->(v) { [[GREYHOLE_BIN, "--remove=#{v[:path]}", { stdin: v[:available] ? "yes\n" : "no\n" }]] }
     },
+    # Takes a share out of Greyhole's pool without losing files (greyhole --remove-share):
+    # Greyhole moves the share's files from the pool drives back into its folder, then takes
+    # the share out of greyhole.conf itself and restarts. The daemon does the moving, after
+    # the work queued before it. Refused when the folder's disk has no room for them.
+    'greyhole.remove_share' => {
+      params: %w[share],
+      validate: ->(a) { installed!(GREYHOLE_BIN) && share_pool_removal(a['share']) },
+      plan: ->(v) { [[GREYHOLE_BIN, "--remove-share=#{v[:share]}"]] }
+    },
     # Removes Greyhole (Disks → Storage Pool) when its config lists no drives and no share
     # keeping copies: the package, its config and its apt repository. Its database stays, so
     # installing it again picks up where it was.
@@ -1015,6 +1024,7 @@ module AmahiHelper
     %r{\Astorage_pool_drive = (/mnt/[A-Za-z0-9][A-Za-z0-9._-]{0,63}(?:/[A-Za-z0-9._-]+)*), min_free: \d{1,6}gb\z},
     /\Anum_copies\[[[:print:]]{1,64}\] = (?:\d{1,2}|max)\z/
   ].freeze
+  GREYHOLE_SHARE_NAME = /\A[A-Za-z0-9][A-Za-z0-9 _-]{0,63}\z/
   DNS_ALIAS_LINES = [%r{\Aaddress=/[a-z][a-z0-9-]{0,62}/(?:#{IPV4})?\z}i].freeze
 
   class << self
@@ -1827,6 +1837,46 @@ module AmahiHelper
       drives.select { |drive| normalized_path?(drive) && drive.start_with?("#{DRIVES_ROOT}/") && !drive.include?(',') }.uniq
     rescue SystemCallError
       []
+    end
+
+    # The shares greyhole.conf keeps copies of (num_copies[<name>]).
+    def greyhole_shares
+      return [] unless File.exist?(GREYHOLE_CONF)
+      File.read(GREYHOLE_CONF).scan(/^\s*num_copies\[([^\]]+)\]/).flatten.map(&:strip).uniq
+    rescue SystemCallError
+      []
+    end
+
+    # A share Greyhole can take out of its pool: one it pools, with a plain name (Greyhole edits
+    # greyhole.conf with the name as a pattern), whose folder's disk has room for all its
+    # files. The room is Greyhole's own measure: every file in the folder, the ones on the
+    # drives counted through the folder's links to them.
+    def share_pool_removal(value)
+      name = string(value, 'share', max: 64)
+      raise Refused, "#{name} isn't a share Greyhole pools" unless greyhole_shares.include?(name)
+      unless name.match?(GREYHOLE_SHARE_NAME)
+        raise Refused, "Greyhole can only take shares named with letters, digits, spaces, - and _ out of its pool: rename #{name} first"
+      end
+      share = samba_shares[name.downcase] or raise Refused, "#{name} isn't in Samba's config"
+      need = folder_size(share[:path])
+      free = free_space(share[:path])
+      if need > free
+        raise Refused, "the share's folder doesn't have room for its files: #{gigabytes(need)} GB to move back, " \
+                       "#{gigabytes(free)} GB free on its disk"
+      end
+      { share: name }
+    end
+
+    # The size of every file in a folder, following links to files (Greyhole's on the drives).
+    def folder_size(path)
+      total = 0
+      Find.find(path) do |entry|
+        stat = File.stat(entry)
+        total += stat.size if stat.file?
+      rescue SystemCallError
+        next
+      end
+      total
     end
 
     # One of Greyhole's pool drives, as greyhole.conf lists it.
