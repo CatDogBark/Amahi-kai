@@ -43,5 +43,19 @@
     <% end %>
   </div>
 
+  <% if @trash %>
+    <%# Kept apart from the shares: what Greyhole keeps of files deleted from pooled shares %>
+    <div class="fb-trash-entry" id="trash-entry">
+      <a href="<%= trash_path %>" class="fb-link fb-trash-link">
+        <span class="fb-trash-icon">🗑</span>
+        <span class="fw-semibold"><%= t('trash') %></span>
+        <span class="small text-muted ms-2" id="trash-entry-summary">
+          <%= @trash[:count].zero? ? 'empty' : "#{pluralize(@trash[:count], 'file')} · #{number_to_human_size(@trash[:space])}" %>
+        </span>
+      </a>
+      <div class="small text-muted">Files deleted or changed in pooled shares, until the trash is emptied</div>
+    </div>
+  <% end %>
+
   <div class="fb-statusbar"><%= pluralize(@shares.size, 'share') %></div>
 </div>
