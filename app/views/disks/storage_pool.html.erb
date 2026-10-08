@@ -78,7 +78,7 @@
           <span>
             <%= pluralize(@pool_drives.size, 'drive') %> ·
             <% if pooled.any? %>
-              <%= pooled.map { |share| "#{share.name}: #{pluralize(copies_of.call(share), 'copy')}" }.join(', ') %>
+              <%= pooled.map { |share| share.pool_removing? ? "#{share.name}: turning off (its files are moving back into its folder)" : "#{share.name}: #{pluralize(copies_of.call(share), 'copy')}" }.join(', ') %>
             <% else %>
               no share keeps copies here yet (set a share's Disk Pool copies on Shares)
             <% end %>

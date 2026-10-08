@@ -95,6 +95,17 @@ RSpec.describe "SharesController extended", type: :request do
       end
     end
 
+    describe "a share turning off" do
+      it "says Greyhole is moving its files back, with no copies buttons, and updates itself" do
+        share.update_columns(disk_pool_copies: 2, pool_removing: true)
+        get shares_path
+        page = Nokogiri::HTML(response.body)
+        expect(page.at_css("#pool-removing-#{share.id}").text).to include("moving the share's files from the pool drives back")
+        expect(page.at_css("#pool-removing-#{share.id}")['data-reload-after']).to eq('30')
+        expect(page.at_css("#pool-controls-#{share.id}")).to be_nil
+      end
+    end
+
     describe "PUT update_disk_pool_copies" do
       it "accepts the copies param the shares page sends and returns JSON" do
         put update_disk_pool_copies_share_path(share), params: { copies: "2" }
@@ -112,6 +123,26 @@ RSpec.describe "SharesController extended", type: :request do
         allow(Greyhole).to receive(:configure!).and_raise(Shell::CommandError.new("greyhole", "boom", 1))
         put update_disk_pool_copies_share_path(share), params: { value: "2" }, as: :json
         expect(response).to have_http_status(:ok)
+      end
+
+      it "turns a pooled share off through Greyhole, which may first move its files back" do
+        share.update_column(:disk_pool_copies, 2)
+        allow(Greyhole).to receive(:remove_share!) { :removing }
+        put update_disk_pool_copies_share_path(share), params: { copies: "0" }
+        expect(response.parsed_body).to include("status" => "ok", "disk_pool_copies" => 2, "removing" => true)
+        expect(Greyhole).to have_received(:remove_share!).with(share)
+      end
+
+      it "says why it can't turn off, and changes nothing while the files move back" do
+        share.update_column(:disk_pool_copies, 2)
+        allow(Greyhole).to receive(:remove_share!).and_raise(Greyhole::GreyholeError, "Start Greyhole first")
+        put update_disk_pool_copies_share_path(share), params: { copies: "0" }
+        expect(response.parsed_body).to include("status" => "error", "message" => "Start Greyhole first", "disk_pool_copies" => 2)
+
+        share.update_column(:pool_removing, true)
+        put update_disk_pool_copies_share_path(share), params: { copies: "1" }
+        expect(response.parsed_body).to include("status" => "error", "removing" => true)
+        expect(share.reload.disk_pool_copies).to eq(2)
       end
     end
   end
