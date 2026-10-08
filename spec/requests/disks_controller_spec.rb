@@ -35,6 +35,21 @@ describe "Disks Controller", type: :request do
       end
     end
 
+    describe "POST /disks/preview_disk" do
+      it "shows what's on the drive" do
+        allow(DiskManager).to receive(:preview).with('/dev/sdb1').and_return(
+          entries: [{ name: 'Movies', type: :directory, size: 5000, file_count: 1 }, { name: 'notes.txt', type: :file, size: 1000, file_count: 0 }],
+          total_used: 6000, file_count: 2
+        )
+        post "/disks/preview_disk", params: { device: '/dev/sdb1' }
+        expect(response).to have_http_status(:ok)
+        page = Nokogiri::HTML(response.body)
+        expect(page.at_css('#disk-preview code').text).to eq('/dev/sdb1')
+        expect(page.css('#disk-preview tbody td strong').map(&:text)).to eq(['Movies'])
+        expect(response.body).to include('notes.txt')
+      end
+    end
+
     describe "GET /disks/storage_pool" do
       it "shows the storage pool page" do
         get "/disks/storage_pool"

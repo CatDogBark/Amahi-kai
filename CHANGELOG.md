@@ -149,7 +149,7 @@ All notable changes to Amahi-kai are documented here.
 - **More dead code out** — Nothing in the app used these either:
   - **Settings and platform leftovers:** the settings file nothing read (`config/yetting.yml`, with its loader), and the platform's service names and file paths for Apache, monit and the DHCP server.
   - **Unused methods:** on shares (the old default shares, the Samba domain name), users (share write checks), settings and DNS, two do-nothing steps on every request, and a few helpers.
-  - **Pages and styles:** four page templates no route showed (a disk preview, DNS aliases' old page, a user settings page and a full-screen layout), Rails' generator templates, the drive table's old stylesheet and a few unused styles.
+  - **Pages and styles:** three page templates nothing showed (DNS aliases' old page, a user settings page and a full-screen layout), Rails' generator templates, the drive table's old stylesheet and a few unused styles.
 - **Tests CI skipped now run** — Search's share indexing, the Apps page's requests and the storage pool's requests were marked as needing a real NAS, so CI never ran them. They don't need one, so CI runs them now.
 
 - **Share tags' column goes** — The last of tags: their database column is dropped.
