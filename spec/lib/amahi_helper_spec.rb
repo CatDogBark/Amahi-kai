@@ -904,7 +904,7 @@ RSpec.describe 'AmahiHelper' do
       stub_const('AmahiHelper::GREYHOLE_CONF', file.path)
       allow(helper).to receive(:do_install)
       helper.do_refresh_greyhole_pool
-      expect(helper).to have_received(:do_install).with('/etc/amahi-kai/greyhole-pool.conf', a_string_excluding('db_'), nil, '0644')
+      expect(helper).to have_received(:do_install).with('/etc/amahi-kai/greyhole-pool.conf', satisfy { |text| text.include?('storage_pool_drive') && !text.include?('db_') }, nil, '0644')
       stub_const('AmahiHelper::GREYHOLE_CONF', '/nonexistent/greyhole.conf')
       helper.do_refresh_greyhole_pool
       expect(helper).to have_received(:do_install).once
@@ -974,7 +974,8 @@ RSpec.describe 'AmahiHelper' do
       expect(steps('greyhole.uninstall', {})).to eq(
         [['/usr/bin/systemctl', 'disable', '--now', 'greyhole.service', { allow_failure: true }],
          ['/usr/bin/apt-get', '-y', '-o', 'DPkg::Lock::Timeout=300', 'purge', 'greyhole', { env: AmahiHelper::APT_ENV, stream: true }],
-         [:remove_files, conf.path, '/etc/apt/sources.list.d/greyhole.list', '/usr/share/keyrings/greyhole-archive-keyring.asc']]
+         [:remove_files, conf.path, '/etc/amahi-kai/greyhole-pool.conf', '/etc/apt/sources.list.d/greyhole.list',
+          '/usr/share/keyrings/greyhole-archive-keyring.asc']]
       )
     ensure
       conf&.close!
