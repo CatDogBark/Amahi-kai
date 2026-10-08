@@ -921,6 +921,14 @@ RSpec.describe 'AmahiHelper' do
       allow(AmahiHelper).to receive(:mount_point?).with('/mnt/storage-1').and_return(true)
       expect(steps('greyhole.replace_drive', { 'path' => '/mnt/storage-1' })).to eq([['/usr/bin/greyhole', '--replaced=/mnt/storage-1']])
 
+      expect(steps('greyhole.remove_drive', { 'path' => '/mnt/storage-1', 'available' => true }))
+        .to eq([['/usr/bin/greyhole', '--remove=/mnt/storage-1', { stdin: "yes\n" }]])
+      expect(steps('greyhole.remove_drive', { 'path' => '/mnt/storage-2', 'available' => false }))
+        .to eq([['/usr/bin/greyhole', '--remove=/mnt/storage-2', { stdin: "no\n" }]])
+      expect(refusal('greyhole.remove_drive', { 'path' => '/mnt/storage-2', 'available' => true }))
+        .to eq('nothing is mounted at /mnt/storage-2: mount the drive on Disks → Devices first')
+      expect(refusal('greyhole.remove_drive', { 'path' => '/mnt/other', 'available' => false })).to eq("/mnt/other isn't one of Greyhole's drives")
+
       allow(AmahiHelper).to receive(:probe).and_return('UUID' => 'u-1')
       allow(AmahiHelper).to receive(:data_device) { |device| [device, { 'path' => device, 'mountpoints' => ['/mnt/storage-2'] }] }
       expect(refusal('disks.unmount', { 'device' => '/dev/sdb' }))

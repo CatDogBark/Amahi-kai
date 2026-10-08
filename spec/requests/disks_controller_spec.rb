@@ -131,6 +131,26 @@ describe "Disks Controller", type: :request do
         expect(flash[:error]).to include("didn't take the drive at /mnt/storage-1: nothing is mounted")
       end
 
+      it "shows a drive Greyhole is removing, and says why a drive stays when it can't be removed" do
+        allow(Greyhole).to receive(:removal_blocker).and_return('Take its drives out of the storage pool first.')
+        allow(Greyhole).to receive(:pool_drives).and_return([{ path: '/mnt/storage-1', minimum_free: 10, total: 20 * 1024**3, free: 18 * 1024**3,
+                                                               used: 2 * 1024**3, state: :ok, removing: true }])
+        get "/disks/storage_pool"
+        page = Nokogiri::HTML(response.body)
+        row = page.at_css('#pool-drive-mnt-storage-1')
+        expect(row.text).to include('Removing: Greyhole is moving the files kept only on it')
+        expect(row.at_css('[data-reload-after="30"]')).not_to be_nil
+        expect(row.css('form')).to be_empty
+
+        allow(DiskService).to receive(:toggle_pool_partition).and_raise(Greyhole::GreyholeError, "It's the pool's only drive")
+        put "/disks/toggle_disk_pool_partition", params: { path: '/mnt/storage-1' }
+        expect(response).to redirect_to(disks_storage_pool_path)
+        expect(flash[:error]).to eq("/mnt/storage-1 stays in the pool: It's the pool's only drive")
+        put "/disks/toggle_disk_pool_partition", params: { path: '/mnt/storage-1' }, as: :json
+        expect(response).to have_http_status(:unprocessable_content)
+        expect(response.parsed_body['message']).to eq("It's the pool's only drive")
+      end
+
       it 'says what keeps it from being uninstalled' do
         allow(Greyhole).to receive(:removal_blocker).and_return('Take its drives out of the storage pool first.')
         get "/disks/storage_pool"

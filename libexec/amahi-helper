@@ -715,6 +715,21 @@ module AmahiHelper
       validate: ->(a) { installed!(GREYHOLE_BIN) && { path: mounted_greyhole_drive(a['path']) } },
       plan: ->(v) { [[GREYHOLE_BIN, "--replaced=#{v[:path]}"]] }
     },
+    # Asks Greyhole to remove one of its drives (greyhole --remove), answering its question,
+    # whether the drive is still there, from `available`: if it is (it must be mounted),
+    # Greyhole first moves the file copies kept only on it to the other drives; if not, those
+    # are lost and the other copies are made again. Greyhole then takes the drive out of
+    # greyhole.conf itself and restarts. It exits 2, scheduling nothing, while an fsck is
+    # pending.
+    'greyhole.remove_drive' => {
+      params: %w[path available],
+      validate: lambda { |a|
+        installed!(GREYHOLE_BIN)
+        available = boolean(a, 'available')
+        { path: available ? mounted_greyhole_drive(a['path']) : listed_greyhole_drive(a['path']), available: available }
+      },
+      plan: ->(v) { [[GREYHOLE_BIN, "--remove=#{v[:path]}", { stdin: v[:available] ? "yes\n" : "no\n" }]] }
+    },
     # Removes Greyhole (Disks → Storage Pool) when its config lists no drives and no share
     # keeping copies: the package, its config and its apt repository. Its database stays, so
     # installing it again picks up where it was.
@@ -1705,10 +1720,16 @@ module AmahiHelper
       []
     end
 
-    # A Greyhole pool drive with a filesystem mounted there now: the drive Greyhole is to use.
-    def mounted_greyhole_drive(value)
+    # One of Greyhole's pool drives, as greyhole.conf lists it.
+    def listed_greyhole_drive(value)
       value = string(value, 'path', max: 256)
       raise Refused, "#{value} isn't one of Greyhole's drives" unless greyhole_drives.include?(value)
+      value
+    end
+
+    # A Greyhole pool drive with a filesystem mounted there now: the drive Greyhole is to use.
+    def mounted_greyhole_drive(value)
+      value = listed_greyhole_drive(value)
       raise Refused, "nothing is mounted at #{value}: mount the drive on Disks → Devices first" unless mount_point?(value)
       value
     end

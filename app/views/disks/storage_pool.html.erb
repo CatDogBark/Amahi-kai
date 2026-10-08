@@ -117,7 +117,10 @@
               <tr class="<%= 'pool-drive-flagged' if %i[changed not_mounted].include?(drive[:state]) %>" id="pool-drive-<%= drive[:path].parameterize %>">
                 <td>
                   <%= drive[:path] %>
-                  <% case drive[:state] %>
+                  <% if drive[:removing] %>
+                    <div class="small text-info" data-reload-after="30">Removing: Greyhole is moving the files kept only on it to the other drives. It leaves the pool when that's done; this page updates by itself.</div>
+                  <% end %>
+                  <% case drive[:removing] ? nil : drive[:state] %>
                   <% when :changed %>
                     <div class="small pool-drive-note">Greyhole isn't using this drive: it isn't the one Greyhole had here (it was swapped or formatted). Use this drive tells Greyhole to take it.</div>
                   <% when :not_mounted %>
@@ -129,18 +132,26 @@
                 <td><%= number_to_human_size(drive[:used]) %></td>
                 <td><%= drive[:minimum_free] %> GB</td>
                 <td class="text-nowrap">
-                  <% if drive[:state] == :changed %>
+                  <% if drive[:state] == :changed && !drive[:removing] %>
                     <%= button_to 'Use this drive', disks_accept_pool_drive_path,
                           params: { path: drive[:path] }, method: :post, form: { class: 'd-inline-block' },
                           class: 'btn btn-sm btn-outline-warning',
                           data: { confirm: "Use the drive now mounted at #{drive[:path]} in Greyhole's pool? Greyhole forgets the drive it had here; files that were only there come back from their other copies, if they have any.",
                                   disable_with: 'Working...' } %>
                   <% end %>
-                  <%= button_to(t('remove', default: 'Remove'),
-                        disks_toggle_disk_pool_partition_path(path: drive[:path]),
-                        method: :put,
-                        class: 'btn btn-sm btn-outline-danger',
-                        data: { confirm: t('are_you_sure', default: 'Are you sure?') }) %>
+                  <% unless drive[:removing] %>
+                    <% remove_note = if drive[:state] == :not_mounted
+                                       "Take #{drive[:path]} out of Greyhole's pool? Its drive isn't connected, so files kept only on it are lost; files with a copy on another drive get their second copy made again."
+                                     else
+                                       "Take #{drive[:path]} out of Greyhole's pool? Greyhole first moves the files kept only on it to the other drives, then takes it out of the pool."
+                                     end %>
+                    <%= button_to(t('remove', default: 'Remove'),
+                          disks_toggle_disk_pool_partition_path(path: drive[:path]),
+                          method: :put,
+                          form: { class: 'd-inline-block' },
+                          class: 'btn btn-sm btn-outline-danger',
+                          data: { confirm: remove_note, disable_with: 'Working...' }) %>
+                  <% end %>
                 </td>
               </tr>
             <% end %>
@@ -180,7 +191,7 @@
                 <td>
                   <% checked = pool_paths.include?(part[:path]) %>
                   <%= render partial: 'shares/disk_pooling_partition_checkbox',
-                             locals: { checked: checked, path: part[:path] } %>
+                             locals: { checked: checked, path: part[:path], removing: @pool_partitions.any? { |p| p.path == part[:path] && p.removing? } } %>
                 </td>
               </tr>
             <% end %>

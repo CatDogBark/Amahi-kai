@@ -20,6 +20,15 @@ document.addEventListener('submit', function(event) {
   }
 }, true);
 
+// A page waiting on something the server is doing (an element with data-reload-after, in
+// seconds) reloads itself then.
+document.addEventListener("DOMContentLoaded", function() {
+  var waiting = document.querySelector("[data-reload-after]");
+  if (waiting) {
+    setTimeout(function() { window.location.reload(); }, (parseInt(waiting.dataset.reloadAfter, 10) || 30) * 1000);
+  }
+});
+
 document.addEventListener("DOMContentLoaded", function() {
   // Stretch-toggle: expand/collapse settings panels
   document.addEventListener("click", function(event) {
