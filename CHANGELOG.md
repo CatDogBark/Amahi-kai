@@ -146,6 +146,8 @@ All notable changes to Amahi-kai are documented here.
 
 ### 🔧 Architecture & Code Quality
 
+- **Users' old SSH-key column goes** — Amahi-kai stopped saving and installing users' SSH keys long ago (web users get no shell), so the database column that held them is dropped.
+
 - **The last of the old command runner goes** — With everything that changes the system going through the root helper, and everything that reads it running as argument lists, the old way of running command strings (with its log masking and its error type) had nothing left to run. It's gone, with 13 places that still caught its error, and the cloudflared check runs the same way as the rest.
 
 - **More dead code out** — Nothing in the app used these either:

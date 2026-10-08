@@ -117,7 +117,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_09_000000) do
     t.string "last_login_ip"
     t.string "current_login_ip"
     t.boolean "admin"
-    t.text "public_key"
     t.datetime "created_at", precision: nil
     t.datetime "updated_at", precision: nil
     t.string "password_digest"
