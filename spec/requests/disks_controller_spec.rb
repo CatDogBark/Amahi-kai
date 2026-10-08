@@ -35,53 +35,6 @@ describe "Disks Controller", type: :request do
       end
     end
 
-    describe "Pool Trash" do
-      let(:item) { GreyholeTrash::Item.new(share: 'Photos', path: '2026/beach.jpg', bytes: 2048, trashed_at: 2.hours.ago, copies: 2) }
-
-      before do
-        create(:share, name: 'Photos', disk_pool_copies: 2)
-        allow(GreyholeTrash).to receive(:contents).and_return(
-          items: [item, GreyholeTrash::Item.new(share: 'Old', path: 'a.txt', bytes: 10, trashed_at: 1.day.ago, copies: 1)], count: 2, space: 4096
-        )
-      end
-
-      it "lists the trash's files, with Restore for the ones whose share is pooled, Delete and Empty trash" do
-        get "/disks/trash"
-        page = Nokogiri::HTML(response.body)
-        expect(page.at_css('#trash-summary').text.squish).to include('2 files', '4 KB')
-        rows = page.css('tr.trash-item')
-        expect(rows.first.text.squish).to include('Photos/2026/beach.jpg', '(2 copies)', '2 KB')
-        expect(rows.first.css('button').map(&:text)).to eq(%w[Restore Delete])
-        expect(rows.last.text).to include("Its share isn't pooled now")
-        expect(rows.last.css('button').map(&:text)).to eq(['Delete'])
-        expect(page.at_css('#empty-trash')['data-confirm']).to include('Delete all 2 files')
-        expect(page.css('.setup-subtab a').map(&:text).map(&:squish)).to include('Pool Trash')
-      end
-
-      it "says when it's empty" do
-        allow(GreyholeTrash).to receive(:contents).and_return(items: [], count: 0, space: 0)
-        get "/disks/trash"
-        expect(Nokogiri::HTML(response.body).at_css('#trash-summary').text).to include('The trash is empty.')
-        expect(response.body).not_to include('empty-trash')
-      end
-
-      it 'restores, deletes and empties through the helper, saying what it did or why not' do
-        post "/disks/trash_restore", params: { share: 'Photos', path: '2026/beach.jpg' }
-        expect(response).to redirect_to('/disks/trash')
-        expect(flash[:notice]).to include('Photos/2026/beach.jpg is back in its share')
-        post "/disks/trash_delete", params: { share: 'Photos', path: '2026/beach.jpg' }
-        post "/disks/trash_empty"
-        expect(flash[:notice]).to eq('The trash is empty.')
-        expect(Privileged.calls).to eq([['greyhole.trash_restore', { share: 'Photos', path: '2026/beach.jpg' }],
-                                        ['greyhole.trash_delete', { share: 'Photos', path: '2026/beach.jpg' }],
-                                        ['greyhole.trash_empty', {}]])
-
-        allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('greyhole.trash_restore', 'Photos has a 2026/beach.jpg now'))
-        post "/disks/trash_restore", params: { share: 'Photos', path: '2026/beach.jpg' }
-        expect(flash[:error]).to include('Photos has a 2026/beach.jpg now')
-      end
-    end
-
     describe "GET /disks/storage_pool" do
       it "shows the storage pool page" do
         get "/disks/storage_pool"

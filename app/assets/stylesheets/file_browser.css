@@ -109,6 +109,23 @@
   margin-bottom: 1rem;
 }
 
+/* The Trash, below the shares and set apart from them */
+.fb-trash-entry {
+  margin: 1.5rem 0 0.5rem;
+  padding: 0.75rem;
+  border-top: 1px solid var(--kai-border, rgba(255,255,255,0.08));
+}
+
+.fb-trash-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.fb-trash-icon {
+  font-size: 1.1rem;
+}
+
 /* Status bar */
 .fb-statusbar {
   padding: 0.5rem 0.75rem;

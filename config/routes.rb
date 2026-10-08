@@ -111,10 +111,6 @@ Rails.application.routes.draw do
     get 'devices', action: 'devices'
     get 'mounts', action: 'mounts'
     get 'storage_pool', action: 'storage_pool'
-    get 'trash', action: 'trash'
-    post 'trash_restore', action: 'trash_restore'
-    post 'trash_delete', action: 'trash_delete'
-    post 'trash_empty', action: 'trash_empty'
     post 'format_disk', action: 'format_disk'
     post 'mount_disk', action: 'mount_disk'
     post 'unmount_disk', action: 'unmount_disk'
@@ -206,6 +202,11 @@ Rails.application.routes.draw do
 
   # File Browser
   get  'files',                        to: 'file_browser#index',   as: :file_browser_index
+  # Greyhole's trash, beside the shares (admins)
+  get  'files/trash',                  to: 'trash#index',          as: :trash
+  post 'files/trash/restore',          to: 'trash#restore',        as: :trash_restore
+  post 'files/trash/delete',           to: 'trash#delete',         as: :trash_delete
+  post 'files/trash/empty',            to: 'trash#empty',          as: :trash_empty
   get  'files/:share_id/browse',       to: 'file_browser#browse',  as: :file_browser, defaults: { path: '' }
   get  'files/:share_id/browse/*path', to: 'file_browser#browse',  as: :file_browser_path
   get  'files/:share_id/download',       to: 'file_browser#download', as: :file_browser_download_root, defaults: { path: '' }

@@ -9,7 +9,7 @@
   visibility: Visibility
   mounts: Mounts
   storage_pool: Storage Pool
-  pool_trash: Pool Trash
+  trash: Trash
   zfs_pools: ZFS Pools
   jobs: Jobs
   dependencies: System Dependencies

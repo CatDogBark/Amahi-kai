@@ -21,6 +21,8 @@ class FileBrowserController < ApplicationController
   def index
     @page_title = t('shares')
     @shares = Share.by_name.select { |share| current_user.can_access_share?(share) }
+    # Admins also get Greyhole's trash, below the shares
+    @trash = GreyholeTrash.contents if current_user.admin? && Greyhole.installed?
   end
 
   # GET /files/:share_id/browse/*path
