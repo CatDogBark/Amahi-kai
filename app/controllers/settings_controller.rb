@@ -106,6 +106,48 @@ class SettingsController < ApplicationController
     @status = SystemDependencies.status
   end
 
+  # Updates one piece of software (its packages with an update waiting), or everything with
+  # all=1, in the install window.
+  def dependencies_upgrade_stream
+    packages = Array(params[:packages]).map(&:to_s)
+    stream_sse do |sse|
+      if params[:all].present?
+        sse.emit('Installing every update waiting (held packages stay as they are)...')
+        SystemDependencies.upgrade_all! { |line| sse.emit("  #{line}") }
+      else
+        sse.emit("Updating #{packages.join(', ')}...")
+        SystemDependencies.upgrade!(packages) { |line| sse.emit("  #{line}") }
+      end
+      sse.emit('✓ Updated. Services keep running the old version until they restart; restarting the NAS restarts them all.')
+      sse.done
+    rescue Privileged::Error => e
+      sse.emit("✗ #{e.message}")
+      sse.done('error')
+    end
+  end
+
+  # Holds software at its version, or releases it.
+  def dependencies_hold
+    held = params[:held] == '1'
+    SystemDependencies.hold!(Array(params[:packages]), held)
+    flash[:notice] = held ? "Held at their versions: #{Array(params[:packages]).join(', ')}." : "Released: #{Array(params[:packages]).join(', ')}."
+    redirect_to settings_dependencies_path
+  rescue Privileged::Error => e
+    flash[:error] = e.message
+    redirect_to settings_dependencies_path
+  end
+
+  # Ubuntu's automatic updates on or off.
+  def dependencies_automatic
+    enabled = params[:enabled] == '1'
+    SystemDependencies.set_automatic!(enabled)
+    flash[:notice] = enabled ? 'Automatic updates are on: Ubuntu installs its updates by itself.' : 'Automatic updates are off: updates install only from here.'
+    redirect_to settings_dependencies_path
+  rescue Privileged::Error => e
+    flash[:error] = e.message
+    redirect_to settings_dependencies_path
+  end
+
   # Check now: apt's package lists refreshed, in the install window.
   def dependencies_refresh_stream
     stream_sse do |sse|

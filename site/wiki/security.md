@@ -31,7 +31,7 @@ Go to **Network > Security** (Advanced mode) and run the audit. Each check is on
 | SSH root login disabled | Warning | Root can't log in over SSH |
 | SSH password login disabled | Warning | SSH accepts keys only |
 | Fail2ban | Warning | Repeated failed SSH logins get blocked |
-| Automatic security updates | Warning | `unattended-upgrades` is installed and turned on |
+| Security updates | Warning | No security update has waited more than a week (Settings → System Dependencies installs them) |
 | Docker ports | Warning | Lists Docker app ports reachable from the network (see below) |
 | Open ports | Info | Lists the ports the server listens on |
 
@@ -50,13 +50,14 @@ Click **Fix All**, or a check's own **Fix** button. The progress streams as it r
   account that can log in has an SSH key**, so the fix can't lock you out. Set up a key first
   (below).
 - **Fail2ban:** installs it; its SSH jail is on by default.
-- **Automatic security updates:** installs `unattended-upgrades` and turns it on.
 - **Samba binding:** Amahi-kai generates Samba's configuration with the LAN binding built in, so
   this passes on its own unless the configuration was edited by hand.
 
 Not fixed automatically:
 
 - **Admin password:** change it on the Users page (the setup wizard requires it too).
+- **Security updates:** install them on Settings → System Dependencies, when you choose to. Nothing
+  updates by itself unless you turn automatic updates on there.
 - **Docker ports and open ports:** informational; close anything you don't expect.
 
 ### Docker and the firewall

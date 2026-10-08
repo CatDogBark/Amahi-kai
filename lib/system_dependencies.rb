@@ -1,4 +1,5 @@
 require 'open3'
+require 'json'
 
 # Settings → System Dependencies (admins): what this NAS runs that Amahi-kai depends on, the
 # version of each, and the updates waiting for it, so updating is a choice made there. Reading
@@ -25,6 +26,12 @@ module SystemDependencies
   ].freeze
 
   APT_LISTS = '/var/lib/apt/lists'.freeze
+  AUTO_UPGRADES = '/etc/apt/apt.conf.d/20auto-upgrades'.freeze
+  # Written by the root helper's update check (every 6 hours) and after updates: the security
+  # updates waiting, each with when it was first seen.
+  SECURITY_UPDATES = '/var/lib/amahi-kai/security-updates.json'.freeze
+  # How long a security update may wait before the dashboard says so.
+  NOTICE_DAYS = 2
   REBOOT_REQUIRED = '/var/run/reboot-required'.freeze
   OS_RELEASE = '/etc/os-release'.freeze
 
@@ -32,7 +39,7 @@ module SystemDependencies
   Update = Struct.new(:package, :installed, :available, :security, keyword_init: true)
 
   # One row of the page: a piece of software, its packages' versions and their updates.
-  Dependency = Struct.new(:key, :name, :role, :source, :version, :updates, keyword_init: true) do
+  Dependency = Struct.new(:key, :name, :role, :source, :version, :updates, :packages, :held, keyword_init: true) do
     def installed?
       !version.nil?
     end
@@ -40,23 +47,84 @@ module SystemDependencies
     def security?
       updates.any?(&:security)
     end
+
+    # Held at its version (apt-mark hold): no update changes it until it's released.
+    def held?
+      held.any?
+    end
   end
 
   class << self
-    # Everything the page shows: { dependencies:, other: [Update], os:, kernel:, restart:,
-    # runtime:, checked_at: }.
+    # Everything the page shows: { dependencies:, other: [Update], held: [package], automatic:,
+    # os:, kernel:, restart:, runtime:, checked_at: }.
     def status
       updates = upgradable
       by_package = updates.to_h { |u| [u.package, u] }
       versions = installed_versions(CATALOG.flat_map { |e| e[:packages] })
+      held = holds
       dependencies = CATALOG.map do |entry|
         package = entry[:packages].find { |p| versions[p] }
+        installed = entry[:packages].select { |p| versions[p] }
         Dependency.new(**entry.slice(:key, :name, :role, :source), version: package && versions[package],
-                       updates: entry[:packages].filter_map { |p| by_package[p] })
+                       updates: entry[:packages].filter_map { |p| by_package[p] }, packages: installed, held: installed & held)
       end
       tracked = CATALOG.flat_map { |e| e[:packages] }
-      { dependencies: dependencies, other: updates.reject { |u| tracked.include?(u.package) }, os: os_name,
-        kernel: kernel, restart: restart_needed, runtime: runtime, checked_at: lists_checked_at }
+      { dependencies: dependencies, other: updates.reject { |u| tracked.include?(u.package) }, held: held,
+        automatic: automatic?, os: os_name, kernel: kernel, restart: restart_needed, runtime: runtime,
+        checked_at: lists_checked_at }
+    end
+
+    # The packages held at their version (apt-mark showhold).
+    def holds
+      out, _err, status = Open3.capture3('apt-mark', 'showhold')
+      status.success? ? out.lines(chomp: true).reject(&:empty?) : []
+    rescue SystemCallError
+      []
+    end
+
+    # Whether Ubuntu's automatic updates are on (unattended-upgrades, in 20auto-upgrades).
+    def automatic?
+      File.read(AUTO_UPGRADES).match?(/^\s*APT::Periodic::Unattended-Upgrade\s+"1"/)
+    rescue SystemCallError
+      false
+    end
+
+    # The security updates that have waited NOTICE_DAYS or more: [{ package:, available:,
+    # since: }], oldest first. [] while automatic updates are on (they install themselves).
+    def overdue_security_updates(now = Time.current, days: NOTICE_DAYS)
+      return [] if automatic?
+      data = JSON.parse(File.read(security_updates_path))
+      Array(data['updates']).filter_map do |package, update|
+        since = Time.iso8601(update['first_seen'].to_s)
+        { package: package, available: update['available'], since: since } if since <= now - days.days
+      rescue ArgumentError, TypeError
+        nil
+      end.sort_by { |u| u[:since] }
+    rescue SystemCallError, JSON::ParserError, TypeError
+      []
+    end
+
+    def security_updates_path
+      Rails.env.production? ? SECURITY_UPDATES : Rails.root.join('tmp', 'security-updates.json').to_s
+    end
+
+    # Updates these packages (those apt has an update for), through the root helper, passing
+    # apt's output on line by line. Raises Privileged::Error.
+    def upgrade!(packages, &progress)
+      Privileged.call('packages.upgrade', packages: Array(packages).map(&:to_s)) { |line| progress&.call(line) }
+    end
+
+    # Every update apt has, except held packages.
+    def upgrade_all!(&progress)
+      Privileged.call('packages.upgrade_all') { |line| progress&.call(line) }
+    end
+
+    def hold!(packages, held)
+      Privileged.call('packages.hold', packages: Array(packages).map(&:to_s), held: held ? true : false)
+    end
+
+    def set_automatic!(enabled)
+      Privileged.call('updates.set_automatic', enabled: enabled ? true : false)
     end
 
     # apt's updates for installed packages, from its package lists (as fresh as the last

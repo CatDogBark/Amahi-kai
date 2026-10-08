@@ -465,7 +465,7 @@ RSpec.describe 'AmahiHelper' do
       after { FileUtils.rm_rf(repo) }
 
       it 'plans one action with no arguments' do
-        expect(steps('system.check_update', {})).to eq([[:check_update], [:refresh_catalog]])
+        expect(steps('system.check_update', {})).to eq([[:check_update], [:refresh_catalog], [:check_security_updates]])
         expect(refusal('system.check_update', { 'branch' => 'x' })).to eq('unexpected argument branch')
       end
 
@@ -940,7 +940,8 @@ RSpec.describe 'AmahiHelper' do
     end
 
     it "refreshes apt's package lists, installing nothing" do
-      expect(steps('packages.refresh', {})).to eq([['/usr/bin/apt-get', 'update', { env: AmahiHelper::APT_ENV, stream: true }]])
+      expect(steps('packages.refresh', {})).to eq([['/usr/bin/apt-get', 'update', { env: AmahiHelper::APT_ENV, stream: true }],
+                                                   [:check_security_updates]])
     end
 
     it 'uninstalls Greyhole only when its config lists no drives and no share keeping copies' do
@@ -1001,6 +1002,97 @@ RSpec.describe 'AmahiHelper' do
   end
 
   describe 'packages' do
+    describe 'updates (Settings → System Dependencies)' do
+      let(:apt_list) do
+        "Listing...\nsamba/noble-updates,noble-security 2:4.19.5-4ubuntu9.3 amd64 [upgradable from: 2:4.19.5-4ubuntu9.2]\n" \
+          "apparmor/noble-updates 4.0.1-0ubuntu0.8 amd64 [upgradable from: 4.0.1-0ubuntu0.5]\n"
+      end
+      let(:ok) { instance_double(Process::Status, success?: true) }
+      let(:opts) { { env: AmahiHelper::UPGRADE_ENV, stream: true } }
+
+      before do
+        allow(Open3).to receive(:capture3).and_call_original
+        allow(Open3).to receive(:capture3).with(AmahiHelper::ENV_MIN, '/usr/bin/apt', 'list', '--upgradable', any_args).and_return([apt_list, '', ok])
+        allow(Open3).to receive(:capture3).with(AmahiHelper::ENV_MIN, '/usr/bin/dpkg-query', '-W', any_args) do |*args|
+          names = args.drop(4).grep(String)
+          [names.map { |n| "#{n}\t#{%w[samba apparmor greyhole].include?(n) ? 'ii ' : 'un '}\n" }.join, '', ok]
+        end
+        allow(helper).to receive(:capture).with(['/usr/bin/apt-mark', 'showhold']).and_return("greyhole\n")
+      end
+
+      it 'updates installed packages with an update waiting, only those, with needrestart just listing restarts' do
+        expect(AmahiHelper::UPGRADE_ENV).to include('NEEDRESTART_MODE' => 'l', 'DEBIAN_FRONTEND' => 'noninteractive')
+        expect(steps('packages.upgrade', { 'packages' => %w[samba apparmor samba] })).to eq(
+          [['/usr/bin/apt-get', '-y', '-o', 'Dpkg::Options::=--force-confold', '-o', 'DPkg::Lock::Timeout=300',
+            'install', '--only-upgrade', 'samba', 'apparmor', opts],
+           [:check_security_updates]]
+        )
+      end
+
+      it "refuses a package that isn't installed, has no update, is held, or isn't a package name" do
+        expect(refusal('packages.upgrade', { 'packages' => ['tailscale'] })).to eq("tailscale isn't installed")
+        expect(refusal('packages.upgrade', { 'packages' => ['greyhole'] })).to eq('greyhole has no update waiting')
+        allow(Open3).to receive(:capture3).with(AmahiHelper::ENV_MIN, '/usr/bin/apt', 'list', '--upgradable', any_args)
+                                          .and_return(["#{apt_list}greyhole/stable 0.15.29 all [upgradable from: 0.15.28]\n", '', ok])
+        expect(refusal('packages.upgrade', { 'packages' => ['greyhole'] })).to eq('greyhole is held at its version; release it first')
+        [['-o'], ['samba', '--purge'], ['Samba'], ['../x'], [], 'samba', nil, ['samba'] * 201].each do |list|
+          expect(refusal('packages.upgrade', { 'packages' => list })).not_to be_nil, list.inspect
+        end
+      end
+
+      it 'updates everything but held packages, adding the new packages an update needs, removing none' do
+        expect(steps('packages.upgrade_all', {})).to eq(
+          [['/usr/bin/apt-get', '-y', '-o', 'Dpkg::Options::=--force-confold', '-o', 'DPkg::Lock::Timeout=300',
+            '--with-new-pkgs', 'upgrade', opts],
+           [:check_security_updates]]
+        )
+        expect(refusal('packages.upgrade_all', { 'packages' => ['samba'] })).to eq('unexpected argument packages')
+      end
+
+      it 'holds and releases installed packages' do
+        expect(steps('packages.hold', { 'packages' => ['samba'], 'held' => true })).to eq([%w[/usr/bin/apt-mark hold samba]])
+        expect(steps('packages.hold', { 'packages' => ['greyhole'], 'held' => false })).to eq([%w[/usr/bin/apt-mark unhold greyhole]])
+        expect(refusal('packages.hold', { 'packages' => ['tailscale'], 'held' => true })).to eq("tailscale isn't installed")
+        expect(refusal('packages.hold', { 'packages' => ['samba'], 'held' => 'yes' })).to eq('held must be true or false')
+      end
+
+      it 'turns automatic updates on or off, leaving the daily package list refresh on' do
+        allow(File).to receive(:exist?).and_call_original
+        allow(File).to receive(:exist?).with('/usr/bin/unattended-upgrade').and_return(true)
+        expect(steps('updates.set_automatic', { 'enabled' => false })).to eq(
+          [[:install, AmahiHelper::AUTO_UPGRADES, %(APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "0";\n), nil]]
+        )
+        expect(steps('updates.set_automatic', { 'enabled' => true }).first[2]).to include('Unattended-Upgrade "1"')
+        allow(File).to receive(:exist?).with('/usr/bin/unattended-upgrade').and_return(false)
+        expect(refusal('updates.set_automatic', { 'enabled' => true })).to eq('unattended-upgrades is not installed')
+        expect(steps('updates.set_automatic', { 'enabled' => false }).size).to eq(1)
+        expect(refusal('updates.set_automatic', { 'enabled' => 1 })).to eq('enabled must be true or false')
+      end
+
+      it 'records the security updates waiting, keeping when each was first seen while its version is the same' do
+        dir = Dir.mktmpdir
+        stub_const('AmahiHelper::SECURITY_UPDATES', "#{dir}/security-updates.json")
+        allow(helper).to receive(:do_install) { |path, content, *| File.write(path, content) }
+        first = Time.utc(2026, 10, 1, 12)
+        helper.do_check_security_updates(first)
+        expect(JSON.parse(File.read("#{dir}/security-updates.json"))['updates'])
+          .to eq('samba' => { 'available' => '2:4.19.5-4ubuntu9.3', 'first_seen' => '2026-10-01T12:00:00Z' })
+
+        helper.do_check_security_updates(first + 3.days)
+        expect(JSON.parse(File.read("#{dir}/security-updates.json"))['updates']['samba']['first_seen']).to eq('2026-10-01T12:00:00Z')
+
+        allow(Open3).to receive(:capture3).with(AmahiHelper::ENV_MIN, '/usr/bin/apt', 'list', '--upgradable', any_args)
+                                          .and_return(["samba/noble-security 2:4.19.5-4ubuntu9.4 amd64 [upgradable from: 2:4.19.5-4ubuntu9.2]\n", '', ok])
+        helper.do_check_security_updates(first + 4.days)
+        data = JSON.parse(File.read("#{dir}/security-updates.json"))
+        expect(data['updates']['samba']).to eq('available' => '2:4.19.5-4ubuntu9.4', 'first_seen' => '2026-10-05T12:00:00Z')
+        expect(data['checked_at']).to eq('2026-10-05T12:00:00Z')
+        expect(helper).to have_received(:do_install).with("#{dir}/security-updates.json", anything, nil, '0640', 'amahi').exactly(3).times
+      ensure
+        FileUtils.rm_rf(dir)
+      end
+    end
+
     it 'adds only the apt repositories it lists' do
       expect(steps('packages.add_repository', { 'repository' => 'greyhole' })).to eq([[:add_apt_repository, 'greyhole']])
       expect(refusal('packages.add_repository', { 'repository' => 'evil' })).to eq('repository "evil" isn\'t one Amahi-kai uses')
@@ -1273,16 +1365,6 @@ RSpec.describe 'AmahiHelper' do
       expect(helper.do_security_report).to eq('firewall' => 'active', 'ssh' => { 'permitrootlogin' => 'without-password' })
       allow(File).to receive(:executable?).with('/usr/sbin/ufw').and_return(false)
       expect(helper.do_security_report['firewall']).to eq('not installed')
-    end
-
-    it 'turns on automatic updates the way dpkg-reconfigure does, once unattended-upgrades is installed' do
-      allow(File).to receive(:exist?).and_call_original
-      allow(File).to receive(:exist?).with('/usr/bin/unattended-upgrade').and_return(true)
-      expect(steps('security.enable_auto_updates', {}))
-        .to eq([[:install, '/etc/apt/apt.conf.d/20auto-upgrades',
-                 %(APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n), nil]])
-      allow(File).to receive(:exist?).with('/usr/bin/unattended-upgrade').and_return(false)
-      expect(refusal('security.enable_auto_updates', {})).to eq('unattended-upgrades is not installed')
     end
   end
 

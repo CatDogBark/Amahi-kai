@@ -28,6 +28,30 @@ describe "Front page", type: :request do
     end
   end
 
+  describe "security updates waiting" do
+    let(:overdue) { [{ package: 'libssl3t64', available: '3.0', since: Time.zone.parse('2026-10-02') }, { package: 'samba', available: '1.1', since: 3.days.ago }] }
+
+    it "tells admins, linking to System Dependencies" do
+      allow(SystemDependencies).to receive(:overdue_security_updates).and_return(overdue)
+      login_as_admin
+      get root_path
+      notice = Nokogiri::HTML(response.body).at_css('#security-updates-notice a')
+      expect(notice['href']).to eq('/settings/dependencies')
+      expect(notice.text.squish).to include('2 security updates waiting since October 2, 2026')
+    end
+
+    it "says nothing when none has waited, and nothing to other users" do
+      allow(SystemDependencies).to receive(:overdue_security_updates).and_return([])
+      login_as_admin
+      get root_path
+      expect(response.body).not_to include('security-updates-notice')
+      allow(SystemDependencies).to receive(:overdue_security_updates).and_return(overdue)
+      login_as(create(:user))
+      get root_path
+      expect(response.body).not_to include('security-updates-notice')
+    end
+  end
+
   describe "app updates" do
     # An app installed from an older image than the catalog's: System Update brought a newer one.
     def installed(identifier, tag: 'old', **attrs)

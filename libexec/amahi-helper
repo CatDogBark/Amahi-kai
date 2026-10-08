@@ -335,8 +335,15 @@ module AmahiHelper
   }.freeze
   SSH_REPORTED = %w[permitrootlogin passwordauthentication kbdinteractiveauthentication].freeze
   AUTO_UPGRADES = '/etc/apt/apt.conf.d/20auto-upgrades'
-  # What `dpkg-reconfigure -plow unattended-upgrades` writes when you answer yes.
-  AUTO_UPGRADES_CONTENT = "APT::Periodic::Update-Package-Lists \"1\";\nAPT::Periodic::Unattended-Upgrade \"1\";\n"
+  # The security updates waiting, and since when each was first seen, for the dashboard's
+  # notice (Settings → System Dependencies installs them; nothing installs them by itself
+  # unless automatic updates are on).
+  SECURITY_UPDATES = '/var/lib/amahi-kai/security-updates.json'
+  PACKAGE_NAME = /\A[a-z0-9][a-z0-9+.\-]{0,99}(?::[a-z0-9]+)?\z/
+  # Updates run with needrestart only listing what to restart (it would otherwise restart
+  # services, Amahi-kai's own among them, in the middle of the update's window).
+  UPGRADE_ENV = APT_ENV.merge('NEEDRESTART_MODE' => 'l').freeze
+  UPGRADE_OPTIONS = ['-o', 'Dpkg::Options::=--force-confold', '-o', 'DPkg::Lock::Timeout=300'].freeze
 
   LOGIN = /\A[a-z][a-z0-9]{2,31}\z/
   RESERVED_LOGINS = %w[root amahi nobody].freeze
@@ -482,7 +489,7 @@ module AmahiHelper
     'system.check_update' => {
       params: [],
       validate: ->(_a) { {} },
-      plan: ->(_v) { [[:check_update], [:refresh_catalog]] }
+      plan: ->(_v) { [[:check_update], [:refresh_catalog], [:check_security_updates]] }
     },
     'system.create_swap' => {
       params: %w[size_gb],
@@ -753,7 +760,48 @@ module AmahiHelper
     'packages.refresh' => {
       params: [],
       validate: ->(_a) { {} },
-      plan: ->(_v) { [['/usr/bin/apt-get', 'update', { env: APT_ENV, stream: true }]] }
+      plan: ->(_v) { [['/usr/bin/apt-get', 'update', { env: APT_ENV, stream: true }], [:check_security_updates]] }
+    },
+    # Updates installed packages that apt has an update for (Settings → System Dependencies),
+    # nothing else: no new package, no removal; a held one is refused.
+    'packages.upgrade' => {
+      params: %w[packages],
+      validate: ->(a) { upgrade_request(a['packages']) },
+      plan: lambda { |v|
+        [['/usr/bin/apt-get', '-y', *UPGRADE_OPTIONS, 'install', '--only-upgrade', *v[:packages], { env: UPGRADE_ENV, stream: true }],
+         [:check_security_updates]]
+      }
+    },
+    # Every update apt has, except held packages: new packages an update needs (a new
+    # kernel) are installed, none removed.
+    'packages.upgrade_all' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: lambda { |_v|
+        [['/usr/bin/apt-get', '-y', *UPGRADE_OPTIONS, '--with-new-pkgs', 'upgrade', { env: UPGRADE_ENV, stream: true }],
+         [:check_security_updates]]
+      }
+    },
+    # Holds installed packages at their version (apt-mark hold), so no update changes them
+    # until released, or releases them.
+    'packages.hold' => {
+      params: %w[packages held],
+      validate: lambda { |a|
+        packages = installed_packages!(a['packages'])
+        { packages: packages, held: boolean(a, 'held') }
+      },
+      plan: ->(v) { [['/usr/bin/apt-mark', v[:held] ? 'hold' : 'unhold', *v[:packages]]] }
+    },
+    # Ubuntu's automatic updates (unattended-upgrades) on or off. apt keeps refreshing its
+    # package lists daily either way: that's what shows the updates waiting.
+    'updates.set_automatic' => {
+      params: %w[enabled],
+      validate: lambda { |a|
+        enabled = boolean(a, 'enabled')
+        raise Refused, 'unattended-upgrades is not installed' if enabled && !File.exist?('/usr/bin/unattended-upgrade')
+        { enabled: enabled }
+      },
+      plan: ->(v) { [[:install, AUTO_UPGRADES, auto_upgrades_content(v[:enabled]), nil]] }
     },
     # Installs packages from PACKAGES, with apt's output streamed as it runs. recommends:
     # false leaves out the packages they only recommend (smartmontools' would bring a mail
@@ -916,13 +964,6 @@ module AmahiHelper
       params: %w[setting],
       validate: ->(a) { ssh_hardening(a['setting']) },
       plan: ->(v) { [[:harden_ssh, v[:settings]]] }
-    },
-    'security.enable_auto_updates' => {
-      params: [],
-      validate: lambda { |_a|
-        File.exist?('/usr/bin/unattended-upgrade') ? {} : raise(Refused, 'unattended-upgrades is not installed')
-      },
-      plan: ->(_v) { [[:install, AUTO_UPGRADES, AUTO_UPGRADES_CONTENT, nil]] }
     }
   }.freeze
 
@@ -1309,6 +1350,60 @@ module AmahiHelper
       tree = block_tree
       disks = members.filter_map { |part| tree.find { |disk| subtree(disk).any? { |n| n['path'] == part } } }.uniq
       { name: name, members: members, wipe: disks.flat_map { |disk| wipe_targets(disk) } }
+    end
+
+    # Packages given by name, each installed now.
+    def installed_packages!(value)
+      raise Refused, 'packages must be a list of package names' unless value.is_a?(Array) && value.size.between?(1, 200)
+      names = value.map { |name| string(name, 'package', max: 110) }
+      bad = names.find { |name| !name.match?(PACKAGE_NAME) }
+      raise Refused, "#{bad.inspect} isn't a package name" if bad
+      installed = installed_package_names(names)
+      missing = names.find { |name| !installed.include?(name) }
+      raise Refused, "#{missing} isn't installed" if missing
+      names.uniq
+    end
+
+    def upgrade_request(value)
+      names = installed_packages!(value)
+      waiting = upgradable_packages
+      none = names.find { |name| !waiting.key?(name) }
+      raise Refused, "#{none} has no update waiting" if none
+      held = (names & held_packages).first
+      raise Refused, "#{held} is held at its version; release it first" if held
+      { packages: names }
+    end
+
+    def installed_package_names(names)
+      out, _err, _status = Open3.capture3(ENV_MIN, '/usr/bin/dpkg-query', '-W', '-f=${Package}\t${db:Status-Abbrev}\n', *names,
+                                          unsetenv_others: true, chdir: '/')
+      out.lines.filter_map { |line| name, state = line.chomp.split("\t"); name if state.to_s.start_with?('ii') }
+    rescue SystemCallError
+      []
+    end
+
+    def held_packages
+      capture(['/usr/bin/apt-mark', 'showhold']).lines(chomp: true).reject(&:empty?)
+    rescue Failed
+      []
+    end
+
+    # { name => { 'installed', 'available', 'security' } }: apt's updates for installed packages.
+    def upgradable_packages
+      out, _err, status = Open3.capture3(ENV_MIN, '/usr/bin/apt', 'list', '--upgradable', unsetenv_others: true, chdir: '/')
+      return {} unless status.success?
+      out.lines.each_with_object({}) do |line, found|
+        match = line.match(%r{\A([^/\s]+)/(\S+)\s+(\S+)\s+\S+\s+\[upgradable from: ([^\]]+)\]})
+        next unless match
+        found[match[1]] = { 'installed' => match[4], 'available' => match[3],
+                            'security' => match[2].split(',').any? { |pocket| pocket.end_with?('-security') } }
+      end
+    rescue SystemCallError
+      {}
+    end
+
+    def auto_upgrades_content(enabled)
+      "APT::Periodic::Update-Package-Lists \"1\";\nAPT::Periodic::Unattended-Upgrade \"#{enabled ? 1 : 0}\";\n"
     end
 
     def export_request(name)
@@ -2231,6 +2326,20 @@ module AmahiHelper
       capture([ZPOOL, 'import', '-d', BY_ID, guid])
       records = offline_records.except(name)
       do_install(OFFLINE_POOLS, "#{JSON.pretty_generate(records)}\n", nil, '0640', APP_USER)
+      nil
+    end
+
+    # The security updates waiting, each with when it was first seen (kept from the last check
+    # while it's still the same version), for the dashboard's notice.
+    def do_check_security_updates(now = Time.now)
+      previous = read_json(SECURITY_UPDATES)
+      seen = previous.is_a?(Hash) && previous['updates'].is_a?(Hash) ? previous['updates'] : {}
+      updates = upgradable_packages.select { |_name, update| update['security'] }.to_h do |name, update|
+        before = seen[name]
+        first = before.is_a?(Hash) && before['available'] == update['available'] ? before['first_seen'] : now.utc.iso8601
+        [name, { 'available' => update['available'], 'first_seen' => first }]
+      end
+      do_install(SECURITY_UPDATES, "#{JSON.pretty_generate('checked_at' => now.utc.iso8601, 'updates' => updates)}\n", nil, '0640', APP_USER)
       nil
     end
 

@@ -383,6 +383,11 @@ if ! "$APP_DIR/bin/amahi-install-helper"; then
   exit 1
 fi
 
+# Nothing updates by itself: Ubuntu's automatic updates stay off until they're switched on
+# (Settings → System Dependencies, where updates are installed). apt still refreshes its
+# package lists daily, which is how the page and the dashboard know what's waiting.
+printf 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "0";\n' > /etc/apt/apt.conf.d/20auto-upgrades
+
 # ---------------------------------------------------------------------------
 # 11. Database migrations
 # ---------------------------------------------------------------------------
