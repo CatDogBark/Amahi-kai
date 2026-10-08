@@ -19,7 +19,7 @@ new**. Either opens **What's new**: the changelog entries the update brings, the
 merges (linked to GitHub), and **Update now** or **Later**. With nothing new, the same button
 shows when Amahi-kai last checked, with **Check now** and **Repair**.
 
-**Settings > System Status** has the same in its **System Update** card, which shows one of:
+**Settings → System Status** has the same in its **System Update** card, which shows one of:
 
 - **Update available: N changes**, with each change listed and linked to its pull request on
   GitHub, and an **Update now** button.
@@ -38,7 +38,7 @@ in this dialog, with a link to the Apps page, where you update it (see [Docker A
 
 ## Installing an update
 
-1. Click the **System Update** button in the header (or go to **Settings > System Status**).
+1. Click the **System Update** button in the header (or go to **Settings → System Status**).
 2. Read what's new, then click **Update now**.
 3. A window shows each step as it runs, with a timer at the bottom. Amahi-kai restarts near the
    end; the window waits for it and carries on.
@@ -132,5 +132,27 @@ sudo cat /var/lib/amahi-kai/update-status.json       # what it found last
 
 ## Automatic updates
 
-Amahi-kai checks automatically but doesn't install updates on its own, so you can read what
-changes first and pick a convenient time.
+Amahi-kai checks automatically but doesn't install its own updates, so you can read what changes
+first and pick a convenient time.
+
+---
+
+## Ubuntu's updates (System Dependencies)
+
+An Amahi-kai update doesn't update Ubuntu's packages. **Settings → System Dependencies** does:
+
+- **What's there:** what the NAS runs that Amahi-kai depends on (Ruby, Samba, Greyhole and its PHP,
+  ZFS, smartmontools, MariaDB, Docker, Tailscale, cloudflared, Avahi, dnsmasq, fail2ban, OpenSSH),
+  each with its installed version, the update waiting and where it comes from, with security
+  updates marked; the operating system and kernel, and whether a restart is waiting; Ubuntu's
+  other updates; and Amahi-kai's own version and Rails.
+- **Check now** refreshes the package lists.
+- **Update** on a piece of software installs its updates (and only those), and **Update all**
+  installs every update waiting. The output shows in a window as it installs.
+- **Hold** keeps a piece of software at its version until you **Release** it: no update, not even
+  Update all, changes it.
+- **Automatic updates** are off unless you turn them on there (new installs start with them off).
+  While they're off, the dashboard says when a security update has waited two days, and the
+  security audit warns once one has waited a week.
+
+When an update needs a restart to finish, the page says so; **Settings → Details** has Restart.

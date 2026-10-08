@@ -5,7 +5,7 @@ title: "Remote Access"
 
 # Remote Access
 
-Amahi-kai can be reached from outside your home two ways, both set up from **Network > Remote
+Amahi-kai can be reached from outside your home two ways, both set up from **Network → Remote
 Access** (Advanced mode):
 
 - **[Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/):**
@@ -29,7 +29,7 @@ You can use either or both.
 ### Create the tunnel in Cloudflare
 
 1. In the [Cloudflare Zero Trust dashboard](https://one.dash.cloudflare.com/), go to
-   **Networks > Tunnels** and click **Create a tunnel**.
+   **Networks → Tunnels** and click **Create a tunnel**.
 2. Choose **Cloudflared**, and name it (for example, "amahi-home").
 3. **Copy the tunnel token.**
 4. Add a public hostname: pick a subdomain (for example `home`) and your domain, and set the
@@ -37,7 +37,7 @@ You can use either or both.
 
 ### Connect Amahi-kai
 
-1. On **Network > Remote Access**, paste the token and click **Setup Tunnel**.
+1. On **Network → Remote Access**, paste the token and click **Setup Tunnel**.
 2. The progress window shows Amahi-kai installing `cloudflared` (if needed), saving the token,
    and starting the tunnel.
 
@@ -100,7 +100,7 @@ sudo systemctl daemon-reload
 
 ## Tailscale
 
-1. On **Network > Remote Access**, click **Install Tailscale** and watch the progress.
+1. On **Network → Remote Access**, click **Install Tailscale** and watch the progress.
 2. Click **Start**. The first time, the page shows a link to log in to Tailscale and approve the
    server; open it and sign in.
 3. Install Tailscale on your phone or laptop and sign in to the same account.

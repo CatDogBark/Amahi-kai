@@ -48,10 +48,10 @@ here once they've been tested on real drives.
 
 ## Adding drives
 
-Drives are prepared on **Disks > Devices** (or in the setup wizard's storage step):
+Drives are prepared on **Disks → Devices** (or in the setup wizard's storage step):
 
 - **Format** a new or empty drive as ext4.
-- **Mount** it. Amahi-kai mounts data drives at `/mnt/<name>` and adds them to `/etc/fstab` by
+- **Mount** it as share storage. Amahi-kai mounts data drives at `/mnt/<name>` and adds them to `/etc/fstab` by
   UUID with `nofail`, so the server still starts if a drive is missing or dead.
 - **Preview** a drive before mounting it: Amahi-kai mounts it read-only for a moment and lists
   its top-level folders, so you can see what's on it.
@@ -79,31 +79,52 @@ Any one of:
 
 - the installer's `--with-greyhole` option
 - the setup wizard's Greyhole step
-- **Disks > Storage Pool > Install Greyhole** (the progress streams as it installs)
+- **Disks → Storage Pool → Install Greyhole** (the progress streams as it installs)
 
 Amahi-kai adds Greyhole's apt repository (its signing key is checked against a pinned
 fingerprint), installs the package and the PHP modules it needs, creates its database and turns
 on the service.
 
+**Disks → Storage Pool** shows Greyhole's status, with **Start** and **Stop**, and **Uninstall**.
+Uninstalling takes only the package, its config and its repository, and is offered once no drive is
+in the pool and no share keeps copies with it (the page says which).
+
 ---
 
 ## Choosing pool drives
 
-On **Disks > Storage Pool**, turn each mounted data drive on or off for the pool. Each pool drive
-keeps at least 10 GB free; Greyhole stops putting files on a drive below that.
+On **Disks → Storage Pool**, tick **In Pool** for each share-storage drive under Available
+Partitions to add it. The pool drives are listed above that, with their space. Each pool drive
+keeps at least 10 GB free (Min Free); Greyhole stops putting files on a drive below that.
 
 ## Copies per share
 
-On the **Shares** tab, turn pooling on for a share and set its number of copies:
+On **Setup → Shares**, open a share and set its **Pool copies** with − and +:
 
-| Copies | What happens |
-|--------|--------------|
-| 0 | Not pooled: files stay in the share's own folder |
-| 1 | Pooled, one copy: files are spread across drives, without duplicates |
-| 2 or more | That many copies, each on a different drive |
-| max | A copy on every pool drive |
+| Pool copies | What happens |
+|-------------|--------------|
+| Off | Not pooled: files stay in the share's own folder, on the system disk |
+| 1 copy | Greyhole keeps the files on the pool drives, which adds up their space, but a drive that fails loses its files |
+| 2 copies | Each file is kept on two drives, so one can fail and nothing is lost |
 
 Changing copies regenerates Greyhole's configuration and restarts it.
+
+**Turning a pooled share Off** moves its files back: Greyhole copies them from the pool drives into
+the share's folder, on the system disk, so it needs room for them there. The share says it's
+turning off until that's done, and the page updates by itself.
+
+### Free space on pooled shares
+
+A computer connected to a pooled share sees the pool's size and free space, not the system
+disk's. Samba asks Amahi-kai's free-space command (`dfree command` in `smb.conf`), which adds up
+the mounted pool drives and divides their free space by the share's copies, as Greyhole's own
+does: a 2-copy share on a pool with 4 TB free shows 2 TB free.
+
+### Deleted files
+
+What's deleted from a pooled share over the network share stays in Greyhole's trash on the pool
+drives, and shows in the file browser's **Trash** with every other share's deleted files, to
+restore or delete for good (see [File Sharing](file-sharing#trash)).
 
 ---
 
@@ -116,8 +137,8 @@ database password). Don't edit it by hand. It lists the pool drives and the copi
 storage_pool_drive = /mnt/data1, min_free: 10gb
 storage_pool_drive = /mnt/data2, min_free: 10gb
 
-num_copies[Movies] = 2
-num_copies[Photos] = max
+num_copies[Movies] = 1
+num_copies[Photos] = 2
 ```
 
 Samba's configuration gets the settings Greyhole needs (following its links) whenever it's
@@ -134,15 +155,20 @@ greyhole --status     # what it's working on
 greyhole --fsck       # check the pool
 ```
 
-The dashboard and **Settings > Servers** show whether Greyhole is running.
+The dashboard, **Settings → Servers** and **Disks → Storage Pool** show whether Greyhole is running.
 
 ### Removing a drive
 
-1. Turn the drive off in the pool on **Disks > Storage Pool**.
-2. Wait for Greyhole to move its files elsewhere (`greyhole --status` shows the queue).
-3. Unmount the drive on **Disks > Devices**, then remove it.
+1. Click **Remove** on the drive's row under Storage Pool Drives on **Disks → Storage Pool**.
+2. Greyhole first moves the files kept only on that drive to the other drives. The row says
+   **Removing** until it's done, and the page updates by itself; then the drive leaves the pool.
+3. Unmount the drive on **Disks → Devices**, then take it out.
 
 Greyhole needs room on the other drives for the files it moves.
+
+A drive that's no longer connected can be removed too. Files kept only on it are lost; files with a
+copy on another drive get their second copy made again. A drive that was swapped or formatted in
+the same place shows **Use this drive**, which tells Greyhole to take it.
 
 ---
 

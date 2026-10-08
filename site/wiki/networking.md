@@ -24,7 +24,7 @@ DNS aliases let you create custom hostnames on your local network that point to 
 
 ### Creating an Alias
 
-1. Go to **Network > DNS Aliases** (Advanced mode)
+1. Go to **Network → DNS Aliases** (Advanced mode)
 2. Enter a **name** (e.g., `files`) — must start with a letter, can contain letters, numbers, and hyphens
 3. Optionally enter an **address** — leave blank to point to your server's own IP, or enter a specific IP
 4. Click **Create**
@@ -58,7 +58,7 @@ For clients to use your aliases, they must use your Amahi-kai server as their DN
 ## Static Hosts
 
 Static hosts give a device the same IP address and name every time (DHCP reservations), when
-Amahi-kai's gateway hands out addresses. Manage them on **Network > Hosts**:
+Amahi-kai's gateway hands out addresses. Manage them on **Network → Hosts**:
 
 - **Name**: the device's name on the network (letters, numbers and hyphens, up to 63 characters)
 - **MAC**: the device's MAC address
@@ -82,7 +82,7 @@ The gateway feature turns your Amahi-kai server into a local DHCP and DNS server
 
 ### Installing dnsmasq
 
-1. Go to **Network > Gateway** (Advanced mode)
+1. Go to **Network → Gateway** (Advanced mode)
 2. Click **Install dnsmasq**
 3. Watch the streaming installation progress
 
@@ -140,7 +140,7 @@ sudo systemctl status dnsmasq
 
 ## DNS Provider Settings
 
-Under **Network > Settings** (Advanced mode), you can choose upstream DNS providers:
+Under **Network → Settings** (Advanced mode), you can choose upstream DNS providers:
 
 | Provider | DNS Servers |
 |----------|-------------|
