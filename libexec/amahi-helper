@@ -152,6 +152,8 @@ module AmahiHelper
 
   GREYHOLE_CONF = '/etc/greyhole.conf'
   GREYHOLE_BIN = '/usr/bin/greyhole'
+  # greyhole.conf without its database lines, for amahi-dfree: anyone may read it.
+  GREYHOLE_POOL_CONF = '/etc/amahi-kai/greyhole-pool.conf'
   # Uninstalling Greyhole or ZFS removes these packages (and nothing else; the PHP modules and
   # smartmontools other things use stay).
   GREYHOLE_PACKAGES = %w[greyhole].freeze
@@ -416,7 +418,7 @@ module AmahiHelper
     'samba.write_config' => {
       params: %w[content],
       validate: ->(a) { { content: smb_conf(a['content']) } },
-      plan: ->(v) { [[:install, SMB_CONF, v[:content], :smb_conf]] }
+      plan: ->(v) { [[:install, SMB_CONF, v[:content], :smb_conf], [:refresh_greyhole_pool]] }
     },
     'samba.write_lmhosts' => {
       params: %w[content],
@@ -705,7 +707,10 @@ module AmahiHelper
     'greyhole.write_config' => {
       params: %w[content],
       validate: ->(a) { { content: greyhole_conf(a['content']) } },
-      plan: ->(v) { [[:install, GREYHOLE_CONF, v[:content], nil, '0640', APP_USER]] }
+      plan: lambda { |v|
+        [[:install, GREYHOLE_CONF, v[:content], nil, '0640', APP_USER],
+         [:install, GREYHOLE_POOL_CONF, greyhole_pool_lines(v[:content]), nil, '0644']]
+      }
     },
     # Greyhole's database, and its schema once the package has put it in place.
     'greyhole.setup_database' => {
@@ -747,7 +752,7 @@ module AmahiHelper
         repository = APT_REPOSITORIES.fetch('greyhole')
         [['/usr/bin/systemctl', 'disable', '--now', 'greyhole.service', { allow_failure: true }],
          ['/usr/bin/apt-get', '-y', '-o', 'DPkg::Lock::Timeout=300', 'purge', *GREYHOLE_PACKAGES, { env: APT_ENV, stream: true }],
-         [:remove_files, GREYHOLE_CONF, repository[:list], repository[:keyring]]]
+         [:remove_files, GREYHOLE_CONF, GREYHOLE_POOL_CONF, repository[:list], repository[:keyring]]]
       }
     },
     'packages.add_repository' => {
@@ -982,7 +987,9 @@ module AmahiHelper
   SAMBA_VFS_MODULES = %w[
     greyhole recycle fruit streams_xattr catia acl_xattr shadow_copy2 full_audit dirsort worm readonly crossrename
   ].freeze
-  GREYHOLE_DFREE = '/usr/bin/greyhole-dfree'
+  # Samba's dfree command for pooled shares: Amahi-kai's, which reads GREYHOLE_POOL_CONF
+  # (greyhole-dfree reads greyhole.conf, which the people connected can't).
+  GREYHOLE_DFREE = "#{APP_DIR}/libexec/amahi-dfree"
 
   # --- dnsmasq config checks ---------------------------------------------------------
 
@@ -2341,6 +2348,18 @@ module AmahiHelper
       end
       do_install(SECURITY_UPDATES, "#{JSON.pretty_generate('checked_at' => now.utc.iso8601, 'updates' => updates)}\n", nil, '0640', APP_USER)
       nil
+    end
+
+    # greyhole.conf's lines but the database's (db_host, db_user, db_pass, db_name).
+    def greyhole_pool_lines(content)
+      content.lines.reject { |line| line.strip.start_with?('db_') }.join
+    end
+
+    # The pooled shares' free space (amahi-dfree) follows greyhole.conf: written again with
+    # Samba's config, so a System Update brings it to a NAS whose greyhole.conf came before it.
+    def do_refresh_greyhole_pool
+      return nil unless File.exist?(GREYHOLE_CONF)
+      do_install(GREYHOLE_POOL_CONF, greyhole_pool_lines(File.read(GREYHOLE_CONF)), nil, '0644')
     end
 
     # Files a plan names (never a path from the request).
