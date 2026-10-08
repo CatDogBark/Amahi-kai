@@ -5,9 +5,11 @@ development: the one install is Troy's NAS, an Ubuntu 24.04 VM on Proxmox, reach
 over plain HTTP, through a Cloudflare Tunnel, and through Tailscale. Troy owns the repo
 (`CatDogBark/Amahi-kai`, **public**) and the NAS.
 
-Current work: after the October look and cleanup (#101–#112), testing Greyhole, shares and the
-Trash on the NAS's virtual drives with Troy's storage checklist
-(https://claude.ai/artifact/AzGwHaFHxKfxPsKYj2st1a). The plans: storage,
+Current work (Troy, 2026-10-08): getting Amahi-kai to a shelf-stable state first, by finishing
+its major code work (the October look and cleanup were #101–#112). Then testing everything,
+including Greyhole, shares and the Trash with Troy's storage checklist
+(https://claude.ai/artifact/AzGwHaFHxKfxPsKYj2st1a). bitShare (P4.6) comes after all of
+Amahi-kai. The plans: storage,
 **`docs/plans/storage.md`** (ZFS pools for bitShare, PRs S1–S5, all built; tested on the drives
 once they're in, with
 **`docs/testing/storage-on-real-drives.md`**), then Phase 4, planned in **`docs/plans/apps.md`**

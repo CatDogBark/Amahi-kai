@@ -208,7 +208,8 @@ the root helper) and P4.2 (reaching apps) are done (#58, #59), to be tested on t
 [`docs/testing/apps.md`](../testing/apps.md). Tailscale is the default way to reach apps from outside (Troy,
 2026-10-04), so P4.3 (Cloudflare per app) is optional and later. P4.4 (shares for apps, #60) and P4.5
 (app updates, #62), P4.5b (the catalog's own repo, #70, #73) and P4.5c (apps on the LAN over mDNS,
-#71, #72) are done; P4.6 (bitShare, with ZFS datasets for apps) is next.
+#71, #72) are done. P4.6 (bitShare, with ZFS datasets for apps) comes after all of Amahi-kai: first
+its major code work is finished (shelf-stable), then everything is tested (Troy, 2026-10-08).
 
 ## Direction
 
