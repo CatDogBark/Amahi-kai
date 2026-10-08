@@ -54,16 +54,6 @@ class Setting < ApplicationRecord
       by_kind(kind).by_name(name).first
     end
 
-    def set_kind(kind, name, value)
-      setting = get_kind(kind, name)
-      if setting
-        setting.update_attribute!(:value, value)
-      else
-        setting = create(:kind => kind, :name => name, :value => value)
-      end
-      setting
-    end
-
     def find_or_create_by(kind, name, value)
       get_kind(kind, name) || create(kind: kind, name: name, value: value)
     end

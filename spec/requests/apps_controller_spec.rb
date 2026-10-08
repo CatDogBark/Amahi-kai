@@ -1,6 +1,6 @@
 require 'spec_helper'
 
-describe "Apps Controller", type: :request, integration: true do
+describe "Apps Controller", type: :request do
 
   describe "unauthenticated" do
     it "redirects to login" do

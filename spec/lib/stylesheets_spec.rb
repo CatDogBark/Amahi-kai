@@ -10,7 +10,7 @@ RSpec.describe 'stylesheets' do
   it "builds application.css from Bootstrap's official CSS, then the app's own" do
     css = Rails.application.assets['application.css'].to_s
     expect(css).to include('Bootstrap  v5.3.8')
-    expect(css.index('Bootstrap  v5.3.8')).to be < css.index('.nav_hover:hover')
+    expect(css.index('Bootstrap  v5.3.8')).to be < css.index(".amahi-toast")
     expect(css).to include('.amahi-toast').or include('#toast-container')
   end
 

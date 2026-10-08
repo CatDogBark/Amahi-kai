@@ -76,41 +76,6 @@ RSpec.describe User, 'RBAC', type: :model do
     end
   end
 
-  describe '#can_write_share?' do
-    let(:share) { create(:share, everyone: false) }
-
-    it 'admin can write any share' do
-      expect(create(:admin).can_write_share?(share)).to be true
-    end
-
-    it 'guest cannot write any share' do
-      expect(create(:user, role: 'guest').can_write_share?(share)).to be false
-    end
-
-    it 'user can write everyone non-readonly share' do
-      everyone_share = create(:share, everyone: true, rdonly: false)
-      user = create(:user, role: 'user')
-      expect(user.can_write_share?(everyone_share)).to be true
-    end
-
-    it 'user cannot write everyone readonly share' do
-      everyone_share = create(:share, everyone: true, rdonly: true)
-      user = create(:user, role: 'user')
-      expect(user.can_write_share?(everyone_share)).to be false
-    end
-
-    it 'user can write share with cap_writer' do
-      user = create(:user, role: 'user')
-      share.users_with_write_access << user
-      expect(user.can_write_share?(share)).to be true
-    end
-
-    it 'user cannot write share without cap_writer' do
-      user = create(:user, role: 'user')
-      expect(user.can_write_share?(share)).to be false
-    end
-  end
-
   describe '#accessible_shares' do
     it 'admin gets all shares' do
       admin = create(:admin)
@@ -136,34 +101,6 @@ RSpec.describe User, 'RBAC', type: :model do
       expect(accessible).to include(everyone_share)
       expect(accessible).to include(granted_share)
       expect(accessible).not_to include(private_share)
-    end
-  end
-
-  describe '#writable_share_ids' do
-    it 'admin gets all share ids' do
-      admin = create(:admin)
-      s1 = create(:share, name: "S1")
-      s2 = create(:share, name: "S2")
-      expect(admin.writable_share_ids).to include(s1.id, s2.id)
-    end
-
-    it 'guest gets empty array' do
-      guest = create(:user, role: 'guest')
-      create(:share)
-      expect(guest.writable_share_ids).to be_empty
-    end
-
-    it 'user gets everyone-writable plus cap_writer shares' do
-      user = create(:user, role: 'user')
-      writable = create(:share, name: "Writable", everyone: true, rdonly: false)
-      readonly = create(:share, name: "ReadOnly", everyone: true, rdonly: true)
-      granted = create(:share, name: "Granted", everyone: false)
-      granted.users_with_write_access << user
-
-      ids = user.writable_share_ids
-      expect(ids).to include(writable.id)
-      expect(ids).to include(granted.id)
-      expect(ids).not_to include(readonly.id)
     end
   end
 

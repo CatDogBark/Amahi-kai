@@ -28,11 +28,4 @@ module UsersHelper
      t('this_users_files_deleted'), "", t('there_is_no_undo'), ""].join("\n").html_safe
   end
 
-  def user_formatted_date(date)
-    date = date.localtime
-    "#{date.to_formatted_s(:short)} (#{time_ago_in_words(date)})"
-  rescue NoMethodError, ArgumentError, RangeError
-    '-'
-  end
-
 end

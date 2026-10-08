@@ -19,98 +19,22 @@ require 'shell'
 
 class Platform
 
-  DEFAULT_GROUP = "users"
-
-  DNSMASQ = true
-
-  def self.dnsmasq?
-    DNSMASQ ? true : false
-  end
-
   PLATFORMS = ['ubuntu', 'debian']
 
-  SERVICES = {
-    'ubuntu' => {
-      :apache => 'apache2',
-      :dhcp => 'isc-dhcp-server',
-      :named => 'bind9',
-      :smb => 'smbd',
-      :nmb => 'nmbd',
-      :mysql => 'mariadb',
-    },
-    'debian' => {
-      :apache => 'apache2',
-      :dhcp => 'isc-dhcp-server',
-      :named => 'bind9',
-      :smb => 'smbd',
-      :nmb => 'nmbd',
-      :mysql => 'mariadb',
-    },
-  }
-
+  # Where this platform keeps the files Amahi-kai reads: the DHCP leases (dnsmasq's, for
+  # Network → Leases) and the system log (the debug tab).
   FILENAMES = {
-    'ubuntu' => {
-      :apache_pid => 'apache2.pid',
-      :dhcpleasefile => dnsmasq? ? '/var/lib/dnsmasq/dnsmasq.leases' : '/var/lib/dhcp3/dhcpd.leases',
-      :samba_pid => 'samba/smbd.pid',
-      :dhcpd_pid => 'dhcp-server/dhcpd.pid',
-      :monit_dir => '/etc/monit/conf.d',
-      :monit_conf => '/etc/monit/monitrc',
-      :monit_log => '/var/log/monit.log',
-      :syslog => '/var/log/syslog',
-    },
-    'debian' => {
-      :apache_pid => 'apache2.pid',
-      :dhcpleasefile => dnsmasq? ? '/var/lib/misc/dnsmasq.leases' : '/var/lib/dhcp/dhcpd.leases',
-      :samba_pid => 'samba/smbd.pid',
-      :dhcpd_pid => 'dhcp-server/dhcpd.pid',
-      :monit_dir => '/etc/monit/conf.d',
-      :monit_conf => '/etc/monit/monitrc',
-      :monit_log => '/var/log/monit.log',
-      :syslog => '/var/log/syslog',
-    },
-  }
+    'ubuntu' => { dhcpleasefile: '/var/lib/dnsmasq/dnsmasq.leases', syslog: '/var/log/syslog' },
+    'debian' => { dhcpleasefile: '/var/lib/misc/dnsmasq.leases', syslog: '/var/log/syslog' }
+  }.freeze
 
   class << self
-    def file_name(service)
-      file2name(service)
-    end
-
-    def service_name(service)
-      service2name(service)
+    def file_name(name)
+      file2name(name)
     end
 
     def platform
       @@platform
-    end
-
-    def ubuntu?
-      @@platform == 'ubuntu'
-    end
-
-    def debian?
-      @@platform == 'debian'
-    end
-
-    def service_start_command(name)
-      "/usr/bin/systemctl start #{service_name(name)}.service"
-    end
-
-    def service_stop_command(name)
-      "/usr/bin/systemctl stop #{service_name(name)}.service"
-    end
-
-    def service_enable_command(name)
-      "/usr/bin/systemctl enable #{service_name(name)}.service"
-    end
-
-    def service_disable_command(name)
-      "/usr/bin/systemctl disable #{service_name(name)}.service"
-    end
-
-    # Monit removed — method kept as no-op for any remaining callers
-    def watchdog_restart_command
-      "true"  # no-op
     end
 
     # Sets the system hostname from a server name: lowercase, spaces and other
@@ -156,11 +80,6 @@ class Platform
       @@platform ||= nil
       @@platform ||= "debian" if File.exist?('/usr/bin/apt-get')
       raise "unsupported platform: only Ubuntu and Debian are supported" unless PLATFORMS.include?(@@platform)
-    end
-
-    def service2name(service)
-      name = SERVICES[@@platform][service.to_sym]
-      name || service
     end
 
     def file2name(fname)

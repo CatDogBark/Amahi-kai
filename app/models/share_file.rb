@@ -55,9 +55,4 @@ class ShareFile < ApplicationRecord
     nil
   end
 
-  # Human-readable file size
-  def human_size
-    return '-' if directory?
-    ActionController::Base.helpers.number_to_human_size(size)
-  end
 end

@@ -22,7 +22,6 @@ All notable changes to Amahi-kai are documented here.
 - **Cloudflare Tunnel** — Install, configure, start/stop from Remote Access page. Security audit gates tunnel activation.
 - **Security Audit System** — 8 automated checks with auto-fix: SSH hardening, firewall, updates, password policy. Streaming terminal output.
 - **Setup Wizard** — 7-step first-run wizard: welcome → admin password → network → storage → greyhole → shares → complete. Drive detection, format, mount. Swap check.
-- **Theme System** — 3-state toggle (light/dark/system). CSS variables, localStorage persistence, smooth transitions.
 - **Toast Notifications** — Fixed-position toasts replace flash banners. No layout shift.
 - **Dashboard Rework** — Per-drive storage bars, CPU/memory stats, services sidebar, share cards with browse buttons, quick action buttons.
 - **Ocean UI** — Living underwater background (`ocean.js`, WebGL + canvas): the surface overhead in perspective, sun and moon following the clock, caustics and light shafts, weather (clear/cloudy/rain/storm with lightning), tides, bubbles in front of and behind the cards, and sea life (fish schools, manta rays, dolphins, sea turtles, night jellyfish). The scene is computed from the clock plus the visitor's settings, so it carries across page loads. A "Water" panel in the header (a floating button on amahi-kai.com) sets time of day, weather, sea life, cycle speed and quality. Half-resolution water, 30 fps cap, 12 fps when idle, automatic quality drop on slow frames, still frames under reduced motion. Glass cards by default. Fixes invisible bubbles on the login and setup pages (their colour came from a theme stylesheet those pages don't load).
@@ -146,6 +145,12 @@ All notable changes to Amahi-kai are documented here.
   - Adding a user through a JSON request no longer fails with a server error, and the Apps page still loads when checking Docker fails.
 
 ### 🔧 Architecture & Code Quality
+
+- **More dead code out** — Nothing in the app used these either:
+  - **Settings and platform leftovers:** the settings file nothing read (`config/yetting.yml`, with its loader), and the platform's service names and file paths for Apache, monit and the DHCP server.
+  - **Unused methods:** on shares (the old default shares, the Samba domain name), users (share write checks), settings and DNS, two do-nothing steps on every request, and a few helpers.
+  - **Pages and styles:** three page templates nothing showed (DNS aliases' old page, a user settings page and a full-screen layout), Rails' generator templates, the drive table's old stylesheet and a few unused styles.
+- **Tests CI skipped now run** — Search's share indexing, the Apps page's requests and the storage pool's requests were marked as needing a real NAS, so CI never ran them. They don't need one, so CI runs them now.
 
 - **Share tags' column goes** — The last of tags: their database column is dropped.
 

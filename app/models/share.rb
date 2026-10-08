@@ -38,8 +38,6 @@ class Share < ApplicationRecord
   DEFAULT_SHARES_ROOT = '/var/lib/amahi-kai/files'
 
   SIGNATURE = "Amahi configuration"
-  DEFAULT_SHARES = %w[Books Pictures Movies Videos Music Docs Public TV].freeze
-
   scope :by_name, -> { order(:name) }
 
   has_many :cap_accesses, :dependent => :destroy
@@ -86,19 +84,6 @@ class Share < ApplicationRecord
   # Save the samba config file — delegates to SambaService
   def self.push_shares
     SambaService.push_config
-  end
-
-  def self.create_default_shares
-    DEFAULT_SHARES.each do |s|
-      sh = Share.new
-      sh.path = Share.default_full_path(s)
-      sh.name = s
-      sh.rdonly = false
-      sh.visible = true
-      sh.extras = ""
-      sh.disk_pool_copies = 0
-      sh.save!
-    end
   end
 
   # --- Samba config generation ---
@@ -157,10 +142,6 @@ class Share < ApplicationRecord
     end
     e += "\tvfs objects = #{modules.join(' ')}\n" if modules.any?
     ret % [name, name, path, wr, br, allowed, writes, masks, e]
-  end
-
-  def self.basenames
-    all.map { |s| [s.path, s.name] }
   end
 
   # --- Delegated instance methods ---
@@ -327,14 +308,6 @@ class Share < ApplicationRecord
       "#{ip} #{hostname}.#{domain}",
     "#{ip} files.#{domain}"].join "\n"
     ret
-  end
-
-  def self.default_samba_domain(domain)
-    d = domain.gsub /\.(com|net|org|local|co.uk|mobi|pro|info|asia|biz|..)$/, ''
-    d = d.gsub /\./, '_'
-    d = domain if d.size == 0
-    d = d[-15..-1] if d.size > 15
-    d
   end
 
   private
