@@ -6,16 +6,17 @@ require 'greyhole'
 # Greyhole streaming install, and share creation from mounts.
 module DiskService
   class << self
+    # Adds a drive to Greyhole's pool, or takes it out (safely: Greyhole.remove_drive!).
+    # { checked: in the pool, removing: Greyhole is moving its files off, path: }.
     def toggle_pool_partition(path)
-      part = DiskPoolPartition.where(path: path).first
-      if part
-        part.destroy
-        checked = false
-      else
-        first = !DiskPoolPartition.exists?
-        DiskPoolPartition.add!(path)
-        checked = true
+      if DiskPoolPartition.exists?(path: path)
+        removing = Greyhole.remove_drive!(path) == :removing
+        return { checked: removing, removing: removing, path: path }
       end
+
+      first = !DiskPoolPartition.exists?
+      DiskPoolPartition.add!(path)
+      checked = true
 
       # Regenerate Greyhole config whenever pool membership changes. With its first drive in,
       # Greyhole has something to do: start it (it can't run without one).
@@ -28,7 +29,7 @@ module DiskService
         Rails.logger.error("Greyhole configure failed: #{e.message}")
       end
 
-      { checked: checked, path: path }
+      { checked: checked, removing: false, path: path }
     end
 
     # Starts or stops Greyhole; true if that worked.

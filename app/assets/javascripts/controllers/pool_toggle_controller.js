@@ -24,10 +24,11 @@
         .then(function(response) { return response.json(); })
         .then(function(data) {
           if (data.status === 'ok') {
+            if (data.removing) { window.location.reload(); return; } // the page shows the removal
             checkbox.checked = data.checked;
             label.textContent = data.checked ? 'In pool' : 'Add to pool';
           } else {
-            console.error("Pool toggle error:", data.message);
+            if (window.showToast) window.showToast(data.message || 'That didn\'t work', 'error');
             checkbox.checked = !checkbox.checked;
           }
           checkbox.disabled = false;

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_04_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_08_000000) do
   create_table "cap_accesses", force: :cascade do |t|
     t.integer "user_id"
     t.integer "share_id"
@@ -30,6 +30,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_04_000000) do
     t.integer "minimum_free", default: 10
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
+    t.boolean "removing", default: false, null: false
     t.index ["path"], name: "index_disk_pool_partitions_on_path", unique: true
   end
 

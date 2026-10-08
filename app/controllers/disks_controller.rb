@@ -110,10 +110,21 @@ class DisksController < ApplicationController
     result = DiskService.toggle_pool_partition(path)
 
     respond_to do |format|
-      format.html { redirect_to disks_storage_pool_path }
-      format.any { render json: { status: 'ok', checked: result[:checked], path: result[:path] } }
+      format.html do
+        flash[:notice] = "Greyhole is moving the files kept only on #{path} to the other drives; it leaves the pool when that's done." if result[:removing]
+        redirect_to disks_storage_pool_path
+      end
+      format.any { render json: { status: 'ok', checked: result[:checked], removing: result[:removing], path: result[:path] } }
     end
-  rescue ActiveRecord::RecordInvalid, Greyhole::GreyholeError, Shell::CommandError => e
+  rescue Greyhole::GreyholeError => e
+    respond_to do |format|
+      format.html do
+        flash[:error] = "#{path} stays in the pool: #{e.message}"
+        redirect_to disks_storage_pool_path
+      end
+      format.any { render json: { status: 'error', message: e.message }, status: :unprocessable_content }
+    end
+  rescue ActiveRecord::RecordInvalid, Shell::CommandError => e
     Rails.logger.error("Toggle disk pool error: #{e.message}\n#{e.backtrace.first(5).join("\n")}")
     render json: { status: 'error', message: e.message }, status: :internal_server_error
   end

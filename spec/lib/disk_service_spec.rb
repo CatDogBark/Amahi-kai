@@ -13,7 +13,7 @@ RSpec.describe DiskService do
 
       it 'removes the partition and returns checked: false' do
         result = described_class.toggle_pool_partition(path)
-        expect(result).to eq({ checked: false, path: path })
+        expect(result).to eq({ checked: false, removing: false, path: path })
         expect(DiskPoolPartition.where(path: path)).to be_empty
       end
     end
@@ -21,7 +21,7 @@ RSpec.describe DiskService do
     context 'when partition does not exist in pool' do
       it 'creates the partition and returns checked: true' do
         result = described_class.toggle_pool_partition(path)
-        expect(result).to eq({ checked: true, path: path })
+        expect(result).to eq({ checked: true, removing: false, path: path })
         expect(DiskPoolPartition.where(path: path).count).to eq(1)
       end
     end
@@ -45,6 +45,16 @@ RSpec.describe DiskService do
         expect(DiskPoolPartition.find_by(path: path).minimum_free).to eq(10)
         described_class.toggle_pool_partition('/mnt/data2')
         expect(Greyhole).to have_received(:start!).once
+      end
+    end
+
+    context 'when a drive with files on it is taken out of the pool' do
+      let!(:partition) { DiskPoolPartition.create!(path: path, minimum_free: 10) }
+
+      it "leaves it to Greyhole's removal, and says it's still in the pool meanwhile" do
+        allow(Greyhole).to receive(:remove_drive!).with(path).and_return(:removing)
+        expect(described_class.toggle_pool_partition(path)).to eq({ checked: true, removing: true, path: path })
+        expect(DiskPoolPartition.where(path: path)).to exist
       end
     end
 

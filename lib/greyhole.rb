@@ -117,6 +117,7 @@ class Greyhole
     # The pool's drives, with their space and how Greyhole stands with each (drive_state).
     def pool_drives
       return dummy_pool_drives unless production?
+      sync_removals!
       records = drive_records
       DiskPoolPartition.all.map do |part|
         usage = part.usage
@@ -126,7 +127,8 @@ class Greyhole
           total: usage[:total],
           free: usage[:free],
           used: usage[:used],
-          state: drive_state(part.path, records)
+          state: drive_state(part.path, records),
+          removing: part.removing?
         }
       end
     end
@@ -162,6 +164,75 @@ class Greyhole
       text.scan(/s:\d+:"([^"]*)";(?:s:\d+:"([^"]*)"|b:0|i:\d+);/).to_h
     end
 
+    # Takes a drive out of Greyhole's pool without losing files: Greyhole first moves the
+    # copies kept only on it to the other drives, and the drive stays in the pool, marked
+    # removing, until Greyhole is done (sync_removals!). A drive holding none of the shares'
+    # files leaves at once. Returns :removed or :removing; raises GreyholeError when it can't
+    # be removed safely now (drive_removal_blocker).
+    def remove_drive!(path)
+      part = DiskPoolPartition.find_by(path: path.to_s) or raise GreyholeError, "#{path} isn't in the pool"
+      return :removing if part.removing?
+      unless installed? && holds_files?(part)
+        part.destroy
+        configure! if installed?
+        return :removed
+      end
+      blocker = drive_removal_blocker(part)
+      raise GreyholeError, blocker if blocker
+      begin
+        privileged('greyhole.remove_drive', path: part.path, available: mounted_uuid(part.path).present?)
+      rescue GreyholeError => e
+        raise unless e.message.include?('exited 2')
+        raise GreyholeError, "Greyhole is still checking the pool's files (fsck). Remove the drive once it's done."
+      end
+      part.update!(removing: true)
+      :removing
+    end
+
+    # Why a drive holding files can't be removed now, or nil: the files need another drive to
+    # go to, room there, and Greyhole running to move them.
+    def drive_removal_blocker(part)
+      others = DiskPoolPartition.where.not(id: part.id).where(removing: false).to_a
+      return "It's the pool's only drive, so Greyhole has nowhere to move its files. Add another drive first." if others.empty?
+      return "Start Greyhole first: it's what moves the drive's files to the other drives." unless running?
+      return nil unless mounted_uuid(part.path) # a drive that's gone has nothing to move
+
+      need = part.usage[:used].to_i
+      room = others.sum { |other| [other.usage[:free].to_i - (other.minimum_free * 1024**3), 0].max }
+      return nil if need <= room
+      size = ->(bytes) { ActiveSupport::NumberHelper.number_to_human_size(bytes) }
+      "The other drives don't have room for its files (#{size.call(need)} to move, #{size.call(room)} free above what Greyhole keeps free)."
+    end
+
+    # Whether any pooled share has files on the drive. A drive that isn't mounted, or a folder
+    # that can't be read, counts as holding them.
+    def holds_files?(part)
+      return true unless mounted_uuid(part.path)
+      Share.where('disk_pool_copies > 0').pluck(:name).any? do |name|
+        dir = File.join(part.path, name)
+        File.directory?(dir) && Dir.children(dir).any?
+      end
+    rescue SystemCallError
+      true
+    end
+
+    # Drives Greyhole has finished removing (it takes them out of greyhole.conf itself) leave
+    # the pool here too. Runs before the config is written, so they aren't put back.
+    def sync_removals!
+      return unless production?
+      removing = DiskPoolPartition.where(removing: true).to_a
+      return if removing.empty?
+      listed = configured_drives
+      removing.reject { |part| listed.include?(part.path) }.each(&:destroy) if listed
+    end
+
+    # The pool drives greyhole.conf lists now (the app may read it), or nil if it can't be read.
+    def configured_drives
+      File.read(CONFIG_PATH).scan(/^\s*storage_pool_drive\s*=\s*([^,\n]+)/).flatten.map(&:strip)
+    rescue SystemCallError
+      nil
+    end
+
     # Tells Greyhole the drive mounted at +path+ (one of its pool folders) is the one to use
     # there, through the root helper (greyhole --replaced). It restarts Greyhole.
     def accept_drive!(path)
@@ -184,6 +255,7 @@ class Greyhole
     # restarts Greyhole if it's running. Returns false, with the reason logged, on failure.
     def configure!
       return true unless production?
+      sync_removals!
       privileged('greyhole.write_config', content: generate_config)
       restart! if running?
       true
@@ -265,7 +337,8 @@ class Greyhole
           total: 500_000_000_000,
           free: 250_000_000_000,
           used: 250_000_000_000,
-          state: :ok
+          state: :ok,
+          removing: part.removing?
         }
       end
     end

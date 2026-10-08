@@ -123,6 +123,63 @@ RSpec.describe Greyhole do
       expect(SambaService).to have_received(:push_config)
     end
 
+    describe 'removing a drive' do
+      let!(:going) { create(:disk_pool_partition, path: '/mnt/storage-1', minimum_free: 10) }
+      let(:gib) { 1024**3 }
+
+      before do
+        allow(Greyhole).to receive(:installed?).and_return(true) # it's dpkg's answer in production
+        allow(Greyhole).to receive(:configure!).and_return(true)
+        allow(Greyhole).to receive(:mounted_uuid).and_return('uuid')
+        allow(Greyhole).to receive(:holds_files?).and_return(true)
+        allow_any_instance_of(DiskPoolPartition).to receive(:usage).and_return(total: 20 * gib, free: 18 * gib, used: 2 * gib)
+      end
+
+      it 'takes a drive with no files on it out at once' do
+        allow(Greyhole).to receive(:holds_files?).and_return(false)
+        expect(Greyhole.remove_drive!('/mnt/storage-1')).to eq(:removed)
+        expect(DiskPoolPartition.exists?(path: '/mnt/storage-1')).to be false
+        expect(Greyhole).to have_received(:configure!)
+        expect(Privileged.calls).to be_empty
+      end
+
+      it "won't remove the only drive, or one while Greyhole is stopped, or without room on the others" do
+        expect { Greyhole.remove_drive!('/mnt/storage-1') }.to raise_error(Greyhole::GreyholeError, /only drive/)
+        other = create(:disk_pool_partition, path: '/mnt/storage-2', minimum_free: 10)
+        allow(Greyhole).to receive(:running?).and_return(false)
+        expect { Greyhole.remove_drive!('/mnt/storage-1') }.to raise_error(Greyhole::GreyholeError, /Start Greyhole first/)
+        allow(Greyhole).to receive(:running?).and_return(true)
+        allow_any_instance_of(DiskPoolPartition).to receive(:usage) do |part|
+          part == other ? { total: 20 * gib, free: 11 * gib, used: 9 * gib } : { total: 20 * gib, free: 18 * gib, used: 2 * gib }
+        end
+        expect { Greyhole.remove_drive!('/mnt/storage-1') }.to raise_error(Greyhole::GreyholeError, /don't have room/)
+        expect(Privileged.calls).to be_empty
+      end
+
+      it "has Greyhole move its files, keeping it in the pool until Greyhole has taken it out of greyhole.conf" do
+        create(:disk_pool_partition, path: '/mnt/storage-2', minimum_free: 10)
+        expect(Greyhole.remove_drive!('/mnt/storage-1')).to eq(:removing)
+        expect(Privileged.calls).to eq([['greyhole.remove_drive', { path: '/mnt/storage-1', available: true }]])
+        expect(going.reload).to be_removing
+        expect(Greyhole.remove_drive!('/mnt/storage-1')).to eq(:removing) # asked again: already under way
+
+        allow(Greyhole).to receive(:configured_drives).and_return(%w[/mnt/storage-1 /mnt/storage-2])
+        Greyhole.sync_removals!
+        expect(DiskPoolPartition.exists?(path: '/mnt/storage-1')).to be true
+        allow(Greyhole).to receive(:configured_drives).and_return(%w[/mnt/storage-2])
+        Greyhole.sync_removals!
+        expect(DiskPoolPartition.exists?(path: '/mnt/storage-1')).to be false
+      end
+
+      it 'says to wait while Greyhole is still checking the files' do
+        create(:disk_pool_partition, path: '/mnt/storage-2', minimum_free: 10)
+        allow(Privileged).to receive(:call).with('greyhole.remove_drive', anything)
+                                           .and_raise(Privileged::Error.new('greyhole.remove_drive', 'greyhole exited 2: '))
+        expect { Greyhole.remove_drive!('/mnt/storage-1') }.to raise_error(Greyhole::GreyholeError, /still checking the pool's files/)
+        expect(going.reload).not_to be_removing
+      end
+    end
+
     it "reads Greyhole's record of its drives, and says which drive it won't use" do
       records = 'a:3:{s:14:"/mnt/storage-1";s:4:"uuid";s:14:"/mnt/storage-2";s:3:"old";s:14:"/mnt/storage-3";b:0;}'
       parsed = Greyhole.parse_drive_records(records)
