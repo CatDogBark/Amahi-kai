@@ -19,8 +19,7 @@ class Greyhole
 
     def installed?
       return true unless production?
-      output = `dpkg-query -W -f='${Status}' greyhole 2>/dev/null`.strip
-      output == 'install ok installed'
+      SystemInfo.package_installed?('greyhole')
     end
 
     def running?
@@ -284,8 +283,7 @@ class Greyhole
     def queue_status
       return { pending: 0, last_action: nil } unless production?
       begin
-        output = `greyhole --status 2>/dev/null`
-        parse_queue_status(output)
+        parse_queue_status(Shell.output('greyhole', '--status'))
       rescue StandardError
         { pending: 0, last_action: nil }
       end

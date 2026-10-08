@@ -77,6 +77,24 @@ module Shell
       Open3.capture3(cmd)
     end
 
+    # What a command prints, whatever its exit status, or "" if it can't run (not installed).
+    # The command is an argument list, run without a shell. For reading the system's state, so
+    # nothing is logged, and it runs in tests too (stub it).
+    def output(*argv)
+      stdout, _stderr, _status = Open3.capture3(*argv)
+      stdout
+    rescue SystemCallError
+      ''
+    end
+
+    # Whether a command, as an argument list run without a shell, runs and succeeds.
+    def success?(*argv)
+      _stdout, _stderr, status = Open3.capture3(*argv)
+      status.success?
+    rescue SystemCallError
+      false
+    end
+
     # +text+ with anything secret-shaped masked (REDACTIONS).
     def redact(text)
       REDACTIONS.reduce(text.to_s) { |out, (pattern, replacement)| out.gsub(pattern, replacement) }

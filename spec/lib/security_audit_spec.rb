@@ -138,7 +138,7 @@ RSpec.describe SecurityAudit do
       allow(SecurityAudit).to receive(:production?).and_return(true)
       allow(Privileged).to receive(:call).and_call_original
       allow(Privileged).to receive(:call).with('security.report').and_return(report)
-      allow(SecurityAudit).to receive(:`).and_return('')
+      allow(Shell).to receive(:output).and_return('')
     end
 
     it "reads UFW and sshd's effective settings from the root helper" do

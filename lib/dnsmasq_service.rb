@@ -13,7 +13,7 @@ module DnsmasqService
     end
 
     def running?
-      installed? && `systemctl is-active dnsmasq 2>/dev/null`.strip == 'active'
+      installed? && Shell.output('systemctl', 'is-active', 'dnsmasq').strip == 'active'
     end
 
     # The options write_config! takes, from the saved settings (Network → Gateway).

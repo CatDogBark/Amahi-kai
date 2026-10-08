@@ -209,12 +209,12 @@ RSpec.describe "SharesController extended", type: :request do
   describe "PUT /shares/:id/update_size" do
     let!(:share) { create(:share) }
 
-    it "returns size info" do
-      allow(Open3).to receive(:capture2e).and_return(["1048576 /path", double(success?: true)])
+    it "returns size info, counted by du run as an argument list (no shell)" do
+      allow(Open3).to receive(:capture2e).with('du', '-sbL', '--', share.path).and_return(["1048576 /path", double(success?: true)])
       put update_size_share_path(share), as: :json
       body = response.parsed_body
       expect(body['status']).to eq('ok')
-      expect(body['size']).to be_present
+      expect(body['size']).to eq('1 MB')
     end
 
     it "handles errors gracefully" do

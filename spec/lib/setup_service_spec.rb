@@ -5,7 +5,7 @@ RSpec.describe SetupService do
     before do
       allow(File).to receive(:read).and_call_original
       allow(File).to receive(:read).with('/proc/meminfo').and_return("MemTotal:        4096000 kB\n")
-      allow(described_class).to receive(:`).with('swapon --show=SIZE --noheadings --bytes 2>/dev/null').and_return("")
+      allow(SystemInfo).to receive(:swaps).and_return([])
     end
 
     it 'returns memory info' do
@@ -19,7 +19,7 @@ RSpec.describe SetupService do
 
     context 'with swap present' do
       before do
-        allow(described_class).to receive(:`).with('swapon --show=SIZE --noheadings --bytes 2>/dev/null').and_return("2147483648\n")
+        allow(SystemInfo).to receive(:swaps).and_return([{ name: '/swap.img', bytes: 2_147_483_648 }])
       end
 
       it 'detects swap' do

@@ -17,8 +17,8 @@ class DashboardStats
 
     def system_info
       {
-        hostname: (`hostname`.strip rescue 'unknown'),
-        uptime: (`uptime -p`.strip.sub(/^up\s+/, '') rescue 'unknown'),
+        hostname: SystemInfo.hostname,
+        uptime: SystemInfo.uptime,
         os: os_name
       }
     end
@@ -114,9 +114,7 @@ class DashboardStats
     def cpu_load
       if File.exist?('/proc/loadavg')
         load1, load5, load15 = File.read('/proc/loadavg').split[0..2].map(&:to_f)
-        cores = `nproc`.strip.to_i rescue 1
-        cores = 1 if cores < 1
-        percent = ((load1 / cores) * 100).round
+        percent = ((load1 / SystemInfo.cores) * 100).round
         { percent: [percent, 100].min, detail: "#{load1} / #{load5} / #{load15}" }
       else
         { percent: 0, detail: 'unavailable' }
@@ -148,7 +146,7 @@ class DashboardStats
 
     def drive_usage
       # Get all mounted filesystems, excluding virtual/system ones
-      lines = `df -BG 2>/dev/null`.lines.drop(1)
+      lines = Shell.output('df', '-BG').lines.drop(1)
       drives = []
       lines.each do |line|
         parts = line.split
@@ -176,10 +174,9 @@ class DashboardStats
     end
 
     def disk_usage
-      df = `df -h / 2>/dev/null`.lines.last
-      if df
-        parts = df.split
-        { percent: parts[4].to_i, detail: "#{parts[2]} / #{parts[1]}" }
+      disk = SystemInfo.root_disk
+      if disk
+        { percent: disk[:percent], detail: "#{disk[:used]} / #{disk[:size]}" }
       else
         { percent: 0, detail: 'unavailable' }
       end

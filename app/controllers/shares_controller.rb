@@ -5,7 +5,6 @@
 # modify it under the terms of the GNU General Public License v3
 # (29 June 2007), as published in the COPYING file.
 
-require 'partition_utils'
 require 'open3'
 
 class SharesController < ApplicationController
@@ -208,7 +207,7 @@ class SharesController < ApplicationController
   # --- Size ---
 
   def update_size
-    std_out, status = Open3.capture2e("du -sbL #{Shellwords.escape(@share.path)}")
+    std_out, status = Open3.capture2e('du', '-sbL', '--', @share.path)
     size = std_out.split(' ').first
     is_integer = Integer(size) rescue false
     if is_integer && status

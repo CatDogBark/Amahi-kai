@@ -1,5 +1,4 @@
 require 'shell'
-require 'shellwords'
 require 'disk_manager'
 
 # Service object for setup wizard operations.
@@ -14,12 +13,7 @@ module SetupService
         0
       end
 
-      swap_mb = begin
-        output = `swapon --show=SIZE --noheadings --bytes 2>/dev/null`.strip
-        output.empty? ? 0 : output.split("\n").sum { |line| line.strip.to_i } / (1024 * 1024)
-      rescue StandardError
-        0
-      end
+      swap_mb = SystemInfo.swaps.sum { |swap| swap[:bytes] } / (1024 * 1024)
 
       recommended_swap = if total_mb < 2048
                            '4G'

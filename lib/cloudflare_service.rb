@@ -12,14 +12,13 @@ class CloudflareService
   class << self
     def installed?
       return false unless production?
-      output = `dpkg-query -W -f='${Status}' cloudflared 2>/dev/null`.strip
-      output == 'install ok installed'
+      SystemInfo.package_installed?('cloudflared')
     end
 
     def running?
       return false unless production?
-      # systemctl is-active doesn't need sudo — don't use Shell.run
-      system('systemctl is-active --quiet cloudflared')
+      # systemctl is-active doesn't need root
+      Shell.success?('systemctl', 'is-active', '--quiet', 'cloudflared')
     end
 
     def enabled?
@@ -40,16 +39,15 @@ class CloudflareService
     def tunnel_url
       return 'https://demo-tunnel.example.com' unless production?
       return nil unless running?
-      output = `cloudflared tunnel info 2>/dev/null`.strip rescue nil
-      return nil if output.nil? || output.empty?
+      output = Shell.output('cloudflared', 'tunnel', 'info').strip
+      return nil if output.empty?
       output[/https?:\/\/\S+/]
     end
 
     def connected_since
       return nil unless production?
       return nil unless running?
-      output = `systemctl show cloudflared --property=ActiveEnterTimestamp 2>/dev/null`.strip rescue nil
-      return nil if output.nil?
+      output = Shell.output('systemctl', 'show', 'cloudflared', '--property=ActiveEnterTimestamp').strip
       timestamp = output.sub('ActiveEnterTimestamp=', '').strip
       timestamp.empty? ? nil : timestamp
     end

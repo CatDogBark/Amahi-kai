@@ -60,6 +60,25 @@ RSpec.describe Shell do
     end
   end
 
+  describe '.output' do
+    it "runs an argument list without a shell and returns what it prints, whatever its status" do
+      expect(described_class.output('printf', '%s', 'a b; echo shell')).to eq('a b; echo shell')
+      expect(described_class.output('sh', '-c', 'echo partial; exit 1')).to eq("partial\n")
+    end
+
+    it 'is empty when the command is not installed' do
+      expect(described_class.output('amahi-no-such-command')).to eq('')
+    end
+  end
+
+  describe '.success?' do
+    it 'says whether the command ran and succeeded' do
+      expect(described_class.success?('true')).to be true
+      expect(described_class.success?('false')).to be false
+      expect(described_class.success?('amahi-no-such-command')).to be false
+    end
+  end
+
   describe '.run_with_input' do
     it 'feeds the input on stdin and returns true on success' do
       expect(described_class.run_with_input("grep -qx hello", "hello\n")).to eq(true)

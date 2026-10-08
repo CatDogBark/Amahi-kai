@@ -1,11 +1,12 @@
 require 'json'
-require 'shellwords'
 require 'shell'
 
-# Lists drives, and formats, mounts, unmounts and previews data drives. The changes are
-# made by the root helper (disks.* operations), which checks the drive itself: it
-# refuses any drive with something mounted outside /mnt (the OS disk) and writes fstab
-# lines as UUID=... /mnt/<name> <type> defaults,nofail,x-systemd.device-timeout=10s 0 2.
+# Lists drives, their temperatures and what's mounted, and formats, mounts, unmounts and
+# previews data drives. The changes are made by the root helper (disks.* operations), which
+# checks the drive itself: it refuses any drive with something mounted outside /mnt (the OS
+# disk) and writes fstab lines as
+# UUID=... /mnt/<name> <type> defaults,nofail,x-systemd.device-timeout=10s 0 2.
+# Commands run as argument lists (Shell.output), never through a shell.
 class DiskManager
   VALID_DEVICE_PATTERN = %r{\A/dev/[svx]d[a-z]+\d*\z}
   VALID_NVME_PATTERN = %r{\A/dev/nvme\d+n\d+(p\d+)?\z}
@@ -14,7 +15,7 @@ class DiskManager
 
   # Detect all block devices with partition info
   def self.devices
-    raw = execute_command("lsblk -J -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT,MODEL,SERIAL,UUID,LABEL 2>/dev/null")
+    raw = lsblk_json
     return sample_devices if raw.blank?
 
     begin
@@ -135,6 +136,56 @@ class DiskManager
     dev[:os_disk]
   end
 
+  # The drives with their temperatures, for Disks' overview.
+  def self.stats
+    temperatures = drive_temperatures
+    devices.map do |disk|
+      temp = temperatures[disk[:path]].to_i
+      {
+        device: disk[:path],
+        model: disk[:model],
+        size: disk[:size],
+        temp_c: temp > 0 ? temp.to_s : '-',
+        temp_f: temp > 0 ? (temp * 1.8 + 32).to_i.to_s : '-',
+        tempcolor: temp_color(temp)
+      }
+    end
+  end
+
+  # Mounted filesystems as df lists them, without tmpfs and the like, for Disks → Mounts.
+  def self.mounts
+    Shell.output('df', '-BK').lines.drop(1).filter_map do |line|
+      filesystem, kib, used, available, use_percent, mount = line.strip.split(/\s+/, 6)
+      next if mount.nil? || %w[tmpfs devtmpfs none overlay].include?(filesystem)
+
+      {
+        filesystem: filesystem,
+        bytes: kib.to_i * 1024,
+        used: used.to_i * 1024,
+        available: available.to_i * 1024,
+        use_percent: use_percent,
+        mount: mount
+      }
+    end.sort_by { |m| m[:filesystem] }
+  end
+
+  # Data drives mounted under /mnt (share storage), with their size and free space: the
+  # drives Greyhole's pool can take (the helper refuses any other), for Disks → Storage Pool.
+  def self.share_storage(mounts_file = '/proc/self/mounts')
+    File.readlines(mounts_file).filter_map do |line|
+      device, path = line.split
+      next unless device&.start_with?('/dev/')
+
+      path = path.gsub(/\\([0-7]{3})/) { Regexp.last_match(1).to_i(8).chr } # \040 is a space
+      next unless path.start_with?('/mnt/')
+
+      total, free = filesystem_space(path)
+      { device: device, path: path, bytes_total: total, bytes_free: free }
+    end
+  rescue SystemCallError
+    []
+  end
+
   private
 
   OS_MOUNTPOINTS = ['/', '/boot', '/boot/efi'].freeze
@@ -208,17 +259,41 @@ class DiskManager
   end
 
   def self.mount_point_active?(path)
-    output = execute_command("mountpoint -q #{Shellwords.escape(path)} 2>/dev/null; echo $?")
-    output.to_s.strip == "0"
+    Shell.success?('mountpoint', '-q', path)
   end
 
   def self.production?
     defined?(Rails) && Rails.env.production?
   end
 
-  def self.execute_command(cmd)
-    stdout, _stderr, _status = Shell.capture(cmd)
-    stdout
+  # lsblk lists partitions and volumes under their disk only when NAME is the first column.
+  def self.lsblk_json
+    Shell.output('lsblk', '-J', '-o', 'NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT,MODEL,SERIAL,UUID,LABEL')
+  end
+
+  # SMART data needs root, so the helper reads it: { '/dev/sda' => 34, '/dev/vda' => nil }.
+  def self.drive_temperatures
+    Privileged.call('disks.temperatures')['temperatures'] || {}
+  rescue Privileged::Error => e
+    Rails.logger.warn("DiskManager: #{e.message}") if defined?(Rails)
+    {}
+  end
+
+  def self.temp_color(temp)
+    return 'hot' if temp > 49
+    return 'warm' if temp > 39
+
+    'cool'
+  end
+
+  # A mounted filesystem's size and free space, in bytes.
+  def self.filesystem_space(path)
+    require 'sys/filesystem'
+    stat = Sys::Filesystem.stat(path)
+    [stat.block_size * stat.blocks, stat.block_size * stat.blocks_available]
+  rescue StandardError => e
+    Rails.logger.error("DiskManager: no size for #{path}: #{e.message}") if defined?(Rails)
+    [0, 0]
   end
 
   def self.read_directory_summary(path)
@@ -234,9 +309,10 @@ class DiskManager
         stat = File.stat(full) rescue next
 
         if stat.directory?
-          # Get directory size with du (faster than Ruby recursion)
-          size_str = `du -sb #{Shellwords.escape(full)} 2>/dev/null`.split("\t").first.to_i
-          count_str = `find #{Shellwords.escape(full)} -type f 2>/dev/null | wc -l`.strip.to_i
+          # The folder's size with du and its files with find (faster than Ruby recursion);
+          # find prints a dot per file.
+          size_str = Shell.output('du', '-sb', '--', full).split("\t").first.to_i
+          count_str = Shell.output('find', full, '-type', 'f', '-printf', '.').length
           entries << { name: name, type: :directory, size: size_str, file_count: count_str }
           total_size += size_str
           file_count += count_str

@@ -63,7 +63,7 @@ module DiskService
     end
 
     def partition_list
-      PartitionUtils.new.info
+      DiskManager.share_storage
     rescue StandardError
       []
     end
