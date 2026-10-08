@@ -108,11 +108,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_09_000000) do
     t.boolean "pool_removing", default: false, null: false
   end
 
-  create_table "themes", force: :cascade do |t|
-    t.string "name", default: "", null: false
-    t.string "css", default: "", null: false
-  end
-
   create_table "users", force: :cascade do |t|
     t.string "login", null: false
     t.string "name"

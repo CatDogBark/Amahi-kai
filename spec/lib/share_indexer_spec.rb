@@ -6,7 +6,7 @@ RSpec.describe ShareIndexer, integration: true do
 
   # Create share without triggering callbacks that need system commands
   let(:share) do
-    Share.new(name: "TestShare", path: tmpdir, rdonly: false, visible: true, everyone: true, tags: "test").tap do |s|
+    Share.new(name: "TestShare", path: tmpdir, rdonly: false, visible: true, everyone: true).tap do |s|
       s.save(validate: false)
     end
   end
