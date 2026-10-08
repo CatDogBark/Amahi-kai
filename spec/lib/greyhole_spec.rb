@@ -128,6 +128,7 @@ RSpec.describe Greyhole do
       let(:gib) { 1024**3 }
 
       before do
+        allow(Greyhole).to receive(:installed?).and_return(true) # it's dpkg's answer in production
         allow(Greyhole).to receive(:configure!).and_return(true)
         allow(Greyhole).to receive(:mounted_uuid).and_return('uuid')
         allow(Greyhole).to receive(:holds_files?).and_return(true)
