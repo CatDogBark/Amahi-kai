@@ -140,10 +140,23 @@ RSpec.describe FileBrowserService do
     end
   end
 
-  describe '.create_zip' do
+  describe 'a folder as a zip' do
     let(:dir) { Dir.mktmpdir }
     let(:outside) { Dir.mktmpdir }
     after { FileUtils.rm_rf([dir, outside]) }
+
+    def zipped(dir)
+      require 'zip_kit'
+      require 'zip'
+      out = StringIO.new(+'', 'wb')
+      ZipKit::Streamer.open(out) { |zip| described_class.write_zip(zip, dir, [dir]) }
+      Tempfile.create(['folder', '.zip']) do |file|
+        file.binmode
+        file.write(out.string)
+        file.flush
+        Zip::File.open(file.path) { |z| z.entries.to_h { |e| [e.name, e.get_input_stream.read] } }
+      end
+    end
 
     it "zips the folder's files, leaving out links that point outside the share" do
       FileUtils.mkdir_p(File.join(dir, 'sub'))
@@ -151,19 +164,18 @@ RSpec.describe FileBrowserService do
       File.write(File.join(dir, 'sub', 'b.txt'), 'B' * 100_000)
       File.write(File.join(outside, 'secret.env'), 'SECRET')
       File.symlink(File.join(outside, 'secret.env'), File.join(dir, 'link.env'))
-
-      zip = described_class.create_zip(dir, [dir])
-      require 'zip'
-      entries = Zip::File.open(zip.path) { |z| z.entries.to_h { |e| [e.name, e.get_input_stream.read] } }
-      expect(entries).to eq('a.txt' => 'A', 'sub/b.txt' => 'B' * 100_000)
-    ensure
-      zip&.close
+      expect(described_class.zip_files("#{dir}/", [dir]).map(&:first)).to contain_exactly('a.txt', 'sub/b.txt')
+      expect(zipped(dir)).to eq('a.txt' => 'A', 'sub/b.txt' => 'B' * 100_000)
     end
 
-    it 'copies each file in pieces rather than reading it whole' do
+    it 'copies each file in pieces rather than reading it whole, and leaves out one gone since it was listed' do
       File.write(File.join(dir, 'big.bin'), 'x')
+      File.write(File.join(dir, 'gone.bin'), 'y')
+      allow(described_class).to receive(:zip_files).and_wrap_original do |original, *args|
+        original.call(*args).tap { FileUtils.rm_f(File.join(dir, 'gone.bin')) }
+      end
       expect(File).not_to receive(:read)
-      described_class.create_zip(dir, [dir]).close
+      expect(zipped(dir).keys).to eq(['big.bin'])
     end
   end
 end

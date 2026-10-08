@@ -5,6 +5,8 @@
   <%# ── Header ── %>
   <div class="fb-header">
     <div class="fb-breadcrumbs">
+      <a href="<%= file_browser_index_path %>" class="fb-crumb" id="fb-shares-crumb"><%= t('shares') %></a>
+      <span class="fb-crumb-sep">/</span>
       <% @breadcrumbs.each_with_index do |crumb, i| %>
         <% if i == @breadcrumbs.length - 1 %>
           <span class="fb-crumb-current"><%= crumb[:name] %></span>
@@ -16,10 +18,13 @@
     </div>
     <div class="fb-actions">
       <% if @entries.any? %>
-        <a class="btn btn-sm btn-outline-info" id="fb-download-folder" href="<%= @relative_path.present? ? file_browser_download_path(@share, path: @relative_path) : file_browser_download_root_path(@share) %>">
+        <a class="btn btn-sm btn-outline-info" id="fb-download-folder" href="<%= @relative_path.present? ? file_browser_download_path(@share, path: @relative_path) : file_browser_download_root_path(@share) %>"
+           data-action="click->file-browser#downloadZip" data-zip-name="<%= @breadcrumbs.last[:name] %>">
           <%= lucide_icon('download', size: 16) %> Download this folder
         </a>
       <% end %>
+      <%# Says the zip is being made until the download starts (the browser then shows its progress) %>
+      <span class="fb-download-status small" id="fb-download-status" data-file-browser-target="downloadStatus" role="status" hidden></span>
     </div>
   </div>
 
@@ -68,13 +73,17 @@
                   </a>
                 <% else %>
                   <% entry_path = [@relative_path, entry[:name]].reject(&:blank?).join('/') %>
+                  <%# Text opens as it is; images, video, audio and PDFs preview in the dialog, and
+                      anything else says there's no preview there, with Download. %>
+                  <% text = entry[:mime].to_s.start_with?('text/') || %w[application/json application/xml].include?(entry[:mime]) %>
                   <a href="<%= file_browser_raw_path(@share, path: entry_path) %>"
                      class="fb-link fb-file-link"
-                     <% if entry[:mime]&.start_with?('image/', 'video/', 'audio/') || entry[:mime] == 'application/pdf' %>
+                     <% unless text %>
                        data-action="click->file-browser#previewFile"
                        data-preview-url="<%= file_browser_raw_path(@share, path: entry_path) %>"
                        data-preview-mime="<%= entry[:mime] %>"
                        data-preview-name="<%= entry[:name] %>"
+                       data-preview-size="<%= number_to_human_size(entry[:size]) if entry[:size] %>"
                      <% end %>
                   >
                     <%= entry[:name] %>
@@ -97,7 +106,8 @@
                   <ul class="dropdown-menu dropdown-menu-end">
                     <li>
                       <% dl_path = [@relative_path, entry[:name]].reject(&:blank?).join('/') %>
-                      <a class="dropdown-item" href="<%= file_browser_download_path(@share, path: dl_path) %>"><%= lucide_icon('download', size: 14) %> <%= entry[:directory] ? 'Download as zip' : 'Download' %></a>
+                      <a class="dropdown-item" href="<%= file_browser_download_path(@share, path: dl_path) %>"
+                         <% if entry[:directory] %>data-action="click->file-browser#downloadZip" data-zip-name="<%= entry[:name] %>"<% end %>><%= lucide_icon('download', size: 14) %> <%= entry[:directory] ? 'Download as zip' : 'Download' %></a>
                     </li>
                   </ul>
                 </div>

@@ -201,6 +201,7 @@ Rails.application.routes.draw do
   post 'setup/finish'   => 'setup#finish',          as: :setup_finish
 
   # File Browser
+  get  'files',                        to: 'file_browser#index',   as: :file_browser_index
   get  'files/:share_id/browse',       to: 'file_browser#browse',  as: :file_browser, defaults: { path: '' }
   get  'files/:share_id/browse/*path', to: 'file_browser#browse',  as: :file_browser_path
   get  'files/:share_id/download',       to: 'file_browser#download', as: :file_browser_download_root, defaults: { path: '' }

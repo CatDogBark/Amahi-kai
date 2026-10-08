@@ -6,10 +6,42 @@ describe "FileBrowser Controller", type: :request do
 
   after { FileUtils.remove_entry(tmpdir, true) }
 
+  # A downloaded zip's entries, { name => content }, read from its central directory.
+  def zip_entries(body)
+    require 'zip'
+    Tempfile.create(['download', '.zip']) do |file|
+      file.binmode
+      file.write(body)
+      file.flush
+      Zip::File.open(file.path) { |zip| zip.entries.to_h { |e| [e.name, e.get_input_stream.read] } }
+    end
+  end
+
   describe "unauthenticated" do
     it "redirects to login" do
       get "/files/#{share.name}/browse"
       expect(response).to redirect_to(new_user_session_url)
+    end
+  end
+
+  describe "the Shares page" do
+    let!(:open_share) { create(:share, name: "Photos", path: Dir.mktmpdir, everyone: true) }
+    let!(:private_share) { create(:share, name: "Finance", path: Dir.mktmpdir, everyone: false) }
+
+    after { FileUtils.remove_entry(open_share.path, true) && FileUtils.remove_entry(private_share.path, true) }
+
+    it "lists the shares a user can open, linked to the file browser, from the header's Shares link" do
+      login_as(create(:user))
+      get "/files"
+      page = Nokogiri::HTML(response.body)
+      expect(page.css("#share-list a").map { |a| [a.text.strip, a["href"]] }).to eq([["Photos", "/files/Photos/browse"]])
+      expect(page.at_css("#shares-link")["href"]).to eq("/files")
+    end
+
+    it "lists every share for an admin" do
+      login_as_admin
+      get "/files"
+      expect(Nokogiri::HTML(response.body).css("#share-list a").map(&:text).map(&:strip)).to eq(%w[Finance Photos])
     end
   end
 
@@ -104,13 +136,42 @@ describe "FileBrowser Controller", type: :request do
         expect(response.body).to include("Add files over the network share (SMB)")
       end
 
-      it "downloads the share, or a folder in it, as a zip" do
+      it "downloads the share, or a folder in it, as a zip made as it's sent" do
         FileUtils.mkdir_p(File.join(tmpdir, "album"))
         File.write(File.join(tmpdir, "album", "pic.jpg"), "jpg")
+        File.write(File.join(tmpdir, "notes.txt"), "n" * 50_000)
         get "/files/#{share.name}/download"
         expect(response.headers['Content-Type']).to eq('application/zip')
+        # Streamed: headers that keep Rack::ETag, Rack::Deflater and proxies from buffering it
+        expect(response.headers).to include('X-Accel-Buffering' => 'no', 'Content-Encoding' => 'identity')
+        expect(response.headers['ETag']).to be_nil
+        expect(zip_entries(response.body)).to eq("album/pic.jpg" => "jpg", "notes.txt" => "n" * 50_000)
         get "/files/#{share.name}/download/album"
         expect(response.headers['Content-Disposition']).to include('album.zip')
+        expect(zip_entries(response.body)).to eq("pic.jpg" => "jpg")
+      end
+
+      it "returns the page's token in a cookie when the zip starts, so it can say the download began" do
+        File.write(File.join(tmpdir, "a.txt"), "a")
+        get "/files/#{share.name}/download", params: { token: "abc123def456" }
+        expect(response.cookies["fb_download"]).to eq("abc123def456")
+        expect(Array(response.headers['Set-Cookie']).find { |c| c.start_with?('fb_download=') }).not_to match(/httponly/i)
+        get "/files/#{share.name}/download", params: { token: "<script>" }
+        expect(response.cookies["fb_download"]).to be_nil
+      end
+
+      it "previews media, opens text as it is, and says other files have no preview, with their size" do
+        %w[pic.jpg notes.txt doc.odt].each { |name| File.write(File.join(tmpdir, name), "x" * 2048) }
+        get "/files/#{share.name}/browse"
+        page = Nokogiri::HTML(response.body)
+        link = ->(name) { page.at_xpath("//tr[@data-name='#{name}']//a[contains(@class, 'fb-file-link')]") }
+        expect(link.call("pic.jpg")["data-action"]).to eq("click->file-browser#previewFile")
+        expect(link.call("notes.txt")["data-action"]).to be_nil
+        expect(link.call("doc.odt")["data-action"]).to eq("click->file-browser#previewFile")
+        expect(link.call("doc.odt")["data-preview-size"]).to eq("2 KB")
+        expect(page.at_css("#fb-download-folder")["data-action"]).to eq("click->file-browser#downloadZip")
+        expect(page.at_css("#fb-download-status")).to be_present
+        expect(page.at_css("#fb-shares-crumb")["href"]).to eq("/files")
       end
     end
 
@@ -141,9 +202,7 @@ describe "FileBrowser Controller", type: :request do
         get "/files/#{share.name}/raw/elsewhere.txt"
         expect(response).not_to have_http_status(:ok)
         get "/files/#{share.name}/download"
-        require 'zip'
-        names = Zip::InputStream.open(StringIO.new(response.body)) { |z| [].tap { |n| while (e = z.get_next_entry) do n << e.name end } }
-        expect(names).to eq(["movie.mp4"])
+        expect(zip_entries(response.body).keys).to eq(["movie.mp4"])
       end
     end
 

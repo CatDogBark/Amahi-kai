@@ -88,25 +88,27 @@ module FileBrowserService
       crumbs
     end
 
-    # The folder as a zip, in a temporary file. Each file is copied in a piece at a time (a
-    # folder of videos used to be read into memory whole), and only files whose real path is
-    # in one of +roots+ go in: a link pointing anywhere else is left out, as it is for a
-    # single download.
-    def create_zip(full_path, roots = [full_path])
-      require 'zip'
-      dir_name = File.basename(full_path)
-      temp_zip = Tempfile.new([dir_name, '.zip'])
-
-      Zip::OutputStream.open(temp_zip.path) do |zos|
-        base = full_path.chomp('/') # the share's top folder comes with a trailing slash
-        Dir.glob(File.join(base, '**', '*')).each do |file|
-          next unless File.file?(file) && inside_any?(roots, file)
-          zos.put_next_entry(file.delete_prefix("#{base}/"))
-          File.open(file, 'rb') { |io| IO.copy_stream(io, zos) }
-        end
+    # The files a folder's zip holds, as [name in the zip, path]: every file under it whose
+    # real path is in one of +roots+. A link pointing anywhere else is left out, as it is for
+    # a single download.
+    def zip_files(full_path, roots = [full_path])
+      base = full_path.chomp('/') # the share's top folder comes with a trailing slash
+      Dir.glob(File.join(base, '**', '*')).filter_map do |file|
+        [file.delete_prefix("#{base}/"), file] if File.file?(file) && inside_any?(roots, file)
       end
+    end
 
-      temp_zip
+    # Writes the folder's zip to +zip+ (a ZipKit streamer, sending it as it's made), each file
+    # copied a piece at a time. A file gone or unreadable since the folder was listed is left
+    # out.
+    def write_zip(zip, full_path, roots = [full_path])
+      zip_files(full_path, roots).each do |name, path|
+        File.open(path, 'rb') do |io|
+          zip.write_file(name, modification_time: io.mtime) { |sink| IO.copy_stream(io, sink) }
+        end
+      rescue SystemCallError
+        next
+      end
     end
 
     def detect_mime_type(path)

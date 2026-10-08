@@ -27,8 +27,8 @@ gem 'stimulus-rails'
 gem 'bcrypt'
 
 gem 'sys-filesystem'
-# Folder downloads in the web file browser (FileBrowserService.create_zip)
-gem 'rubyzip', '~> 3.4', require: false
+# Folder downloads in the web file browser, streamed as the zip is made (FileBrowserController)
+gem 'zip_kit', '~> 6.3', require: false
 
 gem 'rack', '~> 3.2.5'
 gem 'rack-attack'
@@ -49,6 +49,8 @@ group :test do
   gem 'factory_bot_rails'
   gem 'database_cleaner'
   gem 'simplecov', require: false
+  # Reads the folder zips in specs
+  gem 'rubyzip', '~> 3.4', require: false
 end
 
 group :development, :production do

@@ -277,6 +277,7 @@ GEM
       websocket-extensions (>= 0.1.0)
     websocket-extensions (0.1.5)
     zeitwerk (2.7.4)
+    zip_kit (6.3.6)
 
 PLATFORMS
   x86_64-linux
@@ -306,6 +307,7 @@ DEPENDENCIES
   stimulus-rails
   sys-filesystem
   turbo-rails
+  zip_kit (~> 6.3)
 
 BUNDLED WITH
    2.4.19

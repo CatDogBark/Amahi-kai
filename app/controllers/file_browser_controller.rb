@@ -1,18 +1,27 @@
 require 'file_browser_service'
+require 'zip_kit'
 
 # The web file browser: browse, preview and download. It changes nothing. Files are added,
 # renamed and deleted over the SMB shares, so Samba, and Greyhole on pooled shares, sees
 # every change (docs/plans/storage.md, S5).
 class FileBrowserController < ApplicationController
+  include ZipKit::RailsStreaming
+
   before_action :browse_required
-  before_action :set_share
-  before_action :check_share_access
-  before_action :resolve_path
+  before_action :set_share, except: :index
+  before_action :check_share_access, except: :index
+  before_action :resolve_path, except: :index
 
   # A name or path the service refuses gets a clear error, not a 500. (Handlers are
   # matched last-declared first, so InvalidName, a SecurityError, is checked first.)
   rescue_from SecurityError, with: :access_denied
   rescue_from FileBrowserService::InvalidName, with: :invalid_name
+
+  # GET /files: the shares this person can open, to browse (the header's Shares link).
+  def index
+    @page_title = t('shares')
+    @shares = Share.by_name.select { |share| current_user.can_access_share?(share) }
+  end
 
   # GET /files/:share_id/browse/*path
   def browse
@@ -136,14 +145,16 @@ class FileBrowserController < ApplicationController
       filename: File.basename(@full_path)
   end
 
+  # The folder as a zip, sent as it's made: the download starts at once, and nothing is
+  # written to the system disk first. The page's token comes back in a cookie, which tells
+  # it the download has started (file_browser_controller.js).
   def send_directory_as_zip
-    temp_zip = FileBrowserService.create_zip(@full_path, share_roots)
-    dir_name = File.basename(@full_path)
-    send_file temp_zip.path,
-      type: 'application/zip',
-      disposition: 'attachment',
-      filename: "#{dir_name}.zip"
-  ensure
-    temp_zip&.close
+    token = params[:token].to_s
+    cookies[:fb_download] = { value: token, path: '/', httponly: false, same_site: :lax } if token.match?(/\A[a-z0-9]{8,40}\z/)
+    full_path = @full_path
+    roots = share_roots
+    zip_kit_stream(filename: "#{File.basename(full_path)}.zip") do |zip|
+      FileBrowserService.write_zip(zip, full_path, roots)
+    end
   end
 end
