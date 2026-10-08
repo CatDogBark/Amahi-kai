@@ -1,6 +1,6 @@
 # Fix plan and roadmap
 
-Status as of 2026-10-04. Each phase came from a full code review (October 2026; the detailed
+Status as of 2026-10-08. Each phase came from a full code review (October 2026; the detailed
 review is a Claude Doc Troy owns, linked from `CLAUDE.md`). Every PR below was deployed with
 System Update and checked on the NAS, with one exception: from #21 to #24 System Update stopped
 at its migration step (json 3 broke Sprockets 4.2, fixed in #25) and the old app kept running,
@@ -51,10 +51,22 @@ so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 | bitTube in the catalog | bitTube (`ghcr.io/catdogbark/bittube:0.1.0`, pinned by digest) is the catalog's sixth app, on port 8484, writing downloads into a share; `script/app-versions` reads GitHub's registry too. Not yet tested on the NAS | #63 |
 | Fix. Times that stay current | "… ago" times (update check, System Status, pool health, snapshots, Jobs) are worked out again every minute and when a dialog opens (time_ago.js), instead of only when the page loaded; the update check shows its time of day | #61 |
 | Phase 4 P4.4. Shares for apps | Shares chosen at install and changed later, at `/shares/<name>`, found by name in smb.conf by the helper; read only unless the app writes shares and Greyhole doesn't pool the share (pooled shares bring their copy folders, read only); default ACLs keep what apps write editable over SMB; images aren't downloaded again. ZFS datasets for apps moved to P4.6. Not yet tested on the NAS | #60 |
+| Apps: the catalog | bitTube 0.1.1–0.1.4 and its logo (installed apps show the catalog's logos); the dashboard says which apps have an update; P4.5b: the catalog is its own repo ([CatDogBark/amahi-kai-apps](https://github.com/CatDogBark/amahi-kai-apps)), fetched by the one update check for Amahi-kai and its apps; P4.5c: installed apps announced on the LAN (mDNS, with Avahi on Settings → Servers) | #64–#73 |
+| Docs. Making apps | The wiki's Making Apps page; the wiki and README catch up with the catalog repo | #74 |
+| Addresses in one place | Every link to an app or to Amahi-kai is made in one place (for HTTPS later); apps whose own page is HTTPS (`web_tls`) open with https | #75, #76 |
+| Fixes | An app's passwords open again; the footer no longer covers the bottom of long pages | #77, #78 |
+| Storage on the NAS (virtual drives) | Found testing Greyhole and shares on the NAS: Greyhole installs again, with install, uninstall, start and stop for Greyhole and ZFS; small drives; a fixed 10 GB free; Disks' confirmations ask; Greyhole gets every share and drive; taking a drive out, or turning a share's copies Off, moves its files first; copying into a pooled share works (Amahi-kai's own dfree command); no usage reports to greyhole.net | #79–#87, #90, #91, #94 |
+| System Dependencies | Settings → System Dependencies: versions and the updates waiting, Update, Update all, Hold, and automatic updates off unless switched on | #88, #89 |
+| The Trash and the file browser | Every share has a Trash (Greyhole's on pooled shares, Samba's recycle bin on others), in the file browser below the shares, kept 30 days; folder zips stream, with a notice until they start; a Shares page in the header | #92, #93, #95–#97 |
+| Share settings | A share's settings laid out by what they decide, each explained; the Features toggles and tags gone | #99 |
+| The October look | Dark for everyone, mint on near-black glass, Space Grotesk; a new header and Setup's tabs as pills; the file browser redone (whole-row links, a panel for the selected file, list or grid); the theme system and light theme gone | #101, #102 |
+| Cleanup | Only the parts of Rails it uses, no Turbo; dead code, routes, translations, templates and styles; the themes table, tags' and users' SSH-key columns dropped; one disk library; every command run as an argument list (no shell strings outside the debug pages); `Shell` trimmed; specs CI skipped run; RuboCop's old-offense list empty and gone; drive temperatures in °F | #103–#107, #109–#112 |
+| Fix. Update dialog | System Update's dialog stays current on a page left open | #106 |
+| Docs. The wiki catches up | File Sharing, Storage Pooling and Updating describe the share settings, the file browser, the Trash and System Dependencies as they are | #108 |
 
-## Next: Phase 3
+## Phase 3
 
-Decisions already made: Ruby stays on Ubuntu 24.04's patched 3.2; `main` stays the release until
+Done except Content-Security-Policy. Decisions made: Ruby stays on Ubuntu 24.04's patched 3.2; `main` stays the release until
 shares are tested on real drives, then tagged releases and an updater change; the codebase
 becomes root-owned (in N); Docker app work moves to Phase 4.
 
@@ -89,8 +101,8 @@ becomes root-owned (in N); Docker app work moves to Phase 4.
   5.3.8's official CSS and JS are vendored (`vendor/assets`), the app's four Sass files are plain
   CSS, and `sassc`, `sass-rails` and the `bootstrap` gem are gone (`sprockets-rails` is now in
   the Gemfile itself). Screenshots of 14 pages in light and dark mode match the Sass build
-  pixel for pixel, live numbers aside. Theme sources are rebuilt by hand with Dart Sass
-  (`public/themes/README.md`). Sprockets stays; Propshaft can come later.
+  pixel for pixel, live numbers aside. (The themes went in #102, and with them their Sass
+  sources.) Sprockets stays; Propshaft can come later.
 - [ ] **Content-Security-Policy**: today it's report-only. Enforcing it needs the inline
   scripts and `onclick` handlers moved into the JavaScript files first; its own PR.
 
@@ -112,7 +124,6 @@ touches the same code.
   unit started by the helper, with its log streamed to the page).
 - Anonymous SMB browsing shows a `nobody` home folder (cosmetic; needs a guest account with no home
   directory).
-- Not yet tried in the UI because no shares or apps exist: file upload, raw preview, the app proxy.
 
 ## Later: the phone layout
 
@@ -178,13 +189,13 @@ It covers the disk-safety work (PR #13: fstab `nofail`, a drive missing at boot,
 guard), Greyhole, and every storage PR (S1–S5): drive health, pools, scrubs, snapshots, a failing
 drive, deleting a pool, then building the real pool.
 
-## Next: Storage (ZFS pools for bitShare)
+## Storage (ZFS pools for bitShare)
 
 Decided 2026-10-04, in [`storage.md`](storage.md): SMB shares stay on simple drives and Greyhole;
 new ZFS pools, with the layout the user chooses, hold bitShare's data, on other drives; Greyhole
-is basic SMB storage, changed only through Samba (the web file browser only views). Built now in five PRs (S1–S5,
-listed there; S1 is #44, S2 #46, S3 #50, S4 #51, S5 #53), then Phase 4, then bitShare. Tested on the physical drives once
-they're connected.
+is basic SMB storage, changed only through Samba (the web file browser only views). Built in five
+PRs (S1–S5, listed there; S1 is #44, S2 #46, S3 #50, S4 #51, S5 #53). Greyhole and shares have
+been tested on the NAS's virtual drives (#79–#97); ZFS waits for the physical drives.
 
 ## Phase 4: Docker apps
 
@@ -196,7 +207,9 @@ data, a curated catalog of five apps, bitShare as an ordinary app. PRs P4.1–P4
 the root helper) and P4.2 (reaching apps) are done (#58, #59), to be tested on the NAS with
 [`docs/testing/apps.md`](../testing/apps.md). Tailscale is the default way to reach apps from outside (Troy,
 2026-10-04), so P4.3 (Cloudflare per app) is optional and later. P4.4 (shares for apps, #60) and P4.5
-(app updates, #62) are done; P4.6 (bitShare, with ZFS datasets for apps) is next.
+(app updates, #62), P4.5b (the catalog's own repo, #70, #73) and P4.5c (apps on the LAN over mDNS,
+#71, #72) are done. P4.6 (bitShare, with ZFS datasets for apps) comes after all of Amahi-kai: first
+its major code work is finished (shelf-stable), then everything is tested (Troy, 2026-10-08).
 
 ## Direction
 
