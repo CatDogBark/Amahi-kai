@@ -28,10 +28,15 @@ class User < ApplicationRecord
   # guest  — Samba-only access, no web UI beyond login
   ROLES = %w[admin user guest].freeze
 
-  # The account db/seeds.rb creates. Its password is public (it's in this repo), so the
-  # setup wizard can't finish and the security audit fails while it still works.
+  # The account db/seeds.rb creates. On a real install its first password is random:
+  # bin/amahi-install makes it and prints it. Development and tests use SEED_ADMIN_PASSWORD,
+  # which is public (it's in this repo). Either way the setup wizard can't finish, and the
+  # security audit fails, while the admin still has its first password.
   SEED_ADMIN_LOGIN = 'admin'.freeze
   SEED_ADMIN_PASSWORD = 'secretpassword'.freeze
+  # The setting that keeps the first password's hash (never the password), so the wizard knows
+  # when it has been changed.
+  FIRST_PASSWORD_SETTING = 'first_admin_password_digest'.freeze
 
   validates :role, inclusion: { in: ROLES }
 
@@ -84,10 +89,15 @@ class User < ApplicationRecord
   end
 
   class << self
-    # True while the seeded admin account still accepts the seeded password.
+    # True while the seeded admin account still has its first password: the installer's (its
+    # hash, kept at seeding, still matches) or the public one.
     def seed_admin_password_in_use?
       admin = find_by(login: SEED_ADMIN_LOGIN)
-      admin.present? && admin.authenticate(SEED_ADMIN_PASSWORD).present?
+      return false unless admin
+
+      first = Setting.get(FIRST_PASSWORD_SETTING).to_s
+      (first.present? && ActiveSupport::SecurityUtils.secure_compare(admin.password_digest.to_s, first)) ||
+        admin.authenticate(SEED_ADMIN_PASSWORD).present?
     end
 
     # [full name, uid, login] of the Linux account for +username+, or nil.

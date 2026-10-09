@@ -230,5 +230,13 @@ describe User do
       seeded_admin.delete
       expect(User.seed_admin_password_in_use?).to be false
     end
+
+    it "is true while the admin keeps the installer's random first password, and false once it's changed" do
+      seeded_admin.update!(password: 'Xk3f9QvL2mT8wRz5BnYc')
+      Setting.set(User::FIRST_PASSWORD_SETTING, seeded_admin.password_digest)
+      expect(User.seed_admin_password_in_use?).to be true
+      seeded_admin.update!(password: 'a-new-passphrase')
+      expect(User.seed_admin_password_in_use?).to be false
+    end
   end
 end

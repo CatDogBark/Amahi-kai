@@ -401,15 +401,30 @@ if ! as_app "RAILS_ENV=production bin/rails db:migrate"; then
   exit 1
 fi
 
+# The admin's first password is random. The seeds read it from a file only the app user can
+# read (never a command line, where ps would show it) and delete it once used; seeding is
+# skipped when the database has users, and then the file is left and nothing is printed.
 echo "==> Seeding database (skipped when it already has users)..."
-if ! as_app "RAILS_ENV=production bin/rails db:seed"; then
+ADMIN_PASS=$(openssl rand -base64 24 | tr -d '/+=\n')
+ADMIN_PASS=${ADMIN_PASS:0:20}
+PW_DIR=$(mktemp -d /run/amahi-first-password.XXXXXX)
+trap 'rm -rf "$PW_DIR"' EXIT
+chown "$APP_USER:$APP_GROUP" "$PW_DIR"
+chmod 0700 "$PW_DIR"
+PW_FILE="$PW_DIR/password"
+install -o "$APP_USER" -g "$APP_GROUP" -m 0600 /dev/null "$PW_FILE"
+printf '%s' "$ADMIN_PASS" > "$PW_FILE"
+if ! as_app "AMAHI_FIRST_PASSWORD_FILE='$PW_FILE' RAILS_ENV=production bin/rails db:seed"; then
   echo ""
   echo "  ❌ Database seeding failed!"
-  echo "  Try running manually:"
-  echo "    sudo -u $APP_USER bash -lc 'set -a; source $ENV_FILE; set +a; cd $APP_DIR && RAILS_ENV=production bin/rails db:seed'"
+  echo "  Run the installer again once the error above is fixed."
   echo ""
   exit 1
 fi
+if [[ -e "$PW_FILE" ]]; then
+  ADMIN_PASS=""   # seeding was skipped: the existing accounts keep their passwords
+fi
+rm -rf "$PW_DIR"
 
 # Detect host IP and patch network settings to match this machine
 HOST_IP=$(hostname -I | awk '{print $1}')
@@ -423,17 +438,11 @@ if [ -n "$HOST_IP" ]; then
   \""
 fi
 
-# Headless mode: generate random password and mark setup complete
+# Headless mode: no setup wizard. The admin keeps the random first password printed below
+# (so the security audit doesn't ask for it to be changed), and setup is marked complete.
 if $HEADLESS; then
-  ADMIN_PASS=$(openssl rand -base64 16 | tr -d '/+=' | head -c 20)
-  echo "==> Headless mode: configuring admin account..."
-  as_app "RAILS_ENV=production bin/rails runner \"
-    user = User.find_by(login: 'admin')
-    user.password = '$ADMIN_PASS'
-    user.password_confirmation = '$ADMIN_PASS'
-    user.save!
-    Setting.set('setup_completed', 'true')
-  \""
+  echo "==> Headless mode: marking setup complete..."
+  as_app "RAILS_ENV=production bin/rails runner \"Setting.where(name: User::FIRST_PASSWORD_SETTING).delete_all; Setting.set('setup_completed', 'true')\""
 fi
 
 # ---------------------------------------------------------------------------
@@ -580,21 +589,20 @@ echo "============================================"
 echo ""
 echo "  Web UI:  http://$(hostname -I | awk '{print $1}'):3000"
 echo "  Tunnel:  (configure Cloudflare Tunnel if needed)"
-if $HEADLESS; then
+if [[ -n "$ADMIN_PASS" ]]; then
   echo ""
-  echo "  ┌─────────────────────────────────────┐"
-  echo "  │  ADMIN CREDENTIALS (save these!)    │"
-  echo "  │                                     │"
-  echo "  │  Username: admin                    │"
-  echo "  │  Password: $ADMIN_PASS"
-  echo "  │                                     │"
-  echo "  │  Setup wizard: SKIPPED (headless)   │"
-  echo "  └─────────────────────────────────────┘"
+  echo "  Sign in as:  admin"
+  echo "  Password:    $ADMIN_PASS"
+  echo "  (Shown only here. Lost it? sudo $APP_DIR/script/reset-user-password admin)"
+  if $HEADLESS; then
+    echo "  Setup wizard: skipped (headless)"
+  else
+    echo "  The setup wizard asks you to choose a password of your own, then guides"
+    echo "  you through the rest of the setup."
+  fi
   echo ""
 else
-  echo "  Login:   admin / secretpassword"
-  echo "  NOTE:    The setup wizard will guide you through"
-  echo "           initial configuration on first login."
+  echo "  Sign in with your existing account: this run didn't change any passwords."
   echo ""
 fi
 echo "  Config:  $ENV_FILE"

@@ -35,6 +35,15 @@ RSpec.describe 'install and update scripts' do
     end
   end
 
+  it "gives the first admin password to the seeds in a file, never on a command line, and never the public one" do
+    text = File.read(Rails.root.join('bin/amahi-install'))
+    expect(text).not_to include(User::SEED_ADMIN_PASSWORD)
+    expect(text).to include("AMAHI_FIRST_PASSWORD_FILE='$PW_FILE'")
+    expect(text).to match(/install -o "\$APP_USER" -g "\$APP_GROUP" -m 0600 \/dev\/null "\$PW_FILE"/)
+    used = text.lines.grep(/\$ADMIN_PASS\b/).map(&:strip)
+    expect(used.grep(/as_app|bin\/rails|sudo/)).to eq([])
+  end
+
   it 'installs and enables the check for updates' do
     text = File.read(Rails.root.join('bin/amahi-install-helper'))
     expect(text).to include('amahi-kai-update-check.service amahi-kai-update-check.timer')
