@@ -152,8 +152,9 @@ class DashboardStats
         parts = line.split
         next if parts.length < 6
         device, total, used, avail, percent_str, mount = parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]
-        # Only real block devices
+        # Only real block devices; the share root is a bind mount of the system disk, not a drive
         next unless device.start_with?('/dev/')
+        next if mount == Share::DEFAULT_SHARES_ROOT
         # Skip tiny partitions (boot, EFI)
         total_gb = total.to_f
         next if total_gb < 1

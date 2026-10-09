@@ -383,6 +383,10 @@ if ! "$APP_DIR/bin/amahi-install-helper"; then
   exit 1
 fi
 
+# Data drives and the share root mount nosuid,nodev; the share root is bound onto itself for it.
+/usr/local/sbin/amahi-helper disks.secure_mounts </dev/null >/dev/null 2>&1 \
+  || echo "  ⚠ Couldn't set nosuid,nodev on the share root (System Update tries again)"
+
 # Nothing updates by itself: Ubuntu's automatic updates stay off until they're switched on
 # (Settings → System Dependencies, where updates are installed). apt still refreshes its
 # package lists daily, which is how the page and the dashboard know what's waiting.

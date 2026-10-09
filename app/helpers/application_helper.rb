@@ -110,7 +110,7 @@ module ApplicationHelper
   end
 
   def netbios_name
-    @netbios_name ||= (Setting.get('server-name') || 'amahi-kai').downcase
+    @netbios_name ||= Share.server_name.downcase
   end
 
   def path2uri(name)

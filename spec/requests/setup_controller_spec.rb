@@ -116,9 +116,21 @@ describe "Setup Controller", type: :request do
         expect(Privileged.calls).to be_empty
       end
 
-      it "sets the system hostname through the root helper" do
+      it "makes the name one hostname-shaped word, saves that and sets the system hostname through the root helper" do
         post setup_update_network_path, params: { server_name: "My NAS" }
+        expect(Setting.get('server-name')).to eq('my-nas')
         expect(Privileged.calls).to eq([['network.set_hostname', { hostname: 'my-nas' }]])
+      end
+
+      it "refuses a name that isn't one, and nothing of it reaches Samba's config" do
+        ["nas\nhosts allow = 0.0.0.0/0", "nas;x", "-nas", "a" * 64].each do |name|
+          post setup_update_network_path, params: { server_name: name }
+          expect(response).to redirect_to(setup_network_path), name
+          expect(flash[:error]).to include('letters, digits and hyphens'), name
+        end
+        expect(Setting.get('server-name')).to be_nil
+        expect(Privileged.calls).to be_empty
+        expect(Share.server_name).to eq('amahi-kai')
       end
 
       it "keeps the server name and warns when the hostname can't be changed" do

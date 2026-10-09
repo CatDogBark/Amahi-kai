@@ -194,7 +194,10 @@ RSpec.describe 'AmahiHelper' do
   end
 
   describe 'samba.write_config' do
-    let(:base) { "[global]\n\tworkgroup = WORKGROUP\n\tlog file = /var/log/samba/%m.log\n" }
+    let(:base) do
+      "[global]\n\tworkgroup = WORKGROUP\n\tlog file = /var/log/samba/%m.log\n\tunix extensions = no\n" \
+      "\tload printers = no\n\tprinting = bsd\n\tprintcap name = /dev/null\n\tdisable spoolss = yes\n"
+    end
 
     def share_with(line)
       "#{base}[Bad]\n\tpath = /var/lib/amahi-kai/files/bad\n\t#{line}\n"
@@ -209,7 +212,7 @@ RSpec.describe 'AmahiHelper' do
 
     # The config the app generates, with every kind of share and the settings a share's Advanced
     # section may add: Samba as the setup wizard, Greyhole and the Trash leave it.
-    def app_config
+    def app_config(greyhole: true)
       create(:share, name: 'Movies', path: '/var/lib/amahi-kai/files/movies', disk_pool_copies: 2,
                      extras: "veto files = /.DS_Store/\nhide dot files = yes", everyone: false, guest_writeable: true)
       create(:share, name: 'Backups', path: '/mnt/storage-1/backups', disk_pool_copies: 0, rdonly: true,
@@ -218,26 +221,51 @@ RSpec.describe 'AmahiHelper' do
       Setting.set('win98', '1', Setting::SHARES)
       Setting.set('net', '192.168.1')
       allow(Share).to receive(:primary_interface).and_return('ens18')
-      allow(Greyhole).to receive(:installed?).and_return(true)
+      allow(Greyhole).to receive(:installed?).and_return(greyhole)
       Share.samba_conf('example.local')
     end
 
-    it 'accepts the config the app generates' do
+    it 'accepts the config the app generates, with Greyhole and without' do
       conf = app_config
-      expect(conf).to include('dfree command = /opt/amahi-kai/libexec/amahi-dfree', 'hosts allow', 'client lanman auth', 'log level = 5')
+      expect(conf).to include('dfree command = /opt/amahi-kai/libexec/amahi-dfree', 'hosts allow', 'client lanman auth',
+                              'log level = 5', 'wide links = yes', 'unix extensions = no')
       expect(helper.samba_problems(conf)).to eq([])
+      Share.delete_all
+      expect(helper.samba_problems(app_config(greyhole: false))).to eq([])
     end
 
     it "accepts testparm's canonical form of it too, where Samba is installed" do
       skip 'testparm is not installed' unless File.executable?(AmahiHelper::TESTPARM)
-      conf = app_config
-      Dir.mktmpdir do |dir|
-        File.write("#{dir}/smb.conf", conf)
-        canonical, err, status = Open3.capture3(AmahiHelper::TESTPARM, '-s', "#{dir}/smb.conf")
-        expect(status).to be_success, err
-        expect(canonical).to include('read only = No', 'dfree command =')
-        expect(helper.samba_problems(canonical)).to eq([])
+      [true, false].each do |greyhole|
+        Share.delete_all
+        conf = app_config(greyhole: greyhole)
+        Dir.mktmpdir do |dir|
+          File.write("#{dir}/smb.conf", conf)
+          canonical, err, status = Open3.capture3(AmahiHelper::TESTPARM, '-s', "#{dir}/smb.conf")
+          expect(status).to be_success, err
+          expect(canonical).to include('read only = No', 'dfree command =', 'unix extensions = No')
+          expect(helper.samba_problems(canonical)).to eq([]), "greyhole: #{greyhole}"
+        end
       end
+    end
+
+    it 'pins the global values it writes, read as Samba reads them, and wants the ones whose default differs' do
+      { 'guest account = root' => 'guest account must be nobody', 'guest account = amahi' => 'must be nobody',
+        'unix extensions = yes' => 'unix extensions must be no', 'smb1 unix extensions = True' => 'must be no',
+        'load printers = 1' => 'load printers must be no', 'printing = cups' => 'printing must be bsd',
+        'printcap name = /etc/printcap' => 'must be /dev/null', 'disable spoolss = False' => 'must be yes' }.each do |line, reason|
+        expect(helper.samba_problems("#{base}\t#{line}\n").join).to include(reason), line
+      end
+      ['Guest Account = NOBODY', 'unix extensions = False', 'unix extensions = 0', 'disable spoolss = True', 'disable spoolss = 1'].each do |line|
+        expect(helper.samba_problems("#{base}\t#{line}\n")).to eq([]), line
+      end
+      without = base.lines.reject { |line| line.include?('unix extensions') }.join
+      expect(helper.samba_problems(without)).to eq(['[global] unix extensions = no is missing'])
+      expect(helper.samba_problems("#{without}\tsmb1 unix extensions = No\n")).to eq([])
+      expect(helper.samba_problems("[global]\n\tworkgroup = W\n")).to eq(
+        ['[global] unix extensions = no is missing', '[global] load printers = no is missing', '[global] printing = bsd is missing',
+         '[global] printcap name = /dev/null is missing', '[global] disable spoolss = yes is missing']
+      )
     end
 
     it 'refuses every parameter that is not on its list, however it is spelled' do
@@ -266,7 +294,6 @@ RSpec.describe 'AmahiHelper' do
         share_with('directory = /var/lib/amahi-kai/files/../../../etc') => 'outside the share folders',
         share_with('path = /var/lib/amahi-kai/files/%U') => 'outside the share folders',
         "#{base}\tlog file = /etc/cron.d/x\n" => 'log file must be in /var/log/samba',
-        "#{base}\tguest account = root\n" => 'other than root',
         share_with('vfs objects = /tmp/evil.so') => 'not allowed',
         share_with('dfree command = /bin/sh') => 'must be /opt/amahi-kai/libexec/amahi-dfree',
         share_with('dfree command = /usr/bin/greyhole-dfree') => 'must be /opt/amahi-kai/libexec/amahi-dfree'
@@ -282,8 +309,9 @@ RSpec.describe 'AmahiHelper' do
     end
 
     it "checks testparm's canonical output too" do
-      testparm_output = "# Global parameters\n[global]\n\tlog file = /var/log/samba/%m.log\n" \
-                        "\tidmap config * : backend = tdb\n\n\n[x]\n\tpath = /var/lib/amahi-kai/files/x\n\troot preexec = /bin/b\n"
+      testparm_output = "# Global parameters\n[global]\n\tdisable spoolss = Yes\n\tload printers = No\n\tlog file = /var/log/samba/%m.log\n" \
+                        "\tprintcap name = /dev/null\n\tsmb1 unix extensions = No\n\tidmap config * : backend = tdb\n\tprinting = bsd\n\n\n" \
+                        "[x]\n\tpath = /var/lib/amahi-kai/files/x\n\troot preexec = /bin/b\n"
       expect(helper.samba_problems(testparm_output)).to eq(['[x] root preexec is not allowed'])
     end
 
@@ -305,9 +333,9 @@ RSpec.describe 'AmahiHelper' do
       skip 'testparm is not installed' unless File.executable?(AmahiHelper::TESTPARM)
       Dir.mktmpdir do |dir|
         conf = "#{dir}/smb.conf"
-        File.write(conf, "[global]\n\tworkgroup = W\n[x]\n\tpath = /var/lib/amahi-kai/files/x\n")
+        File.write(conf, "#{base}[x]\n\tpath = /var/lib/amahi-kai/files/x\n")
         expect { helper.check_smb_conf(conf) }.not_to raise_error
-        File.write(conf, "[global]\n[x]\n\tR O O T P R E E X E C = /bin/sh\n\tpath = /var/lib/amahi-kai/files/x\n")
+        File.write(conf, "#{base}[x]\n\tR O O T P R E E X E C = /bin/sh\n\tpath = /var/lib/amahi-kai/files/x\n")
         expect { helper.check_smb_conf(conf) }.to raise_error(AmahiHelper::Refused, /root preexec is not allowed/)
         File.write(conf, "[global]\n[x\n")
         expect { helper.check_smb_conf(conf) }.to raise_error(AmahiHelper::Refused, /testparm rejected/)
@@ -833,6 +861,82 @@ RSpec.describe 'AmahiHelper' do
       expect(refusal('disks.preview', { 'device' => '/dev/sdb1' })).to include('unmount it first')
     end
 
+    describe 'disks.secure_mounts' do
+      let(:files) { "#{dir}/files" }
+      let(:ours) { "UUID=u-1 #{mnt}/storage-1 ext4 defaults,nofail,x-systemd.device-timeout=10s 0 2\n" }
+      let(:theirs) { "UUID=u-2 #{mnt}/media ext4 defaults,nofail 0 2\n" }
+      let(:done) { "UUID=u-3 #{mnt}/storage-3 ext4 defaults,nofail,nosuid,nodev,x-systemd.device-timeout=10s 0 2\n" }
+
+      before do
+        Dir.mkdir(files)
+        stub_const('AmahiHelper::SHARE_ROOT', files)
+        stub_const('AmahiHelper::SHARE_ROOT_FSTAB', "#{files} #{files} none bind,nosuid,nodev 0 0")
+        stub_const('AmahiHelper::RUN_DIR', dir)
+        File.write(fstab, "UUID=os / ext4 defaults 0 1\n#{ours}#{theirs}#{done}")
+        File.chmod(0o644, fstab)
+      end
+
+      it 'plans the fstab change, then the remounts' do
+        expect(steps('disks.secure_mounts', {})).to eq([[:secure_fstab], [:secure_mounts]])
+      end
+
+      it "gives the lines it wrote nosuid,nodev once, leaves others alone, binds the share root, and keeps a backup" do
+        before = File.read(fstab)
+        expect(helper.do_secure_fstab).to eq('fstab_changed' => 2)
+        expect(File.read(fstab)).to eq(
+          "UUID=os / ext4 defaults 0 1\nUUID=u-1 #{mnt}/storage-1 ext4 defaults,nofail,nosuid,nodev,x-systemd.device-timeout=10s 0 2\n" \
+          "#{theirs}#{done}#{files} #{files} none bind,nosuid,nodev 0 0\n"
+        )
+        expect(File.read("#{fstab}.amahi-backup")).to eq(before)
+        expect(File.stat(fstab).mode & 0o777).to eq(0o644)
+        after = File.read(fstab)
+        expect(helper.do_secure_fstab).to eq('fstab_changed' => 0)
+        expect(File.read(fstab)).to eq(after)
+      end
+
+      it 'refuses a new fstab that would not parse, and keeps the old one' do
+        allow(helper).to receive(:fstab_entries).and_return([]) # as if the bind line were missing
+        stub_const('AmahiHelper::SHARE_ROOT_FSTAB', "#{files} #{files}")
+        expect { helper.do_secure_fstab }.to raise_error(AmahiHelper::Failed, /bad line/)
+        expect(File.read(fstab)).to include(ours)
+      end
+
+      it "refuses a new fstab that findmnt finds new errors in" do
+        skip 'findmnt is not installed' unless File.executable?(AmahiHelper::FINDMNT)
+        stub_const('AmahiHelper::SHARE_ROOT_FSTAB', "#{files} #{dir}/nowhere none bind,nosuid,nodev 0 0")
+        expect { helper.do_secure_fstab }.to raise_error(AmahiHelper::Failed, /errors the old one didn't/)
+        expect(File.read(fstab)).to include(ours)
+      end
+
+      it 'remounts the drives whose lines have the options but whose mounts lack them, and binds the share root' do
+        ran = []
+        live = { "#{mnt}/storage-1" => %w[rw relatime], "#{mnt}/storage-3" => %w[rw nosuid nodev relatime] }
+        allow(helper).to receive(:mount_options) { |path| live.fetch(path, []) }
+        allow(helper).to receive(:mount_point?) { |path| live.key?(path) }
+        allow(helper).to receive(:run_command) do |argv|
+          ran << argv
+          live[argv.last] = %w[rw relatime] if argv[1] == '--bind'
+          live[argv.last] = %w[rw nosuid nodev relatime] if argv[1] == '-o'
+          nil
+        end
+        helper.do_secure_fstab
+        expect(helper.do_secure_mounts).to eq('remounted' => ["#{mnt}/storage-1", files])
+        expect(ran).to eq([['/usr/bin/mount', '-o', 'remount,nosuid,nodev', "#{mnt}/storage-1"],
+                           ['/usr/bin/mount', '--bind', files, files],
+                           ['/usr/bin/mount', '-o', 'remount,bind,nosuid,nodev', files]])
+        ran.clear
+        expect(helper.do_secure_mounts).to eq('remounted' => [])
+        expect(ran).to eq([])
+      end
+
+      it 'reads a mount\'s options from the mounts list, the newest first' do
+        mounts = "#{dir}/mounts"
+        File.write(mounts, "/dev/sda2 / ext4 rw,relatime 0 0\n/dev/sda2 #{files} ext4 rw,relatime 0 0\n/dev/sda2 #{files} ext4 rw,nosuid,nodev,relatime 0 0\n")
+        expect(helper.mount_options(files, mounts)).to eq(%w[rw nosuid nodev relatime])
+        expect(helper.mount_options("#{mnt}/none", mounts)).to eq([])
+      end
+    end
+
     describe 'mounting and unmounting' do
       let(:ran) { [] }
       let(:mounted) { [] }
@@ -851,8 +955,8 @@ RSpec.describe 'AmahiHelper' do
       it 'mounts, and adds the PR #13 fstab line (nofail, short timeout) once' do
         mp = "#{mnt}/storage-2"
         expect(helper.do_mount_drive('/dev/sdd1', mp, 'ext4', 'u-1')).to eq('mount_point' => mp)
-        expect(ran).to eq([['/usr/bin/mount', '/dev/sdd1', mp]])
-        expect(File.read(fstab).lines.last).to eq("UUID=u-1 #{mp} ext4 defaults,nofail,x-systemd.device-timeout=10s 0 2\n")
+        expect(ran).to eq([['/usr/bin/mount', '-o', 'nosuid,nodev', '/dev/sdd1', mp]])
+        expect(File.read(fstab).lines.last).to eq("UUID=u-1 #{mp} ext4 defaults,nofail,nosuid,nodev,x-systemd.device-timeout=10s 0 2\n")
 
         mounted.clear
         helper.do_mount_drive('/dev/sdd1', mp, 'ext4', 'u-1')
@@ -861,7 +965,7 @@ RSpec.describe 'AmahiHelper' do
 
       it 'mounts NTFS with ntfs-3g' do
         helper.do_mount_drive('/dev/sdd1', "#{mnt}/win", 'ntfs', 'A1B2')
-        expect(ran.last).to eq(['/usr/bin/mount', '-t', 'ntfs-3g', '/dev/sdd1', "#{mnt}/win"])
+        expect(ran.last).to eq(['/usr/bin/mount', '-t', 'ntfs-3g', '-o', 'nosuid,nodev', '/dev/sdd1', "#{mnt}/win"])
         expect(File.read(fstab)).to include("UUID=A1B2 #{mnt}/win ntfs-3g defaults,nofail")
       end
 

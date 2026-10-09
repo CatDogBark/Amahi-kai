@@ -103,7 +103,15 @@ module AmahiHelper
     /^Current Drive Temperature:\s+(\d+)/
   ].freeze
   MOUNTABLE_FS = %w[ext2 ext3 ext4 xfs btrfs ntfs vfat exfat].freeze
-  FSTAB_OPTIONS = 'defaults,nofail,x-systemd.device-timeout=10s'
+  # Data drives mount nosuid,nodev: nothing on a drive (one brought from elsewhere, or written
+  # by an app) can run with privileges or stand in for a device. The share root, on the OS
+  # disk, gets the same by a bind mount of itself (SHARE_ROOT_FSTAB). disks.secure_mounts
+  # brings fstab lines written before (FSTAB_OPTIONS_BEFORE) and the live mounts up to this.
+  MOUNT_OPTIONS = %w[nosuid nodev].freeze
+  FSTAB_OPTIONS = "defaults,nofail,#{MOUNT_OPTIONS.join(',')},x-systemd.device-timeout=10s".freeze
+  FSTAB_OPTIONS_BEFORE = 'defaults,nofail,x-systemd.device-timeout=10s'
+  SHARE_ROOT_FSTAB = "#{SHARE_ROOT} #{SHARE_ROOT} none bind,#{MOUNT_OPTIONS.join(',')} 0 0".freeze
+  FINDMNT = '/usr/bin/findmnt'
   PREVIEW_LIMIT = { entries: 1_000_000, seconds: 30 }.freeze
   # Where the helper makes its temporary folders (preview mounts, downloaded keys):
   # writable only by root.
@@ -546,6 +554,15 @@ module AmahiHelper
       validate: ->(a) { unmount_request(a['device']) },
       plan: ->(v) { [[:unmount_drive, v[:mount_points], v[:uuid]]] }
     },
+    # Data drives and the share root mounted nosuid,nodev (see MOUNT_OPTIONS): the fstab lines
+    # Amahi-kai wrote before get the options (the new file is checked first, and the old one
+    # kept as /etc/fstab.amahi-backup), and what's mounted now is remounted with them. System
+    # Update runs it every time, and the installer once; it changes nothing that's in place.
+    'disks.secure_mounts' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:secure_fstab], [:secure_mounts]] }
+    },
     # Lists the top level of an unmounted data drive, mounted read-only for the moment.
     'disks.preview' => {
       params: %w[device],
@@ -598,7 +615,7 @@ module AmahiHelper
          ['/usr/bin/udevadm', 'settle', { allow_failure: true }],
          [:make_dir, POOL_ROOT, '0755'],
          [ZPOOL, 'create', '-f', '-o', 'ashift=12', '-o', 'autoexpand=on', *(v[:ssd] ? %w[-o autotrim=on] : []),
-          '-O', 'compression=lz4', '-O', "mountpoint=#{POOL_ROOT}/#{v[:name]}",
+          '-O', 'compression=lz4', '-O', 'setuid=off', '-O', 'devices=off', '-O', "mountpoint=#{POOL_ROOT}/#{v[:name]}",
           *SNAPSHOT_KEEP.flat_map { |kind, keep| ['-O', "amahi:snapshot-#{kind}=#{keep}"] }, v[:name], *v[:vdevs]],
          [:pool_status]]
       }
@@ -1057,6 +1074,19 @@ module AmahiHelper
   SAMBA_VFS_MODULES = %w[
     greyhole recycle fruit streams_xattr catia acl_xattr shadow_copy2 full_audit dirsort worm readonly crossrename
   ].freeze
+  # Global values pinned to what Share.header_workgroup writes: no printing, no SMB1 unix
+  # extensions (they let a client make links), the guest account nobody.
+  SAMBA_PINNED = {
+    'guestaccount' => 'nobody', 'unixextensions' => 'no', 'smb1unixextensions' => 'no', 'loadprinters' => 'no',
+    'printing' => 'bsd', 'printcapname' => '/dev/null', 'disablespoolss' => 'yes'
+  }.freeze
+  # Samba's defaults differ from these, so a config must say them: the raw one, and testparm's
+  # output, which leaves out parameters at their default (unix extensions has two names).
+  SAMBA_REQUIRED = {
+    'unix extensions = no' => %w[unixextensions smb1unixextensions], 'load printers = no' => %w[loadprinters],
+    'printing = bsd' => %w[printing], 'printcap name = /dev/null' => %w[printcapname],
+    'disable spoolss = yes' => %w[disablespoolss]
+  }.freeze
   # Samba's dfree command for pooled shares: Amahi-kai's, which reads GREYHOLE_POOL_CONF
   # (greyhole-dfree reads greyhole.conf, which the people connected can't).
   GREYHOLE_DFREE = "#{APP_DIR}/libexec/amahi-dfree"
@@ -2119,14 +2149,30 @@ module AmahiHelper
     # Problems with a Samba config (raw text, or testparm's canonical output): a parameter
     # that isn't listed, or a listed one with a value that points somewhere it shouldn't.
     def samba_problems(text)
-      samba_params(text).filter_map do |section, name, value|
+      params = samba_params(text)
+      problems = params.filter_map do |section, name, value|
         key = name.downcase.delete(" \t")
         if !samba_param_allowed?(section, key)
           "[#{section}] #{name} is not allowed"
+        elsif (pinned = SAMBA_PINNED[key]) && !samba_value?(value, pinned)
+          "[#{section}] #{name} must be #{pinned}"
         else
           samba_value_problem(section, key, value)
         end
       end
+      return problems unless text.match?(/^\s*\[global\]/i) # a whole config, not one share's section
+      written = params.filter_map { |section, name, _value| name.downcase.delete(" \t") if section == 'global' }
+      SAMBA_REQUIRED.each { |line, keys| problems << "[global] #{line} is missing" if (keys & written).empty? }
+      problems
+    end
+
+    # Whether +value+ says +wanted+ the way Samba reads it: yes, true and 1 are one value, no,
+    # false and 0 another, and case doesn't count.
+    def samba_value?(value, wanted)
+      v = value.strip.downcase
+      v = 'yes' if %w[yes true 1].include?(v)
+      v = 'no' if %w[no false 0].include?(v)
+      v == wanted
     end
 
     # Share parameters are accepted in any section (in [global] Samba takes them as defaults);
@@ -2142,8 +2188,6 @@ module AmahiHelper
         "[#{section}] path #{value} is outside the share folders" unless config_share_path?(value)
       when 'logfile'
         "[#{section}] log file must be in /var/log/samba" unless value.start_with?('/var/log/samba/') && !value.include?('..')
-      when 'guestaccount'
-        "[#{section}] guest account must be an existing user other than root" unless (pw = passwd(value)) && !pw.uid.zero?
       when 'vfsobjects'
         unknown = value.split(/[\s,]+/) - SAMBA_VFS_MODULES
         "[#{section}] vfs objects #{unknown.join(', ')} not allowed" if unknown.any?
@@ -2368,7 +2412,7 @@ module AmahiHelper
       created = !File.exist?(mount_point)
       Dir.mkdir(mount_point, 0o755) if created
       begin
-        run_command(['/usr/bin/mount', *(fstype == 'ntfs' ? %w[-t ntfs-3g] : []), device, mount_point])
+        run_command(['/usr/bin/mount', *(fstype == 'ntfs' ? %w[-t ntfs-3g] : []), '-o', MOUNT_OPTIONS.join(','), device, mount_point])
         raise Failed, "#{device} didn't mount at #{mount_point}" unless mount_point?(mount_point)
       rescue Failed
         Dir.rmdir(mount_point) if created && !mount_point?(mount_point)
@@ -2398,8 +2442,94 @@ module AmahiHelper
       old = File.read(FSTAB)
       new = old.lines.reject { |line| line.split.first == source }.join
       return if new == old
+      replace_fstab(old, new)
+    end
+
+    def replace_fstab(old, new)
       File.write("#{FSTAB}.amahi-backup", old)
       do_install(FSTAB, new, nil, format('%o', File.stat(FSTAB).mode & 0o7777))
+    end
+
+    # The data drive lines Amahi-kai wrote before MOUNT_OPTIONS get them, and the share root's
+    # bind mount is added once. A bad fstab can stop the NAS booting, so the new file must
+    # parse, and findmnt --verify must find no error in it that the old one didn't have (an
+    # unplugged drive is an error either way, which nofail is there for).
+    def do_secure_fstab
+      old = File.read(FSTAB)
+      changed = 0
+      new = old.lines.map do |line|
+        fields = line.split
+        drive = fields.size == 6 && fields[0].start_with?('UUID=') && fields[1].start_with?("#{MNT}/") &&
+                (MOUNTABLE_FS + ['ntfs-3g']).include?(fields[2]) && fields[3] == FSTAB_OPTIONS_BEFORE
+        next line unless drive
+        changed += 1
+        "#{fields[0]} #{fields[1]} #{fields[2]} #{FSTAB_OPTIONS} #{fields[4]} #{fields[5]}\n"
+      end.join
+      bind = fstab_entries.none? { |fields| fields[0] == SHARE_ROOT && fields[1] == SHARE_ROOT }
+      new = "#{new.chomp}\n#{SHARE_ROOT_FSTAB}\n" if bind
+      return { 'fstab_changed' => 0 } if new == old
+      fstab_check!(old, new)
+      replace_fstab(old, new)
+      { 'fstab_changed' => changed + (bind ? 1 : 0) }
+    end
+
+    def fstab_check!(old, new)
+      bad = new.lines.find { |line| !(line.strip.empty? || line.start_with?('#') || line.split.size.between?(4, 6)) }
+      raise Failed, "the new fstab has a bad line: #{bad.strip}" if bad
+      return unless File.executable?(FINDMNT)
+      before, after = [old, new].map { |text| fstab_errors(text) }
+      fresh = after - before
+      raise Failed, "the new fstab has errors the old one didn't: #{fresh.join('; ')}" if fresh.any?
+    end
+
+    # findmnt --verify's errors for an fstab's text, each with the mount point it's under
+    # (findmnt prints the mount point, then its findings indented), so one drive's error
+    # doesn't stand in for another's.
+    def fstab_errors(text)
+      Dir.mktmpdir('amahi-fstab-', RUN_DIR) do |dir|
+        path = "#{dir}/fstab"
+        File.write(path, text)
+        out, _err, _status = Open3.capture3(ENV_MIN, [FINDMNT, FINDMNT], '--verify', '--tab-file', path, unsetenv_others: true, chdir: '/')
+        target = nil
+        out.lines.filter_map do |line|
+          target = line.strip unless line.start_with?(' ', "\t") || line.strip.empty?
+          "#{target}: #{line.strip}" if line.strip.start_with?('[E]')
+        end
+      end
+    end
+
+    # Remounts the data drives whose fstab line has MOUNT_OPTIONS but whose mount doesn't yet,
+    # and makes the share root a bind mount of itself with them.
+    def do_secure_mounts
+      remounted = []
+      fstab_entries.each do |fields|
+        next unless fields[1].start_with?("#{MNT}/") && fields[3].to_s.split(',').include?(MOUNT_OPTIONS.first) && mount_point?(fields[1])
+        next if secured?(fields[1])
+        run_command(['/usr/bin/mount', '-o', "remount,#{MOUNT_OPTIONS.join(',')}", fields[1]])
+        remounted << fields[1]
+      end
+      if File.directory?(SHARE_ROOT) && !File.symlink?(SHARE_ROOT)
+        run_command(['/usr/bin/mount', '--bind', SHARE_ROOT, SHARE_ROOT]) if mount_options(SHARE_ROOT).empty?
+        unless secured?(SHARE_ROOT)
+          run_command(['/usr/bin/mount', '-o', "remount,bind,#{MOUNT_OPTIONS.join(',')}", SHARE_ROOT])
+          remounted << SHARE_ROOT
+        end
+        raise Failed, "#{SHARE_ROOT} isn't mounted #{MOUNT_OPTIONS.join(',')}" unless secured?(SHARE_ROOT)
+      end
+      { 'remounted' => remounted }
+    end
+
+    def secured?(path)
+      (MOUNT_OPTIONS - mount_options(path)).empty?
+    end
+
+    # The options of the mount at +path+ (the newest, when several), from /proc/self/mounts;
+    # empty when nothing is mounted there. (mount_point? can't see a folder bound onto itself.)
+    def mount_options(path, mounts_file = '/proc/self/mounts')
+      entry = File.readlines(mounts_file).map(&:split).select { |fields| fields[1] == path }.last
+      entry ? entry[3].to_s.split(',') : []
+    rescue SystemCallError
+      []
     end
 
     def do_preview_drive(device, fstype)
