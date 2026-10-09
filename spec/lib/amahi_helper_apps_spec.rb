@@ -472,7 +472,7 @@ RSpec.describe 'AmahiHelper apps' do
       acl = ran.index { |argv| argv.first == '/usr/bin/find' }
       expect(ran[acl - 1]).to include('/usr/bin/apt-get', 'install', 'acl')
       expect(ran[acl]).to eq(['/usr/bin/find', "#{dir}/downloads", '-xdev', '-type', 'd', '-exec',
-                              '/usr/bin/setfacl', '-d', '-m', 'u::rwx,g::rwx,o::rx', '{}', '+'])
+                              '/usr/bin/setfacl', '-P', '-d', '-m', 'u::rwx,g::rwx,o::rx', '{}', '+'])
       expect(ran.index { |argv| argv[1] == 'start' }).to be > acl
     end
 
