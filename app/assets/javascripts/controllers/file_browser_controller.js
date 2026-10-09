@@ -2,8 +2,9 @@
 //
 // The web file browser only views: files are added, renamed and deleted over the SMB shares,
 // so Samba (and Greyhole on pooled shares) sees every change. A row is one link: a folder opens
-// (the link's own job), a file is shown in the panel beside the list (select), with Download and,
-// for pictures, video, audio, PDFs and text, Open full screen. The list can be a grid of tiles
+// (the link's own job), a file is shown in the panel beside the list (select; clicking it again
+// closes it), with Download and, for pictures, video, audio, PDFs and text, Open full screen. The
+// list can be a grid of tiles
 // (setView, remembered in this browser), and a folder's zip says it's coming until its download
 // starts (downloadZip).
 
@@ -45,6 +46,8 @@
       var view = 'list';
       try { view = localStorage.getItem(VIEW_KEY) || 'list'; } catch (e) { /* no storage: the list */ }
       this.applyView(view);
+      // What the panel says with no file selected, put back when one is closed
+      if (this.hasDetailsTarget) this.emptyDetails = this.detailsTarget.querySelector('.fb-details-empty');
     }
 
     // ── List or grid ──
@@ -82,8 +85,10 @@
       if (!this.hasDetailsTarget) return; // no panel: the link opens the file
       event.preventDefault();
       var link = event.currentTarget;
-      this.element.querySelectorAll('.fb-item.selected').forEach(function(item) { item.classList.remove('selected'); });
-      link.closest('.fb-item').classList.add('selected');
+      var item = link.closest('.fb-item');
+      if (item.classList.contains('selected')) { this.deselect(); return; }
+      this.element.querySelectorAll('.fb-item.selected').forEach(function(row) { row.classList.remove('selected'); });
+      item.classList.add('selected');
       this.selected = link.dataset;
 
       var d = link.dataset;
@@ -138,6 +143,14 @@
         actions.appendChild(open);
       }
       panel.appendChild(actions);
+    }
+
+    // Closes the selected file's panel (a playing video or song stops with it).
+    deselect() {
+      this.element.querySelectorAll('.fb-item.selected').forEach(function(row) { row.classList.remove('selected'); });
+      this.selected = null;
+      this.detailsTarget.replaceChildren();
+      if (this.emptyDetails) this.detailsTarget.appendChild(this.emptyDetails);
     }
 
     // The selected file in the full-screen dialog; text opens in its own tab.

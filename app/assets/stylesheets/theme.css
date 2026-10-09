@@ -886,13 +886,17 @@ a:hover { color: #b5f7df; }
   border-bottom: 1px solid var(--kai-line);
   padding: 10px 0;
 }
-.kai-header-inner {
+/* Wraps at every width: Bootstrap's navbar-expand-md stops its container wrapping, which
+   squeezed the name onto two lines and pushed the tools off a medium-width window. */
+.navbar.kai-header > .kai-header-inner {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
 }
+.kai-brand, .kai-mainnav, .kai-header-tools { flex: none; }
 .kai-brand {
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -944,6 +948,10 @@ a:hover { color: #b5f7df; }
   font: inherit;
 }
 .kai-search input::placeholder { color: var(--kai-placeholder); }
+/* Too narrow for everything on one line: the search takes a row of its own below. */
+@media (min-width: 768px) and (max-width: 991.98px) {
+  .kai-search { order: 1; flex-basis: 100%; max-width: none; }
+}
 .kai-header-tools {
   display: flex;
   align-items: center;
