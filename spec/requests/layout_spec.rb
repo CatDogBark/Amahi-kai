@@ -30,6 +30,26 @@ RSpec.describe 'The layout', type: :request do
     expect(page.at_css('.kai-brand').text.strip).to eq('Amahi-kai')
   end
 
+  it "shows Advanced mode's toggle as pressed when the setting is on, reading the setting once per page" do
+    login_as_admin
+    { '1' => 'true', '0' => 'false' }.each do |value, pressed|
+      Setting.set('advanced', value)
+      queries = []
+      counter = lambda do |*, payload|
+        values = Array(payload[:type_casted_binds]).flatten.map(&:to_s)
+        queries << payload[:sql] if payload[:sql].to_s.include?('settings') && (values.include?('advanced') || payload[:sql].include?("'advanced'"))
+      end
+      ActiveSupport::Notifications.subscribed(counter, 'sql.active_record') do
+        get '/shares'
+      end
+      expect(Nokogiri::HTML(response.body).at_css('#advanced-toggle')['aria-pressed']).to eq(pressed)
+      expect(queries.size).to eq(1), queries.inspect
+    end
+    Setting.where(name: 'advanced').delete_all
+    get '/shares'
+    expect(Nokogiri::HTML(response.body).at_css('#advanced-toggle')['aria-pressed']).to eq('false')
+  end
+
   it "labels Apps' sub-tabs Available and Installed" do
     login_as_admin
     expect(page_at('/apps').css('.setup-subtab a').map { |a| a.text.strip }).to eq(%w[Available Installed])

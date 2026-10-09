@@ -82,4 +82,11 @@ class ShareAccessManager
     share.guest_writeable = !share.guest_writeable
     share.save
   end
+
+  # Takes everyone off the share's lists of people (used when everyone is off).
+  def clear_permissions!
+    share.users_with_share_access = []
+    share.users_with_write_access = []
+    share.save
+  end
 end

@@ -24,7 +24,6 @@ class SettingsController < ApplicationController
 
   def index
     @page_title = t 'settings'
-    @advanced_settings = Setting.where(:name=>'advanced').first
     @version = Platform.platform_versions
   end
 
@@ -42,7 +41,7 @@ class SettingsController < ApplicationController
 
   def servers
     @page_title = t 'settings'
-    unless @advanced
+    unless advanced?
       redirect_to settings_index_path
     else
       @services = SystemServices.all(versions: true)
@@ -265,16 +264,10 @@ class SettingsController < ApplicationController
   end
 
   def gather_system_info
-    os = if File.exist?('/etc/os-release')
-           File.readlines('/etc/os-release').find { |l| l.start_with?('PRETTY_NAME=') }&.split('=', 2)&.last&.tr('"', '')&.strip || 'Unknown'
-         else
-           'Unknown'
-         end
-
     {
       hostname: SystemInfo.hostname,
       ip_address: SystemInfo.ip_address,
-      os: os,
+      os: SystemInfo.os_name,
       kernel: SystemInfo.kernel,
       uptime: "up #{SystemInfo.uptime}",
       ruby_version: RUBY_VERSION,
@@ -284,28 +277,18 @@ class SettingsController < ApplicationController
   end
 
   def gather_resources
-    # CPU load average
     cpu = 0
     cpu_detail = 'unavailable'
-    if File.exist?('/proc/loadavg')
-      load1, load5, load15 = File.read('/proc/loadavg').split[0..2].map(&:to_f)
-      cores = SystemInfo.cores
-      cpu = ((load1 / cores) * 100).round
-      cpu_detail = "Load: #{load1} / #{load5} / #{load15} (#{cores} cores)"
+    if (load = SystemInfo.load)
+      cpu = load[:percent]
+      cpu_detail = "Load: #{load[:one]} / #{load[:five]} / #{load[:fifteen]} (#{load[:cores]} cores)"
     end
 
-    # Memory
     mem_percent = 0
     mem_detail = 'unavailable'
-    if File.exist?('/proc/meminfo')
-      meminfo = File.read('/proc/meminfo')
-      total = meminfo[/MemTotal:\s+(\d+)/, 1].to_i
-      available = meminfo[/MemAvailable:\s+(\d+)/, 1].to_i
-      if total > 0
-        used = total - available
-        mem_percent = ((used.to_f / total) * 100).round
-        mem_detail = "#{(used / 1024.0).round} MB / #{(total / 1024.0).round} MB"
-      end
+    if (memory = SystemInfo.memory)
+      mem_percent = memory[:percent]
+      mem_detail = "#{(memory[:used] / 1024.0).round} MB / #{(memory[:total] / 1024.0).round} MB"
     end
 
     # Disk
@@ -317,7 +300,7 @@ class SettingsController < ApplicationController
     end
 
     {
-      cpu_percent: [cpu, 100].min,
+      cpu_percent: cpu,
       cpu_detail: cpu_detail,
       memory_percent: mem_percent,
       memory_detail: mem_detail,

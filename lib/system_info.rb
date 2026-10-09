@@ -28,6 +28,37 @@ module SystemInfo
     Etc.uname[:release]
   end
 
+  # The distribution's name from os-release ("Ubuntu 24.04.3 LTS"), or Linux.
+  def os_name(file = '/etc/os-release')
+    line = File.readlines(file).find { |l| l.start_with?('PRETTY_NAME=') }
+    line&.split('=', 2)&.last&.tr('"', '')&.strip.presence || 'Linux'
+  rescue SystemCallError
+    'Linux'
+  end
+
+  # The load averages with the CPU count, and the 1-minute load as a percentage of the cores
+  # (capped at 100): { one:, five:, fifteen:, cores:, percent: }, or nil without /proc.
+  def load(file = '/proc/loadavg')
+    one, five, fifteen = File.read(file).split[0..2].map(&:to_f)
+    cores = self.cores
+    { one: one, five: five, fifteen: fifteen, cores: cores, percent: [((one / cores) * 100).round, 100].min }
+  rescue SystemCallError
+    nil
+  end
+
+  # Memory in kB, as /proc/meminfo counts it, with the share in use (what isn't available):
+  # { total:, available:, used:, percent: }, or nil without /proc or with no total.
+  def memory(file = '/proc/meminfo')
+    text = File.read(file)
+    total = text[/MemTotal:\s+(\d+)/, 1].to_i
+    available = text[/MemAvailable:\s+(\d+)/, 1].to_i
+    return nil unless total.positive?
+    used = total - available
+    { total: total, available: available, used: used, percent: ((used.to_f / total) * 100).round }
+  rescue SystemCallError
+    nil
+  end
+
   def machine
     Etc.uname[:machine]
   end

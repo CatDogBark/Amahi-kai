@@ -203,6 +203,10 @@ class Share < ApplicationRecord
     access_manager.toggle_guest_writeable!
   end
 
+  def clear_permissions!
+    access_manager.clear_permissions!
+  end
+
   # --- Samba config class methods ---
 
   def self.samba_conf(domain)

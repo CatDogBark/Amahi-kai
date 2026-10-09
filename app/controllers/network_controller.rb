@@ -41,7 +41,7 @@ class NetworkController < ApplicationController
   end
 
   def dns_aliases
-    unless @advanced
+    unless advanced?
       redirect_to network_index_path
     else
       get_dns_aliases
@@ -68,7 +68,7 @@ class NetworkController < ApplicationController
   end
 
   def settings
-    unless @advanced
+    unless advanced?
       redirect_to network_index_path
     else
       @net = Setting.get 'net'
@@ -158,7 +158,7 @@ class NetworkController < ApplicationController
   # --- Gateway (dnsmasq DHCP/DNS) ---
 
   def gateway
-    unless @advanced
+    unless advanced?
       redirect_to network_index_path
       return
     end

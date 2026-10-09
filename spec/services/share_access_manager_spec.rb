@@ -62,6 +62,18 @@ RSpec.describe ShareAccessManager do
     end
   end
 
+  describe '#clear_permissions!' do
+    it "takes everyone off the share's lists" do
+      share = create(:share, everyone: false)
+      user = create(:user)
+      share.users_with_share_access << user
+      share.users_with_write_access << user
+      described_class.new(share).clear_permissions!
+      expect(share.reload.users_with_share_access).to be_empty
+      expect(share.users_with_write_access).to be_empty
+    end
+  end
+
   describe '#toggle_access!' do
     let(:user) { create(:user) }
     let(:share) { create(:share, everyone: false) }

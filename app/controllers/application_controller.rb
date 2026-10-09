@@ -21,16 +21,16 @@ class ApplicationController < ActionController::Base
   protect_from_forgery with: :exception
 
   before_action :set_user_session_controller
-  before_action :before_action_hook
   before_action :check_setup_completed
 
-  helper_method :current_user
+  helper_method :current_user, :advanced?
 
   private
 
-  def before_action_hook
-    adv = Setting.where(:name=>'advanced').first
-    @advanced = adv && adv.value == '1'
+  # Advanced mode (the header's toggle), read once per request, and only when a page asks.
+  def advanced?
+    return @advanced if defined?(@advanced)
+    @advanced = Setting.get('advanced') == '1'
   end
 
   # The values of +params+ with Windows line endings (\r\n, a ^M at each line's end) made \n.
@@ -50,8 +50,9 @@ class ApplicationController < ActionController::Base
   end
 
   def setup_completed?
+    return @setup_completed if defined?(@setup_completed)
     val = Setting.get('setup_completed')
-    val == 'true' || val == '1'
+    @setup_completed = (val == 'true' || val == '1')
   end
   helper_method :setup_completed?
 
