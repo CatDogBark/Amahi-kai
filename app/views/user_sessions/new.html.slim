@@ -20,10 +20,3 @@
 
     p[class="submit"]
       = submit_tag t('log_in')
-
-script
-  | function try_focus() {
-  |   var field = document.getElementById('username');
-  |   if (field) { field.focus(); field.select(); }
-  | }
-  | try_focus();

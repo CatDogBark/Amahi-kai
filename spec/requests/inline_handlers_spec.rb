@@ -17,6 +17,6 @@ RSpec.describe 'the views' do
   end
 
   it 'have no inline scripts' do
-    expect(offenders(/<script(?![^>]*type="application\/json")|^\s*javascript:\s*$/)).to eq([])
+    expect(offenders(/<script(?![^>]*type="application\/json")|^\s*javascript:\s*$|^\s*script\b(?!#flash-data)/)).to eq([])
   end
 end
