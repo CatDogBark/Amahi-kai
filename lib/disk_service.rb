@@ -7,10 +7,13 @@ require 'greyhole'
 module DiskService
   class << self
     # Adds a drive to Greyhole's pool, or takes it out (safely: Greyhole.remove_drive!).
-    # { checked: in the pool, removing: Greyhole is moving its files off, path: }.
+    # { checked: in the pool, removing: Greyhole is moving its files off, path: }. Either way
+    # the apps given pooled shares follow the pool (a removal Greyhole finishes later, when
+    # it's noticed: Greyhole.sync_removals!).
     def toggle_pool_partition(path)
       if DiskPoolPartition.exists?(path: path)
         removing = Greyhole.remove_drive!(path) == :removing
+        DockerApp.follow_pool! unless removing
         return { checked: removing, removing: removing, path: path }
       end
 
@@ -30,6 +33,7 @@ module DiskService
       rescue StandardError => e
         Rails.logger.error("Greyhole configure failed: #{e.message}")
       end
+      DockerApp.follow_pool!
 
       { checked: checked, removing: false, path: path }
     end

@@ -716,6 +716,7 @@ RSpec.describe 'AmahiHelper apps' do
     end
 
     it "mounts shares at /shares/<name>, a pooled share with its copy folders, and lets a writer join the users group" do
+      allow(helper).to receive(:mount_point?) { |path| path == "#{drives}/storage-1" } # storage-2 isn't mounted
       allow(helper).to receive(:group_id).and_call_original
       allow(helper).to receive(:group_id).with('users').and_return(100)
       mounts = helper.app_share_mounts(choose(transmission, [{ 'name' => 'Movies' }, { 'name' => 'Downloads', 'write' => true }]))
@@ -725,6 +726,23 @@ RSpec.describe 'AmahiHelper apps' do
                             '--mount', "type=bind,source=#{files}/downloads,target=/shares/Downloads"])
       expect(helper.app_share_mounts(choose(transmission, [{ 'name' => 'Downloads' }])))
         .to eq(['--mount', "type=bind,source=#{files}/downloads,target=/shares/Downloads,readonly"])
+    end
+
+    it "makes a pooled share's folder on a mounted pool drive that has none yet, so the app sees the copies made there" do
+      allow(helper).to receive(:mount_point?).and_return(true)
+      allow(helper).to receive(:real_root?).and_return(true) # the drives are mounted
+      allow(helper).to receive(:do_own_dir)
+      mounts = helper.app_share_mounts(choose(transmission, [{ 'name' => 'Movies' }]))
+      expect(mounts).to include("type=bind,source=#{drives}/storage-2/Movies,target=#{drives}/storage-2/Movies,readonly")
+      expect(File.directory?("#{drives}/storage-2/Movies")).to be true
+      expect(helper).to have_received(:do_own_dir).with("#{drives}/storage-2/Movies", 'amahi', 'users', '2775').once
+      expect(helper).not_to have_received(:do_own_dir).with("#{drives}/storage-1/Movies", anything, anything, anything)
+
+      # A link where the folder would be is left alone, and not mounted
+      FileUtils.rm_rf("#{drives}/storage-2/Movies")
+      File.symlink('/etc', "#{drives}/storage-2/Movies")
+      expect(helper.app_share_mounts(choose(transmission, [{ 'name' => 'Movies' }])).join(' ')).not_to include('storage-2')
+      expect { helper.greyhole_copies('..') }.to raise_error(AmahiHelper::Failed, /can't be a folder/)
     end
 
     it "is checked when the request comes in" do

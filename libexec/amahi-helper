@@ -1938,9 +1938,21 @@ module AmahiHelper
       {}
     end
 
-    # The folders holding a pooled share's copies, one per Greyhole drive (<drive>/<share>).
+    # The folders holding a pooled share's copies, one per mounted Greyhole drive
+    # (<drive>/<share>), for an app's mounts. One that's missing is made (amahi:users 2775, as
+    # Greyhole makes them), through handles: a drive just added to the pool gets the share's
+    # copies after the app's mounts are made, and the app sees them there.
     def greyhole_copies(share)
-      greyhole_drives.map { |drive| "#{drive}/#{share}" }.select { |dir| File.directory?(dir) && !File.symlink?(dir) }.uniq
+      raise Failed, "share #{share.inspect} can't be a folder on a pool drive" if %w[. ..].include?(share)
+
+      greyhole_drives.select { |drive| mount_point?(drive) }.filter_map do |drive|
+        dir = "#{drive}/#{share}"
+        unless File.exist?(dir) || File.symlink?(dir)
+          do_mkdir_p(dir)
+          do_own_dir(dir, APP_USER, USERS_GROUP, '2775')
+        end
+        dir if File.directory?(dir) && !File.symlink?(dir)
+      end.uniq
     end
 
     # Greyhole's storage pool drives, as greyhole.conf lists them (folders under DRIVES_ROOT).

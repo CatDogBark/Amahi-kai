@@ -25,6 +25,24 @@ describe "Disk Pool Actions", type: :request do
         expect(Greyhole).to have_received(:check_pool!).once
         expect(share.reload.disk_pool_copies).to eq(1)
       end
+
+      it "has the apps given the share follow it into the pool, and out of it once it's Off" do
+        allow(SambaService).to receive(:push_config)
+        allow(Greyhole).to receive(:configure!)
+        allow(Greyhole).to receive(:check_pool!)
+        allow(DockerApp).to receive(:follow_pool!)
+        put update_disk_pool_copies_share_path(share), params: { copies: 2 }
+        expect(DockerApp).to have_received(:follow_pool!).with(shares: [share.name]).once
+        put update_disk_pool_copies_share_path(share), params: { copies: 1 } # still pooled
+        expect(DockerApp).to have_received(:follow_pool!).once
+
+        allow(Greyhole).to receive(:remove_share!).and_return(:removing) # files to move back first
+        put update_disk_pool_copies_share_path(share), params: { copies: 0 }
+        expect(DockerApp).to have_received(:follow_pool!).once
+        allow(Greyhole).to receive(:remove_share!) { |s| s.update!(disk_pool_copies: 0) && :removed }
+        put update_disk_pool_copies_share_path(share), params: { copies: 0 }
+        expect(DockerApp).to have_received(:follow_pool!).with(shares: [share.name]).twice
+      end
     end
   end
 
