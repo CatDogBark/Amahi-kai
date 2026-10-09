@@ -1,4 +1,5 @@
-/* A share's settings on Shares (shares/_share): full width, by section, with what each does. */
+/* A share's settings on Shares (shares/_share), and a user's on Users (users/_user): full width,
+   by section, with what each does. */
 .share-card {
   padding: 1rem 1.25rem;
 }
