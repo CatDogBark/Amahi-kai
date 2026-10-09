@@ -89,11 +89,12 @@ describe "Disks Controller", type: :request do
         page = Nokogiri::HTML(response.body)
         expect(page.at_css('#greyhole-install-modal')['data-stream-url']).to eq(disks_install_greyhole_stream_path)
         expect(page.at_css('#system-update-install-modal')['data-stream-url']).to eq(settings_update_system_stream_path)
-        # The shared opener reads the window's own address; no window's address is baked into it.
-        opener = page.css('script').map(&:text).find { |js| js.include?('function openInstallTerminal') }
-        expect(opener).to include("dataset.streamUrl")
-        expect(opener).not_to include(disks_install_greyhole_stream_path)
-        expect(opener).not_to include(settings_update_system_stream_path)
+        # The shared opener (install_terminal.js) reads the window's own address; the page carries
+        # no script of its own.
+        opener = Rails.application.assets['install_terminal.js'].to_s
+        expect(opener).to include('function openInstallTerminal', 'dataset.streamUrl')
+        expect(page.css('script:not([type="application/json"])').map { |s| s['src'].to_s }).to all(include('/assets/'))
+        expect(page.at_css('#greyhole-install-modal').to_html).not_to include(settings_update_system_stream_path)
       end
     end
 

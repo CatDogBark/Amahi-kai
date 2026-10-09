@@ -73,59 +73,12 @@
 
   <div class="setup-actions">
     <a href="<%= setup_share_path %>" class="btn-skip">Skip — I'll set this up later</a>
-    <button type="button" class="btn-kai" data-call="installGreyhole">
+    <button type="button" class="btn-kai" data-call="installGreyhole" data-args='["<%= setup_install_greyhole_stream_path %>", "<%= setup_share_path %>"]'>
       Install Greyhole →
     </button>
   </div>
 
   <%= render 'shared/install_terminal', id: 'greyhole-install', title: 'Installing Greyhole', stream_url: '' %>
-
-  <script>
-  function installGreyhole() {
-    var copies = document.getElementById('default_copies').value;
-    var url = '<%= setup_install_greyhole_stream_path %>' + '?default_copies=' + copies;
-
-    var id = 'greyhole-install';
-    var modal = document.getElementById(id + '-install-modal');
-    var output = document.getElementById(id + '-output');
-    var cursor = document.getElementById(id + '-cursor');
-    var footer = document.getElementById(id + '-install-footer');
-    var terminal = document.getElementById(id + '-terminal');
-
-    modal.style.display = 'flex';
-    output.innerHTML = '';
-    cursor.style.display = '';
-    footer.style.display = 'none';
-    footer.innerHTML = '<a href="<%= setup_share_path %>" class="btn btn-sm btn-outline-light">Continue →</a>';
-
-    var source = new EventSource(withStreamToken(url));
-
-    source.onmessage = function(e) {
-      var line = document.createElement('div');
-      line.className = 'term-line';
-      var text = e.data;
-      if (text.match(/^(Installing|Generating|Starting)/)) { line.classList.add('step'); }
-      else if (text.match(/✓/)) { line.classList.add('success'); }
-      else if (text.match(/✗/)) { line.classList.add('error'); }
-      else if (text.match(/⚠/)) { line.classList.add('warn'); }
-      line.textContent = text;
-      output.appendChild(line);
-      terminal.scrollTop = terminal.scrollHeight;
-    };
-
-    source.addEventListener('done', function(e) {
-      source.close();
-      cursor.style.display = 'none';
-      footer.style.display = 'block';
-    });
-
-    source.onerror = function() {
-      source.close();
-      cursor.style.display = 'none';
-      footer.style.display = 'block';
-    };
-  }
-  </script>
 <% end %>
 
 <style>
