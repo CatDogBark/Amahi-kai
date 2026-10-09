@@ -34,10 +34,16 @@ Amahi-kai has two kinds of storage, side by side. Each data drive belongs to exa
    here.** It stays the easy home NAS that drew Troy to Amahi in the first place: mixed drive
    sizes, any device can open it. Troy keeps his general data here (pictures, videos, books,
    documents).
-2. **ZFS pools (new), for bitShare.** Amahi-kai creates a pool on the drives the user assigns, and
+2. **ZFS pools (new).** Amahi-kai creates a pool on the drives the user assigns, and
    **the user chooses the layout** (below); Amahi-kai shows a recommendation but doesn't force it.
-   More than one pool is allowed. Pools are not SMB shares: bitShare owns its data (versions,
-   conflicts, locks, chunk storage), and files changed over SMB behind its back would break that.
+   More than one pool is allowed. bitShare's data gets a dataset of its own and is never an SMB
+   share: bitShare owns its data (versions, conflicts, locks, chunk storage), and files changed
+   over SMB behind its back would break that.
+   - **SMB shares on a pool** (Troy, 2026-10-09): a share can live on a pool, in the pool's
+     `shares` dataset (`/srv/pools/<pool>/shares/<name>`), chosen under Where when it's made. It's
+     never also a Greyhole share, and it stays on its pool. The Shares list shows where each share
+     lives (System disk, Greyhole, ZFS), and a pool with shares on it isn't taken offline or
+     destroyed. Simple SMB access to a pool, with bitShare as the layer on top for sync.
 
 - **One RAID engine: ZFS.** It covers the RAID levels people ask for. A second engine (mdadm,
   Btrfs) would double the setup, drive-replacement and failure handling to build and test.
@@ -90,7 +96,7 @@ operations with their own validation and logging.
 - **Create a pool:** pick unmounted data drives (never the OS disk, never a drive already used by
   share storage), pick a layout, confirm wiping them. Created with `ashift=12`, `compression=lz4`,
   `setuid=off`, `devices=off` (apps' datasets inherit them), and `autotrim=on` for SSDs, and imported at every boot. Pools mount at `/srv/pools/<name>`,
-  not under `/mnt`, so the helper never accepts a share folder on one. The drives are named by
+  not under `/mnt`; the helper accepts a share folder on one only in its `shares` dataset. The drives are named by
   their `/dev/disk/by-id` links (model and serial), so a failed one can be found in its bay.
 - **Pool status:** health, capacity, each drive's state, the last scrub and its result.
 - **Alerts** on the dashboard and Disks pages when a pool is degraded or faulted, a scrub found

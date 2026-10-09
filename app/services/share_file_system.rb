@@ -6,7 +6,8 @@
 # Extracted from Share model callbacks to keep the model thin
 # and make side effects testable in isolation. The changes themselves are made by the
 # root helper (shares.* operations), which only works inside the share root
-# (/var/lib/amahi-kai/files) or a mounted data drive under /mnt.
+# (/var/lib/amahi-kai/files), a mounted data drive under /mnt, or a ZFS pool's shares dataset
+# (/srv/pools/<pool>/shares).
 
 class ShareFileSystem
   attr_reader :share
@@ -25,6 +26,8 @@ class ShareFileSystem
     # from being created.
     remove_empty_directory(share.path_was) unless share.path_was.blank?
 
+    # On a ZFS pool, the pool's shares dataset first (made the first time a share goes there).
+    Privileged.call('pools.shares_root', name: share.zfs_pool) if share.zfs?
     # amahi:users, mode 2775: group-writable, and new files keep the users group.
     Privileged.call('shares.create_dir', path: share.path)
   rescue Privileged::Error => e

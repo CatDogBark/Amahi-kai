@@ -212,6 +212,7 @@ module StoragePools
     # Takes a pool offline: unmounted, and staying offline after a restart, with its drives
     # kept for it.
     def take_offline!(name)
+      no_shares_on!(name)
       changed { privileged('pools.export', name: name.to_s) }
     end
 
@@ -264,7 +265,17 @@ module StoragePools
 
     # Destroys a pool; +confirm+ must be its name.
     def destroy!(name:, confirm:)
+      no_shares_on!(name)
       changed { privileged('pools.destroy', name: name.to_s, confirm: confirm.to_s) }
+    end
+
+    # The SMB shares on a pool (Share#zfs_pool): it isn't taken offline or destroyed under them.
+    # The root helper refuses too.
+    def no_shares_on!(name)
+      on = Share.where(zfs_pool: name.to_s).order(:name).pluck(:name)
+      return if on.empty?
+
+      raise Error, "#{on.to_sentence} #{on.size == 1 ? 'is' : 'are'} on this pool: delete #{on.size == 1 ? 'that share' : 'those shares'} on Shares first."
     end
 
     private

@@ -8,7 +8,8 @@
             th.settings-col2.shares-col2[scope="col"]= t('location')
       = render :partial => 'shares/share', :collection => @shares
     - else
-        h2 =t('there_are_no_shares_created')
+      / Padded: the panel's rounded, clipped corner cut it off otherwise
+      p.text-muted.mb-0.p-3#no-shares =t('there_are_no_shares_created')
 
   = button_tag t('new_share'), :type => 'button', :class => 'open-area btnn btn-create btn btn-info pull-left', :id => "new-share-to-step1",  :data => { :related => "#new-share-step1" }
 

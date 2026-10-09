@@ -294,6 +294,70 @@ RSpec.describe 'AmahiHelper ZFS pools' do
     end
   end
 
+  # A share on a pool lives in the pool's shares dataset, POOL_ROOT/<pool>/shares; the pool isn't
+  # taken offline or destroyed under its shares.
+  describe 'SMB shares on a pool' do
+    let(:root) { "#{dir}/pools/old/shares" }
+
+    before do
+      allow(File).to receive(:executable?).with('/usr/sbin/zfs').and_return(true)
+      FileUtils.mkdir_p(root)
+    end
+
+    it "makes the pool's shares dataset if it has none, and checks it's mounted" do
+      expect(steps('pools.shares_root', { 'name' => 'old' })).to eq([[:pool_shares_root, 'old']])
+      expect(refusal('pools.shares_root', { 'name' => 'nope' })).to eq(%(there's no pool named "nope"))
+
+      ran = []
+      allow(helper).to receive(:capture).with(%w[/usr/sbin/zfs list -H -o name old/shares]).and_raise(AmahiHelper::Failed, 'no such dataset')
+      allow(helper).to receive(:run_command) { |argv| ran << argv && nil }
+      allow(helper).to receive(:do_own_dir)
+      allow(helper).to receive(:pool_shares_mounted?).with(root).and_return(true)
+      expect(helper.do_pool_shares_root('old')).to eq('root' => root)
+      expect(ran).to eq([%w[/usr/sbin/zfs create old/shares]])
+      expect(helper).to have_received(:do_own_dir).with(root, 'root', 'root', '0755')
+
+      allow(helper).to receive(:pool_shares_mounted?).with(root).and_return(false)
+      expect { helper.do_pool_shares_root('old') }.to raise_error(AmahiHelper::Failed, "old/shares isn't mounted at #{root}")
+    end
+
+    it "takes a share folder in a pool's shares dataset only while that dataset is mounted there" do
+      expect(refusal('shares.create_dir', { 'path' => "#{root}/photos" })).to include("a ZFS pool's shares folder")
+      allow(helper).to receive(:pool_shares_mounted?).and_call_original
+      allow(helper).to receive(:pool_shares_mounted?).with(root).and_return(true)
+      expect(steps('shares.create_dir', { 'path' => "#{root}/photos" }))
+        .to eq([[:mkdir_p, "#{root}/photos"], [:own_dir, "#{root}/photos", 'amahi', 'users', '2775']])
+      # Not the pool itself, nor beside its shares folder
+      expect(refusal('shares.create_dir', { 'path' => "#{dir}/pools/old/photos" })).to include("a ZFS pool's shares folder")
+      expect(refusal('shares.create_dir', { 'path' => "#{dir}/pools/old/shares" })).to include("a ZFS pool's shares folder")
+    end
+
+    it "reads whether a pool's shares dataset is mounted from the mounts list" do
+      mounts = "#{dir}/mounts"
+      File.write(mounts, "old /srv/x zfs rw 0 0\nold/shares #{root} zfs rw,nosuid,nodev 0 0\nold/other #{dir}/pools/old/other zfs rw 0 0\n")
+      expect(helper.pool_shares_mounted?(root, mounts)).to be true
+      File.write(mounts, "/dev/sdb1 #{root} ext4 rw 0 0\n")
+      expect(helper.pool_shares_mounted?(root, mounts)).to be false
+      expect(helper.pool_shares_mounted?("#{dir}/pools/old/other", mounts)).to be false
+    end
+
+    it "lets Samba's config name a share folder on a pool" do
+      expect(helper.config_share_path?("#{dir}/pools/old/shares/photos")).to be true
+      expect(helper.config_share_path?("#{dir}/pools/old/photos")).to be false
+      expect(helper.config_share_path?("#{dir}/pools/old/shares")).to be false
+    end
+
+    it "won't take a pool offline or destroy it while shares are on it" do
+      allow(helper).to receive(:samba_shares).and_return(
+        'photos' => { name: 'Photos', path: "#{root}/photos", pooled: false },
+        'docs' => { name: 'Docs', path: "#{root}/docs", pooled: false },
+        'music' => { name: 'Music', path: '/var/lib/amahi-kai/files/music', pooled: true }
+      )
+      expect(refusal('pools.export', { 'name' => 'old' })).to eq('the shares Docs, Photos are on old: delete them on Shares first')
+      expect(refusal('pools.destroy', { 'name' => 'old', 'confirm' => 'old' })).to eq('the shares Docs, Photos are on old: delete them on Shares first')
+    end
+  end
+
   describe 'taking a pool offline, and uninstalling ZFS' do
     let(:offline_file) { "#{dir}/offline-pools.json" }
 

@@ -54,7 +54,7 @@ describe "FileBrowser Controller", type: :request do
       get "/files"
       cards = Nokogiri::HTML(response.body).css("#share-list .fb-card").to_h { |c| [c.at_css(".fb-card-name").text, c] }
       expect(cards["Photos"].at_css(".fb-card-meta").text.squish).to eq("1 item")
-      expect(cards["Photos"].at_css(".fb-chip").text).to eq("Pool · 2 copies")
+      expect(cards["Photos"].at_css(".fb-chip").text).to eq("Greyhole · 2 copies")
       expect(cards["Finance"].at_css(".fb-chip").text).to eq("Read only")
     end
   end

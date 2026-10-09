@@ -20,6 +20,21 @@ form.share.create-form.form-horizontal.p-1.mt-2.bg-white[
         .controls
           input.form-control type="text" name="share[name]" size="16" maxlength="20" placeholder="Name" value=@share.name required=true
 
+      / Where its files are kept, set now for good (SharesController#params_create_share)
+      - choices = share_where_choices
+      - if choices.size > 1
+        .control-group.form-group
+          .controls
+            label.small.mb-1 for="share_where" Where its files are kept
+            select.form-select.form-select-sm#share_where name="share[where]"
+              - choices.each do |label, value|
+                option value=value selected=(value == share_where_value(@share)) = label
+            .messages
+              | System disk: in the share's own folder on the NAS's disk. Greyhole pool: on the share drives, with copies on two of them.
+              |  ZFS pool: on the pool, which keeps it safe across its drives, with its snapshots. It's set now and can't be changed later.
+      - else
+        input type="hidden" name="share[where]" value="disk"
+
       .control-group.form-group
         .controls
           input.right-margin-10 type="checkbox" name="share[visible]" value="1" checked="checked" id="share_visible"
