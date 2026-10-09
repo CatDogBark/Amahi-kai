@@ -92,6 +92,8 @@ module AmahiHelper
   # Makes a data drive's empty mount point immutable while nothing is mounted on it (see
   # protect_mount_point).
   CHATTR = '/usr/bin/chattr'
+  # The folder Greyhole keeps its metadata backups in, on each pool drive.
+  GREYHOLE_METASTORE_BACKUP = '.gh_metastore_backup'
   DISK_DEVICE = %r{\A/dev/(?:[svx]d[a-z]{1,2}\d{0,3}|nvme\d{1,3}n\d{1,3}(?:p\d{1,3})?)\z}
   MOUNT_NAME = /\A[A-Za-z0-9][A-Za-z0-9._-]{0,63}\z/
   WHOLE_DISK = %r{\A/dev/(?:[svx]d[a-z]{1,2}|nvme\d{1,3}n\d{1,3})\z}
@@ -2566,9 +2568,15 @@ module AmahiHelper
     # A data drive's mount point, an empty folder on the system disk, is made immutable (chattr
     # +i) while nothing is mounted on it: the drive mounted there covers it as usual, and while
     # the drive is missing nothing can put files in it on the system disk, as Greyhole did (its
-    # metadata backups). True when it was.
+    # metadata backups). Greyhole's job remakes that folder every minute while a pool drive is
+    # missing, so an empty one of those is removed first; anything else in the way is left, and
+    # the folder isn't protected. True when it was.
     def protect_mount_point(path)
-      return false unless File.executable?(CHATTR) && File.lstat(path).directory? && !mount_point?(path) && Dir.empty?(path)
+      return false unless File.executable?(CHATTR) && File.lstat(path).directory? && !mount_point?(path)
+
+      stray = File.join(path, GREYHOLE_METASTORE_BACKUP)
+      Dir.rmdir(stray) if Dir.children(path) == [GREYHOLE_METASTORE_BACKUP] && File.lstat(stray).directory? && Dir.empty?(stray)
+      return false unless Dir.empty?(path)
 
       run_command([CHATTR, '+i', path, { allow_failure: true }])
       true
