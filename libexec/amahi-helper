@@ -538,7 +538,7 @@ module AmahiHelper
     # ext4 on a data drive that isn't mounted. Never a drive the system runs from.
     'disks.format' => {
       params: %w[device],
-      validate: ->(a) { { device: unmounted_data_device(a['device']).first } },
+      validate: ->(a) { { device: unmounted_data_device(a['device']).first.tap { |device| not_held!(device, 'format it') } } },
       plan: ->(v) { [['/usr/sbin/mkfs.ext4', '-F', v[:device]], ['/usr/bin/udevadm', 'settle', { allow_failure: true }]] }
     },
     # Mounts a data drive at /mnt/<name> and adds it to fstab (by UUID) if it isn't
@@ -1344,12 +1344,66 @@ module AmahiHelper
       # drive formatted and mounted back is a stranger to it.
       pooled = (mounted & greyhole_drives).first
       raise Refused, "#{pooled} is one of Greyhole's drives; remove it from the pool on Disks → Storage Pool first" if pooled
+      not_held!(device, 'unmount it')
       { device: device, mount_points: mounted, uuid: probe(device)['UUID'] }
     end
 
     def preview_request(device)
       device, = unmounted_data_device(device)
+      not_held!(device, 'preview it')
       { device: device, fstype: mountable_fstype(device, probe(device)) }
+    end
+
+    # An app's container keeps the mounts it was made with, in its own view of them: a drive
+    # unmounted here is still in use there, and can't be previewed or formatted. Says which app.
+    def not_held!(device, doing)
+      holders = drive_holders(device)
+      return if holders.empty?
+
+      apps = holders.map { |name| name.start_with?('amahi-') ? "the app #{name.delete_prefix('amahi-')}" : name }
+      raise Refused, "#{device} is still in use by #{apps.join(' and ')}, which has folders on it mounted: " \
+                     "restart or stop it on Apps, then #{doing}"
+    end
+
+    # The containers (or other programs) that have the filesystem on +device+ mounted in a view
+    # of the mounts other than this one's: ["amahi-bittube"].
+    def drive_holders(device)
+      stat = File.stat(device)
+      return [] unless stat.blockdev?
+
+      id = "#{stat.rdev_major}:#{stat.rdev_minor}"
+      views = other_mount_views.select { |view| view[:mountinfo].each_line.any? { |line| line.split[2] == id } }
+      return [] if views.empty?
+
+      names = container_names
+      views.map { |view| names[view[:cgroup][%r{docker[-/]([0-9a-f]{64})}, 1]] || view[:comm] }.uniq
+    rescue SystemCallError
+      []
+    end
+
+    # One process's view of the mounts per mount namespace other than the system's (pid 1's):
+    # [{ mountinfo:, cgroup:, comm: }].
+    def other_mount_views
+      host = File.readlink('/proc/1/ns/mnt')
+      seen = {}
+      Dir.glob('/proc/[0-9]*').filter_map do |dir|
+        namespace = File.readlink("#{dir}/ns/mnt")
+        next if namespace == host || seen[namespace]
+
+        seen[namespace] = true
+        { mountinfo: File.read("#{dir}/mountinfo"), cgroup: File.read("#{dir}/cgroup"), comm: File.read("#{dir}/comm").strip }
+      rescue SystemCallError
+        nil # gone meanwhile
+      end
+    end
+
+    # { full id => name } for the running containers; {} without Docker.
+    def container_names
+      return {} unless File.executable?(DOCKER)
+
+      capture([DOCKER, 'ps', '--no-trunc', '--format', '{{.ID}} {{.Names}}']).lines.to_h { |line| line.split(' ', 2).map(&:strip) }
+    rescue Failed
+      {}
     end
 
     def mountable_fstype(device, info)

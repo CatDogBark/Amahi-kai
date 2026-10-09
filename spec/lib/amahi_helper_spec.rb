@@ -876,6 +876,31 @@ RSpec.describe 'AmahiHelper' do
       expect(refusal('disks.preview', { 'device' => '/dev/sdb1' })).to include('unmount it first')
     end
 
+    it "won't unmount, preview or format a drive an app's container still has mounted, and names the app" do
+      allow(helper).to receive(:drive_holders).and_return(['amahi-bittube'])
+      expect(refusal('disks.unmount', { 'device' => '/dev/sdb1' }))
+        .to eq('/dev/sdb1 is still in use by the app bittube, which has folders on it mounted: restart or stop it on Apps, then unmount it')
+      expect(refusal('disks.preview', { 'device' => '/dev/sdd1' })).to end_with('then preview it')
+      expect(refusal('disks.format', { 'device' => '/dev/sdd1' })).to end_with('then format it')
+    end
+
+    it "finds the containers that have a drive mounted in their own view of the mounts" do
+      stat = instance_double(File::Stat, blockdev?: true, rdev_major: 8, rdev_minor: 16)
+      allow(File).to receive(:stat).and_call_original
+      allow(File).to receive(:stat).with('/dev/sdb').and_return(stat)
+      id = 'a' * 64
+      allow(helper).to receive(:other_mount_views).and_return(
+        [{ mountinfo: "505 456 8:16 /Test /mnt/storage-2/Test ro - ext4 /dev/sdb rw\n", cgroup: "0::/system.slice/docker-#{id}.scope\n", comm: 'bittube' },
+         { mountinfo: "12 1 8:0 / /mnt/storage-1 rw - ext4 /dev/sda rw\n", cgroup: "0::/x\n", comm: 'other' }]
+      )
+      allow(helper).to receive(:container_names).and_return(id => 'amahi-bittube')
+      expect(helper.drive_holders('/dev/sdb')).to eq(['amahi-bittube'])
+      allow(helper).to receive(:container_names).and_return({})
+      expect(helper.drive_holders('/dev/sdb')).to eq(['bittube']) # no container by that id: its program
+      allow(helper).to receive(:other_mount_views).and_return([])
+      expect(helper.drive_holders('/dev/sdb')).to eq([])
+    end
+
     describe 'disks.secure_mounts' do
       let(:files) { "#{dir}/files" }
       let(:ours) { "UUID=u-1 #{mnt}/storage-1 ext4 defaults,nofail,x-systemd.device-timeout=10s 0 2\n" }

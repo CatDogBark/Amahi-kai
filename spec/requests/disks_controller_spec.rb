@@ -60,6 +60,17 @@ describe "Disks Controller", type: :request do
         expect(page.css('#disk-preview tbody td strong').map(&:text)).to eq(['Movies'])
         expect(response.body).to include('notes.txt')
       end
+
+      it "notices a pool removal Greyhole has finished first, so the apps let go of the drive" do
+        allow(Greyhole).to receive(:sync_removals!)
+        allow(DiskManager).to receive(:preview).and_return(entries: [], total_used: 0, file_count: 0)
+        allow(DiskManager).to receive(:unmount!)
+        allow(DiskManager).to receive(:devices).and_return([])
+        post "/disks/preview_disk", params: { device: '/dev/sdb1' }
+        post "/disks/unmount_disk", params: { device: '/dev/sdb1' }
+        get "/disks/devices"
+        expect(Greyhole).to have_received(:sync_removals!).exactly(3).times
+      end
     end
 
     describe "GET /disks/storage_pool" do
