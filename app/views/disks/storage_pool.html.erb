@@ -22,7 +22,7 @@
                 disabled: !@greyhole_status[:running] && @pool_drives.empty?,
                 class: "btn btn-sm #{@greyhole_status[:running] ? 'btn-outline-danger' : 'btn-outline-success'}") %>
           <button type="button" class="btn btn-sm btn-outline-secondary" id="uninstall-greyhole-btn" <%= 'disabled' if @greyhole_removal_blocker %>
-                  onclick="if (confirm('Uninstall Greyhole? Shares stay as they are; installing it again later brings pooling back.')) openInstallTerminal('greyhole-uninstall')">Uninstall</button>
+                  data-confirm="Uninstall Greyhole? Shares stay as they are; installing it again later brings pooling back." data-call="openInstallTerminal" data-args='["greyhole-uninstall"]'>Uninstall</button>
           <span class="text-muted small">
             <% if @greyhole_status[:running] %>
               <%= t('pending_operations', default: 'Pending operations') %>: <%= @greyhole_status.dig(:queue, :pending).to_i %>
@@ -38,7 +38,7 @@
         <% end %>
       <% else %>
         <p class="text-muted mb-2"><%= t('greyhole_not_installed_msg', default: 'Greyhole is not installed. Install it to enable storage pooling and drive replication.') %></p>
-        <button type="button" class="btn btn-primary" onclick="openInstallTerminal('greyhole')">
+        <button type="button" class="btn btn-primary" data-call="openInstallTerminal" data-args='["greyhole"]'>
           Install Greyhole
         </button>
       <% end %>

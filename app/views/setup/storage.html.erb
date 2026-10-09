@@ -15,7 +15,7 @@
 </p>
 
 <% if @devices.any? { |d| !d[:os_disk] && !d[:zfs_pool] } %>
-  <form id="storage-form" onsubmit="prepareDrives(event); return false;">
+  <form id="storage-form" data-call="prepareDrives" data-args='["@event"]'>
     <div class="drive-list">
       <% @devices.each do |device| %>
         <% next if device[:os_disk] || device[:zfs_pool] %>
@@ -42,7 +42,7 @@
                 <% fs_supported = supported_fs.include?(part[:fstype].to_s.downcase) %>
                 <span class="setup-warning">⚠ Has existing <%= part[:fstype] %> filesystem (may contain data)</span>
                 <a href="#" class="setup-link" style="margin-left: 8px; font-size: 12px;"
-                   onclick="previewDrive('<%= part[:path] %>'); return false;">Preview contents</a>
+                   data-call="previewDrive" data-args='["<%= part[:path] %>"]'>Preview contents</a>
                 <div style="margin-top: 4px;">
                   <% unless fs_supported %>
                     <span class="setup-muted" style="font-size: 12px;">
@@ -100,7 +100,7 @@
   <div style="background:#fff; border-radius:12px; max-width:500px; width:90%; max-height:80vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.4);">
     <div style="padding:16px 20px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
       <strong id="preview-title">📂 Drive Preview</strong>
-      <a href="#" onclick="closePreview(); return false;" style="color:#9ca3af; text-decoration:none; font-size:20px;">✕</a>
+      <a href="#" data-call="closePreview" style="color:#9ca3af; text-decoration:none; font-size:20px;">✕</a>
     </div>
     <div id="preview-body" style="padding:16px 20px;">
       <div style="text-align:center; padding:20px; color:#7f8c9b;">Loading...</div>

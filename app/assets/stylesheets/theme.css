@@ -1147,3 +1147,6 @@ table.settings tbody tr { border-bottom-color: var(--kai-line); }
 /* Disks: a drive's temperature, amber from 40 °C (104 °F), red from 50 °C (122 °F) */
 #disks-table .disk-temp.warm { color: var(--kai-alert-warning-text); }
 #disks-table .disk-temp.hot { color: var(--kai-alert-danger-text); font-weight: 600; }
+/* Dashboard tiles (shares, apps): lit on hover, where inline handlers used to do it */
+.kai-tile:hover { background: rgba(255, 255, 255, 0.06); }
+.kai-tile-lift:hover { transform: translateY(-2px); }

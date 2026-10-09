@@ -1,7 +1,7 @@
 - if @docker_installed
   .d-flex.align-items-center.gap-3.mb-3
     label.docker-toggle-switch style="position:relative; display:inline-block; width:44px; height:24px; cursor:pointer;"
-      input#docker-toggle type="checkbox" checked=@docker_running style="opacity:0; width:0; height:0;" onchange="toggleDocker(this)"
+      input#docker-toggle type="checkbox" checked=@docker_running style="opacity:0; width:0; height:0;" data-call="toggleDocker" data-args='["@el"]'
       span.docker-slider style="position:absolute; top:0; left:0; right:0; bottom:0; background:#4a5568; border-radius:24px; transition:0.3s;"
       span.docker-knob style="position:absolute; top:2px; left:#{@docker_running ? '22px' : '2px'}; width:20px; height:20px; background:white; border-radius:50%; transition:0.3s; box-shadow:0 1px 3px rgba(0,0,0,0.3);"
     span.docker-status style="font-size:13px; color:var(--kai-muted, #a0aec0);"

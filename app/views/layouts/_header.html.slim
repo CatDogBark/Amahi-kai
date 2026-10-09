@@ -34,7 +34,7 @@ nav.navbar.navbar-expand-md.kai-header
       a.kai-iconbtn.d-none.d-md-inline-flex href="https://amahi-kai.com/wiki/" target="_blank" rel="noopener" data-tip=t('help') data-tip-placement="bottom" aria-label=t('help')
         = lucide_icon('help-circle', size: 17)
       - if current_user_is_admin?
-        a.kai-iconbtn#advanced-toggle href="#" class=("active" if advanced?) data-tip=t('advanced_settings') data-tip-placement="bottom" aria-label=t('advanced_settings') aria-pressed=(advanced? ? 'true' : 'false') onclick="fetch('#{toggle_advanced_path}', {method:'POST', headers:{'X-CSRF-Token':document.querySelector('meta[name=csrf-token]').content}}).then(function(){location.reload()});return false;"
+        a.kai-iconbtn#advanced-toggle href="#" class=("active" if advanced?) data-tip=t('advanced_settings') data-tip-placement="bottom" aria-label=t('advanced_settings') aria-pressed=(advanced? ? 'true' : 'false') data-call="toggleAdvanced" data-args='["#{toggle_advanced_path}"]'
           = lucide_icon('wrench', size: 17)
       - if current_user
         button.navbar-toggler.kai-iconbtn.d-md-none type="button" data-bs-target="#amahi-nav" data-bs-toggle="collapse" aria-controls="amahi-nav" aria-expanded="false" aria-label="Menu"

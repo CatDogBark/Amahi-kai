@@ -16,6 +16,7 @@
 //= require time_ago
 //= require storage_pools
 //= require tooltips
+//= require lib/dispatch
 //= require lib/application
 
 //= require bootstrap.bundle.min

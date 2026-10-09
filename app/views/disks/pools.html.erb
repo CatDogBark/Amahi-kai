@@ -269,7 +269,7 @@
           <% if @zfs_removal_blocker %>To uninstall it: <%= @zfs_removal_blocker %><% else %>No pool uses it, so it can be uninstalled.<% end %>
         </span>
         <button type="button" class="btn btn-sm btn-outline-secondary" id="uninstall-zfs-btn" <%= 'disabled' if @zfs_removal_blocker %>
-                onclick="if (confirm('Uninstall ZFS? There are no pools, so nothing is lost; install it again here whenever you need a pool.')) openInstallTerminal('zfs-uninstall')">Uninstall ZFS</button>
+                data-confirm="Uninstall ZFS? There are no pools, so nothing is lost; install it again here whenever you need a pool." data-call="openInstallTerminal" data-args='["zfs-uninstall"]'>Uninstall ZFS</button>
       </div>
     </div>
   <% end %>

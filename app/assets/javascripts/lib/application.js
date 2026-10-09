@@ -20,6 +20,12 @@ document.addEventListener('submit', function(event) {
   }
 }, true);
 
+// The header's wrench and Settings' checkbox: Advanced mode on or off, then the page again.
+window.toggleAdvanced = function(url) {
+  fetch(url, { method: 'POST', headers: csrfHeaders(), credentials: 'same-origin' })
+    .then(function() { window.location.reload(); });
+};
+
 // A page waiting on something the server is doing (an element with data-reload-after, in
 // seconds) reloads itself then.
 document.addEventListener("DOMContentLoaded", function() {

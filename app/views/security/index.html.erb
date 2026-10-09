@@ -10,10 +10,10 @@
     <div class="card-header d-flex align-items-center justify-content-between">
       <h5 class="mb-0">Security Audit</h5>
       <div class="d-flex gap-2">
-        <button type="button" class="btn btn-sm btn-primary" onclick="runSecurityAudit()">
+        <button type="button" class="btn btn-sm btn-primary" data-call="runSecurityAudit">
           Run Audit
         </button>
-        <button type="button" class="btn btn-sm btn-warning" onclick="openInstallTerminal('security-fix', '<%= security_fix_stream_path %>')">
+        <button type="button" class="btn btn-sm btn-warning" data-call="openInstallTerminal" data-args='["security-fix", "<%= security_fix_stream_path %>"]'>
           Fix All
         </button>
       </div>
@@ -54,7 +54,7 @@
               </td>
               <td>
                 <% if check.status != :pass && check.fix_command && check.name != 'admin_password' && check.name != 'open_ports' %>
-                  <button type="button" class="btn btn-sm btn-outline-primary" onclick="fixCheck('<%= check.name %>', this)">
+                  <button type="button" class="btn btn-sm btn-outline-primary" data-call="fixCheck" data-args='["<%= check.name %>", "@el"]'>
                      Fix
                   </button>
                 <% elsif check.name == 'admin_password' && check.status != :pass %>
