@@ -2,8 +2,9 @@
 //
 // A living underwater scene behind the page: water lit from above, the surface overhead in
 // perspective, sun and moon, caustics, weather, tides, bubbles and the occasional sea creature.
-// Everything on screen is a function of the clock plus the visitor's settings, so a full page
-// load picks up exactly where the previous page left off.
+// Time of day, weather, tide and sea-life sightings follow the clock and the visitor's settings.
+// The rest (the water's motion, bubbles, fish in formation) is handed from each page to the next
+// in sessionStorage, so following a link carries the scene on instead of starting it again.
 //
 // Markup:  <div id="ocean" data-ocean-occlude="CSS selector" [data-ocean-theme="dark"] [data-ocean-fab]></div>
 //   data-ocean-occlude  elements that near bubbles fade over (cards, header, forms)
@@ -633,7 +634,21 @@
         }
         bctx.globalAlpha = 1; fctx.globalAlpha = 1;
       }
-      return { makeSprites, resize, update, draw, updateRects, counts: () => [bubbles.length, fronts.length] };
+
+      // Hand-off: the next page's bubbles carry on from these, scaled if the window changed size.
+      function snapshot() {
+        return { W, H, bubbles, fronts, sources: sources.map(s => ({ next: s.next, left: s.left, gap: s.gap })) };
+      }
+      function restore(d) {
+        const fine = b => b && ["x", "y", "vy", "z", "dist", "k", "r0", "amp", "freq", "ph"].every(n => Number.isFinite(b[n]));
+        const sx = W / d.W, sy = H / d.H;
+        const fit = list => list.filter(fine).map(b => Object.assign(b, { x: b.x * sx, y: b.y * sy }));
+        bubbles.splice(0, bubbles.length, ...fit(d.bubbles));
+        fronts.splice(0, fronts.length, ...fit(d.fronts));
+        d.sources.forEach((s, i) => { if (sources[i]) Object.assign(sources[i], s); });
+        populate(false);
+      }
+      return { makeSprites, resize, update, draw, updateRects, snapshot, restore, counts: () => [bubbles.length, fronts.length] };
     })();
 
 
@@ -668,6 +683,7 @@
       const cache = new Map();             // slot id -> event or null
       const accepted = { school: [], big: [], jelly: [] };
       const schools = new Map();           // event id -> fish
+      let handed = null;                   // event id -> fish placed relative to their leader, from the previous page
       let forced = [], active = [];
       let W = 1, H = 1, dpr = 1, glow = null, glowTheme = "";
       const kOf = z => 1.2 / (3.4 + (0.55 - 3.4) * z);   // same depth scale as the bubbles
@@ -789,6 +805,11 @@
         let fish = schools.get(ev.id);
         if (fish) return fish;
         const lead = pathPos(ev, (now - ev.start) / 1000);
+        if (handed && handed[ev.id]) {       // the same school on the previous page: same formation, where the leader is now
+          fish = handed[ev.id].map(f => Object.assign(f, { x: lead.x + f.x, y: lead.y + f.y }));
+          schools.set(ev.id, fish);
+          return fish;
+        }
         fish = [];
         for (let i = 0; i < ev.n; i++) {
           const a = Math.random() * TAU, rr = Math.sqrt(Math.random());
@@ -840,9 +861,44 @@
         for (const ev of active) {
           if (ev.kind !== "school") continue;
           live.add(ev.id);
-          updateSchool(ev, schoolFish(ev, now), now, dt, t);
+          const fish = schoolFish(ev, now);
+          if (dt > 0) updateSchool(ev, fish, now, dt, t);   // a still frame only places them
         }
         for (const id of schools.keys()) if (!live.has(id)) schools.delete(id);
+        handed = null;
+      }
+      // Hand-off: fish are kept relative to their leader, since the leader follows the clock. The
+      // sightings already decided go too: worked out afresh from a later start, the on-screen cap
+      // can pick different ones, and a school would vanish while another appeared.
+      function snapshot(now) {
+        const out = {}, decided = [], rate = RATE[S.life];
+        for (const ev of active) {
+          const fish = ev.kind === "school" && schools.get(ev.id);
+          if (!fish) continue;
+          const lead = pathPos(ev, (now - ev.start) / 1000);
+          out[ev.id] = fish.map(f => Object.assign({}, f, { x: f.x - lead.x, y: f.y - lead.y }));
+        }
+        if (rate) {
+          for (const [id, ev] of cache) {
+            const [kind, , s] = id.split(":"), slot = rate[kind][0];
+            if (Number(s) >= Math.floor(now / (slot * 1000)) - Math.ceil((2 * LOOKBACK_S) / slot) - 1) decided.push([id, ev]);
+          }
+        }
+        return { schools: out, forced, decided };
+      }
+      function restore(d) {
+        const fine = f => f && f.off && ["x", "y", "vx", "vy", "head", "flash", "ph", "len"].every(n => Number.isFinite(f[n]));
+        handed = {};
+        schools.clear();                   // a page brought back by Back has its own, older fish
+        for (const [id, fish] of Object.entries(d.schools)) if (Array.isArray(fish) && fish.every(fine)) handed[id] = fish;
+        forced = d.forced.filter(ev => ev && typeof ev.id === "string" && Number.isFinite(ev.start));
+        reset();
+        for (const [id, ev] of d.decided) {
+          const [kind, life] = id.split(":");
+          if (life !== S.life || !accepted[kind] || (ev && !Number.isFinite(ev.start))) continue;
+          cache.set(id, ev);
+          if (ev) accepted[kind].push(ev);
+        }
       }
 
       // ── Painting helpers ──
@@ -1185,7 +1241,7 @@
         return text.charAt(0).toUpperCase() + text.slice(1);
       }
       return {
-        update, draw, summon, describe, reset,
+        update, draw, summon, describe, reset, snapshot, restore,
         resize: (w, h, d) => { W = w; H = h; dpr = d || 1; },
       };
     })();
@@ -1252,7 +1308,7 @@
     const IDLE_MS = 3 * 60 * 1000;
     let theme = "dark";
     let resScale = quality().res, autoLowered = false;
-    let raf = 0, last = 0, animT = 20, still = false;
+    let raf = 0, last = 0, animT = 20, still = false, booting = true;
     let lastInput = performance.now(), jsMs = 0, frames = 0, winStart = 0, fps = 0, slowWindows = 0;
     let current = sceneState(Date.now());
 
@@ -1287,9 +1343,10 @@
     const running = () => !!S.on;
     const animating = () => running() && !still && !REDUCED;
     function renderNow() {
+      if (booting) return;                 // the page isn't shown until the start below has drawn once
       if (running()) {
         current = sceneState(Date.now());
-        if (!animating()) life.update(Date.now(), 0, animT);
+        life.update(Date.now(), 0, animT);   // so the first frame already has the sea life in it
         drawFrame();
       }
       updatePanel();
@@ -1328,6 +1385,35 @@
         current = sceneState(Date.now());
         parts.update(1 / 30, animT + i / 30, current);
         life.update(Date.now(), 1 / 30, animT + i / 30);
+      }
+    }
+    // ── Hand-off: a page saves the scene as it's left, and the next page in this tab carries it on ──
+    const HANDOFF = "amahi-ocean-scene";
+    window.addEventListener("pagehide", () => {
+      if (previewing) return;
+      try {
+        sessionStorage.setItem(HANDOFF, JSON.stringify({ v: 1, animT, parts: parts.snapshot(), life: life.snapshot(Date.now()) }));
+      } catch (e) { /* storage unavailable or full: the next page starts afresh */ }
+    });
+    // Back and Forward can bring a page back as it was left, still running: it takes up the scene
+    // from the page just left, instead of going back to its own.
+    window.addEventListener("pageshow", e => {
+      if (e.persisted && takeHandoff()) renderNow();
+    });
+    function takeHandoff() {
+      let d = null;
+      try {
+        d = JSON.parse(sessionStorage.getItem(HANDOFF) || "null");
+        sessionStorage.removeItem(HANDOFF);   // it only exists between one page and the next
+      } catch (e) { return false; }
+      if (!d || d.v !== 1 || !Number.isFinite(d.animT)) return false;
+      try {
+        parts.restore(d.parts);
+        life.restore(d.life);
+        animT = d.animT;
+        return true;
+      } catch (e) {
+        return false;
       }
     }
     function refreshRun() {
@@ -1482,10 +1568,13 @@
       },
     };
 
-    // ── Start ──
+    // ── Start ── (one frame drawn, with the scene the previous page handed over: drawing more
+    // before the page first paints would only hold that paint up)
     applyTheme();
     resizeAll();
-    if (REDUCED) settle();
+    if (!takeHandoff() && REDUCED) settle();
+    booting = false;
+    renderNow();
     refreshRun();
   };
 
