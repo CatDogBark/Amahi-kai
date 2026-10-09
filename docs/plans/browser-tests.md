@@ -1,8 +1,9 @@
 # Browser tests
 
-A plan, reviewed by Troy (2026-10-09). The harness, the CI job and the first four specs are
-built (the first pull request); the rest of the table is the second. The setup wizard waits for
-its redo.
+A plan, reviewed by Troy (2026-10-09). Built, in two pull requests: the harness, the CI job and
+the first four pages (#127), then the rest of the table. The setup wizard's spec waits for the
+wizard's redo. The streams needed no new simulated paths: outside production the root helper
+records its calls, so a window opens, streams what the page says and finishes.
 
 ## Why
 
