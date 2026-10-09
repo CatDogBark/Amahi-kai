@@ -72,13 +72,16 @@ When it finishes, it prints where to go:
 
 ```
 Web UI:  http://<your-server-ip>:3000
-Login:   admin / secretpassword
+Sign in as:  admin
+Password:    <a random password, shown only here>
 Config:  /etc/amahi-kai/amahi.env
 Shares:  /var/lib/amahi-kai/files
 Logs:    journalctl -u amahi-kai -f
 ```
 
-With `--headless`, the admin password is random and printed once: **save it**.
+The admin password is random and printed once: **save it**. The setup wizard then asks you to
+choose one of your own (with `--headless` there's no wizard, and the printed one stays). Lost it?
+On the server, `sudo /opt/amahi-kai/script/reset-user-password admin` sets a new one.
 
 ---
 

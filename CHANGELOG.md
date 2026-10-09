@@ -46,6 +46,7 @@ All notable changes to Amahi-kai are documented here.
 - **bitTube 0.1.1** — Find channels by name or topic and follow them; import your subscriptions from NewPipe or Google Takeout; new videos keep arriving when YouTube's channel feeds are down (they were on 2026-10-05); the sign-in and Settings forms line up; TMDB and JustWatch are credited as TMDB's terms ask. Update it from its row on the Apps page.
 ### 🔒 Security & Fixes
 
+- **A random first admin password** — A new install's admin account gets a random password, which the installer prints once, instead of one that was the same on every install. The setup wizard still asks you to choose your own before it finishes, and `script/reset-user-password` sets a new one if the printed one is lost. The password reaches the app in a file only it can read, never on a command line. Existing installs are unchanged.
 - **Drive temperatures in °F** — Disks shows each drive's temperature in Fahrenheit (it showed Celsius, with a hidden Fahrenheit nothing could show), amber from 104 °F and red from 122 °F. Those colours were set but never styled before.
 - **The sign-in page shows its messages as plain text.**
 

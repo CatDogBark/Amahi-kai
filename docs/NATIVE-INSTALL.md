@@ -54,12 +54,13 @@ systemctl status smbd         # Samba file sharing
 systemctl status dnsmasq      # DNS (if enabled)
 ```
 
-### Default Login
+### First Login
 
 - **Username:** `admin`
-- **Password:** `secretpassword`
+- **Password:** a random one the installer prints when it finishes, once. Save it.
 
-The setup wizard won't finish until you change it.
+The setup wizard won't finish until you choose a password of your own. If the printed one is
+lost before then, set a new one on the server with `sudo /opt/amahi-kai/script/reset-user-password admin`.
 
 ### File Shares
 
