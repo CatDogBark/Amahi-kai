@@ -180,6 +180,7 @@ RSpec.describe 'AmahiHelper' do
     it 'deletes the Samba user, then the Linux account of an app account, with a home folder an older version made' do
       expect(steps('users.delete', { 'login' => 'ann' })).to eq([
         ['/usr/bin/pdbedit', '-d0', '-x', '-u', 'ann', { allow_failure: true }],
+        [:end_user_processes, 'ann'], # their SMB sessions: userdel refuses an account in use
         ['/usr/sbin/userdel', 'ann']
       ])
       allow(File).to receive(:directory?).and_call_original
@@ -189,6 +190,32 @@ RSpec.describe 'AmahiHelper' do
 
     it 'deletes only the Samba user when there is no Linux account' do
       expect(steps('users.delete', { 'login' => 'ghost' })).to eq([['/usr/bin/pdbedit', '-d0', '-x', '-u', 'ghost', { allow_failure: true }]])
+    end
+
+    it "ends a deleted account's processes, asked first, then made to; never a system account's" do
+      allow(helper).to receive(:passwd).with('ann').and_return(account(uid: 1001))
+      allow(helper).to receive(:passwd).with('sys').and_return(account(uid: 120))
+      allow(helper).to receive(:pause)
+      allow(helper).to receive(:user_process_ids).with(1001).and_return([4242], [4242], [], [])
+      allow(Process).to receive(:kill)
+      helper.do_end_user_processes('ann')
+      expect(Process).to have_received(:kill).with('TERM', 4242).once
+      expect(Process).not_to have_received(:kill).with('KILL', anything)
+
+      helper.do_end_user_processes('sys')
+      expect(Process).to have_received(:kill).once
+    end
+
+    it "counts a process as the user's by any of its ids, as userdel does" do
+      Dir.mktmpdir do |proc_dir|
+        FileUtils.mkdir_p(%W[#{proc_dir}/10 #{proc_dir}/11 #{proc_dir}/12])
+        File.write("#{proc_dir}/10/status", "Name:\tsmbd\nUid:\t0\t1001\t0\t1001\n")
+        File.write("#{proc_dir}/11/status", "Name:\tsshd\nUid:\t0\t0\t0\t0\n")
+        File.write("#{proc_dir}/12/status", "Name:\tsmbd\nUid:\t1001\t1001\t1001\t1001\n")
+        allow(Dir).to receive(:glob).and_call_original
+        allow(Dir).to receive(:glob).with('/proc/[0-9]*/status').and_return(Dir.glob("#{proc_dir}/*/status").sort)
+        expect(helper.user_process_ids(1001)).to eq([10, 12])
+      end
     end
 
     it "refuses to delete an account the app didn't create" do

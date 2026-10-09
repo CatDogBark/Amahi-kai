@@ -178,11 +178,19 @@ describe User do
       expect(Privileged.calls).to eq([['users.delete', { login: "leaving" }]])
     end
 
-    it "still deletes the web user when the helper refuses" do
+    it "still deletes the web user when the helper refuses (an account that existed before)" do
       existing = User.find(create(:user, login: "leaving").id)
-      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('users.delete', 'not an account Amahi created'))
+      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('users.delete', 'not an account Amahi created', refused: true))
       existing.destroy
       expect(User.exists?(existing.id)).to be false
+    end
+
+    it "keeps the web user, saying why, when the Linux account couldn't be deleted" do
+      existing = User.find(create(:user, login: "leaving").id)
+      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('users.delete', 'userdel exited 8: user leaving is currently used by process 158525'))
+      expect(existing.destroy).to be false
+      expect(User.exists?(existing.id)).to be true
+      expect(existing.errors.full_messages.first).to eq("Couldn't delete leaving's account on the NAS: userdel exited 8: user leaving is currently used by process 158525")
     end
   end
 

@@ -58,7 +58,7 @@ class UsersController < ApplicationController
     if @user != current_user && !@user.admin?
       @user.destroy
       if @user.errors.any?
-        render json: { status: t('error_occured'), id: nil }
+        render json: { status: @user.errors.full_messages.to_sentence.presence || t('error_occured'), id: nil }
       else
         render json: { status: :ok, id: @user.id }
       end
