@@ -37,6 +37,12 @@ RSpec.describe DiskService do
         expect(Greyhole).to have_received(:configure!)
       end
 
+      it "has Greyhole check the pool after a drive goes in, so the shares' copies are made on it now" do
+        allow(Greyhole).to receive(:check_pool!)
+        described_class.toggle_pool_partition(path)
+        expect(Greyhole).to have_received(:check_pool!).once
+      end
+
       it "starts Greyhole when its first drive goes in, leaving 10 GB free on it" do
         allow(Greyhole).to receive(:running?).and_return(false)
         allow(Greyhole).to receive(:start!).and_return(true)

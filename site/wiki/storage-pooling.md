@@ -99,6 +99,10 @@ On **Disks → Storage Pool**, tick **In Pool** for each share-storage drive und
 Partitions to add it. The pool drives are listed above that, with their space. Each pool drive
 keeps at least 10 GB free (Min Free); Greyhole stops putting files on a drive below that.
 
+When a drive joins the pool, or a share's copies go up, Amahi-kai has Greyhole check the pool
+straight away (`greyhole --fsck`), so the copies the shares are short of are made within minutes.
+Greyhole's own daily check runs only after its configuration changes, the next morning.
+
 ## Copies per share
 
 On **Setup → Shares**, open a share and set its **Pool copies** with − and +:

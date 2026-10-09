@@ -14,6 +14,17 @@ describe "Disk Pool Actions", type: :request do
         expect(response).to have_http_status(:ok)
         expect(share.reload.disk_pool_copies).to eq(3)
       end
+
+      it "has Greyhole check the pool when copies go up, not when they go down" do
+        allow(SambaService).to receive(:push_config)
+        allow(Greyhole).to receive(:configure!)
+        allow(Greyhole).to receive(:check_pool!)
+        put update_disk_pool_copies_share_path(share), params: { copies: 2 }
+        expect(Greyhole).to have_received(:check_pool!).once
+        put update_disk_pool_copies_share_path(share), params: { copies: 1 }
+        expect(Greyhole).to have_received(:check_pool!).once
+        expect(share.reload.disk_pool_copies).to eq(1)
+      end
     end
   end
 
