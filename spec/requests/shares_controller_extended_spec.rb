@@ -18,6 +18,14 @@ RSpec.describe "SharesController extended", type: :request do
       }.not_to change(Share, :count)
     end
 
+    it "shows why it refused a new share, in the form, open, with the name typed" do
+      post shares_path, params: { share: { name: "x" } }
+      page = Nokogiri::HTML(response.body)
+      expect(page.at_css('#new-share-step1')['style']).to be_nil
+      expect(page.at_css('#new-share-form .alert-danger')).not_to be_nil
+      expect(page.at_css('input[name="share[name]"]')['value']).to eq('x')
+    end
+
     it "creates share successfully" do
       expect {
         post shares_path, params: { share: { name: "NewShare" } }

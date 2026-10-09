@@ -67,6 +67,19 @@ describe "Network Controller", type: :request do
       end
     end
 
+    it "shows why it refused a new host or alias, in the form, open, with what was typed" do
+      post "/network/hosts", params: { host: { name: "my_host", mac: "aa:bb", address: "50" } }
+      page = Nokogiri::HTML(response.body)
+      expect(page.at_css('#new-host-step1')['style']).to be_nil
+      expect(page.at_css('#new-host-step1 .alert-danger').text).to include('Mac')
+      expect(page.at_css('input[name="host[mac]"]')['value']).to eq('aa:bb')
+
+      post "/network/dns_aliases", params: { dns_alias: { name: "", address: "60" } }
+      page = Nokogiri::HTML(response.body)
+      expect(page.at_css('#new-dns-alias-step1')['style']).to be_nil
+      expect(page.at_css('input[name="dns_alias[address]"]')['value']).to eq('60')
+    end
+
     describe "POST /network/hosts" do
       it "creates a new host" do
         allow_any_instance_of(Host).to receive(:restart)

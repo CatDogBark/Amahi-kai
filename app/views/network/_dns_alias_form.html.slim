@@ -18,11 +18,11 @@ form.dns_alias.create-form.form-horizontal.col-md-6.bg-white.p-2[
     .create-inside
       .control-group.form-group
         .controls
-          input.form-control.input-sm.top-margin-10 type="text" name="dns_alias[name]" size="16" maxlength="20" placeholder=t('name')
+          input.form-control.input-sm.top-margin-10 type="text" name="dns_alias[name]" size="16" maxlength="20" placeholder=t('name') value=@dns_alias&.name
 
       .control-group.form-group
         .controls
-          input.form-control.input-sm.top-margin-10 type="text" name="dns_alias[address]" size="16" maxlength="20" placeholder=t('ip_address')
+          input.form-control.input-sm.top-margin-10 type="text" name="dns_alias[address]" size="16" maxlength="20" placeholder=t('ip_address') value=@dns_alias&.address
         .messages
           = @net + '.'
           b#net-message = 'X'

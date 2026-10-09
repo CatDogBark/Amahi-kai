@@ -15,7 +15,7 @@
   div
     #new-share-box.col-sm-7
       #share-new
-        #new-share-step1.area[style="display:none;"]
+        #new-share-step1.area style=new_form_area_style(@share)
           = render 'form'
 
 - js_include = include_javascript rescue true
