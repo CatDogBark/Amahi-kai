@@ -218,16 +218,19 @@ class Greyhole
     # Drives and shares Greyhole has finished removing (it takes them out of greyhole.conf
     # itself) leave the pool here too: a drive's record goes, a share's copies turn Off. Runs
     # before the config is written, so they aren't put back.
+    # The apps given pooled shares follow what changed (DockerApp.follow_pool!).
     def sync_removals!
       return unless production?
       removing = DiskPoolPartition.where(removing: true).to_a
       if removing.any? && (listed = configured_drives)
-        removing.reject { |part| listed.include?(part.path) }.each(&:destroy)
+        gone = removing.reject { |part| listed.include?(part.path) }.each(&:destroy)
       end
       shares = Share.where(pool_removing: true).to_a
       if shares.any? && (listed = configured_shares)
-        shares.reject { |share| listed.include?(share.name) }.each { |share| share.update!(disk_pool_copies: 0, pool_removing: false) }
+        off = shares.reject { |share| listed.include?(share.name) }.each { |share| share.update!(disk_pool_copies: 0, pool_removing: false) }
       end
+      DockerApp.follow_pool! if gone.present?
+      DockerApp.follow_pool!(shares: off.map(&:name)) if off.present?
     end
 
     # The pool drives greyhole.conf lists now (the app may read it), or nil if it can't be read.

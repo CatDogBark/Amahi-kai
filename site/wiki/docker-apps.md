@@ -99,6 +99,9 @@ keeping its data.
 - Shares are **read only** unless you choose **Read and write**, which only apps that save files
   into shares offer (Transmission, for downloads).
 - Shares that **Greyhole pools** are always read only to apps: their files change over SMB only.
+  When the storage pool changes (a drive joins or leaves it, or a share's pool copies turn on or
+  Off), the apps given a pooled share restart with the pool as it is now, so they keep reading
+  its files and don't hold on to a drive taken out of the pool. A stopped app stays stopped.
 - What an app saves into a share stays editable over SMB.
 - **Everyone with an account in the app can see the shares you give it**, whatever the share's own
   list of users says. Give an app only the shares its users should see.

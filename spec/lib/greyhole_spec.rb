@@ -208,6 +208,22 @@ RSpec.describe Greyhole do
         expect(Privileged.calls.map(&:first)).not_to include('greyhole.remove_share')
       end
 
+      it "has the apps given the share, or every pooled share, follow once Greyhole is done" do
+        allow(DockerApp).to receive(:follow_pool!)
+        share.update!(pool_removing: true)
+        DiskPoolPartition.create!(path: '/mnt/storage-2', minimum_free: 10, removing: true)
+        allow(Greyhole).to receive(:configured_drives).and_return(['/mnt/storage-1', '/mnt/storage-2'])
+        allow(Greyhole).to receive(:configured_shares).and_return(['Photos'])
+        Greyhole.sync_removals!
+        expect(DockerApp).not_to have_received(:follow_pool!)
+
+        allow(Greyhole).to receive(:configured_drives).and_return(['/mnt/storage-1'])
+        allow(Greyhole).to receive(:configured_shares).and_return([])
+        Greyhole.sync_removals!
+        expect(DockerApp).to have_received(:follow_pool!).with(no_args).once
+        expect(DockerApp).to have_received(:follow_pool!).with(shares: ['Photos']).once
+      end
+
       it "has Greyhole move its files back, keeping it pooled until Greyhole has taken it out of greyhole.conf" do
         expect(Greyhole.remove_share!(share)).to eq(:removing)
         expect(Privileged.calls).to eq([['greyhole.remove_share', { share: 'Photos' }]])

@@ -43,6 +43,18 @@ RSpec.describe DiskService do
         expect(Greyhole).to have_received(:check_pool!).once
       end
 
+      it "has the apps given pooled shares follow a drive going in, or out at once, but not one still being removed" do
+        allow(DockerApp).to receive(:follow_pool!)
+        described_class.toggle_pool_partition(path)
+        expect(DockerApp).to have_received(:follow_pool!).with(no_args).once
+        allow(Greyhole).to receive(:remove_drive!).and_return(:removed)
+        described_class.toggle_pool_partition(path)
+        expect(DockerApp).to have_received(:follow_pool!).twice
+        allow(Greyhole).to receive(:remove_drive!).and_return(:removing)
+        described_class.toggle_pool_partition(path)
+        expect(DockerApp).to have_received(:follow_pool!).twice # once Greyhole is done (sync_removals!)
+      end
+
       it "starts Greyhole when its first drive goes in, leaving 10 GB free on it" do
         allow(Greyhole).to receive(:running?).and_return(false)
         allow(Greyhole).to receive(:start!).and_return(true)
