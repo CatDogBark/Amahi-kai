@@ -16,9 +16,11 @@
         <% copies = share.disk_pool_copies.to_i %>
         <a class="fb-card" href="<%= file_browser_path(share) %>">
           <span class="fb-card-top">
-            <span class="fb-card-icon<%= ' fb-accent' if copies.positive? %>"><%= lucide_icon('folder', size: 24) %></span>
-            <% if copies.positive? %>
-              <span class="fb-chip fb-chip-accent">Pool · <%= pluralize(copies, 'copy') %></span>
+            <span class="fb-card-icon<%= ' fb-accent' if copies.positive? || share.zfs? %>"><%= lucide_icon('folder', size: 24) %></span>
+            <% if share.zfs? %>
+              <span class="fb-chip fb-chip-accent">ZFS · <%= share.zfs_pool %></span>
+            <% elsif copies.positive? %>
+              <span class="fb-chip fb-chip-accent">Greyhole · <%= pluralize(copies, 'copy') %></span>
             <% elsif share.rdonly %>
               <span class="fb-chip">Read only</span>
             <% end %>

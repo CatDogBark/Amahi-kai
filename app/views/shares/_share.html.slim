@@ -5,6 +5,7 @@ div.share[id="whole_share_#{share.id}"]
       td.settings-col1.shares-col1
         span.share-name style="cursor:pointer; color:var(--kai-link, #5bc0de);"
           = share.name
+        = share_storage_badge(share)
       td.settings-col2.shares-col2
         = link_to path2location(share.name), path2uri(share.name)
 
@@ -40,22 +41,29 @@ div.share[id="whole_share_#{share.id}"]
 
       section.share-section id="share-section-storage-#{share.id}"
         h6.share-section-title Storage
-        .share-row
-          .share-row-label Folder
-          .share-row-body data-controller="inline-edit" data-inline-edit-url-value=update_path_share_path(id: share.id) data-inline-edit-method-value="PUT"
-            a.open-update-path-area.focus href="#" data-inline-edit-target="display" data-action="click->inline-edit#edit"
-              = share.path
-            form.update-path-form style="display:none" action=update_path_share_path(id: share.id) method="post" data-inline-edit-target="form" data-action="submit->inline-edit#submit"
-              input type="hidden" name="_method" value="put"
-              input type="hidden" name="authenticity_token" value=form_authenticity_token
-              input.form-control.input-sm type="text" name="share[path]" value=share.path data-inline-edit-target="input"
-              |  
-              button.btnn.btn.btn-info.btn-sm type="submit"
-                = t('change')
-              a.cancel-btn-style.left-margin-10 href="#" data-action="click->inline-edit#cancel"
-                | Cancel
-            span.messages data-inline-edit-target="message"
-            .share-help Where the share's files are kept on the NAS. Click it to change it.
+        - if share.zfs?
+          .share-row
+            .share-row-label Folder
+            .share-row-body
+              code= share.path
+              .share-help Its folder on the ZFS pool #{share.zfs_pool}. A share's place is set when it's made, so it stays there.
+        - else
+          .share-row
+            .share-row-label Folder
+            .share-row-body data-controller="inline-edit" data-inline-edit-url-value=update_path_share_path(id: share.id) data-inline-edit-method-value="PUT"
+              a.open-update-path-area.focus href="#" data-inline-edit-target="display" data-action="click->inline-edit#edit"
+                = share.path
+              form.update-path-form style="display:none" action=update_path_share_path(id: share.id) method="post" data-inline-edit-target="form" data-action="submit->inline-edit#submit"
+                input type="hidden" name="_method" value="put"
+                input type="hidden" name="authenticity_token" value=form_authenticity_token
+                input.form-control.input-sm type="text" name="share[path]" value=share.path data-inline-edit-target="input"
+                |  
+                button.btnn.btn.btn-info.btn-sm type="submit"
+                  = t('change')
+                a.cancel-btn-style.left-margin-10 href="#" data-action="click->inline-edit#cancel"
+                  | Cancel
+              span.messages data-inline-edit-target="message"
+              .share-help Where the share's files are kept on the NAS. Click it to change it.
         .share-row
           .share-row-label Size
           .share-row-body
@@ -64,31 +72,38 @@ div.share[id="whole_share_#{share.id}"]
                 span= t('get_the_size')
               span.spinner-border.spinner-border-sm.ms-1 id="size-spinner-#{share.id}" style="display:none"
             .share-help How much its files take up. Counting a big share takes a moment.
-        .share-row
-          .share-row-label Pool copies
-          .share-row-body
-            - copies = share.disk_pool_copies
-            - if share.pool_removing?
-              .small.text-info id="pool-removing-#{share.id}" data-reload-after="10"
-                | Turning off: Greyhole is moving the share's files from the pool drives back into its folder. This page updates by itself when it's done.
-            - else
-              .d-flex.align-items-center.gap-2 id="pool-controls-#{share.id}" data-copies=copies
-                button.btn.btn-sm.btn-outline-secondary data-pool-action="minus" data-call="updatePoolCopies" data-args='[#{share.id}, #{[copies - 1, 0].max}]' disabled=(copies <= 0) aria-label="Fewer copies"
-                  | −
-                span.fw-bold.mx-1 id="pool-copies-#{share.id}"
-                  = copies == 0 ? 'Off' : "#{copies} #{copies == 1 ? 'copy' : 'copies'}"
-                button.btn.btn-sm.btn-outline-secondary data-pool-action="plus" data-call="updatePoolCopies" data-args='[#{share.id}, #{[copies + 1, 2].min}]' disabled=(copies >= 2) aria-label="More copies"
-                  | +
-                span.spinner-border.spinner-border-sm.ms-1 id="pool-spinner-#{share.id}" style="display:none"
-              .share-help id="pool-help-#{share.id}"
-                | Over the network the share looks the same either way: this sets where its files are kept.
-                |  Off: in the share's folder, on the system disk.
-                |  1 copy: Greyhole moves them onto the Greyhole pool's drives and leaves links to them in the folder, which adds up the drives' space, but a drive that fails loses its files.
-                |  2 copies: each file is kept on two drives, so one can fail and nothing is lost.
-                - unless Greyhole.installed?
-                  |  Install Greyhole on
-                  =< link_to 'Disks → Greyhole Pool', disks_storage_pool_path
-                  |  to use the pool.
+        - if share.zfs?
+          .share-row
+            .share-row-label ZFS pool
+            .share-row-body
+              = link_to share.zfs_pool, disks_pools_path, id: "share-zfs-pool-#{share.id}"
+              .share-help ZFS keeps the share's files safe across the pool's drives, with the pool's snapshots, so Greyhole doesn't copy them.
+        - else
+          .share-row
+            .share-row-label Pool copies
+            .share-row-body
+              - copies = share.disk_pool_copies
+              - if share.pool_removing?
+                .small.text-info id="pool-removing-#{share.id}" data-reload-after="10"
+                  | Turning off: Greyhole is moving the share's files from the pool drives back into its folder. This page updates by itself when it's done.
+              - else
+                .d-flex.align-items-center.gap-2 id="pool-controls-#{share.id}" data-copies=copies
+                  button.btn.btn-sm.btn-outline-secondary data-pool-action="minus" data-call="updatePoolCopies" data-args='[#{share.id}, #{[copies - 1, 0].max}]' disabled=(copies <= 0) aria-label="Fewer copies"
+                    | −
+                  span.fw-bold.mx-1 id="pool-copies-#{share.id}"
+                    = copies == 0 ? 'Off' : "#{copies} #{copies == 1 ? 'copy' : 'copies'}"
+                  button.btn.btn-sm.btn-outline-secondary data-pool-action="plus" data-call="updatePoolCopies" data-args='[#{share.id}, #{[copies + 1, 2].min}]' disabled=(copies >= 2) aria-label="More copies"
+                    | +
+                  span.spinner-border.spinner-border-sm.ms-1 id="pool-spinner-#{share.id}" style="display:none"
+                .share-help id="pool-help-#{share.id}"
+                  | Over the network the share looks the same either way: this sets where its files are kept.
+                  |  Off: in the share's folder, on the system disk.
+                  |  1 copy: Greyhole moves them onto the Greyhole pool's drives and leaves links to them in the folder, which adds up the drives' space, but a drive that fails loses its files.
+                  |  2 copies: each file is kept on two drives, so one can fail and nothing is lost.
+                  - unless Greyhole.installed?
+                    |  Install Greyhole on
+                    =< link_to 'Disks → Greyhole Pool', disks_storage_pool_path
+                    |  to use the pool.
 
       section.share-section id="share-section-trash-#{share.id}"
         h6.share-section-title= t('trash')
@@ -101,7 +116,7 @@ div.share[id="whole_share_#{share.id}"]
               =< link_to t('trash'), trash_path, id: "share-trash-#{share.id}"
               = days.zero? ? ' until it is emptied.' : " for #{pluralize(days, 'day')}, then deleted for good."
             .share-help
-              - if copies.positive?
+              - if share.disk_pool_copies.to_i.positive?
                 | Greyhole keeps them on the pool drives. Restore them from the Trash, below the shares in the file browser; how long they're kept is set there.
               - else
                 | They're kept in a hidden .recycle folder in the share. Restore them from the Trash, below the shares in the file browser; how long they're kept is set there.

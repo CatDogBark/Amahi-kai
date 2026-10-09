@@ -181,6 +181,8 @@ class DisksController < ApplicationController
     @new_pool_name = (1..).lazy.map { |n| "pool#{n}" }.find { |name| names.exclude?(name) }
     @smart_installed = StoragePools.smart_installed?
     @next_scrub = StoragePools.next_scrub
+    # The SMB shares on each pool (Shares → New Share → Where): it isn't taken offline or deleted under them
+    @pool_shares = Share.where.not(zfs_pool: [nil, '']).order(:name).group_by(&:zfs_pool)
   end
 
   # The pool buttons post JSON and reload on { status: 'ok' }, or show the error.

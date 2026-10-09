@@ -79,6 +79,15 @@
           <% if pool.scan.blank? || pool.scan == 'none requested' %>No scrub has run yet.<% else %><%= pool.scan.upcase_first %>.<% end %>
           <% if @next_scrub %>Next automatic scrub: <%= @next_scrub.strftime('%A, %B %-d at %H:%M') %>.<% end %>
         </p>
+        <% shares_here = Array(@pool_shares[pool.name]) %>
+        <p class="small mt-2 mb-0" id="pool-shares-<%= pool.name %>">
+          <% if shares_here.any? %>
+            Shares on this pool: <%= safe_join(shares_here.map { |share| link_to(share.name, shares_path) }, ', ') %>.
+            <span class="text-muted">It can't be taken offline or deleted while they're here; a snapshot roll-back rolls them back too.</span>
+          <% else %>
+            <span class="text-muted">No shares on this pool. To put one here, choose it under Where when making a share on <%= link_to 'Shares', shares_path %>.</span>
+          <% end %>
+        </p>
         <% if pool.scanning? %>
           <p class="small text-info mb-0 mt-1" data-pool-scanning="">This page updates every 30 seconds until it's done.</p>
         <% end %>

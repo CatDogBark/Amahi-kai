@@ -29,6 +29,8 @@ class SharesController < ApplicationController
   def create
     @share = Share.new(params_create_share)
     if @share.save
+      # Made in the Greyhole pool: Greyhole's config lists it
+      Greyhole.configure! if @share.disk_pool_copies.to_i.positive? && Greyhole.installed?
       respond_to do |format|
         format.html { redirect_to shares_path, notice: "Share '#{@share.name}' created successfully" }
         format.json
@@ -191,6 +193,10 @@ class SharesController < ApplicationController
   # Off for a share with files in the pool waits for Greyhole to move them back into the
   # share's folder (removing: true); nothing changes while it does.
   def set_disk_pool_copies(copies)
+    if @share.zfs?
+      return render json: { status: :error, message: "#{@share.name} is on the ZFS pool #{@share.zfs_pool}: ZFS keeps its data safe, so it has no Greyhole copies.",
+                            disk_pool_copies: 0 }
+    end
     if @share.pool_removing?
       return render json: { status: :error, message: "Greyhole is still moving this share's files back into its folder.",
                             disk_pool_copies: @share.disk_pool_copies, removing: true }
@@ -249,8 +255,20 @@ class SharesController < ApplicationController
              end
   end
 
+  # Where a new share lives (the form's Where): "disk", the system disk; "greyhole", the Greyhole
+  # pool, with 2 copies; or "zfs:<pool>", a ZFS pool's shares folder. It's set when the share is
+  # made: the share model and the root helper check the pool.
   def params_create_share
-    params.require(:share).permit(:name, :visible, :rdonly).merge(path: Share.default_full_path(params[:share][:name]))
+    attrs = params.require(:share).permit(:name, :visible, :rdonly)
+    name = params[:share][:name].to_s
+    where = params[:share][:where].to_s
+    if (pool = where[/\Azfs:(.+)\z/, 1])
+      attrs.merge(zfs_pool: pool, path: Share.pool_full_path(pool, name))
+    elsif where == 'greyhole'
+      attrs.merge(disk_pool_copies: 2, path: Share.default_full_path(name))
+    else
+      attrs.merge(path: Share.default_full_path(name))
+    end
   end
 
   def params_update_path

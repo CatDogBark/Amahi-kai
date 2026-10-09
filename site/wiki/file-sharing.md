@@ -26,11 +26,27 @@ header) for using shares from a web browser. When you create, change or delete a
 ## Creating a share
 
 1. Go to **Setup → Shares**.
-2. Under **Create a New Share**, enter a name and click **Create**.
+2. Under **Create a New Share**, enter a name, choose **Where** its files are kept, and click
+   **Create**.
 
 Amahi-kai creates the folder (owner `amahi`, group `users`, so share users can write to it), adds
 the share to Samba's configuration and reloads Samba. A share's folder must be inside
-`/var/lib/amahi-kai/files` or on a data drive under `/mnt`; other places are refused.
+`/var/lib/amahi-kai/files`, on a data drive under `/mnt`, or in a ZFS pool's shares folder; other
+places are refused.
+
+### Where a share lives
+
+**Where** is chosen when the share is made, and the Shares list shows it beside each share's name:
+
+| Where | Its files | Kept safe by |
+| --- | --- | --- |
+| System disk | In the share's own folder on the NAS's disk (`/var/lib/amahi-kai/files/<name>`) | Nothing more |
+| Greyhole pool | On the share drives, with links in its folder; offered once the Greyhole pool has drives | Copies on two drives (its **Pool copies**, see [Storage Pooling](storage-pooling)) |
+| A ZFS pool | In the pool's shares folder (`/srv/pools/<pool>/shares/<name>`); offered once a pool exists | The pool's redundancy and snapshots |
+
+A share on the system disk can join the Greyhole pool later, and leave it, with **Pool copies**. A
+share on a ZFS pool stays on that pool: to move it, make a new share and copy the files across.
+While shares are on a ZFS pool, the pool can't be taken offline or deleted.
 
 ### Deleting a share
 

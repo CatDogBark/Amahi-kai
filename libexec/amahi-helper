@@ -124,9 +124,10 @@ module AmahiHelper
   # writable only by root.
   RUN_DIR = '/run'
 
-  # ZFS pools (docs/plans/storage.md): bitShare's storage, on whole disks of their own. They
-  # mount under POOL_ROOT, not /mnt, so no share folder can be made on one (share folders
-  # live in SHARE_ROOT or on data drives under /mnt).
+  # ZFS pools (docs/plans/storage.md), on whole disks of their own, mounted under POOL_ROOT, not
+  # /mnt. A share on a pool lives in its shares dataset, POOL_ROOT/<pool>/shares (pools.shares_root):
+  # share folders are made there, in SHARE_ROOT, or on data drives under /mnt, and nowhere else
+  # on a pool. bitShare's data gets a dataset of its own (Phase 4).
   ZPOOL = '/usr/sbin/zpool'
   ZFS = '/usr/sbin/zfs'
   WIPEFS = '/usr/sbin/wipefs'
@@ -680,6 +681,15 @@ module AmahiHelper
       params: %w[name],
       validate: ->(a) { installed!(ZPOOL) && export_request(a['name']) },
       plan: ->(v) { [[:export_pool, v[:name], v[:guid]], [:pool_status]] }
+    },
+    # The folder a pool's SMB shares live in: its dataset <pool>/shares, mounted at
+    # POOL_ROOT/<pool>/shares and owned by root (the shares are folders in it, made by
+    # shares.create_dir). Made the first time a share goes on the pool; it inherits the pool's
+    # setuid=off and devices=off, and is in its snapshots.
+    'pools.shares_root' => {
+      params: %w[name],
+      validate: ->(a) { installed!(ZFS) && { name: existing_pool(a['name']) } },
+      plan: ->(v) { [[:pool_shares_root, v[:name]]] }
     },
     # Brings back a pool taken offline here, by the GUID recorded then, at its own mount point.
     'pools.import' => {
@@ -1582,6 +1592,7 @@ module AmahiHelper
       installed!(ZPOOL)
       name = existing_pool(name)
       raise Refused, "type the pool's name (#{name}) to destroy it" unless confirm == name
+      no_shares_on!(name)
       members = pool_leaves(pool_vdevs(name)).filter_map { |leaf| leaf['device'] }
       tree = block_tree
       disks = members.filter_map { |part| tree.find { |disk| subtree(disk).any? { |n| n['path'] == part } } }.uniq
@@ -1644,7 +1655,18 @@ module AmahiHelper
 
     def export_request(name)
       name = existing_pool(name)
+      no_shares_on!(name)
       { name: name, guid: capture([ZPOOL, 'get', '-H', '-o', 'value', 'guid', name]).strip }
+    end
+
+    # A pool with SMB shares on it isn't taken offline or destroyed: Samba (and any app given
+    # them) would lose their folders.
+    def no_shares_on!(name)
+      on = samba_shares.values.select { |share| share[:path].to_s.start_with?("#{pool_root}/#{name}/") }.map { |share| share[:name] }.sort
+      return if on.empty?
+
+      raise Refused, "#{on.size == 1 ? 'the share' : 'the shares'} #{on.join(', ')} #{on.size == 1 ? 'is' : 'are'} on #{name}: " \
+                     "delete #{on.size == 1 ? 'it' : 'them'} on Shares first"
     end
 
     def import_request(value)
@@ -2235,7 +2257,7 @@ module AmahiHelper
       value = string(value, 'path', max: 4096)
       raise Refused, "path #{value.inspect} must be absolute, without . or .. or //" unless normalized_path?(value)
       raise Refused, "path #{value} contains a line break" if value.match?(/[\r\n]/)
-      share_root_of(value) or raise Refused, "path #{value} is not inside #{SHARE_ROOT} or a data drive under #{DRIVES_ROOT}"
+      share_root_of(value) or raise Refused, "path #{value} is not inside #{SHARE_ROOT}, a data drive under #{DRIVES_ROOT} or a ZFS pool's shares folder"
       value
     end
 
@@ -2244,21 +2266,45 @@ module AmahiHelper
         path.split('/').drop(1).none? { |part| part.empty? || part == '.' || part == '..' }
     end
 
-    # The root +path+ sits in (the share root, or a data drive's mount point), or nil.
+    # The root +path+ sits in (the share root, a data drive's mount point, or a ZFS pool's shares
+    # dataset), or nil.
     def share_root_of(path)
       roots = [share_root]
       drive = path.delete_prefix("#{drives_root}/").split('/').first
       roots << "#{drives_root}/#{drive}" if path.start_with?("#{drives_root}/") && drive
+      pool = path.delete_prefix("#{pool_root}/").split('/').first
+      roots << pool_shares_root(pool) if path.start_with?("#{pool_root}/") && pool&.match?(POOL_NAME)
       roots.find { |root| path.start_with?("#{root}/") && real_root?(root) }
     end
 
     # A root must be a real directory at its own path (no symlink anywhere in it), and a
-    # data drive must be mounted: an unmounted /mnt/<name> is just a folder on the OS disk.
+    # data drive must be mounted: an unmounted /mnt/<name> is just a folder on the OS disk. A
+    # pool's shares folder must be its shares dataset, mounted there.
     def real_root?(root)
       return false unless File.realpath(root) == root && File.lstat(root).directory?
+      return pool_shares_mounted?(root) if root.start_with?("#{pool_root}/")
+
       root == share_root || File.stat(root).dev != File.stat(drives_root).dev
     rescue SystemCallError
       false
+    end
+
+    def pool_shares_root(pool)
+      "#{pool_root}/#{pool}/shares"
+    end
+
+    # Whether +root+ (POOL_ROOT/<pool>/shares) is the dataset <pool>/shares, mounted there.
+    def pool_shares_mounted?(root, mounts_file = '/proc/self/mounts')
+      pool = root.delete_prefix("#{pool_root}/").delete_suffix('/shares')
+      return false unless pool.match?(POOL_NAME) && root == pool_shares_root(pool)
+
+      File.readlines(mounts_file).map(&:split).any? { |fields| fields[0] == "#{pool}/shares" && fields[1] == root && fields[2] == 'zfs' }
+    rescue SystemCallError
+      false
+    end
+
+    def pool_root
+      POOL_ROOT
     end
 
     def share_root
@@ -2341,7 +2387,8 @@ module AmahiHelper
     # themselves are created with shares.create_dir.
     def config_share_path?(value)
       normalized_path?(value) && !value.include?('%') &&
-        (value.start_with?("#{share_root}/") || value.match?(%r{\A#{Regexp.escape(drives_root)}/[^/]+/}))
+        (value.start_with?("#{share_root}/") || value.match?(%r{\A#{Regexp.escape(drives_root)}/[^/]+/}) ||
+         value.match?(%r{\A#{Regexp.escape(pool_root)}/[a-z][a-z0-9_-]{0,31}/shares/[^/]+}))
     end
 
     # [section, name, value] for each parameter. Samba joins a line ending in a
@@ -2801,6 +2848,23 @@ module AmahiHelper
       rolled = datasets.select { |ds| snaps.include?("#{ds}@#{snapshot}") }
       rolled.each { |ds| run_command([ZFS, 'rollback', '-r', "#{ds}@#{snapshot}"]) }
       { 'rolled_back' => rolled }
+    end
+
+    # Makes the pool's shares dataset if it has none (it mounts at POOL_ROOT/<pool>/shares, the
+    # pool's own mount point inherited), and checks it's mounted there before the share folders
+    # go in it.
+    def do_pool_shares_root(name)
+      dataset = "#{name}/shares"
+      begin
+        capture([ZFS, 'list', '-H', '-o', 'name', dataset])
+      rescue Failed
+        run_command([ZFS, 'create', dataset])
+      end
+      root = pool_shares_root(name)
+      raise Failed, "#{dataset} isn't mounted at #{root}" unless pool_shares_mounted?(root)
+
+      do_own_dir(root, 'root', 'root', '0755')
+      { 'root' => root }
     end
 
     # The pool's empty mount point, once the pool is gone.

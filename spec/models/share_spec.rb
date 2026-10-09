@@ -131,6 +131,31 @@ describe Share do
     end
   end
 
+  # A share's place is set when it's made: the system disk, the Greyhole pool, or a ZFS pool.
+  describe "on a ZFS pool" do
+    it "keeps its folder in the pool's shares folder, with no Greyhole copies" do
+      expect(Share.pool_full_path('tank', 'Photos')).to eq('/srv/pools/tank/shares/photos')
+      share = build(:share, name: 'Photos', zfs_pool: 'tank', path: '/srv/pools/tank/shares/photos')
+      expect(share).to be_valid
+      expect(share.zfs?).to be true
+      expect(share.storage_label).to eq('ZFS · tank')
+
+      share.disk_pool_copies = 2
+      expect(share).not_to be_valid
+      expect(share.errors[:disk_pool_copies].first).to include('ZFS keeps a share on the pool tank safe')
+      share.disk_pool_copies = 0
+      share.path = '/var/lib/amahi-kai/files/photos'
+      expect(share).not_to be_valid
+      expect(build(:share, zfs_pool: '../etc', path: '/srv/pools/../etc/shares/x')).not_to be_valid
+    end
+
+    it "says where any share lives" do
+      expect(build(:share, disk_pool_copies: 2).storage_label).to eq('Greyhole · 2 copies')
+      expect(build(:share, disk_pool_copies: 1).storage_label).to eq('Greyhole · 1 copy')
+      expect(build(:share, disk_pool_copies: 0).storage_label).to eq('System disk')
+    end
+  end
+
   # Deleting a share keeps its files; one with files on the pool drives waits until they're back.
   describe "deleting" do
     it "deletes a share that isn't pooled" do

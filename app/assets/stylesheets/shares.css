@@ -52,3 +52,20 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Where a share lives, beside its name on Shares (SharesHelper#share_storage_badge) */
+.share-storage {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  vertical-align: 0.1em;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--kai-muted, #8a96a8);
+}
+.share-storage-greyhole,
+.share-storage-zfs {
+  background: var(--kai-mint-soft, rgba(79, 224, 176, 0.14));
+  color: var(--kai-mint-text, #86f0cb);
+}

@@ -35,6 +35,10 @@ class Share < ApplicationRecord
   end
 
   DEFAULT_SHARES_ROOT = '/var/lib/amahi-kai/files'
+  # A share on a ZFS pool lives in the pool's shares dataset (the root helper's pools.shares_root):
+  # POOL_ROOT/<pool>/shares/<name>. ZFS keeps it safe, so it has no Greyhole copies.
+  POOL_ROOT = '/srv/pools'
+  POOL_NAME = /\A[a-z][a-z0-9_-]{0,31}\z/
 
   SIGNATURE = "Amahi configuration"
 
@@ -80,6 +84,30 @@ class Share < ApplicationRecord
   # another ([global], [homes]) is refused. The root helper checks the settings themselves,
   # against its list of allowed parameters, when the config is installed.
   validate :extras_stay_in_this_share
+  validate :zfs_share_has_no_greyhole_copies
+
+  # Where a share lives is set when it's made: on a ZFS pool, ZFS keeps its data safe, so
+  # Greyhole doesn't, and its folder stays in the pool's shares dataset.
+  def zfs_share_has_no_greyhole_copies
+    return unless zfs?
+
+    errors.add(:zfs_pool, "#{zfs_pool.inspect} isn't a pool name") unless zfs_pool.match?(POOL_NAME)
+    errors.add(:disk_pool_copies, "can't be set: ZFS keeps a share on the pool #{zfs_pool} safe") if disk_pool_copies.to_i.positive?
+    errors.add(:path, "must stay in the pool #{zfs_pool}'s shares folder") unless path.to_s.start_with?("#{POOL_ROOT}/#{zfs_pool}/shares/")
+  end
+
+  def zfs?
+    zfs_pool.present?
+  end
+
+  # Where its files are kept, for the Shares page: "ZFS · tank", "Greyhole · 2 copies" or
+  # "System disk".
+  def storage_label
+    if zfs? then "ZFS · #{zfs_pool}"
+    elsif disk_pool_copies.to_i.positive? then "Greyhole · #{disk_pool_copies} #{disk_pool_copies.to_i == 1 ? 'copy' : 'copies'}"
+    else 'System disk'
+    end
+  end
 
   def extras_stay_in_this_share
     return if extras.blank?
@@ -123,6 +151,11 @@ class Share < ApplicationRecord
 
   def self.default_full_path(name)
     File.join(DEFAULT_SHARES_ROOT, name.downcase)
+  end
+
+  # A share's folder on the ZFS pool +pool+.
+  def self.pool_full_path(pool, name)
+    File.join(POOL_ROOT, pool, 'shares', name.downcase)
   end
 
   # Save the samba config file — delegates to SambaService
