@@ -6,10 +6,15 @@
 //   - toggle_controller.js — visibility, access, permissions checkboxes
 //   - inline_edit_controller.js — path, extras, workgroup editing
 
+// A share's pool copies, from its − and + buttons (data-call, with the copies each asks for in
+// data-args). One change at a time: both buttons wait for the answer, which sets what they ask
+// for next.
 function updatePoolCopies(shareId, copies) {
   var spinner = document.getElementById('pool-spinner-' + shareId);
   var container = document.getElementById('pool-controls-' + shareId);
   if (copies === 0 && !confirm("Turn the pool off for this share? If it has files on the pool drives, Greyhole first moves them back into the share's folder on the system disk, which needs room for them.")) return;
+  var current = container ? parseInt(container.dataset.copies, 10) : copies;
+  setPoolButtons(container, shareId, current, true);
   if (spinner) spinner.style.display = '';
 
   fetch('/shares/' + shareId + '/update_disk_pool_copies', {
@@ -21,33 +26,51 @@ function updatePoolCopies(shareId, copies) {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data.status === 'error') alert(data.message);
-      // Turning off while Greyhole moves the files back: the page shows it, and updates itself.
-      if (data.removing) { window.location.reload(); return; }
+      // Turning off while Greyhole moves the files back: the page shows it, with the card
+      // still open, and updates itself.
+      if (data.removing) { reloadWithShareOpen(shareId); return; }
       var c = data.disk_pool_copies;
-      // Update label
       var label = document.getElementById('pool-copies-' + shareId);
       if (label) label.textContent = c === 0 ? 'Off' : c + (c === 1 ? ' copy' : ' copies');
-      // Update buttons
-      if (container) {
-        var minusBtn = container.querySelector('[data-pool-action="minus"]');
-        var plusBtn = container.querySelector('[data-pool-action="plus"]');
-        if (minusBtn) {
-          minusBtn.disabled = (c <= 0);
-          minusBtn.onclick = function() { updatePoolCopies(shareId, c - 1); };
-        }
-        if (plusBtn) {
-          plusBtn.disabled = (c >= 2);
-          plusBtn.onclick = function() { updatePoolCopies(shareId, c + 1); };
-        }
-      }
+      setPoolButtons(container, shareId, c, false);
     })
     .catch(function(err) {
       console.error('Pool copies update failed:', err);
+      setPoolButtons(container, shareId, current, false);
     })
     .finally(function() {
       if (spinner) spinner.style.display = 'none';
     });
 }
+
+// The − and + buttons for a share at +copies+: what each asks for, and whether it can.
+function setPoolButtons(container, shareId, copies, waiting) {
+  if (!container) return;
+  container.dataset.copies = copies;
+  var minus = container.querySelector('[data-pool-action="minus"]');
+  var plus = container.querySelector('[data-pool-action="plus"]');
+  if (minus) {
+    minus.dataset.args = JSON.stringify([shareId, Math.max(copies - 1, 0)]);
+    minus.disabled = waiting || copies <= 0;
+  }
+  if (plus) {
+    plus.dataset.args = JSON.stringify([shareId, Math.min(copies + 1, 2)]);
+    plus.disabled = waiting || copies >= 2;
+  }
+}
+
+// Reloads Shares with this share's card open (#share-<id>): the page opens it when it loads.
+function reloadWithShareOpen(shareId) {
+  history.replaceState(null, '', '#share-' + shareId);
+  window.location.reload();
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  var open = window.location.hash.match(/^#share-(\d+)$/);
+  var share = open && document.getElementById('whole_share_' + open[1]);
+  var stretcher = share && share.querySelector('.settings-stretcher');
+  if (stretcher) stretcher.style.display = '';
+});
 
 // When "All Users" is toggled, show/hide per-user section and writeable option
 document.addEventListener("toggle:success", function(e) {

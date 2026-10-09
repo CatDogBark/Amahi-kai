@@ -69,10 +69,10 @@ div.share[id="whole_share_#{share.id}"]
           .share-row-body
             - copies = share.disk_pool_copies
             - if share.pool_removing?
-              .small.text-info id="pool-removing-#{share.id}" data-reload-after="30"
+              .small.text-info id="pool-removing-#{share.id}" data-reload-after="10"
                 | Turning off: Greyhole is moving the share's files from the pool drives back into its folder. This page updates by itself when it's done.
             - else
-              .d-flex.align-items-center.gap-2 id="pool-controls-#{share.id}"
+              .d-flex.align-items-center.gap-2 id="pool-controls-#{share.id}" data-copies=copies
                 button.btn.btn-sm.btn-outline-secondary data-pool-action="minus" data-call="updatePoolCopies" data-args='[#{share.id}, #{[copies - 1, 0].max}]' disabled=(copies <= 0) aria-label="Fewer copies"
                   | −
                 span.fw-bold.mx-1 id="pool-copies-#{share.id}"

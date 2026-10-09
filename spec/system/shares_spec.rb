@@ -33,6 +33,37 @@ RSpec.describe 'Shares', type: :system do
     end
   end
 
+  # Each click is one request for the copies its button shows; turning off keeps the card open.
+  it "changes pool copies one request per click, and keeps the card open while it turns off" do
+    requests = []
+    counter = ActiveSupport::Notifications.subscribe('process_action.action_controller') do |*, payload|
+      requests << payload[:params]['copies'] if payload[:action] == 'update_disk_pool_copies'
+    end
+    sign_in_as_admin
+    visit '/shares'
+    find("#whole_share_#{share.id} .share-name", text: 'Photos').click
+    plus = "#pool-controls-#{share.id} [data-pool-action='plus']"
+    minus = "#pool-controls-#{share.id} [data-pool-action='minus']"
+
+    find(plus).click
+    expect(page).to have_css("#pool-copies-#{share.id}", text: '1 copy')
+    find(plus).click
+    expect(page).to have_css("#pool-copies-#{share.id}", text: '2 copies')
+    find(minus).click # 2 → 1: no question about turning the pool off
+    expect(page).to have_css("#pool-copies-#{share.id}", text: '1 copy')
+    expect(requests).to eq(%w[1 2 1])
+    expect(share.reload.disk_pool_copies).to eq(1)
+
+    # Off with files on the drives: the page reloads to show it turning off, with the card open
+    allow(Greyhole).to receive(:remove_share!) { |s| s.update!(pool_removing: true) && :removing }
+    accept_confirm { find(minus).click }
+    expect(page).to have_css("#pool-removing-#{share.id}", text: 'Turning off', visible: :visible)
+    expect(page.evaluate_script('window.location.hash')).to eq("#share-#{share.id}")
+    expect(requests).to eq(%w[1 2 1 0])
+  ensure
+    ActiveSupport::Notifications.unsubscribe(counter) if counter
+  end
+
   it 'creates a share from the form and lists it without a reload' do
     sign_in_as_admin
     visit '/shares'
