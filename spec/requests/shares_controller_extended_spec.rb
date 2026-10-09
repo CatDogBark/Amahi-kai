@@ -58,7 +58,7 @@ RSpec.describe "SharesController extended", type: :request do
         get shares_path
         page = Nokogiri::HTML(response.body)
         expect(page.at_css("#pool-removing-#{share.id}").text).to include("moving the share's files from the pool drives back")
-        expect(page.at_css("#pool-removing-#{share.id}")['data-reload-after']).to eq('30')
+        expect(page.at_css("#pool-removing-#{share.id}")['data-reload-after']).to eq('10')
         expect(page.at_css("#pool-controls-#{share.id}")).to be_nil
       end
     end
