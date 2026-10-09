@@ -120,6 +120,19 @@ bitShare (P4.6). In this order:
 5. The inline `onclick` handlers and scripts move into the JavaScript files, then
    Content-Security-Policy is enforced (Phase 3's last item). Done: #121, #122 and the CSP PR.
 
+## Next: before shelf-stable
+
+After the audit's fixes and the inline-script work (2026-10-09), in this order:
+
+1. **Browser tests** in CI ([`browser-tests.md`](browser-tests.md)): a real browser loads the
+   pages and the job fails on any console error or policy violation.
+2. **Backups:** a daily dump of the database and `/etc/amahi-kai` into a share of Troy's choice.
+3. **Signed updates:** tagged releases, verified by the updater against a key pinned in the
+   installed copy, so control of the GitHub account alone can't put code on a NAS.
+
+HTTPS stays later and optional (see below); Cloudflare Access in front of the tunnel is a
+setting on Cloudflare's side, for when anyone but Troy gets the link.
+
 ## Open, not yet scheduled
 
 Smaller findings from the review that no PR covers yet. Fold them into a nearby PR when it
