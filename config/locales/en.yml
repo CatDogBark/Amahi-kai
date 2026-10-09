@@ -222,6 +222,7 @@
   changelog: ChangeLog
 
   must_be_logged_in: You must be logged in to access this area
-  must_be_admin: You must have admin privileges to access this area
+  must_be_admin: That page is for admins.
+  guests_use_shares: "Guest accounts use the network shares (SMB) only: they can't sign in here."
   login: Login
   you_have_been_logged_out: You have been logged out

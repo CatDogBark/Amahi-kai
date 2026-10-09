@@ -13,7 +13,7 @@ describe "RemoteAccess Controller", type: :request do
     it "redirects non-admin users" do
       login_as_user
       get '/network/remote_access'
-      expect(response).to redirect_to(new_user_session_url)
+      expect(response).to redirect_to(root_url) # signed in, not an admin: to the dashboard
     end
   end
 

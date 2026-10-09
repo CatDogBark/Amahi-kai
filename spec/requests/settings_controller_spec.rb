@@ -14,7 +14,7 @@ describe "Settings Controller", type: :request do
       user = create(:user)
       login_as(user)
       get "/settings"
-      expect(response).to redirect_to(new_user_session_url)
+      expect(response).to redirect_to(root_url) # signed in, not an admin: to the dashboard
     end
   end
 

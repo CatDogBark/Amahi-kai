@@ -156,7 +156,7 @@ RSpec.describe 'Update notice', type: :request do
 
       login_as(create(:user))
       get '/settings/update_dialog'
-      expect(response).to redirect_to(new_user_session_url)
+      expect(response).to redirect_to(root_url) # signed in, not an admin: to the dashboard
     end
   end
 end

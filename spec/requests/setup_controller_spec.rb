@@ -273,7 +273,7 @@ describe "Setup Controller", type: :request do
       login_as(user)
       mark_setup_incomplete
       get setup_welcome_path
-      expect(response).to redirect_to(new_user_session_url)
+      expect(response).to redirect_to(root_url) # signed in, not an admin: to the dashboard
     end
   end
 end

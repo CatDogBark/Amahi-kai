@@ -14,7 +14,7 @@ RSpec.describe 'Trash', type: :request do
   it 'is for admins only' do
     login_as(create(:user))
     get '/files/trash'
-    expect(response).to redirect_to(new_user_session_url)
+    expect(response).to redirect_to(root_url) # signed in, not an admin: to the dashboard
     post '/files/trash/empty'
     expect(Privileged.calls).to eq([])
   end
