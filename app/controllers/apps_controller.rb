@@ -19,7 +19,6 @@ class AppsController < ApplicationController
 
   before_action :admin_required
 
-  skip_before_action :before_action_hook, except: [:docker_apps, :installed_apps]
 
   # ─── Docker Engine Installation ───────────────────────────
 

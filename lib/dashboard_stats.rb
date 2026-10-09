@@ -19,7 +19,7 @@ class DashboardStats
       {
         hostname: SystemInfo.hostname,
         uptime: SystemInfo.uptime,
-        os: os_name
+        os: SystemInfo.os_name
       }
     end
 
@@ -99,49 +99,16 @@ class DashboardStats
 
     private
 
-    def os_name
-      if File.exist?('/etc/os-release')
-        File.readlines('/etc/os-release')
-          .find { |l| l.start_with?('PRETTY_NAME=') }
-          &.split('=', 2)&.last&.tr('"', '')&.strip || 'Linux'
-      else
-        'Linux'
-      end
-    rescue StandardError
-      'Linux'
-    end
-
     def cpu_load
-      if File.exist?('/proc/loadavg')
-        load1, load5, load15 = File.read('/proc/loadavg').split[0..2].map(&:to_f)
-        percent = ((load1 / SystemInfo.cores) * 100).round
-        { percent: [percent, 100].min, detail: "#{load1} / #{load5} / #{load15}" }
-      else
-        { percent: 0, detail: 'unavailable' }
-      end
-    rescue StandardError
-      { percent: 0, detail: 'unavailable' }
+      load = SystemInfo.load
+      return { percent: 0, detail: 'unavailable' } unless load
+      { percent: load[:percent], detail: "#{load[:one]} / #{load[:five]} / #{load[:fifteen]}" }
     end
 
     def memory_usage
-      if File.exist?('/proc/meminfo')
-        meminfo = File.read('/proc/meminfo')
-        total = meminfo[/MemTotal:\s+(\d+)/, 1].to_i
-        available = meminfo[/MemAvailable:\s+(\d+)/, 1].to_i
-        if total > 0
-          used = total - available
-          percent = ((used.to_f / total) * 100).round
-          total_gb = (total / 1048576.0).round(1)
-          used_gb = (used / 1048576.0).round(1)
-          { percent: percent, detail: "#{used_gb} / #{total_gb} GB" }
-        else
-          { percent: 0, detail: 'unavailable' }
-        end
-      else
-        { percent: 0, detail: 'unavailable' }
-      end
-    rescue StandardError
-      { percent: 0, detail: 'unavailable' }
+      memory = SystemInfo.memory
+      return { percent: 0, detail: 'unavailable' } unless memory
+      { percent: memory[:percent], detail: "#{(memory[:used] / 1048576.0).round(1)} / #{(memory[:total] / 1048576.0).round(1)} GB" }
     end
 
     def drive_usage

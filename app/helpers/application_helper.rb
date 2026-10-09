@@ -135,7 +135,4 @@ module ApplicationHelper
 
 
 
-  def advanced?
-    (s = Setting.where(:name=>'advanced').first) && s.set?
-  end
 end

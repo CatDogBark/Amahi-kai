@@ -33,7 +33,7 @@ ruby:
       { id: 'dependencies', label: 'dependencies', url: '/settings/dependencies', advanced: true }
     ]}
   ]
-  visible_tabs = @advanced ? tabs : tabs.reject { |t| t[:advanced] }
+  visible_tabs = advanced? ? tabs : tabs.reject { |t| t[:advanced] }
   ctrl = params[:controller].to_s
   act = params[:action].to_s
   # A tab owns the controller named after it plus any listed in :controllers.
@@ -59,7 +59,7 @@ ul.nav.nav-tabs.setup-main-tab
         span= t(tab[:label])
 
 - if active_tab && active_tab[:subtabs]&.any?
-  - visible_subtabs = @advanced ? active_tab[:subtabs] : active_tab[:subtabs].reject { |s| s[:advanced] }
+  - visible_subtabs = advanced? ? active_tab[:subtabs] : active_tab[:subtabs].reject { |s| s[:advanced] }
   - if visible_subtabs.any?
     .setup-subtab-container
       ul.nav.nav-tabs.setup-subtab

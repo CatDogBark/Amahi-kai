@@ -58,6 +58,28 @@ RSpec.describe SystemInfo do
     end
   end
 
+  describe '.os_name, .load and .memory' do
+    it "reads the distribution's name, or says Linux" do
+      expect(described_class.os_name(proc_file("NAME=\"Ubuntu\"\nPRETTY_NAME=\"Ubuntu 24.04.3 LTS\"\n"))).to eq('Ubuntu 24.04.3 LTS')
+      expect(described_class.os_name(proc_file("NAME=\"Ubuntu\"\n"))).to eq('Linux')
+      expect(described_class.os_name('/nonexistent/os-release')).to eq('Linux')
+    end
+
+    it 'reads the load averages against the cores, capped at 100%' do
+      allow(described_class).to receive(:cores).and_return(4)
+      expect(described_class.load(proc_file("1.50 0.75 0.25 2/345 6789\n"))).to eq(one: 1.5, five: 0.75, fifteen: 0.25, cores: 4, percent: 38)
+      expect(described_class.load(proc_file("9.0 1.0 1.0 1/2 3\n"))[:percent]).to eq(100)
+      expect(described_class.load('/nonexistent/loadavg')).to be_nil
+    end
+
+    it 'reads memory in kB with the share in use' do
+      meminfo = proc_file("MemTotal:        8000000 kB\nMemFree:         1000000 kB\nMemAvailable:    6000000 kB\n")
+      expect(described_class.memory(meminfo)).to eq(total: 8_000_000, available: 6_000_000, used: 2_000_000, percent: 25)
+      expect(described_class.memory(proc_file("MemFree: 1 kB\n"))).to be_nil
+      expect(described_class.memory('/nonexistent/meminfo')).to be_nil
+    end
+  end
+
   it 'reads the hostname, the first address, the kernel and the cores' do
     allow(Shell).to receive(:output).with('hostname', '-I').and_return("192.168.1.111 100.64.0.5 \n")
     expect(described_class.ip_address).to eq('192.168.1.111')

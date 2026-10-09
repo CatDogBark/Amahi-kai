@@ -50,7 +50,7 @@ class SharesController < ApplicationController
   # --- Settings ---
 
   def settings
-    unless @advanced
+    unless advanced?
       redirect_to shares_path
     else
       @page_title = t('shares')
@@ -58,78 +58,40 @@ class SharesController < ApplicationController
     end
   end
 
-  # --- Toggles ---
+  # --- Toggles (the rules are in ShareAccessManager) ---
 
   def toggle_visible
-    @share.visible = !@share.visible
-    @share.save
+    @share.toggle_visible!
     render json: { status: :ok }
   end
 
   def toggle_everyone
-    if @share.everyone
-      allu = User.all
-      @share.users_with_share_access = allu
-      @share.users_with_write_access = allu
-      @share.everyone = false
-      @share.rdonly = true
-    else
-      @share.users_with_share_access = []
-      @share.users_with_write_access = []
-      @share.guest_access = false
-      @share.guest_writeable = false
-      @share.everyone = true
-    end
-    @share.save
+    @share.toggle_everyone!
     render json: { status: :ok }
   end
 
   def toggle_readonly
-    @share.rdonly = !@share.rdonly
-    @share.save
+    @share.toggle_readonly!
     render json: { status: :ok }
   end
 
   def toggle_access
-    unless @share.everyone
-      user = User.find(params[:user_id])
-      if @share.users_with_share_access.include?(user)
-        @share.users_with_share_access -= [user]
-      else
-        @share.users_with_share_access += [user]
-      end
-      @share.save
-    end
+    @share.toggle_access!(params[:user_id])
     render json: { status: :ok }
   end
 
   def toggle_write
-    unless @share.everyone
-      user = User.find(params[:user_id])
-      if @share.users_with_write_access.include?(user)
-        @share.users_with_write_access -= [user]
-      else
-        @share.users_with_write_access += [user]
-      end
-      @share.save
-    end
+    @share.toggle_write!(params[:user_id])
     render json: { status: :ok }
   end
 
   def toggle_guest_access
-    if @share.guest_access
-      @share.guest_access = false
-    else
-      @share.guest_access = true
-      @share.guest_writeable = false
-    end
-    @share.save
+    @share.toggle_guest_access!
     render json: { status: :ok }
   end
 
   def toggle_guest_writeable
-    @share.guest_writeable = !@share.guest_writeable
-    @share.save
+    @share.toggle_guest_writeable!
     render json: { status: :ok }
   end
 
@@ -192,9 +154,7 @@ class SharesController < ApplicationController
   end
 
   def clear_permissions
-    @share.users_with_share_access = []
-    @share.users_with_write_access = []
-    @share.save
+    @share.clear_permissions!
     render json: { status: :ok }
   end
 
