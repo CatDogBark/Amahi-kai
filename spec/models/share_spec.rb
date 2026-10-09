@@ -19,6 +19,13 @@ describe Share do
     expect { 2.times{ create(:share, name: "not_unique") } }.to raise_error(ActiveRecord::RecordInvalid) # name must be unique
   end
 
+  it "keeps a share's extra Samba settings in its own section" do
+    expect(build(:share, extras: "veto files = /.DS_Store/\nhide dot files = yes")).to be_valid
+    share = build(:share, extras: "veto files = /x/\n[homes]\npath = /etc")
+    expect(share).not_to be_valid
+    expect(share.errors[:extras]).to eq(["can't open another section ([homes])"])
+  end
+
   it "should be invalid without a valid path" do
     expect { create(:share, path: nil) }.to raise_error(ActiveRecord::RecordInvalid)
     expect { create(:share, path: "this path is too way long because it has more than sixty four characters") }.to raise_error(ActiveRecord::RecordInvalid)

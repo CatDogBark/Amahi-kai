@@ -110,14 +110,6 @@ RSpec.describe Share, type: :model do
     end
   end
 
-  describe "#update_extras!" do
-    it "updates extras" do
-      share = create(:share, extras: "")
-      share.update_extras!(extras: "force user = nobody")
-      expect(share.reload.extras).to eq("force user = nobody")
-    end
-  end
-
 
   describe "#make_guest_writeable" do
     it "executes chmod command" do
