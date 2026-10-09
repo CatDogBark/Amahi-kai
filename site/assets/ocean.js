@@ -2,9 +2,10 @@
 //
 // A living underwater scene behind the page: water lit from above, the surface overhead in
 // perspective, sun and moon, caustics, weather, tides, bubbles and the occasional sea creature.
-// Time of day, weather, tide and sea-life sightings follow the clock and the visitor's settings.
-// The rest (the water's motion, bubbles, fish in formation) is handed from each page to the next
-// in sessionStorage, so following a link carries the scene on instead of starting it again.
+// The sun, moon and tide follow the clock. Weather and sea life run on viewing time (how long the
+// water has been on screen in this tab). That and the rest of the scene (the water's motion,
+// bubbles, fish in formation) are handed from each page to the next in sessionStorage, so
+// following a link carries the scene on instead of starting it again.
 //
 // Markup:  <div id="ocean" data-ocean-occlude="CSS selector" [data-ocean-theme="dark"] [data-ocean-fab]></div>
 //   data-ocean-occlude  elements that near bubbles fade over (cards, header, forms)
@@ -76,36 +77,66 @@
 
     const sceneMs = now => S.anchorScene + (now - S.anchorReal) * S.cycle;
 
-    // Weather: one number w from 0 (clear) to 3 (storm); auto weather is smooth noise over scene time
+    // Viewing time: how long the water has been on screen in this tab, in ms. Weather, lightning
+    // and sea life run on it, so they move on while someone is looking and wait while nobody is;
+    // it's handed to the next page with the rest of the scene. A new tab starts somewhere new.
+    let view = Math.floor(Math.random() * 1e9), viewAt = performance.now(), viewing = false;
+    function viewNow() {
+      const p = performance.now();
+      if (viewing) view += p - viewAt;
+      viewAt = p;
+      viewing = !!S.on && document.visibilityState === "visible";
+      return view;
+    }
+    document.addEventListener("visibilitychange", viewNow);
+
+    // Weather: one number w from 0 (clear) to 3 (storm). Auto weather drifts between clear and
+    // cloudy, with a spell of rain every EPISODE.every of viewing time and a storm in place of
+    // every third one; each builds up and clears over a minute or so.
     const TARGET = { clear: 0.3, cloudy: 1.15, rain: 1.95, storm: 2.85 };
+    const EPISODE = { every: 12.5 * 60000, rainMin: [2.5, 4], stormMin: [3, 4], stormEvery: 3, rampMs: 50000 };
     const BLEND_MS = 20000;
-    const autoW = ms => { const x = ms / (45 * 60000); return 3 * Math.pow(noise1(x) * 0.65 + noise1(x * 2.3 + 17.3) * 0.35, 1.7); };
-    const weatherW = now => {
-      const target = S.weather === "auto" ? autoW(sceneMs(now)) : TARGET[S.weather];
-      return mix(S.wFrom, target, smooth(0, 1, (now - S.wSetAt) / BLEND_MS));
+    function autoW(v) {
+      const base = 0.3 + 0.85 * smooth(0.25, 0.85, noise1(v / (7 * 60000)));
+      let w = base;
+      const cur = Math.floor(v / EPISODE.every);
+      for (let n = cur - 1; n <= cur; n++) {   // a spell can run on into the next period
+        const r = i => hash1(n * 3.17 + i * 11.3 + 5.1);
+        const storm = n % EPISODE.stormEvery === EPISODE.stormEvery - 1;
+        const [lo, hi] = storm ? EPISODE.stormMin : EPISODE.rainMin;
+        const len = (lo + (hi - lo) * r(1)) * 60000;
+        const start = n * EPISODE.every + r(2) * (EPISODE.every - len);
+        const k = smooth(start - EPISODE.rampMs, start, v) * (1 - smooth(start + len, start + len + EPISODE.rampMs, v));
+        w = Math.max(w, mix(base, storm ? TARGET.storm : TARGET.rain, k));
+      }
+      return w;
+    }
+    const weatherW = v => {
+      const target = S.weather === "auto" ? autoW(v) : TARGET[S.weather];
+      return mix(S.wFrom, target, smooth(0, 1, (Date.now() - S.wSetAt) / BLEND_MS));
     };
     const cloudOf = w => smooth(0.55, 1.5, w);
     const rainOf = w => smooth(1.5, 2.15, w);
     const stormOf = w => smooth(2.25, 2.85, w);
-    function turbAt(now) {      // sediment stirred by recent storms, settling over a scene-hour
+    function turbAt(v) {        // sediment stirred by recent storms, settling over an hour of viewing
       let tb = 0;
-      const step = (7.5 * 60000) / S.cycle;
+      const step = 7.5 * 60000;
       for (let k = 0; k < 8; k++) {
-        const w = weatherW(now - k * step);
+        const w = weatherW(v - k * step);
         tb = Math.max(tb, (stormOf(w) + 0.3 * rainOf(w)) * Math.pow(1 - k / 8, 1.2));
       }
       return clamp(tb, 0, 1);
     }
     let manualFlashAt = -1e12;
     const flashEnv = dt => (dt < 0 || dt > 0.9) ? 0 : 0.9 * Math.exp(-dt * 8) + 0.7 * Math.exp(-Math.pow((dt - 0.22) * 22, 2));
-    function flashAt(now) {     // lightning is tied to real seconds so every open page agrees
-      let f = flashEnv((now - manualFlashAt) / 1000);
-      const st = stormOf(weatherW(now));
+    function flashAt(v) {       // lightning comes in viewing seconds, so the next page carries a storm on
+      let f = flashEnv((Date.now() - manualFlashAt) / 1000);
+      const st = stormOf(weatherW(v));
       if (st > 0.05) {
-        const sec = Math.floor(now / 1000);
+        const sec = Math.floor(v / 1000);
         for (let k = 0; k < 2; k++) {
           const s = sec - k;
-          if (hash1(s * 1.37) < st * 0.09) f = Math.max(f, flashEnv((now - (s * 1000 + hash1(s * 7.13) * 1000)) / 1000));
+          if (hash1(s * 1.37) < st * 0.09) f = Math.max(f, flashEnv((v - (s * 1000 + hash1(s * 7.13) * 1000)) / 1000));
         }
       }
       return clamp(f, 0, 1);
@@ -131,12 +162,13 @@
         moonAmt: day ? 0 : smooth(0, 0.2, Math.sin(Math.PI * p)) * (1 - dayF),
       };
     }
-    function sceneState(now) {
-      const hour = hourAt(now), w = weatherW(now);
+    // now: the real clock (sun, moon, tide); v: viewing time (weather, lightning)
+    function sceneState(now, v = viewNow()) {
+      const hour = hourAt(now), w = weatherW(v);
       const ph = TAU * (sceneMs(now) / 3.6e6) / 12.42 + 1.1;
       return Object.assign(sky(hour), {
-        hour, w, cloud: cloudOf(w), rain: rainOf(w), storm: stormOf(w), turb: turbAt(now),
-        tide: Math.sin(ph), tideRising: Math.cos(ph) > 0, flash: flashAt(now),
+        hour, w, cloud: cloudOf(w), rain: rainOf(w), storm: stormOf(w), turb: turbAt(v),
+        tide: Math.sin(ph), tideRising: Math.cos(ph) > 0, flash: flashAt(v),
       });
     }
 
@@ -653,7 +685,7 @@
 
 
     // ── Sea life: distant animals that travel sideways, so nothing reads as a bubble ──
-    // Sightings are scheduled from the real clock (like lightning), so every open page sees the same ones.
+    // Sightings are scheduled in viewing time (like the weather), and handed to the next page with it.
     // Each animal is painted solid on a scratch canvas, then placed on the water once, tinted toward the
     // water around it and faded with distance. Edges stay sharp, as they would through a dive mask.
     const life = (() => {
@@ -747,7 +779,7 @@
               ev = null;
               if (r(0) < p) {
                 const e = makeEvent(kind, (s + r(9) * 0.6) * slotMs, r);
-                if (allowed(kind, sceneState(e.start))) {
+                if (allowed(kind, sceneState(Date.now() + e.start - now, e.start))) {
                   const list = accepted[kind];
                   const overlapping = list.filter(o => o.start <= e.start && endOf(o) > e.start).length;
                   if (overlapping < CAP[kind]) { e.id = id; ev = e; list.push(e); }
@@ -771,9 +803,16 @@
         if (big) { ev.sub = kind; sizeBig(ev); }
         if (y != null && !isNaN(y)) ev.y0 = y;
         ev.id = "summon:" + Math.random();
-        const now = Date.now();
+        const now = viewNow();
         if (ev.kind === "jelly") ev.start = now - (mid ? 20000 : 3000);
         else ev.start = now - (mid ? duration(ev) * 0.45 : (ev.margin / ev.speed) * 0.8) * 1000;
+        forced.push(ev);
+      }
+      // A new visit gets a visitor within its first minute: a big one by day, a jellyfish at night.
+      function welcome(now, st) {
+        if (!RATE[S.life] || st.storm > 0.3) return;
+        const ev = makeEvent(st.dayF > 0.25 ? "big" : "jelly", now + (20 + 40 * Math.random()) * 1000, () => Math.random());
+        ev.id = "welcome:" + Math.random();
         forced.push(ev);
       }
 
@@ -856,7 +895,7 @@
       }
       function update(now, dt, t) {
         forced = forced.filter(ev => now <= endOf(ev));
-        active = scheduled(now).concat(forced);
+        active = scheduled(now).concat(forced.filter(ev => now >= ev.start));   // a welcome visitor waits its turn
         const live = new Set();
         for (const ev of active) {
           if (ev.kind !== "school") continue;
@@ -1241,7 +1280,7 @@
         return text.charAt(0).toUpperCase() + text.slice(1);
       }
       return {
-        update, draw, summon, describe, reset, snapshot, restore,
+        update, draw, summon, welcome, describe, reset, snapshot, restore,
         resize: (w, h, d) => { W = w; H = h; dpr = d || 1; },
       };
     })();
@@ -1282,7 +1321,7 @@
       <section>
         <h4>Cycle speed</h4>
         <div class="ocean-seg" data-set="cycle"><button type="button" data-val="1">Real time</button><button type="button" data-val="60">1 hour/min</button><button type="button" data-val="720">Day in 2 min</button></div>
-        <div class="ocean-row"><span class="ocean-fine">Moves the clock, auto weather and tide. Sunrise 6:30, sunset 19:30.</span><button type="button" class="ocean-mini" data-ocean-reset>Reset clock</button></div>
+        <div class="ocean-row"><span class="ocean-fine">Moves the clock and the tide. Sunrise 6:30, sunset 19:30.</span><button type="button" class="ocean-mini" data-ocean-reset>Reset clock</button></div>
       </section>
       <section>
         <h4>Quality</h4>
@@ -1336,7 +1375,7 @@
     }
     function drawFrame() {
       const u = uniformsFor(current, theme);
-      const now = Date.now();
+      const now = viewNow();
       glView.draw(u, animT, 14 * current.storm * Math.sin(animT * 0.5));
       parts.draw(animT, current, theme, ctx => life.draw(ctx, now, animT, current, theme, u));
     }
@@ -1346,7 +1385,7 @@
       if (booting) return;                 // the page isn't shown until the start below has drawn once
       if (running()) {
         current = sceneState(Date.now());
-        life.update(Date.now(), 0, animT);   // so the first frame already has the sea life in it
+        life.update(viewNow(), 0, animT);    // so the first frame already has the sea life in it
         drawFrame();
       }
       updatePanel();
@@ -1364,7 +1403,7 @@
       if (idle && animT > 20000) animT = 20;
       animT += dt * (1 + 0.9 * current.storm + 0.25 * current.rain);
       parts.update(dt, animT, current);
-      life.update(Date.now(), dt, animT);
+      life.update(viewNow(), dt, animT);
       drawFrame();
       const spent = performance.now() - t0;
       jsMs = jsMs ? jsMs * 0.92 + spent * 0.08 : spent;
@@ -1384,7 +1423,7 @@
       for (let i = 0; i < 60; i++) {
         current = sceneState(Date.now());
         parts.update(1 / 30, animT + i / 30, current);
-        life.update(Date.now(), 1 / 30, animT + i / 30);
+        life.update(viewNow(), 1 / 30, animT + i / 30);
       }
     }
     // ── Hand-off: a page saves the scene as it's left, and the next page in this tab carries it on ──
@@ -1392,7 +1431,8 @@
     window.addEventListener("pagehide", () => {
       if (previewing) return;
       try {
-        sessionStorage.setItem(HANDOFF, JSON.stringify({ v: 1, animT, parts: parts.snapshot(), life: life.snapshot(Date.now()) }));
+        const v = viewNow();
+        sessionStorage.setItem(HANDOFF, JSON.stringify({ v: 2, view: v, animT, parts: parts.snapshot(), life: life.snapshot(v) }));
       } catch (e) { /* storage unavailable or full: the next page starts afresh */ }
     });
     // Back and Forward can bring a page back as it was left, still running: it takes up the scene
@@ -1406,17 +1446,20 @@
         d = JSON.parse(sessionStorage.getItem(HANDOFF) || "null");
         sessionStorage.removeItem(HANDOFF);   // it only exists between one page and the next
       } catch (e) { return false; }
-      if (!d || d.v !== 1 || !Number.isFinite(d.animT)) return false;
+      if (!d || d.v !== 2 || !Number.isFinite(d.animT) || !Number.isFinite(d.view)) return false;
       try {
         parts.restore(d.parts);
         life.restore(d.life);
         animT = d.animT;
+        view = d.view;
+        viewAt = performance.now();
         return true;
       } catch (e) {
         return false;
       }
     }
     function refreshRun() {
+      viewNow();                           // viewing time stops while the water is off
       document.documentElement.classList.toggle("ocean-off", !S.on);
       $$("[data-ocean-panel]").forEach(b => b.classList.toggle("active", !!S.on));
       if (animating()) start(); else { stop(); renderNow(); }
@@ -1516,7 +1559,7 @@
       const b = e.target.closest("button");
       if (!b) return;
       const key = seg.dataset.set, val = b.dataset.val, now = Date.now();
-      if (key === "weather") { S.wFrom = weatherW(now); S.wSetAt = now; S.weather = val; }
+      if (key === "weather") { S.wFrom = weatherW(viewNow()); S.wSetAt = now; S.weather = val; }
       else if (key === "cycle") { S.anchorScene = sceneMs(now); S.anchorReal = now; S.cycle = Number(val); }
       else if (key === "timeMode") { if (val === "manual") S.manualHour = hourAt(now); S.timeMode = val; }
       else if (key === "quality") { S.quality = val; resScale = quality().res; autoLowered = false; resizeAll(); }
@@ -1572,7 +1615,10 @@
     // before the page first paints would only hold that paint up)
     applyTheme();
     resizeAll();
-    if (!takeHandoff() && REDUCED) settle();
+    if (!takeHandoff()) {                // a new visit
+      life.welcome(viewNow(), sceneState(Date.now()));
+      if (REDUCED) settle();
+    }
     booting = false;
     renderNow();
     refreshRun();
