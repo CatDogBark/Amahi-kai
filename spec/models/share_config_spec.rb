@@ -166,6 +166,15 @@ RSpec.describe Share, 'config generation', type: :model do
       expect(result).to include("netbios name = mynas")
     end
 
+    it "never writes a server name that isn't one hostname-shaped word (the wizard checks it; this is the last line)" do
+      Setting.set('server-name', "mynas\n\thosts allow = 0.0.0.0/0")
+      conf = Share.header_workgroup("example.local")
+      expect(conf).to include("netbios name = amahi-kai")
+      expect(conf).not_to include('0.0.0.0/0')
+      expect(Share.samba_lmhosts("example.local")).not_to include('0.0.0.0/0')
+      expect(Share.samba_lmhosts("example.local")).to include('amahi-kai.example.local')
+    end
+
     it 'sets debug log level when debug enabled' do
       Setting.set("debug", "1", Setting::SHARES)
       result = Share.header_workgroup("example.local")

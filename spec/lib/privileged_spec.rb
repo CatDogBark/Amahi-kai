@@ -119,7 +119,10 @@ RSpec.describe Privileged do
       in_units = Dir[Rails.root.join('config/systemd/*.service')].flat_map do |file|
         File.read(file).scan(%r{^ExecStart=-?/usr/local/sbin/amahi-helper ([a-z]+\.[a-z_]+)$}).flatten
       end
-      (in_code + in_units).uniq
+      in_scripts = Dir[Rails.root.join('bin/amahi-*')].flat_map do |file|
+        File.read(file).scan(%r{/usr/local/sbin/amahi-helper ([a-z]+\.[a-z_]+)}).flatten
+      end
+      (in_code + in_units + in_scripts).uniq
     end
 
     it 'only calls operations the helper has' do

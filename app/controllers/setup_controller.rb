@@ -78,9 +78,16 @@ class SetupController < ApplicationController
     @server_name = Setting.get('server-name') || @hostname
   end
 
+  # The server name becomes the system hostname and Samba's netbios name, so it's one
+  # hostname-shaped word (spaces become hyphens); anything else is refused.
   def update_network
-    name = params[:server_name].to_s.strip
+    name = params[:server_name].to_s.strip.downcase.tr(' ', '-')
     unless name.blank?
+      unless name.match?(Share::SERVER_NAME)
+        flash[:error] = "The server name can only have letters, digits and hyphens (up to 63), like my-nas."
+        redirect_to setup_network_path
+        return
+      end
       Setting.set('server-name', name)
       # Actually change the system hostname
       flash[:warning] = "Saved the server name, but the system hostname couldn't be changed (details in the Amahi-kai log)" unless Platform.set_hostname!(name)

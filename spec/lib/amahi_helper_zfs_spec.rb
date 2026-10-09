@@ -79,7 +79,7 @@ RSpec.describe 'AmahiHelper ZFS pools' do
          %w[/usr/sbin/wipefs -a /dev/sde], ['/usr/bin/udevadm', 'settle', { allow_failure: true }],
          [:make_dir, "#{dir}/pools", '0755'],
          ['/usr/sbin/zpool', 'create', '-f', '-o', 'ashift=12', '-o', 'autoexpand=on', '-o', 'autotrim=on', '-O', 'compression=lz4',
-          '-O', "mountpoint=#{dir}/pools/tank", '-O', 'amahi:snapshot-hourly=24', '-O', 'amahi:snapshot-daily=30', 'tank', 'raidz1',
+          '-O', 'setuid=off', '-O', 'devices=off', '-O', "mountpoint=#{dir}/pools/tank", '-O', 'amahi:snapshot-hourly=24', '-O', 'amahi:snapshot-daily=30', 'tank', 'raidz1',
           '/dev/disk/by-id/ata-SSD_sdc', '/dev/disk/by-id/ata-SSD_sdd', '/dev/disk/by-id/ata-SSD_sde'],
          [:pool_status]]
       )

@@ -325,6 +325,9 @@ as_app "set -o pipefail; RAILS_ENV=production bin/rails assets:precompile 2>&1 |
 # 5. Ensure all fstab mounts are active (FUSE mounts like ntfs-3g can get lost)
 log "Restoring mounts..."
 mount -a 2>&1 || log "⚠ Some mounts may have failed — check 'mount -a' manually"
+# Data drives and the share root mounted nosuid,nodev (fstab lines from before get the options)
+reply=$(/usr/local/sbin/amahi-helper disks.secure_mounts </dev/null 2>/dev/null) \
+  || log "⚠ Couldn't set nosuid,nodev on the data drives and share root: $reply"
 
 # 6. Restart the app and check that it answers. Inside amahi-kai.service the restart ends
 #    this script, so it's the last thing it does there.
