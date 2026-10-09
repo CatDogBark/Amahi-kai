@@ -36,7 +36,7 @@ RSpec.describe "ApplicationController features", type: :request do
       user = create(:user, admin: false)
       login_as(user)
       get shares_path
-      expect(response).to redirect_to(new_user_session_url)
+      expect(response).to redirect_to(root_url) # signed in, not an admin: to the dashboard
     end
 
     it "admin_required allows admin users" do

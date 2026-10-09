@@ -93,12 +93,13 @@ class ApplicationController < ActionController::Base
     end
   end
 
+  # Someone signed in who isn't an admin is turned away to the dashboard (they're signed in
+  # already: the sign-in page made no sense), with a word on why.
   def admin_required
     return false if login_required == false
     unless current_user.admin?
-      store_location
       flash[:info] = t('must_be_admin')
-      redirect_to new_user_session_url
+      redirect_to root_url
       return false
     end
   end

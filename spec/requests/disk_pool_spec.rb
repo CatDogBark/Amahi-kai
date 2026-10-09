@@ -53,7 +53,7 @@ describe "Disk Pool Actions", type: :request do
 
     it "can't change a share's copies" do
       put update_disk_pool_copies_share_path(share), params: { copies: 2 }
-      expect(response).to redirect_to(new_user_session_path)
+      expect(response).to redirect_to(root_path) # signed in, not an admin: to the dashboard
       expect(share.reload.disk_pool_copies).to eq(0)
     end
   end

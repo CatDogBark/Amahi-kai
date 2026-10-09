@@ -38,7 +38,7 @@ RSpec.describe 'ZFS pools', type: :request do
   it 'is for admins only' do
     login_as(create(:user))
     get '/disks/pools'
-    expect(response).to redirect_to(new_user_session_url)
+    expect(response).to redirect_to(root_url) # signed in, not an admin: to the dashboard
     post '/disks/create_pool', params: { name: 'tank', layout: 'mirror', devices: %w[/dev/sdd /dev/sde] }, as: :json
     expect(Privileged.calls).to be_empty
   end

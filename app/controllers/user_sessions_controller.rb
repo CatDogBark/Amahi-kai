@@ -34,7 +34,7 @@ class UserSessionsController < ApplicationController
       flash[:success] = t 'logged_in_successfully'
       redirect_to root_url
     else
-      flash[:danger] = t 'not_a_valid_user_or_password'
+      flash.now[:danger] = @user_session.guest? ? t('guests_use_shares') : t('not_a_valid_user_or_password')
       render :action => 'new'
     end
   end

@@ -23,7 +23,7 @@ RSpec.describe 'Settings → System Dependencies', type: :request do
   it 'is for admins only' do
     login_as(create(:user))
     get '/settings/dependencies'
-    expect(response).to redirect_to(new_user_session_url)
+    expect(response).to redirect_to(root_url) # signed in, not an admin: to the dashboard
   end
 
   it "lists the software, its versions and the updates waiting, security ones marked, with Check now" do

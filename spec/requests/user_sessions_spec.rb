@@ -20,6 +20,43 @@ describe "User Sessions", type: :request do
       expect(response.body).to include("Dashboard")
     end
 
+    # A guest has the network shares only: no web UI, right password or not.
+    it "refuses a guest, saying guests use the network shares, and only with the right password" do
+      ensure_setup_completed!
+      guest = create(:user, role: 'guest')
+      post user_sessions_path, params: { username: guest.login, password: "secretpassword" }
+      expect(response.body).to include("Guest accounts use the network shares (SMB) only")
+      expect(session[:user_id]).to be_nil
+      expect(guest.reload.login_count.to_i).to eq(0)
+      get '/'
+      expect(response).to redirect_to(new_user_session_path)
+
+      post user_sessions_path, params: { username: guest.login, password: "wrong-password" }
+      expect(response.body).to include("Incorrect username or password")
+      expect(response.body).not_to include("Guest accounts")
+    end
+
+    it "ends the session of someone who became a guest since signing in" do
+      ensure_setup_completed!
+      user = create(:user)
+      post user_sessions_path, params: { username: user.login, password: "secretpassword" }
+      get '/'
+      expect(response).to have_http_status(:ok)
+      user.update_column(:role, 'guest')
+      get '/'
+      expect(response).to redirect_to(new_user_session_path)
+    end
+
+    it "turns a signed-in user away from an admin page to the dashboard, saying why" do
+      ensure_setup_completed!
+      user = create(:user)
+      post user_sessions_path, params: { username: user.login, password: "secretpassword" }
+      get '/disks/storage_pool'
+      expect(response).to redirect_to(root_url)
+      follow_redirect!
+      expect(response.body).to include("That page is for admins.")
+    end
+
     it "starts a fresh session at login" do
       ensure_setup_completed!
       user = create(:user)

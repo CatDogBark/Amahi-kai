@@ -12,6 +12,12 @@ class UserSession
   attr_reader :record
   attr_accessor :login, :password, :remember_me
 
+  # A guest account uses the network shares (SMB) only: right password or not, it doesn't sign
+  # in to the web UI (guest? says so after a refused save, for the page's message).
+  def guest?
+    @guest == true
+  end
+
   def persisted?
     false
   end
@@ -28,7 +34,11 @@ class UserSession
   # Returns true on success, false on failure.
   def save
     user = User.find_by("LOWER(login) = ?", @login.to_s.downcase)
-    if user&.authenticate(@password)
+    if user&.authenticate(@password) && user.guest?
+      @guest = true
+      errors.add(:base, "Guest accounts use the network shares only")
+      false
+    elsif user&.authenticate(@password)
       @record = user
       # Start a fresh session, so a session id issued before login can't be reused after it.
       self.class.controller.reset_session
@@ -60,6 +70,9 @@ class UserSession
     return nil unless store&.[](:user_id)
     user = User.find_by(id: store[:user_id])
     return nil unless user
+    # A guest has no web UI: a session from before it became one (or before guests were
+    # refused) ends.
+    return expire(store) if user.guest?
 
     # A password change gives the user a new token; sessions holding the old one end.
     # (Sessions from before tokens existed carry none and match a user who has none.)
