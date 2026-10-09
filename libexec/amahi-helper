@@ -2286,18 +2286,44 @@ module AmahiHelper
       raise Failed, "#{argv[0]}: #{e.message}"
     end
 
+    # Makes the folders from the share root down, each through a handle on the folder above
+    # (its /proc/self/fd path), never through the path: a part swapped for a link while this
+    # runs can't send the new folder elsewhere. A link anywhere on the way is refused.
     def do_mkdir_p(path)
       root = share_root_of(path) or raise Failed, "#{path} is no longer inside a share root"
+      dir = open_dir(root)
       current = root
       path.delete_prefix("#{root}/").split('/').each do |part|
         current = "#{current}/#{part}"
+        child = "/proc/self/fd/#{dir.fileno}/#{part}"
         begin
-          Dir.mkdir(current, 0o755)
+          Dir.mkdir(child, 0o755)
         rescue Errno::EEXIST
-          raise Failed, "#{current} is not a folder" unless File.lstat(current).directory?
+          nil # checked by the open below: a folder, not a link or a file
         end
+        dir = open_dir(child, dir, current)
       end
+      raise Failed, "#{path} moved while it was being made" unless File.readlink("/proc/self/fd/#{dir.fileno}") == path
       nil
+    ensure
+      dir&.close
+    end
+
+    # A handle on the folder at +path+, not following a link there; +parent+ is closed once
+    # the child is open. +shown+ is the path for messages (a /proc path says nothing).
+    def open_dir(path, parent = nil, shown = path)
+      dir = File.open(path, File::RDONLY | File::NOFOLLOW | File::NONBLOCK)
+      unless dir.stat.directory?
+        dir.close
+        raise Failed, "#{shown} is not a folder"
+      end
+      dir
+    rescue Errno::ELOOP
+      raise Failed, "#{shown} is a symbolic link"
+    rescue Errno::ENOENT
+      raise Failed, "#{shown} doesn't exist"
+    ensure
+      parent&.close
     end
 
     def do_own_dir(path, user, group, mode)
@@ -3156,7 +3182,9 @@ module AmahiHelper
                      'install', 'acl', { env: APT_ENV, stream: true }])
       end
       say("Letting what it writes in #{path} stay editable over SMB...")
-      run_command(['/usr/bin/find', path, '-xdev', '-type', 'd', '-exec', SETFACL, '-d', '-m', 'u::rwx,g::rwx,o::rx', '{}', '+'])
+      # setfacl -P takes a physical walk: a folder swapped for a link since find listed it is
+      # skipped, never followed.
+      run_command(['/usr/bin/find', path, '-xdev', '-type', 'd', '-exec', SETFACL, '-P', '-d', '-m', 'u::rwx,g::rwx,o::rx', '{}', '+'])
     end
 
     # [{ preferred:, host:, container:, protocol: }]: the host port for each of the manifest's

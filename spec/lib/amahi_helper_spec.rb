@@ -414,11 +414,26 @@ RSpec.describe 'AmahiHelper' do
       expect(File.stat(path).gid).to eq(Process.gid)
     end
 
-    it "won't follow a symlink in place of a folder" do
-      File.symlink(@tmp, "#{root}/movies")
-      expect { helper.do_mkdir_p("#{root}/movies/x") }.to raise_error(AmahiHelper::Failed, /is not a folder/)
+    it "won't follow a symlink in place of a folder, anywhere on the way, and makes nothing where it points" do
+      Dir.mkdir("#{@tmp}/elsewhere")
+      File.symlink("#{@tmp}/elsewhere", "#{root}/movies")
+      expect { helper.do_mkdir_p("#{root}/movies/x") }.to raise_error(AmahiHelper::Failed, /is a symbolic link/)
+      expect { helper.do_mkdir_p("#{root}/movies/x/y") }.to raise_error(AmahiHelper::Failed, /is a symbolic link/)
+      expect(Dir.children("#{@tmp}/elsewhere")).to eq([])
       expect { helper.do_own_dir("#{root}/movies", me, my_group, '2775') }.to raise_error(AmahiHelper::Failed, /is not a folder/)
       expect(File.stat(@tmp).mode & 0o7777).not_to eq(0o2775)
+    end
+
+    it "stops at a file in place of a folder, and makes every folder through the one above it" do
+      File.write("#{root}/notes", '')
+      expect { helper.do_mkdir_p("#{root}/notes/x") }.to raise_error(AmahiHelper::Failed, /is not a folder/)
+      expect(File.file?("#{root}/notes")).to be true
+      # Through handles: the paths given to mkdir and open are /proc/self/fd/<the folder above>/<part>
+      made = []
+      allow(Dir).to receive(:mkdir).and_wrap_original { |m, path, *args| made << path; m.call(path, *args) }
+      helper.do_mkdir_p("#{root}/a/b")
+      expect(made).to all(match(%r{\A/proc/self/fd/\d+/[ab]\z}))
+      expect(File.directory?("#{root}/a/b")).to be true
     end
 
     it 'turns guest write on and off on the folder only' do
