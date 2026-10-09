@@ -54,7 +54,9 @@ Drives are prepared on **Disks → Devices** (or in the setup wizard's storage s
 - **Mount** it as share storage. Amahi-kai mounts data drives at `/mnt/<name>` and adds them to `/etc/fstab` by
   UUID with `nofail`, so the server still starts if a drive is missing or dead, and with
   `nosuid,nodev`, so nothing on a drive can run with privileges. The share folder on the system
-  disk (`/var/lib/amahi-kai/files`) is mounted the same way.
+  disk (`/var/lib/amahi-kai/files`) is mounted the same way. A drive's mount point is an empty
+  folder made immutable while nothing is mounted on it, so while the drive is missing nothing
+  can put files there on the system disk.
 - **Preview** a drive before mounting it: Amahi-kai mounts it read-only for a moment and lists
   its top-level folders, so you can see what's on it.
 - **Unmount** it before removing it.

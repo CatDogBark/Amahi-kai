@@ -109,24 +109,6 @@ class DockerApp < ApplicationRecord
     self.class.uninstall(identifier, delete_data: delete_data)
   end
 
-  # Installs the app again with the same shares and version (apps.install), so its container's
-  # mounts are made from the storage pool as it is now (DockerApp.follow_pool!). A stopped app
-  # stays stopped. A failure is the app's error, not the pool change's.
-  def follow_pool!
-    stopped = status == 'stopped'
-    reply = Privileged.call('apps.install', app: identifier, shares: shares)
-    entry = AppCatalog.find(identifier)
-    if entry
-      ports = self.class.assigned_ports(entry, reply['ports'])
-      update!(ports: ports, host_port: ports.find { |port| port[:label] == 'web' }&.dig(:host) || host_port)
-    end
-    Privileged.call('apps.stop', app: identifier) if stopped
-    update!(status: stopped ? 'stopped' : 'running', error_message: nil, image: reply['image'].presence || image)
-  rescue Privileged::Error => e
-    Rails.logger.error("DockerApp: #{identifier} didn't follow the pool's change: #{e.message}")
-    update!(status: 'error', error_message: "Couldn't follow the storage pool's change: #{e.message}")
-  end
-
   class << self
     # The catalog entry's ports with the host ports the helper gave them (apps.install's
     # reply: each catalog port as preferred, and the one it got); the catalog's own where the
@@ -150,17 +132,23 @@ class DockerApp < ApplicationRecord
 
     # An app given a pooled share reads it through mounts made with its container: the share's
     # folder, and the share's copy folder on each pool drive. After the pool changes (a drive
-    # joins or leaves, a share is pooled or turned off), the apps given the shares it touched
-    # are installed again (follow_pool!), so their mounts follow it, and a drive taken out isn't
-    # held by an app. Each restarts for a few seconds. +shares+: the names of the shares that
-    # changed; nil when a drive did, which touches every pooled share.
-    def follow_pool!(shares: nil)
-      names = (shares || Share.where('disk_pool_copies > 0').pluck(:name)).map(&:downcase)
-      return if names.empty?
+    # joins or leaves, a share is pooled or turned Off, a pool drive is mounted), the root
+    # helper makes again the containers whose mounts no longer match it (apps.follow_pool),
+    # keeping each app's shares, version and data, so a drive taken out isn't held by an app.
+    # Each restarts for a few seconds; a stopped one stays stopped. One it couldn't make again
+    # shows why.
+    def follow_pool!
+      return unless where.not(volume_mappings: [nil, '', '[]']).exists?
 
-      where(status: %w[running stopped]).find_each do |app|
-        app.follow_pool! if app.shares.any? { |share| names.include?(share[:name].downcase) }
+      reply = Privileged.call('apps.follow_pool')
+      refresh_statuses!
+      (reply['apps'] || {}).each do |identifier, outcome|
+        next if outcome.to_s.start_with?('remade')
+
+        where(identifier: identifier).update_all(status: 'error', error_message: "Couldn't follow the storage pool's change: #{outcome}")
       end
+    rescue Privileged::Error => e
+      Rails.logger.error("DockerApp: the apps didn't follow the pool's change: #{e.message}")
     end
 
     # Each installed app's status from Docker, all at once (apps.status). Nothing changes when

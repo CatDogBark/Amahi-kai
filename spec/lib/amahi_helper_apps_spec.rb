@@ -745,6 +745,68 @@ RSpec.describe 'AmahiHelper apps' do
       expect { helper.greyhole_copies('..') }.to raise_error(AmahiHelper::Failed, /can't be a folder/)
     end
 
+    # apps.follow_pool: each app container whose pool drive mounts don't match the pool now is
+    # made again, keeping its shares (read from its mounts), version and data.
+    describe 'following the pool' do
+      let(:jellyfin_mounts) do
+        [{ 'Destination' => '/shares/Movies', 'Source' => "#{files}/movies", 'RW' => false },
+         { 'Destination' => '/shares/Downloads', 'Source' => "#{files}/downloads", 'RW' => true },
+         { 'Destination' => "#{drives}/storage-1/Movies", 'RW' => false },
+         { 'Destination' => "#{drives}/storage-2/Movies", 'RW' => false },
+         { 'Destination' => '/config', 'RW' => true }]
+      end
+
+      def containers(states)
+        allow(helper).to receive(:docker_output) do |*args|
+          if args.first == 'ps' then states.keys.join("\n")
+          else
+            id = args.last.delete_prefix('amahi-')
+            [{ 'Mounts' => states[id][:mounts], 'State' => states[id][:state] }].to_json
+          end
+        end
+      end
+
+      before do
+        allow(helper).to receive(:do_install_app)
+        allow(helper).to receive(:run_command)
+        allow(helper).to receive(:do_app_firewall)
+        allow(helper).to receive(:greyhole_copies).with('Movies').and_return(["#{drives}/storage-1/Movies"]) # storage-2 is missing
+      end
+
+      it "makes again, with the drives there are, an app whose mounts don't match the pool, keeping its shares" do
+        containers('jellyfin' => { mounts: jellyfin_mounts, state: { 'Running' => true, 'Error' => '' } })
+        expect(helper.do_follow_pool_apps).to eq('apps' => { 'jellyfin' => 'remade' })
+        expect(helper).to have_received(:do_install_app).with(
+          'jellyfin', anything,
+          [{ name: 'Movies', path: "#{files}/movies", pooled: true, write: false },
+           { name: 'Downloads', path: "#{files}/downloads", pooled: false, write: true }], true
+        )
+        expect(helper).not_to have_received(:run_command)
+        expect(helper).to have_received(:do_app_firewall)
+      end
+
+      it "leaves an app whose mounts match alone, remakes one that couldn't start over a mount, and keeps a stopped one stopped" do
+        matching = jellyfin_mounts.reject { |mount| mount['Destination'].include?('storage-2') }
+        containers('jellyfin' => { mounts: matching, state: { 'Running' => true, 'Error' => '' } },
+                   'plex' => { mounts: matching, state: { 'Running' => false, 'Error' => 'failed to fulfil mount request: open /mnt/storage-2/Movies' } },
+                   'emby' => { mounts: jellyfin_mounts, state: { 'Running' => false, 'Error' => '' } })
+        allow(helper).to receive(:app_manifest).and_return({})
+        expect(helper.do_follow_pool_apps).to eq('apps' => { 'plex' => 'remade', 'emby' => 'remade, stopped' })
+        expect(helper).to have_received(:run_command).with(['/usr/bin/docker', 'stop', '--time', '30', 'amahi-emby']).once
+      end
+
+      it "goes on past an app it can't make again, giving the reason" do
+        containers('jellyfin' => { mounts: jellyfin_mounts, state: { 'Running' => true, 'Error' => '' } })
+        allow(helper).to receive(:do_install_app).and_raise(AmahiHelper::Failed, 'docker exited 125: no space')
+        expect(helper.do_follow_pool_apps).to eq('apps' => { 'jellyfin' => 'docker exited 125: no space' })
+      end
+
+      it 'does nothing without Docker' do
+        allow(helper).to receive(:docker_output).and_return(nil)
+        expect(helper.do_follow_pool_apps).to eq('apps' => {})
+      end
+    end
+
     it "is checked when the request comes in" do
       allow(File).to receive(:executable?).with('/usr/bin/docker').and_return(true)
       expect(refusal('apps.install', { 'app' => 'jellyfin', 'shares' => [{ 'name' => 'Downloads', 'write' => true }] }))

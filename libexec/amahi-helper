@@ -89,6 +89,9 @@ module AmahiHelper
   # mounted at /mnt/<name>. The fstab options are the ones PR #13 settled on: nofail and
   # a short timeout, so a missing drive can't stop the NAS booting.
   MNT = '/mnt'
+  # Makes a data drive's empty mount point immutable while nothing is mounted on it (see
+  # protect_mount_point).
+  CHATTR = '/usr/bin/chattr'
   DISK_DEVICE = %r{\A/dev/(?:[svx]d[a-z]{1,2}\d{0,3}|nvme\d{1,3}n\d{1,3}(?:p\d{1,3})?)\z}
   MOUNT_NAME = /\A[A-Za-z0-9][A-Za-z0-9._-]{0,63}\z/
   WHOLE_DISK = %r{\A/dev/(?:[svx]d[a-z]{1,2}|nvme\d{1,3}n\d{1,3})\z}
@@ -1009,6 +1012,15 @@ module AmahiHelper
       params: [],
       validate: ->(_a) { {} },
       plan: ->(_v) { [[:announce_apps]] }
+    },
+    # Remakes the containers of the apps given pooled shares whose mounts no longer match the
+    # pool (do_follow_pool_apps): after a drive joins or leaves it, a share is pooled or turned
+    # Off, a pool drive is mounted, and each time Docker starts (amahi-kai-app-firewall.service),
+    # when a drive missing at boot would keep an app from starting. Takes nothing from the app.
+    'apps.follow_pool' => {
+      params: [],
+      validate: ->(_a) { installed!(DOCKER) && {} },
+      plan: ->(_v) { [[:follow_pool_apps]] }
     },
     # Limits the apps' ports to the LAN and Tailscale (APP_CHAIN). Run by
     # amahi-kai-app-firewall.service each time Docker starts, and at every install.
@@ -2519,11 +2531,15 @@ module AmahiHelper
     def do_mount_drive(device, mount_point, fstype, uuid)
       created = !File.exist?(mount_point)
       Dir.mkdir(mount_point, 0o755) if created
+      protect_mount_point(mount_point)
       begin
         run_command(['/usr/bin/mount', *(fstype == 'ntfs' ? %w[-t ntfs-3g] : []), '-o', MOUNT_OPTIONS.join(','), device, mount_point])
         raise Failed, "#{device} didn't mount at #{mount_point}" unless mount_point?(mount_point)
       rescue Failed
-        Dir.rmdir(mount_point) if created && !mount_point?(mount_point)
+        if created && !mount_point?(mount_point)
+          unprotect_mount_point(mount_point)
+          Dir.rmdir(mount_point)
+        end
         raise
       end
       fstab_type = fstype == 'ntfs' ? 'ntfs-3g' : fstype
@@ -2537,10 +2553,35 @@ module AmahiHelper
       mount_points.each { |mp| run_command(['/usr/bin/umount', mp]) }
       remove_fstab_lines("UUID=#{uuid}") if uuid
       mount_points.each do |mp|
-        Dir.rmdir(mp) if mp.start_with?("#{MNT}/storage-") && Dir.empty?(mp)
+        next unless mp.start_with?("#{MNT}/storage-") && Dir.empty?(mp)
+
+        unprotect_mount_point(mp)
+        Dir.rmdir(mp)
       rescue SystemCallError
         nil
       end
+      nil
+    end
+
+    # A data drive's mount point, an empty folder on the system disk, is made immutable (chattr
+    # +i) while nothing is mounted on it: the drive mounted there covers it as usual, and while
+    # the drive is missing nothing can put files in it on the system disk, as Greyhole did (its
+    # metadata backups). True when it was.
+    def protect_mount_point(path)
+      return false unless File.executable?(CHATTR) && File.lstat(path).directory? && !mount_point?(path) && Dir.empty?(path)
+
+      run_command([CHATTR, '+i', path, { allow_failure: true }])
+      true
+    rescue SystemCallError, Failed
+      false # never in the way of the mount itself
+    end
+
+    # Before an empty mount point is removed.
+    def unprotect_mount_point(path)
+      return unless File.executable?(CHATTR) && File.lstat(path).directory?
+
+      run_command([CHATTR, '-i', path, { allow_failure: true }])
+    rescue SystemCallError, Failed
       nil
     end
 
@@ -2610,8 +2651,14 @@ module AmahiHelper
     # and makes the share root a bind mount of itself with them.
     def do_secure_mounts
       remounted = []
+      protected = []
       fstab_entries.each do |fields|
-        next unless fields[1].start_with?("#{MNT}/") && fields[3].to_s.split(',').include?(MOUNT_OPTIONS.first) && mount_point?(fields[1])
+        next unless fields[1].start_with?("#{MNT}/") && fields[3].to_s.split(',').include?(MOUNT_OPTIONS.first)
+        # A drive missing now: its mount point can't take files meanwhile
+        unless mount_point?(fields[1])
+          protected << fields[1] if protect_mount_point(fields[1])
+          next
+        end
         next if secured?(fields[1])
         run_command(['/usr/bin/mount', '-o', "remount,#{MOUNT_OPTIONS.join(',')}", fields[1]])
         remounted << fields[1]
@@ -2624,7 +2671,7 @@ module AmahiHelper
         end
         raise Failed, "#{SHARE_ROOT} isn't mounted #{MOUNT_OPTIONS.join(',')}" unless secured?(SHARE_ROOT)
       end
-      { 'remounted' => remounted }
+      { 'remounted' => remounted, 'protected' => protected }
     end
 
     def secured?(path)
@@ -3023,6 +3070,47 @@ module AmahiHelper
       say('Starting it...')
       run_command([DOCKER, 'start', container])
       { 'app' => id, 'container' => container, 'image' => manifest[:image], 'ports' => ports.map { |p| p.transform_keys(&:to_s) } }
+    end
+
+    # An app given a pooled share sees its copies through one mount per pool drive, made with
+    # its container. Each app container whose drive mounts aren't the ones its shares have now
+    # (a drive joined, left, is missing or back; a share pooled or turned Off), or that couldn't
+    # start over a mount, is made again (do_install_app, keeping its version, shares and data),
+    # with the drives mounted now. One the owner stopped stays stopped. One app's failure is
+    # its own: { 'apps' => { id => 'remade' | 'remade, stopped' | its reason } }.
+    def do_follow_pool_apps
+      out = docker_output('ps', '--all', '--filter', 'label=amahi.app', '--format', '{{.Label "amahi.app"}}')
+      return { 'apps' => {} } unless out
+
+      shares = samba_shares
+      done = out.lines.map(&:strip).grep(APP_ID).uniq.filter_map do |id|
+        info = JSON.parse(docker_output('inspect', app_container(id)) || '[]').first or next
+        mounts = Array(info['Mounts'])
+        chosen = mounts.filter_map do |mount|
+          name = mount['Destination'].to_s.delete_prefix("#{APP_SHARE_TARGET}/")
+          next if name == mount['Destination'] || name.include?('/')
+
+          shares[name.downcase]&.merge(write: mount['RW'] == true && !shares[name.downcase][:pooled])
+        end
+        have = mounts.map { |mount| mount['Destination'].to_s }.select { |dest| dest.start_with?("#{drives_root}/") }.sort
+        want = chosen.select { |share| share[:pooled] }.flat_map { |share| greyhole_copies(share[:name]) }.uniq.sort
+        failed = info.dig('State', 'Error').to_s.include?('mount')
+        next if have == want && !failed
+
+        stopped = !info.dig('State', 'Running') && !failed
+        say("#{id}: making its container again with the pool drives mounted now")
+        begin
+          do_install_app(id, app_manifest(id), chosen, true)
+          run_command([DOCKER, 'stop', '--time', '30', app_container(id)]) if stopped
+          [id, stopped ? 'remade, stopped' : 'remade']
+        rescue Failed, Refused => e
+          [id, e.message]
+        end
+      rescue JSON::ParserError
+        nil
+      end
+      do_app_firewall if done.any?
+      { 'apps' => done.to_h }
     end
 
     # The image an app's container runs (name:tag@sha256:...), or nil without a container.

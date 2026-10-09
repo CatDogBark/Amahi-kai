@@ -50,6 +50,8 @@ class DisksController < ApplicationController
     begin
       mp = DiskManager.mount!(device, mount_point)
       flash[:notice] = "Mounted #{device} at #{mp}"
+      # A pool drive back: the apps given pooled shares get it again
+      DockerApp.follow_pool! if DiskPoolPartition.exists?(path: mp)
     rescue DiskManager::DiskError => e
       flash[:error] = "Mount failed: #{e.message}"
     rescue Errno::ENOENT => e

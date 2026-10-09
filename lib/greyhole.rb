@@ -229,8 +229,7 @@ class Greyhole
       if shares.any? && (listed = configured_shares)
         off = shares.reject { |share| listed.include?(share.name) }.each { |share| share.update!(disk_pool_copies: 0, pool_removing: false) }
       end
-      DockerApp.follow_pool! if gone.present?
-      DockerApp.follow_pool!(shares: off.map(&:name)) if off.present?
+      DockerApp.follow_pool! if gone.present? || off.present?
     end
 
     # The pool drives greyhole.conf lists now (the app may read it), or nil if it can't be read.

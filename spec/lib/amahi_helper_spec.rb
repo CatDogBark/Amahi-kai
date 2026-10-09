@@ -960,13 +960,28 @@ RSpec.describe 'AmahiHelper' do
           nil
         end
         helper.do_secure_fstab
-        expect(helper.do_secure_mounts).to eq('remounted' => ["#{mnt}/storage-1", files])
+        expect(helper.do_secure_mounts).to eq('remounted' => ["#{mnt}/storage-1", files], 'protected' => [])
         expect(ran).to eq([['/usr/bin/mount', '-o', 'remount,nosuid,nodev', "#{mnt}/storage-1"],
                            ['/usr/bin/mount', '--bind', files, files],
                            ['/usr/bin/mount', '-o', 'remount,bind,nosuid,nodev', files]])
         ran.clear
-        expect(helper.do_secure_mounts).to eq('remounted' => [])
+        expect(helper.do_secure_mounts).to eq('remounted' => [], 'protected' => [])
         expect(ran).to eq([])
+      end
+
+      it "makes a missing drive's empty mount point immutable, so nothing lands on the system disk there" do
+        ran = []
+        allow(helper).to receive(:mount_options) { |path| path == files ? %w[rw nosuid nodev] : [] }
+        allow(helper).to receive(:mount_point?).and_return(false)
+        allow(helper).to receive(:run_command) { |argv| ran << argv && nil }
+        allow(File).to receive(:executable?).and_call_original
+        allow(File).to receive(:executable?).with(AmahiHelper::CHATTR).and_return(true)
+        File.write(fstab, "UUID=os / ext4 defaults 0 1\nUUID=u-1 #{mnt}/storage-1 ext4 defaults,nofail,nosuid,nodev 0 2\n" \
+                          "UUID=u-2 #{mnt}/storage-2 ext4 defaults,nofail,nosuid,nodev 0 2\n")
+        FileUtils.mkdir_p(["#{mnt}/storage-1", "#{mnt}/storage-2/.gh_metastore_backup"])
+        expect(helper.do_secure_mounts['protected']).to eq(["#{mnt}/storage-1"]) # storage-2 has something in it
+        expect(ran).to include([AmahiHelper::CHATTR, '+i', "#{mnt}/storage-1", { allow_failure: true }])
+        expect(ran.flatten).not_to include("#{mnt}/storage-2")
       end
 
       it 'reads a mount\'s options from the mounts list, the newest first' do
@@ -995,7 +1010,8 @@ RSpec.describe 'AmahiHelper' do
       it 'mounts, and adds the PR #13 fstab line (nofail, short timeout) once' do
         mp = "#{mnt}/storage-2"
         expect(helper.do_mount_drive('/dev/sdd1', mp, 'ext4', 'u-1')).to eq('mount_point' => mp)
-        expect(ran).to eq([['/usr/bin/mount', '-o', 'nosuid,nodev', '/dev/sdd1', mp]])
+        expect(ran).to eq([[AmahiHelper::CHATTR, '+i', mp, { allow_failure: true }], # its empty folder, before
+                           ['/usr/bin/mount', '-o', 'nosuid,nodev', '/dev/sdd1', mp]])
         expect(File.read(fstab).lines.last).to eq("UUID=u-1 #{mp} ext4 defaults,nofail,nosuid,nodev,x-systemd.device-timeout=10s 0 2\n")
 
         mounted.clear
@@ -1028,7 +1044,8 @@ RSpec.describe 'AmahiHelper' do
         helper.do_unmount_drive(["#{mnt}/storage-1"], 'u-1')
         helper.do_unmount_drive(["#{mnt}/media"], nil)
 
-        expect(ran).to eq([['/usr/bin/umount', "#{mnt}/storage-1"], ['/usr/bin/umount', "#{mnt}/media"]])
+        expect(ran).to eq([['/usr/bin/umount', "#{mnt}/storage-1"], [AmahiHelper::CHATTR, '-i', "#{mnt}/storage-1", { allow_failure: true }],
+                           ['/usr/bin/umount', "#{mnt}/media"]])
         expect(File.read(fstab)).to eq("UUID=os / ext4 defaults 0 1\nUUID=u-12 #{mnt}/media ext4 defaults,nofail 0 2\n")
         expect(File.stat(fstab).mode & 0o777).to eq(0o644)
         expect(File.read("#{fstab}.amahi-backup")).to eq(before)

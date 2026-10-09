@@ -1,6 +1,8 @@
 # Limits the ports Docker apps publish to the LAN and Tailscale (the root helper's
 # apps.firewall), each time Docker starts or restarts: Docker's own rules for published ports
-# come before UFW's. Installed and enabled by bin/amahi-install-helper.
+# come before UFW's. First, the apps given pooled shares get the pool drives mounted now
+# (apps.follow_pool): a drive missing at boot would keep them from starting. Installed and
+# enabled by bin/amahi-install-helper.
 [Unit]
 Description=Amahi-kai: keep app ports to the LAN and Tailscale
 After=docker.service
@@ -9,11 +11,12 @@ PartOf=docker.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+ExecStart=-/usr/local/sbin/amahi-helper apps.follow_pool
 ExecStart=/usr/local/sbin/amahi-helper apps.firewall
 # And announces the apps on the LAN (mDNS); a failure there doesn't count against the firewall.
 ExecStart=-/usr/local/sbin/amahi-helper apps.announce
 StandardInput=null
-TimeoutStartSec=1min
+TimeoutStartSec=5min
 
 [Install]
 WantedBy=docker.service
