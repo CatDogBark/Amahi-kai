@@ -1,6 +1,8 @@
 # Browser tests
 
-A plan, for Troy to review (2026-10-09). Nothing here is built yet.
+A plan, reviewed by Troy (2026-10-09). The harness, the CI job and the first four specs are
+built (the first pull request); the rest of the table is the second. The setup wizard waits for
+its redo.
 
 ## Why
 

@@ -309,3 +309,35 @@ jobs:
       # A sudoers file visudo rejects would be kept off the NAS; catch it here first.
       - name: Sudoers syntax
         run: sudo visudo -cf config/sudoers/amahi-kai
+
+  # A real browser (Chrome, on the runner already) loads the pages as an admin and clicks what
+  # matters; any console error or Content-Security-Policy violation fails the example
+  # (spec/support/browser_specs.rb). On failure, the screenshots are an artifact of the run.
+  browser:
+    name: Browser
+    runs-on: ubuntu-latest
+    env:
+      RAILS_ENV: test
+      BUNDLE_JOBS: 4
+      BUNDLE_WITHOUT: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev libmariadb-dev
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+      - name: Prepare DB
+        run: |
+          mkdir -p tmp/cache/tmpfiles tmp/pids log
+          bundle exec rails db:schema:load
+      - name: Browser specs
+        run: google-chrome --version && bundle exec rspec spec/system --format documentation
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-failures
+          path: tmp/capybara/
+          retention-days: 7
+          if-no-files-found: ignore

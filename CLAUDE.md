@@ -47,10 +47,17 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
 | Requests | `bundle exec rspec spec/requests/` |
 | MariaDB | models + requests again on MariaDB 10.11 (`DATABASE_URL`), the production database |
 | Lint & Security | RuboCop 1.91.0 (+ rails 2.38.0, rspec 3.10.2), Brakeman 8.1.0, bundle-audit 0.9.3, installed as gems, not bundled |
+| Browser | `bundle exec rspec spec/system`: Chrome, headless, loads the pages as an admin and clicks (`docs/plans/browser-tests.md`) |
 
 - Prepare the test DB with `RAILS_ENV=test bundle exec rails db:schema:load`. Tests use SQLite.
 - RuboCop fails on any offense (there's no list of old ones to skip). Brakeman fails on
   anything not in `config/brakeman.ignore`, and every entry there needs a `note`.
+- **Browser specs** (`spec/system`, `spec/support/browser_specs.rb`) need Chrome or Chromium on the
+  PATH, or `BROWSER_PATH`; without one they skip. Every example fails on anything the browser
+  logs at error level (a refused inline script, an exception, a failed request), so a page
+  passes only when it loads clean. They sign in through the real form as the seeded admin, and
+  run with truncation (the server thread can't see a transaction); a failure's screenshot is in
+  `tmp/capybara/`.
 - Every spec runs in CI: there are no tags that CI skips. A spec that needs root
   skips itself (`skip 'needs root' unless Process.euid.zero?`).
 - **Ruby is 3.2 on the NAS (Ubuntu's `ruby3.2`, 3.2.3).** Change `Gemfile.lock` only under Ruby

@@ -229,6 +229,7 @@ All notable changes to Amahi-kai are documented here.
 
 ### 📊 Test Coverage
 
+- **Browser tests** — CI now opens Amahi-kai in a real browser (Chrome, headless), signs in, and clicks through the sign-in page, the dashboard, Shares and Files, failing on any error the browser logs, a refused script included. Buttons that do nothing, or a script the Content-Security-Policy refuses, no longer get past CI. More pages follow.
 - 312+ specs across models, requests, lib, helpers, features
 - 44.7% line coverage (Models 53%, Helpers 82%, Services 74%)
 - Automated coverage report on every CI run

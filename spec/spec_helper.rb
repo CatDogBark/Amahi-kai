@@ -21,11 +21,14 @@ RSpec.configure do |config|
 
   config.include FactoryBot::Syntax::Methods
 
-  config.before(:each) do
+  config.before(:each) do |example|
     # Specs never run system commands or the root helper, even those that stub
     # Rails.env.production? to test production code; the few that test the real paths (with
     # the system calls stubbed) set Shell.simulated = false.
     Shell.simulated = true
+    # Each example's data is rolled back after it. A browser spec's server thread has its own
+    # connection, which can't see an open transaction, so those commit and are truncated.
+    DatabaseCleaner[:active_record].strategy = example.metadata[:type] == :system ? :truncation : :transaction
     DatabaseCleaner.start
     # load the seed to get the minimum env going
     load "#{Rails.root}/db/seeds.rb"
