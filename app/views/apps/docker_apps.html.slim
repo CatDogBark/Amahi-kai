@@ -4,7 +4,7 @@
       h4.mb-3 Docker is not installed
       p.text-muted.mb-4 Docker is required to run containerized apps. Click below to install Docker Engine on this server.
       - install_url = apps_install_docker_stream_path
-      button.btn.btn-primary.btn-lg onclick="openInstallTerminal('docker', '#{install_url}')" Install Docker
+      button.btn.btn-primary.btn-lg data-call="openInstallTerminal" data-args='["docker", "#{install_url}"]' Install Docker
 
 - if !@docker_installed
   == render 'shared/install_terminal', id: 'docker', title: 'Installing Docker', stream_url: apps_install_docker_stream_path

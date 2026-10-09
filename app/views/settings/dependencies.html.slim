@@ -17,9 +17,9 @@
         = relative_time_tag(@status[:checked_at])
       - else
         | Package lists not refreshed yet
-    button.btn.btn-sm.btn-outline-light type="button" id="check-dependencies" onclick="openInstallTerminal('deps-refresh')" Check now
+    button.btn.btn-sm.btn-outline-light type="button" id="check-dependencies" data-call="openInstallTerminal" data-args='["deps-refresh"]' Check now
     - if waiting.any?
-      button.btn.btn-sm.btn-light type="button" id="update-all" onclick="if (confirm(#{"Install all #{pluralize(waiting.size, 'update')} waiting? Held packages stay as they are. Services keep their old version until they restart.".to_json})) openInstallTerminal('deps-upgrade', #{settings_dependencies_upgrade_stream_path(all: 1).to_json})" Update all
+      button.btn.btn-sm.btn-light type="button" id="update-all" data-confirm="Install all #{pluralize(waiting.size, 'update')} waiting? Held packages stay as they are. Services keep their old version until they restart." data-call="openInstallTerminal" data-args='["deps-upgrade", "#{settings_dependencies_upgrade_stream_path(all: 1)}"]' Update all
   .card-body
     p.mb-3 id="dependencies-summary"
       - if waiting.empty?
@@ -75,7 +75,7 @@
               td.text-end.text-nowrap
                 - if dep.updates.any? && !dep.held?
                   - names = dep.updates.map(&:package)
-                  button.btn.btn-sm.btn-outline-primary.me-1 type="button" onclick="if (confirm(#{"Update #{dep.name} (#{names.join(', ')})?".to_json})) openInstallTerminal('deps-upgrade', #{upgrade_url.call(names).to_json})" Update
+                  button.btn.btn-sm.btn-outline-primary.me-1 type="button" data-confirm="Update #{dep.name} (#{names.join(', ')})?" data-call="openInstallTerminal" data-args='["deps-upgrade", "#{upgrade_url.call(names)}"]' Update
                 - if dep.installed?
                   = button_to (dep.held? ? 'Release' : 'Hold'), settings_dependencies_hold_path,
                         params: { packages: dep.packages, held: dep.held? ? '0' : '1' }, method: :post, form: { class: 'd-inline' },
@@ -148,7 +148,7 @@
                       span.badge.bg-warning.text-dark.ms-1 Security
                   td.text-end
                     - unless @status[:held].include?(update.package)
-                      button.btn.btn-sm.btn-outline-primary type="button" onclick="if (confirm(#{"Update #{update.package}?".to_json})) openInstallTerminal('deps-upgrade', #{upgrade_url.call([update.package]).to_json})" Update
+                      button.btn.btn-sm.btn-outline-primary type="button" data-confirm="Update #{update.package}?" data-call="openInstallTerminal" data-args='["deps-upgrade", "#{upgrade_url.call([update.package])}"]' Update
 
 .card.mb-4 id="runtime"
   .card-header

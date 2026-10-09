@@ -156,6 +156,7 @@ All notable changes to Amahi-kai are documented here.
 
 ### 🔧 Architecture & Code Quality
 
+- **No inline event handlers** — Every button, link and form that ran a snippet of JavaScript from its own markup (52 of them, on 20 pages) now says what it does in its attributes, and one small script does the calling. It's the first of three steps to a Content-Security-Policy that refuses inline scripts, which stops a script smuggled into a page from acting as you. Nothing changes in what the buttons do; the dashboard's tiles light up on hover by stylesheet now.
 - **Three small cleanups from the roadmap** — A share's toggles (All users, Visible, Writeable, guests, each person's access, Clear the list) have one set of rules, in `ShareAccessManager`; the Shares page's actions call them instead of repeating them. Advanced mode is read once per page, and only on pages that show it, instead of on every request (and twice on some). The dashboard and System Status read the OS name, load and memory through `SystemInfo`, the same way, instead of each in its own way.
 - **The last leftovers** — A final sweep for code nothing uses:
   - **Gone:** an empty search page with no route, two unused methods, two scripts nothing loaded (one only comments), Turbo's copy (189 KB, unused since Turbo went), the `stimulus-rails` gem (Stimulus is bundled with Amahi-kai), six unused translations, an old DHCP-lease reader from the ISC DHCP days, and a lease filter that would have crashed if anything had called it.

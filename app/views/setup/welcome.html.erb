@@ -41,7 +41,7 @@
         Systems with less than 8 GB RAM can run out of memory during heavy operations.
       </div>
       <button type="button" class="btn-kai" style="width: 100%; padding: 8px; font-size: 13px;"
-              onclick="openInstallTerminal('swap-setup', '<%= setup_create_swap_path %>?size=<%= @memory[:recommended_swap] %>')">
+              data-call="openInstallTerminal" data-args='["swap-setup", "<%= setup_create_swap_path %>?size=<%= @memory[:recommended_swap] %>"]'>
         Create <%= @memory[:recommended_swap] %> Swap File
       </button>
       <div id="swap-success" class="setup-success" style="display: none; text-align: center; margin-top: 8px; font-size: 12px;">

@@ -60,14 +60,16 @@ RSpec.describe 'Settings → System Dependencies', type: :request do
 
     it 'offers Update for software with an update, Hold or Release for what is installed, and Update all' do
       samba = page.at_css('#dependency-samba')
-      expect(samba.at_xpath(".//button[text()='Update']")['onclick']).to include("openInstallTerminal('deps-upgrade'",
-                                                                                  '/settings/dependencies_upgrade_stream?packages%5B%5D=samba')
+      update = samba.at_xpath(".//button[text()='Update']")
+      expect(update['data-call']).to eq('openInstallTerminal')
+      expect(JSON.parse(update['data-args'])).to eq(['deps-upgrade', '/settings/dependencies_upgrade_stream?packages%5B%5D=samba'])
+      expect(update['data-confirm']).to start_with('Update Samba')
       expect(samba.at_xpath(".//form//button[text()='Hold']")).to be_present
       greyhole = page.at_css('#dependency-greyhole')
       expect(greyhole.text).to include('Held')
       expect(greyhole.at_xpath(".//form//button[text()='Release']")).to be_present
       expect(page.at_css('#dependency-tailscale form')).to be_nil
-      expect(page.at_css('#update-all')['onclick']).to include('/settings/dependencies_upgrade_stream?all=1')
+      expect(JSON.parse(page.at_css('#update-all')['data-args'])).to eq(['deps-upgrade', '/settings/dependencies_upgrade_stream?all=1'])
       expect(page.at_css('#other-updates').css('button').map(&:text)).to eq(%w[Update Update])
       expect(page.at_css('#deps-upgrade-install-modal')).to be_present
     end

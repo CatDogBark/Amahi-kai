@@ -27,7 +27,7 @@
     </span>
     <%= form_with url: trash_keep_path, method: :post, class: 'd-inline-flex align-items-center gap-1', id: 'trash-keep' do %>
       <label for="trash-days" class="text-muted">Keep files</label>
-      <select name="days" id="trash-days" class="form-select form-select-sm w-auto" onchange="this.form.requestSubmit()">
+      <select name="days" id="trash-days" class="form-select form-select-sm w-auto" data-autosubmit>
         <% Trash::DAY_CHOICES.each do |choice| %>
           <option value="<%= choice %>" <%= 'selected' if choice == @days %>><%= choice.zero? ? 'until emptied' : "for #{choice} days" %></option>
         <% end %>

@@ -20,7 +20,8 @@
       td.settings-col1.settings-col1-pad1.apps-col1 style="vertical-align:middle"
         .d-flex.align-items-center
           - if logo.present?
-            img.me-2 src=logo style="width:32px;height:32px;border-radius:4px;object-fit:contain" alt=name onerror="this.outerHTML='<span class=\'me-2 d-inline-flex align-items-center justify-content-center bg-secondary text-white rounded\' style=\'width:32px;height:32px;font-size:14px;\'>📦</span>'"
+            img.me-2 src=logo style="width:32px;height:32px;border-radius:4px;object-fit:contain" alt=name data-fallback=""
+            span.me-2.d-inline-flex.align-items-center.justify-content-center.bg-secondary.text-white.rounded.d-none style="width:32px;height:32px;font-size:14px;" data-fallback-for="logo" 📦
           span.fw-bold= name
           - if category.present?
             span.badge.bg-secondary.ms-2.small= category
@@ -55,7 +56,7 @@
         - if status == 'available' && AppCatalog.data_kept?(identifier)
           .small.mt-1
             | Its data from an earlier install is kept and used again.
-            button.btn.btn-link.p-0.ms-1.text-danger.align-baseline type="button" style="font-size: inherit" onclick="if(confirm(#{"Delete #{name}'s data in #{data_path}? This can't be undone.".to_json})){dockerAppAction('/apps/docker/uninstall/#{identifier}?delete_data=1', this)}" Delete it
+            button.btn.btn-link.p-0.ms-1.text-danger.align-baseline type="button" style="font-size: inherit" data-confirm="Delete #{name}'s data in #{data_path}? This can't be undone." data-call="dockerAppAction" data-args='["/apps/docker/uninstall/#{identifier}?delete_data=1", "@el"]' Delete it
       td.text-end.pe-3.text-nowrap style='width: 240px; vertical-align:middle'
         - case status
         - when 'available'
@@ -74,17 +75,17 @@
               span.small.text-secondary.me-1.align-self-center Open it on your LAN or Tailscale
             - elsif app.url(request.host)
               a.btn.btn-sm.btn-success href=app.url(request.host) target="_blank" rel="noopener" Open
-            button.btn.btn-sm.btn-outline-danger onclick="dockerAppAction('/apps/docker/stop/#{identifier}', this)" Stop
-            button.btn.btn-sm.btn-outline-secondary onclick="if(confirm(#{uninstall_note.to_json})){dockerAppAction('/apps/docker/uninstall/#{identifier}', this)}" Uninstall
+            button.btn.btn-sm.btn-outline-danger type="button" data-call="dockerAppAction" data-args='["/apps/docker/stop/#{identifier}", "@el"]' Stop
+            button.btn.btn-sm.btn-outline-secondary type="button" data-confirm=uninstall_note data-call="dockerAppAction" data-args='["/apps/docker/uninstall/#{identifier}", "@el"]' Uninstall
         - when 'stopped'
           .d-flex.gap-1.justify-content-end
-            button.btn.btn-sm.btn-outline-success onclick="dockerAppAction('/apps/docker/start/#{identifier}', this)" Start
-            button.btn.btn-sm.btn-outline-secondary onclick="if(confirm(#{uninstall_note.to_json})){dockerAppAction('/apps/docker/uninstall/#{identifier}', this)}" Uninstall
+            button.btn.btn-sm.btn-outline-success type="button" data-call="dockerAppAction" data-args='["/apps/docker/start/#{identifier}", "@el"]' Start
+            button.btn.btn-sm.btn-outline-secondary type="button" data-confirm=uninstall_note data-call="dockerAppAction" data-args='["/apps/docker/uninstall/#{identifier}", "@el"]' Uninstall
         - when 'error'
           .d-flex.gap-1.align-items-center.justify-content-end
             span.badge.bg-danger Error
             button.btn.btn-sm.btn-outline-primary type="button" data=share_dialog.merge('verb' => 'Install again') Install again
-            button.btn.btn-sm.btn-outline-secondary onclick="if(confirm(#{uninstall_note.to_json})){dockerAppAction('/apps/docker/uninstall/#{identifier}', this)}" Uninstall
+            button.btn.btn-sm.btn-outline-secondary type="button" data-confirm=uninstall_note data-call="dockerAppAction" data-args='["/apps/docker/uninstall/#{identifier}", "@el"]' Uninstall
     - secrets = installed ? AppCatalog.secrets(identifier) : []
     - if secrets.any?
       tr

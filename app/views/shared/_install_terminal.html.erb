@@ -30,7 +30,7 @@
     <div id="<%= id %>-install-bar" class="term-bar">
       <span id="<%= id %>-status" class="term-status"></span>
       <div id="<%= id %>-install-footer" style="display:none; text-align:right;">
-        <button type="button" class="btn btn-sm btn-outline-light" onclick="closeInstallTerminal('<%= id %>')">Close & Refresh</button>
+        <button type="button" class="btn btn-sm btn-outline-light" data-call="closeInstallTerminal" data-args='["<%= id %>"]'>Close & Refresh</button>
       </div>
     </div>
   </div>
