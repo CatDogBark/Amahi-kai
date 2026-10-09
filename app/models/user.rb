@@ -230,11 +230,18 @@ class User < ApplicationRecord
     end
   end
 
-  # The helper removes the Samba user, then the Linux account and its home directory,
-  # but only an account the app created (primary group users): one that existed
-  # before, such as the install user, is left alone. A refusal is logged, and the web
-  # user is still deleted.
+  # The helper removes the Samba user, ends their SMB sessions, then the Linux account, but
+  # only an account the app created (primary group users): one that existed before, such as
+  # the install user, is left alone, and that refusal still lets the web user go. Any other
+  # failure keeps the user, saying why: deleting it anyway left a Linux account behind, and
+  # its login couldn't be used again.
   def before_destroy_hook
-    system_call('users.delete', login: login)
+    Privileged.call('users.delete', login: login)
+  rescue Privileged::Error => e
+    Rails.logger.error("User #{login}: users.delete failed: #{e.message}")
+    return if e.refused?
+
+    errors.add(:base, "Couldn't delete #{login}'s account on the NAS: #{e.message}")
+    throw :abort
   end
 end

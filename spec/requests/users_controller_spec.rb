@@ -100,6 +100,16 @@ describe "Users Controller", type: :request do
         }.to change(User, :count).by(-1)
       end
 
+      it "keeps a user whose account on the NAS couldn't be deleted, and says why" do
+        user = create(:user, login: "busy")
+        allow(Privileged).to receive(:call).and_call_original
+        allow(Privileged).to receive(:call).with('users.delete', login: 'busy')
+                                           .and_raise(Privileged::Error.new('users.delete', 'userdel exited 8: user busy is currently used by process 1'))
+        delete "/users/#{user.id}", as: :json
+        expect(response.parsed_body['status']).to eq("Couldn't delete busy's account on the NAS: userdel exited 8: user busy is currently used by process 1")
+        expect(User.exists?(user.id)).to be true
+      end
+
       it "does not allow deleting yourself" do
         expect {
           delete "/users/#{@admin.id}", as: :json
