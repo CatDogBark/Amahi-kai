@@ -118,7 +118,7 @@
                 <td>
                   <%= drive[:path] %>
                   <% if drive[:removing] %>
-                    <div class="small text-info" data-reload-after="30">Removing: Greyhole is moving the files kept only on it to the other drives. It leaves the pool when that's done; this page updates by itself.</div>
+                    <div class="small text-info" data-reload-after="10">Removing: Greyhole is moving the files kept only on it to the other drives. It leaves the pool when that's done; this page updates by itself.</div>
                   <% end %>
                   <% case drive[:removing] ? nil : drive[:state] %>
                   <% when :changed %>

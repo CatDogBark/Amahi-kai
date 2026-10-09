@@ -2,12 +2,12 @@
 
 .access id="share-access-#{share.id}"
   span data-controller="toggle" data-toggle-url-value=toggle_everyone_share_path(id: share.id)
-    input.share_everyone_checkbox.form-check-input type="checkbox" id="share_everyone_#{share.id}" checked=share.everyone data-toggle-target="checkbox" data-action="click->toggle#toggle"
+    input.share_everyone_checkbox.form-check-input type="checkbox" id="share_everyone_#{share.id}" autocomplete="off" checked=share.everyone data-toggle-target="checkbox" data-action="click->toggle#toggle"
     |  #{t('all_users')}
   | &nbsp;&nbsp;&nbsp;
   span style=("display:none" unless share.everyone) data-access-show="everyone"
     span data-controller="toggle" data-toggle-url-value=toggle_readonly_share_path(id: share.id)
-      input.share_readonly_checkbox.form-check-input type="checkbox" id="share_readonly_#{share.id}" checked=(!share.rdonly) data-toggle-target="checkbox" data-action="click->toggle#toggle"
+      input.share_readonly_checkbox.form-check-input type="checkbox" id="share_readonly_#{share.id}" autocomplete="off" checked=(!share.rdonly) data-toggle-target="checkbox" data-action="click->toggle#toggle"
       |  #{t('writeable')}
 
   .per-user-access style=("display:none" if share.everyone or User.count < 1) data-access-show="per-user"
@@ -31,12 +31,12 @@
               td &nbsp;
               td.align-center
                 span data-controller="toggle" data-toggle-url-value=toggle_access_share_path(id: share.id, user_id: user.id)
-                  input.share_access_checkbox.form-check-input type="checkbox" id="share_access_for_user#{user.id}" checked=share.users_with_share_access.include?(user) data-toggle-target="checkbox" data-action="click->toggle#toggle"
+                  input.share_access_checkbox.form-check-input type="checkbox" id="share_access_for_user#{user.id}" autocomplete="off" checked=share.users_with_share_access.include?(user) data-toggle-target="checkbox" data-action="click->toggle#toggle"
               td &nbsp;
               td &nbsp;
               td.align-center
                 span data-controller="toggle" data-toggle-url-value=toggle_write_share_path(id: share.id, user_id: user.id)
-                  input.share_write_checkbox.form-check-input type="checkbox" id="share_write_for_user#{user.id}" checked=share.users_with_write_access.include?(user) disabled=(!share.users_with_share_access.include?(user)) data-toggle-target="checkbox" data-action="click->toggle#toggle"
+                  input.share_write_checkbox.form-check-input type="checkbox" id="share_write_for_user#{user.id}" autocomplete="off" checked=share.users_with_write_access.include?(user) disabled=(!share.users_with_share_access.include?(user)) data-toggle-target="checkbox" data-action="click->toggle#toggle"
 
         tbody
           tr
@@ -44,9 +44,9 @@
             td &nbsp;
             td.align-center
               span data-controller="toggle" data-toggle-url-value=toggle_guest_access_share_path(id: share.id)
-                input.share_guest_access_checkbox.form-check-input type="checkbox" id="share_guest_access_#{share.id}" checked=share.guest_access data-toggle-target="checkbox" data-action="click->toggle#toggle"
+                input.share_guest_access_checkbox.form-check-input type="checkbox" id="share_guest_access_#{share.id}" autocomplete="off" checked=share.guest_access data-toggle-target="checkbox" data-action="click->toggle#toggle"
             td &nbsp;
             td &nbsp;
             td.align-center
               span data-controller="toggle" data-toggle-url-value=toggle_guest_writeable_share_path(id: share.id)
-                input.share_guest_writeable_checkbox.form-check-input type="checkbox" id="share_guest_writeable_#{share.id}" checked=share.guest_writeable disabled=(!share.guest_access) data-toggle-target="checkbox" data-action="click->toggle#toggle"
+                input.share_guest_writeable_checkbox.form-check-input type="checkbox" id="share_guest_writeable_#{share.id}" autocomplete="off" checked=share.guest_writeable disabled=(!share.guest_access) data-toggle-target="checkbox" data-action="click->toggle#toggle"

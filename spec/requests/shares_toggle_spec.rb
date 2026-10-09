@@ -114,6 +114,16 @@ describe "Shares Toggle Actions", type: :request do
         expect(card.at_css("#extras-textarea-#{share.id}")).to be_nil
       end
 
+      it "has every switch show what's saved after a reload (no browser-restored state)" do
+        share = create(:share, name: "Docs", everyone: false, guest_access: false)
+        create(:user)
+        get shares_path
+        card = Nokogiri::HTML(response.body).at_css("#whole_share_#{share.id}")
+        switches = card.css('input[type=checkbox]')
+        expect(switches.size).to be >= 7 # visible, all users, writeable, a user's access and write, two guest
+        expect(switches.map { |s| s['autocomplete'] }).to all(eq('off'))
+      end
+
       it "has Samba settings under Advanced, in advanced mode" do
         Setting.set("advanced", "1")
         share = create(:share, name: "Docs", extras: "log level = 1")
