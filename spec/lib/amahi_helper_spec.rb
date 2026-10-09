@@ -979,9 +979,23 @@ RSpec.describe 'AmahiHelper' do
         File.write(fstab, "UUID=os / ext4 defaults 0 1\nUUID=u-1 #{mnt}/storage-1 ext4 defaults,nofail,nosuid,nodev 0 2\n" \
                           "UUID=u-2 #{mnt}/storage-2 ext4 defaults,nofail,nosuid,nodev 0 2\n")
         FileUtils.mkdir_p(["#{mnt}/storage-1", "#{mnt}/storage-2/.gh_metastore_backup"])
-        expect(helper.do_secure_mounts['protected']).to eq(["#{mnt}/storage-1"]) # storage-2 has something in it
+        File.write("#{mnt}/storage-2/.gh_metastore_backup/backup", 'x') # Greyhole's folder, not empty
+        expect(helper.do_secure_mounts['protected']).to eq(["#{mnt}/storage-1"])
         expect(ran).to include([AmahiHelper::CHATTR, '+i', "#{mnt}/storage-1", { allow_failure: true }])
         expect(ran.flatten).not_to include("#{mnt}/storage-2")
+        expect(File.exist?("#{mnt}/storage-2/.gh_metastore_backup/backup")).to be true
+
+        # Greyhole's folder empty, as its job remakes it every minute: it goes, and the folder is protected
+        File.delete("#{mnt}/storage-2/.gh_metastore_backup/backup")
+        expect(helper.do_secure_mounts['protected']).to include("#{mnt}/storage-2")
+        expect(Dir.empty?("#{mnt}/storage-2")).to be true
+
+        # Anything else there stays, and the folder isn't protected
+        FileUtils.mkdir_p("#{mnt}/storage-3/.gh_metastore_backup")
+        File.write("#{mnt}/storage-3/notes.txt", 'mine')
+        File.write(fstab, "UUID=u-3 #{mnt}/storage-3 ext4 defaults,nofail,nosuid,nodev 0 2\n")
+        expect(helper.do_secure_mounts['protected']).to eq([])
+        expect(Dir.children("#{mnt}/storage-3").sort).to eq(%w[.gh_metastore_backup notes.txt])
       end
 
       it 'reads a mount\'s options from the mounts list, the newest first' do
