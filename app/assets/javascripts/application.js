@@ -17,6 +17,7 @@
 //= require storage_pools
 //= require tooltips
 //= require lib/dispatch
+//= require install_terminal
 //= require lib/application
 
 //= require bootstrap.bundle.min

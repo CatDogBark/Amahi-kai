@@ -10,7 +10,7 @@
     <div class="card-header d-flex align-items-center justify-content-between">
       <h5 class="mb-0">Security Audit</h5>
       <div class="d-flex gap-2">
-        <button type="button" class="btn btn-sm btn-primary" data-call="runSecurityAudit">
+        <button type="button" class="btn btn-sm btn-primary" data-call="runSecurityAudit" data-args='["<%= security_audit_stream_path %>", "<%= security_fix_stream_path %>"]'>
           Run Audit
         </button>
         <button type="button" class="btn btn-sm btn-warning" data-call="openInstallTerminal" data-args='["security-fix", "<%= security_fix_stream_path %>"]'>
@@ -54,7 +54,7 @@
               </td>
               <td>
                 <% if check.status != :pass && check.fix_command && check.name != 'admin_password' && check.name != 'open_ports' %>
-                  <button type="button" class="btn btn-sm btn-outline-primary" data-call="fixCheck" data-args='["<%= check.name %>", "@el"]'>
+                  <button type="button" class="btn btn-sm btn-outline-primary" data-call="fixCheck" data-args='["<%= check.name %>", "@el", "<%= security_fix_path %>"]'>
                      Fix
                   </button>
                 <% elsif check.name == 'admin_password' && check.status != :pass %>
@@ -72,101 +72,4 @@
 <%= render 'shared/install_terminal', id: 'security-audit', title: 'Security Audit', stream_url: security_audit_stream_path %>
 <%= render 'shared/install_terminal', id: 'security-fix', title: 'Applying Security Fixes', stream_url: security_fix_stream_path %>
 
-<script>
-function runSecurityAudit() {
-  var id = 'security-audit';
-  var url = '<%= security_audit_stream_path %>';
-  var modal = document.getElementById(id + '-install-modal');
-  var output = document.getElementById(id + '-output');
-  var cursor = document.getElementById(id + '-cursor');
-  var footer = document.getElementById(id + '-install-footer');
-  var terminal = document.getElementById(id + '-terminal');
-
-  modal.style.display = 'flex';
-  output.innerHTML = '';
-  cursor.style.display = '';
-  footer.style.display = 'none';
-
-  // Reset footer to just the close button
-  footer.innerHTML = '<button type="button" class="btn btn-sm btn-outline-light" onclick="closeInstallTerminal(\'security-audit\')">Close & Refresh</button>';
-
-  var source = new EventSource(withStreamToken(url));
-
-  source.onmessage = function(e) {
-    var line = document.createElement('div');
-    line.className = 'term-line';
-    var text = e.data;
-
-    if (text.match(/^(Checking|Running)/)) {
-      line.classList.add('step');
-    } else if (text.match(/^  ✓/)) {
-      line.classList.add('success');
-    } else if (text.match(/^  ✗/) || text.match(/^✗/)) {
-      line.classList.add('error');
-    } else if (text.match(/^  ⚠/) || text.match(/^⚠/)) {
-      line.classList.add('warn');
-    } else if (text.match(/^───/)) {
-      line.style.color = '#7f8c9b';
-      line.style.fontWeight = 'bold';
-      line.style.marginTop = '8px';
-    }
-
-    line.textContent = text;
-    output.appendChild(line);
-    terminal.scrollTop = terminal.scrollHeight;
-  };
-
-  source.addEventListener('has_fixable', function(e) {
-    if (e.data === 'true') {
-      // Add "Fix All Issues" button to footer
-      var fixBtn = document.createElement('button');
-      fixBtn.type = 'button';
-      fixBtn.className = 'btn btn-sm btn-warning me-2';
-      fixBtn.innerHTML = 'Fix All Issues';
-      fixBtn.onclick = function() {
-        // Hide audit modal without reloading (closeInstallTerminal reloads the page)
-        document.getElementById('security-audit-install-modal').style.display = 'none';
-        openInstallTerminal('security-fix', '<%= security_fix_stream_path %>');
-      };
-      footer.insertBefore(fixBtn, footer.firstChild);
-    }
-  });
-
-  source.addEventListener('done', function(e) {
-    source.close();
-    cursor.style.display = 'none';
-    footer.style.display = 'block';
-  });
-
-  source.onerror = function() {
-    source.close();
-    cursor.style.display = 'none';
-    footer.style.display = 'block';
-    var line = document.createElement('div');
-    line.className = 'term-line error';
-    line.textContent = '✗ Connection lost';
-    output.appendChild(line);
-  };
-}
-
-function fixCheck(name, btn) {
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
-  fetch('<%= security_fix_path %>', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content },
-    body: JSON.stringify({ check_name: name })
-  }).then(function(r) { return r.json(); }).then(function(data) {
-    if (data.status === 'ok') {
-      window.location.reload();
-    } else {
-      alert('Fix failed for: ' + name + (data.error ? '\n\n' + data.error : ''));
-      btn.disabled = false;
-      btn.innerHTML = 'Fix';
-    }
-  }).catch(function() {
-    btn.disabled = false;
-    btn.innerHTML = 'Fix';
-  });
-}
-</script>
+<%= javascript_include_tag 'security' %>

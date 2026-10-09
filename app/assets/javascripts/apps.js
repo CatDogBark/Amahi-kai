@@ -95,3 +95,47 @@ function openShareDialog(button) {
   };
   bootstrap.Modal.getOrCreateInstance(dialog).show();
 }
+
+// Docker's on/off switch on the Apps pages: the slider moves at once, then the server is
+// asked; it goes back if that fails. The addresses come from the switch's data-args.
+function dockerStatusText(statusEl, running, text) {
+  statusEl.textContent = 'Docker ';
+  var mark = document.createElement('span');
+  mark.className = 'ms-1';
+  mark.style.color = running ? 'var(--kai-success, #68d391)' : 'var(--kai-muted, #a0aec0)';
+  mark.textContent = text;
+  statusEl.appendChild(mark);
+}
+
+function toggleDocker(cb, startUrl, stopUrl) {
+  var url = cb.checked ? startUrl : stopUrl;
+  var statusEl = cb.closest('.d-flex').querySelector('.docker-status');
+  var knob = cb.closest('.docker-toggle-switch').querySelector('.docker-knob');
+  var slider = cb.closest('.docker-toggle-switch').querySelector('.docker-slider');
+  var paint = function(running) {
+    knob.style.left = running ? '22px' : '2px';
+    slider.style.background = running ? 'var(--kai-success, #68d391)' : '#4a5568';
+  };
+
+  paint(cb.checked);
+  dockerStatusText(statusEl, cb.checked, cb.checked ? '● Starting...' : '○ Stopping...');
+
+  fetch(url, {
+    method: 'POST',
+    headers: { 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content, 'Accept': 'application/json' },
+    credentials: 'same-origin'
+  }).then(function() {
+    dockerStatusText(statusEl, cb.checked, cb.checked ? '● Running' : '○ Stopped');
+  }).catch(function() {
+    cb.checked = !cb.checked;
+    paint(cb.checked);
+    dockerStatusText(statusEl, cb.checked, cb.checked ? '● Running' : '○ Stopped');
+  });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  var cb = document.getElementById('docker-toggle');
+  if (cb && cb.checked) {
+    cb.closest('.docker-toggle-switch').querySelector('.docker-slider').style.background = 'var(--kai-success, #68d391)';
+  }
+});

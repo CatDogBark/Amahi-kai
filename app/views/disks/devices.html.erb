@@ -114,12 +114,3 @@
     </div>
   <% end %>
 </div>
-
-<script>
-document.querySelectorAll('[data-disable-with]').forEach(function(btn) {
-  btn.closest('form').addEventListener('submit', function() {
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>' + btn.getAttribute('data-disable-with');
-  });
-});
-</script>

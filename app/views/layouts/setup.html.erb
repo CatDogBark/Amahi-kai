@@ -284,49 +284,6 @@
       <%= yield %>
     </div>
   </div>
-<script>
-// Inline toast system for setup layout
-(function() {
-  var TYPE_MAP = {
-    success: { bg: '#198754', icon: '✓' },
-    notice:  { bg: '#198754', icon: '✓' },
-    danger:  { bg: '#dc3545', icon: '✗' },
-    error:   { bg: '#dc3545', icon: '✗' },
-    warning: { bg: '#ffc107', icon: '⚠', dark: true },
-    info:    { bg: '#0dcaf0', icon: 'ℹ', dark: true }
-  };
-  function getContainer() {
-    var c = document.getElementById('toast-container');
-    if (!c) { c = document.createElement('div'); c.id = 'toast-container'; document.body.appendChild(c); }
-    return c;
-  }
-  function showToast(message, type) {
-    var cfg = TYPE_MAP[type || 'info'] || TYPE_MAP.info;
-    var container = getContainer();
-    var t = document.createElement('div');
-    t.className = 'amahi-toast';
-    t.style.cssText = 'background:' + cfg.bg + ';color:' + (cfg.dark ? '#212529' : '#fff') + ';';
-    t.innerHTML = '<span class="amahi-toast-icon">' + cfg.icon + '</span><span class="amahi-toast-text">' +
-      message.replace(/</g,'&lt;') + '</span><button class="amahi-toast-close" style="color:' +
-      (cfg.dark ? '#212529' : '#fff') + '">&times;</button>';
-    t.querySelector('.amahi-toast-close').onclick = function() { dismiss(t); };
-    container.appendChild(t);
-    requestAnimationFrame(function() { requestAnimationFrame(function() { t.classList.add('amahi-toast-visible'); }); });
-    var timer = setTimeout(function() { dismiss(t); }, 5000);
-    t._timer = timer;
-    t.addEventListener('mouseenter', function() { clearTimeout(t._timer); });
-    t.addEventListener('mouseleave', function() { t._timer = setTimeout(function() { dismiss(t); }, 2000); });
-  }
-  function dismiss(t) {
-    if (t._gone) return; t._gone = true; clearTimeout(t._timer);
-    t.classList.remove('amahi-toast-visible'); t.classList.add('amahi-toast-leaving');
-    setTimeout(function() { if (t.parentNode) t.parentNode.removeChild(t); }, 300);
-  }
-  window.showToast = showToast;
-  <% flash.each do |name, msg| %>
-    showToast(<%= msg.to_json %>, <%= name.to_json %>);
-  <% end %>
-})();
-</script>
+<%= render 'shared/flash_messages' %>
 </body>
 </html>
