@@ -11,8 +11,9 @@ html[lang="en" data-theme="dark" data-bs-theme="dark"]
     = stylesheet_link_tag "login"
     = stylesheet_link_tag "ocean-bg"
     = javascript_include_tag "ocean"
+    = javascript_include_tag "form_reply"
     = csrf_meta_tags
 
-  body.login
+  body.login data-form-reply=form_reply_attribute
     == render 'layouts/ocean_bg'
     = yield

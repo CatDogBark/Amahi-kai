@@ -19,5 +19,6 @@
 //= require lib/dispatch
 //= require install_terminal
 //= require lib/application
+//= require form_reply
 
 //= require bootstrap.bundle.min
