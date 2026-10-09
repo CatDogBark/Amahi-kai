@@ -29,6 +29,8 @@ When someone clicks **Install**, Amahi-kai's root helper:
 4. Pulls your image, by its digest.
 5. Creates the container:
    - as the app's user (`--user <uid>:<gid>`) when the manifest says `run_as: app`;
+   - with `no-new-privileges`, so nothing in it can gain privileges (setuid programs in the
+     image included);
    - with a memory limit (`1g` unless the manifest sets another), restarted unless stopped;
    - with your environment settings and the generated secrets;
    - with each of your folders mounted at the path you gave;
@@ -57,7 +59,10 @@ installing it again picks up where it was.
   update.
 - **Able to run as an ordinary user** (best: `run_as: app`). It mustn't need to write outside
   its folders or `/tmp`. Images that must start as root and switch to a user they're given (the
-  linuxserver.io images, with `PUID`/`PGID`) use `run_as: image`.
+  linuxserver.io images, with `PUID`/`PGID`) use `run_as: image`. An app that writes into shares
+  (`writes_shares: true`) must run its processes as the app's user: `run_as: app`, or `run_as:
+  image` with `PUID: "{{uid}}"` and `PGID: "{{gid}}"` in its environment, both exactly so. The
+  catalog's check refuses anything else.
 - **No default passwords.** If it needs one from the start, take it from an environment variable
   your manifest marks as a secret: Amahi-kai generates it.
 - **Settings through the environment**, not a file someone has to edit.
