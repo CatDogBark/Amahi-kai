@@ -170,7 +170,7 @@ class DiskManager
   end
 
   # Data drives mounted under /mnt (share storage), with their size and free space: the
-  # drives Greyhole's pool can take (the helper refuses any other), for Disks → Storage Pool.
+  # drives Greyhole's pool can take (the helper refuses any other), for Disks → Greyhole Pool.
   def self.share_storage(mounts_file = '/proc/self/mounts')
     File.readlines(mounts_file).filter_map do |line|
       device, path = line.split

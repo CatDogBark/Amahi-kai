@@ -151,7 +151,7 @@ describe DockerApp do
       DockerApp.follow_pool!
       expect(Privileged).to have_received(:call).with('apps.follow_pool').once
       expect(DockerApp.find_by(identifier: 'jellyfin').status).to eq('running')
-      expect(DockerApp.find_by(identifier: 'immich')).to have_attributes(status: 'error', error_message: /storage pool's change: docker exited 125/)
+      expect(DockerApp.find_by(identifier: 'immich')).to have_attributes(status: 'error', error_message: /Greyhole pool's change: docker exited 125/)
     end
 
     it "doesn't ask when no app has shares, and a helper failure is only logged" do

@@ -83,13 +83,13 @@ Any one of:
 
 - the installer's `--with-greyhole` option
 - the setup wizard's Greyhole step
-- **Disks → Storage Pool → Install Greyhole** (the progress streams as it installs)
+- **Disks → Greyhole Pool → Install Greyhole** (the progress streams as it installs)
 
 Amahi-kai adds Greyhole's apt repository (its signing key is checked against a pinned
 fingerprint), installs the package and the PHP modules it needs, creates its database and turns
 on the service.
 
-**Disks → Storage Pool** shows Greyhole's status, with **Start** and **Stop**, and **Uninstall**.
+**Disks → Greyhole Pool** shows Greyhole's status, with **Start** and **Stop**, and **Uninstall**.
 Uninstalling takes only the package, its config and its repository, and is offered once no drive is
 in the pool and no share keeps copies with it (the page says which).
 
@@ -97,7 +97,7 @@ in the pool and no share keeps copies with it (the page says which).
 
 ## Choosing pool drives
 
-On **Disks → Storage Pool**, tick **In Pool** for each share-storage drive under Available
+On **Disks → Greyhole Pool**, tick **In Pool** for each share-storage drive under Available
 Partitions to add it. The pool drives are listed above that, with their space. Each pool drive
 keeps at least 10 GB free (Min Free); Greyhole stops putting files on a drive below that.
 
@@ -166,11 +166,11 @@ greyhole --status     # what it's working on
 greyhole --fsck       # check the pool
 ```
 
-The dashboard, **Settings → Servers** and **Disks → Storage Pool** show whether Greyhole is running.
+The dashboard, **Settings → Servers** and **Disks → Greyhole Pool** show whether Greyhole is running.
 
 ### Removing a drive
 
-1. Click **Remove** on the drive's row under Storage Pool Drives on **Disks → Storage Pool**.
+1. Click **Remove** on the drive's row under Pool Drives on **Disks → Greyhole Pool**.
 2. Greyhole first moves the files kept only on that drive to the other drives. The row says
    **Removing** until it's done, and the page updates by itself; then the drive leaves the pool.
 3. Unmount the drive on **Disks → Devices**, then take it out.

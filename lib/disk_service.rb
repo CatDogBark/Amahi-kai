@@ -121,7 +121,7 @@ module DiskService
     # Greyhole.install! is the one install path (the setup wizard uses it too).
     def stream_greyhole_install_production(sse)
       Greyhole.install! { |msg| sse.emit(msg) }
-      sse.emit(Greyhole.running? ? "  ✓ Greyhole is running" : "  ⚠ Greyhole isn't running yet: add storage pool drives first")
+      sse.emit(Greyhole.running? ? "  ✓ Greyhole is running" : "  ⚠ Greyhole isn't running yet: add drives to the Greyhole pool first")
       sse.emit("✓ Greyhole installed successfully!")
       sse.done
     rescue Greyhole::GreyholeError => e

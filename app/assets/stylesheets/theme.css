@@ -460,7 +460,7 @@ body:has(> #footer) > #footer {
   margin-top: auto;
 }
 
-/* A Greyhole pool drive Greyhole can't use (Disks → Storage Pool): a stripe and a note in
+/* A Greyhole pool drive Greyhole can't use (Disks → Greyhole Pool): a stripe and a note in
    the theme's warning colours, rather than Bootstrap's table-warning, whose light yellow
    washes out a dark page */
 .pool-drive-flagged > td:first-child {

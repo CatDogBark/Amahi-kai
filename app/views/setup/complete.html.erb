@@ -38,7 +38,7 @@
   <div class="summary-item">
     <% if @pool_partitions.any? %>
       <span class="check">✓</span>
-      <span>Storage pool: <strong><%= @pool_partitions.count %></strong> drive<%= @pool_partitions.count == 1 ? '' : 's' %></span>
+      <span>Greyhole pool: <strong><%= @pool_partitions.count %></strong> drive<%= @pool_partitions.count == 1 ? '' : 's' %></span>
     <% else %>
       <span class="skip">–</span>
       <span style="color: #9ca3af;">Storage pooling (not configured)</span>

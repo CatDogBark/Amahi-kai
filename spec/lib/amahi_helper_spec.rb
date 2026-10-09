@@ -1231,7 +1231,7 @@ RSpec.describe 'AmahiHelper' do
       allow(AmahiHelper).to receive(:probe).and_return('UUID' => 'u-1')
       allow(AmahiHelper).to receive(:data_device) { |device| [device, { 'path' => device, 'mountpoints' => ['/mnt/storage-2'] }] }
       expect(refusal('disks.unmount', { 'device' => '/dev/sdb' }))
-        .to eq("/mnt/storage-2 is one of Greyhole's drives; remove it from the pool on Disks → Storage Pool first")
+        .to eq("/mnt/storage-2 is one of Greyhole's drives; remove it from the pool on Disks → Greyhole Pool first")
       allow(AmahiHelper).to receive(:data_device) { |device| [device, { 'path' => device, 'mountpoints' => ['/mnt/storage-3'] }] }
       expect(refusal('disks.unmount', { 'device' => '/dev/sdc' })).to be_nil
     ensure
@@ -1389,7 +1389,7 @@ RSpec.describe 'AmahiHelper' do
       stub_const('AmahiHelper::GREYHOLE_CONF', conf.path)
       allow(AmahiHelper).to receive(:installed!).and_return(true)
       File.write(conf.path, "db_name = greyhole\nstorage_pool_drive = /mnt/storage-1/gh, min_free: 10gb\n")
-      expect(refusal('greyhole.uninstall', {})).to eq('Greyhole still has drives in its pool; take them out on Disks → Storage Pool first')
+      expect(refusal('greyhole.uninstall', {})).to eq('Greyhole still has drives in its pool; take them out on Disks → Greyhole Pool first')
       File.write(conf.path, "db_name = greyhole\nnum_copies[Photos] = 2\n")
       expect(refusal('greyhole.uninstall', {})).to eq('the share Photos still keeps copies with Greyhole; turn that off on Shares first')
       File.write(conf.path, "db_name = greyhole\n")

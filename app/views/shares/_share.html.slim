@@ -83,11 +83,11 @@ div.share[id="whole_share_#{share.id}"]
               .share-help id="pool-help-#{share.id}"
                 | Over the network the share looks the same either way: this sets where its files are kept.
                 |  Off: in the share's folder, on the system disk.
-                |  1 copy: Greyhole moves them onto the storage pool's drives and leaves links to them in the folder, which adds up the drives' space, but a drive that fails loses its files.
+                |  1 copy: Greyhole moves them onto the Greyhole pool's drives and leaves links to them in the folder, which adds up the drives' space, but a drive that fails loses its files.
                 |  2 copies: each file is kept on two drives, so one can fail and nothing is lost.
                 - unless Greyhole.installed?
                   |  Install Greyhole on
-                  =< link_to 'Disks → Storage Pool', disks_storage_pool_path
+                  =< link_to 'Disks → Greyhole Pool', disks_storage_pool_path
                   |  to use the pool.
 
       section.share-section id="share-section-trash-#{share.id}"

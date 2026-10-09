@@ -6,7 +6,7 @@
   # Tab labels and UI elements
   troubleshoot: Troubleshoot
   mounts: Mounts
-  storage_pool: Storage Pool
+  storage_pool: Greyhole Pool
   trash: Trash
   zfs_pools: ZFS Pools
   jobs: Jobs

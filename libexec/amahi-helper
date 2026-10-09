@@ -837,7 +837,7 @@ module AmahiHelper
       validate: ->(_a) { installed!(GREYHOLE_BIN) && {} },
       plan: ->(_v) { [[GREYHOLE_BIN, '--empty-trash']] }
     },
-    # Removes Greyhole (Disks → Storage Pool) when its config lists no drives and no share
+    # Removes Greyhole (Disks → Greyhole Pool) when its config lists no drives and no share
     # keeping copies: the package, its config and its apt repository. Its database stays, so
     # installing it again picks up where it was.
     'greyhole.uninstall' => {
@@ -1402,7 +1402,7 @@ module AmahiHelper
       # Greyhole keeps files there: out from under it, its copies would be missing, and a
       # drive formatted and mounted back is a stranger to it.
       pooled = (mounted & greyhole_drives).first
-      raise Refused, "#{pooled} is one of Greyhole's drives; remove it from the pool on Disks → Storage Pool first" if pooled
+      raise Refused, "#{pooled} is one of Greyhole's drives; remove it from the pool on Disks → Greyhole Pool first" if pooled
       not_held!(device, 'unmount it')
       { device: device, mount_points: mounted, uuid: probe(device)['UUID'] }
     end
@@ -1666,7 +1666,7 @@ module AmahiHelper
     def greyhole_removable!
       lines = File.exist?(GREYHOLE_CONF) ? File.readlines(GREYHOLE_CONF, chomp: true) : []
       if lines.any? { |line| line.match?(/\A\s*storage_pool_drive\s*=/) }
-        raise Refused, 'Greyhole still has drives in its pool; take them out on Disks → Storage Pool first'
+        raise Refused, 'Greyhole still has drives in its pool; take them out on Disks → Greyhole Pool first'
       end
       if (share = lines.filter_map { |line| line[/\A\s*num_copies\[([^\]]+)\]/, 1] }.first)
         raise Refused, "the share #{share} still keeps copies with Greyhole; turn that off on Shares first"
