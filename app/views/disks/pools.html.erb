@@ -1,11 +1,12 @@
 <%# ZFS pools (docs/plans/storage.md). storage_pools.js runs the create form and the buttons. %>
 <%= render 'shared/storage_alerts', health: @health %>
+<%# Above the panel: inside it, the panel's rounded, clipped corner cut the text off %>
+<p class="text-muted" id="zfs-pools-intro">
+  ZFS pools keep data safe across several drives, like RAID. They hold bitShare's data; SMB shares stay on
+  share storage (<a href="<%= disks_devices_path %>">Devices</a> and <a href="<%= disks_storage_pool_path %>">Storage Pool</a>).
+  Each drive belongs to one or the other.
+</p>
 <div class="settings-table" id="zfs-pools">
-  <p class="text-muted">
-    ZFS pools keep data safe across several drives, like RAID. They hold bitShare's data; SMB shares stay on
-    share storage (<a href="<%= disks_devices_path %>">Devices</a> and <a href="<%= disks_storage_pool_path %>">Storage Pool</a>).
-    Each drive belongs to one or the other.
-  </p>
 
   <% if @status[:error] %>
     <div class="alert alert-warning">Couldn't read the pools: <%= @status[:error] %></div>
@@ -33,12 +34,12 @@
 
   <% @status[:pools].each do |pool| %>
     <div class="card mb-3 pool-card" id="pool-<%= pool.name %>">
-      <div class="card-header d-flex justify-content-between align-items-center">
+      <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
         <div>
           <strong><%= lucide_icon('database', size: 16) %> <%= pool.name %></strong>
           <span class="text-muted ms-2"><%= pool.layout %> · <%= pluralize(pool.drives.size, 'drive') %></span>
         </div>
-        <div class="d-flex align-items-center gap-2">
+        <div class="d-flex flex-wrap align-items-center gap-2 pool-actions">
           <% scrubbing = pool.scan.to_s.start_with?('scrub in progress') %>
           <button type="button" class="btn btn-sm btn-outline-secondary" data-storage-post="<%= disks_scrub_pool_path %>" data-name="<%= pool.name %>"
                   data-tip="Read every block and repair what can be repaired" <%= 'disabled' if pool.scanning? %>><%= scrubbing ? 'Scrubbing…' : 'Scrub now' %></button>
@@ -162,12 +163,12 @@
   <% Array(@status[:offline]).each do |pool| %>
     <% disks = @drives.select { |d| d[:role] == :offline && d[:pool] == pool.name }.map { |d| d[:path] } %>
     <div class="card mb-3 pool-card" id="pool-<%= pool.name %>">
-      <div class="card-header d-flex justify-content-between align-items-center">
+      <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
         <div>
           <strong><%= lucide_icon('database', size: 16) %> <%= pool.name %></strong>
           <span class="text-muted ms-2">Offline</span>
         </div>
-        <div class="d-flex align-items-center gap-2">
+        <div class="d-flex flex-wrap align-items-center gap-2 pool-actions">
           <button type="button" class="btn btn-sm btn-outline-success" data-storage-post="<%= disks_pool_online_path %>" data-name="<%= pool.name %>"
                   <%= 'disabled' unless pool.found? %>>Bring online</button>
           <span class="badge bg-secondary">OFFLINE</span>
@@ -192,7 +193,7 @@
 
   <% free = @drives.select { |d| d[:free] } %>
   <div class="card mb-3">
-    <div class="card-header d-flex justify-content-between align-items-center">
+    <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
       <strong><%= lucide_icon('hard-drive', size: 16) %> <%= @status[:installed] ? 'Create a pool' : 'Drives' %></strong>
       <span class="small text-muted" id="health-checked">
         <% if @health.checked? %>Health checked <%= relative_time_tag(@health.checked_at) %><% else %>Health not checked yet<% end %>
