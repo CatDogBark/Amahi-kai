@@ -161,9 +161,10 @@ class Share < ApplicationRecord
     if (guest_access || guest_writeable) && !everyone
       writes += "\tguest ok = yes\n"
     end
-    e = ""
-    e = "\t" + (extras.gsub /\n/, "\n\t") unless extras.nil?
-    e = "#{e.chomp}\n" unless e.empty?
+    # The share's extra settings (Advanced), one per line as the browser sends them (CRLF); an
+    # emptied box adds nothing.
+    text = extras.to_s.gsub(/\r\n?/, "\n").strip
+    e = text.empty? ? "" : "\t#{text.gsub("\n", "\n\t")}\n"
     # Samba takes one vfs objects line per share (a later one replaces an earlier), so the
     # modules the share's features ask for go on one line. A pooled share has Greyhole's first,
     # as Greyhole's own tools put it, and no recycle: Greyhole's trash keeps deleted files.
