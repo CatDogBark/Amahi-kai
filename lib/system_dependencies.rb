@@ -11,7 +11,7 @@ module SystemDependencies
   CATALOG = [
     { key: 'ruby', name: 'Ruby', role: 'Runs Amahi-kai', packages: %w[ruby3.2], source: 'Ubuntu' },
     { key: 'samba', name: 'Samba', role: 'Network shares (SMB)', packages: %w[samba], source: 'Ubuntu' },
-    { key: 'greyhole', name: 'Greyhole', role: 'Storage pool', packages: %w[greyhole], source: 'Greyhole' },
+    { key: 'greyhole', name: 'Greyhole', role: 'Greyhole pool', packages: %w[greyhole], source: 'Greyhole' },
     { key: 'php', name: 'PHP', role: 'Runs Greyhole', packages: %w[php8.3-cli php8.3-mysql php8.3-mbstring], source: 'Ubuntu' },
     { key: 'zfs', name: 'ZFS', role: 'ZFS pools', packages: %w[zfsutils-linux zfs-zed], source: 'Ubuntu' },
     { key: 'smartmontools', name: 'smartmontools', role: 'Drive health', packages: %w[smartmontools], source: 'Ubuntu' },

@@ -43,7 +43,7 @@ class Greyhole
       }
     end
 
-    # The one way to install Greyhole (Disks → Storage Pool and the setup wizard).
+    # The one way to install Greyhole (Disks → Greyhole Pool and the setup wizard).
     # Reports progress, including apt's output, through the block. Raises GreyholeError.
     def install!(&progress)
       progress ||= proc { |_msg| } # no-op if no block given
@@ -75,7 +75,7 @@ class Greyhole
 
     # Why Greyhole can't be uninstalled now, or nil when it can: nothing may still use it.
     def removal_blocker
-      return 'Take its drives out of the storage pool first.' if DiskPoolPartition.exists?
+      return 'Take its drives out of the Greyhole pool first.' if DiskPoolPartition.exists?
       share = Share.where('disk_pool_copies > 0').order(:name).first
       return "The share #{share.name} keeps copies with Greyhole: turn that off on Shares first." if share
       nil

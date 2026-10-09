@@ -145,7 +145,7 @@ class DockerApp < ApplicationRecord
       (reply['apps'] || {}).each do |identifier, outcome|
         next if outcome.to_s.start_with?('remade')
 
-        where(identifier: identifier).update_all(status: 'error', error_message: "Couldn't follow the storage pool's change: #{outcome}")
+        where(identifier: identifier).update_all(status: 'error', error_message: "Couldn't follow the Greyhole pool's change: #{outcome}")
       end
     rescue Privileged::Error => e
       Rails.logger.error("DockerApp: the apps didn't follow the pool's change: #{e.message}")

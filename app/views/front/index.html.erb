@@ -243,14 +243,14 @@
     <% end %>
   </div>
 
-  <%# ── Storage Pool (only when Greyhole active) ── %>
+  <%# ── Greyhole Pool (only when Greyhole active) ── %>
   <% pool = @stats[:pool] %>
   <% if pool[:active] %>
     <div class="row mb-4">
       <div class="col-12">
         <div class="card">
           <div class="card-header d-flex justify-content-between align-items-center" style="background: var(--kai-dark); color: white;">
-            <strong><%= lucide_icon('database', size: 16) %> Storage Pool</strong>
+            <strong><%= lucide_icon('database', size: 16) %> Greyhole Pool</strong>
             <% if current_user_is_admin? %>
             <a href="/disks/storage_pool" class="text-muted text-decoration-none" style="font-size: 0.8rem;">Manage →</a>
             <% end %>

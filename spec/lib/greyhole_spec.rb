@@ -286,8 +286,8 @@ RSpec.describe Greyhole do
 
     it 'uninstalls only when no drive is in its pool and no share keeps copies with it' do
       create(:disk_pool_partition, path: '/mnt/storage-1', minimum_free: 10)
-      expect(Greyhole.removal_blocker).to eq('Take its drives out of the storage pool first.')
-      expect { Greyhole.uninstall! }.to raise_error(Greyhole::GreyholeError, 'Take its drives out of the storage pool first.')
+      expect(Greyhole.removal_blocker).to eq('Take its drives out of the Greyhole pool first.')
+      expect { Greyhole.uninstall! }.to raise_error(Greyhole::GreyholeError, 'Take its drives out of the Greyhole pool first.')
       DiskPoolPartition.delete_all
       create(:share, name: 'Photos', disk_pool_copies: 2)
       expect(Greyhole.removal_blocker).to eq('The share Photos keeps copies with Greyhole: turn that off on Shares first.')
