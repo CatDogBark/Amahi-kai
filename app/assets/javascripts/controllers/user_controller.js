@@ -1,6 +1,6 @@
 // User Controller
 //
-// Handles user-specific interactions: delete, toggle admin,
+// Handles user-specific interactions: delete, change role,
 // edit name, update password.
 //
 // Mounted on each .user element (whole_user_N)
@@ -8,7 +8,7 @@
 (function() {
   var UserController = class extends Stimulus.Controller {
     static get targets() {
-      return ["deleteArea", "adminCheckbox", "userIcons", "nameDisplay",
+      return ["deleteArea", "adminNote", "userIcons", "nameDisplay",
               "nameForm", "nameInput", "message", "passwordForm",
               "passwordMessage"];
     }
@@ -46,39 +46,8 @@
         });
     }
 
-    // Toggle admin checkbox
-    toggleAdmin(event) {
-      event.preventDefault();
-      var _this = this;
-      var checkbox = event.currentTarget;
-      var url = checkbox.dataset.url;
-
-      var spinner = checkbox.parentElement.querySelector('.spinner');
-      if (spinner) spinner.style.display = '';
-
-      fetch(url, { method: "PUT", headers: csrfHeaders(), credentials: "same-origin" })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-          if (data.status === "ok") {
-            checkbox.checked = !checkbox.checked;
-            // Toggle admin icon
-            if (_this.hasUserIconsTarget) {
-              _this.userIconsTarget.classList.toggle("user_admin");
-            }
-            // Toggle delete area visibility
-            if (_this.hasDeleteAreaTarget) {
-              _this.deleteAreaTarget.style.display =
-                _this.deleteAreaTarget.style.display === 'none' ? '' : 'none';
-            }
-          }
-        })
-        .catch(function(err) { console.error("Toggle admin failed:", err); })
-        .finally(function() {
-          if (spinner) spinner.style.display = 'none';
-        });
-    }
-
     changeRole(event) {
+      var _this = this;
       var select = event.currentTarget;
       var url = select.dataset.url;
       var role = select.value;
@@ -97,6 +66,11 @@
           } else {
             select.dataset.previousRole = role;
             if (typeof showToast === 'function') showToast('Role updated to ' + role, 'success');
+            // An admin can't be deleted: the card says so instead of offering Delete
+            var admin = role === 'admin';
+            if (_this.hasDeleteAreaTarget) _this.deleteAreaTarget.style.display = admin ? 'none' : '';
+            if (_this.hasAdminNoteTarget) _this.adminNoteTarget.style.display = admin ? '' : 'none';
+            if (_this.hasUserIconsTarget) _this.userIconsTarget.classList.toggle('user_admin', admin);
           }
         })
         .catch(function(err) {

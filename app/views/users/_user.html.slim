@@ -1,3 +1,5 @@
+/! One user's settings, laid out like a share's card: by what they decide, each with what it does
+/! underneath, and Delete at the bottom (user_controller.js).
 div.user[id="whole_user_#{user.id}" data-controller="user"]
   table.settings.stretchtoggle
     tr.hover-style
@@ -7,68 +9,77 @@ div.user[id="whole_user_#{user.id}" data-controller="user"]
       td.settings-col2.users-col2= user.name
 
   div.settings-stretcher[id="about_user_#{user.id}" style="display:none;"]
-    div.user-manage.collapsed-div-style
-      fieldset
-        legend
-          = t('edit_user')
-          | &nbsp;
-          b = user.login
-          | &mdash;
-          small = "#{t('created')} #{formatted_date(user.created_at)}"
+    .user-manage.collapsed-div-style.share-card
+      .share-card-title
+        span.fw-semibold= user.login
+        span.small.text-muted.ms-2= "#{t('created')} #{formatted_date(user.created_at)}"
 
-        .settings-actions
-          span.delete[style="#{user.admin? ? 'display:none' : ''}" data-user-target="deleteArea"]
-            = spinner
-            a.btn-delete.remote-btn.navbar-right.btn.btn-sm[
-              href="#"
-              id="delete-user-#{user.id}"
-              data-action="click->user#destroy"
-              data-url=user_path(user)
-              data-confirm=confirm_user_destroy_message(user.login)]
-              = t('delete') + ' ' + user.login
+      section.share-section id="user-section-account-#{user.id}"
+        h6.share-section-title Account
+        .share-row
+          .share-row-label Full name
+          .share-row-body
+            a.name_click_change[href="#" data-user-target="nameDisplay" data-action="click->user#editName"] = user.name
+            / The form itself has no display class: Bootstrap's d-flex would override its display:none
+            form.edit_name_form.form_hidden[
+              action=user_path(id: user.id)
+              method="post"
+              style="display:none"
+              data-user-target="nameForm"
+              data-action="submit->user#submitName"]
+              input type="hidden" name="_method" value="put"
+              .d-flex.flex-wrap.align-items-center.gap-2
+                input.form-control.form-control-sm[type="text" name="name" value=user.name maxlength="64" style="max-width: 18rem" data-user-target="nameInput"]
+                button.btn.btn-info.btn-sm type="submit"
+                  = t('change')
+                a.cancel-btn-style[href="#" data-action="click->user#cancelName"] Cancel
+                span.spinner.theme-image style="display:none"
+            .messages data-user-target="message"
+            .share-help The account's full name on the NAS, shown on this list. Click it to change it.
+        .share-row
+          .share-row-label Role
+          .share-row-body
+            - if can_i_toggle_admin?(user)
+              select.form-select.form-select-sm.d-inline-block[
+                style="width: auto;"
+                id="user-role-#{user.id}"
+                autocomplete="off"
+                data-action="change->user#changeRole"
+                data-url=update_role_user_path(id: user.id)
+                data-previous-role=user.role]
+                option value="admin" selected=(user.admin?) Admin
+                option value="user" selected=(user.user?) User
+                option value="guest" selected=(user.guest?) Guest
+            - else
+              span.badge class=(user.admin? ? 'bg-info' : user.user? ? 'bg-secondary' : 'bg-dark')
+                = user.role.capitalize
+            .share-help
+              | Admin: everything, Setup included. User: the dashboard, the file browser and search. Guest: the network shares (SMB) only, with no web UI.
+              - if current_user == user
+                |  You can't change your own role.
+        .share-row
+          .share-row-label Last sign-in
+          .share-row-body id="user-last-login-#{user.id}"
+            = user.last_login_at ? formatted_date(user.last_login_at) : 'Never'
 
-        .settings-fields
-          table
-            tr
-              td
-                label #{t('name')}
-              td
-                a.name_click_change[data-user-target="nameDisplay" data-action="click->user#editName"]  #{user.name}
-                form.edit_name_form.form_hidden.form-inline[
-                  action=user_path(id: user.id)
-                  method="post"
-                  style="display:none"
-                  data-user-target="nameForm"
-                  data-action="submit->user#submitName"]
-                  input type="hidden" name="_method" value="put"
-                  input.form-control.input-sm[type="text" name="name" value="#{user.name}" data-user-target="nameInput"]
-                  |  
-                  button.btnn.btn.btn-info.btn-create.btn-sm.margin-for-message type="submit"
-                    = t("change")
-                  a.name_cancel_link.left-margin-10.cancel-btn-style[href="#" data-action="click->user#cancelName"]
-                    | Cancel
-                  span.spinner.theme-image style="display:none"
-                .messages data-user-target="message"
+      section.share-section id="user-section-password-#{user.id}"
+        h6.share-section-title= t('password')
+        .share-row
+          .share-row-label= t('password')
+          .share-row-body
+            = render partial: 'password', locals: { user: user }
+            .share-help At least 8 characters. The same password opens the web UI and the network shares (SMB).
 
-            - if advanced?
-              tr
-                td
-                  label #{t('last_login')}
-                td = formatted_date(user.last_login_at)
-            tr
-              td
-                label Role
-              td
-                - if can_i_toggle_admin?(user)
-                  select.form-select.form-select-sm.d-inline-block[
-                    style="width: auto;"
-                    data-action="change->user#changeRole"
-                    data-url=update_role_user_path(id: user.id)]
-                    option value="admin" selected=(user.admin?) Admin
-                    option value="user" selected=(user.user?) User
-                    option value="guest" selected=(user.guest?) Guest
-                - else
-                  span.badge class=(user.admin? ? 'bg-info' : user.user? ? 'bg-secondary' : 'bg-dark')
-                    = user.role.capitalize
-            tr
-              = render partial: 'password', locals: { user: user }
+      .share-card-footer
+        span.delete[style=(user.admin? ? 'display:none' : nil) data-user-target="deleteArea"]
+          = spinner
+          a.btn-delete.remote-btn.btn.btn-sm[
+            href="#"
+            id="delete-user-#{user.id}"
+            data-action="click->user#destroy"
+            data-url=user_path(user)
+            data-confirm=confirm_user_destroy_message(user.login)]
+            = t('delete') + ' ' + user.login
+          span.share-help.ms-2 Deletes the account, its network share password and its home folder, with what's in it. Shares and their files stay. There's no undo.
+        span.share-help[style=(user.admin? ? nil : 'display:none') data-user-target="adminNote"]
+          | An admin can't be deleted: make the account a User first.

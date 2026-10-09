@@ -18,26 +18,27 @@ form.user.create-form.form-horizontal.p-1[
     .create-inside
       .control-group.form-group
         .controls
-          input.form-control[type="text" name="user[login]" size="16" maxlength="20" placeholder=t('username')]
+          input.form-control[type="text" name="user[login]" size="16" maxlength="20" placeholder=t('username') value=@user.login required=true minlength="3" autocomplete="off"]
 
       .control-group.form-group
         .controls
-          input.form-control[type="text" name="user[name]" size="16" maxlength="64" placeholder=t('full_name')]
+          input.form-control[type="text" name="user[name]" size="16" maxlength="64" placeholder=t('full_name') value=@user.name required=true]
 
       .control-group.form-group
         .controls
-          input.form-control[type="password" name="user[password]" size="16" maxlength="128" placeholder=t('password')]
+          input.form-control[type="password" name="user[password]" size="16" maxlength="128" placeholder=t('password') required=true minlength="8" autocomplete="new-password"]
 
       .control-group.form-group
         .controls
-          input.form-control[type="password" name="user[password_confirmation]" size="16" maxlength="128" placeholder=t('confirm')]
+          input.form-control[type="password" name="user[password_confirmation]" size="16" maxlength="128" placeholder=t('confirm') required=true minlength="8" autocomplete="new-password"]
+        .messages Passwords need at least 8 characters.
 
       .control-group.form-group
         .controls
           select.form-select name="user[role]"
-            option value="user" User — File browser & search
-            option value="admin" Admin — Full system access
-            option value="guest" Guest — Samba only, no web UI
+            option value="user" selected=(@user.role == 'user') User — File browser & search
+            option value="admin" selected=(@user.role == 'admin') Admin — Full system access
+            option value="guest" selected=(@user.role == 'guest') Guest — Samba only, no web UI
 
       .control-group.create-btn.form-group
         .controls.col-xs-offset-2.col-xs-10

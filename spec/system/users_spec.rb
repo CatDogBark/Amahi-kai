@@ -26,4 +26,32 @@ RSpec.describe 'Users', type: :system do
     end
     expect(find("#password_#{ann.id}", visible: :hidden).value).to eq('')
   end
+
+  # The card is laid out like a share's: sections, each setting with what it does, Delete at the end.
+  it "shows a user's card by section, and a role change swaps Delete for the admin note" do
+    ann = User.create!(login: 'ann', name: 'Ann Example', password: 'a-long-passphrase', password_confirmation: 'a-long-passphrase', role: 'user')
+    sign_in_as_admin
+    visit '/users'
+    find("#whole_user_#{ann.id} td.users-col2", text: 'Ann Example').click
+    within("#about_user_#{ann.id}") do
+      expect(page.all('h6.share-section-title').map { |title| title.text.downcase }).to eq(%w[account password])
+      expect(page.all('.share-row-label').map(&:text)).to eq(['Full name', 'Role', 'Last sign-in', 'Password'])
+      expect(page).to have_css("#user-last-login-#{ann.id}", text: 'Never')
+      expect(page).to have_button('Change password')
+      expect(page).to have_no_css('form.edit_name_form', visible: :visible) # until the name is clicked
+      expect(page).to have_link('Delete ann', visible: :visible)
+
+      find("#user-role-#{ann.id}").select('Admin')
+      expect(page).to have_no_link('Delete ann', visible: :visible)
+      expect(page).to have_css('[data-user-target="adminNote"]', text: "An admin can't be deleted", visible: :visible)
+    end
+    expect(ann.reload.role).to eq('admin')
+
+    admin = User.find_by(login: User::SEED_ADMIN_LOGIN)
+    find("#whole_user_#{admin.id} td.users-col1").click
+    within("#about_user_#{admin.id}") do
+      expect(page).to have_no_css("#user-role-#{admin.id}")
+      expect(page).to have_text("You can't change your own role.")
+    end
+  end
 end

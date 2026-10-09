@@ -616,6 +616,20 @@ body:has(> #footer) > #footer {
   padding-left: 32px;
 }
 
+/* The same for Users: each user's row is a table of its own, so the columns are fixed to line up */
+#users-table table.settings {
+  table-layout: fixed;
+  width: 100%;
+}
+#users-table .users-col1 {
+  width: 30%;
+}
+#users-table .users-col2,
+#users-table th.users-col2 {
+  text-align: left;
+  padding-left: 32px;
+}
+
 /* ─── Var-driven element styles (work in all modes) ─── */
 .container, .inner {
   color: var(--kai-text);

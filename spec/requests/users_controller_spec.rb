@@ -73,6 +73,23 @@ describe "Users Controller", type: :request do
           }, as: :json
         }.not_to change(User, :count)
       end
+
+      # The form is drawn again, open this time, saying why, with what was typed (not the passwords)
+      it "shows why it refused a new user, in the form, open, with what was typed" do
+        post '/users', params: { user: { login: "meow", name: "", password: "longenough1", password_confirmation: "longenough1", role: "guest" } }
+        expect(response).to have_http_status(:unprocessable_entity)
+        page = Nokogiri::HTML(response.body)
+        expect(page.at_css('#new-user-step1')['style']).to be_nil
+        expect(page.at_css('#new-user-form .alert-danger').text).to include("Name can't be blank")
+        expect(page.at_css('input[name="user[login]"]')['value']).to eq('meow')
+        expect(page.at_css('select[name="user[role]"] option[selected]')['value']).to eq('guest')
+        expect(page.css('input[type=password]').map { |input| input['value'] }).to all(be_nil)
+        expect(page.css('#new-user-form [required]').map { |input| input['name'] })
+          .to eq(['user[login]', 'user[name]', 'user[password]', 'user[password_confirmation]'])
+
+        get '/users'
+        expect(Nokogiri::HTML(response.body).at_css('#new-user-step1')['style']).to eq('display:none;')
+      end
     end
 
     describe "DELETE /users/:id" do

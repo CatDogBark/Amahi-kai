@@ -26,6 +26,12 @@ module ApplicationHelper
     current_user && current_user.admin?
   end
 
+  # A "New ..." form's area starts closed; when the server refused what was sent, it's drawn
+  # open, so its reasons show (with the fields as they were sent).
+  def new_form_area_style(record)
+    record&.errors&.any? ? nil : 'display:none;'
+  end
+
   # What the last check for updates found, read once per page (admins' header and dashboard).
   def update_status
     @update_status ||= UpdateStatus.load
