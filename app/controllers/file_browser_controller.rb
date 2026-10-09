@@ -98,8 +98,13 @@ class FileBrowserController < ApplicationController
     mime = 'text/plain' if ACTIVE_TYPES.include?(mime)
     # Files from a share open in a sandbox: no scripts, and no access to the Amahi
     # origin, so an SVG (still served as an image for previews) can't run code either.
-    # PDFs are left out because browsers' built-in PDF viewers won't load sandboxed.
-    response.headers['Content-Security-Policy'] = 'sandbox' unless mime == 'application/pdf'
+    # PDFs are left out because browsers' built-in PDF viewers won't load sandboxed, and get
+    # no policy at all (the site's would reach the viewer too).
+    if mime == 'application/pdf'
+      request.content_security_policy = nil
+    else
+      response.headers['Content-Security-Policy'] = 'sandbox'
+    end
     send_file @full_path,
       type: mime,
       disposition: 'inline',

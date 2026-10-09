@@ -17,7 +17,8 @@ once they're in, with
 [CatDogBark/amahi-kai-apps](https://github.com/CatDogBark/amahi-kai-apps), fetched with the update
 check, and apps are announced over mDNS; `docs/testing/apps.md`; P4.6 next). Read
 **`docs/plans/roadmap.md`** first, then the plan for the PR you're on. Phase 3, the code review
-fix plan (**`docs/plans/privileged-helper.md`**), is done except Content-Security-Policy. The
+fix plan (**`docs/plans/privileged-helper.md`**), is done, Content-Security-Policy included
+(enforced: no inline scripts or handlers; inline styles still allowed). The
 privilege model is in `docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`.
 
 ## Workflow

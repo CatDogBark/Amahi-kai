@@ -66,7 +66,7 @@ so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 
 ## Phase 3
 
-Done except Content-Security-Policy. Decisions made: Ruby stays on Ubuntu 24.04's patched 3.2; `main` stays the release until
+Done. Decisions made: Ruby stays on Ubuntu 24.04's patched 3.2; `main` stays the release until
 shares are tested on real drives, then tagged releases and an updater change; the codebase
 becomes root-owned (in N); Docker app work moves to Phase 4.
 
@@ -103,8 +103,9 @@ becomes root-owned (in N); Docker app work moves to Phase 4.
   the Gemfile itself). Screenshots of 14 pages in light and dark mode match the Sass build
   pixel for pixel, live numbers aside. (The themes went in #102, and with them their Sass
   sources.) Sprockets stays; Propshaft can come later.
-- [ ] **Content-Security-Policy**: today it's report-only. Enforcing it needs the inline
-  scripts and `onclick` handlers moved into the JavaScript files first; its own PR.
+- [x] **Content-Security-Policy**: enforced (scripts only from Amahi-kai itself, no inline
+  scripts), once the inline handlers (#121) and the pages' own scripts (#122) had moved into
+  the JavaScript files. Inline styles are still allowed; taking them out is a later pass.
 
 ## Next: shelf-stable
 
@@ -117,7 +118,7 @@ bitShare (P4.6). In this order:
 3. Fewer `Setting` queries per request (`before_action_hook`).
 4. System Status and the dashboard read the server's details through `SystemInfo` alike.
 5. The inline `onclick` handlers and scripts move into the JavaScript files, then
-   Content-Security-Policy is enforced (Phase 3's last item).
+   Content-Security-Policy is enforced (Phase 3's last item). Done: #121, #122 and the CSP PR.
 
 ## Open, not yet scheduled
 
