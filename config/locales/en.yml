@@ -94,7 +94,7 @@
   the_name_cannot_be_blank: The name cannot be blank
   there_are_no_users: There are no users in your system at this time.
   are_you_sure_user: Are you sure you want to delete user '%{user}' ?
-  this_users_files_deleted: "The files in this user's home folder WILL BE DELETED"
+  this_users_files_deleted: "The account and its network share password are deleted. Shares and their files stay."
   last_login: Last login
   admin: Admin
 

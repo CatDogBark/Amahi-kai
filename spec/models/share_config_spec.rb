@@ -232,8 +232,8 @@ RSpec.describe Share, 'config generation', type: :model do
       expect(Share.header_workgroup("example.local")).not_to include("wide links")
     end
 
-    it 'gives the guest account no home share' do
-      expect(Share.header_workgroup("example.local")).to include("invalid users = nobody")
+    it 'has no [homes] share: no private folder per user, and no "nobody" one when browsing anonymously' do
+      expect(Share.header_workgroup("example.local")).not_to include("[homes]")
     end
   end
 
