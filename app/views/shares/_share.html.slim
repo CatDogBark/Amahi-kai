@@ -81,8 +81,9 @@ div.share[id="whole_share_#{share.id}"]
                   | +
                 span.spinner-border.spinner-border-sm.ms-1 id="pool-spinner-#{share.id}" style="display:none"
               .share-help id="pool-help-#{share.id}"
-                | Off: the files stay in the share's folder, on the system disk.
-                |  1 copy: Greyhole keeps them on the storage pool's drives, which adds up their space, but a drive that fails loses its files.
+                | Over the network the share looks the same either way: this sets where its files are kept.
+                |  Off: in the share's folder, on the system disk.
+                |  1 copy: Greyhole moves them onto the storage pool's drives and leaves links to them in the folder, which adds up the drives' space, but a drive that fails loses its files.
                 |  2 copies: each file is kept on two drives, so one can fail and nothing is lost.
                 - unless Greyhole.installed?
                   |  Install Greyhole on
@@ -127,4 +128,4 @@ div.share[id="whole_share_#{share.id}"]
         span.delete data-controller="delete" data-delete-url-value=share_path(share) data-delete-confirm-value=confirm_share_destroy_message(share.name) data-delete-remove-selector-value="#whole_share_#{share.id}"
           a.btn-delete.remote-btn.btn.btn-sm href="#" data-action="click->delete#destroy"
             = t('delete') + ' ' + share.name
-        span.share-help.ms-2 Deletes the share and every file in it. There's no undo.
+        span.share-help.ms-2 Deletes the share. Its files stay in its folder, and a new share with the same name opens them again. Turn a pooled share's copies Off first, so Greyhole moves its files back into the folder.

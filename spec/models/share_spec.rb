@@ -131,4 +131,34 @@ describe Share do
     end
   end
 
+  # Deleting a share keeps its files; one with files on the pool drives waits until they're back.
+  describe "deleting" do
+    it "deletes a share that isn't pooled" do
+      share = create(:share, name: "Plain")
+      expect(share.destroy).to be_truthy
+      expect(Share.exists?(share.id)).to be false
+    end
+
+    it "refuses a pooled share until its copies are Off" do
+      share = create(:share, name: "Pooled", disk_pool_copies: 2)
+      expect(share.destroy).to be false
+      expect(share.errors.full_messages.first).to start_with("Turn Pooled's pool copies Off first")
+      expect(Share.exists?(share.id)).to be true
+      expect(Privileged.calls.map(&:first)).not_to include('shares.remove_dir')
+    end
+
+    it "refuses a share Greyhole is still moving back into its folder" do
+      share = create(:share, name: "Moving", disk_pool_copies: 2, pool_removing: true)
+      expect(share.destroy).to be false
+      expect(share.errors.full_messages.first).to include("still moving Moving's files")
+    end
+
+    it "refuses a share that's Off with files left on a pool drive" do
+      share = create(:share, name: "Leftover", disk_pool_copies: 0)
+      allow(Greyhole).to receive(:share_on_drives?).with(share).and_return(true)
+      expect(share.destroy).to be false
+      expect(share.errors.full_messages.first).to include("still on the pool drives")
+    end
+  end
+
 end

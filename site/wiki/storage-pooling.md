@@ -109,7 +109,10 @@ On **Setup → Shares**, open a share and set its **Pool copies** with − and +
 | 1 copy | Greyhole keeps the files on the pool drives, which adds up their space, but a drive that fails loses its files |
 | 2 copies | Each file is kept on two drives, so one can fail and nothing is lost |
 
-Changing copies regenerates Greyhole's configuration and restarts it.
+Over the network a pooled share looks the same as one that's Off: Greyhole leaves a link in the
+share's folder for each file it moves onto the pool drives. What changes is where the files are
+kept, and so whose space they use. Changing copies regenerates Greyhole's configuration and
+restarts it.
 
 **Turning a pooled share Off** moves its files back: Greyhole copies them from the pool drives into
 the share's folder, on the system disk, so it needs room for them there. The share says it's

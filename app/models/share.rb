@@ -60,6 +60,9 @@ class Share < ApplicationRecord
   # Folder first: guest write access is set on the folder setup_directory creates.
   before_save -> { file_system.setup_directory }
   before_save -> { file_system.update_guest_permissions }
+  # Deleting a share keeps its files: only an empty folder goes (cleanup_directory). A share
+  # with files on the pool drives is refused first (keep_files_off_the_pool).
+  before_destroy :keep_files_off_the_pool, prepend: true
   before_destroy -> { file_system.cleanup_directory }
   after_create_commit :index_share_files
   after_save -> { access_manager.sync_everyone_access }
@@ -82,6 +85,28 @@ class Share < ApplicationRecord
     return if extras.blank?
     bad = extras.lines.map(&:strip).find { |line| line.start_with?('[') }
     errors.add(:extras, "can't open another section (#{bad})") if bad
+  end
+
+  # A pooled share's files are on the pool drives, with links to them in its folder. Deleted
+  # like that, its folder would keep the links and the drives the files, with no share for
+  # Greyhole to look after them. Turning its copies Off first moves the files back.
+  def keep_files_off_the_pool
+    reason = pool_delete_blocker
+    return unless reason
+
+    errors.add(:base, reason)
+    throw :abort
+  end
+
+  def pool_delete_blocker
+    if pool_removing?
+      "Greyhole is still moving #{name}'s files back into its folder. Delete it once its pool copies show Off."
+    elsif disk_pool_copies.to_i.positive?
+      "Turn #{name}'s pool copies Off first: Greyhole moves its files back into its folder, and then it can be deleted."
+    elsif Greyhole.share_on_drives?(self)
+      "Some of #{name}'s files are still on the pool drives. Set its pool copies to 1, then back to Off, " \
+        "so Greyhole moves them back into its folder, and then it can be deleted."
+    end
   end
 
   # --- Service accessors ---
