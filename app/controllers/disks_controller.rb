@@ -11,6 +11,9 @@ class DisksController < ApplicationController
   before_action :admin_required
   # The storage health alerts at the top of every Disks page.
   before_action(only: %i[index mounts devices storage_pool pools]) { @health = StorageHealth.load }
+  # A pool drive Greyhole has finished removing leaves the pool before anything touches it, and
+  # the apps given pooled shares let go of it (Greyhole.sync_removals!).
+  before_action(only: %i[devices format_disk mount_disk unmount_disk preview_disk]) { Greyhole.sync_removals! }
 
   def index
     @page_title = t('disks')
