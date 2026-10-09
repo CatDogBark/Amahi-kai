@@ -32,7 +32,7 @@ describe "Disk Pool Actions", type: :request do
         allow(Greyhole).to receive(:check_pool!)
         allow(DockerApp).to receive(:follow_pool!)
         put update_disk_pool_copies_share_path(share), params: { copies: 2 }
-        expect(DockerApp).to have_received(:follow_pool!).with(shares: [share.name]).once
+        expect(DockerApp).to have_received(:follow_pool!).with(no_args).once
         put update_disk_pool_copies_share_path(share), params: { copies: 1 } # still pooled
         expect(DockerApp).to have_received(:follow_pool!).once
 
@@ -41,7 +41,7 @@ describe "Disk Pool Actions", type: :request do
         expect(DockerApp).to have_received(:follow_pool!).once
         allow(Greyhole).to receive(:remove_share!) { |s| s.update!(disk_pool_copies: 0) && :removed }
         put update_disk_pool_copies_share_path(share), params: { copies: 0 }
-        expect(DockerApp).to have_received(:follow_pool!).with(shares: [share.name]).twice
+        expect(DockerApp).to have_received(:follow_pool!).with(no_args).twice
       end
     end
   end

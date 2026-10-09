@@ -102,6 +102,8 @@ keeping its data.
   When the storage pool changes (a drive joins or leaves it, or a share's pool copies turn on or
   Off), the apps given a pooled share restart with the pool as it is now, so they keep reading
   its files and don't hold on to a drive taken out of the pool. A stopped app stays stopped.
+  The same happens when Docker starts and when a pool drive is mounted again, so a drive
+  missing at boot doesn't keep an app from starting.
 - What an app saves into a share stays editable over SMB.
 - **Everyone with an account in the app can see the shares you give it**, whatever the share's own
   list of users says. Give an app only the shares its users should see.

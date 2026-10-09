@@ -132,12 +132,9 @@ describe DockerApp do
     end
   end
 
-  # After the storage pool changes, apps given a pooled share are installed again, so their
-  # container's mounts follow the pool.
+  # After the storage pool changes, the root helper makes again the app containers whose mounts
+  # don't match it (apps.follow_pool).
   describe '.follow_pool!' do
-    let!(:photos) { create(:share, name: 'Photos', disk_pool_copies: 2) }
-    let!(:docs) { create(:share, name: 'Docs', disk_pool_copies: 0) }
-
     def app_with(identifier, shares, status: 'running')
       build_app(identifier: identifier, name: identifier.capitalize, status: status).tap do |app|
         app.shares = shares.map { |name| { name: name, write: false } }
@@ -145,37 +142,25 @@ describe DockerApp do
       end
     end
 
-    it "installs again, with the same shares, the apps given a pooled share; a stopped one stays stopped" do
-      app_with('jellyfin', %w[Photos])
-      app_with('immich', %w[photos Docs], status: 'stopped')
-      app_with('gitea', %w[Docs])
-      app_with('broken', %w[Photos], status: 'error')
-      DockerApp.follow_pool!
-      expect(Privileged.calls).to contain_exactly(
-        ['apps.install', { app: 'jellyfin', shares: [{ name: 'Photos', write: false }] }],
-        ['apps.install', { app: 'immich', shares: [{ name: 'photos', write: false }, { name: 'Docs', write: false }] }],
-        ['apps.stop', { app: 'immich' }]
-      )
-      expect(DockerApp.find_by(identifier: 'immich').status).to eq('stopped')
-      expect(DockerApp.find_by(identifier: 'jellyfin').status).to eq('running')
-    end
-
-    it 'follows only the shares named, pooled or not any more' do
-      app_with('jellyfin', %w[Photos])
-      app_with('gitea', %w[Docs])
-      DockerApp.follow_pool!(shares: ['Docs'])
-      expect(Privileged.calls.map { |op, args| [op, args[:app]] }).to eq([['apps.install', 'gitea']])
-    end
-
-    it "records an app's failure as its own, and goes on with the others" do
+    it "asks the helper once, and shows why an app it couldn't make again isn't working" do
       app_with('jellyfin', %w[Photos])
       app_with('immich', %w[Photos])
       allow(Privileged).to receive(:call).and_call_original
-      allow(Privileged).to receive(:call).with('apps.install', hash_including(app: 'jellyfin'))
-                                         .and_raise(Privileged::Error.new('apps.install', 'docker exited 125: bad'))
+      allow(Privileged).to receive(:call).with('apps.follow_pool')
+                                         .and_return('apps' => { 'jellyfin' => 'remade', 'immich' => 'docker exited 125: no space' })
+      DockerApp.follow_pool!
+      expect(Privileged).to have_received(:call).with('apps.follow_pool').once
+      expect(DockerApp.find_by(identifier: 'jellyfin').status).to eq('running')
+      expect(DockerApp.find_by(identifier: 'immich')).to have_attributes(status: 'error', error_message: /storage pool's change: docker exited 125/)
+    end
+
+    it "doesn't ask when no app has shares, and a helper failure is only logged" do
+      app_with('gitea', [])
+      DockerApp.follow_pool!
+      expect(Privileged.calls).to be_empty
+      app_with('jellyfin', %w[Photos])
+      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('apps.follow_pool', "docker isn't installed"))
       expect { DockerApp.follow_pool! }.not_to raise_error
-      expect(DockerApp.find_by(identifier: 'jellyfin')).to have_attributes(status: 'error', error_message: /storage pool's change: docker exited 125/)
-      expect(DockerApp.find_by(identifier: 'immich').status).to eq('running')
     end
   end
 

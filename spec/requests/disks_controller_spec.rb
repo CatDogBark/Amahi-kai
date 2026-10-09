@@ -71,6 +71,17 @@ describe "Disks Controller", type: :request do
         get "/disks/devices"
         expect(Greyhole).to have_received(:sync_removals!).exactly(3).times
       end
+
+      it "has the apps given pooled shares follow when a pool drive is mounted again, not another drive" do
+        allow(Greyhole).to receive(:sync_removals!)
+        allow(DockerApp).to receive(:follow_pool!)
+        DiskPoolPartition.create!(path: '/mnt/storage-2', minimum_free: 10)
+        allow(DiskManager).to receive(:mount!).and_return('/mnt/storage-2', '/mnt/storage-3')
+        post "/disks/mount_disk", params: { device: '/dev/sdb' }
+        expect(DockerApp).to have_received(:follow_pool!).once
+        post "/disks/mount_disk", params: { device: '/dev/sdc' }
+        expect(DockerApp).to have_received(:follow_pool!).once
+      end
     end
 
     describe "GET /disks/storage_pool" do

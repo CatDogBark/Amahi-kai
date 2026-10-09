@@ -197,7 +197,7 @@ class SharesController < ApplicationController
     end
     if copies.zero? && @share.disk_pool_copies.positive?
       removing = Greyhole.remove_share!(@share) == :removing
-      DockerApp.follow_pool!(shares: [@share.name]) unless removing # else once Greyhole is done
+      DockerApp.follow_pool! unless removing # else once Greyhole is done
       return render json: { status: :ok, disk_pool_copies: @share.reload.disk_pool_copies, removing: removing }
     end
     more = copies > @share.disk_pool_copies.to_i
@@ -223,7 +223,7 @@ class SharesController < ApplicationController
     rescue Greyhole::GreyholeError => e
       Rails.logger.error("Greyhole configure failed: #{e.message}")
     end
-    DockerApp.follow_pool!(shares: [@share.name]) if follow
+    DockerApp.follow_pool! if follow
     render json: { status: :ok, disk_pool_copies: @share.reload.disk_pool_copies }
   end
 

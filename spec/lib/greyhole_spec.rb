@@ -220,8 +220,7 @@ RSpec.describe Greyhole do
         allow(Greyhole).to receive(:configured_drives).and_return(['/mnt/storage-1'])
         allow(Greyhole).to receive(:configured_shares).and_return([])
         Greyhole.sync_removals!
-        expect(DockerApp).to have_received(:follow_pool!).with(no_args).once
-        expect(DockerApp).to have_received(:follow_pool!).with(shares: ['Photos']).once
+        expect(DockerApp).to have_received(:follow_pool!).with(no_args).once # for the drive and the share together
       end
 
       it "has Greyhole move its files back, keeping it pooled until Greyhole has taken it out of greyhole.conf" do
