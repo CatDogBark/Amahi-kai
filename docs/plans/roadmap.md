@@ -124,9 +124,14 @@ bitShare (P4.6). In this order:
 
 After the audit's fixes and the inline-script work (2026-10-09), in this order:
 
-1. **Browser tests** in CI ([`browser-tests.md`](browser-tests.md)): a real browser loads the
-   pages and the job fails on any console error or policy violation.
-2. **Backups:** a daily dump of the database and `/etc/amahi-kai` into a share of Troy's choice.
+1. **Browser tests** in CI ([`browser-tests.md`](browser-tests.md)): done (#127, #129); the
+   setup wizard's spec waits for the wizard's redo.
+2. **Backups**, planned when Troy decides where they go (2026-10-09). The shape: a daily dump
+   of the database (users, shares, settings) and `/etc/amahi-kai` (its configuration, minus the
+   secrets that stay root-only) into a folder of Troy's choice, kept for a set number of days.
+   Decisions for later: the destination (a share, so it's reachable over SMB and copied by
+   whatever backs the shares up, or a pool once there is one), how many to keep, and whether
+   restoring is a page or a command.
 3. **Signed updates:** tagged releases, verified by the updater against a key pinned in the
    installed copy, so control of the GitHub account alone can't put code on a NAS.
 
