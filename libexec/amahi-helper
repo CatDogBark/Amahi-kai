@@ -1754,6 +1754,13 @@ module AmahiHelper
       environment = app_environment_spec(data['environment'], bad)
       writes_shares = data.fetch('writes_shares', false)
       bad.call('writes_shares must be true or false') unless [true, false].include?(writes_shares)
+      # What writes into shares runs as the app's own user: the whole container (run_as: app),
+      # or the image's init drops to it, told by PUID and PGID set to the app's own placeholders
+      # (a fixed number, or PUID alone, isn't that).
+      drops = environment['PUID'] == '{{uid}}' && environment['PGID'] == '{{gid}}'
+      if writes_shares && run_as != 'app' && !drops
+        bad.call("an app that writes shares runs as the app's user: run_as: app, or PUID and PGID set to {{uid}} and {{gid}}")
+      end
       ports = app_ports(data['ports'], bad)
       web_port = data['web_port']
       bad.call("web_port #{web_port.inspect} must be one of its ports") unless web_port.nil? || ports.any? { |p| p[:host] == web_port }
@@ -2902,6 +2909,7 @@ module AmahiHelper
       say('Creating the container...')
       with_env_file(app_environment(manifest, uid, gid, secrets)) do |env_file|
         run_command([DOCKER, 'create', '--name', container, '--restart', 'unless-stopped',
+                     '--security-opt', 'no-new-privileges', # nothing in it gains privileges, setuid files included
                      '--memory', manifest[:memory], '--label', "amahi.app=#{id}", '--env-file', env_file,
                      *(manifest[:run_as] == 'app' ? ['--user', "#{uid}:#{gid}"] : []),
                      *ports.flat_map { |p| ['--publish', "0.0.0.0:#{p[:host]}:#{p[:container]}/#{p[:protocol]}"] },

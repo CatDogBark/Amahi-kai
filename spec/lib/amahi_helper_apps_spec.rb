@@ -300,6 +300,17 @@ RSpec.describe 'AmahiHelper apps' do
                                                      secrets: ['TOKEN'])
     end
 
+    it "wants an app that writes shares to run as the app's user: by --user, or by PUID and PGID set to its own placeholders" do
+      expect(failure('writes_shares' => true)).to be_nil
+      expect(failure('writes_shares' => true, 'run_as' => 'image',
+                     'environment' => { 'PUID' => '{{uid}}', 'PGID' => '{{gid}}', 'TZ' => '{{timezone}}' })).to be_nil
+      [{}, { 'PUID' => '0', 'PGID' => '0' }, { 'PUID' => '1000', 'PGID' => '1000' }, { 'PUID' => '{{uid}}' },
+       { 'PUID' => '{{gid}}', 'PGID' => '{{uid}}' }, { 'PUID' => '{{uid}}', 'PGID' => '100' }].each do |env|
+        expect(failure('writes_shares' => true, 'run_as' => 'image', 'environment' => env)).to include("runs as the app's user"), env.inspect
+      end
+      expect(failure('writes_shares' => false, 'run_as' => 'image', 'environment' => { 'PUID' => '0' })).to be_nil
+    end
+
     it 'fails on anything the helper would have to trust' do
       expect(failure('image' => 'example/app:latest')).to include('image must be name:tag@sha256:digest')
       expect(failure('run_as' => 'root')).to include('run_as must be app or image')
@@ -375,7 +386,7 @@ RSpec.describe 'AmahiHelper apps' do
       expect(ran[1]).to eq(['/usr/bin/docker', 'pull', manifest[:image], { stream: true }])
       create = ran.find { |argv| argv[1] == 'create' }
       expect(create).to eq(['/usr/bin/docker', 'create', '--name', 'amahi-vaultwarden', '--restart', 'unless-stopped',
-                            '--memory', '512m', '--label', 'amahi.app=vaultwarden', '--env-file', env_files.sole[0],
+                            '--security-opt', 'no-new-privileges', '--memory', '512m', '--label', 'amahi.app=vaultwarden', '--env-file', env_files.sole[0],
                             '--user', '996:996', '--publish', '0.0.0.0:8880:8080/tcp',
                             '--volume', "#{apps_root}/vaultwarden/data:/data", manifest[:image]])
       expect(create.join(' ')).not_to include(token)
