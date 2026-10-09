@@ -403,11 +403,12 @@ module AmahiHelper
   # :stdin and :allow_failure.
   OPERATIONS = {
     # A Linux account for a web user: primary group users, no shell, password locked
-    # (Samba has its own password, set with users.set_password).
+    # (Samba has its own password, set with users.set_password), and no home folder: users
+    # keep their files in shares (there's no [homes] share).
     'users.create' => {
       params: %w[login name],
       validate: ->(a) { { login: new_login(a['login']), name: gecos(a['name']) } },
-      plan: ->(v) { [['/usr/sbin/useradd', '-m', '-g', USERS_GROUP, '-s', NOLOGIN, '-c', v[:name], v[:login]]] }
+      plan: ->(v) { [['/usr/sbin/useradd', '--no-create-home', '-g', USERS_GROUP, '-s', NOLOGIN, '-c', v[:name], v[:login]]] }
     },
     # The Samba password. pdbedit adds the Samba user or changes its password; -t reads
     # the password twice from stdin.
@@ -428,14 +429,15 @@ module AmahiHelper
       validate: ->(a) { { login: app_login(a['login']) } },
       plan: ->(v) { normal_account?(v[:login]) ? [] : [['/usr/sbin/usermod', '-s', NOLOGIN, '-G', '', v[:login]]] }
     },
-    # Removes the Samba user (if any), then the Linux account and home directory, but
-    # only an account the app created; one that existed before is left alone.
+    # Removes the Samba user (if any), then the Linux account, with the home folder an older
+    # version made for it if it has one, but only an account the app created; one that existed
+    # before is left alone.
     'users.delete' => {
       params: %w[login],
       validate: ->(a) { deletable_login(a['login']) },
       plan: lambda { |v|
         steps = [['/usr/bin/pdbedit', '-d0', '-x', '-u', v[:login], { allow_failure: true }]]
-        steps << ['/usr/sbin/userdel', '-r', v[:login]] if v[:linux_account]
+        steps << ['/usr/sbin/userdel', *(v[:home] ? ['-r'] : []), v[:login]] if v[:linux_account]
         steps
       }
     },
@@ -1269,7 +1271,12 @@ module AmahiHelper
       value = login(value)
       pw = passwd(value)
       raise Refused, "#{value} is not an account Amahi created" if pw && !app_account?(pw)
-      { login: value, linux_account: !pw.nil? }
+      { login: value, linux_account: !pw.nil?, home: !pw.nil? && old_home?(pw) }
+    end
+
+    # A home folder an older version made with the account (useradd -m), under /home.
+    def old_home?(pw)
+      pw.dir.to_s.start_with?('/home/') && File.directory?(pw.dir) && !File.symlink?(pw.dir)
     end
 
     def app_account?(pw)

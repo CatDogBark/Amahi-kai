@@ -188,10 +188,20 @@ thread while they run. System Update moved to its own job in #31; the others cou
 same way (a systemd unit started by the helper, with its log streamed to the page). With one admin
 on the NAS this costs nothing today.
 
-### The `nobody` folder
+### Private folders per user
 
-Anonymous SMB browsing shows a `nobody` home folder (cosmetic; needs a guest account with no home
-directory).
+Removed (Troy, 2026-10-09): Troy didn't like how they worked and will think about how to do them
+better. They were Samba's `[homes]` share: each user's Linux home folder, `/home/<login>`, made
+with the account and open only to its owner over SMB. They sat on the system disk with the OS,
+with no pool copies, no snapshots and no size limit, weren't in the web UI's Files, and were mode
+0750 with group `users`, so every account on the NAS could read them there. `[homes]` also showed
+a `nobody` folder when browsing anonymously (the guest account's). Now no account gets a home
+folder, and deleting a user removes one an older version made. To decide:
+
+- Where they live: on share storage or a pool rather than the system disk, so they get its space
+  and copies.
+- How big they can get (a quota per user, or none).
+- Whether Files shows your own (and only your own), and so who on the NAS may read them.
 
 ## Later: HTTPS on the LAN
 

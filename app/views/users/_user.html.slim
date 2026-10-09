@@ -80,6 +80,6 @@ div.user[id="whole_user_#{user.id}" data-controller="user"]
             data-url=user_path(user)
             data-confirm=confirm_user_destroy_message(user.login)]
             = t('delete') + ' ' + user.login
-          span.share-help.ms-2 Deletes the account, its network share password and its home folder, with what's in it. Shares and their files stay. There's no undo.
+          span.share-help.ms-2 Deletes the account and its network share password. Shares and their files stay. There's no undo.
         span.share-help[style=(user.admin? ? nil : 'display:none') data-user-target="adminNote"]
           | An admin can't be deleted: make the account a User first.

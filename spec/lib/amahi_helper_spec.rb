@@ -108,7 +108,7 @@ RSpec.describe 'AmahiHelper' do
   describe 'users.create' do
     it 'plans useradd with the users group and no login shell' do
       expect(steps('users.create', { 'login' => 'ann', 'name' => 'Ann Smith' })).to eq([
-        ['/usr/sbin/useradd', '-m', '-g', 'users', '-s', '/usr/sbin/nologin', '-c', 'Ann Smith', 'ann']
+        ['/usr/sbin/useradd', '--no-create-home', '-g', 'users', '-s', '/usr/sbin/nologin', '-c', 'Ann Smith', 'ann']
       ])
     end
 
@@ -177,11 +177,14 @@ RSpec.describe 'AmahiHelper' do
       expect(steps('users.normalize', { 'login' => 'ann' })).to eq([])
     end
 
-    it 'deletes the Samba user, then the Linux account and home of an app account' do
+    it 'deletes the Samba user, then the Linux account of an app account, with a home folder an older version made' do
       expect(steps('users.delete', { 'login' => 'ann' })).to eq([
         ['/usr/bin/pdbedit', '-d0', '-x', '-u', 'ann', { allow_failure: true }],
-        ['/usr/sbin/userdel', '-r', 'ann']
+        ['/usr/sbin/userdel', 'ann']
       ])
+      allow(File).to receive(:directory?).and_call_original
+      allow(File).to receive(:directory?).with('/home/x').and_return(true)
+      expect(steps('users.delete', { 'login' => 'ann' }).last).to eq(['/usr/sbin/userdel', '-r', 'ann'])
     end
 
     it 'deletes only the Samba user when there is no Linux account' do

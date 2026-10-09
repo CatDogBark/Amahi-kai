@@ -276,16 +276,9 @@ class Share < ApplicationRecord
       win98 ? "client lanman auth = yes" : "",
       *samba_network_lines,
       *greyhole_samba_lines,
-      "",
-      "[homes]",
-      "\tcomment = Home Directories",
-      "\tvalid users = %%S",
-      # The guest account has no home; without this, anonymous browsing showed a "nobody" share.
-      "\tinvalid users = nobody",
-      "\tbrowseable = no",
-      "\twritable = yes",
-      "\tcreate mask = 0644",
-    "\tdirectory mask = 0755"].join "\n"
+      # No [homes]: users keep their files in shares. It gave every user a private home folder
+      # on the system disk, and anonymous browsing a "nobody" one (roadmap: private folders).
+      ""].join "\n"
     ret % [short_domain, domain]
   end
 
