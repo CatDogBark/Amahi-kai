@@ -64,6 +64,17 @@ class Share < ApplicationRecord
   validates :path, presence: true,
     length: 2..64
 
+  # A share's extra Samba settings (Advanced) are lines of its own section: one that opens
+  # another ([global], [homes]) is refused. The root helper checks the settings themselves,
+  # against its list of allowed parameters, when the config is installed.
+  validate :extras_stay_in_this_share
+
+  def extras_stay_in_this_share
+    return if extras.blank?
+    bad = extras.lines.map(&:strip).find { |line| line.start_with?('[') }
+    errors.add(:extras, "can't open another section (#{bad})") if bad
+  end
+
   # --- Service accessors ---
 
   def file_system
@@ -181,10 +192,6 @@ class Share < ApplicationRecord
 
   def toggle_guest_writeable!
     access_manager.toggle_guest_writeable!
-  end
-
-  def update_extras!(params)
-    self.update(params)
   end
 
   # --- Samba config class methods ---

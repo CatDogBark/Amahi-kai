@@ -173,8 +173,9 @@ class SharesController < ApplicationController
       end
     else
       params[:share] = sanitize_text(params_update_extras)
-      @saved = @share.update_extras!(params_update_extras)
-      render json: { status: @saved ? :ok : :not_acceptable }
+      @share.assign_attributes(params_update_extras)
+      refused = @share.valid? ? save_extras_if_samba_takes_them : @share.errors.full_messages.join(', ')
+      render json: { status: refused ? :not_acceptable : :ok, message: refused }
     end
   end
 
@@ -250,6 +251,19 @@ class SharesController < ApplicationController
       Rails.logger.error("Greyhole configure failed: #{e.message}")
     end
     render json: { status: :ok, disk_pool_copies: @share.reload.disk_pool_copies }
+  end
+
+  # Writes the share's extra Samba settings and installs the config with them. If the root
+  # helper refuses it, Samba keeps the current config, so the settings go back to what it runs.
+  # Returns the helper's reason, or nil. (Columns only: the share's other callbacks don't apply.)
+  def save_extras_if_samba_takes_them
+    before = @share.extras_was
+    @share.update_columns(extras: @share.extras, updated_at: Time.current)
+    SambaService.push_config(raise_refusal: true)
+    nil
+  rescue Privileged::Error => e
+    @share.update_columns(extras: before)
+    e.message
   end
 
   def find_share

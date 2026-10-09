@@ -57,6 +57,23 @@ describe "Shares Toggle Actions", type: :request do
       it "updates extras" do
         put update_extras_share_path(share), params: { share: { extras: "vfs objects = recycle" } }, as: :json
         expect(response).to have_http_status(:ok)
+        expect(response.parsed_body).to eq('status' => 'ok', 'message' => nil)
+        expect(share.reload.extras).to eq("vfs objects = recycle")
+      end
+
+      it "refuses settings that open another section, and says so" do
+        put update_extras_share_path(share), params: { share: { extras: "hide dot files = yes\n [global]\nx = y" } }, as: :json
+        expect(response.parsed_body).to eq('status' => 'not_acceptable', 'message' => "Extras can't open another section ([global])")
+        expect(share.reload.extras).to be_blank
+      end
+
+      it "puts the settings back when the root helper refuses the config, and says why" do
+        allow(SambaService).to receive(:push_config).with(raise_refusal: true)
+          .and_raise(Privileged::Error.new('samba.write_config', 'smb.conf refused: [test] made up is not allowed', refused: true))
+        share.update_columns(extras: "hide dot files = yes")
+        put update_extras_share_path(share), params: { share: { extras: "made up = x" } }, as: :json
+        expect(response.parsed_body).to eq('status' => 'not_acceptable', 'message' => 'smb.conf refused: [test] made up is not allowed')
+        expect(share.reload.extras).to eq("hide dot files = yes")
       end
     end
 

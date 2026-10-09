@@ -26,9 +26,9 @@ RSpec.describe 'AmahiHelper' do
   end
 
   # Run the helper as its own process, the way sudo runs it: no Bundler, no gems.
-  def run_helper(*args, stdin: '')
+  def run_helper(*args, stdin: '', env: {})
     Bundler.with_unbundled_env do
-      Open3.capture3(RbConfig.ruby, '--disable-gems', helper_path, *args, stdin_data: stdin)
+      Open3.capture3(env, RbConfig.ruby, '--disable-gems', helper_path, *args, stdin_data: stdin)
     end
   end
 
@@ -207,47 +207,77 @@ RSpec.describe 'AmahiHelper' do
       expect(planned).to eq([[:install, '/etc/samba/smb.conf', base, :smb_conf], [:refresh_greyhole_pool], [:stop_greyhole_stats]])
     end
 
-    it 'accepts the config the app generates' do
+    # The config the app generates, with every kind of share and the settings a share's Advanced
+    # section may add: Samba as the setup wizard, Greyhole and the Trash leave it.
+    def app_config
       create(:share, name: 'Movies', path: '/var/lib/amahi-kai/files/movies', disk_pool_copies: 2,
-                     extras: "veto files = /.DS_Store/\nforce user = nobody", everyone: false, guest_writeable: true)
+                     extras: "veto files = /.DS_Store/\nhide dot files = yes", everyone: false, guest_writeable: true)
+      create(:share, name: 'Backups', path: '/mnt/storage-1/backups', disk_pool_copies: 0, rdonly: true,
+                     extras: "vfs objects = catia fruit streams_xattr\nfruit:time machine = yes\nfruit:time machine max size = 500G")
+      Setting.set('debug', '1', Setting::SHARES)
+      Setting.set('win98', '1', Setting::SHARES)
+      Setting.set('net', '192.168.1')
+      allow(Share).to receive(:primary_interface).and_return('ens18')
       allow(Greyhole).to receive(:installed?).and_return(true)
-      conf = Share.samba_conf('example.local')
-      expect(conf).to include('dfree command = /opt/amahi-kai/libexec/amahi-dfree')
+      Share.samba_conf('example.local')
+    end
+
+    it 'accepts the config the app generates' do
+      conf = app_config
+      expect(conf).to include('dfree command = /opt/amahi-kai/libexec/amahi-dfree', 'hosts allow', 'client lanman auth', 'log level = 5')
       expect(helper.samba_problems(conf)).to eq([])
     end
 
-    it 'refuses parameters that run commands or change identities, however they are spelled' do
+    it "accepts testparm's canonical form of it too, where Samba is installed" do
+      skip 'testparm is not installed' unless File.executable?(AmahiHelper::TESTPARM)
+      conf = app_config
+      Dir.mktmpdir do |dir|
+        File.write("#{dir}/smb.conf", conf)
+        canonical, err, status = Open3.capture3(AmahiHelper::TESTPARM, '-s', "#{dir}/smb.conf")
+        expect(status).to be_success, err
+        expect(canonical).to include('read only = No', 'dfree command =')
+        expect(helper.samba_problems(canonical)).to eq([])
+      end
+    end
+
+    it 'refuses every parameter that is not on its list, however it is spelled' do
       [
         'root preexec = /bin/sh', 'ROOT  PREEXEC = /bin/sh', 'root_preexec = x', 'exec = x', 'postexec = x',
         'print command = x', 'add user script = x', 'magic script = x', 'passwd program = x',
         'idmap config * : script = x', 'include = /tmp/x', "inc\\\nlude = /tmp/x", 'config file = /tmp/x',
-        'admin users = admin', 'username map = /tmp/map', 'panic action = x', 'wins hook = x', 'root directory = /'
+        'admin users = admin', 'username map = /tmp/map', 'panic action = x', 'wins hook = x', 'root directory = /',
+        'preload modules = /var/lib/amahi-kai/files/x/m.so', 'perfcount module = x', 'force user = nobody',
+        'force group = users', 'shadow:basedir = /', 'copy = global', 'smb ports = 4445', 'made up = x'
       ].each do |line|
-        expect(helper.samba_problems(share_with(line))).not_to be_empty, line
+        expect(helper.samba_problems(share_with(line))).to eq(["[bad] #{line.split('=').first.strip.gsub(/\\\n/, ' ')} is not allowed"]), line
       end
+    end
+
+    it "takes global parameters only in [global]" do
+      expect(helper.samba_problems("#{base}\tpreload modules = /x.so\n")).to eq(['[global] preload modules is not allowed'])
+      expect(helper.samba_problems(share_with('hosts allow = 0.0.0.0/0'))).to eq(['[bad] hosts allow is not allowed'])
+      expect(helper.samba_problems(share_with('create mask = 0775'))).to eq([])
+      expect(helper.samba_problems("#{base}\tcreate mask = 0775\n")).to eq([])
     end
 
     it 'checks values that point at files, users and modules' do
       {
-        'path = /etc' => 'outside the share folders',
-        'directory = /var/lib/amahi-kai/files/../../../etc' => 'outside the share folders',
-        'path = /var/lib/amahi-kai/files/%U' => 'outside the share folders',
-        'log file = /etc/cron.d/x' => 'log file must be in /var/log/samba',
-        'force user = root' => 'other than root',
-        'group = root' => 'other than root',
-        'force group = +root' => 'other than root',
-        'guest account = root' => 'other than root',
-        'vfs objects = /tmp/evil.so' => 'not allowed',
-        'dfree command = /bin/sh' => 'must be /opt/amahi-kai/libexec/amahi-dfree',
-        'dfree command = /usr/bin/greyhole-dfree' => 'must be /opt/amahi-kai/libexec/amahi-dfree'
-      }.each do |line, reason|
-        expect(helper.samba_problems(share_with(line)).join).to include(reason), line
+        share_with('path = /etc') => 'outside the share folders',
+        share_with('directory = /var/lib/amahi-kai/files/../../../etc') => 'outside the share folders',
+        share_with('path = /var/lib/amahi-kai/files/%U') => 'outside the share folders',
+        "#{base}\tlog file = /etc/cron.d/x\n" => 'log file must be in /var/log/samba',
+        "#{base}\tguest account = root\n" => 'other than root',
+        share_with('vfs objects = /tmp/evil.so') => 'not allowed',
+        share_with('dfree command = /bin/sh') => 'must be /opt/amahi-kai/libexec/amahi-dfree',
+        share_with('dfree command = /usr/bin/greyhole-dfree') => 'must be /opt/amahi-kai/libexec/amahi-dfree'
+      }.each do |conf, reason|
+        expect(helper.samba_problems(conf).join).to include(reason), conf
       end
     end
 
     it "allows ordinary share options and data drives" do
-      ok = ['vfs objects = recycle fruit streams_xattr', 'acl allow execute always = yes', 'force user = nobody',
-            'path = /mnt/storage-1/movies', 'hide dot files = yes']
+      ok = ['vfs objects = recycle fruit streams_xattr', 'acl allow execute always = yes', 'veto files = /.DS_Store/',
+            'path = /mnt/storage-1/movies', 'hide dot files = yes', 'fruit:time machine = yes', 'recycle:keeptree = yes']
       ok.each { |line| expect(helper.samba_problems(share_with(line))).to eq([]), line }
     end
 
@@ -259,6 +289,16 @@ RSpec.describe 'AmahiHelper' do
 
     it 'refuses the request before anything runs' do
       expect(refusal('samba.write_config', { 'content' => share_with('root preexec = /bin/sh') })).to start_with('smb.conf refused')
+    end
+
+    it "doesn't offer --dry-run or --check-catalog through sudo" do
+      out, err, status = run_helper('--dry-run', 'samba.reload', stdin: '{}', env: { 'SUDO_USER' => 'amahi' })
+      expect(status.exitstatus).to eq(1)
+      expect(out).to eq('')
+      expect(err).to include('not available through sudo')
+      _out, err, status = run_helper('--check-catalog', '/tmp', env: { 'SUDO_USER' => 'amahi' })
+      expect(status.exitstatus).to eq(1)
+      expect(err).to include('not available through sudo')
     end
 
     it 'checks smb.conf with the real testparm where Samba is installed' do
@@ -1061,6 +1101,8 @@ RSpec.describe 'AmahiHelper' do
           expect(refusal('greyhole.trash_delete', { 'share' => 'Photos', 'path' => path })).not_to be_nil, path
         end
         expect(refusal('greyhole.trash_delete', { 'share' => '../Photos', 'path' => '2026/beach [1].jpg' })).to include("isn't a share name")
+        # Would read as an option on greyhole's command line
+        expect(refusal('greyhole.trash_delete', { 'share' => '--empty-trash', 'path' => 'x' })).to include("isn't a share name")
       end
 
       it "restores only into a share that's still pooled and has no file by that name" do

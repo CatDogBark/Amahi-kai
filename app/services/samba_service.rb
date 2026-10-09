@@ -9,11 +9,12 @@
 
 class SambaService
   # Generate and deploy Samba configuration, then reload services.
-  # Returns whether a new smb.conf was installed.
-  def self.push_config
+  # Returns whether a new smb.conf was installed. With raise_refusal, a config the root helper
+  # refuses raises Privileged::Error (its message says which line) instead of being logged.
+  def self.push_config(raise_refusal: false)
     domain = Setting.get("domain")
 
-    written = write_smb_conf(Share.samba_conf(domain))
+    written = write_smb_conf(Share.samba_conf(domain), raise_refusal: raise_refusal)
     lmhosts = write_lmhosts(Share.samba_lmhosts(domain))
 
     # smbd re-reads smb.conf on reload; it used to pick share changes up only on its own timer.
@@ -22,10 +23,11 @@ class SambaService
   end
 
   # Installs smb.conf if Samba can load it; otherwise the current one stays.
-  def self.write_smb_conf(content)
+  def self.write_smb_conf(content, raise_refusal: false)
     Privileged.call('samba.write_config', content: content)
     true
   rescue Privileged::Error => e
+    raise if raise_refusal
     Rails.logger.error("SambaService: smb.conf not installed; keeping the current one: #{e.message}")
     false
   end

@@ -1030,16 +1030,30 @@ module AmahiHelper
 
   # --- Samba config checks ---------------------------------------------------------
 
-  # Samba can run commands as root and change identities from its config, so a config
-  # that does either is refused. Names are compared the way Samba does: case and
-  # spaces don't count ("Root PreExec" is "rootpreexec").
-  SAMBA_REFUSED = %w[
-    include configfile configbackend usernamemap adminusers root rootdir rootdirectory panicaction
-    magicoutput winshook passdbbackend smbpasswdfile privatedir lockdir lockdirectory statedirectory
-    cachedirectory piddirectory ncalrpcdir binddnsdir usersharepath templatehomedir templateshell
-    utmpdirectory wtmpdirectory
+  # Samba runs as root, and its config can make it run commands, load code and change
+  # identities, so only the parameters listed here are accepted: the ones Share.samba_conf
+  # writes, and a few a share's Advanced settings may add (masks and modes, hidden and vetoed
+  # files, the Apple and recycle modules' own). Every other parameter is refused, whatever it
+  # does. Names are compared the way Samba does: case and spaces don't count ("Read Only" is
+  # "readonly"), and both the app's spelling and testparm's canonical one are listed
+  # ("writeable" comes back as "read only").
+  SAMBA_GLOBAL_PARAMS = %w[
+    workgroup serverstring netbiosname loadprinters printing printcapname disablespoolss logfile loglevel
+    maxlogsize preferredmaster oslevel timeserver unixextensions smb1unixextensions security largereadwrite
+    encryptpasswords doscharset unixcharset guestaccount maptoguest winssupport clientlanmanauth hostsallow
+    interfaces bindinterfacesonly widelinks followsymlinks allowinsecurewidelinks idmapconfig*:backend
   ].freeze
-  SAMBA_RUNS_COMMANDS = /(pre|post)exec|\Aexec\z|command|script|program/
+  SAMBA_SHARE_PARAMS = %w[
+    comment path directory writeable writable readonly browseable browsable available validusers invalidusers
+    writelist readlist guestok guestonly createmask forcecreatemode directorymask forcedirectorymode vfsobjects
+    dfreecommand hidedotfiles hidefiles vetofiles deletevetofiles hideunreadable hideunwriteablefiles casesensitive
+    defaultcase preservecase shortpreservecase manglednames storedosattributes maparchive maphidden mapsystem
+    mapreadonly dosfilemode easupport inheritpermissions inheritacls aclallowexecutealways oplocks level2oplocks
+    kerneloplocks strictlocking posixlocking strictallocate usesendfile maxconnections volume accessbasedshareenum
+    deletereadonly
+  ].freeze
+  # The modules' own settings, "module:name"; shadow_copy2's point at folders, so they stay out.
+  SAMBA_MODULE_PARAMS = %w[fruit: recycle: streams_xattr: catia: full_audit: acl_xattr: worm: readonly: crossrename:].freeze
   SAMBA_VFS_MODULES = %w[
     greyhole recycle fruit streams_xattr catia acl_xattr shadow_copy2 full_audit dirsort worm readonly crossrename
   ].freeze
@@ -1077,10 +1091,16 @@ module AmahiHelper
   class << self
     # --- Entry points --------------------------------------------------------------
 
+    # The checking modes (--dry-run, --check-catalog) are for a person at a root shell and the
+    # catalog's CI: through the app's sudo rule they're refused, so the app can only run
+    # operations, which are logged.
     def main(argv, input: $stdin, output: $stdout)
       case argv
       in ['--self-test'] then self_test(output)
       in ['--list'] then output.puts(OPERATIONS.keys) || 0
+      in ['--dry-run' | '--check-catalog', String] if ENV.key?('SUDO_USER')
+        warn 'amahi-helper: --dry-run and --check-catalog are not available through sudo'
+        1
       in ['--dry-run', String => op] then respond(output) { dry_run(op, read_args(input)) }
       in ['--check-catalog', String => dir] then check_catalog(dir, output)
       in [String => op] unless op.start_with?('-') then respond(output) { execute(op, input) }
@@ -1930,7 +1950,7 @@ module AmahiHelper
     # drive that has it (<drive>/.gh_trash/<share>/<path>, a file reached through no link).
     def trash_item(share_value, path_value)
       share = string(share_value, 'share', max: 64)
-      raise Refused, "#{share.inspect} isn't a share name" if share.include?('/') || share.start_with?('.')
+      raise Refused, "#{share.inspect} isn't a share name" if share.include?('/') || share.start_with?('.', '-')
       path = string(path_value, 'path', max: 4096)
       raise Refused, 'path must be relative, without . or .. or //' unless normalized_path?("/#{path}") && !path.start_with?('/')
       copies = greyhole_drives.filter_map do |drive|
@@ -2096,33 +2116,39 @@ module AmahiHelper
       value
     end
 
-    # Problems with a Samba config (raw text, or testparm's canonical output).
+    # Problems with a Samba config (raw text, or testparm's canonical output): a parameter
+    # that isn't listed, or a listed one with a value that points somewhere it shouldn't.
     def samba_problems(text)
       samba_params(text).filter_map do |section, name, value|
         key = name.downcase.delete(" \t")
-        if key == 'dfreecommand'
-          "[#{section}] dfree command must be #{GREYHOLE_DFREE}" unless value == GREYHOLE_DFREE
-        elsif SAMBA_REFUSED.include?(key) || key.match?(SAMBA_RUNS_COMMANDS)
+        if !samba_param_allowed?(section, key)
           "[#{section}] #{name} is not allowed"
         else
-          samba_value_problem(section, key, name, value)
+          samba_value_problem(section, key, value)
         end
       end
     end
 
-    def samba_value_problem(section, key, name, value)
+    # Share parameters are accepted in any section (in [global] Samba takes them as defaults);
+    # global ones only in [global].
+    def samba_param_allowed?(section, key)
+      SAMBA_SHARE_PARAMS.include?(key) || SAMBA_MODULE_PARAMS.any? { |prefix| key.start_with?(prefix) } ||
+        (section == 'global' && SAMBA_GLOBAL_PARAMS.include?(key))
+    end
+
+    def samba_value_problem(section, key, value)
       case key
       when 'path', 'directory'
         "[#{section}] path #{value} is outside the share folders" unless config_share_path?(value)
       when 'logfile'
         "[#{section}] log file must be in /var/log/samba" unless value.start_with?('/var/log/samba/') && !value.include?('..')
-      when 'forceuser', 'guestaccount'
-        "[#{section}] #{name} must be an existing user other than root" unless (pw = passwd(value)) && !pw.uid.zero?
-      when 'forcegroup', 'group'
-        "[#{section}] #{name} must be an existing group other than root" unless (gid = group_id(value.delete_prefix('+'))) && !gid.zero?
-      when 'vfsobjects', 'vfsobject'
+      when 'guestaccount'
+        "[#{section}] guest account must be an existing user other than root" unless (pw = passwd(value)) && !pw.uid.zero?
+      when 'vfsobjects'
         unknown = value.split(/[\s,]+/) - SAMBA_VFS_MODULES
         "[#{section}] vfs objects #{unknown.join(', ')} not allowed" if unknown.any?
+      when 'dfreecommand'
+        "[#{section}] dfree command must be #{GREYHOLE_DFREE}" unless value == GREYHOLE_DFREE
       end
     end
 
