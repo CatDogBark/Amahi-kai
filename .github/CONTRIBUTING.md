@@ -29,6 +29,7 @@ on MariaDB):
 bundle exec rspec spec/models/ spec/services/ spec/helpers/
 bundle exec rspec spec/lib/
 bundle exec rspec spec/requests/
+bundle exec rspec spec/system/      # a real browser; needs Chrome or Chromium (or BROWSER_PATH)
 ```
 
 Lint and security checks (installed as gems, not in the bundle): RuboCop 1.91.0 with

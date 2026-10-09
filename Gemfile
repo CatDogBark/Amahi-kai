@@ -39,6 +39,9 @@ end
 gem 'rspec-rails', group: [:test, :development]
 
 group :test do
+  # Browser specs (spec/system): Capybara driving Chrome through its DevTools protocol
+  gem 'capybara'
+  gem 'cuprite'
   gem 'database_cleaner'
   gem 'factory_bot_rails'
   # Reads the folder zips in specs
