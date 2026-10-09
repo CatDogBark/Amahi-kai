@@ -109,7 +109,7 @@ describe "Shares Toggle Actions", type: :request do
         expect(card.at_css("#pool-help-#{share.id}").text.squish).to include("2 copies: each file is kept on two drives")
         expect(card.at_css("#share-section-trash-#{share.id}").text.squish).to include("for 30 days", "hidden .recycle folder")
         expect(card.at_css("#share-trash-#{share.id}")["href"]).to eq("/files/trash")
-        expect(card.at_css(".share-card-footer").text.squish).to include("Delete Docs", "There's no undo")
+        expect(card.at_css(".share-card-footer").text.squish).to include("Delete Docs", "Its files stay in its folder")
         expect(card.text).not_to include("Features", "Tags", "Recycle Bin", "Time Machine")
         expect(card.at_css("#extras-textarea-#{share.id}")).to be_nil
       end
