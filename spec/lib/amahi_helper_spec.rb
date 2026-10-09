@@ -1139,6 +1139,9 @@ RSpec.describe 'AmahiHelper' do
         .to eq('nothing is mounted at /mnt/storage-2: mount the drive on Disks → Devices first')
       expect(refusal('greyhole.remove_drive', { 'path' => '/mnt/other', 'available' => false })).to eq("/mnt/other isn't one of Greyhole's drives")
 
+      # Checking the pool takes nothing from the app
+      expect(steps('greyhole.fsck', {})).to eq([['/usr/bin/greyhole', '--fsck', '--dont-walk-metadata-store']])
+
       allow(AmahiHelper).to receive(:probe).and_return('UUID' => 'u-1')
       allow(AmahiHelper).to receive(:data_device) { |device| [device, { 'path' => device, 'mountpoints' => ['/mnt/storage-2'] }] }
       expect(refusal('disks.unmount', { 'device' => '/dev/sdb' }))

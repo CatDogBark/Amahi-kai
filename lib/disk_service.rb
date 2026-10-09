@@ -19,11 +19,13 @@ module DiskService
       checked = true
 
       # Regenerate Greyhole config whenever pool membership changes. With its first drive in,
-      # Greyhole has something to do: start it (it can't run without one).
+      # Greyhole has something to do: start it (it can't run without one). Then it checks the
+      # pool, making the copies the shares are short of on the new drive.
       begin
         if Greyhole.installed?
           Greyhole.configure!
           Greyhole.start! if first && !Greyhole.running?
+          Greyhole.check_pool!
         end
       rescue StandardError => e
         Rails.logger.error("Greyhole configure failed: #{e.message}")

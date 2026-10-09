@@ -771,6 +771,15 @@ module AmahiHelper
       },
       plan: ->(v) { [[GREYHOLE_BIN, "--remove=#{v[:path]}", { stdin: v[:available] ? "yes\n" : "no\n" }]] }
     },
+    # Asks Greyhole to check the pooled shares now (greyhole --fsck, queued for its daemon), so
+    # it makes the copies they're short of: on a drive just added to the pool, or for a share
+    # whose copies went up. Its daily job checks only when greyhole.conf has changed, the
+    # next morning. Takes nothing from the app.
+    'greyhole.fsck' => {
+      params: [],
+      validate: ->(_a) { installed!(GREYHOLE_BIN) && {} },
+      plan: ->(_v) { [[GREYHOLE_BIN, '--fsck', '--dont-walk-metadata-store']] }
+    },
     # Takes a share out of Greyhole's pool without losing files (greyhole --remove-share):
     # Greyhole moves the share's files from the pool drives back into its folder, then takes
     # the share out of greyhole.conf itself and restarts. The daemon does the moving, after

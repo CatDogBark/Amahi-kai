@@ -106,6 +106,15 @@ RSpec.describe Greyhole do
       allow(SambaService).to receive(:push_config).and_return(true)
     end
 
+    it 'checks the pool through the root helper while Greyhole runs, and not when it is stopped' do
+      allow(Greyhole).to receive(:installed?).and_return(true)
+      expect(Greyhole.check_pool!).to be true
+      expect(Privileged.calls).to eq([['greyhole.fsck', {}]])
+      allow(Greyhole).to receive(:running?).and_return(false)
+      expect(Greyhole.check_pool!).to be false
+      expect(Privileged.calls.size).to eq(1)
+    end
+
     it 'installs through the root helper in one path, streaming apt output' do
       allow(Privileged).to receive(:call).and_call_original
       allow(Privileged).to receive(:call).with('packages.install', packages: Greyhole::PACKAGES) do |*_args, &block|

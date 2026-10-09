@@ -1,6 +1,7 @@
 // Pool Toggle Controller
 //
-// Toggles a partition in/out of the Greyhole storage pool via AJAX.
+// Toggles a partition in/out of the Greyhole storage pool via AJAX, then reloads the page, whose
+// drives, summary and status all follow the pool.
 
 (function() {
   var PoolToggleController = class extends Stimulus.Controller {
@@ -24,9 +25,9 @@
         .then(function(response) { return response.json(); })
         .then(function(data) {
           if (data.status === 'ok') {
-            if (data.removing) { window.location.reload(); return; } // the page shows the removal
-            checkbox.checked = data.checked;
             label.textContent = data.checked ? 'In pool' : 'Add to pool';
+            window.location.reload();
+            return;
           } else {
             if (window.showToast) window.showToast(data.message || 'That didn\'t work', 'error');
             checkbox.checked = !checkbox.checked;
