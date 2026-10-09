@@ -28,7 +28,7 @@ div.share[id="whole_share_#{share.id}"]
           .share-row-label Visible
           .share-row-body
             span data-controller="toggle" data-toggle-url-value=toggle_visible_share_path(id: share.id)
-              input.share_visible_checkbox.form-check-input type="checkbox" id="share_visible_#{share.id}" checked=share.visible data-toggle-target="checkbox" data-action="click->toggle#toggle"
+              input.share_visible_checkbox.form-check-input type="checkbox" id="share_visible_#{share.id}" autocomplete="off" checked=share.visible data-toggle-target="checkbox" data-action="click->toggle#toggle"
               |  Shown on the network
             .share-help
               | Computers browsing the network see it. Turned off, it's hidden from the list but still opens at #{path2location(share.name)}.

@@ -8,7 +8,7 @@
           label = t 'dhcp_server'
         td
           span data-controller="toggle" data-toggle-url-value=network_toggle_setting_path(@dnsmasq_dhcp)
-            input.form-check-input type="checkbox" id="checkbox_setting_dnsmasq_dhcp" checked=@dnsmasq_dhcp.set? data-toggle-target="checkbox" data-action="click->toggle#toggle"
+            input.form-check-input type="checkbox" id="checkbox_setting_dnsmasq_dhcp" autocomplete="off" checked=@dnsmasq_dhcp.set? data-toggle-target="checkbox" data-action="click->toggle#toggle"
             |  
             span.spinner.theme-image data-toggle-target="spinner" style="display:none"
 

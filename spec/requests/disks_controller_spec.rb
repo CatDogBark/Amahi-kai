@@ -82,6 +82,21 @@ describe "Disks Controller", type: :request do
         expect(response).to have_http_status(:ok)
       end
 
+      # Firefox puts a checkbox back the way it was when a page reloads; these show the pool.
+      it "shows each drive's In pool as the pool has it, whatever the browser remembers" do
+        DiskPoolPartition.create!(path: '/mnt/storage-1', minimum_free: 10, removing: true)
+        allow(DiskService).to receive(:partition_list).and_return(
+          [{ device: '/dev/sda', path: '/mnt/storage-1', bytes_total: 1, bytes_free: 1 },
+           { device: '/dev/sdb', path: '/mnt/storage-2', bytes_total: 1, bytes_free: 1 }]
+        )
+        allow(Greyhole).to receive(:pool_drives).and_return([{ path: '/mnt/storage-1', removing: true, state: :ok, total: 1, free: 1, used: 0, minimum_free: 10 }])
+        get "/disks/storage_pool"
+        page = Nokogiri::HTML(response.body)
+        boxes = page.css('.disk-pool-partition input[type=checkbox]')
+        expect(boxes.size).to eq(2)
+        expect(boxes.map { |b| b['autocomplete'] }).to all(eq('off'))
+      end
+
       it "opens Install Greyhole on Greyhole's own stream, not System Update's" do
         allow(Greyhole).to receive(:status).and_return({ installed: false, running: false })
         allow(Greyhole).to receive(:pool_drives).and_return([])
@@ -167,7 +182,7 @@ describe "Disks Controller", type: :request do
         page = Nokogiri::HTML(response.body)
         row = page.at_css('#pool-drive-mnt-storage-1')
         expect(row.text).to include('Removing: Greyhole is moving the files kept only on it')
-        expect(row.at_css('[data-reload-after="30"]')).not_to be_nil
+        expect(row.at_css('[data-reload-after="10"]')).not_to be_nil
         expect(row.css('form')).to be_empty
 
         allow(DiskService).to receive(:toggle_pool_partition).and_raise(Greyhole::GreyholeError, "It's the pool's only drive")
