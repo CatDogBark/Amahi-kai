@@ -106,6 +106,19 @@ becomes root-owned (in N); Docker app work moves to Phase 4.
 - [ ] **Content-Security-Policy**: today it's report-only. Enforcing it needs the inline
   scripts and `onclick` handlers moved into the JavaScript files first; its own PR.
 
+## Next: shelf-stable
+
+Troy (2026-10-08): Amahi-kai's major code work is finished first, then everything is tested, then
+bitShare (P4.6). In this order:
+
+1. The security fixes from the 2026-10-08 audit (details in the private review doc that
+   `CLAUDE.md` links), with the Open item on `nosuid,nodev` below.
+2. Share toggles in one place (`SharesController` and `ShareAccessManager` duplicate them).
+3. Fewer `Setting` queries per request (`before_action_hook`).
+4. System Status and the dashboard read the server's details through `SystemInfo` alike.
+5. The inline `onclick` handlers and scripts move into the JavaScript files, then
+   Content-Security-Policy is enforced (Phase 3's last item).
+
 ## Open, not yet scheduled
 
 Smaller findings from the review that no PR covers yet. Fold them into a nearby PR when it
@@ -114,18 +127,16 @@ touches the same code.
 - Several features staged files at fixed `/tmp` paths before a root copy. Samba (L), dnsmasq
   (M1), Greyhole (M2), the tunnel and Tailscale (M3) no longer do: the helper writes the files.
   The Docker app installer did until P4.1 (#58), which replaced it with the helper.
-- Duplicates: share toggles live in both `SharesController` and `ShareAccessManager`.
 - Data drives mount with PR #13's `defaults,nofail,...` options. `nosuid,nodev` would be safer for
   drives brought from another machine; share storage stays ext4 ([`storage.md`](storage.md)), so
   this can be decided now.
-- Per-request overhead: 4–5 `Setting` queries in `before_action_hook`.
-- Long jobs (package installs, docker pull) run inside web requests and hold Puma threads.
-  System Update moved to its own job in #31; the others could follow the same way (a systemd
-  unit started by the helper, with its log streamed to the page).
-- Anonymous SMB browsing shows a `nobody` home folder (cosmetic; needs a guest account with no home
-  directory).
 
-## Later: the phone layout
+## Long-term (not soon)
+
+Troy (2026-10-08): none of these are coming soon; they wait until Amahi-kai is shelf-stable and
+tested.
+
+### The phone layout
 
 Troy will use Amahi-kai on his phone (2026-10-08). The October refresh (dark, mint, Space Grotesk)
 stacks at phone width: the header's sections fold into a menu, cards and panels go one column,
@@ -137,7 +148,7 @@ and the file browser's list drops its dates. It hasn't been designed for a phone
 - Touch: rows and buttons at least 44 px, the row's download button always shown (no hover).
 - Check the water background's cost on a phone (it has a battery saver setting).
 
-## Later: the debug pages as a Settings tab
+### The debug pages as a Settings tab
 
 The debug pages (`/tab/debug`: App Logs, Logs and System Info) are from the original Amahi. They
 have their own old layout, outside the October look, read logs through shell strings, and their
@@ -150,6 +161,18 @@ wants them rebuilt as a tab in Settings (2026-10-08); until then they stay as th
   reads `/var/log/syslog`, which a journald-only system doesn't have).
 - System info from System Status's sources rather than raw `/proc/cpuinfo` and `/proc/meminfo`.
 - Drop Submit for Debug, or make it a download of the logs to attach to an issue.
+
+### Long jobs in their own units
+
+Package installs, Docker pulls and Greyhole's install run inside web requests and hold a Puma
+thread while they run. System Update moved to its own job in #31; the others could follow the
+same way (a systemd unit started by the helper, with its log streamed to the page). With one admin
+on the NAS this costs nothing today.
+
+### The `nobody` folder
+
+Anonymous SMB browsing shows a `nobody` home folder (cosmetic; needs a guest account with no home
+directory).
 
 ## Later: HTTPS on the LAN
 
