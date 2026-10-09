@@ -28,6 +28,20 @@ RSpec.describe 'Sign in and the dashboard', type: :system do
     expect(Setting.get('advanced')).to eq(before == 'true' ? '0' : '1')
   end
 
+  it "fits the header in a medium-width window: the name on one line, the tools inside it" do
+    sign_in_as_admin
+    page.driver.resize(860, 800)
+    header = page.evaluate_script(<<~JS)
+      (() => {
+        const box = s => document.querySelector(s).getBoundingClientRect();
+        return { brand: box('.kai-brand').height, tools: box('.kai-header-tools').right, search: box('#searchform').top, nav: box('.kai-mainnav').bottom };
+      })()
+    JS
+    expect(header['brand']).to be < 40
+    expect(header['tools']).to be <= 860
+    expect(header['search']).to be >= header['nav'] # its own row, below the sections
+  end
+
   it "hears what the browser logs (the harness fails an example on an error; this one clears it)" do
     sign_in_as_admin
     page.execute_script("console.error('a test error'); console.log('a test note')")

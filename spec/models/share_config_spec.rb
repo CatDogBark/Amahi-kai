@@ -50,6 +50,15 @@ RSpec.describe Share, 'config generation', type: :model do
       expect(conf).to include("dfree command = /opt/amahi-kai/libexec/amahi-dfree")
     end
 
+    it "adds no blank line for an emptied Advanced box, and takes the browser's CRLF lines" do
+      emptied = create(:share, name: "Emptied", disk_pool_copies: 2, extras: "\r\n")
+      expect(emptied.share_conf.lines.map(&:strip)[0...-1]).not_to include("") # the last separates sections
+
+      typed = create(:share, name: "Typed", disk_pool_copies: 0, extras: "veto files = /*.mp3/\r\nhide dot files = yes")
+      expect(typed.share_conf).to include("\tveto files = /*.mp3/\n\thide dot files = yes\n")
+      expect(typed.share_conf).not_to include("\r")
+    end
+
     it 'does not include greyhole when disk_pool_copies is 0' do
       share = create(:share, name: "NoPool", disk_pool_copies: 0, extras: "")
       conf = share.share_conf

@@ -42,9 +42,13 @@ class SharesController < ApplicationController
     end
   end
 
+  # The share goes, its files stay (Share#keep_files_off_the_pool says when it can't yet).
   def destroy
-    @share.destroy
-    render json: { status: :ok, id: @share.id }
+    if @share.destroy
+      render json: { status: :ok, id: @share.id }
+    else
+      render json: { status: :error, message: @share.errors.full_messages.to_sentence }
+    end
   end
 
   # --- Settings ---

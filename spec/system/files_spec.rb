@@ -35,6 +35,11 @@ RSpec.describe 'Files', type: :system do
       expect(page).to have_link('Download')
     end
 
+    # Clicking it again closes it
+    find('.fb-item[data-name="notes.txt"] .fb-file-link').click
+    expect(page).to have_no_css('.fb-item.selected')
+    expect(page).to have_css('.fb-details .fb-details-empty', text: 'Click a file to see it here')
+
     # The grid shows pictures as themselves; the choice is remembered
     find('.fb-viewbtn[data-view="grid"]').click
     expect(page).to have_css('.fb-listing.fb-grid')

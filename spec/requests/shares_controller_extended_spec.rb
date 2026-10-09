@@ -115,6 +115,15 @@ RSpec.describe "SharesController extended", type: :request do
       expect(body['status']).to eq('ok')
       expect(body['id']).to eq(share.id)
     end
+
+    it "keeps a pooled share and says why" do
+      pooled = create(:share, name: "Pooled", disk_pool_copies: 2)
+      delete share_path(pooled), as: :json
+      body = response.parsed_body
+      expect(body['status']).to eq('error')
+      expect(body['message']).to start_with("Turn Pooled's pool copies Off first")
+      expect(Share.exists?(pooled.id)).to be true
+    end
   end
 
   # --- Permission toggle edge cases ---

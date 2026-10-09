@@ -32,6 +32,16 @@ Amahi-kai creates the folder (owner `amahi`, group `users`, so share users can w
 the share to Samba's configuration and reloads Samba. A share's folder must be inside
 `/var/lib/amahi-kai/files` or on a data drive under `/mnt`; other places are refused.
 
+### Deleting a share
+
+**Delete** at the bottom of a share's settings takes the share off the network and out of
+Amahi-kai. Its files stay: the folder is removed only if it's empty, and a new share with the same
+name opens the files again. To get rid of the files, delete them over the network share first.
+
+A pooled share's files are on the pool drives, so Delete waits until they're back in its folder:
+turn its **Pool copies** Off first (see [Storage Pooling](storage-pooling)), and delete it once
+it shows Off.
+
 ### Share settings
 
 Click a share's name to open its settings. Each says what it does underneath.

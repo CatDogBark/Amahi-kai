@@ -49,7 +49,8 @@
               btn.innerHTML = btn.dataset.originalText;
               btn.style.pointerEvents = '';
             }
-            if (typeof showToast === 'function') showToast(data.status || "Error", 'error');
+            // The server's reason when it gives one (a share with files on the pool drives)
+            if (typeof showToast === 'function') showToast(data.message || data.status || "Error", 'error');
           }
         })
         .catch(function(err) {
