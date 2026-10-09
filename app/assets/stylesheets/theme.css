@@ -616,6 +616,14 @@ body:has(> #footer) > #footer {
   padding-left: 32px;
 }
 
+/* Disks → ZFS Pools: a pool's buttons keep their words on one line (the header wraps instead),
+   and the tables a card holds keep the card's own side padding. */
+.pool-actions .btn { white-space: nowrap; }
+.pool-card > .table > :not(caption) > * > :first-child,
+#pool-drives > :not(caption) > * > :first-child { padding-left: 1rem; }
+.pool-card > .table > :not(caption) > * > :last-child,
+#pool-drives > :not(caption) > * > :last-child { padding-right: 1rem; }
+
 /* The same for Users: each user's row is a table of its own, so the columns are fixed to line up */
 #users-table table.settings {
   table-layout: fixed;
