@@ -591,7 +591,8 @@ module AmahiHelper
       plan: ->(_v) { [[:drive_temperatures]] }
     },
     # Loads ZFS and caps its memory cache (ARC_LIMIT or half the memory), now and at every
-    # boot. Run once zfsutils-linux is installed.
+    # boot. Run once zfsutils-linux is installed, and at every System Update, so the cap follows
+    # memory added since.
     'zfs.setup' => {
       params: [],
       validate: ->(_a) { installed!(ZPOOL) && { arc_max: arc_limit } },
