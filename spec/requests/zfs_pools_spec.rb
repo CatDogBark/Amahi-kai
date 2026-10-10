@@ -73,7 +73,8 @@ RSpec.describe 'ZFS pools', type: :request do
       card = page.at_css('#pool-tank')
       expect(card.at_css('.card-header').text).to include('tank', 'RAIDZ1 · 2 drives', 'DEGRADED')
       expect(card.text).to include('466 GB used', '1.82 TB free of 2.27 TB', 'One or more devices could not be used.',
-                                   "What to do: Replace the device using 'zpool replace'.", '/srv/pools/tank', 'No scrub has run yet.')
+                                   "What to do: The drive Samsung_SSD_870_S2 is missing: connect it again and restart the NAS, " \
+                                   'or Replace it with a free drive.', '/srv/pools/tank', 'No scrub has run yet.')
       rows = card.css('tbody tr').map { |tr| tr.css('td').map { |td| td.text.strip } }
       expect(rows).to eq([['/dev/sdc', 'Samsung_SSD_870_S1', 'ONLINE', 'Not checked yet', '0 / 0 / 0', 'Replace'],
                           ['—', 'was /dev/disk/by-id/ata-Samsung_SSD_870_S2-part1', 'UNAVAIL', '—', '0 / 0 / 0', 'Replace']])
@@ -128,6 +129,10 @@ RSpec.describe 'ZFS pools', type: :request do
       get '/disks/pools'
       buttons = page.css('[data-storage-post="/disks/online_pool_drive"]')
       expect(buttons.map { |b| [b['data-name'], b['data-drive']] }).to eq([['tank', back]]) # not the missing one
+      expect(page.at_css('#pool-tank').text.squish).to include(
+        'What to do: The drive Samsung_SSD_870_S1 is connected again: click Bring online on its row. ' \
+        'The drive Samsung_SSD_870_S2 is missing: connect it again and restart the NAS, or Replace it with a free drive.'
+      )
 
       allow(File).to receive(:exist?).with(back).and_return(false)
       get '/disks/pools'
