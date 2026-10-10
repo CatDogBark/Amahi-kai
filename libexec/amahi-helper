@@ -685,6 +685,20 @@ module AmahiHelper
          [:pool_status]]
       }
     },
+    # Erases a free disk's old ZFS label: one a replaced drive keeps once it's left its pool (ZFS
+    # leaves a label from no pool on it), or one from a pool on another server. Share storage never
+    # takes a disk with a ZFS label, so this frees it for that too. Only a disk a new pool could
+    # take: not the system's, nothing on it mounted or in use, not in a pool here, online or offline.
+    'pools.erase_drive' => {
+      params: %w[device],
+      validate: ->(a) { erase_drive_request(a['device']) },
+      plan: lambda { |v|
+        [*v[:labels].map { |part| [ZPOOL, 'labelclear', '-f', part, { allow_failure: true }] },
+         *v[:wipe].map { |device| [WIPEFS, '-a', device] },
+         ['/usr/bin/udevadm', 'settle', { allow_failure: true }],
+         [:pool_status]]
+      }
+    },
     # Takes a pool offline: unmounted and out of ZFS's cache file, so it stays offline after a
     # reboot, and recorded in OFFLINE_POOLS so its drives stay its own. Fails while something
     # has files open on it.
@@ -1623,6 +1637,15 @@ module AmahiHelper
       raise Refused, "#{paths.find { |p| paths.count(p) > 1 }} is listed twice" if paths.uniq.size != paths.size
       { name: name, wipe: disks.flat_map { |_path, node| wipe_targets(node) },
         vdevs: [layout, *paths.map { |path| stable_path(path) }] }
+    end
+
+    def erase_drive_request(value)
+      installed!(ZPOOL)
+      path, node = pool_disk(value, block_tree, pooled_devices)
+      labels = subtree(node).select { |n| n['fstype'] == 'zfs_member' }.map { |n| n['path'] }
+      raise Refused, "#{path} has no ZFS label to erase" if labels.empty?
+
+      { labels: labels, wipe: wipe_targets(node) }
     end
 
     def destroy_request(name, confirm)

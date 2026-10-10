@@ -103,6 +103,8 @@ RSpec.describe StoragePools do
           'rota' => false, 'mountpoints' => [nil] },
         { 'path' => '/dev/sdf', 'type' => 'disk', 'size' => 1_000, 'mountpoints' => [nil],
           'children' => [{ 'path' => '/dev/md0', 'type' => 'raid1', 'mountpoints' => [nil] }] },
+        { 'path' => '/dev/sdg', 'type' => 'disk', 'size' => 1_000, 'mountpoints' => [nil],
+          'children' => [{ 'path' => '/dev/sdg1', 'type' => 'part', 'fstype' => 'zfs_member', 'label' => 'tank', 'mountpoints' => [nil] }] },
         { 'path' => '/dev/sr0', 'type' => 'rom', 'size' => 1, 'mountpoints' => [nil] }
       ] }.to_json
     end
@@ -118,8 +120,11 @@ RSpec.describe StoragePools do
       drives = described_class.drives(described_class.status[:pools])
       expect(drives.to_h { |d| [d[:path], [d[:role], d[:free]]] }).to eq(
         '/dev/sda' => [:os, false], '/dev/sdb' => [:share, false], '/dev/sdc' => [:pool, false],
-        '/dev/sdd' => [:old_zfs, true], '/dev/sde' => [:free, true], '/dev/sdf' => [:in_use, false]
+        '/dev/sdd' => [:old_zfs, true], '/dev/sde' => [:free, true], '/dev/sdf' => [:in_use, false],
+        '/dev/sdg' => [:left_pool, true] # replaced out of tank: its label names the pool, its drives don't
       )
+      expect(drives.find { |d| d[:path] == '/dev/sdg' }[:pool]).to eq('tank')
+      expect(described_class.drives.find { |d| d[:path] == '/dev/sdg' }[:role]).to eq(:old_zfs) # no pool tank here
       expect(drives.find { |d| d[:path] == '/dev/sde' }).to include(model: 'Samsung SSD 870 EVO 1TB', serial: 'S6P', size: 1_000_000, ssd: true)
       expect(drives.find { |d| d[:path] == '/dev/sdc' }[:pool]).to eq('tank')
       expect(drives.find { |d| d[:path] == '/dev/sdb' }[:mounts]).to eq(['/mnt/storage-1'])
@@ -217,14 +222,16 @@ RSpec.describe StoragePools do
   end
 
   describe 'changing a pool' do
-    it 'replaces a drive, adds a group and destroys a pool through the helper, then checks the health' do
+    it "replaces a drive, adds a group, destroys a pool and erases a drive's old label through the helper, then checks the health" do
       described_class.replace!(name: 'tank', old: '1234567890', new: '/dev/sdg')
       described_class.add_group!(name: 'tank', devices: %w[/dev/sdg /dev/sdh /dev/sdi])
       described_class.destroy!(name: 'tank', confirm: 'tank')
+      described_class.erase_drive!('/dev/sdg')
       expect(Privileged.calls).to eq([
         ['pools.replace', { name: 'tank', old: '1234567890', new: '/dev/sdg' }], ['storage.check_health', {}],
         ['pools.add_group', { name: 'tank', devices: %w[/dev/sdg /dev/sdh /dev/sdi] }], ['storage.check_health', {}],
-        ['pools.destroy', { name: 'tank', confirm: 'tank' }], ['storage.check_health', {}]
+        ['pools.destroy', { name: 'tank', confirm: 'tank' }], ['storage.check_health', {}],
+        ['pools.erase_drive', { device: '/dev/sdg' }], ['storage.check_health', {}]
       ])
     end
 

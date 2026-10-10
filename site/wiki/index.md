@@ -20,6 +20,7 @@ web UI to manage it all, from one install command.
 | [Getting Started](getting-started) | Installing, the setup wizard, system requirements |
 | [File Sharing](file-sharing) | Shares, per-user permissions, the web file browser, Samba |
 | [Storage Pooling](storage-pooling) | Adding drives safely, Greyhole, copies per share |
+| [ZFS Pools](zfs-pools) | Pools across matched drives, replacing a drive, snapshots, drive health |
 | [Docker Apps](docker-apps) | The app catalog, installing apps, their ports and data |
 | [Making Apps](making-apps) | Packaging an app of your own for the catalog |
 | [Remote Access](remote-access) | Cloudflare Tunnel and Tailscale |
@@ -40,6 +41,7 @@ Amahi-kai runs as a systemd service (`amahi-kai.service`, Puma on port 3000) as 
 - **Docker** (optional) for apps
 - **Avahi** for announcing the apps on your LAN (mDNS)
 - **Greyhole** (optional) for storage pooling
+- **ZFS** (optional) for pools of matched drives, with snapshots
 - **dnsmasq** (optional) for local DNS and DHCP
 - **Cloudflare Tunnel** and **Tailscale** (optional) for remote access
 
@@ -51,6 +53,7 @@ Amahi-kai runs as a systemd service (`amahi-kai.service`, Puma on port 3000) as 
 | `/etc/amahi-kai/amahi.env` | Configuration (database, secret key) |
 | `/var/lib/amahi-kai/files` | Default folder for shares |
 | `/mnt/<name>` | Data drives |
+| `/srv/pools/<name>` | ZFS pools |
 | `/var/lib/amahi-kai/apps` | Docker app data, a folder per app |
 | `/var/lib/amahi-kai/backups` | Database backups taken before each update (the last 3) |
 | `/var/log/amahi-kai/helper.log` | Every root action, one line each |
@@ -66,6 +69,8 @@ systemctl status smbd nmbd                         # Samba
 systemctl list-timers amahi-kai-update-check.timer # update check (Amahi-kai and its apps), every 6 hours
 systemctl list-timers amahi-kai-indexer.timer      # file search index, every 10 minutes
 systemctl list-timers amahi-kai-trash.timer        # the Trash: deletes what's been kept too long, daily
+systemctl list-timers amahi-kai-snapshots.timer    # ZFS pool snapshots, every hour
+systemctl list-timers amahi-kai-storage-check.timer # pool and drive health, every 15 minutes
 ```
 
 **Settings → Servers** in the web UI shows each service's status, version and uptime, with

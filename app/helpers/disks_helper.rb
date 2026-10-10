@@ -57,7 +57,8 @@ module DisksHelper
     when :in_use then 'In use (LVM, RAID or encryption)'
     when :pool then "ZFS pool #{drive[:pool]}"
     when :offline then "ZFS pool #{drive[:pool]} (offline)"
-    when :old_zfs then "Free: has an old ZFS label (pool #{drive[:pool]}, not on this server), which a new pool erases"
+    when :left_pool then "Free: replaced out of the pool #{drive[:pool]}, with its old ZFS label still on it"
+    when :old_zfs then "Free: has an old ZFS label (pool #{drive[:pool]}, not on this server)"
     else 'Free'
     end
   end

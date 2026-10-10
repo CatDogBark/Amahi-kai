@@ -41,10 +41,10 @@ Amahi-kai has two kinds of storage, and each drive belongs to one of them.
 | Snapshots | No | Hourly and daily, to roll back to |
 | Checks | Greyhole's own | Scrubs and drive health (SMART) |
 
-ZFS pools are on **Disks → ZFS Pools**. A share can live on one: choose the pool under **Where**
-when you make it (see [File Sharing](file-sharing#where-a-share-lives)). It's never also a
-Greyhole share: ZFS keeps it safe. The pools get their own page here once they've been tested on
-real drives.
+ZFS pools are on **Disks → ZFS Pools** (see [ZFS Pools](zfs-pools)). A share can live on one:
+choose the pool under **Where** when you make it (see
+[File Sharing](file-sharing#where-a-share-lives)). It's never also a Greyhole share: ZFS keeps it
+safe.
 
 ---
 

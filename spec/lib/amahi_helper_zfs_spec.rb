@@ -551,6 +551,26 @@ RSpec.describe 'AmahiHelper ZFS pools' do
       expect(refusal('pools.online_drive', { 'name' => 'nope', 'drive' => '/dev/disk/by-id/ata-SSD_9-part1' })).to eq(%(there's no pool named "nope"))
     end
 
+    it "erases the old ZFS label on a free disk, and only on one" do
+      left = { 'path' => '/dev/sdi', 'type' => 'disk', 'mountpoints' => [nil],
+               'children' => [{ 'path' => '/dev/sdi1', 'type' => 'part', 'fstype' => 'zfs_member', 'label' => 'old', 'mountpoints' => [nil] },
+                              { 'path' => '/dev/sdi9', 'type' => 'part', 'mountpoints' => [nil] }] }
+      allow(helper).to receive(:block_tree).and_return(tree + [left])
+      expect(steps('pools.erase_drive', { 'device' => '/dev/sdi' })).to eq(
+        [['/usr/sbin/zpool', 'labelclear', '-f', '/dev/sdi1', { allow_failure: true }],
+         %w[/usr/sbin/wipefs -a /dev/sdi1], %w[/usr/sbin/wipefs -a /dev/sdi9], %w[/usr/sbin/wipefs -a /dev/sdi],
+         ['/usr/bin/udevadm', 'settle', { allow_failure: true }], [:pool_status]]
+      )
+      erase = ->(device) { refusal('pools.erase_drive', { 'device' => device }) }
+      expect(erase.call('/dev/sdh')).to eq('/dev/sdh is in the pool old')
+      expect(erase.call('/dev/sdd')).to eq('/dev/sdd has no ZFS label to erase')
+      expect(erase.call('/dev/sda')).to include('a disk the system uses')
+      expect(erase.call('/dev/sdg')).to include('which is in use')
+      expect(erase.call('/dev/sdi1')).to eq('"/dev/sdi1" is not a whole disk')
+      allow(helper).to receive(:offline_devices).and_return('/dev/sdi1' => 'away')
+      expect(erase.call('/dev/sdi')).to include('is in the pool away, which is offline')
+    end
+
     it "refuses a drive that isn't in the pool, and a new one that isn't free" do
       replace = ->(old, new) { refusal('pools.replace', { 'name' => 'old', 'old' => old, 'new' => new }) }
       expect(replace.call('/dev/sdc1', '/dev/sdd')).to eq('"/dev/sdc1" isn\'t a drive in the pool old')
