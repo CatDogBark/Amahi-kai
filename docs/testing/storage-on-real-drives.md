@@ -218,7 +218,8 @@ Use the other two SSDs (here `/dev/sdd` and `/dev/sde`).
 
 - [ ] **Replace a drive** (needs a spare drive at least as big as the SSDs): **Replace** on a pool
   drive, choose the spare, tick erase. The resilver runs with the pool still usable, and the old
-  drive leaves the pool.
+  drive leaves the pool: it shows as **Free: replaced out of the pool**, with **Erase**, which
+  clears its old ZFS label so Disks → Devices can use it for share storage.
 - [ ] **Grow the pool** (needs 4 more drives): **Add drives** offers one more 4-drive RAIDZ1 group
   and shows the space it adds. After it's added, the pool is **RAIDZ1 · 8 drives**, with about
   twice the space.

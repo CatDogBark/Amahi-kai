@@ -19,6 +19,9 @@ module StoragePools
 
   class Error < StandardError; end
 
+  # The roles (StoragePools.drives) of a free disk with an old ZFS label on it, which Erase clears.
+  OLD_LABEL = %i[left_pool old_zfs].freeze
+
   # The layouts a new pool may have (the helper's POOL_LAYOUTS). parity: drives that may
   # fail in a RAIDZ group; pairs: striped mirrors take drives two by two.
   LAYOUTS = [
@@ -190,8 +193,9 @@ module StoragePools
     # Every whole disk, with what it's used for (:role) and whether a new pool may take it
     # (:free). Roles: :os (the system runs from it), :share (mounted as share storage),
     # :in_use (mounted elsewhere, or LVM, RAID or encryption on it), :pool (in an imported
-    # pool), :offline (in a pool taken offline here), :old_zfs (a ZFS label from a pool that
-    # isn't on this server; a new pool erases it), :free.
+    # pool), :offline (in a pool taken offline here), :left_pool (replaced out of a pool here,
+    # its old ZFS label still on it), :old_zfs (a ZFS label from a pool that isn't on this
+    # server), :free. A new pool, or Erase, clears an old label.
     def drives(pools = [], offline = [])
       lsblk.select { |d| d['type'] == 'disk' }.map do |disk|
         nodes = subtree(disk)
@@ -204,12 +208,13 @@ module StoragePools
                elsif nodes.any? { |n| !%w[disk part].include?(n['type']) } then :in_use
                elsif away then :offline
                elsif pool then :pool
+               elsif label && pools.any? { |p| p.name == label } then :left_pool
                elsif label then :old_zfs
                else :free
                end
         { path: disk['path'], model: disk['model'].to_s.strip.presence, serial: disk['serial'], size: disk['size'].to_i,
           ssd: [false, '0', 0].include?(disk['rota']), role: role, pool: pool || label, mounts: mounts,
-          free: %i[free old_zfs].include?(role) }
+          free: OLD_LABEL.include?(role) || role == :free }
       end
     end
 
@@ -276,6 +281,11 @@ module StoragePools
     # disk is connected again; ZFS resilvers it.
     def online_drive!(name:, drive:)
       changed { privileged('pools.online_drive', name: name.to_s, drive: drive.to_s) }
+    end
+
+    # Erases the old ZFS label on a free disk (+device+: /dev/sdg), so share storage can use it too.
+    def erase_drive!(device)
+      changed { privileged('pools.erase_drive', device: device.to_s) }
     end
 
     # Replaces a pool's drive (+old+: its name in the pool's status) with a free disk.

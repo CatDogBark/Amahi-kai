@@ -42,7 +42,7 @@ places are refused.
 | --- | --- | --- |
 | System disk | In the share's own folder on the NAS's disk (`/var/lib/amahi-kai/files/<name>`) | Nothing more |
 | Greyhole pool | On the share drives, with links in its folder; offered once the Greyhole pool has drives | Copies on two drives (its **Pool copies**, see [Storage Pooling](storage-pooling)) |
-| A ZFS pool | In the pool's shares folder (`/srv/pools/<pool>/shares/<name>`); offered once a pool exists | The pool's redundancy and snapshots |
+| A ZFS pool | In the pool's shares folder (`/srv/pools/<pool>/shares/<name>`); offered once a pool exists | The pool's redundancy and snapshots (see [ZFS Pools](zfs-pools)) |
 
 A share on the system disk can join the Greyhole pool later, and leave it, with **Pool copies**. A
 share on a ZFS pool stays on that pool: to move it, make a new share and copy the files across.

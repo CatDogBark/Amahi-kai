@@ -18,7 +18,7 @@ RSpec.describe 'ZFS pools', type: :request do
 
   def drive(path, role, **extra)
     { path: path, model: 'Samsung SSD 870 EVO 1TB', serial: "S#{path[-1]}", size: 1_000_204_886_016, ssd: true, role: role,
-      pool: nil, mounts: [], free: %i[free old_zfs].include?(role) }.merge(extra)
+      pool: nil, mounts: [], free: %i[free left_pool old_zfs].include?(role) }.merge(extra)
   end
 
   let(:drives) do
@@ -141,6 +141,20 @@ RSpec.describe 'ZFS pools', type: :request do
       post '/disks/online_pool_drive', params: { name: 'tank', drive: back }, as: :json
       expect(response.parsed_body).to eq('status' => 'ok')
       expect(Privileged.calls).to include(['pools.online_drive', { name: 'tank', drive: back }])
+    end
+
+    it "offers Erase for a free drive with an old ZFS label, and erases it through the helper" do
+      stub_pools(installed: true, pools: [pool], drives: drives + [drive('/dev/sdg', :left_pool, pool: 'tank')])
+      get '/disks/pools'
+      buttons = page.css('[data-storage-post="/disks/erase_pool_drive"]')
+      expect(buttons.map { |b| b['data-drive'] }).to eq(%w[/dev/sdf /dev/sdg]) # not free, in a pool or empty drives
+      expect(buttons.last['data-confirm']).to include('Erase /dev/sdg?', '(pool tank)')
+      row = page.css('#pool-drives tbody tr').find { |tr| tr.text.include?('/dev/sdg') }
+      expect(row.css('td')[4].text.squish).to eq('Free: replaced out of the pool tank, with its old ZFS label still on it Erase')
+
+      post '/disks/erase_pool_drive', params: { drive: '/dev/sdg' }, as: :json
+      expect(response.parsed_body).to eq('status' => 'ok')
+      expect(Privileged.calls).to include(['pools.erase_drive', { device: '/dev/sdg' }])
     end
 
     it 'replaces a drive, adds drives and deletes a pool through the helper' do

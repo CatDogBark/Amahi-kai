@@ -116,6 +116,7 @@ Rails.application.routes.draw do
     post 'scrub_pool', action: 'scrub_pool'
     post 'replace_pool_drive', action: 'replace_pool_drive'
     post 'online_pool_drive', action: 'online_pool_drive'
+    post 'erase_pool_drive', action: 'erase_pool_drive'
     post 'add_pool_group', action: 'add_pool_group'
     post 'destroy_pool', action: 'destroy_pool'
     post 'pool_offline', action: 'pool_offline'

@@ -239,7 +239,16 @@
                 <td class="text-nowrap"><label for="pool-drive-<%= File.basename(drive[:path]) %>"><code><%= drive[:path] %></code></label></td>
                 <td><%= [drive[:model], drive[:serial]].compact.join(' · ').presence || '—' %></td>
                 <td class="text-nowrap"><%= number_to_human_size(drive[:size]) %><%= ' SSD' if drive[:ssd] %></td>
-                <td><%= drive_role(drive) %></td>
+                <td>
+                  <%= drive_role(drive) %>
+                  <%# Share storage won't take a disk with a ZFS label; a new pool erases it itself %>
+                  <% if @status[:installed] && StoragePools::OLD_LABEL.include?(drive[:role]) %>
+                    <button type="button" class="btn btn-sm btn-outline-warning ms-2" data-storage-post="<%= disks_erase_pool_drive_path %>"
+                            data-drive="<%= drive[:path] %>" id="erase-<%= File.basename(drive[:path]) %>"
+                            data-confirm="Erase <%= drive[:path] %>? This clears its old ZFS label (pool <%= drive[:pool] %>) and everything else on the drive, so it shows as Free and share storage can use it too."
+                            data-tip="Clears the old ZFS label, so Disks → Devices can use it for share storage">Erase</button>
+                  <% end %>
+                </td>
                 <td class="small"><%= drive_health(@health, drive[:path], model: drive[:model]) %></td>
               </tr>
             <% end %>
