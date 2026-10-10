@@ -14,6 +14,16 @@ RSpec.describe 'Settings', type: :system do
     expect(Privileged.calls.map(&:first)).not_to include('system.update')
   end
 
+  # Their confirmations were inline onsubmit scripts, which the Content-Security-Policy refuses:
+  # the forms went with no question asked (Servers' Restart and Stop too; no_inline_handlers_spec).
+  it "asks before powering off or rebooting, and Cancel sends nothing" do
+    sign_in_as_admin
+    visit '/settings'
+    dismiss_confirm(/This will power off your server/) { click_button 'Power off' }
+    dismiss_confirm(/This will reboot your server/) { click_button 'Reboot' }
+    expect(Privileged.calls.map(&:first)).not_to include('system.poweroff', 'system.reboot')
+  end
+
   it "opens System Dependencies' window for Check now, streams to the end, and Close & Refresh reloads" do
     sign_in_as_admin
     visit '/settings/dependencies'

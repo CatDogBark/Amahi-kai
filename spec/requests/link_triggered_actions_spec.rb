@@ -44,7 +44,11 @@ RSpec.describe "Link-triggered actions", type: :request do
     it "renders power off and reboot as confirmed POST buttons" do
       get settings_index_path
       expect(response.body).to include('action="/settings/poweroff"', 'action="/settings/reboot"')
-      expect(response.body).to include('onsubmit="return confirm(')
+      page = Nokogiri::HTML(response.body)
+      # Asked by the page's own script (lib/application.js): an inline onsubmit is refused by the CSP
+      expect(page.at_css('#btn-poweroff')['data-confirm']).to include('This will power off your server.')
+      expect(page.at_css('#btn-reboot')['data-confirm']).to include('This will reboot your server.')
+      expect(response.body).not_to include('onsubmit=')
     end
   end
 

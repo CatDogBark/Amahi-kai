@@ -14,10 +14,10 @@ div.settings-fields.settings-wrap.bg-white.p-2
     legend
       = t 'system_info'
     div.settings-actions.d-flex.gap-2
-      = button_to settings_poweroff_path, id: 'btn-poweroff', class: 'btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1', form: { onsubmit: "return confirm(#{t('this_will_power_off').to_json})" } do
+      = button_to settings_poweroff_path, id: 'btn-poweroff', class: 'btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1', data: { confirm: t('this_will_power_off') } do
         = lucide_icon('power', size: 16)
         = t('poweroff')
-      = button_to settings_reboot_path, id: 'btn-reboot', class: 'btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1', form: { onsubmit: "return confirm(#{t('this_will_reboot').to_json})" } do
+      = button_to settings_reboot_path, id: 'btn-reboot', class: 'btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1', data: { confirm: t('this_will_reboot') } do
         = lucide_icon('refresh-cw', size: 16)
         = t('reboot')
     div.settings-fields#info-table
