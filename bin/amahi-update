@@ -328,6 +328,12 @@ mount -a 2>&1 || log "⚠ Some mounts may have failed — check 'mount -a' manua
 # Data drives and the share root mounted nosuid,nodev (fstab lines from before get the options)
 reply=$(/usr/local/sbin/amahi-helper disks.secure_mounts </dev/null 2>/dev/null) \
   || log "⚠ Couldn't set nosuid,nodev on the data drives and share root: $reply"
+# ZFS's memory cache cap (2 GB, or half the memory on a smaller NAS) follows the memory there is
+# now: it was worked out only when ZFS was installed, so memory added since wasn't counted.
+if [[ -x /usr/sbin/zpool ]]; then
+  reply=$(/usr/local/sbin/amahi-helper zfs.setup </dev/null 2>/dev/null) \
+    || log "⚠ Couldn't set ZFS's memory cache cap: $reply"
+fi
 
 # 6. Restart the app and check that it answers. Inside amahi-kai.service the restart ends
 #    this script, so it's the last thing it does there.

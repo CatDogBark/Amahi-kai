@@ -92,6 +92,11 @@ RSpec.describe 'install and update scripts' do
     expect(text).to include('flock -w 90 9', 'refresh_update_status')
   end
 
+  it "works out ZFS's memory cache cap again at every update, when ZFS is installed" do
+    text = File.read(Rails.root.join('bin/amahi-update'))
+    expect(text).to include("if [[ -x /usr/sbin/zpool ]]; then\n  reply=$(/usr/local/sbin/amahi-helper zfs.setup </dev/null 2>/dev/null)")
+  end
+
   it 'pulls as root without hooks or an fsmonitor command from the checkout' do
     text = File.read(Rails.root.join('bin/amahi-update'))
     expect(text).to include('git -c core.hooksPath=/dev/null -c core.fsmonitor=false "$@"')
