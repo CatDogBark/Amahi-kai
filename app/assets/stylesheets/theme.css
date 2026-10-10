@@ -624,6 +624,11 @@ body:has(> #footer) > #footer {
 .pool-card > .table > :not(caption) > * > :last-child,
 #pool-drives > :not(caption) > * > :last-child { padding-right: 1rem; }
 
+/* Settings → Jobs and Servers: the name and its line keep room to read in a narrower window;
+   the times and buttons beside them don't take it all (the table scrolls sideways before it
+   squeezes the names to a word a line). */
+#jobs-table td:first-child, .servers-table td:first-child { min-width: 14rem; }
+
 /* The same for Users: each user's row is a table of its own, so the columns are fixed to line up */
 #users-table table.settings {
   table-layout: fixed;

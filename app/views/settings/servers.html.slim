@@ -51,10 +51,10 @@
               td.text-end.text-nowrap
                 - if svc.actions.any? && svc.installed?
                   - if svc.running?
-                    = button_to settings_service_action_path(svc.key, 'restart'), class: 'btn btn-sm btn-outline-primary me-1', form_class: 'd-inline', form: { onsubmit: "return confirm(#{"Restart #{svc.name}?".to_json})" } do
+                    = button_to settings_service_action_path(svc.key, 'restart'), class: 'btn btn-sm btn-outline-primary me-1', form_class: 'd-inline', data: { confirm: "Restart #{svc.name}?" } do
                       = lucide_icon('refresh-cw', size: 14)
                       |  Restart
-                    = button_to settings_service_action_path(svc.key, 'stop'), class: 'btn btn-sm btn-outline-danger', form_class: 'd-inline', form: { onsubmit: "return confirm(#{"Stop #{svc.name}?".to_json})" } do
+                    = button_to settings_service_action_path(svc.key, 'stop'), class: 'btn btn-sm btn-outline-danger', form_class: 'd-inline', data: { confirm: "Stop #{svc.name}?" } do
                       = lucide_icon('square', size: 14)
                       |  Stop
                   - else
