@@ -1591,7 +1591,18 @@ module AmahiHelper
       raise Refused, "#{drive} is #{leaf['state']}, in the pool already" unless OUT_OF_POOL.include?(leaf['state'])
       raise Refused, "#{drive} isn't connected: connect it again, or replace it" unless leaf['device'] && File.exist?(drive)
 
-      { name: name, drive: drive }
+      { name: name, drive: whole_disk_of(drive) }
+    end
+
+    # zpool online grows a drive to fill its disk when the pool has autoexpand on, which needs
+    # the disk: given the partition ZFS made on it (<disk>-part1, beside its -part9), it can't
+    # read the disk's size ("cannot relabel ... unable to read disk capacity"). zpool finds the
+    # drive by its disk just the same. Any other path is passed as it is.
+    def whole_disk_of(path)
+      disk = path.delete_suffix('-part1')
+      return path if disk == path || !File.exist?(disk) || !File.exist?("#{disk}-part9")
+
+      disk
     end
 
     def add_group_request(name, devices)

@@ -534,6 +534,13 @@ RSpec.describe 'AmahiHelper ZFS pools' do
       allow(File).to receive(:exist?).with('/dev/disk/by-id/ata-SSD_9-part1').and_return(true)
       expect(steps('pools.online_drive', { 'name' => 'old', 'drive' => '/dev/disk/by-id/ata-SSD_9-part1' }))
         .to eq([['/usr/sbin/zpool', 'online', 'old', '/dev/disk/by-id/ata-SSD_9-part1'], [:pool_status]])
+      # A whole disk ZFS partitioned (-part1 and -part9): zpool online gets the disk, whose size it
+      # reads to grow the drive with autoexpand on
+      allow(File).to receive(:exist?).with('/dev/disk/by-id/ata-SSD_9').and_return(true)
+      allow(File).to receive(:exist?).with('/dev/disk/by-id/ata-SSD_9-part9').and_return(true)
+      expect(steps('pools.online_drive', { 'name' => 'old', 'drive' => '/dev/disk/by-id/ata-SSD_9-part1' }).first)
+        .to eq(['/usr/sbin/zpool', 'online', 'old', '/dev/disk/by-id/ata-SSD_9'])
+      allow(File).to receive(:exist?).with('/dev/disk/by-id/ata-SSD_9').and_return(false)
 
       online = ->(drive) { refusal('pools.online_drive', { 'name' => 'old', 'drive' => drive }) }
       expect(online.call('/dev/disk/by-id/ata-SSD_8-part1')).to eq('/dev/disk/by-id/ata-SSD_8-part1 is ONLINE, in the pool already')
