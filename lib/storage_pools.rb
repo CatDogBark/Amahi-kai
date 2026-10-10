@@ -228,6 +228,12 @@ module StoragePools
       changed { privileged('pools.create', name: name.to_s.strip, layout: layout, devices: devices.map(&:to_s)) }
     end
 
+    # Brings back a pool's drive ZFS took out (+drive+: its name in the pool's status) once its
+    # disk is connected again; ZFS resilvers it.
+    def online_drive!(name:, drive:)
+      changed { privileged('pools.online_drive', name: name.to_s, drive: drive.to_s) }
+    end
+
     # Replaces a pool's drive (+old+: its name in the pool's status) with a free disk.
     def replace!(name:, old:, new:)
       raise Error, 'Choose the new drive' if new.blank?

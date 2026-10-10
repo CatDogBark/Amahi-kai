@@ -638,6 +638,15 @@ module AmahiHelper
     # Replaces one of a pool's drives (old: its name in `zpool status -P`, a path or, for a
     # missing drive, a number) with a free whole disk, wiped first. ZFS copies the pool's
     # data onto it (a resilver) and keeps using the old drive, if it's there, until done.
+    # Brings a pool's drive that ZFS has taken out (REMOVED, OFFLINE, FAULTED or UNAVAIL) back
+    # into it (zpool online) once its disk is connected again: a reseated cable, a drive that
+    # dropped out for a moment. ZFS then resilvers what changed while it was out. A drive that
+    # isn't connected is refused (a dead one is replaced instead).
+    'pools.online_drive' => {
+      params: %w[name drive],
+      validate: ->(a) { online_drive_request(a['name'], a['drive']) },
+      plan: ->(v) { [[ZPOOL, 'online', v[:name], v[:drive]], [:pool_status]] }
+    },
     'pools.replace' => {
       params: %w[name old new],
       validate: ->(a) { replace_request(a['name'], a['old'], a['new']) },
@@ -1568,6 +1577,21 @@ module AmahiHelper
       raise Refused, "#{old.inspect} isn't a drive in the pool #{name}" unless leaves.any? { |leaf| leaf['name'] == old }
       path, node = pool_disk(new, block_tree, pooled_devices)
       { name: name, old: old, new: stable_path(path), wipe: wipe_targets(node) }
+    end
+
+    # The states ZFS puts a drive in when it's out of its pool.
+    OUT_OF_POOL = %w[REMOVED OFFLINE FAULTED UNAVAIL].freeze
+
+    def online_drive_request(name, drive)
+      installed!(ZPOOL)
+      name = existing_pool(name)
+      drive = string(drive, 'drive', max: 256)
+      leaf = pool_leaves(pool_vdevs(name)).find { |row| row['name'] == drive }
+      raise Refused, "#{drive.inspect} isn't a drive in the pool #{name}" unless leaf
+      raise Refused, "#{drive} is #{leaf['state']}, in the pool already" unless OUT_OF_POOL.include?(leaf['state'])
+      raise Refused, "#{drive} isn't connected: connect it again, or replace it" unless leaf['device'] && File.exist?(drive)
+
+      { name: name, drive: drive }
     end
 
     def add_group_request(name, devices)

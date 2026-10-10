@@ -159,7 +159,14 @@
               <td class="text-end"><%= [drive['read'], drive['write'], drive['cksum']].map { |n| n || '—' }.join(' / ') %></td>
               <td class="text-end">
                 <% label = disk ? "#{disk} (#{pool_drive_id(drive['name'])})" : "the missing drive (#{drive['note'] || drive['name']})" %>
-                <button type="button" class="btn btn-sm <%= drive['state'] == 'ONLINE' ? 'btn-outline-secondary' : 'btn-warning' %>"
+                <%# Out of the pool but connected again (a reseated cable): it can come back as it is %>
+                <% back = %w[REMOVED OFFLINE FAULTED UNAVAIL].include?(drive['state']) && drive['name'].to_s.start_with?('/dev/') && File.exist?(drive['name']) %>
+                <% if back %>
+                  <button type="button" class="btn btn-sm btn-success me-1" data-storage-post="<%= disks_online_pool_drive_path %>"
+                          data-name="<%= pool.name %>" data-drive="<%= drive['name'] %>" id="online-<%= pool.name %>-<%= File.basename(disk.to_s) %>"
+                          data-tip="It's connected again: ZFS takes it back and copies what changed while it was out">Bring online</button>
+                <% end %>
+                <button type="button" class="btn btn-sm <%= drive['state'] == 'ONLINE' || back ? 'btn-outline-secondary' : 'btn-warning' %>"
                         data-pool-dialog="replace" data-name="<%= pool.name %>" data-old="<%= drive['name'] %>" data-old-label="<%= label %>">Replace</button>
               </td>
             </tr>
