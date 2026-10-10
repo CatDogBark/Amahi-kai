@@ -666,7 +666,8 @@ module AmahiHelper
       params: %w[name confirm],
       validate: ->(a) { destroy_request(a['name'], a['confirm']) },
       plan: lambda { |v|
-        [[ZPOOL, 'destroy', v[:name]],
+        [[:release_pool, v[:name]],
+         [ZPOOL, 'destroy', v[:name]],
          *v[:members].map { |part| [ZPOOL, 'labelclear', '-f', part, { allow_failure: true }] },
          *v[:wipe].map { |device| [WIPEFS, '-a', device, { allow_failure: true }] },
          ['/usr/bin/udevadm', 'settle', { allow_failure: true }],
@@ -2850,6 +2851,65 @@ module AmahiHelper
       { 'rolled_back' => rolled }
     end
 
+    # A pool taken offline or destroyed is unmounted, which ZFS refuses while anything has a folder
+    # or file open on it ("pool or dataset is busy"). The Samba sessions holding it (a computer
+    # connected to a share whose folder is, or was, on the pool) are ended: asked to stop, then
+    # made to after USER_STOP_SECONDS; those computers reconnect to the other shares by themselves.
+    # Anything else holding it is named, and nothing is taken offline.
+    def do_release_pool(name)
+      root = "#{pool_root}/#{name}"
+      sessions = pool_holders(root).select { |holder| samba_session?(holder) }
+      sessions.each { |holder| signal_process(holder[:pid], 'TERM') }
+      deadline = monotonic_now + USER_STOP_SECONDS
+      pause(0.2) while sessions.any? { |holder| process_alive?(holder[:pid]) } && monotonic_now < deadline
+      sessions.each { |holder| signal_process(holder[:pid], 'KILL') if process_alive?(holder[:pid]) }
+      others = pool_holders(root).reject { |holder| samba_session?(holder) }
+      return nil if others.empty?
+
+      named = others.map { |holder| "#{holder[:comm]} (process #{holder[:pid]})" }.uniq
+      raise Failed, "#{name} is in use by #{named.join(', ')}: stop #{named.size == 1 ? 'it' : 'them'} first"
+    end
+
+    # The processes with a folder or file open on +root+, as their working folder, their root or an
+    # open file: [{ pid:, comm:, ppid: }].
+    def pool_holders(root)
+      Dir.glob('/proc/[0-9]*').filter_map do |dir|
+        links = ["#{dir}/cwd", "#{dir}/root", *Dir.glob("#{dir}/fd/*")]
+        next unless links.any? { |link| on_path?(read_link(link), root) }
+
+        stat = File.read("#{dir}/stat") # pid (comm) state ppid ...: comm may hold ") "
+        { pid: File.basename(dir).to_i, comm: File.read("#{dir}/comm").strip, ppid: stat[(stat.rindex(')') + 2)..].split[1].to_i }
+      rescue SystemCallError
+        nil # gone meanwhile
+      end
+    end
+
+    def read_link(link)
+      File.readlink(link)
+    rescue SystemCallError
+      nil
+    end
+
+    def on_path?(target, root)
+      !target.nil? && (target == root || target.start_with?("#{root}/"))
+    end
+
+    # One computer's SMB session: an smbd started by Samba's own smbd, never that one (whose
+    # parent is init).
+    def samba_session?(holder)
+      holder[:comm] == 'smbd' && holder[:ppid] > 1
+    end
+
+    def signal_process(pid, signal)
+      Process.kill(signal, pid)
+    rescue SystemCallError
+      nil # gone meanwhile
+    end
+
+    def process_alive?(pid)
+      File.exist?("/proc/#{pid}")
+    end
+
     # Makes the pool's shares dataset if it has none (it mounts at POOL_ROOT/<pool>/shares, the
     # pool's own mount point inherited), and checks it's mounted there before the share folders
     # go in it.
@@ -2877,6 +2937,7 @@ module AmahiHelper
     end
 
     def do_export_pool(name, guid)
+      do_release_pool(name)
       capture([ZPOOL, 'export', name])
       records = offline_records.merge(name => guid)
       do_make_dir(File.dirname(OFFLINE_POOLS), '0755')

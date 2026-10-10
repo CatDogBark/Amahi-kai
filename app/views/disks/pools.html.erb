@@ -50,7 +50,7 @@
                     data-parity="<%= shape.first == 'mirror' ? shape.last - 1 : layout[:parity] %>">Add drives</button>
           <% end %>
           <button type="button" class="btn btn-sm btn-outline-secondary" data-storage-post="<%= disks_pool_offline_path %>" data-name="<%= pool.name %>"
-                  data-confirm="Take the pool <%= pool.name %> offline? Its files at <%= pool.mountpoint %> are out of reach until you bring it back online, and it stays offline after a restart. Its drives stay its own."
+                  data-confirm="Take the pool <%= pool.name %> offline? Its files at <%= pool.mountpoint %> are out of reach until you bring it back online, and it stays offline after a restart. Its drives stay its own. Computers with its files open over the network are disconnected first."
                   data-tip="Unmount it and stop using it, keeping everything on its drives">Take offline</button>
           <button type="button" class="btn btn-sm btn-outline-danger" data-pool-dialog="destroy" data-name="<%= pool.name %>">Delete pool</button>
           <%= pool_state_badge(pool.health) %>

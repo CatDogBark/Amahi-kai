@@ -358,6 +358,53 @@ RSpec.describe 'AmahiHelper ZFS pools' do
     end
   end
 
+  # Taking a pool offline or destroying it unmounts it: the Samba sessions holding it end first,
+  # and anything else holding it is named.
+  describe 'releasing a pool' do
+    let(:root) { "#{dir}/pools/old" }
+
+    it "ends the Samba sessions holding the pool, asked first, and names anything else" do
+      allow(helper).to receive(:pause)
+      allow(helper).to receive(:signal_process)
+      session = { pid: 4242, comm: 'smbd', ppid: 900 }
+      allow(helper).to receive(:pool_holders).with(root).and_return([session], [])
+      allow(helper).to receive(:process_alive?).with(4242).and_return(true, false)
+      expect(helper.do_release_pool('old')).to be_nil
+      expect(helper).to have_received(:signal_process).with(4242, 'TERM').once
+      expect(helper).not_to have_received(:signal_process).with(4242, 'KILL')
+
+      # Samba's own smbd (its parent is init) and a shell are named, not ended
+      allow(helper).to receive(:pool_holders).with(root).and_return([{ pid: 1, comm: 'smbd', ppid: 1 }, { pid: 77, comm: 'bash', ppid: 70 }])
+      expect { helper.do_release_pool('old') }.to raise_error(AmahiHelper::Failed, 'old is in use by smbd (process 1), bash (process 77): stop them first')
+      expect(helper).not_to have_received(:signal_process).with(1, anything)
+    end
+
+    it "finds the processes with a folder or file open on the pool" do
+      Dir.mktmpdir do |procs|
+        FileUtils.mkdir_p(root)
+        { 10 => ["#{root}/shares/vault", nil, 'smbd', 900], 11 => ['/', "#{root}/shares/vault/a.jpg", 'smbd', 900],
+          12 => ['/home/troy', '/var/log/x', 'bash', 70], 13 => [root, nil, 'cool) prog', 5] }.each do |pid, (cwd, file, comm, ppid)|
+          FileUtils.mkdir_p("#{procs}/#{pid}/fd")
+          File.symlink(cwd, "#{procs}/#{pid}/cwd")
+          File.symlink(file, "#{procs}/#{pid}/fd/3") if file
+          File.write("#{procs}/#{pid}/comm", "#{comm}\n")
+          File.write("#{procs}/#{pid}/stat", "#{pid} (#{comm}) S #{ppid} 1 1 0")
+        end
+        allow(Dir).to receive(:glob).and_call_original
+        allow(Dir).to receive(:glob).with('/proc/[0-9]*').and_return(Dir.glob("#{procs}/*").sort)
+        expect(helper.pool_holders(root)).to eq([{ pid: 10, comm: 'smbd', ppid: 900 }, { pid: 11, comm: 'smbd', ppid: 900 },
+                                                 { pid: 13, comm: 'cool) prog', ppid: 5 }])
+      end
+    end
+
+    it "is done before the pool is taken offline" do
+      allow(helper).to receive(:do_release_pool).with('old').and_raise(AmahiHelper::Failed, 'old is in use by bash (process 77): stop it first')
+      allow(helper).to receive(:capture)
+      expect { helper.do_export_pool('old', '1') }.to raise_error(AmahiHelper::Failed, /in use by bash/)
+      expect(helper).not_to have_received(:capture).with(%w[/usr/sbin/zpool export old])
+    end
+  end
+
   describe 'taking a pool offline, and uninstalling ZFS' do
     let(:offline_file) { "#{dir}/offline-pools.json" }
 
@@ -512,7 +559,8 @@ RSpec.describe 'AmahiHelper ZFS pools' do
     it 'destroys a pool only when its name is typed again, then frees its drives' do
       expect(refusal('pools.destroy', { 'name' => 'old', 'confirm' => 'OLD' })).to eq("type the pool's name (old) to destroy it")
       expect(steps('pools.destroy', { 'name' => 'old', 'confirm' => 'old' })).to eq(
-        [%w[/usr/sbin/zpool destroy old],
+        [[:release_pool, 'old'], # SMB sessions holding it end first
+         %w[/usr/sbin/zpool destroy old],
          ['/usr/sbin/zpool', 'labelclear', '-f', '/dev/sdh1', { allow_failure: true }],
          ['/usr/sbin/zpool', 'labelclear', '-f', '/dev/sdz1', { allow_failure: true }],
          ['/usr/sbin/wipefs', '-a', '/dev/sdh1', { allow_failure: true }],
