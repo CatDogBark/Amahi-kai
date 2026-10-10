@@ -2,9 +2,10 @@
 <%= render 'shared/storage_alerts', health: @health %>
 <%# Above the panel: inside it, the panel's rounded, clipped corner cut the text off %>
 <p class="text-muted" id="zfs-pools-intro">
-  ZFS pools keep data safe across several drives, like RAID. They hold bitShare's data; SMB shares stay on
-  share storage (<a href="<%= disks_devices_path %>">Devices</a> and <a href="<%= disks_storage_pool_path %>">Greyhole Pool</a>).
-  Each drive belongs to one or the other.
+  ZFS pools keep data safe across several drives, like RAID. A share can live on one (choose the pool under
+  Where when you make it on <a href="<%= shares_path %>">Shares</a>), and bitShare keeps its data on one. Each drive
+  belongs either to a pool or to share storage (<a href="<%= disks_devices_path %>">Devices</a> and
+  <a href="<%= disks_storage_pool_path %>">Greyhole Pool</a>).
 </p>
 <div class="settings-table" id="zfs-pools">
 
@@ -63,7 +64,7 @@
         <% if pool.status %>
           <div class="alert alert-warning small">
             <%= pool.status %>
-            <% if pool.action %><br><strong>What to do:</strong> <%= pool.action %><% end %>
+            <% if (advice = pool.what_to_do) %><br><strong>What to do:</strong> <%= advice %><% end %>
           </div>
         <% end %>
         <% total = pool.used.to_i + pool.available.to_i %>
@@ -160,7 +161,7 @@
               <td class="text-end">
                 <% label = disk ? "#{disk} (#{pool_drive_id(drive['name'])})" : "the missing drive (#{drive['note'] || drive['name']})" %>
                 <%# Out of the pool but connected again (a reseated cable): it can come back as it is %>
-                <% back = %w[REMOVED OFFLINE FAULTED UNAVAIL].include?(drive['state']) && drive['name'].to_s.start_with?('/dev/') && File.exist?(drive['name']) %>
+                <% back = pool.connected_again?(drive) %>
                 <% if back %>
                   <button type="button" class="btn btn-sm btn-success me-1" data-storage-post="<%= disks_online_pool_drive_path %>"
                           data-name="<%= pool.name %>" data-drive="<%= drive['name'] %>" id="online-<%= pool.name %>-<%= File.basename(disk.to_s) %>"

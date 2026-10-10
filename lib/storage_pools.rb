@@ -36,6 +36,15 @@ module StoragePools
       health == 'ONLINE'
     end
 
+    # The states ZFS puts a drive in when it's out of its pool (the root helper's OUT_OF_POOL).
+    OUT_OF_POOL = %w[REMOVED OFFLINE FAULTED UNAVAIL].freeze
+
+    # A drive out of the pool whose disk is connected again (its /dev/disk/by-id path is back), so
+    # Bring online can take it back as it is.
+    def connected_again?(drive)
+      OUT_OF_POOL.include?(drive['state']) && drive['name'].to_s.start_with?('/dev/') && File.exist?(drive['name'])
+    end
+
     # "RAIDZ1", "Mirror", "Striped mirrors" (2 mirrors), or "Stripe" (drives on their own).
     def layout
       groups = vdevs.map { |v| v['name'].to_s[/\A(raidz\d|mirror|draid\d?)-\d+\z/, 1] }
@@ -48,6 +57,25 @@ module StoragePools
     # The pool's drives: [{ 'name' =>, 'device' =>, 'state' =>, 'read' =>, ... }].
     def drives
       leaves(vdevs)
+    end
+
+    # What to do about a pool that isn't healthy, in the page's own words rather than ZFS's
+    # zpool commands: a drive out of the pool comes back with Bring online once it's connected
+    # again, or is replaced. One missing since the pool was opened (ZFS names it by a number)
+    # can't be brought online by its disk, but the pool finds it again when the NAS restarts.
+    # Otherwise ZFS's own advice (nil when it has none).
+    def what_to_do
+      out = drives.select { |drive| OUT_OF_POOL.include?(drive['state']) }
+      return action if out.empty?
+
+      back, gone = out.partition { |drive| connected_again?(drive) }
+      unplugged, lost = gone.partition { |drive| drive['name'].to_s.start_with?('/dev/') }
+      [phrase(back, 'connected again: click Bring online on its row', 'connected again: click Bring online on their rows'),
+       phrase(unplugged, 'missing: connect it again and click Bring online, or Replace it with a free drive',
+              'missing: connect them again and click Bring online, or Replace them with free drives'),
+       phrase(lost, 'missing: connect it again and restart the NAS, or Replace it with a free drive',
+              'missing: connect them again and restart the NAS, or Replace them with free drives')]
+        .compact.join('. ') + '.'
     end
 
     # The kind and size of the pool's groups when they all match (['raidz1', 4]), else nil.
@@ -82,6 +110,22 @@ module StoragePools
 
     def leaves(rows)
       rows.flat_map { |row| row['children'].blank? ? [row] : leaves(row['children']) }
+    end
+
+    # "The drive SSD_2 is " + one, or "The drives … and … are " + many; nil for no drives.
+    def phrase(list, one, many)
+      return if list.empty?
+
+      names = list.map { |drive| drive_label(drive) }.to_sentence
+      list.size == 1 ? "The drive #{names} is #{one}" : "The drives #{names} are #{many}"
+    end
+
+    # A drive as the page's table names it (its model and serial, from the by-id name; a missing
+    # one's from ZFS's note, "was /dev/disk/by-id/…").
+    def drive_label(drive)
+      path = drive['name'].to_s.start_with?('/dev/') ? drive['name'] : drive['note'].to_s.delete_prefix('was ')
+      name = File.basename(path.to_s).sub(/\A(?:ata|nvme|scsi|wwn|virtio)-/, '').sub(/-part\d+\z/, '')
+      name.empty? ? drive['name'].to_s : name
     end
   end
 

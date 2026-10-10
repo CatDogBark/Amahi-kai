@@ -129,7 +129,8 @@ class StorageHealth
     path = '/disks/pools'
     list = []
     unless pool.healthy?
-      list << Alert.new(level: :danger, message: "Pool #{pool.name} is #{pool.health}#{": #{pool.action}" if pool.action}", path: path)
+      advice = pool.what_to_do
+      list << Alert.new(level: :danger, message: "Pool #{pool.name} is #{pool.health}#{". #{advice}" if advice}", path: path)
     end
     list << Alert.new(level: :danger, message: "Pool #{pool.name} has data errors: #{pool.data_errors}", path: path) if pool.data_errors
     pool.drives.each do |d|

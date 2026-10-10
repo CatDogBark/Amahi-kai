@@ -27,6 +27,39 @@ RSpec.describe StoragePools do
       expect(pool.data_errors).to be_nil
     end
 
+    it "says what to do about drives out of the pool in the page's words, not zpool commands" do
+      back = '/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsi6-part1'
+      unplugged = '/dev/disk/by-id/ata-SSD_3-part1'
+      allow(File).to receive(:exist?).and_call_original
+      allow(File).to receive(:exist?).with(back).and_return(true)
+      allow(File).to receive(:exist?).with(unplugged).and_return(false)
+      leaf = ->(name, state, **extra) { { 'name' => name, 'state' => state, 'children' => [] }.merge(extra) }
+      pool = lambda do |*leaves|
+        StoragePools::Pool.new(health: 'DEGRADED', action: "Online the device using 'zpool online' or replace the device with 'zpool replace'.",
+                               vdevs: [{ 'name' => 'raidz1-0', 'children' => [leaf.call('/dev/disk/by-id/ata-SSD_1-part1', 'ONLINE'), *leaves] }])
+      end
+      missing = leaf.call('1234', 'UNAVAIL', 'note' => 'was /dev/disk/by-id/ata-SSD_2-part1')
+
+      expect(pool.call(leaf.call(back, 'REMOVED')).what_to_do)
+        .to eq('The drive 0QEMU_QEMU_HARDDISK_drive-scsi6 is connected again: click Bring online on its row.')
+      expect(pool.call(leaf.call(unplugged, 'REMOVED')).what_to_do)
+        .to eq('The drive SSD_3 is missing: connect it again and click Bring online, or Replace it with a free drive.')
+      expect(pool.call(missing).what_to_do)
+        .to eq('The drive SSD_2 is missing: connect it again and restart the NAS, or Replace it with a free drive.')
+      expect(pool.call(leaf.call(back, 'FAULTED'), leaf.call(unplugged, 'OFFLINE'), missing).what_to_do)
+        .to eq('The drive 0QEMU_QEMU_HARDDISK_drive-scsi6 is connected again: click Bring online on its row. ' \
+               'The drive SSD_3 is missing: connect it again and click Bring online, or Replace it with a free drive. ' \
+               'The drive SSD_2 is missing: connect it again and restart the NAS, or Replace it with a free drive.')
+      expect(pool.call(missing, leaf.call('5678', 'UNAVAIL', 'note' => 'was /dev/disk/by-id/ata-SSD_4-part1')).what_to_do)
+        .to eq('The drives SSD_2 and SSD_4 are missing: connect them again and restart the NAS, or Replace them with free drives.')
+      expect(pool.call(leaf.call(back, 'REMOVED'))).to be_connected_again(leaf.call(back, 'REMOVED'))
+      expect(pool.call).not_to be_connected_again(leaf.call(back, 'ONLINE'))
+
+      # No drive out (a resilver, errors on a drive that's in): ZFS's own advice, or none.
+      expect(pool.call.what_to_do).to start_with('Online the device')
+      expect(StoragePools::Pool.new(vdevs: []).what_to_do).to be_nil
+    end
+
     it 'names each layout from its vdevs' do
       layout = ->(*names) { StoragePools::Pool.new(vdevs: names.map { |n| { 'name' => n, 'children' => [] } }).layout }
       expect(layout.call('mirror-0')).to eq('Mirror')

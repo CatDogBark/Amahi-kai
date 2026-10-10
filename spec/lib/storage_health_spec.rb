@@ -37,11 +37,16 @@ RSpec.describe StorageHealth do
     degraded['vdevs'][0]['children'][1]['cksum'] = '7'
     alerts = health(pools: [degraded]).alerts
     expect(alerts.map { |a| [a.level, a.message, a.path] }).to eq([
-      [:danger, "Pool tank is DEGRADED: Replace the device using 'zpool replace'.", '/disks/pools'],
+      [:danger, "Pool tank is DEGRADED. Replace the device using 'zpool replace'.", '/disks/pools'],
       [:danger, 'Pool tank has data errors: 3 data errors, use -v for a list', '/disks/pools'],
       [:warning, '/dev/sdd in pool tank has read/write/checksum errors (0 / 0 / 7)', '/disks/pools'],
       [:warning, 'The last scrub of tank repaired 12K of damaged data', '/disks/pools']
     ])
+    removed = pool(health: 'DEGRADED', action: "Online the device using 'zpool online'.")
+    removed['vdevs'][0]['children'][1].merge!('state' => 'REMOVED', 'device' => nil)
+    expect(health(pools: [removed]).alerts.first.message).to eq(
+      'Pool tank is DEGRADED. The drive S2 is missing: connect it again and click Bring online, or Replace it with a free drive.'
+    )
     unrepaired = pool(scan: 'scrub repaired 0B in 00:01:02 with 2 errors on Sun Oct  4 02:41:08 2026')
     expect(health(pools: [unrepaired]).alerts.sole.message).to eq("The last scrub of tank found 2 errors it couldn't repair")
     expect(health(pools: [pool(scan: 'scrub in progress since Sun Oct  4 10:00:00 2026')]).alerts).to be_empty
