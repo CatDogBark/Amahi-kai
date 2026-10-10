@@ -115,6 +115,29 @@ RSpec.describe 'ZFS pools', type: :request do
                                       ['storage.check_health', {}]])
     end
 
+    it "offers Bring online for a drive ZFS took out once it's connected again, and brings it back through the helper" do
+      back = '/dev/disk/by-id/ata-Samsung_SSD_870_S1-part1'
+      out = StoragePools::Pool.new(**pool.to_h, vdevs: [{ 'name' => 'raidz1-0', 'state' => 'DEGRADED', 'children' => [
+        { 'name' => back, 'device' => '/dev/sdc1', 'state' => 'REMOVED', 'read' => '0', 'write' => '0', 'cksum' => '0', 'children' => [] },
+        { 'name' => '1234', 'state' => 'UNAVAIL', 'note' => 'was /dev/disk/by-id/ata-Samsung_SSD_870_S2-part1',
+          'read' => '0', 'write' => '0', 'cksum' => '0', 'children' => [] }
+      ] }])
+      stub_pools(installed: true, pools: [out])
+      allow(File).to receive(:exist?).and_call_original
+      allow(File).to receive(:exist?).with(back).and_return(true)
+      get '/disks/pools'
+      buttons = page.css('[data-storage-post="/disks/online_pool_drive"]')
+      expect(buttons.map { |b| [b['data-name'], b['data-drive']] }).to eq([['tank', back]]) # not the missing one
+
+      allow(File).to receive(:exist?).with(back).and_return(false)
+      get '/disks/pools'
+      expect(page.css('[data-storage-post="/disks/online_pool_drive"]')).to be_empty # not connected
+
+      post '/disks/online_pool_drive', params: { name: 'tank', drive: back }, as: :json
+      expect(response.parsed_body).to eq('status' => 'ok')
+      expect(Privileged.calls).to include(['pools.online_drive', { name: 'tank', drive: back }])
+    end
+
     it 'replaces a drive, adds drives and deletes a pool through the helper' do
       post '/disks/replace_pool_drive', params: { name: 'tank', old: '1234', new: '/dev/sdd' }, as: :json
       expect(response.parsed_body).to eq('status' => 'ok')

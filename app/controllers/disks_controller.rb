@@ -194,6 +194,10 @@ class DisksController < ApplicationController
     pool_change { StoragePools.replace!(name: params[:name], old: params[:old], new: params[:new]) }
   end
 
+  def online_pool_drive
+    pool_change { StoragePools.online_drive!(name: params[:name], drive: params[:drive]) }
+  end
+
   def add_pool_group
     pool_change { StoragePools.add_group!(name: params[:name], devices: Array(params[:devices])) }
   end

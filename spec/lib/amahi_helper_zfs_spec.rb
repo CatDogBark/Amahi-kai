@@ -527,6 +527,23 @@ RSpec.describe 'AmahiHelper ZFS pools' do
         .to eq([%w[/usr/sbin/wipefs -a /dev/sdc1], %w[/usr/sbin/wipefs -a /dev/sdc]])
     end
 
+    it "brings back a drive ZFS took out once it's connected again, and only then" do
+      removed = status.sub("ata-SSD_9-part1    ONLINE ", "ata-SSD_9-part1    REMOVED")
+      allow(helper).to receive(:capture).with(%w[/usr/sbin/zpool status -P old]).and_return(removed)
+      allow(File).to receive(:exist?).and_call_original
+      allow(File).to receive(:exist?).with('/dev/disk/by-id/ata-SSD_9-part1').and_return(true)
+      expect(steps('pools.online_drive', { 'name' => 'old', 'drive' => '/dev/disk/by-id/ata-SSD_9-part1' }))
+        .to eq([['/usr/sbin/zpool', 'online', 'old', '/dev/disk/by-id/ata-SSD_9-part1'], [:pool_status]])
+
+      online = ->(drive) { refusal('pools.online_drive', { 'name' => 'old', 'drive' => drive }) }
+      expect(online.call('/dev/disk/by-id/ata-SSD_8-part1')).to eq('/dev/disk/by-id/ata-SSD_8-part1 is ONLINE, in the pool already')
+      expect(online.call('1234567890123456789')).to eq("1234567890123456789 isn't connected: connect it again, or replace it")
+      expect(online.call('/dev/sdc1')).to eq(%("/dev/sdc1" isn't a drive in the pool old))
+      allow(File).to receive(:exist?).with('/dev/disk/by-id/ata-SSD_9-part1').and_return(false)
+      expect(online.call('/dev/disk/by-id/ata-SSD_9-part1')).to include("isn't connected")
+      expect(refusal('pools.online_drive', { 'name' => 'nope', 'drive' => '/dev/disk/by-id/ata-SSD_9-part1' })).to eq(%(there's no pool named "nope"))
+    end
+
     it "refuses a drive that isn't in the pool, and a new one that isn't free" do
       replace = ->(old, new) { refusal('pools.replace', { 'name' => 'old', 'old' => old, 'new' => new }) }
       expect(replace.call('/dev/sdc1', '/dev/sdd')).to eq('"/dev/sdc1" isn\'t a drive in the pool old')

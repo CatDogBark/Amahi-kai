@@ -211,13 +211,14 @@
     submit(form);
   });
 
-  // data-name and data-snapshot go in the body; data-confirm asks first.
+  // data-name, data-snapshot and data-drive go in the body; data-confirm asks first.
   function post(button) {
     if (button.dataset.confirm && !confirm(button.dataset.confirm)) return;
     var label = button.textContent;
     var body = {};
     if (button.dataset.name) body.name = button.dataset.name;
     if (button.dataset.snapshot) body.snapshot = button.dataset.snapshot;
+    if (button.dataset.drive) body.drive = button.dataset.drive;
     button.disabled = true;
     button.textContent = 'Working…';
     postJSON(button.dataset.storagePost, body, function(message) {
