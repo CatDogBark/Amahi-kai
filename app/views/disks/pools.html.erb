@@ -102,18 +102,19 @@
             <strong>Snapshots</strong>
             <span class="text-muted"><%= pluralize(snaps.size, 'snapshot') %>, using <%= number_to_human_size(pool.snapshot_space.to_i) %></span>
             <form class="d-flex flex-wrap align-items-center gap-1 ms-auto" data-snapshot-policy="" data-url="<%= disks_pool_snapshot_policy_path %>" data-name="<%= pool.name %>">
-              <label for="keep-hourly-<%= pool.name %>">Keep</label>
-              <input type="number" class="form-control form-control-sm" style="width: 5em;" id="keep-hourly-<%= pool.name %>" name="hourly" min="0" max="168" value="<%= pool.keeps['hourly'] %>">
+              <label for="keep-hourly-<%= pool.name %>">Keep the newest</label>
+              <input type="number" class="form-control form-control-sm" style="width: 5em;" id="keep-hourly-<%= pool.name %>" name="hourly" min="0" max="168" value="<%= pool.keeps['hourly'] %>" aria-label="Hourly snapshots to keep">
               <label for="keep-daily-<%= pool.name %>">hourly and</label>
-              <input type="number" class="form-control form-control-sm" style="width: 5em;" id="keep-daily-<%= pool.name %>" name="daily" min="0" max="366" value="<%= pool.keeps['daily'] %>">
-              <span>daily</span>
+              <input type="number" class="form-control form-control-sm" style="width: 5em;" id="keep-daily-<%= pool.name %>" name="daily" min="0" max="366" value="<%= pool.keeps['daily'] %>" aria-label="Daily snapshots to keep">
+              <span>daily snapshots</span>
               <button type="submit" class="btn btn-sm btn-outline-secondary">Save</button>
             </form>
             <button type="button" class="btn btn-sm btn-outline-secondary" data-storage-post="<%= disks_snapshot_pool_path %>" data-name="<%= pool.name %>">Take snapshot now</button>
           </div>
-          <p class="small text-muted mb-1 mt-1">
-            Every hour, and once a day, the pool keeps a snapshot it can be rolled back to; the oldest go once there are more than it keeps.
-            0 turns a kind off and removes the ones kept. A snapshot taken now is kept until you delete it.
+          <% hourly, daily = pool.keeps['hourly'].to_i, pool.keeps['daily'].to_i %>
+          <p class="small text-muted mb-1 mt-1" id="snapshot-help-<%= pool.name %>">
+            One snapshot is taken every hour and one every day, and the oldest of each kind goes once there are more than this<%= ": you can roll back to any hour of the last #{pluralize(hourly, 'hour')} and any day of the last #{pluralize(daily, 'day')}" if hourly.positive? && daily.positive? %>.
+            Each uses space only for what's changed since it was taken. 0 turns a kind off and removes its snapshots. A snapshot taken now is kept until you delete it.
           </p>
           <% if snaps.any? %>
             <details>

@@ -198,6 +198,10 @@ RSpec.describe 'ZFS pools', type: :request do
       form = section.at_css('[data-snapshot-policy]')
       expect([form['data-url'], form.at_css('[name=hourly]')['value'], form.at_css('[name=daily]')['value']])
         .to eq(['/disks/pool_snapshot_policy', '12', '30'])
+      expect(form.text.squish).to eq('Keep the newest hourly and daily snapshots Save')
+      expect(section.at_css('#snapshot-help-tank').text.squish)
+        .to start_with('One snapshot is taken every hour and one every day, and the oldest of each kind goes once there are more than this: ' \
+                       'you can roll back to any hour of the last 12 hours and any day of the last 30 days.')
       expect(section.at_css('[data-storage-post="/disks/snapshot_pool"]')['data-name']).to eq('tank')
       rows = section.css('[data-snapshot-table] tbody tr')
       expect(rows.map { |tr| tr.css('td').first.text.squish }).to eq(['Hourly amahi-hourly-2026-10-05-1300', 'Daily amahi-daily-2026-10-04-0010',
