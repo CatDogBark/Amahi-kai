@@ -196,7 +196,7 @@ describe "Docker Apps", type: :request do
     it "says on an installed app's row which pool its data is on" do
       DockerApp.create!(identifier: 'store', name: 'Store', image: AppCatalog.find('store')[:image], status: 'running', host_port: 3001)
       get "/apps/installed_apps"
-      expect(Nokogiri::HTML(response.body).at_css('#app-storage-store').text.squish).to include('No pool for its data')
+      expect(Nokogiri::HTML(response.body).at_css('#app-storage-store').text.squish).to include('Its data needs a ZFS pool now, and it has none')
 
       File.write(storage, { 'store' => 'tank' }.to_json)
       get "/apps/installed_apps"

@@ -60,6 +60,8 @@
               - if storage_pool
                 | Its data is on the ZFS pool
                 =< link_to storage_pool, disks_pools_path
+              - elsif entry[:storage] == :required
+                | Its data needs a ZFS pool now, and it has none: Change gives it one. What it kept on the system disk isn't moved.
               - else
                 | No pool for its data: what it keeps on one is off. Change gives it one.
         - if status == 'error' && installed && app.error_message.present?

@@ -521,6 +521,12 @@ RSpec.describe 'AmahiHelper apps' do
           .to raise_error(AmahiHelper::Failed, "store's data is on the pool tank, which isn't online: bring it online on Disks → ZFS Pools first")
       end
 
+      it "won't make the container of an app whose folders moved to a dataset after it was installed" do
+        expect { helper.do_install_app('store', store) } # an update, or the pool changing: no pool recorded
+          .to raise_error(AmahiHelper::Failed, /keeps its data on a ZFS pool now, and has none: uninstall it and install it again on a pool/)
+        expect(ran.any? { |argv| argv.first == '/usr/bin/docker' && argv[1] == 'create' }).to be false
+      end
+
       it "leaves an optional dataset's folders out when no pool is chosen" do
         manifest = store(required: false)
         expect(manifest[:storage]).to eq(:optional)

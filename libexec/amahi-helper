@@ -3846,6 +3846,12 @@ module AmahiHelper
     def app_storage(id, manifest, pool, uid, gid)
       return nil unless manifest[:storage]
       pool ||= app_storage_pool(id)
+      # An app installed before its manifest moved folders to a dataset (an update, or the pool
+      # changing, would start it on empty folders): it's installed again on a pool instead.
+      if pool.nil? && manifest[:storage] == :required
+        raise Failed, "#{id} keeps its data on a ZFS pool now, and has none: uninstall it and install it again on a pool " \
+                      "(what it kept in #{APPS_ROOT}/#{id} stays there)"
+      end
       return nil unless pool
 
       raise Failed, "#{id}'s data is on the pool #{pool}, which isn't online: bring it online on Disks → ZFS Pools first" unless pool_names.include?(pool)
