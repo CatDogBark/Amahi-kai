@@ -269,7 +269,7 @@ RSpec.describe 'AmahiHelper apps' do
     it 'installs from the manifest, and uninstalls keeping the data unless asked' do
       # A reinstall (new shares) keeps the version the app runs: the last argument.
       expect(steps('apps.install', { 'app' => 'vaultwarden' }))
-        .to eq([[:install_app, 'vaultwarden', helper.app_manifest('vaultwarden'), [], true], [:announce_apps]])
+        .to eq([[:install_app, 'vaultwarden', helper.app_manifest('vaultwarden'), [], true, nil], [:announce_apps]])
       image = helper.app_manifest('gitea')[:image]
       expect(steps('apps.uninstall', { 'app' => 'gitea' })).to eq([[:uninstall_app, 'gitea', image, false], [:announce_apps]])
       expect(steps('apps.uninstall', { 'app' => 'gitea', 'delete_data' => true })).to eq([[:uninstall_app, 'gitea', image, true], [:announce_apps]])
@@ -357,7 +357,7 @@ RSpec.describe 'AmahiHelper apps' do
       allow(helper).to receive(:run_command) do |argv|
         ran << argv
         accounts[argv.last] = account(argv.last, 996) if argv.first == '/usr/sbin/useradd'
-        if argv[1] == 'create'
+        if argv.first == '/usr/bin/docker' && argv[1] == 'create'
           path = argv[argv.index('--env-file') + 1]
           env_files << [path, File.read(path), File.stat(path).mode & 0o777]
         end
@@ -431,6 +431,157 @@ RSpec.describe 'AmahiHelper apps' do
       accounts['app-gitea'] = account('app-gitea', 1001)
       expect { helper.do_install_app('gitea', helper.app_manifest('gitea')) }.to raise_error(AmahiHelper::Failed, /isn't a system account/)
       expect(ran).to be_empty
+    end
+
+    # P4.6: an app's dataset folders on a ZFS pool, <pool>/apps/<id>, chosen at install.
+    describe 'storage on a ZFS pool' do
+      let(:manifests) { "#{dir}/manifests" }
+      let(:root) { "#{dir}/pools/tank/apps/store" }
+      let(:datasets) { [] }
+
+      def store(required: true)
+        FileUtils.mkdir_p(manifests)
+        FileUtils.cp(Rails.root.join('config/apps/vaultwarden.yml'), manifests)
+        File.write("#{manifests}/store.yml", {
+          'image' => "example/store:1.0@sha256:#{'a' * 64}", 'run_as' => 'app', 'requires' => 3,
+          'ports' => [{ 'host' => 8600, 'container' => 8443 }],
+          'folders' => [{ 'name' => 'config', 'path' => '/config' },
+                        { 'name' => 'data', 'path' => '/data', 'kind' => 'dataset', 'required' => required },
+                        { 'name' => 'chunks', 'path' => '/chunks', 'kind' => 'dataset', 'backup' => false, 'required' => required }]
+        }.to_yaml)
+        helper.app_manifest('store')
+      end
+
+      before do
+        stub_const('AmahiHelper::APP_MANIFESTS', manifests)
+        stub_const('AmahiHelper::APP_STORAGE', "#{dir}/app-storage.json")
+        stub_const('AmahiHelper::POOL_ROOT', "#{dir}/pools")
+        stub_const('AmahiHelper::APP_BACKUPS', "#{dir}/app-backups")
+        FileUtils.mkdir_p("#{dir}/pools/tank/apps")
+        allow(File).to receive(:executable?).with('/usr/sbin/zpool').and_return(true)
+        allow(helper).to receive(:pool_names).and_return(['tank'])
+        allow(helper).to receive(:zfs_dataset?) { |name| datasets.include?(name) }
+        allow(helper).to receive(:capture).and_call_original
+        allow(helper).to receive(:capture).with(%w[/usr/sbin/zfs get -H -o value mounted tank/apps/store]).and_return("yes\n")
+        allow(helper).to receive(:capture).with(%w[/usr/sbin/zfs get -H -o value mountpoint tank/apps/store]).and_return("#{root}\n")
+        allow(helper).to receive(:dataset_mounted?).with('tank/apps/store', root).and_return(true)
+      end
+
+      it 'reads which folders go on a pool, and whether the app needs one' do
+        expect(store[:folders].map { |f| [f[:name], f[:kind], f[:required]] })
+          .to eq([['config', :state, false], ['data', :dataset, true], ['chunks', :dataset, true]])
+        expect(store[:storage]).to eq(:required)
+        FileUtils.mkdir_p(manifests)
+        File.write("#{manifests}/bad.yml", { 'image' => "example/bad:1@sha256:#{'a' * 64}", 'run_as' => 'app',
+                                              'folders' => [{ 'name' => 'data', 'path' => '/data', 'kind' => 'pool' }] }.to_yaml)
+        expect { helper.app_manifest('bad') }.to raise_error(AmahiHelper::Failed, /kind must be state or dataset/)
+        File.write("#{manifests}/bad.yml", { 'image' => "example/bad:1@sha256:#{'a' * 64}", 'run_as' => 'app',
+                                              'folders' => [{ 'name' => 'data', 'path' => '/data', 'required' => false }] }.to_yaml)
+        expect { helper.app_manifest('bad') }.to raise_error(AmahiHelper::Failed, /required is for a dataset folder/)
+        expect(helper.app_manifest('vaultwarden')[:storage]).to be_nil
+      end
+
+      it 'takes the pool the first time, and keeps the data on it after' do
+        store
+        expect(helper.validate('apps.install', { 'app' => 'store', 'pool' => 'tank' })).to include(pool: 'tank')
+        expect(refusal('apps.install', { 'app' => 'store' })).to eq('store keeps its data on a ZFS pool: choose one (make one on Disks → ZFS Pools first)')
+        expect(refusal('apps.install', { 'app' => 'store', 'pool' => 'nope' })).to eq(%(there's no pool named "nope"))
+        expect(steps('apps.install', { 'app' => 'store', 'pool' => 'tank' }).first.last).to eq('tank')
+        expect(helper.validate('apps.install', { 'app' => 'vaultwarden', 'pool' => 'tank' })).to include(pool: nil)
+
+        File.write("#{dir}/app-storage.json", { 'store' => 'tank' }.to_json)
+        expect(helper.validate('apps.install', { 'app' => 'store' })).to include(pool: 'tank')
+        expect(refusal('apps.install', { 'app' => 'store', 'pool' => 'other' }))
+          .to eq("store's data is on the pool tank: uninstall it with its data to move it to other")
+      end
+
+      it 'makes the dataset, gives the container its folders from it, and records the pool' do
+        helper.do_install_app('store', store, [], true, 'tank')
+        expect(ran).to include(%w[/usr/sbin/zfs create -p tank/apps/store])
+        create = ran.find { |argv| argv[1] == 'create' && argv.first == '/usr/bin/docker' }
+        expect(create.each_cons(2).select { |flag, _| %w[--volume --mount].include?(flag) }).to eq(
+          [['--volume', "#{apps_root}/store/config:/config"],
+           ['--mount', "type=bind,source=#{root}/data,target=/data"],
+           ['--mount', "type=bind,source=#{root}/chunks,target=/chunks"]]
+        )
+        expect(Dir.exist?("#{apps_root}/store/data")).to be false # not on the system disk
+        expect(File.stat("#{root}/data").mode & 0o777).to eq(0o750)
+        expect(File).to have_received(:lchown).with(996, 996, "#{root}/chunks")
+        expect(JSON.parse(File.read("#{dir}/app-storage.json"))).to eq('store' => 'tank')
+
+        # Made again later (an update, the pool changing): the same pool, the dataset reused.
+        datasets << 'tank/apps/store'
+        ran.clear
+        helper.do_install_app('store', store)
+        expect(ran).not_to include(%w[/usr/sbin/zfs create -p tank/apps/store])
+        expect(ran.find { |argv| argv.first == '/usr/bin/docker' && argv[1] == 'create' }).to include("type=bind,source=#{root}/data,target=/data")
+
+        allow(helper).to receive(:pool_names).and_return([])
+        expect { helper.do_install_app('store', store) }
+          .to raise_error(AmahiHelper::Failed, "store's data is on the pool tank, which isn't online: bring it online on Disks → ZFS Pools first")
+      end
+
+      it "won't make the container of an app whose folders moved to a dataset after it was installed" do
+        expect { helper.do_install_app('store', store) } # an update, or the pool changing: no pool recorded
+          .to raise_error(AmahiHelper::Failed, /keeps its data on a ZFS pool now, and has none: uninstall it and install it again on a pool/)
+        expect(ran.any? { |argv| argv.first == '/usr/bin/docker' && argv[1] == 'create' }).to be false
+      end
+
+      it "leaves an optional dataset's folders out when no pool is chosen" do
+        manifest = store(required: false)
+        expect(manifest[:storage]).to eq(:optional)
+        expect(helper.validate('apps.install', { 'app' => 'store' })).to include(pool: nil)
+        helper.do_install_app('store', manifest)
+        create = ran.find { |argv| argv.first == '/usr/bin/docker' && argv[1] == 'create' }
+        expect(create).not_to include('--mount')
+        expect(ran).not_to include(%w[/usr/sbin/zfs create -p tank/apps/store])
+        expect(File.exist?("#{dir}/app-storage.json")).to be false
+      end
+
+      it 'snapshots the dataset before an update instead of copying it, rolls back to it, and drops it after' do
+        datasets << 'tank/apps/store'
+        File.write("#{dir}/app-storage.json", { 'store' => 'tank' }.to_json)
+        manifest = store
+        FileUtils.mkdir_p("#{apps_root}/store/config")
+        helper.app_backup('store', manifest, "example/store:0.9@sha256:#{'b' * 64}")
+        snapshot = ran.find { |argv| argv[1] == 'snapshot' }&.last
+        expect(snapshot).to match(%r{\Atank/apps/store@amahi-update-\d{8}-\d{6}\z})
+        info = JSON.parse(File.read("#{dir}/app-backups/store.json"))
+        expect(info).to include('snapshot' => snapshot, 'folders' => ['config']) # the dataset isn't copied
+
+        datasets << snapshot
+        ran.clear
+        helper.app_restore('store', manifest, "example/store:0.9@sha256:#{'b' * 64}", [])
+        expect(ran).to include(['/usr/sbin/zfs', 'rollback', '-r', snapshot])
+        expect(ran.index(['/usr/sbin/zfs', 'rollback', '-r', snapshot])).to be < ran.index { |argv| argv.first == '/usr/bin/docker' && argv[1] == 'create' }
+
+        ran.clear
+        helper.app_forget_backup('store')
+        expect(ran).to eq([['/usr/sbin/zfs', 'destroy', snapshot, { allow_failure: true }]])
+
+        File.write("#{dir}/app-backups/store.json", { 'snapshot' => 'tank/apps/other@amahi-update-20261011-120000' }.to_json)
+        expect { helper.app_backup_snapshot('store', JSON.parse(File.read("#{dir}/app-backups/store.json"))) }
+          .to raise_error(AmahiHelper::Failed, /names a snapshot/)
+      end
+
+      it 'deletes the dataset with the data, only while its pool is online' do
+        datasets << 'tank/apps/store'
+        File.write("#{dir}/app-storage.json", { 'store' => 'tank', 'other' => 'tank' }.to_json)
+        helper.do_uninstall_app('store', "example/store:1.0@sha256:#{'a' * 64}", false)
+        expect(ran).not_to include(%w[/usr/sbin/zfs destroy -r tank/apps/store])
+        expect(JSON.parse(File.read("#{dir}/app-storage.json"))).to include('store' => 'tank') # kept
+
+        helper.do_uninstall_app('store', "example/store:1.0@sha256:#{'a' * 64}", true)
+        expect(ran).to include(%w[/usr/sbin/zfs destroy -r tank/apps/store])
+        expect(JSON.parse(File.read("#{dir}/app-storage.json"))).to eq('other' => 'tank')
+
+        File.write("#{dir}/app-storage.json", { 'store' => 'tank' }.to_json)
+        allow(helper).to receive(:pool_names).and_return([])
+        ran.clear
+        expect { helper.do_uninstall_app('store', "example/store:1.0@sha256:#{'a' * 64}", true) }
+          .to raise_error(AmahiHelper::Failed, "store's data is on the pool tank, which isn't online: bring it online to delete it")
+        expect(ran).to be_empty # nothing removed
+      end
     end
 
     describe 'uninstalling' do

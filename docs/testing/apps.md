@@ -147,6 +147,29 @@ good one to try first: they have Docker health checks and small data.
 - [ ] **Stop** one app, then reboot the VM. The running apps come back running, the stopped one
   stays stopped, and `sudo iptables -S AMAHI-APPS` lists the rules again.
 
+## 7b. Data on a ZFS pool (P4.6a)
+
+With a ZFS pool online (say `test`) and bitShare's catalog entry marking its folders
+`kind: dataset` (catalog format 3):
+
+- [ ] **Install** bitShare: the dialog asks for the pool under **Storage**. Its row says "Its data
+  is on the ZFS pool test", and the pool's card lists bitShare under "Apps keeping their data here".
+
+  ```bash
+  zfs list -r test/apps
+  ```
+
+- [ ] Its files are in the dataset, not on the system disk: `/srv/pools/test/apps/bitshare/data`
+  and `.../chunks` fill as files sync; `/var/lib/amahi-kai/apps/bitshare` holds no `data` or
+  `chunks`.
+- [ ] **Take offline** and **Delete pool** on `test` are refused, naming bitShare.
+- [ ] **Roll back** `test` to an earlier snapshot: bitShare is stopped while it runs and comes back
+  running, with its data as it was then.
+- [ ] Reboot: bitShare comes back running, its data mounted.
+- [ ] **Uninstall** it: the dataset stays (`zfs list -r test/apps`). **Delete it**: the dataset is
+  gone.
+- [ ] With no pool online, installing it is refused: "keeps its data on a ZFS pool".
+
 ## 8. Optional: a port that's taken
 
 - [ ] Uninstall Uptime Kuma and delete its data. In a second terminal on the NAS, keep port 3001

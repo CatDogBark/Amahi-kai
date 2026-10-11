@@ -303,7 +303,7 @@ module AmahiHelper
   APP_CATALOG = '/var/lib/amahi-kai/catalog'
   CATALOG_STATUS = '/var/lib/amahi-kai/catalog-status.json'
   CATALOG_LOCK = '/run/amahi-kai-catalog.lock'
-  CATALOG_FORMAT = 2
+  CATALOG_FORMAT = 3
   CATALOG_MAX_APPS = 200
   CATALOG_MAX_BYTES = 64 * 1024
   # Apps on the LAN (mDNS). Avahi announces each installed app with a web page as an HTTP
@@ -320,6 +320,17 @@ module AmahiHelper
   # The host ports each app was given (P4.2): its catalog ports when they're free, others when
   # not, kept for its next install. root:amahi 0640, so the Apps page can show them.
   APP_PORTS = '/var/lib/amahi-kai/app-ports.json'
+  # Apps' storage on a ZFS pool (P4.6). A manifest's folders are kept on the system disk
+  # (kind: state, the default: what the app needs to run), or on a dataset of the app's own,
+  # <pool>/apps/<id>, on the pool chosen at install (kind: dataset: the data that grows), in the
+  # pool's snapshots. Each app's pool is recorded here, { id => pool }, root:amahi 0640, so its
+  # container is made again on the same pool (an update, a reinstall, the pool changing), and
+  # the Apps and ZFS Pools pages can say where it is. Uninstall keeps the dataset unless asked.
+  APP_STORAGE = '/var/lib/amahi-kai/app-storage.json'
+  APP_DATASETS = 'apps'
+  # Before an update, an app's dataset is snapshotted (instead of copied) as
+  # <pool>/apps/<id>@amahi-update-<UTC time>, and rolled back to if the update fails.
+  APP_UPDATE_SNAPSHOT = /\A[a-z][a-z0-9_-]{0,31}\/apps\/[a-z0-9]{1,24}@amahi-update-\d{8}-\d{6}\z/
   # Who can reach the apps' ports (P4.2). Docker's rules for published ports come before UFW's,
   # so the helper adds its own chain to Docker's DOCKER-USER: connections to a container from
   # anywhere but the NAS's own private subnets and Tailscale are dropped. That covers a port
@@ -682,6 +693,7 @@ module AmahiHelper
          *v[:wipe].map { |device| [WIPEFS, '-a', device, { allow_failure: true }] },
          ['/usr/bin/udevadm', 'settle', { allow_failure: true }],
          [:remove_pool_dir, v[:name]],
+         [:forget_app_storage, v[:kept]],
          [:pool_status]]
       }
     },
@@ -996,13 +1008,16 @@ module AmahiHelper
     # earlier install), its secrets (likewise), the pinned image, pulled with progress, and
     # its container, started, with the shares chosen ([{ "name": "Movies", "write": false }]).
     # Changing an app's shares is a reinstall, which keeps the version it runs: only
-    # apps.update moves it to the manifest's.
+    # apps.update moves it to the manifest's. An app with dataset folders (P4.6) takes the ZFS
+    # pool they go on (pool), the first time; after that they stay on theirs (APP_STORAGE).
     'apps.install' => {
-      params: %w[app shares],
+      params: %w[app shares pool],
       validate: lambda { |a|
-        installed!(DOCKER) && app_request(a['app']).then { |v| v.merge(shares: app_share_choices(a['shares'], v[:id], v[:manifest])) }
+        installed!(DOCKER) && app_request(a['app']).then do |v|
+          v.merge(shares: app_share_choices(a['shares'], v[:id], v[:manifest]), pool: app_pool_choice(v[:id], v[:manifest], a['pool']))
+        end
       },
-      plan: ->(v) { [[:install_app, v[:id], v[:manifest], v[:shares], true], [:announce_apps]] }
+      plan: ->(v) { [[:install_app, v[:id], v[:manifest], v[:shares], true, v[:pool]], [:announce_apps]] }
     },
     'apps.start' => {
       params: %w[app],
@@ -1653,10 +1668,22 @@ module AmahiHelper
       name = existing_pool(name)
       raise Refused, "type the pool's name (#{name}) to destroy it" unless confirm == name
       no_shares_on!(name)
+      no_apps_on!(name, 'deleted')
       members = pool_leaves(pool_vdevs(name)).filter_map { |leaf| leaf['device'] }
       tree = block_tree
       disks = members.filter_map { |part| tree.find { |disk| subtree(disk).any? { |n| n['path'] == part } } }.uniq
-      { name: name, members: members, wipe: disks.flat_map { |disk| wipe_targets(disk) } }
+      { name: name, members: members, wipe: disks.flat_map { |disk| wipe_targets(disk) },
+        kept: apps_on_pool(name).map(&:first) }
+    end
+
+    # A pool an installed app keeps its data on isn't taken offline or deleted: the app would lose
+    # it. Data kept from an uninstalled app doesn't stop it (deleting the pool deletes that too).
+    def no_apps_on!(name, what)
+      on = apps_on_pool(name).select { |_id, installed| installed }.map(&:first)
+      return if on.empty?
+
+      raise Refused, "#{on.join(' and ')} #{on.size == 1 ? 'keeps its' : 'keep their'} data on #{name}, so it can't be #{what}: " \
+                     "uninstall #{on.size == 1 ? 'it' : 'them'} on Apps first (the data stays on the pool unless you delete it)"
     end
 
     # Packages given by name, each installed now.
@@ -1716,6 +1743,7 @@ module AmahiHelper
     def export_request(name)
       name = existing_pool(name)
       no_shares_on!(name)
+      no_apps_on!(name, 'taken offline')
       { name: name, guid: capture([ZPOOL, 'get', '-H', '-o', 'value', 'guid', name]).strip }
     end
 
@@ -1971,8 +1999,9 @@ module AmahiHelper
       web_tls = data.fetch('web_tls', false)
       bad.call('web_tls must be true or false') unless [true, false].include?(web_tls)
       bad.call('web_tls needs a web_port') if web_tls && web_port.nil?
+      folders = app_folders(data['folders'], bad)
       { image: image, run_as: run_as, memory: memory, ports: ports, web_port: web_port, web_tls: web_tls,
-        folders: app_folders(data['folders'], bad), environment: environment,
+        folders: folders, storage: app_storage_need(folders), environment: environment,
         secrets: app_secret_names(data['secrets'], environment, bad), writes_shares: writes_shares }
     end
 
@@ -2060,10 +2089,24 @@ module AmahiHelper
         bad.call("folder path #{path.inspect} must be an absolute, normalized path") unless normalized_path?(path)
         backup = folder.fetch('backup', true)
         bad.call("folder #{name}'s backup must be true or false") unless [true, false].include?(backup)
-        { name: name, path: path, backup: backup }
+        kind = folder.fetch('kind', 'state').to_s
+        bad.call("folder #{name}'s kind must be state or dataset") unless %w[state dataset].include?(kind)
+        required = folder.fetch('required', true)
+        bad.call("folder #{name}'s required must be true or false") unless [true, false].include?(required)
+        bad.call("folder #{name}: required is for a dataset folder") if folder.key?('required') && kind != 'dataset'
+        { name: name, path: path, backup: backup, kind: kind.to_sym, required: kind == 'dataset' && required }
       end
       bad.call('a folder is listed twice') if folders.map { |f| f[:name] }.uniq.size != folders.size
       folders
+    end
+
+    # Whether the app keeps folders on a ZFS pool: :required (it can't be installed without one),
+    # :optional (it runs without, those folders left out until a pool is chosen) or nil.
+    def app_storage_need(folders)
+      datasets = folders.select { |folder| folder[:kind] == :dataset }
+      return nil if datasets.empty?
+
+      datasets.any? { |folder| folder[:required] } ? :required : :optional
     end
 
     def app_environment_spec(environment, bad)
@@ -2901,13 +2944,32 @@ module AmahiHelper
       { 'pruned' => pruned }
     end
 
-    # Rolls back every dataset in the pool that has the snapshot (snapshots are taken with -r).
+    # Rolls back every dataset in the pool that has the snapshot (snapshots are taken with -r). The
+    # apps keeping their data on it are stopped first (ZFS won't roll back a dataset a container
+    # holds open, and a roll-back comes first: Troy, 2026-10-11), and the ones that were running
+    # start again afterwards, rolled back or not.
     def do_rollback_pool(pool, snapshot)
+      running = apps_on_pool(pool).select { |id, installed| installed && app_running?(id) }.map(&:first)
+      running.each do |id|
+        say("Stopping #{id} while the pool rolls back...")
+        run_command([DOCKER, 'stop', '--time', '30', app_container(id)])
+      end
       datasets = capture([ZFS, 'list', '-H', '-o', 'name', '-r', '-t', 'filesystem,volume', pool]).lines(chomp: true)
       snaps = capture([ZFS, 'list', '-H', '-o', 'name', '-r', '-t', 'snapshot', pool]).lines(chomp: true)
       rolled = datasets.select { |ds| snaps.include?("#{ds}@#{snapshot}") }
       rolled.each { |ds| run_command([ZFS, 'rollback', '-r', "#{ds}@#{snapshot}"]) }
-      { 'rolled_back' => rolled }
+      { 'rolled_back' => rolled, 'apps_stopped' => running }
+    ensure
+      Array(running).each { |id| run_command([DOCKER, 'start', app_container(id), { allow_failure: true }]) }
+    end
+
+    def app_running?(id)
+      docker_output('inspect', '--format', '{{.State.Running}}', app_container(id)).to_s.strip == 'true'
+    end
+
+    def do_forget_app_storage(ids)
+      Array(ids).each { |id| app_forget_storage(id) }
+      nil
     end
 
     # A pool taken offline or destroyed is unmounted, which ZFS refuses while anything has a folder
@@ -3268,7 +3330,7 @@ module AmahiHelper
       nil
     end
 
-    def do_install_app(id, manifest, shares = [], keep_version = false)
+    def do_install_app(id, manifest, shares = [], keep_version = false, pool = nil)
       if keep_version && (running = app_image(id)) && running != manifest[:image]
         say("Keeping the version it runs (#{image_tag(running)})")
         manifest = manifest.merge(image: running)
@@ -3277,7 +3339,8 @@ module AmahiHelper
       dir = "#{APPS_ROOT}/#{id}"
       do_make_dir(APPS_ROOT, '0755')
       app_folder(dir, uid, gid)
-      manifest[:folders].each { |folder| app_folder("#{dir}/#{folder[:name]}", uid, gid) }
+      manifest[:folders].each { |folder| app_folder("#{dir}/#{folder[:name]}", uid, gid) if folder[:kind] == :state }
+      storage = app_storage(id, manifest, pool, uid, gid)
       secrets = app_secrets(id, manifest[:secrets])
       if docker_output('image', 'inspect', '--format', '{{.Id}}', manifest[:image].sub(%r{:[^:@/]+@}, '@'))
         say("Using #{manifest[:image].sub(/@.*/, '')}, downloaded already")
@@ -3298,8 +3361,7 @@ module AmahiHelper
                      '--memory', manifest[:memory], '--label', "amahi.app=#{id}", '--env-file', env_file,
                      *(manifest[:run_as] == 'app' ? ['--user', "#{uid}:#{gid}"] : []),
                      *ports.flat_map { |p| ['--publish', "0.0.0.0:#{p[:host]}:#{p[:container]}/#{p[:protocol]}"] },
-                     *manifest[:folders].flat_map { |f| ['--volume', "#{dir}/#{f[:name]}:#{f[:path]}"] },
-                     *app_share_mounts(shares), manifest[:image]])
+                     *app_folder_mounts(manifest, dir, storage), *app_share_mounts(shares), manifest[:image]])
       end
       shares.select { |share| share[:write] }.each { |share| app_share_writable(share[:path]) }
       app_record_ports(id, ports)
@@ -3434,8 +3496,10 @@ module AmahiHelper
                     "#{gigabytes(have)} GB is free); free some space or grow the disk"
     end
 
+    # The folders an update copies first: the system disk's that the manifest backs up. A dataset
+    # is snapshotted instead (app_update_snapshot).
     def app_backup_folders(id, manifest)
-      manifest[:folders].select { |f| f[:backup] }.map { |f| "#{APPS_ROOT}/#{id}/#{f[:name]}" }
+      manifest[:folders].select { |f| f[:backup] && f[:kind] == :state }.map { |f| "#{APPS_ROOT}/#{id}/#{f[:name]}" }
                         .select { |path| File.directory?(path) && !File.symlink?(path) }
     end
 
@@ -3462,9 +3526,24 @@ module AmahiHelper
       Dir.mkdir(data, 0o700)
       folders = app_backup_folders(id, manifest)
       folders.each { |folder| run_command(['/usr/bin/cp', '-a', '--', folder, "#{data}/#{File.basename(folder)}"]) }
+      snapshot = app_update_snapshot(id, manifest)
       info = { 'taken_at' => Time.now.utc.iso8601, 'from' => from, 'to' => manifest[:image],
-               'folders' => folders.map { |folder| File.basename(folder) } }
+               'folders' => folders.map { |folder| File.basename(folder) }, 'snapshot' => snapshot }.compact
       do_install("#{APP_BACKUPS}/#{id}.json", "#{JSON.pretty_generate(info)}\n", nil, '0640', APP_USER)
+    end
+
+    # A snapshot of the app's dataset, taken before an update (the app stopped), or nil without
+    # one. Rolling back to it (app_restore) also removes the pool's own snapshots of the dataset
+    # taken after it.
+    def app_update_snapshot(id, manifest)
+      return nil unless manifest[:storage] && (pool = app_storage_pool(id)) && pool_names.include?(pool)
+
+      dataset = "#{pool}/#{APP_DATASETS}/#{id}"
+      return nil unless zfs_dataset?(dataset)
+
+      snapshot = "#{dataset}@amahi-update-#{Time.now.utc.strftime('%Y%m%d-%H%M%S')}"
+      run_command([ZFS, 'snapshot', snapshot])
+      snapshot
     end
 
     # Puts the copied folders back and recreates the container on +image+.
@@ -3477,7 +3556,20 @@ module AmahiHelper
         FileUtils.remove_entry_secure(target) if File.exist?(target) || File.symlink?(target)
         run_command(['/usr/bin/cp', '-a', '--', "#{APP_BACKUPS}/#{id}/#{name}", target])
       end
+      if (snapshot = app_backup_snapshot(id, backup))
+        say("Rolling its storage back to #{snapshot.split('@').last}...")
+        run_command([ZFS, 'rollback', '-r', snapshot])
+      end
       do_install_app(id, manifest.merge(image: image), shares)
+    end
+
+    # The update snapshot a backup names, checked, if it's still there.
+    def app_backup_snapshot(id, backup)
+      snapshot = backup['snapshot']
+      return nil unless snapshot.is_a?(String)
+      raise Failed, "the copy names a snapshot #{snapshot.inspect}" unless snapshot.match?(APP_UPDATE_SNAPSHOT) && snapshot.include?("/#{APP_DATASETS}/#{id}@")
+
+      zfs_dataset?(snapshot) ? snapshot : nil
     end
 
     def app_backup_info(id)
@@ -3492,6 +3584,10 @@ module AmahiHelper
     end
 
     def app_forget_backup(id)
+      backup = read_json("#{APP_BACKUPS}/#{id}.json")
+      if backup.is_a?(Hash) && (snapshot = app_backup_snapshot(id, backup))
+        run_command([ZFS, 'destroy', snapshot, { allow_failure: true }])
+      end
       FileUtils.rm_f("#{APP_BACKUPS}/#{id}.json")
       data = "#{APP_BACKUPS}/#{id}"
       FileUtils.remove_entry_secure(data) if File.exist?(data) || File.symlink?(data)
@@ -3710,6 +3806,117 @@ module AmahiHelper
       File.chmod(0o750, path)
     end
 
+    # The container's mounts for the app's folders: the system disk's (state) as before, and its
+    # dataset's, bound with --mount (never --volume, which would make a missing folder: on a pool
+    # that isn't mounted, that would be the system disk's). A dataset folder is left out when the
+    # app has no pool (an optional one not chosen).
+    def app_folder_mounts(manifest, dir, storage)
+      manifest[:folders].flat_map do |folder|
+        if folder[:kind] == :state
+          ['--volume', "#{dir}/#{folder[:name]}:#{folder[:path]}"]
+        elsif storage
+          ['--mount', "type=bind,source=#{storage}/#{folder[:name]},target=#{folder[:path]}"]
+        else
+          []
+        end
+      end
+    end
+
+    # The pool an app's dataset folders go on, for apps.install: the one they're on already
+    # (APP_STORAGE), else the one chosen; nil for an app without them, or with optional ones
+    # and no pool chosen. Moving them to another pool is uninstalling with the data, then
+    # installing on the other pool.
+    def app_pool_choice(id, manifest, value)
+      return nil unless manifest[:storage]
+      chosen = value.nil? || value == '' ? nil : string(value, 'pool', max: 32)
+      if (have = app_storage_pool(id))
+        raise Refused, "#{id}'s data is on the pool #{have}: uninstall it with its data to move it to #{chosen}" if chosen && chosen != have
+        return have
+      end
+      return existing_pool(chosen) if chosen
+      raise Refused, "#{id} keeps its data on a ZFS pool: choose one (make one on Disks → ZFS Pools first)" if manifest[:storage] == :required
+
+      nil
+    end
+
+    # The mounted folder of the app's dataset, <pool>/apps/<id>, made the first time (owned by the
+    # app's user, like its folder on the system disk, with a folder for each dataset folder), and
+    # recorded in APP_STORAGE; nil without one. +pool+ is apps.install's choice; otherwise (an
+    # update, a reinstall over the pool's change) it's the recorded one.
+    def app_storage(id, manifest, pool, uid, gid)
+      return nil unless manifest[:storage]
+      pool ||= app_storage_pool(id)
+      # An app installed before its manifest moved folders to a dataset (an update, or the pool
+      # changing, would start it on empty folders): it's installed again on a pool instead.
+      if pool.nil? && manifest[:storage] == :required
+        raise Failed, "#{id} keeps its data on a ZFS pool now, and has none: uninstall it and install it again on a pool " \
+                      "(what it kept in #{APPS_ROOT}/#{id} stays there)"
+      end
+      return nil unless pool
+
+      raise Failed, "#{id}'s data is on the pool #{pool}, which isn't online: bring it online on Disks → ZFS Pools first" unless pool_names.include?(pool)
+      dataset = "#{pool}/#{APP_DATASETS}/#{id}"
+      unless zfs_dataset?(dataset)
+        say("Making its storage on the pool #{pool}...")
+        run_command([ZFS, 'create', '-p', dataset])
+      end
+      run_command([ZFS, 'mount', dataset]) unless capture([ZFS, 'get', '-H', '-o', 'value', 'mounted', dataset]).strip == 'yes'
+      root = capture([ZFS, 'get', '-H', '-o', 'value', 'mountpoint', dataset]).strip
+      raise Failed, "#{dataset} isn't mounted at #{pool_root}/#{pool}/#{APP_DATASETS}/#{id}" unless dataset_mounted?(dataset, root) && root == "#{pool_root}/#{pool}/#{APP_DATASETS}/#{id}"
+
+      app_folder(root, uid, gid)
+      manifest[:folders].each { |folder| app_folder("#{root}/#{folder[:name]}", uid, gid) if folder[:kind] == :dataset }
+      app_record_storage(id, pool)
+      root
+    end
+
+    # Whether ZFS has +dataset+ mounted at +root+, a real folder (no symlink in the way).
+    def dataset_mounted?(dataset, root, mounts_file = '/proc/self/mounts')
+      return false unless File.realpath(root) == root && File.lstat(root).directory?
+
+      File.readlines(mounts_file).map(&:split).any? { |fields| fields[0] == dataset && fields[1] == root && fields[2] == 'zfs' }
+    rescue SystemCallError
+      false
+    end
+
+    def zfs_dataset?(name)
+      _out, _err, status = Open3.capture3(ENV_MIN, ZFS, 'list', '-H', '-o', 'name', name, unsetenv_others: true, chdir: '/')
+      status.success?
+    rescue SystemCallError
+      false
+    end
+
+    # { id => pool } from APP_STORAGE, the pool names checked.
+    def app_storage_records
+      records = read_json(APP_STORAGE)
+      records.is_a?(Hash) ? records.select { |id, pool| id.is_a?(String) && id.match?(APP_ID) && pool.is_a?(String) && pool.match?(POOL_NAME) } : {}
+    end
+
+    def app_storage_pool(id)
+      app_storage_records[id]
+    end
+
+    def app_record_storage(id, pool)
+      records = app_storage_records
+      return if records[id] == pool
+
+      records[id] = pool
+      do_install(APP_STORAGE, "#{JSON.pretty_generate(records)}\n", nil, '0640', APP_USER)
+    end
+
+    def app_forget_storage(id)
+      records = app_storage_records
+      return unless records.delete(id)
+
+      do_install(APP_STORAGE, "#{JSON.pretty_generate(records)}\n", nil, '0640', APP_USER)
+    end
+
+    # The apps whose storage is on the pool +name+: [[id, installed?]] (installed: it has a
+    # container; else only its data was kept at uninstall).
+    def apps_on_pool(name)
+      app_storage_records.select { |_id, pool| pool == name }.keys.sort.map { |id| [id, !app_image(id).nil?] }
+    end
+
     # { 'ADMIN_TOKEN' => '...' }: the app's secrets, generated on its first install and kept in
     # APP_SECRETS/<id>.json (root:amahi 0640) so the admin pages can show them.
     def app_secrets(id, names)
@@ -3750,6 +3957,10 @@ module AmahiHelper
     end
 
     def do_uninstall_app(id, image, delete_data)
+      pool = app_storage_pool(id)
+      if delete_data && pool && !pool_names.include?(pool)
+        raise Failed, "#{id}'s data is on the pool #{pool}, which isn't online: bring it online to delete it"
+      end
       image = app_image(id) || image
       run_command([DOCKER, 'rm', '--force', app_container(id), { allow_failure: true }])
       run_command([DOCKER, 'image', 'rm', image, { allow_failure: true }])
@@ -3761,6 +3972,11 @@ module AmahiHelper
       FileUtils.rm_f("#{APP_SECRETS}/#{id}.json")
       app_forget_ports(id)
       app_forget_backup(id)
+      if pool
+        dataset = "#{pool}/#{APP_DATASETS}/#{id}"
+        run_command([ZFS, 'destroy', '-r', dataset]) if zfs_dataset?(dataset)
+        app_forget_storage(id)
+      end
       run_command(['/usr/sbin/userdel', "app-#{id}", { allow_failure: true }]) if passwd("app-#{id}")
       { 'app' => id, 'data_kept' => false }
     end

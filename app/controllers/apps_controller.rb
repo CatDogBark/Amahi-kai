@@ -113,6 +113,7 @@ class AppsController < ApplicationController
     DockerApp.refresh_statuses! if @docker_running
     @docker_apps = DockerApp.order(:name)
     @shares = Share.by_name
+    @storage_pools = storage_pools
   end
 
   def docker_apps
@@ -126,6 +127,7 @@ class AppsController < ApplicationController
     @docker_apps = catalog.map { |entry| installed[entry[:identifier]] || entry }
     @categories = AppCatalog.categories
     @shares = Share.by_name
+    @storage_pools = storage_pools
   end
 
   # Check now: the update check, as the timer runs it every 6 hours (Amahi-kai and the app
@@ -147,13 +149,14 @@ class AppsController < ApplicationController
     entry = AppCatalog.find(params[:id])
     host = request.host
     shares = entry ? chosen_shares(entry) : []
+    pool = params[:pool].presence if entry&.dig(:storage)
     stream_sse do |sse|
       unless entry
         sse.emit("That app isn't in the catalog")
         sse.done('error')
         next
       end
-      install_app(entry, host, sse, shares)
+      install_app(entry, host, sse, shares, pool)
     end
   end
 
@@ -203,15 +206,18 @@ class AppsController < ApplicationController
   private
 
   # Installs +entry+ through the root helper (apps.install), streaming its progress. Changing an
-  # app's shares installs it again with the new ones.
-  def install_app(entry, host, sse, shares)
+  # app's shares installs it again with the new ones. +pool+: the ZFS pool chosen for an app that
+  # keeps data on one (P4.6), the first time; after that the helper keeps it on its own.
+  def install_app(entry, host, sse, shares, pool = nil)
     sse.emit("Installing #{entry[:name]}...")
     app = DockerApp.find_or_initialize_by(identifier: entry[:identifier])
     app.update!(name: entry[:name], description: entry[:description], image: app.image.presence || entry[:image],
                 category: entry[:category], logo_url: entry[:logo_url], host_port: entry[:web_port],
                 container_name: "amahi-#{entry[:identifier]}", status: 'installing', error_message: nil,
                 shares: shares)
-    reply = Privileged.call('apps.install', app: entry[:identifier], shares: shares) { |line| sse.emit("  #{line}") }
+    args = { app: entry[:identifier], shares: shares }
+    args[:pool] = pool if pool
+    reply = Privileged.call('apps.install', **args) { |line| sse.emit("  #{line}") }
     ports = DockerApp.assigned_ports(entry, reply['ports'])
     web = ports.find { |port| port[:label] == 'web' }
     # A reinstall keeps the version the app runs (only Update changes it): the reply says which.
@@ -277,6 +283,17 @@ class AppsController < ApplicationController
     render json: { status: 'ok' }
   rescue DockerApp::ContainerError => e
     render json: { status: 'error', message: e.message }, status: :unprocessable_content
+  end
+
+  # The ZFS pools that are online, for the install dialog's Storage, when an app in the catalog
+  # keeps data on one (P4.6); [] otherwise, without asking the helper.
+  def storage_pools
+    return [] unless AppCatalog.all.any? { |entry| entry[:storage] } && StoragePools.zfs_installed?
+
+    StoragePools.status[:pools].map { |pool| { name: pool.name, layout: pool.layout } }
+  rescue StandardError => e
+    Rails.logger.warn("AppsController: couldn't read the ZFS pools: #{e.message}")
+    []
   end
 
   # [installed, running]. A failing check shows Docker as not installed instead of

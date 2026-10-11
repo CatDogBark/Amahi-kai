@@ -54,6 +54,7 @@ RSpec.describe 'AmahiHelper ZFS pools' do
     stub_const('AmahiHelper::MNT', mnt)
     stub_const('AmahiHelper::FSTAB', fstab)
     stub_const('AmahiHelper::POOL_ROOT', "#{dir}/pools")
+    stub_const('AmahiHelper::APP_STORAGE', "#{dir}/app-storage.json")
     allow(helper).to receive(:block_tree).and_return(tree)
     allow(File).to receive(:blockdev?).and_call_original
     allow(File).to receive(:blockdev?).with(a_string_starting_with('/dev/')).and_return(true)
@@ -600,6 +601,20 @@ RSpec.describe 'AmahiHelper ZFS pools' do
       expect(refusal('pools.add_group', { 'name' => 'old', 'devices' => %w[/dev/sdc /dev/sdd /dev/sde] })).to include("isn't made of matching")
     end
 
+    it "won't take a pool offline or delete it under an installed app's data, and forgets the data an uninstalled one kept" do
+      File.write("#{dir}/app-storage.json", { 'store' => 'old', 'gone' => 'old', 'other' => 'tank' }.to_json)
+      allow(helper).to receive(:app_image) { |id| id == 'store' ? "example/store:1@sha256:#{'a' * 64}" : nil }
+      why = "store keeps its data on old, so it can't be %s: uninstall it on Apps first (the data stays on the pool unless you delete it)"
+      expect(refusal('pools.export', { 'name' => 'old' })).to eq(format(why, 'taken offline'))
+      expect(refusal('pools.destroy', { 'name' => 'old', 'confirm' => 'old' })).to eq(format(why, 'deleted'))
+
+      allow(helper).to receive(:app_image).and_return(nil) # store uninstalled too, its data kept
+      expect(steps('pools.destroy', { 'name' => 'old', 'confirm' => 'old' })).to include([:forget_app_storage, %w[gone store]])
+      allow(helper).to receive(:do_install) { |path, content, *| File.write(path, content) }
+      helper.do_forget_app_storage(%w[gone store])
+      expect(JSON.parse(File.read("#{dir}/app-storage.json"))).to eq('other' => 'tank')
+    end
+
     it 'destroys a pool only when its name is typed again, then frees its drives' do
       expect(refusal('pools.destroy', { 'name' => 'old', 'confirm' => 'OLD' })).to eq("type the pool's name (old) to destroy it")
       expect(steps('pools.destroy', { 'name' => 'old', 'confirm' => 'old' })).to eq(
@@ -611,7 +626,7 @@ RSpec.describe 'AmahiHelper ZFS pools' do
          ['/usr/sbin/wipefs', '-a', '/dev/sdh9', { allow_failure: true }],
          ['/usr/sbin/wipefs', '-a', '/dev/sdh', { allow_failure: true }],
          ['/usr/bin/udevadm', 'settle', { allow_failure: true }],
-         [:remove_pool_dir, 'old'], [:pool_status]]
+         [:remove_pool_dir, 'old'], [:forget_app_storage, []], [:pool_status]]
       )
     end
 
@@ -688,9 +703,35 @@ RSpec.describe 'AmahiHelper ZFS pools' do
       allow(helper).to receive(:capture).with(%w[/usr/sbin/zfs list -H -o name -r -t filesystem,volume old]).and_return("old\nold/bitshare\nold/new\n")
       allow(helper).to receive(:capture).with(%w[/usr/sbin/zfs list -H -o name -r -t snapshot old])
                                         .and_return("old@amahi-daily-2026-10-04-0010\nold/bitshare@amahi-daily-2026-10-04-0010\n")
-      expect(helper.do_rollback_pool('old', 'amahi-daily-2026-10-04-0010')).to eq('rolled_back' => %w[old old/bitshare])
+      expect(helper.do_rollback_pool('old', 'amahi-daily-2026-10-04-0010')).to eq('rolled_back' => %w[old old/bitshare], 'apps_stopped' => [])
       expect(ran).to eq([%w[/usr/sbin/zfs rollback -r old@amahi-daily-2026-10-04-0010],
                          %w[/usr/sbin/zfs rollback -r old/bitshare@amahi-daily-2026-10-04-0010]])
+    end
+
+    # Apps keeping their data on the pool (P4.6): a roll-back comes first, so they're stopped while
+    # it runs, and the ones that were running start again whether it worked or not.
+    it 'stops the running apps whose data is on the pool while it rolls back, and starts them again' do
+      File.write("#{dir}/app-storage.json", { 'store' => 'old', 'idle' => 'old', 'gone' => 'old', 'other' => 'tank' }.to_json)
+      allow(helper).to receive(:app_image) { |id| %w[store idle].include?(id) ? "example/#{id}:1@sha256:#{'a' * 64}" : nil }
+      allow(helper).to receive(:app_running?) { |id| id == 'store' }
+      allow(helper).to receive(:say)
+      allow(helper).to receive(:capture).with(%w[/usr/sbin/zfs list -H -o name -r -t filesystem,volume old]).and_return("old\nold/apps/store\n")
+      allow(helper).to receive(:capture).with(%w[/usr/sbin/zfs list -H -o name -r -t snapshot old])
+                                        .and_return("old@amahi-daily-2026-10-04-0010\nold/apps/store@amahi-daily-2026-10-04-0010\n")
+      expect(helper.do_rollback_pool('old', 'amahi-daily-2026-10-04-0010'))
+        .to eq('rolled_back' => %w[old old/apps/store], 'apps_stopped' => ['store'])
+      expect(ran).to eq([%w[/usr/bin/docker stop --time 30 amahi-store],
+                         %w[/usr/sbin/zfs rollback -r old@amahi-daily-2026-10-04-0010],
+                         %w[/usr/sbin/zfs rollback -r old/apps/store@amahi-daily-2026-10-04-0010],
+                         ['/usr/bin/docker', 'start', 'amahi-store', { allow_failure: true }]])
+
+      ran.clear
+      allow(helper).to receive(:run_command) do |argv|
+        ran << argv
+        raise AmahiHelper::Failed, 'dataset is busy' if argv[1] == 'rollback'
+      end
+      expect { helper.do_rollback_pool('old', 'amahi-daily-2026-10-04-0010') }.to raise_error(AmahiHelper::Failed, 'dataset is busy')
+      expect(ran.last).to eq(['/usr/bin/docker', 'start', 'amahi-store', { allow_failure: true }]) # started again anyway
     end
 
     it "takes the snapshots that are due, then prunes the oldest of each kind beyond what's kept, never manual or others'" do

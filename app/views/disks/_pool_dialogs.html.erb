@@ -71,7 +71,8 @@
       <div class="modal-header"><h5 class="modal-title" id="rollback-dialog-title">Roll <span data-fill="name"></span> back</h5></div>
       <div class="modal-body">
         <p class="small">The pool goes back to how it was at the <strong data-fill="snapshot-label"></strong>.
-          Everything changed on it since is lost<span data-fill="later"></span>.</p>
+          Everything changed on it since is lost<span data-fill="later"></span>. Apps keeping their data on
+          it are stopped while it rolls back, then started again.</p>
         <label class="form-label small" for="rollback-confirm">Type <strong data-fill="name"></strong> to confirm</label>
         <input type="text" class="form-control form-control-sm" id="rollback-confirm" autocomplete="off" data-confirm-name="">
       </div>

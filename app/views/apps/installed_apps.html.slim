@@ -37,6 +37,6 @@
         = render partial: 'docker_app', locals: { app: app }
 
 == render 'shared/install_terminal', id: 'app', title: 'Installing App', stream_url: ''
-== render 'shares_dialog', shares: @shares
+== render 'shares_dialog', shares: @shares, pools: @storage_pools
 
 = javascript_include_tag 'apps'
