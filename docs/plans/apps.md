@@ -258,21 +258,28 @@ Troy (2026-10-06): the NAS knows what it runs, so devices shouldn't have to be t
 
 ### P4.6: App storage, and bitShare
 
-Decided with Troy on 2026-10-10: **apps install on the system disk; their storage doesn't.** An
-app runs from the system disk (its image, and the small state it needs to run) with no storage
-set up at all; the data that grows goes on share storage or a pool, never on the system disk.
-Apps don't install on pools: certain things they keep do.
+Decided with Troy on 2026-10-10: **apps install on the system disk, and Amahi-kai decides where
+their storage goes.** An app runs from the system disk (its image, and the small state it needs to
+run) with no storage set up at all. What it keeps that grows goes in a share or a ZFS dataset,
+and the app only declares which kind it needs: Amahi-kai orchestrates the rest. Apps don't
+install on pools: certain things they keep do.
 
 - [ ] **Each folder in a manifest has a kind:**
   - `state` (the default): what the app needs to run (settings, keys, a small database), in
     `/var/lib/amahi-kai/apps/<id>/` on the system disk, as today.
-  - `share`: files people use (bitTube's downloads): a share chosen at install, whose folder isn't
-    on the system disk (a share on a data drive or a ZFS pool, or a Greyhole share with its folder
-    on the pool drives, S6 in [`storage.md`](storage.md)). The app writes it **through Samba**, so
-    Greyhole sees every file: the helper mounts the share over SMB on the NAS itself, with an
-    account of the app's own, and gives that folder to the container (containers still can't
-    reach Samba). The mount comes up after Samba and before the app. A ZFS share can be given
-    directly. This replaces P4.4's read-only rule for the shares an app keeps its files in.
+  - `share`: files people use (bitTube's downloads): a share chosen at install, **wherever
+    Amahi-kai keeps that share** (Troy): the app doesn't care. With S6 ([`storage.md`](storage.md))
+    off, a Greyhole share's folder is on the system disk and the app's files land there first,
+    as anyone's over SMB do; with it on, they land on the pool drives.
+    - **A Greyhole share reaches the app through Samba**, so Greyhole sees every write: the helper
+      mounts the share by name on the NAS's own Samba (`//127.0.0.1/<share>`), with an account of
+      the app's own, and gives that folder to the container (containers still can't reach Samba
+      themselves). The app sees the share's real files, not Greyhole's links, so it needs no copy
+      folders and nothing follows the pool for it; and S6 moving the share's folder only changes
+      Samba's path, not the app's mount. The mount comes up after Samba and before the app.
+    - **A share that isn't pooled** (the system disk, a data drive, a ZFS pool) is mounted
+      directly, as P4.4 does: nothing needs to see its writes.
+    - This replaces P4.4's read-only rule for the shares an app keeps its files in.
   - `dataset`: the app's own private data (bitShare's chunk store and its database): a ZFS dataset
     of its own, `<pool>/apps/<id>`, on the pool chosen at install, with an optional quota, in the
     pool's snapshots. Never Greyhole (it only sees Samba's writes, and nobody opens chunks over

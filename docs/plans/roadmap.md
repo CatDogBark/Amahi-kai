@@ -147,8 +147,8 @@ Decided with Troy on 2026-10-10, while testing on the NAS; when they're built is
   the Greyhole Pool page shows which drive holds each share's folder and warns as drives fill
   ([`storage.md`](storage.md#greyhole-shares-folders-on-the-pool-drives-s6)).
 - **P4.6. App storage:** apps run from the system disk, and what they keep that grows goes in a
-  share written through Samba or a ZFS dataset of their own, never the system disk; bitShare's
-  data moves to a dataset, and its tests on the NAS wait for it
+  share (wherever Amahi-kai keeps it; a Greyhole share reaches the app through Samba) or a ZFS
+  dataset of their own; bitShare's data moves to a dataset, and its tests on the NAS wait for it
   ([`apps.md`](apps.md#p46-app-storage-and-bitshare)).
 
 ## Open, not yet scheduled
