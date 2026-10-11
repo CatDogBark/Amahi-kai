@@ -41,29 +41,15 @@ div.share[id="whole_share_#{share.id}"]
 
       section.share-section id="share-section-storage-#{share.id}"
         h6.share-section-title Storage
-        - if share.zfs?
-          .share-row
-            .share-row-label Folder
-            .share-row-body
-              code= share.path
-              .share-help Its folder on the ZFS pool #{share.zfs_pool}. A share's place is set when it's made, so it stays there.
-        - else
-          .share-row
-            .share-row-label Folder
-            .share-row-body data-controller="inline-edit" data-inline-edit-url-value=update_path_share_path(id: share.id) data-inline-edit-method-value="PUT"
-              a.open-update-path-area.focus href="#" data-inline-edit-target="display" data-action="click->inline-edit#edit"
-                = share.path
-              form.update-path-form style="display:none" action=update_path_share_path(id: share.id) method="post" data-inline-edit-target="form" data-action="submit->inline-edit#submit"
-                input type="hidden" name="_method" value="put"
-                input type="hidden" name="authenticity_token" value=form_authenticity_token
-                input.form-control.input-sm type="text" name="share[path]" value=share.path data-inline-edit-target="input"
-                |  
-                button.btnn.btn.btn-info.btn-sm type="submit"
-                  = t('change')
-                a.cancel-btn-style.left-margin-10 href="#" data-action="click->inline-edit#cancel"
-                  | Cancel
-              span.messages data-inline-edit-target="message"
-              .share-help Where the share's files are kept on the NAS. Click it to change it.
+        / Where a share lives is set when it's made (Where): its folder isn't changed by hand, which
+        / left its files behind, or pointed it at a Greyhole drive's copies of a share.
+        .share-row
+          .share-row-label Folder
+          .share-row-body
+            code id="share-path-#{share.id}"= share.path
+            .share-help
+              = share.zfs? ? "Its folder on the ZFS pool #{share.zfs_pool}. " : "Where the share's files are kept on the NAS. "
+              | A share's place is set when it's made, so it stays there: to move one, make a new share and copy its files across.
         .share-row
           .share-row-label Size
           .share-row-body

@@ -12,7 +12,7 @@ class SharesController < ApplicationController
   before_action :find_share, only: %i[
     destroy toggle_visible toggle_everyone toggle_readonly toggle_access
     toggle_write toggle_guest_access toggle_guest_writeable
-    update_path update_extras clear_permissions
+    update_extras clear_permissions
     update_disk_pool_copies update_size update_name
   ]
 
@@ -110,22 +110,6 @@ class SharesController < ApplicationController
       render plain: @share.name
     else
       render plain: @share.errors.full_messages.join(", "), status: :unprocessable_entity
-    end
-  end
-
-  def update_path
-    if params[:value].present?
-      @share.path = params[:value]
-      if @share.save
-        @share.reload
-        render plain: @share.path
-      else
-        render plain: @share.errors.full_messages.join(", "), status: :unprocessable_entity
-      end
-    else
-      @saved = @share.update(params_update_path)
-      Share.push_shares if @saved
-      render json: { status: @saved ? :ok : :not_acceptable }
     end
   end
 
@@ -269,10 +253,6 @@ class SharesController < ApplicationController
     else
       attrs.merge(path: Share.default_full_path(name))
     end
-  end
-
-  def params_update_path
-    params.require(:share).permit(:path)
   end
 
   def params_update_workgroup
