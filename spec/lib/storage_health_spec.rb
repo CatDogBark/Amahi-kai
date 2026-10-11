@@ -31,6 +31,33 @@ RSpec.describe StorageHealth do
     expect(described_class.new('drives' => 'x', 'pools' => 'y').alerts).to be_empty
   end
 
+  it "warns when the system disk runs low, first among the alerts, and more urgently when it's almost full" do
+    gb = 1024**3
+    low = ->(free) { described_class.new({ 'pools' => [], 'drives' => {} }, free).alerts.map { |a| [a.level, a.message, a.path] } }
+    expect(low.call(20 * gb)).to be_empty
+    expect(low.call(nil)).to be_empty # not known
+    expect(low.call(8 * gb)).to eq([[:warning, 'The system disk has only 8 GB free. Amahi-kai, its database and its apps need room there, ' \
+                                                'and files written to Greyhole shares land there before Greyhole moves them to the pool drives.',
+                                     '/disks/devices']])
+    expect(low.call(1.5 * gb).sole.first(2)).to eq([:danger, 'The system disk is almost full: 1.5 GB free. ' \
+                                                    'Amahi-kai, its database and its apps need room there, and files written to Greyhole shares ' \
+                                                    'land there before Greyhole moves them to the pool drives.'])
+    failing = described_class.new({ 'drives' => { '/dev/sdc' => smart(passed: false) } }, 8 * gb).alerts
+    expect(failing.map(&:level)).to eq(%i[danger warning]) # worst first
+
+    allow(described_class).to receive(:system_disk_free).and_return(5 * gb)
+    expect(described_class.load('/nonexistent/health.json').alerts.sole.message).to start_with('The system disk has only 5 GB free')
+  end
+
+  it "reads the system disk's free space only in production" do
+    expect(described_class.system_disk_free).to be_nil
+    allow(Rails.env).to receive(:production?).and_return(true)
+    allow(Shell).to receive(:output).with('df', '-B1', '--output=avail', '/').and_return("      Avail\n15032385536\n")
+    expect(described_class.system_disk_free).to eq(15_032_385_536)
+    allow(Shell).to receive(:output).with('df', '-B1', '--output=avail', '/').and_return('')
+    expect(described_class.system_disk_free).to be_nil
+  end
+
   it "warns about a pool that isn't ONLINE, data errors, drive errors and what a scrub found, worst first" do
     degraded = pool(health: 'DEGRADED', action: "Replace the device using 'zpool replace'.",
                     scan: 'scrub repaired 12K in 00:01:02 with 0 errors on Sun Oct  4 02:41:08 2026', errors: '3 data errors, use -v for a list')
