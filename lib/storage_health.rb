@@ -2,7 +2,8 @@
 #
 # The root helper's storage.check_health reads the pools and every drive's SMART data and
 # writes them to /var/lib/amahi-kai/storage-health.json: amahi-kai-storage-check.timer runs
-# it every 15 minutes, and Disks → ZFS Pools has Check now. The dashboard and the Disks
+# it every 15 minutes, and Disks → ZFS Pools has Check now. The system disk's free space is
+# read when the alerts are, since it can run out between checks. The dashboard and the Disks
 # pages show the alerts (admins only).
 
 require 'json'
@@ -16,6 +17,9 @@ class StorageHealth
   # as the drive wears (Samsung, Micron and Crucial, others).
   WEAR_ATTRIBUTES = %w[177 202 231 233].freeze
   WORN = 90 # % of an SSD's rated wear that calls for a warning
+  # Free space on the system disk that calls for a warning, and for a more urgent one.
+  SYSTEM_DISK_LOW = 10 * 1024**3
+  SYSTEM_DISK_FULL = 2 * 1024**3
 
   Alert = Struct.new(:level, :message, :path, keyword_init: true) # level: :danger or :warning
 
@@ -30,9 +34,20 @@ class StorageHealth
   end
 
   def self.load(path = default_path)
-    new(JSON.parse(File.read(path)))
-  rescue SystemCallError, JSON::ParserError, TypeError
-    new({})
+    data = begin
+      JSON.parse(File.read(path))
+    rescue SystemCallError, JSON::ParserError, TypeError
+      {}
+    end
+    new(data, system_disk_free)
+  end
+
+  # Bytes free on the system disk, read now: shares' folders (Greyhole's landing zones), the
+  # database, Docker and the apps' own folders are all there. nil outside production (specs pass
+  # it in), or when df can't say.
+  def self.system_disk_free
+    return nil unless defined?(Rails) && Rails.env.production?
+    Shell.output('df', '-B1', '--output=avail', '/').lines.last.to_s.strip[/\A\d+\z/]&.to_i
   end
 
   # Outside production (development and specs) the file lives in tmp/.
@@ -40,7 +55,10 @@ class StorageHealth
     defined?(Rails) && !Rails.env.production? ? Rails.root.join('tmp', 'storage-health.json').to_s : PATH
   end
 
-  def initialize(data)
+  # +data+: the health check's file, parsed. +system_disk_free+: bytes free on the system disk,
+  # or nil when not known.
+  def initialize(data, system_disk_free = nil)
+    @system_disk_free = system_disk_free
     data = {} unless data.is_a?(Hash)
     @checked_at = parse_time(data['checked_at'])
     @smartctl = data['smartctl'] == true
@@ -73,7 +91,7 @@ class StorageHealth
 
   # Everything that needs looking at, worst first.
   def alerts
-    list = pools.flat_map { |pool| pool_alerts(pool) }
+    list = [system_disk_alert].compact + pools.flat_map { |pool| pool_alerts(pool) }
     drives.each do |path, smart|
       drive_problems(smart).each do |level, text|
         list << Alert.new(level: level, message: "#{drive_name(path, smart)} #{text}", path: drive_page(path))
@@ -124,6 +142,22 @@ class StorageHealth
   end
 
   private
+
+  # Files written to a Greyhole share land in its folder on the system disk before Greyhole moves
+  # them, so a full system disk stops them, and Amahi-kai with them.
+  def system_disk_alert
+    free = @system_disk_free
+    return unless free && free < SYSTEM_DISK_LOW
+
+    size = ActiveSupport::NumberHelper.number_to_human_size(free)
+    why = 'Amahi-kai, its database and its apps need room there, and files written to Greyhole ' \
+          'shares land there before Greyhole moves them to the pool drives.'
+    if free < SYSTEM_DISK_FULL
+      Alert.new(level: :danger, message: "The system disk is almost full: #{size} free. #{why}", path: '/disks/devices')
+    else
+      Alert.new(level: :warning, message: "The system disk has only #{size} free. #{why}", path: '/disks/devices')
+    end
+  end
 
   def pool_alerts(pool)
     path = '/disks/pools'
