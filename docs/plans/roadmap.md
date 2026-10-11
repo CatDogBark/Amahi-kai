@@ -164,6 +164,11 @@ touches the same code.
 Troy (2026-10-08): none of these are coming soon; they wait until Amahi-kai is shelf-stable and
 tested.
 
+### Quotas for apps' storage
+
+A size limit on an app's ZFS dataset (P4.6). Left out for now (Troy, 2026-10-11): people manage
+their own files, and the disk warnings cover running low.
+
 ### Greyhole shares' folders on the pool drives
 
 So nothing a Greyhole share receives passes through the system disk (a file bigger than its free

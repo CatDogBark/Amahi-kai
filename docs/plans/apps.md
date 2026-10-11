@@ -281,9 +281,10 @@ install on pools: certain things they keep do.
       directly, as P4.4 does: nothing needs to see its writes.
     - This replaces P4.4's read-only rule for the shares an app keeps its files in.
   - `dataset`: the app's own private data (bitShare's chunk store and its database): a ZFS dataset
-    of its own, `<pool>/apps/<id>`, on the pool chosen at install, with an optional quota, in the
-    pool's snapshots. Never Greyhole (it only sees Samba's writes, and nobody opens chunks over
-    SMB).
+    of its own, `<pool>/apps/<id>`, on the pool chosen at install, in the pool's snapshots. No quota
+    (Troy, 2026-10-11: people manage their own files, and the disk warnings cover it; quotas are on
+    the roadmap's long-term list). Never Greyhole (it only sees Samba's writes, and nobody opens
+    chunks over SMB).
 - [ ] **Each storage folder is required or optional.** Optional: the app installs and runs
   without it, and that feature stays off until one is chosen (bitTube streams with no downloads
   folder, its Download hidden). Required: the app can't be installed until there's somewhere to
@@ -293,12 +294,22 @@ install on pools: certain things they keep do.
   took away). Only the container and what Amahi-kai keeps about the app stay on the system disk.
 - [ ] **Chosen at install, changed by reinstalling** for now (Troy); moving an app's storage
   between pools comes later. Uninstall keeps the storage unless asked (P4.1).
+- [ ] **A pool with apps' storage on it** isn't taken offline or deleted (like shares), its page
+  lists the apps on it, and an update snapshots the app's dataset first (instead of copying its
+  folders) and rolls back to it if the update fails. **Rolling the pool back stops the apps on
+  it** while it runs (Troy: "rollbacks are emergencies and they take priority over any app
+  functionality"), then starts them again.
+- [ ] **Two PRs** (Troy, 2026-10-11): **P4.6a**, datasets (what bitShare needs; its tests on the
+  NAS wait for it), then **P4.6b**, Greyhole shares through Samba (what bitTube's downloads need).
 - [ ] **bitTube** runs with no downloads folder (a change in bitTube); its downloads become an
   optional `share`. **bitShare**'s `data` and `chunks` become a required `dataset`. The bitShare
   installed for testing (its folders on the system disk) is uninstalled and installed again onto
   the test pool once this is in.
-- [ ] How bitShare signs people in: Amahi-kai's users (so one account works for both), or its own
-  (today one admin, its password a manifest secret). Troy's decision.
+- [x] **How bitShare signs people in: Amahi-kai's users** (Troy, 2026-10-11: one login for
+  everything on Amahi-kai, the desktop app included; separate logins aren't a good design). It
+  needs a way for an app to ask Amahi-kai whether a sign-in is right (the capability API's
+  direction, [`roadmap.md`](roadmap.md)), planned on its own; P4.6 doesn't wait for it, and bitShare
+  keeps its own admin until then.
 - [ ] How bitShare uses snapshots and datasets (through the helper, as any app would).
 - [x] Where its image comes from: built from `~/Projects/bitShare`, published to GHCR by its tag
   workflow, pinned in the catalog (0.3.0 on 2026-10-10); the image carries the Linux client for
