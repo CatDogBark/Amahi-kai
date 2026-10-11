@@ -60,8 +60,10 @@ Each pool has a card with its layout, health (**ONLINE** when all is well), the 
 free, and the last scrub. Under it, each drive's state, its health (SMART) and its read, write and
 checksum errors.
 
-**Shares on this pool** lists the shares that live on it. While a share is there, the pool can't be
-taken offline or deleted.
+**Shares on this pool** lists the shares that live on it, and **Apps keeping their data here** the
+apps whose data is on it (see [Docker Apps](docker-apps#apps-that-keep-their-data-on-a-zfs-pool)).
+While a share is there, or an installed app keeps its data there, the pool can't be taken offline
+or deleted.
 
 ### When a drive fails or goes missing
 
@@ -121,8 +123,10 @@ only for what changes after it.
 - **Take snapshot now** takes one that's kept until you delete it.
 - **Show the snapshots** lists them, with the space each one holds on its own. **Delete** removes
   one.
-- **Roll back** puts the whole pool, and the shares on it, back to how it was then. Everything
-  changed since is lost, and so are the snapshots taken after it. Type the pool's name to confirm.
+- **Roll back** puts the whole pool, and the shares and apps' data on it, back to how it was then.
+  Everything changed since is lost, and so are the snapshots taken after it. The apps keeping
+  their data on the pool are stopped while it rolls back, then started again. Type the pool's name
+  to confirm.
 
 The page only rolls back or deletes Amahi-kai's own snapshots.
 
@@ -137,7 +141,8 @@ The page only rolls back or deletes Amahi-kai's own snapshots.
   and become free for share storage or a new pool. Type the pool's name to confirm. This can't be
   undone.
 
-Neither works while shares are on the pool: delete them on **Shares** first.
+Neither works while shares are on the pool, or an installed app keeps its data there: delete the
+shares on **Shares**, or uninstall the app on **Apps**, first.
 
 ---
 

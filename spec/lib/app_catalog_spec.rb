@@ -47,6 +47,29 @@ RSpec.describe AppCatalog do
       AppCatalog.reload!
     end
 
+    it "says which apps keep data on a ZFS pool, and where each one's is" do
+      store = File.read(File.join(AppCatalog::CATALOG_DIR, "uptimekuma.yml"))
+                  .sub("  - { name: data, path: /app/data }", "  - { name: data, path: /app/data, kind: dataset }")
+      File.write("#{fetched}/store.yml", store)
+      File.write("#{fetched}/maybe.yml", store.sub("kind: dataset }", "kind: dataset, required: false }"))
+      AppCatalog.reload!
+      expect(AppCatalog.find("store")[:storage]).to eq(:required)
+      expect(AppCatalog.find("maybe")[:storage]).to eq(:optional)
+      expect(AppCatalog.find("gitea")[:storage]).to be_nil
+
+      path = AppCatalog.storage_path
+      begin
+        expect(AppCatalog.storage_pool("store")).to be_nil
+        File.write(path, { "store" => "tank", "maybe" => "tank", "other" => "big" }.to_json)
+        expect(AppCatalog.storage_pool("store")).to eq("tank")
+        expect(AppCatalog.apps_on_pool("tank")).to eq(%w[maybe store])
+        File.write(path, "not json")
+        expect(AppCatalog.storage_pool("store")).to be_nil
+      ensure
+        FileUtils.rm_f(path)
+      end
+    end
+
     it "is what the pages list, read again when the helper swaps in a new one" do
       expect(AppCatalog.source_dir).to eq(fetched)
       expect(AppCatalog.all.map { |app| app[:identifier] }).to eq(%w[gitea])

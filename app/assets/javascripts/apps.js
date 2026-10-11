@@ -71,6 +71,7 @@ function openShareDialog(button) {
 
   dialog.querySelectorAll('[data-fill="name"]').forEach(function(el) { el.textContent = name; });
   dialog.querySelector('[data-fill="verb"]').textContent = button.dataset.verb;
+  var storage = storageChoice(dialog, button);
   dialog.querySelector('[data-role="read-only-note"]').hidden = writes;
   rows.forEach(function(row) {
     var given = current.filter(function(share) { return share.name === row.dataset.share; })[0];
@@ -83,6 +84,7 @@ function openShareDialog(button) {
 
   dialog.querySelector('[data-role="confirm"]').onclick = function() {
     var params = [];
+    if (storage.value()) params.push('pool=' + encodeURIComponent(storage.value()));
     rows.forEach(function(row) {
       if (!row.querySelector('[data-role="give"]').checked) return;
       var share = encodeURIComponent(row.dataset.share);
@@ -94,6 +96,29 @@ function openShareDialog(button) {
     openAppInstall(button.dataset.appShares, button.dataset.url + (params.length ? '?' + params.join('&') : ''), name);
   };
   bootstrap.Modal.getOrCreateInstance(dialog).show();
+}
+
+// Storage, for an app that keeps data on a ZFS pool (P4.6; data-storage: required or optional): the
+// pool its data is on already (data-storage-pool), or one to choose, the first time. An app that
+// needs one can't be installed before there's a pool. Returns { value() } for the install.
+function storageChoice(dialog, button) {
+  var need = button.dataset.storage;
+  var kept = button.dataset.storagePool;
+  var box = dialog.querySelector('[data-role="storage"]');
+  var select = box.querySelector('[data-role="pool"]');
+  var none = box.querySelector('[data-role="pool-none"]');
+  var pools = select.options.length - 1;
+  var choosing = !!need && !kept && pools > 0;
+
+  box.hidden = !need;
+  box.querySelector('[data-fill="storage-pool"]').textContent = kept || '';
+  box.querySelector('[data-role="storage-kept"]').hidden = !kept;
+  box.querySelector('[data-role="storage-choose"]').hidden = !choosing;
+  box.querySelector('[data-role="storage-missing"]').hidden = !need || !!kept || pools > 0 || need !== 'required';
+  none.hidden = none.disabled = need === 'required';
+  select.selectedIndex = need === 'required' && pools > 0 ? 1 : 0;
+  dialog.querySelector('[data-role="confirm"]').disabled = need === 'required' && !kept && pools === 0;
+  return { value: function() { return choosing ? select.value : ''; } };
 }
 
 // Docker's on/off switch on the Apps pages: the slider moves at once, then the server is

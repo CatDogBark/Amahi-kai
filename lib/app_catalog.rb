@@ -16,8 +16,8 @@ class AppCatalog
   STATUS_PATH = '/var/lib/amahi-kai/catalog-status.json'.freeze
   # The catalog format this Amahi-kai knows (the helper's CATALOG_FORMAT). An app whose
   # `requires` is higher is listed, but installing it waits for System Update. Format 2 adds
-  # `web_tls`.
-  FORMAT = 2
+  # `web_tls`; 3, folders kept on a ZFS pool (`kind: dataset`, and `required`).
+  FORMAT = 3
   # Where the helper keeps each app's folders and generated secrets (outside production: tmp/).
   APPS_ROOT = '/var/lib/amahi-kai/apps'.freeze
   SECRETS_DIR = '/var/lib/amahi-kai/app-secrets'.freeze
@@ -25,6 +25,8 @@ class AppCatalog
   # BACKUP_DAYS for Undo update; <id>.json describes it.
   BACKUPS_DIR = '/var/lib/amahi-kai/app-backups'.freeze
   BACKUP_DAYS = 30
+  # The ZFS pool each app keeps its dataset folders on (the helper's APP_STORAGE), { id => pool }.
+  STORAGE_PATH = '/var/lib/amahi-kai/app-storage.json'.freeze
 
   class << self
     # Read again whenever the helper swaps in a newly fetched catalog (a new folder).
@@ -134,6 +136,27 @@ class AppCatalog
       production? ? BACKUPS_DIR : Rails.root.join('tmp', 'app-backups').to_s
     end
 
+    # The ZFS pool the app keeps its data on (installed, or kept from an earlier install), or nil.
+    def storage_pool(id)
+      storage_records[id.to_s]
+    end
+
+    # The ids of the apps whose data is on the pool +name+, installed or kept.
+    def apps_on_pool(name)
+      storage_records.select { |_id, pool| pool == name.to_s }.keys.sort
+    end
+
+    def storage_records
+      data = JSON.parse(File.read(storage_path))
+      data.is_a?(Hash) ? data.select { |id, pool| id.is_a?(String) && pool.is_a?(String) } : {}
+    rescue SystemCallError, JSON::ParserError
+      {}
+    end
+
+    def storage_path
+      production? ? STORAGE_PATH : Rails.root.join('tmp', 'app-storage.json').to_s
+    end
+
     private
 
     # nil for a manifest that can't be read (the helper's checks make that a bug, but one
@@ -146,6 +169,7 @@ class AppCatalog
         category: data['category'], logo_url: data['logo'], image: data['image'], web_port: data['web_port'],
         web_tls: data['web_tls'] == true,
         writes_shares: data['writes_shares'] == true, releases: data['releases'],
+        storage: storage_need(data['folders']),
         ports: Array(data['ports']).map do |p|
           { host: p['host'], container: p['container'], protocol: p['protocol'] || 'tcp',
             label: p['host'] == data['web_port'] ? 'web' : p['label'] }
@@ -154,6 +178,15 @@ class AppCatalog
     rescue Psych::Exception, SystemCallError, NoMethodError, TypeError => e
       Rails.logger.warn("AppCatalog: #{path}: #{e.message}") if defined?(Rails.logger)
       nil
+    end
+
+    # Whether the app keeps folders on a ZFS pool (kind: dataset): :required, :optional or nil, as
+    # the helper reads it.
+    def storage_need(folders)
+      datasets = Array(folders).select { |folder| folder.is_a?(Hash) && folder['kind'] == 'dataset' }
+      return nil if datasets.empty?
+
+      datasets.any? { |folder| folder.fetch('required', true) != false } ? :required : :optional
     end
 
     def production?

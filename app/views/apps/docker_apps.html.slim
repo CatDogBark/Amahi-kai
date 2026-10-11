@@ -37,6 +37,6 @@
           p= t('docker_not_configured', default: 'Check that Docker is installed and the app catalog is configured.')
 
 == render 'shared/install_terminal', id: 'app', title: 'Installing App', stream_url: ''
-== render 'shares_dialog', shares: @shares
+== render 'shares_dialog', shares: @shares, pools: @storage_pools
 
 = javascript_include_tag 'apps'

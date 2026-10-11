@@ -23,7 +23,8 @@ When someone clicks **Install**, Amahi-kai's root helper:
 
 1. Checks your manifest, field by field. It installs nothing from anywhere else.
 2. Makes the app a user of its own, `app-<id>`, and its folders under
-   `/var/lib/amahi-kai/apps/<id>/`, owned by that user.
+   `/var/lib/amahi-kai/apps/<id>/`, owned by that user. Folders marked `kind: dataset` go on a
+   ZFS pool instead (below).
 3. Generates the secrets your manifest asks for (an admin token, a password), shown to the
    server's admins on the Apps page, and kept for the next install.
 4. Pulls your image, by its digest.
@@ -41,7 +42,8 @@ When someone clicks **Install**, Amahi-kai's root helper:
 6. Starts it, and announces it on the LAN as "<Name> on <server>", so devices can find it.
 
 **Updates:** when your manifest's `image` changes in the catalog, each server's Apps page offers
-**Update**. Amahi-kai copies the app's folders first (except those marked `backup: false`), starts
+**Update**. Amahi-kai copies the app's folders first (except those marked `backup: false`, and
+snapshots a dataset instead of copying it), starts
 the new version, and waits up to 5 minutes for it to be healthy. If it isn't, Amahi-kai puts the
 old version and its data back. "Healthy" means your image's Docker `HEALTHCHECK` passes, or,
 without one, that its web page answers and the container is still running 10 seconds later.
@@ -106,6 +108,14 @@ environment:
 - **`environment`** can use `{{uid}}`, `{{gid}}` and `{{timezone}}`, filled in at install.
 - **`secrets`** (`{ env: ADMIN_TOKEN, label: Admin page token }`) are generated at install.
 - **`folders`** with `backup: false` (caches, downloads) aren't copied before an update.
+- **`folders`** with **`kind: dataset`** hold the data that grows (a sync engine's file store, say):
+  they go on a ZFS pool, in a dataset of the app's own (`<pool>/apps/<id>`), on the pool the admin
+  chooses at install, and the pool's snapshots cover them. The others (`kind: state`, the
+  default) stay on the server's system disk: what the app needs to run. A dataset folder is
+  **`required: true`** unless you say `required: false`: the app can't be installed until there's
+  a pool. An optional one is left out until a pool is chosen, so your app must run without it.
+  Before an update, Amahi-kai snapshots the dataset instead of copying it, and rolls back to the
+  snapshot if the update fails. It needs `requires: 3`.
 - **`logo`** is an `https` link. A logo of your own goes in the catalog's `logos/` folder.
 - **`web_tls: true`** says the app's page is HTTPS with its own certificate (as bitShare's is):
   **Open** goes to `https://`, and the app is announced on the LAN as HTTPS. It needs
@@ -163,8 +173,9 @@ notice on its dashboard.
 ### New manifest fields
 
 A server only understands the manifest fields its Amahi-kai knows. A manifest that uses newer
-ones says so with `requires: 2` (the catalog format it needs). Older servers then list the app
-with "Needs a newer Amahi-kai" instead of installing what they can't read.
+ones says so with `requires` (the catalog format it needs: 2 for `web_tls`, 3 for `kind:
+dataset`). Older servers then list the app with "Needs a newer Amahi-kai" instead of installing
+what they can't read.
 
 ---
 

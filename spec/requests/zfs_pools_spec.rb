@@ -80,6 +80,17 @@ RSpec.describe 'ZFS pools', type: :request do
                           ['—', 'was /dev/disk/by-id/ata-Samsung_SSD_870_S2-part1', 'UNAVAIL', '—', '0 / 0 / 0', 'Replace']])
     end
 
+    it "lists the apps keeping their data on a pool" do
+      stub_pools(installed: true, pools: [pool])
+      path = AppCatalog.storage_path
+      File.write(path, { 'gitea' => 'tank', 'unknown' => 'tank', 'other' => 'big' }.to_json)
+      get '/disks/pools'
+      expect(page.at_css('#pool-apps-tank').text.squish).to start_with('Apps keeping their data here: Gitea, unknown.')
+      expect(page.at_css('#rollback-dialog').text.squish).to include('Apps keeping their data on it are stopped while it rolls back')
+    ensure
+      FileUtils.rm_f(path)
+    end
+
     it 'offers only free drives to a new pool, with every layout, and a free name' do
       stub_pools(installed: true, pools: [pool])
       get '/disks/pools'
