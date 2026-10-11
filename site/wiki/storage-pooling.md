@@ -77,6 +77,13 @@ Greyhole works with Samba. When a file is saved to a pooled share:
 3. With extra copies turned on, Greyhole keeps that many copies on different drives.
 4. The file stays where you put it as far as you can see; Greyhole handles where it really lives.
 
+A share's folder is on the system disk, so each file passes through it on the way to the pool
+drives. Nothing stays there but the links, and files waiting their turn (all of them while
+Greyhole is stopped). So a single file bigger than the system disk's free space can't be written
+to a Greyhole share, though the share shows the pool's free space. Amahi-kai warns on the
+dashboard and the Disks pages when the system disk has less than 10 GB free, and more urgently
+under 2 GB: Amahi-kai, its database and its apps need room there too.
+
 ---
 
 ## Installing Greyhole

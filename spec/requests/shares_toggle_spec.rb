@@ -114,6 +114,22 @@ describe "Shares Toggle Actions", type: :request do
         expect(card.at_css("#extras-textarea-#{share.id}")).to be_nil
       end
 
+      it "shows a share's folder without a way to change it: a share stays where it was made" do
+        share = create(:share, name: "Docs", disk_pool_copies: 0)
+        get shares_path
+        card = Nokogiri::HTML(response.body).at_css("#whole_share_#{share.id} .share-card")
+        expect(card.at_css("#share-path-#{share.id}").text).to eq(share.path)
+        expect(card.at_css(".update-path-form, .open-update-path-area")).to be_nil
+        expect(card.text.squish).to include("A share's place is set when it's made, so it stays there: to move one, make a new share")
+
+        expect { Rails.application.routes.recognize_path("/shares/#{share.id}/update_path", method: :put) }
+          .to raise_error(ActionController::RoutingError)
+        put "/shares/#{share.id}/update_path", params: { share: { path: "/mnt/storage-1/Docs" } }
+        expect(response).to have_http_status(:not_found)
+        expect(share.reload.path).not_to eq("/mnt/storage-1/Docs")
+        expect(Privileged.calls.map(&:first)).not_to include("shares.create_dir")
+      end
+
       it "has every switch show what's saved after a reload (no browser-restored state)" do
         share = create(:share, name: "Docs", everyone: false, guest_access: false)
         create(:user)

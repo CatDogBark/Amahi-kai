@@ -151,7 +151,6 @@ Rails.application.routes.draw do
       put 'toggle_write'
       put 'toggle_guest_access'
       put 'toggle_guest_writeable'
-      put 'update_path'
       put 'update_workgroup'
       put 'update_disk_pool_copies'
       put 'update_extras'

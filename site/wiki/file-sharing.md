@@ -44,9 +44,10 @@ places are refused.
 | Greyhole pool | On the share drives, with links in its folder; offered once the Greyhole pool has drives | Copies on two drives (its **Pool copies**, see [Storage Pooling](storage-pooling)) |
 | A ZFS pool | In the pool's shares folder (`/srv/pools/<pool>/shares/<name>`); offered once a pool exists | The pool's redundancy and snapshots (see [ZFS Pools](zfs-pools)) |
 
-A share on the system disk can join the Greyhole pool later, and leave it, with **Pool copies**. A
-share on a ZFS pool stays on that pool: to move it, make a new share and copy the files across.
-While shares are on a ZFS pool, the pool can't be taken offline or deleted.
+A share stays where it was made: its folder can't be changed. To move one somewhere else, make a
+new share there and copy the files across over the network. A share on the system disk can still
+join the Greyhole pool later, and leave it, with **Pool copies**. While shares are on a ZFS pool,
+the pool can't be taken offline or deleted.
 
 ### Deleting a share
 
@@ -67,7 +68,7 @@ Click a share's name to open its settings. Each says what it does underneath.
 | Access | Who can use it | All users, Writeable | All users and Writeable, or (with All users off) each user's access and write, and guests |
 | | Visible | On | Whether the share shows up when browsing the network; hidden, it still opens by its address |
 | | People | | **Clear the list** takes everyone off the share's list of people |
-| Storage | Folder | `/var/lib/amahi-kai/files/<name>` | The folder on disk; click it to change it |
+| Storage | Folder | `/var/lib/amahi-kai/files/<name>` | Where its files are kept, set when the share is made |
 | | Size | | How much the share's files take up, counted when you ask |
 | | Pool copies | Off | Whether Greyhole pools the share, and how many copies it keeps (see [Storage Pooling](storage-pooling)) |
 | Trash | Deleted files | 30 days | Where the share's deleted files are kept, and for how long (see [Trash](#trash)) |
