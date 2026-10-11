@@ -268,15 +268,15 @@ install on pools: certain things they keep do.
   - `state` (the default): what the app needs to run (settings, keys, a small database), in
     `/var/lib/amahi-kai/apps/<id>/` on the system disk, as today.
   - `share`: files people use (bitTube's downloads): a share chosen at install, **wherever
-    Amahi-kai keeps that share** (Troy): the app doesn't care. With S6 ([`storage.md`](storage.md))
-    off, a Greyhole share's folder is on the system disk and the app's files land there first,
-    as anyone's over SMB do; with it on, they land on the pool drives.
+    Amahi-kai keeps that share** (Troy): the app doesn't care. A Greyhole share's folder is on the
+    system disk, so the app's files land there first and Greyhole moves them onto the pool drives,
+    as it does with anyone's over SMB.
     - **A Greyhole share reaches the app through Samba**, so Greyhole sees every write: the helper
       mounts the share by name on the NAS's own Samba (`//127.0.0.1/<share>`), with an account of
       the app's own, and gives that folder to the container (containers still can't reach Samba
       themselves). The app sees the share's real files, not Greyhole's links, so it needs no copy
-      folders and nothing follows the pool for it; and S6 moving the share's folder only changes
-      Samba's path, not the app's mount. The mount comes up after Samba and before the app.
+      folders and nothing follows the pool for it. The mount comes up after Samba and before the
+      app.
     - **A share that isn't pooled** (the system disk, a data drive, a ZFS pool) is mounted
       directly, as P4.4 does: nothing needs to see its writes.
     - This replaces P4.4's read-only rule for the shares an app keeps its files in.

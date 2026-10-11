@@ -142,10 +142,6 @@ setting on Cloudflare's side, for when anyone but Troy gets the link.
 
 Decided with Troy on 2026-10-10, while testing on the NAS; when they're built is his call.
 
-- **S6. Greyhole shares' folders on the pool drives**, as a setting (off by default), so nothing a
-  Greyhole share receives goes through the system disk; copies up to the number of pool drives;
-  the Greyhole Pool page shows which drive holds each share's folder and warns as drives fill
-  ([`storage.md`](storage.md#greyhole-shares-folders-on-the-pool-drives-s6)).
 - **P4.6. App storage:** apps run from the system disk, and what they keep that grows goes in a
   share (wherever Amahi-kai keeps it; a Greyhole share reaches the app through Samba) or a ZFS
   dataset of their own; bitShare's data moves to a dataset, and its tests on the NAS wait for it
@@ -167,6 +163,13 @@ touches the same code.
 
 Troy (2026-10-08): none of these are coming soon; they wait until Amahi-kai is shelf-stable and
 tested.
+
+### Greyhole shares' folders on the pool drives
+
+So nothing a Greyhole share receives passes through the system disk (a file bigger than its free
+space can't be written to a Greyhole share today). Put off on 2026-10-11: Greyhole won't run with a
+share's folder inside a pool drive, so it needs a bind mount per drive or pool drives as
+`<mount>/gh`. Worked out in [`storage.md`](storage.md#later-greyhole-shares-folders-on-the-pool-drives).
 
 ### The phone layout
 
