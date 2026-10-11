@@ -24,6 +24,9 @@ tested on the physical drives ([Tests on real drives](#tests-on-real-drives)).
 - [x] **S5.** The web file browser only views and downloads (Troy, 2026-10-05), so every change
   to a share goes through Samba and Greyhole needs no special handling; pooled files preview and
   download, and folder zips work (#53).
+- [ ] **S6.** Greyhole shares' folders on the pool drives, as a setting (off by default); copies
+  up to the number of pool drives; the Greyhole Pool page shows which drive holds each share's
+  folder and warns as drives fill ([below](#greyhole-shares-folders-on-the-pool-drives-s6)).
 
 ## Decisions
 
@@ -138,12 +141,56 @@ treated as nothing more.**
 
 - The web file browser only views and downloads (S5). Files change over SMB, so every change
   goes through Samba and Greyhole needs nothing special.
-- Apps don't write into pooled shares: an app that writes its own data gets a ZFS dataset (Phase 4)
-  or a share that isn't pooled. If an app ever needs Greyhole, that's handled with that app.
+- Apps don't write into pooled shares directly: an app's files that people use go in a share
+  written through Samba, and an app's private data in a ZFS dataset (P4.6 in
+  [`apps.md`](apps.md#p46-app-storage-and-bitshare)).
 - Research kept for then: `greyhole --fsck --dir=<folder>` queues write tasks for plain files in a
   folder; `greyhole --cp` copies a file onto the pool directly (synchronously, as the caller's
   user); the spool note format (`unlink`, `rmdir`, `rename`: the action, the share, the path(s), a
   blank line) has been the same in Greyhole's Samba modules from 4.5 to 4.22.
+
+### Greyhole shares' folders on the pool drives (S6)
+
+Decided with Troy on 2026-10-10. A share's folder is Greyhole's landing zone: Samba writes every
+file there, and Greyhole then moves it onto the pool drives and leaves a link. Amahi-kai keeps
+every share's folder on the system disk (`/var/lib/amahi-kai/files/<name>`), as the original Amahi
+did (`/var/hda/files`, with `/` itself allowed in the pool), so every file written to a Greyhole
+share is written to the system disk first: wear on its SSD, and a few big files at once can fill
+it before Greyhole catches up. Greyhole doesn't need that: the landing zone can be anywhere, and
+when it's on the drive a copy goes to, Greyhole renames the file there instead of copying it
+(`StorageFile::create_file_copies`, checked in its code on the NAS).
+
+- [ ] **A setting**, on Disks → Greyhole Pool once Greyhole has drives: *Keep pooled shares'
+  folders on the pool drives*. **Off by default** (Troy: "people who know what they are doing can
+  turn it on"), so everything stays as tested and a first setup still works on the system disk
+  alone.
+- [ ] **On:** every share with copies has its folder on a pool drive, picked automatically: the
+  one with the most free space when the folder moves (Greyhole's own drive choice is
+  `most_available_space`, so a copy often lands on the same drive and is a rename). The folder is
+  Amahi-kai's own, beside Greyhole's storage on that drive (Greyhole keeps a share's copies in
+  `<drive>/<share>`, so the folders need a name of their own, decided in the PR). Moving one:
+  Greyhole paused, the share offline for a moment, the folder's links (and any file not moved
+  yet) moved, smb.conf's path changed, Greyhole's check of that share run. Turning a share's
+  copies on moves its folder too; turning them Off leaves it on the drive (a plain share on a
+  data drive). **Off again:** the folders move back to the system disk.
+- [ ] **Copies up to the number of pool drives** (Greyhole caps a share's copies at the drives it
+  has, and has `max` for a copy on every drive). The system disk is never a pool drive, so it
+  never counts. A new Greyhole share keeps **2 copies** by default (Troy). Next to the choice:
+  what it means (1 copy: each file exists once, not protected if a drive fails; 2: survives one
+  drive failing). With fewer drives than copies the page says so ("2 copies (1 until another
+  drive is added)"); Greyhole makes the missing copies once a drive is added.
+- [ ] **Removing or replacing a drive** that holds share folders: their folders move to another
+  pool drive first, then Greyhole empties the drive (part of Remove and Replace).
+- [ ] **A drive failing** with share folders on it: an alert with **Move share folders** (Troy:
+  a button, not automatic), which moves them to another pool drive and runs Greyhole's check to
+  rebuild their links from the copies. The copies setting stays; files that had only one copy, on
+  the dead drive, are lost.
+- [ ] **The Greyhole Pool page** shows each drive's space (it does already), which shares'
+  folders each drive holds, and a warning as a drive fills (the threshold decided in the PR).
+- [ ] **Tests:** turning the setting on moves the folders; a write lands on the pool drive and
+  nothing on the system disk; removing the drive that holds a folder; that drive failing (Move
+  share folders); the low-space warning; turning the setting off. The gh-* steps already passed
+  stand, since the default is unchanged.
 
 ## Tests on real drives
 
@@ -156,7 +203,8 @@ drives, a machine booting from NVMe) are listed at its end.
 
 - Which drives go to the pool and which to Greyhole on the first build (the 4 SSDs, plus what
   later?).
-- How bitShare gets its dataset and permissions: decided in the Phase 4 app model.
+- How bitShare gets its dataset and permissions: P4.6 in [`apps.md`](apps.md) (a dataset of its
+  own on a ZFS pool chosen at install, decided 2026-10-10).
 - Share-storage drives still mount with `defaults,nofail,...`; whether to add `nosuid,nodev`
   (safer for drives brought from another machine) can be decided now that share storage stays
   ext4.

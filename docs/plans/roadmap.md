@@ -138,6 +138,19 @@ After the audit's fixes and the inline-script work (2026-10-09), in this order:
 HTTPS stays later and optional (see below); Cloudflare Access in front of the tunnel is a
 setting on Cloudflare's side, for when anyone but Troy gets the link.
 
+## Planned from the storage tests
+
+Decided with Troy on 2026-10-10, while testing on the NAS; when they're built is his call.
+
+- **S6. Greyhole shares' folders on the pool drives**, as a setting (off by default), so nothing a
+  Greyhole share receives goes through the system disk; copies up to the number of pool drives;
+  the Greyhole Pool page shows which drive holds each share's folder and warns as drives fill
+  ([`storage.md`](storage.md#greyhole-shares-folders-on-the-pool-drives-s6)).
+- **P4.6. App storage:** apps run from the system disk, and what they keep that grows goes in a
+  share written through Samba or a ZFS dataset of their own, never the system disk; bitShare's
+  data moves to a dataset, and its tests on the NAS wait for it
+  ([`apps.md`](apps.md#p46-app-storage-and-bitshare)).
+
 ## Open, not yet scheduled
 
 Smaller findings from the review that no PR covers yet. Fold them into a nearby PR when it

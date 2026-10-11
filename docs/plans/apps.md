@@ -186,8 +186,9 @@ app needs a public hostname. HTTPS for apps through Tailscale (Vaultwarden needs
 - [x] **Shares appear at `/shares/<name>`** in every app. The web app names shares; the helper
   finds their folders in smb.conf (which only it writes) and checks they're in the share root or
   on a mounted data drive.
-- [x] **ZFS datasets for apps wait for bitShare (P4.6)**: none of the five apps needs one, and
-  there's no pool yet to test with.
+- [x] **ZFS datasets for apps wait for bitShare (P4.6)**: none of the five apps needed one, and
+  there was no pool yet to test with. P4.6 (2026-10-10) splits an app's folders into state, shares
+  and datasets.
 - [x] **Backups of app data wait** (Proton Drive as its own app, or app data on a pool). Proxmox
   backups of the NAS VM cover it meanwhile.
 - [x] Uninstall keeps the data unless asked (P4.1).
@@ -255,14 +256,46 @@ Troy (2026-10-06): the NAS knows what it runs, so devices shouldn't have to be t
   starts (`amahi-kai-app-firewall.service`). UFW lets mDNS (5353/udp) in, both when the security
   audit turns UFW on and at each announce when it's on already.
 
-### P4.6: bitShare as the first built-in app
+### P4.6: App storage, and bitShare
 
-- [ ] ZFS datasets for apps (from P4.4): one per app on the pool chosen at install; quotas or not;
-  the app's snapshots are the pool's.
-- [ ] How bitShare signs people in: Amahi-kai's users (so one account works for both), or its own.
+Decided with Troy on 2026-10-10: **apps install on the system disk; their storage doesn't.** An
+app runs from the system disk (its image, and the small state it needs to run) with no storage
+set up at all; the data that grows goes on share storage or a pool, never on the system disk.
+Apps don't install on pools: certain things they keep do.
+
+- [ ] **Each folder in a manifest has a kind:**
+  - `state` (the default): what the app needs to run (settings, keys, a small database), in
+    `/var/lib/amahi-kai/apps/<id>/` on the system disk, as today.
+  - `share`: files people use (bitTube's downloads): a share chosen at install, whose folder isn't
+    on the system disk (a share on a data drive or a ZFS pool, or a Greyhole share with its folder
+    on the pool drives, S6 in [`storage.md`](storage.md)). The app writes it **through Samba**, so
+    Greyhole sees every file: the helper mounts the share over SMB on the NAS itself, with an
+    account of the app's own, and gives that folder to the container (containers still can't
+    reach Samba). The mount comes up after Samba and before the app. A ZFS share can be given
+    directly. This replaces P4.4's read-only rule for the shares an app keeps its files in.
+  - `dataset`: the app's own private data (bitShare's chunk store and its database): a ZFS dataset
+    of its own, `<pool>/apps/<id>`, on the pool chosen at install, with an optional quota, in the
+    pool's snapshots. Never Greyhole (it only sees Samba's writes, and nobody opens chunks over
+    SMB).
+- [ ] **Each storage folder is required or optional.** Optional: the app installs and runs
+  without it, and that feature stays off until one is chosen (bitTube streams with no downloads
+  folder, its Download hidden). Required: the app can't be installed until there's somewhere to
+  put it (bitShare needs a ZFS pool).
+- [ ] **bitShare's database goes with its chunks** (Troy): both on its dataset, so one snapshot
+  always has the two together (a database on the system disk could name chunks a pool roll-back
+  took away). Only the container and what Amahi-kai keeps about the app stay on the system disk.
+- [ ] **Chosen at install, changed by reinstalling** for now (Troy); moving an app's storage
+  between pools comes later. Uninstall keeps the storage unless asked (P4.1).
+- [ ] **bitTube** runs with no downloads folder (a change in bitTube); its downloads become an
+  optional `share`. **bitShare**'s `data` and `chunks` become a required `dataset`. The bitShare
+  installed for testing (its folders on the system disk) is uninstalled and installed again onto
+  the test pool once this is in.
+- [ ] How bitShare signs people in: Amahi-kai's users (so one account works for both), or its own
+  (today one admin, its password a manifest secret). Troy's decision.
 - [ ] How bitShare uses snapshots and datasets (through the helper, as any app would).
-- [ ] Where its image comes from (built from `~/Projects/bitShare` and published, then pinned in the
-  catalog like any app).
+- [x] Where its image comes from: built from `~/Projects/bitShare`, published to GHCR by its tag
+  workflow, pinned in the catalog (0.3.0 on 2026-10-10); the image carries the Linux client for
+  computers to download.
 
 ### Also in Phase 4
 
