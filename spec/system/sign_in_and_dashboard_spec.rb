@@ -45,6 +45,9 @@ RSpec.describe 'Sign in and the dashboard', type: :system do
   it "hears what the browser logs (the harness fails an example on an error; this one clears it)" do
     sign_in_as_admin
     page.execute_script("console.error('a test error'); console.log('a test note')")
+    # The browser sends what it logs on its own time: wait for it rather than read the log at once.
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
+    sleep 0.05 while browser_errors.empty? && Process.clock_gettime(Process::CLOCK_MONOTONIC) < deadline
     expect(browser_errors.map { |e| e[:text] }).to eq(['a test error'])
     @browser_log.clear
   end
