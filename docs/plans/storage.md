@@ -138,12 +138,50 @@ treated as nothing more.**
 
 - The web file browser only views and downloads (S5). Files change over SMB, so every change
   goes through Samba and Greyhole needs nothing special.
-- Apps don't write into pooled shares: an app that writes its own data gets a ZFS dataset (Phase 4)
-  or a share that isn't pooled. If an app ever needs Greyhole, that's handled with that app.
+- Apps don't write into pooled shares directly: an app's files that people use go in a share
+  written through Samba, and an app's private data in a ZFS dataset (P4.6 in
+  [`apps.md`](apps.md#p46-app-storage-and-bitshare)).
 - Research kept for then: `greyhole --fsck --dir=<folder>` queues write tasks for plain files in a
   folder; `greyhole --cp` copies a file onto the pool directly (synchronously, as the caller's
   user); the spool note format (`unlink`, `rmdir`, `rename`: the action, the share, the path(s), a
   blank line) has been the same in Greyhole's Samba modules from 4.5 to 4.22.
+
+### Later: Greyhole shares' folders on the pool drives
+
+Discussed with Troy on 2026-10-10 and 2026-10-11, and **put off to the long term** (Troy: "this
+is getting too complicated"). Kept here so it isn't worked out again.
+
+A share's folder is Greyhole's landing zone: Samba writes every file there, and Greyhole moves it
+onto the pool drives and leaves a link. Amahi-kai keeps every share's folder on the system disk
+(`/var/lib/amahi-kai/files/<name>`), as the original Amahi did (`/var/hda/files`). Data doesn't
+stay there: a pooled share's folder holds only links, and files waiting their turn (all of them
+while Greyhole is stopped, and the temporary and lock files it ignores). The limit that matters is
+space: a single file bigger than the system disk's free space can't be written to a Greyhole share
+at all, though the share reports the pool's free space.
+
+The idea was a setting (off by default) that keeps pooled shares' folders on the pool drives, so
+nothing passes through the system disk; Greyhole renames a file into place, instead of copying
+it, when the landing zone is on the drive a copy goes to (`StorageFile::create_file_copies`).
+**It doesn't work as it stands:** at start-up Greyhole stops with a critical error when a share's
+path starts with a pool drive's path ("Share directories should never be inside a directory that
+you have in your storage pool"), and Amahi-kai's pool drives are their mount points
+(`/mnt/storage-1`), so any folder on the drive is inside one. Two ways round it, if it's taken up:
+
+- **A bind mount per pool drive:** a folder of Amahi-kai's own on the drive
+  (`/mnt/storage-1/.amahi-shares`) mounted again outside `/mnt`
+  (`/var/lib/amahi-kai/pool-shares/storage-1`), with the share folders under it. Greyhole's check
+  only compares paths; the files land on the data drive; every pool drive stays as it is. The
+  rename is lost (Linux won't rename between two mount points, even of one filesystem), so Greyhole
+  copies within the drive. Costs: an fstab entry per pool drive, added and removed with it, and its
+  mount point locked (immutable, like `/mnt`'s) while the drive is missing, so writes fail instead
+  of landing on the system disk.
+- **Pool drives as `<mount>/gh`** (Greyhole's own convention): folders on the same mount as the
+  copies, so the rename works; but every pool drive is defined differently, existing ones are
+  removed and added again, and most of the Greyhole tests are run again.
+
+Decided for it, if it's built: off by default; a new Greyhole share keeps 2 copies; folders move
+off a drive before Remove; after a failure, an alert with **Move share folders**; turning the
+setting off refused while shares with copies Off hold files on a drive; a warning under 10% free.
 
 ## Tests on real drives
 
@@ -156,7 +194,8 @@ drives, a machine booting from NVMe) are listed at its end.
 
 - Which drives go to the pool and which to Greyhole on the first build (the 4 SSDs, plus what
   later?).
-- How bitShare gets its dataset and permissions: decided in the Phase 4 app model.
+- How bitShare gets its dataset and permissions: P4.6 in [`apps.md`](apps.md) (a dataset of its
+  own on a ZFS pool chosen at install, decided 2026-10-10).
 - Share-storage drives still mount with `defaults,nofail,...`; whether to add `nosuid,nodev`
   (safer for drives brought from another machine) can be decided now that share storage stays
   ext4.
