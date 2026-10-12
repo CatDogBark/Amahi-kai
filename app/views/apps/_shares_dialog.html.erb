@@ -1,11 +1,35 @@
-<%# Choosing an app's shares (docs/plans/apps.md, P4.4), before installing it or to change them.
+<%# Choosing an app's shares (docs/plans/apps.md, P4.4), before installing it or to change them,
+    and the ZFS pool for an app that keeps its data on one (P4.6), the first time.
     The Install, Install again and Change buttons carry the app's details (data-app-shares, ...);
-    apps.js fills this in and sends the choice to the install stream (share[]=Movies&write[]=Downloads). %>
+    apps.js fills this in and sends the choice to the install stream
+    (share[]=Movies&write[]=Downloads&pool=tank). pools: the online ZFS pools. %>
 <div class="modal fade" id="app-shares-dialog" tabindex="-1" aria-labelledby="app-shares-title" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header"><h5 class="modal-title" id="app-shares-title">Shares for <span data-fill="name"></span></h5></div>
       <div class="modal-body">
+        <div class="mb-3 pb-3 border-bottom" data-role="storage" hidden>
+          <div class="fw-semibold small mb-1">Storage</div>
+          <p class="small mb-0" data-role="storage-kept">
+            <span data-fill="name"></span>'s data is on the ZFS pool <strong data-fill="storage-pool"></strong>, and stays there.
+          </p>
+          <div data-role="storage-choose">
+            <label class="small d-block mb-1" for="app-storage-pool">
+              <span data-fill="name"></span> keeps its data on a ZFS pool, in a dataset of its own that the pool's
+              snapshots cover. Choose the pool: it stays there.
+            </label>
+            <select class="form-select form-select-sm" id="app-storage-pool" data-role="pool">
+              <option value="" data-role="pool-none">None: without what it keeps on a pool</option>
+              <% pools.each do |pool| %>
+                <option value="<%= pool[:name] %>">ZFS pool <%= pool[:name] %> (<%= pool[:layout] %>)</option>
+              <% end %>
+            </select>
+          </div>
+          <p class="small text-warning mb-0" data-role="storage-missing">
+            <span data-fill="name"></span> keeps its data on a ZFS pool, and there isn't one yet: make one on
+            <%= link_to 'Disks → ZFS Pools', disks_pools_path %> first.
+          </p>
+        </div>
         <p class="small">
           Shares you give <span data-fill="name"></span> appear in it at <code>/shares/&lt;name&gt;</code>.
           <strong>Everyone with an account in <span data-fill="name"></span> can see them</strong>, whatever the

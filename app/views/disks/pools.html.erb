@@ -89,6 +89,13 @@
             <span class="text-muted">No shares on this pool. To put one here, choose it under Where when making a share on <%= link_to 'Shares', shares_path %>.</span>
           <% end %>
         </p>
+        <% apps_here = Array(@pool_apps[pool.name]) %>
+        <% if apps_here.any? %>
+          <p class="small mt-1 mb-0" id="pool-apps-<%= pool.name %>">
+            Apps keeping their data here: <%= safe_join(apps_here.map { |app| link_to(app, apps_installed_apps_path) }, ', ') %>.
+            <span class="text-muted">While they're installed, it can't be taken offline or deleted; a roll-back stops them while it runs, then starts them again.</span>
+          </p>
+        <% end %>
         <% if pool.scanning? %>
           <p class="small text-info mb-0 mt-1" data-pool-scanning="">This page updates every 30 seconds until it's done.</p>
         <% end %>

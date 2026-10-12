@@ -9,10 +9,14 @@
 - status = installed ? app.status : 'available'
 - entry = AppCatalog.find(identifier) || {}
 / The share dialog (_shares_dialog, apps.js) opens from buttons carrying these; it then installs.
+- storage_pool = AppCatalog.storage_pool(identifier) if entry[:storage]
 - share_dialog = { 'app-shares' => identifier, 'app-name' => name, 'url' => apps_docker_install_stream_path(identifier),
-                   'writes' => entry[:writes_shares].to_s, 'current' => (installed ? app.shares : []).to_json }
+                   'writes' => entry[:writes_shares].to_s, 'current' => (installed ? app.shares : []).to_json,
+                   'storage' => entry[:storage].to_s, 'storage-pool' => storage_pool.to_s }
 - data_path = File.join(AppCatalog.apps_root, identifier)
-- uninstall_note = "Uninstall #{name}? Its data stays in #{data_path} and is used again if you install it later."
+- kept_on_pool = "Its data stays on the ZFS pool #{storage_pool}, and its settings in #{data_path}: both are used again if you install it later."
+- uninstall_note = "Uninstall #{name}? #{storage_pool ? kept_on_pool : "Its data stays in #{data_path} and is used again if you install it later."}"
+- data_place = storage_pool ? "on the ZFS pool #{storage_pool}, and its settings in #{data_path}" : "in #{data_path}"
 
 .app.docker-app id="docker_app_#{identifier}"
   table.settings.stretchtoggle
@@ -51,12 +55,21 @@
           .small.mt-1
             = app.shares.any? ? "Shares #{app.share_summary}" : 'No shares'
             button.btn.btn-link.p-0.ms-2.align-baseline type="button" style="font-size: inherit" data=share_dialog.merge('verb' => 'Save and restart') Change
+          - if entry[:storage]
+            .small.mt-1 id="app-storage-#{identifier}"
+              - if storage_pool
+                | Its data is on the ZFS pool
+                =< link_to storage_pool, disks_pools_path
+              - elsif entry[:storage] == :required
+                | Its data needs a ZFS pool now, and it has none: Change gives it one. What it kept on the system disk isn't moved.
+              - else
+                | No pool for its data: what it keeps on one is off. Change gives it one.
         - if status == 'error' && installed && app.error_message.present?
           .small.text-danger.mt-1 = app.error_message
         - if status == 'available' && AppCatalog.data_kept?(identifier)
           .small.mt-1
             | Its data from an earlier install is kept and used again.
-            button.btn.btn-link.p-0.ms-1.text-danger.align-baseline type="button" style="font-size: inherit" data-confirm="Delete #{name}'s data in #{data_path}? This can't be undone." data-call="dockerAppAction" data-args='["/apps/docker/uninstall/#{identifier}?delete_data=1", "@el"]' Delete it
+            button.btn.btn-link.p-0.ms-1.text-danger.align-baseline type="button" style="font-size: inherit" data-confirm="Delete #{name}'s data #{data_place}? This can't be undone." data-call="dockerAppAction" data-args='["/apps/docker/uninstall/#{identifier}?delete_data=1", "@el"]' Delete it
       td.text-end.pe-3.text-nowrap style='width: 240px; vertical-align:middle'
         - case status
         - when 'available'

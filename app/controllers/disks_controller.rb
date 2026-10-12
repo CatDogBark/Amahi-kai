@@ -183,6 +183,10 @@ class DisksController < ApplicationController
     @next_scrub = StoragePools.next_scrub
     # The SMB shares on each pool (Shares → New Share → Where): it isn't taken offline or deleted under them
     @pool_shares = Share.where.not(zfs_pool: [nil, '']).order(:name).group_by(&:zfs_pool)
+    # The apps keeping their data on each pool (P4.6), by name: installed, or kept at uninstall
+    @pool_apps = AppCatalog.storage_records.group_by(&:last).transform_values do |records|
+      records.map { |id, _pool| AppCatalog.find(id)&.dig(:name) || id }.sort
+    end
   end
 
   # The pool buttons post JSON and reload on { status: 'ok' }, or show the error.

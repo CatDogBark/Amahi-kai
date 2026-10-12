@@ -144,6 +144,70 @@ describe "Docker Apps", type: :request do
     end
   end
 
+  # P4.6: an app whose catalog entry keeps folders on a ZFS pool (kind: dataset).
+  describe "storage on a ZFS pool" do
+    let(:fetched) { Rails.root.join('tmp', 'catalog', 'apps').to_s }
+    let(:storage) { AppCatalog.storage_path }
+
+    before do
+      FileUtils.rm_rf(File.dirname(fetched))
+      FileUtils.mkdir_p(fetched)
+      File.write("#{fetched}/store.yml", File.read(File.join(AppCatalog::CATALOG_DIR, 'uptimekuma.yml'))
+                                            .sub(/^name: .*$/, 'name: Store')
+                                            .sub('  - { name: data, path: /app/data }', '  - { name: data, path: /app/data, kind: dataset }'))
+      FileUtils.cp(File.join(AppCatalog::CATALOG_DIR, 'gitea.yml'), fetched)
+      AppCatalog.reload!
+      allow(StoragePools).to receive(:zfs_installed?).and_return(true)
+      allow(StoragePools).to receive(:status).and_return(
+        installed: true, offline: [], error: nil,
+        pools: [StoragePools::Pool.new(name: 'tank', vdevs: [{ 'name' => 'mirror-0', 'children' => [] }])]
+      )
+    end
+
+    after do
+      FileUtils.rm_rf([File.dirname(fetched), storage])
+      AppCatalog.reload!
+    end
+
+    it "offers the online pools in the install dialog, and says when there's none" do
+      get "/apps"
+      page = Nokogiri::HTML(response.body)
+      install = page.at_css('#docker_app_store button[data-app-shares]')
+      expect(install['data-storage']).to eq('required')
+      expect(install['data-storage-pool']).to eq('')
+      expect(page.css('#app-storage-pool option').map { |o| [o['value'], o.text.strip] })
+        .to eq([['', 'None: without what it keeps on a pool'], ['tank', 'ZFS pool tank (Mirror)']])
+      expect(page.at_css('#docker_app_gitea button[data-app-shares]')['data-storage']).to eq('')
+
+      allow(StoragePools).to receive(:status).and_return(installed: true, offline: [], error: nil, pools: [])
+      get "/apps"
+      page = Nokogiri::HTML(response.body)
+      expect(page.css('#app-storage-pool option').size).to eq(1)
+      expect(page.at_css('[data-role="storage-missing"]').text.squish).to include("there isn't one yet", 'Disks → ZFS Pools')
+    end
+
+    it "passes the pool chosen to the helper, only for an app that keeps data on one" do
+      get "/apps/docker/install_stream/store", params: { pool: 'tank' }, headers: same_origin
+      expect(Privileged.calls).to include(['apps.install', { app: 'store', shares: [], pool: 'tank' }])
+      get "/apps/docker/install_stream/gitea", params: { pool: 'tank' }, headers: same_origin
+      expect(Privileged.calls).to include(['apps.install', { app: 'gitea', shares: [] }])
+    end
+
+    it "says on an installed app's row which pool its data is on" do
+      DockerApp.create!(identifier: 'store', name: 'Store', image: AppCatalog.find('store')[:image], status: 'running', host_port: 3001)
+      get "/apps/installed_apps"
+      expect(Nokogiri::HTML(response.body).at_css('#app-storage-store').text.squish).to include('Its data needs a ZFS pool now, and it has none')
+
+      File.write(storage, { 'store' => 'tank' }.to_json)
+      get "/apps/installed_apps"
+      page = Nokogiri::HTML(response.body)
+      expect(page.at_css('#app-storage-store').text.squish).to eq('Its data is on the ZFS pool tank')
+      expect(page.at_css('#docker_app_store button[data-app-shares]')['data-storage-pool']).to eq('tank')
+      get "/apps/docker_apps"
+      expect(response.body).to include("Its data stays on the ZFS pool tank, and its settings in #{AppCatalog.apps_root}/store: both are used again")
+    end
+  end
+
   describe "installing" do
     it "installs through the helper, streaming its progress, and says where to open the app" do
       get "/apps/docker/install_stream/uptimekuma", headers: same_origin.merge('Host' => '192.168.1.111')

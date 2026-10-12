@@ -143,8 +143,8 @@ button in the header gets its dot, and the app's row offers **Update to <version
 
 **Update**:
 
-1. Copies the app's data. Caches and Transmission's downloads are left out. It stops first if
-   there isn't room for the copy.
+1. Copies the app's data. Caches and Transmission's downloads are left out, and data on a ZFS pool
+   is snapshotted instead of copied. It stops first if there isn't room for the copy.
 2. Starts the new version, and waits up to 5 minutes for it to come up healthy.
 3. If it doesn't come up, puts the old version and its data back by itself, and says why.
 
@@ -191,8 +191,22 @@ Each app's data is in its own folder, owned by the app's user:
 Generated passwords are in `/var/lib/amahi-kai/app-secrets/<app>.json`, readable only by root and
 Amahi-kai.
 
-Shares you give an app stay where they are: the app reads (or writes) them in place. Giving an
-app storage on a ZFS pool comes with bitShare.
+Shares you give an app stay where they are: the app reads (or writes) them in place.
+
+### Apps that keep their data on a ZFS pool
+
+Some apps keep the data that grows on a ZFS pool (bitShare's files, say), so it isn't on the
+system disk. Installing one asks for the pool, under **Storage**; it can't be installed before
+there's a pool (**Disks → ZFS Pools**). Its data goes in a dataset of its own,
+`<pool>/apps/<app>` (mounted at `/srv/pools/<pool>/apps/<app>`), and stays on that pool: its
+settings stay in its folder on the system disk. The app's row says which pool.
+
+- The pool's hourly and daily snapshots cover it. **Rolling the pool back** stops the app while
+  it runs, then starts it again: its data goes back too.
+- A pool can't be taken offline or deleted while an installed app keeps its data on it.
+- **Update** snapshots the dataset instead of copying it, and **Undo update** rolls back to it.
+- **Uninstall** keeps the dataset; **Delete it** deletes it too. To move an app to another pool,
+  uninstall it, delete its data, and install it again on the other one.
 
 ### Backing up an app's data
 
