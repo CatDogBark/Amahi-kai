@@ -264,7 +264,7 @@ run) with no storage set up at all. What it keeps that grows goes in a share or 
 and the app only declares which kind it needs: Amahi-kai orchestrates the rest. Apps don't
 install on pools: certain things they keep do.
 
-- [ ] **Each folder in a manifest has a kind:**
+- [ ] **Each folder in a manifest has a kind** (`state` and `dataset` done in P4.6a, #158; `share` is P4.6b):
   - `state` (the default): what the app needs to run (settings, keys, a small database), in
     `/var/lib/amahi-kai/apps/<id>/` on the system disk, as today.
   - `share`: files people use (bitTube's downloads): a share chosen at install, **wherever
@@ -285,24 +285,26 @@ install on pools: certain things they keep do.
     (Troy, 2026-10-11: people manage their own files, and the disk warnings cover it; quotas are on
     the roadmap's long-term list). Never Greyhole (it only sees Samba's writes, and nobody opens
     chunks over SMB).
-- [ ] **Each storage folder is required or optional.** Optional: the app installs and runs
+- [x] **Each storage folder is required or optional** (#158). Optional: the app installs and runs
   without it, and that feature stays off until one is chosen (bitTube streams with no downloads
   folder, its Download hidden). Required: the app can't be installed until there's somewhere to
   put it (bitShare needs a ZFS pool).
-- [ ] **bitShare's database goes with its chunks** (Troy): both on its dataset, so one snapshot
+- [x] **bitShare's database goes with its chunks** (Troy; catalog amahi-kai-apps#14): both on its dataset, so one snapshot
   always has the two together (a database on the system disk could name chunks a pool roll-back
   took away). Only the container and what Amahi-kai keeps about the app stay on the system disk.
-- [ ] **Chosen at install, changed by reinstalling** for now (Troy); moving an app's storage
+- [x] **Chosen at install, changed by reinstalling** for now (Troy; #158); moving an app's storage
   between pools comes later. Uninstall keeps the storage unless asked (P4.1).
-- [ ] **A pool with apps' storage on it** isn't taken offline or deleted (like shares), its page
+- [x] **A pool with apps' storage on it** (#158) isn't taken offline or deleted (like shares), its page
   lists the apps on it, and an update snapshots the app's dataset first (instead of copying its
   folders) and rolls back to it if the update fails. **Rolling the pool back stops the apps on
   it** while it runs (Troy: "rollbacks are emergencies and they take priority over any app
   functionality"), then starts them again.
 - [ ] **Two PRs** (Troy, 2026-10-11): **P4.6a**, datasets (what bitShare needs; its tests on the
-  NAS wait for it), then **P4.6b**, Greyhole shares through Samba (what bitTube's downloads need).
+  NAS wait for it), done in #158, then **P4.6b**, Greyhole shares through Samba (what bitTube's
+  downloads need).
 - [ ] **bitTube** runs with no downloads folder (a change in bitTube); its downloads become an
-  optional `share`. **bitShare**'s `data` and `chunks` become a required `dataset`. The bitShare
+  optional `share`. **bitShare**'s `data` and `chunks` became a required `dataset` (catalog
+  amahi-kai-apps#14). The bitShare
   installed for testing (its folders on the system disk) is uninstalled and installed again onto
   the test pool once this is in.
 - [x] **How bitShare signs people in: Amahi-kai's users** (Troy, 2026-10-11: one login for
@@ -310,7 +312,8 @@ install on pools: certain things they keep do.
   needs a way for an app to ask Amahi-kai whether a sign-in is right (the capability API's
   direction, [`roadmap.md`](roadmap.md)), planned on its own; P4.6 doesn't wait for it, and bitShare
   keeps its own admin until then.
-- [ ] How bitShare uses snapshots and datasets (through the helper, as any app would).
+- [x] How bitShare uses snapshots and datasets: through the helper, as any app does (the pool's
+  snapshots, and one before each update; #158).
 - [x] Where its image comes from: built from `~/Projects/bitShare`, published to GHCR by its tag
   workflow, pinned in the catalog (0.3.0 on 2026-10-10); the image carries the Linux client for
   computers to download.
