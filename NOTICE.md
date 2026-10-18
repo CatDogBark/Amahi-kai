@@ -12,7 +12,7 @@ Licensed under GNU AGPL v3
 ## Derivative Work
 
 **Amahi-kai Platform** (modernized fork)
-Copyright (C) 2026, CatDogBark
+Copyright (C) 2026, Enlightened Solutions LLC
 https://github.com/CatDogBark/Amahi-kai
 Licensed under GNU AGPL v3 (inherited from original)
 
