@@ -128,8 +128,8 @@ RSpec.describe 'AmahiHelper' do
     end
 
     it 'refuses a login that already exists' do
-      allow(helper).to receive(:passwd).with('troy').and_return(account(uid: 1000, gid: 1000))
-      expect(refusal('users.create', { 'login' => 'troy', 'name' => 'Troy' })).to eq('troy already exists on this system')
+      allow(helper).to receive(:passwd).with('casey').and_return(account(uid: 1000, gid: 1000))
+      expect(refusal('users.create', { 'login' => 'casey', 'name' => 'Casey' })).to eq('casey already exists on this system')
     end
 
     it 'refuses names the passwd file cannot hold' do
@@ -143,7 +143,7 @@ RSpec.describe 'AmahiHelper' do
   describe 'operations on existing accounts' do
     before do
       allow(helper).to receive(:passwd).with('ann').and_return(account(uid: 1001))
-      allow(helper).to receive(:passwd).with('troy').and_return(account(uid: 1000, gid: 1000, shell: '/bin/bash'))
+      allow(helper).to receive(:passwd).with('casey').and_return(account(uid: 1000, gid: 1000, shell: '/bin/bash'))
       allow(helper).to receive(:passwd).with('sysuser').and_return(account(uid: 120))
     end
 
@@ -164,8 +164,8 @@ RSpec.describe 'AmahiHelper' do
 
     it 'only changes accounts the app created' do
       %w[users.set_password users.set_name users.normalize].each do |op|
-        args = { 'login' => 'troy', 'password' => 'longenough', 'name' => 'T' }.slice(*AmahiHelper::OPERATIONS[op][:params])
-        expect(refusal(op, args)).to eq('troy is not an account Amahi created'), op
+        args = { 'login' => 'casey', 'password' => 'longenough', 'name' => 'T' }.slice(*AmahiHelper::OPERATIONS[op][:params])
+        expect(refusal(op, args)).to eq('casey is not an account Amahi created'), op
         expect(refusal(op, args.merge('login' => 'sysuser'))).to eq('sysuser is not an account Amahi created'), op
         expect(refusal(op, args.merge('login' => 'ghost'))).to eq('ghost has no Linux account'), op
       end
@@ -219,7 +219,7 @@ RSpec.describe 'AmahiHelper' do
     end
 
     it "refuses to delete an account the app didn't create" do
-      expect(refusal('users.delete', { 'login' => 'troy' })).to eq('troy is not an account Amahi created')
+      expect(refusal('users.delete', { 'login' => 'casey' })).to eq('casey is not an account Amahi created')
     end
   end
 
@@ -1732,7 +1732,7 @@ RSpec.describe 'AmahiHelper' do
     it 'turns off SSH password login only while an account that can log in has a key' do
       allow(helper).to receive(:ssh_key_holders).and_return([])
       expect(refusal('security.harden_ssh', { 'setting' => 'password_login' })).to include('would lock everyone out of SSH')
-      allow(helper).to receive(:ssh_key_holders).and_return(['troy'])
+      allow(helper).to receive(:ssh_key_holders).and_return(['casey'])
       expect(steps('security.harden_ssh', { 'setting' => 'password_login' }))
         .to eq([[:harden_ssh, { 'PasswordAuthentication' => 'no', 'KbdInteractiveAuthentication' => 'no' }]])
     end
@@ -1742,7 +1742,7 @@ RSpec.describe 'AmahiHelper' do
       File.write(shells, "# /etc/shells\n/bin/sh\n/bin/bash\n/usr/bin/bash\n")
       allow(File).to receive(:readlines).and_call_original
       allow(File).to receive(:readlines).with('/etc/shells', chomp: true).and_return(File.readlines(shells, chomp: true))
-      people = { 'troy' => [1000, '/bin/bash', "ssh-ed25519 AAAAC3Nza troy@laptop\n"],
+      people = { 'casey' => [1000, '/bin/bash', "ssh-ed25519 AAAAC3Nza casey@laptop\n"],
                  'ann' => [1001, '/usr/sbin/nologin', "ssh-ed25519 AAAAC3Nza ann\n"],
                  'bob' => [1002, '/bin/bash', "# ssh-ed25519 AAAAC3Nza old key\n"],
                  'svc' => [999, '/bin/bash', "ssh-rsa AAAAB3Nza svc\n"],
@@ -1754,7 +1754,7 @@ RSpec.describe 'AmahiHelper' do
         Etc::Passwd.new(name, 'x', uid, 100, '', home, shell)
       end
       allow(Etc).to receive(:passwd) { |&block| entries.each(&block) }
-      expect(helper.ssh_key_holders).to eq(['troy'])
+      expect(helper.ssh_key_holders).to eq(['casey'])
     end
 
     describe 'the sshd drop-in' do

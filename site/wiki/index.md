@@ -81,6 +81,7 @@ start, stop and restart where that's safe.
 ## Getting help
 
 - **GitHub Issues**: [github.com/CatDogBark/Amahi-kai/issues](https://github.com/CatDogBark/Amahi-kai/issues)
+- **Email**: [catdogbark@pm.me](mailto:catdogbark@pm.me)
 - **Logs**: `journalctl -u amahi-kai -f`
 - **Debug pages**: in the web UI at `/tab/debug`, for admins: Amahi-kai's log, the system log and
   system info

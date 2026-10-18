@@ -384,7 +384,7 @@ RSpec.describe 'AmahiHelper ZFS pools' do
       Dir.mktmpdir do |procs|
         FileUtils.mkdir_p(root)
         { 10 => ["#{root}/shares/vault", nil, 'smbd', 900], 11 => ['/', "#{root}/shares/vault/a.jpg", 'smbd', 900],
-          12 => ['/home/troy', '/var/log/x', 'bash', 70], 13 => [root, nil, 'cool) prog', 5] }.each do |pid, (cwd, file, comm, ppid)|
+          12 => ['/home/casey', '/var/log/x', 'bash', 70], 13 => [root, nil, 'cool) prog', 5] }.each do |pid, (cwd, file, comm, ppid)|
           FileUtils.mkdir_p("#{procs}/#{pid}/fd")
           File.symlink(cwd, "#{procs}/#{pid}/cwd")
           File.symlink(file, "#{procs}/#{pid}/fd/3") if file

@@ -1,6 +1,6 @@
 # Browser tests
 
-A plan, reviewed by Troy (2026-10-09). Built, in two pull requests: the harness, the CI job and
+A plan, reviewed by CatDogBark (2026-10-09). Built, in two pull requests: the harness, the CI job and
 the first four pages (#127), then the rest of the table. The setup wizard's spec waits for the
 wizard's redo. The streams needed no new simulated paths: outside production the root helper
 records its calls, so a window opens, streams what the page says and finishes.
@@ -8,7 +8,7 @@ records its calls, so a window opens, streams what the page says and finishes.
 ## Why
 
 Every JavaScript change this week (the `data-call` dispatcher in #121, the scripts moved to files
-in #122, the enforced Content-Security-Policy in #123) was checked by Troy clicking through the
+in #122, the enforced Content-Security-Policy in #123) was checked by CatDogBark clicking through the
 NAS. The request specs render every page, but they don't run its JavaScript, so a button that
 does nothing, a script the policy refuses, or a page that throws on load gets through CI. The
 sign-in page's leftover inline script (#124) is the example: 1511 examples passed with it there.

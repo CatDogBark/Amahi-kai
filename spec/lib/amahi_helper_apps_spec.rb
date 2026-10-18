@@ -225,7 +225,7 @@ RSpec.describe 'AmahiHelper apps' do
   describe 'the catalog' do
     let(:ids) { Dir[File.join(catalog, '*.yml')].map { |path| File.basename(path, '.yml') } }
 
-    it "has the apps Troy chose, each a manifest the helper accepts" do
+    it "has the apps chosen for the catalog, each a manifest the helper accepts" do
       expect(ids).to contain_exactly('jellyfin', 'vaultwarden', 'uptimekuma', 'gitea', 'transmission', 'bittube')
       ids.each do |id|
         manifest = helper.app_manifest(id)
