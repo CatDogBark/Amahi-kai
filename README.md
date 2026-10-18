@@ -84,7 +84,10 @@ See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for how changes are made, and
 ## Credits
 
 - **Original:** [Amahi](http://www.amahi.org) (2007-2013)
-- **Modernization:** Kai 🌊 + Troy (2026)
+- **Modernization:** Kai 🌊 + CatDogBark (2026)
+
+Questions, problems, ideas: [GitHub Issues](https://github.com/CatDogBark/Amahi-kai/issues), or email
+catdogbark@pm.me.
 
 ## License
 

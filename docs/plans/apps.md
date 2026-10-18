@@ -1,6 +1,6 @@
 # Phase 4: apps
 
-Status: planned with Troy, 2026-10-05; P4.1 (#58), P4.2 (#59), P4.4 (#60) and P4.5 (#62) are done,
+Status: planned with CatDogBark, 2026-10-05; P4.1 (#58), P4.2 (#59), P4.4 (#60) and P4.5 (#62) are done,
 not yet tested on the NAS ([`docs/testing/apps.md`](../testing/apps.md)). The overall decisions and P4.1's are made (below); each
 later PR's decisions are listed under it, to settle when that PR starts.
 
@@ -26,7 +26,7 @@ reached and stored, so that installing an app can't give it more than it was mea
   security audit's "Docker ports" check warns about it).
 - **No way to give an app a share or a pool dataset**: the media folder Jellyfin gets is fixed in
   the catalog.
-- No apps are installed on Troy's NAS (the dashboard shows 0), so nothing has to be migrated.
+- No apps are installed on CatDogBark's NAS (the dashboard shows 0), so nothing has to be migrated.
 
 ## Goals
 
@@ -49,7 +49,7 @@ These shape every PR after them.
   The web app loses `sudo docker` and the `docker` group. Alternatives: keep `sudo docker` (simple,
   but the web app stays root-equivalent); rootless Docker or Podman per app (stronger isolation, but
   a larger change: ports below 1024, file ownership on shares, a second container runtime).
-  **Decided: the helper** (Troy, 2026-10-05). This is about what may start containers inside the
+  **Decided: the helper** (CatDogBark, 2026-10-05). This is about what may start containers inside the
   NAS, not about reaching apps remotely (that's O3).
 - [x] **O2. How an app is defined.** Recommended: **a small manifest of our own** (YAML in the repo),
   with only the fields Amahi-kai supports (image and version, ports, folders, storage it asks for,
@@ -62,7 +62,7 @@ These shape every PR after them.
   proxy with a hostname per app on the LAN (`jellyfin.nas.lan`): nicer addresses, but it needs
   local DNS (dnsmasq isn't running on the NAS) and certificates. **Decided: own ports, with remote
   use required**: bitShare and other apps must work through the Cloudflare Tunnel (P4.3) or
-  Tailscale. **Updated with P4.2 (Troy, 2026-10-04): Tailscale is the default way to reach apps
+  Tailscale. **Updated with P4.2 (CatDogBark, 2026-10-04): Tailscale is the default way to reach apps
   from outside**; a Cloudflare hostname for an app is a specialty case, built later if wanted.
 - [x] **O4. Where apps keep data.** Recommended: **each app gets its own system user and folder**
   (`/var/lib/amahi-kai/apps/<app>`, owned by that user, no `777`), and its container runs as that
@@ -114,19 +114,19 @@ Decisions for this PR:
 - [x] **A4. One user per app.** Recommended: a system user per app (`app-jellyfin`), so one app can't
   read another's data. Alternative: one shared `amahi-apps` user (simpler; apps can read each
   other's files). **Decided: one per app.**
-- [x] **A5. Which apps stay in the catalog.** **Decided (Troy, 2026-10-05): Jellyfin, Vaultwarden,
+- [x] **A5. Which apps stay in the catalog.** **Decided (CatDogBark, 2026-10-05): Jellyfin, Vaultwarden,
   Uptime Kuma, Gitea and Transmission.** Dropped: Portainer (Docker's socket is root), Nextcloud
   and Syncthing (bitShare covers sync), Home Assistant (its container version has no add-ons and
   needs host networking to find devices; if wanted, Home Assistant OS runs better as its own
   Proxmox VM), Audiobookshelf, Pi-hole, Paperless-ngx (broken as defined: no Redis, a `changeme`
   secret) and Grafana (empty without a metrics source). Apps are added later when wanted. None of
   the five has been tested with Amahi-kai yet; each is tested on the new model. **bitTube**
-  (Troy's own app, `CatDogBark/bitTube`, from GitHub's registry) joined the catalog on
+  (CatDogBark's own app, `CatDogBark/bitTube`, from GitHub's registry) joined the catalog on
   2026-10-05, as the sixth.
 - [x] **A6. Default memory limit** for apps whose manifest doesn't set one, on an 8 GB VM shared with
-  ZFS's 2 GB cache. Recommended: 1 GB, with Jellyfin set higher in its manifest. **Decided** (Troy
+  ZFS's 2 GB cache. Recommended: 1 GB, with Jellyfin set higher in its manifest. **Decided** (CatDogBark
   is raising the VM to 8 GB).
-- [x] **A7. One container per app.** **Decided (Troy, 2026-10-05):** the manifest describes a single
+- [x] **A7. One container per app.** **Decided (CatDogBark, 2026-10-05):** the manifest describes a single
   container. All five apps keep their data in a built-in database file (SQLite) or need none.
   Apps built from several containers (an app plus its database server and Redis, like Immich or
   a working Paperless-ngx) wait until one is wanted; companion support is designed then, with that
@@ -138,7 +138,7 @@ Decisions for this PR:
 **Done** (#59). Each app on its own port, `/app/<id>` retired, the dashboard and Apps pages linking
 to each app's own address.
 
-Decisions (Troy, 2026-10-04):
+Decisions (CatDogBark, 2026-10-04):
 
 - [x] **Who can reach an app's port: the LAN and Tailscale only.** The helper's `apps.firewall`
   adds a chain (`AMAHI-APPS`) to Docker's `DOCKER-USER`: new connections into a container are
@@ -169,7 +169,7 @@ app needs a public hostname. HTTPS for apps through Tailscale (Vaultwarden needs
 
 ### P4.4: Storage for apps
 
-**Done** (#60): shares for apps. Decisions (Troy, 2026-10-04):
+**Done** (#60): shares for apps. Decisions (CatDogBark, 2026-10-04):
 
 - [x] **Shares chosen at install**, none by default, and changed later from the app's row (a
   reinstall with the new shares: the container is recreated, data and ports kept, and the image
@@ -195,7 +195,7 @@ app needs a public hostname. HTTPS for apps through Tailscale (Vaultwarden needs
 
 ### P4.5: App updates
 
-**Done** (#62). Decisions (Troy, 2026-10-05):
+**Done** (#62). Decisions (CatDogBark, 2026-10-05):
 
 - [x] **Manual.** An installed app's row offers **Update to <version>** when the catalog (fetched on
   its own since P4.5b) has another version than the one it runs. Installing again and changing shares
@@ -218,7 +218,7 @@ app needs a public hostname. HTTPS for apps through Tailscale (Vaultwarden needs
 
 ### P4.5b: The catalog's own repo
 
-Decided (Troy, 2026-10-06): app updates mustn't wait for an Amahi-kai update.
+Decided (CatDogBark, 2026-10-06): app updates mustn't wait for an Amahi-kai update.
 
 - [x] **A repo of its own**, [CatDogBark/amahi-kai-apps](https://github.com/CatDogBark/amahi-kai-apps):
   one manifest per app in `apps/<id>.yml`, the same fields as before. Its CI runs this repo's
@@ -245,7 +245,7 @@ Decided (Troy, 2026-10-06): app updates mustn't wait for an Amahi-kai update.
 
 ### P4.5c: Apps on the LAN
 
-Troy (2026-10-06): the NAS knows what it runs, so devices shouldn't have to be told its address.
+CatDogBark (2026-10-06): the NAS knows what it runs, so devices shouldn't have to be told its address.
 
 - [x] **Announced over mDNS** by Avahi (`avahi-daemon`, installed by `bin/amahi-install`, and by
   `bin/amahi-update` on NASes from before): each installed app with a web page is an HTTP service
@@ -258,7 +258,7 @@ Troy (2026-10-06): the NAS knows what it runs, so devices shouldn't have to be t
 
 ### P4.6: App storage, and bitShare
 
-Decided with Troy on 2026-10-10: **apps install on the system disk, and Amahi-kai decides where
+Decided with CatDogBark on 2026-10-10: **apps install on the system disk, and Amahi-kai decides where
 their storage goes.** An app runs from the system disk (its image, and the small state it needs to
 run) with no storage set up at all. What it keeps that grows goes in a share or a ZFS dataset,
 and the app only declares which kind it needs: Amahi-kai orchestrates the rest. Apps don't
@@ -268,7 +268,7 @@ install on pools: certain things they keep do.
   - `state` (the default): what the app needs to run (settings, keys, a small database), in
     `/var/lib/amahi-kai/apps/<id>/` on the system disk, as today.
   - `share`: files people use (bitTube's downloads): a share chosen at install, **wherever
-    Amahi-kai keeps that share** (Troy): the app doesn't care. A Greyhole share's folder is on the
+    Amahi-kai keeps that share** (CatDogBark): the app doesn't care. A Greyhole share's folder is on the
     system disk, so the app's files land there first and Greyhole moves them onto the pool drives,
     as it does with anyone's over SMB.
     - **A Greyhole share reaches the app through Samba**, so Greyhole sees every write: the helper
@@ -282,24 +282,24 @@ install on pools: certain things they keep do.
     - This replaces P4.4's read-only rule for the shares an app keeps its files in.
   - `dataset`: the app's own private data (bitShare's chunk store and its database): a ZFS dataset
     of its own, `<pool>/apps/<id>`, on the pool chosen at install, in the pool's snapshots. No quota
-    (Troy, 2026-10-11: people manage their own files, and the disk warnings cover it; quotas are on
+    (CatDogBark, 2026-10-11: people manage their own files, and the disk warnings cover it; quotas are on
     the roadmap's long-term list). Never Greyhole (it only sees Samba's writes, and nobody opens
     chunks over SMB).
 - [x] **Each storage folder is required or optional** (#158). Optional: the app installs and runs
   without it, and that feature stays off until one is chosen (bitTube streams with no downloads
   folder, its Download hidden). Required: the app can't be installed until there's somewhere to
   put it (bitShare needs a ZFS pool).
-- [x] **bitShare's database goes with its chunks** (Troy; catalog amahi-kai-apps#14): both on its dataset, so one snapshot
+- [x] **bitShare's database goes with its chunks** (CatDogBark; catalog amahi-kai-apps#14): both on its dataset, so one snapshot
   always has the two together (a database on the system disk could name chunks a pool roll-back
   took away). Only the container and what Amahi-kai keeps about the app stay on the system disk.
-- [x] **Chosen at install, changed by reinstalling** for now (Troy; #158); moving an app's storage
+- [x] **Chosen at install, changed by reinstalling** for now (CatDogBark; #158); moving an app's storage
   between pools comes later. Uninstall keeps the storage unless asked (P4.1).
 - [x] **A pool with apps' storage on it** (#158) isn't taken offline or deleted (like shares), its page
   lists the apps on it, and an update snapshots the app's dataset first (instead of copying its
   folders) and rolls back to it if the update fails. **Rolling the pool back stops the apps on
-  it** while it runs (Troy: "rollbacks are emergencies and they take priority over any app
+  it** while it runs (CatDogBark: "rollbacks are emergencies and they take priority over any app
   functionality"), then starts them again.
-- [ ] **Two PRs** (Troy, 2026-10-11): **P4.6a**, datasets (what bitShare needs; its tests on the
+- [ ] **Two PRs** (CatDogBark, 2026-10-11): **P4.6a**, datasets (what bitShare needs; its tests on the
   NAS wait for it), done in #158, then **P4.6b**, Greyhole shares through Samba (what bitTube's
   downloads need).
 - [ ] **bitTube** runs with no downloads folder (a change in bitTube); its downloads become an
@@ -307,7 +307,7 @@ install on pools: certain things they keep do.
   amahi-kai-apps#14). The bitShare
   installed for testing (its folders on the system disk) is uninstalled and installed again onto
   the test pool once this is in.
-- [x] **How bitShare signs people in: Amahi-kai's users** (Troy, 2026-10-11: one login for
+- [x] **How bitShare signs people in: Amahi-kai's users** (CatDogBark, 2026-10-11: one login for
   everything on Amahi-kai, the desktop app included; separate logins aren't a good design). It
   needs a way for an app to ask Amahi-kai whether a sign-in is right (the capability API's
   direction, [`roadmap.md`](roadmap.md)), planned on its own; P4.6 doesn't wait for it, and bitShare

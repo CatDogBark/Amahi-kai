@@ -1,7 +1,7 @@
 # Fix plan and roadmap
 
 Status as of 2026-10-08. Each phase came from a full code review (October 2026; the detailed
-review is a Claude Doc Troy owns, linked from `CLAUDE.md`). Every PR below was deployed with
+review is a Claude Doc CatDogBark owns, linked from `CLAUDE.md`). Every PR below was deployed with
 System Update and checked on the NAS, with one exception: from #21 to #24 System Update stopped
 at its migration step (json 3 broke Sprockets 4.2, fixed in #25) and the old app kept running,
 so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
@@ -32,7 +32,7 @@ so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 | 3. Update check | The helper checks for an update every 6 hours (timer) and on Check now; System Status shows it, with Update now or Repair; an update with nothing new stops after the pull | #37 |
 | 3. Small fixes | Login throttle by the real client address; static DHCP hosts written to dnsmasq; Gateway checkboxes saved; setup storage step keeps the pool; Users JSON create; Apps page survives a failed Docker check | #38 |
 | 3. Repo cleanup | Unused files, scripts, initializers, classes, partials, images and archived browser tests removed (with Capybara and the Feature Specs job); README, install guide and CONTRIBUTING refreshed | #39 |
-| 3. English only | 25 translations, the language picker, the language cookie and right-to-left styling removed (Troy's decision) | #40 |
+| 3. English only | 25 translations, the language picker, the language cookie and right-to-left styling removed (CatDogBark's decision) | #40 |
 | 3. Update notice | A dot on the header's update button and a dashboard line when an update is waiting; the button opens a What's new window (changelog, pull requests, Update now or Later; else Check now and Repair) | #43 |
 | Storage S1. ZFS pools | Disks → ZFS Pools: install ZFS (cache capped), create a pool in the chosen layout, pool status; every drive's use shown; ZFS drives kept away from share storage. Not yet tested on real drives | #44 |
 | Storage fix. lsblk tree | The helper's drive checks and ZFS Pools read lsblk as a tree (NAME first; a flat list is refused), so the system disk is recognised again; specs on the real lsblk; What's new without the dash | #45 |
@@ -70,7 +70,7 @@ Done. Decisions made: Ruby stays on Ubuntu 24.04's patched 3.2; `main` stays the
 shares are tested on real drives, then tagged releases and an updater change; the codebase
 becomes root-owned (in N); Docker app work moves to Phase 4.
 
-- [x] **M. Privileged helper, part 2**, in three PRs (Troy, 2026-10-04); design in
+- [x] **M. Privileged helper, part 2**, in three PRs (CatDogBark, 2026-10-04); design in
   [`privileged-helper.md`](privileged-helper.md):
   - [x] **M1.** Settings → Servers, reboot and power off, hostname, dnsmasq and DNS aliases,
     swap (#26).
@@ -85,7 +85,7 @@ becomes root-owned (in N); Docker app work moves to Phase 4.
   `amahi-update` run every Rails and bundle step as `amahi`; root's `git pull` runs without hooks;
   `production.log` is rotated as `amahi`; `docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`
   rewritten to describe the helper and this model (#30).
-- [x] **O. Update rollback** (designed with Troy, 2026-10-04: in place, database backups, its own
+- [x] **O. Update rollback** (designed with CatDogBark, 2026-10-04: in place, database backups, its own
   job; #31): System Update runs as `amahi-kai-update.service` (started by the helper's
   `system.update`; the page follows `/var/log/amahi-kai/update.log` and reconnects through the
   restart). It remembers the running commit and its compiled assets, dumps the database before
@@ -97,7 +97,7 @@ becomes root-owned (in N); Docker app work moves to Phase 4.
   bypass UFW; make the "tunnel blocked until the audit passes" rule a server-side check, not just
   a hidden button. The firewall fix also opens DNS and DHCP once dnsmasq is configured, and the
   SSH password fix needs a key first.
-- [x] **Q. Replace `sassc`** (LibSass is unmaintained; #32). Troy chose plain CSS (2026-10-04): Bootstrap
+- [x] **Q. Replace `sassc`** (LibSass is unmaintained; #32). CatDogBark chose plain CSS (2026-10-04): Bootstrap
   5.3.8's official CSS and JS are vendored (`vendor/assets`), the app's four Sass files are plain
   CSS, and `sassc`, `sass-rails` and the `bootstrap` gem are gone (`sprockets-rails` is now in
   the Gemfile itself). Screenshots of 14 pages in light and dark mode match the Sass build
@@ -109,7 +109,7 @@ becomes root-owned (in N); Docker app work moves to Phase 4.
 
 ## Next: shelf-stable
 
-Troy (2026-10-08): Amahi-kai's major code work is finished first, then everything is tested, then
+CatDogBark (2026-10-08): Amahi-kai's major code work is finished first, then everything is tested, then
 bitShare (P4.6). In this order:
 
 1. The security fixes from the 2026-10-08 audit (details in the private review doc that
@@ -126,9 +126,9 @@ After the audit's fixes and the inline-script work (2026-10-09), in this order:
 
 1. **Browser tests** in CI ([`browser-tests.md`](browser-tests.md)): done (#127, #129); the
    setup wizard's spec waits for the wizard's redo.
-2. **Backups**, planned when Troy decides where they go (2026-10-09). The shape: a daily dump
+2. **Backups**, planned when CatDogBark decides where they go (2026-10-09). The shape: a daily dump
    of the database (users, shares, settings) and `/etc/amahi-kai` (its configuration, minus the
-   secrets that stay root-only) into a folder of Troy's choice, kept for a set number of days.
+   secrets that stay root-only) into a folder of CatDogBark's choice, kept for a set number of days.
    Decisions for later: the destination (a share, so it's reachable over SMB and copied by
    whatever backs the shares up, or a pool once there is one), how many to keep, and whether
    restoring is a page or a command.
@@ -136,11 +136,11 @@ After the audit's fixes and the inline-script work (2026-10-09), in this order:
    installed copy, so control of the GitHub account alone can't put code on a NAS.
 
 HTTPS stays later and optional (see below); Cloudflare Access in front of the tunnel is a
-setting on Cloudflare's side, for when anyone but Troy gets the link.
+setting on Cloudflare's side, for when anyone but CatDogBark gets the link.
 
 ## Planned from the storage tests
 
-Decided with Troy on 2026-10-10, while testing on the NAS; when they're built is his call.
+Decided with CatDogBark on 2026-10-10, while testing on the NAS; when they're built is his call.
 
 - **P4.6. App storage:** apps run from the system disk, and what they keep that grows goes in a
   share (wherever Amahi-kai keeps it; a Greyhole share reaches the app through Samba) or a ZFS
@@ -161,12 +161,12 @@ touches the same code.
 
 ## Long-term (not soon)
 
-Troy (2026-10-08): none of these are coming soon; they wait until Amahi-kai is shelf-stable and
+CatDogBark (2026-10-08): none of these are coming soon; they wait until Amahi-kai is shelf-stable and
 tested.
 
 ### Quotas for apps' storage
 
-A size limit on an app's ZFS dataset (P4.6). Left out for now (Troy, 2026-10-11): people manage
+A size limit on an app's ZFS dataset (P4.6). Left out for now (CatDogBark, 2026-10-11): people manage
 their own files, and the disk warnings cover running low.
 
 ### Greyhole shares' folders on the pool drives
@@ -178,7 +178,7 @@ share's folder inside a pool drive, so it needs a bind mount per drive or pool d
 
 ### The phone layout
 
-Troy will use Amahi-kai on his phone (2026-10-08). The October refresh (dark, mint, Space Grotesk)
+CatDogBark will use Amahi-kai on his phone (2026-10-08). The October refresh (dark, mint, Space Grotesk)
 stacks at phone width: the header's sections fold into a menu, cards and panels go one column,
 and the file browser's list drops its dates. It hasn't been designed for a phone yet. To do:
 
@@ -192,7 +192,7 @@ and the file browser's list drops its dates. It hasn't been designed for a phone
 
 The debug pages (`/tab/debug`: App Logs, Logs and System Info) are from the original Amahi. They
 have their own old layout, outside the October look, read logs through shell strings, and their
-"Submit for Debug" button only counts log lines (the report service it sent to is gone). Troy
+"Submit for Debug" button only counts log lines (the report service it sent to is gone). CatDogBark
 wants them rebuilt as a tab in Settings (2026-10-08); until then they stay as they are. To do:
 
 - A tab on Settings in the current look, for admins, replacing `/tab/debug` and
@@ -211,7 +211,7 @@ on the NAS this costs nothing today.
 
 ### Private folders per user
 
-Removed (Troy, 2026-10-09): Troy didn't like how they worked and will think about how to do them
+Removed (CatDogBark, 2026-10-09): CatDogBark didn't like how they worked and will think about how to do them
 better. They were Samba's `[homes]` share: each user's Linux home folder, `/home/<login>`, made
 with the account and open only to its owner over SMB. They sat on the system disk with the OS,
 with no pool copies, no snapshots and no size limit, weren't in the web UI's Files, and were mode
@@ -226,7 +226,7 @@ folder, and deleting a user removes one an older version made. To decide:
 
 ## Later: HTTPS on the LAN
 
-Troy (2026-10-06): the web UI and every app's page are plain HTTP on the LAN, so anyone on the
+CatDogBark (2026-10-06): the web UI and every app's page are plain HTTP on the LAN, so anyone on the
 network can read or change what passes (bitTube Desktop's updates come from the NAS this way:
 its installers are checked against hashes from the same server). To plan as its own phase,
 for Amahi-kai and its apps at once. The options:
@@ -243,7 +243,7 @@ for Amahi-kai and its apps at once. The options:
 Then: a reverse proxy in front of the web UI and the apps' ports (one place for the
 certificate), and the apps (bitTube Desktop included) told the HTTPS address.
 
-Decided (Troy, 2026-10-06): **not now**, and when it comes, **optional**. Nothing on the NAS needs
+Decided (CatDogBark, 2026-10-06): **not now**, and when it comes, **optional**. Nothing on the NAS needs
 it yet (remote access is already encrypted: the Cloudflare Tunnel and Tailscale), and users mustn't
 need a domain for Amahi-kai to work. So HTTPS will be a toggle that adds a front door, with plain
 HTTP staying fully working underneath (it's also the way in when the internet is down and the
@@ -272,26 +272,26 @@ been tested on the NAS's virtual drives (#79–#97); ZFS waits for the physical 
 
 ## Phase 4: Docker apps
 
-Planned with Troy (2026-10-05) in [`apps.md`](apps.md): Docker only through the root helper,
+Planned with CatDogBark (2026-10-05) in [`apps.md`](apps.md): Docker only through the root helper,
 apps defined by our own manifest (one container each), each app on its own port with an optional
 Cloudflare Tunnel hostname (remote use required), one user and folder per app, ZFS datasets for big
 data, shares read-only or read-write as chosen (never a pooled share read-write), uninstall keeps
 data, a curated catalog of five apps, bitShare as an ordinary app. PRs P4.1–P4.6; P4.1 (apps through
 the root helper) and P4.2 (reaching apps) are done (#58, #59), to be tested on the NAS with
-[`docs/testing/apps.md`](../testing/apps.md). Tailscale is the default way to reach apps from outside (Troy,
+[`docs/testing/apps.md`](../testing/apps.md). Tailscale is the default way to reach apps from outside (CatDogBark,
 2026-10-04), so P4.3 (Cloudflare per app) is optional and later. P4.4 (shares for apps, #60) and P4.5
 (app updates, #62), P4.5b (the catalog's own repo, #70, #73) and P4.5c (apps on the LAN over mDNS,
 #71, #72) are done. P4.6 (bitShare, with ZFS datasets for apps) comes after all of Amahi-kai: first
-its major code work is finished (shelf-stable), then everything is tested (Troy, 2026-10-08).
+its major code work is finished (shelf-stable), then everything is tested (CatDogBark, 2026-10-08).
 
 ## Direction
 
-Troy's long-term aim is a self-hosted personal platform: storage, identity, permissions, apps and
+CatDogBark's long-term aim is a self-hosted personal platform: storage, identity, permissions, apps and
 eventually local AI, with system actions exposed as narrow, audited capabilities rather than root
 access. That is why the helper's operations are named like an API (`users.create`,
 `shares.grant`) and log every call. Build the boring, reliable pieces first.
 
-**Router, for those who want it** (Troy, 2026-10-05): Amahi-kai can optionally act as the network's
+**Router, for those who want it** (CatDogBark, 2026-10-05): Amahi-kai can optionally act as the network's
 router. Part of it exists: Network → Gateway runs DHCP and DNS (dnsmasq). The rest (the internet
 connection on its own port, NAT, the firewall facing the internet) is its own feature, designed
 later. Until then, other work (Phase 4's networking above all) mustn't assume the NAS is only ever a

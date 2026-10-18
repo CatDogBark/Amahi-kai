@@ -1,6 +1,6 @@
 # Privileged helper (Phase 3, PRs L and M)
 
-Status: **PR L done** (#24, checked on the NAS 2026-10-04). **PR M** is split in three (Troy,
+Status: **PR L done** (#24, checked on the NAS 2026-10-04). **PR M** is split in three (CatDogBark,
 2026-10-04): **M1 done** (#26: services, reboot/power off, hostname, dnsmasq, swap), **M2 done**
 (#27: data drives, Greyhole), **M3 done** (#28: packages, tunnel, Tailscale, Docker install,
 security audit with PR P). Sudoers is now the helper, the updater and Docker. **PR N built**: the
@@ -143,7 +143,7 @@ them). Also removed: `Platform.make_admin`, `Platform.update_user_pubkey`, the p
 setting (it never worked on the NAS: sudo refused its `mkdir` and `mv`, so no keys were installed),
 and `ShareFileSystem#clear_permissions` (`chmod -R a+rwx`, which nothing called).
 
-### Check on the NAS after the System Update (Troy)
+### Check on the NAS after the System Update (CatDogBark)
 
 1. Users: create a test user with a password, log in to `smb://192.168.1.111/<user>`, change the
    password (old one fails, new one works), delete the user (`getent passwd <user>` is empty).
@@ -197,7 +197,7 @@ from `/tmp`, `mysql -u root *`, `dpkg --configure -a`, `phpenmod *`; `systemctl 
 smbd.service`/`nmbd.service`; and `mysqldump`, which nothing used and which could write any file
 as root.
 
-### Check on the NAS after the System Update (Troy)
+### Check on the NAS after the System Update (CatDogBark)
 
 Drives can't be tested until the NAS hardware arrives (VM 104's disks belong to Proxmox).
 
@@ -224,7 +224,7 @@ paths are the ones earlier installs used, so an installed repository is rewritte
 | `docker.grant_app_user` | `usermod -aG docker amahi` | the same, once the `docker` group exists |
 | `security.report` | `ufw status` and reading `sshd_config` | UFW's state and sshd's effective settings (`sshd -T`, so drop-ins count) |
 | `security.enable_firewall` | `ufw *` | deny incoming; allow 22/tcp, 3000/tcp, 443/tcp, 445/tcp, 139/tcp, 137:138/udp, plus 53 and 67/udp once Amahi-kai has configured dnsmasq; enable |
-| `security.harden_ssh` {setting} | copying a Rails-written `sshd_config` over the real one | `root_login` or `password_login` (password and keyboard-interactive) set to `no` in `sshd_config.d/10-amahi-kai.conf`, checked with `sshd -t` (old file put back if it fails), `try-reload-or-restart ssh`. Password login is refused while no account with a login shell has a key in `~/.ssh/authorized_keys` (Troy, 2026-10-04) |
+| `security.harden_ssh` {setting} | copying a Rails-written `sshd_config` over the real one | `root_login` or `password_login` (password and keyboard-interactive) set to `no` in `sshd_config.d/10-amahi-kai.conf`, checked with `sshd -t` (old file put back if it fails), `try-reload-or-restart ssh`. Password login is refused while no account with a login shell has a key in `~/.ssh/authorized_keys` (CatDogBark, 2026-10-04) |
 | `security.enable_auto_updates` | `dpkg-reconfigure -plow unattended-upgrades` | writes `20auto-upgrades` as that dialog does |
 
 Rails: `CloudflareService`, `TailscaleService` (status is read without root), `DockerService`
@@ -242,7 +242,7 @@ the `tailscaled` service rules), and the security rules (`ufw *`, ssh restarts, 
 copying `sshd_config`). 52 → 10 rules: the helper, the Docker app folders, `docker`, `smartctl` and
 the updater.
 
-### Check on the NAS after the System Update (Troy)
+### Check on the NAS after the System Update (CatDogBark)
 
 1. The update's last line is "✓ Amahi-kai updated and running!".
 2. Network → Remote Access shows the tunnel connected and Tailscale running, as before.
@@ -250,16 +250,16 @@ the updater.
 4. `sudo -l -U amahi | grep -c NOPASSWD` prints `10`.
 5. `sudo /usr/local/sbin/amahi-helper --self-test` prints `ok: 43 operations`.
 
-## Decisions (Troy, confirmed 2026-10-03)
+## Decisions (CatDogBark, confirmed 2026-10-03)
 
 1. **Web admins in the Linux `sudo` group**: dropped. Web admin and OS admin are separate; making
    someone an admin no longer touches Linux groups or rewrites `smb.conf`.
 2. **Shell access for web users**: app-created accounts get `/usr/sbin/nologin`, and the SSH key
-   setting is gone (Troy uses his own `troy` account for SSH). The `public_key` column stays until
+   setting is gone (the owner uses their own account for SSH). The `public_key` column stays until
    a later cleanup.
 3. **Language**: Ruby, standard library only.
 4. **Share "reset permissions"**: it turned out the button only empties the share's user lists;
-   the `chmod -R a+rwx` was dead code. Troy chose (2026-10-04) to delete it and add no
+   the `chmod -R a+rwx` was dead code. CatDogBark chose (2026-10-04) to delete it and add no
    reset-permissions operation for now.
 5. **SSH password login fix** (2026-10-04): the helper turns it off only while an account that
    can log in has an SSH key; Fix all still includes it.

@@ -12,7 +12,7 @@ Licensed under GNU AGPL v3
 ## Derivative Work
 
 **Amahi-kai Platform** (modernized fork)
-Copyright (C) 2026, Troy (CatDogBark)
+Copyright (C) 2026, Enlightened Solutions LLC
 https://github.com/CatDogBark/Amahi-kai
 Licensed under GNU AGPL v3 (inherited from original)
 
@@ -24,7 +24,7 @@ This fork was created in **February 2026** to modernize the Amahi Platform for c
 
 **Modernization performed by:**
 - **Kai 🌊** (OpenClaw AI Agent) - Technical implementation
-- **Troy** - Project direction, infrastructure, and testing
+- **CatDogBark** - Project direction, infrastructure, and testing
 
 ### Key Changes from Original
 
@@ -80,6 +80,7 @@ The Amahi team created an excellent home server platform that served thousands o
 ## Contact
 
 **For questions about this fork:**
+- Email: catdogbark@pm.me
 - Website: https://amahi-kai.com
 - Repository: https://github.com/CatDogBark/Amahi-kai
 - Issues: https://github.com/CatDogBark/Amahi-kai/issues

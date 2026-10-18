@@ -1,13 +1,13 @@
 # Amahi-kai: notes for Claude sessions
 
 Amahi-kai is a Rails 8.1 NAS web app, modernized from the 2013 Amahi platform. It is still in
-development: the one install is Troy's NAS, an Ubuntu 24.04 VM on Proxmox, reached on the LAN by IP
-over plain HTTP, through a Cloudflare Tunnel, and through Tailscale. Troy owns the repo
+development: the one install is CatDogBark's NAS, an Ubuntu 24.04 VM on Proxmox, reached on the LAN by IP
+over plain HTTP, through a Cloudflare Tunnel, and through Tailscale. CatDogBark owns the repo
 (`CatDogBark/Amahi-kai`, **public**) and the NAS.
 
-Current work (Troy, 2026-10-08): getting Amahi-kai to a shelf-stable state first, by finishing
+Current work (CatDogBark, 2026-10-08): getting Amahi-kai to a shelf-stable state first, by finishing
 its major code work (the October look and cleanup were #101–#112). Then testing everything,
-including Greyhole, shares and the Trash with Troy's storage checklist
+including Greyhole, shares and the Trash with CatDogBark's storage checklist
 (https://claude.ai/artifact/AzGwHaFHxKfxPsKYj2st1a). bitShare (P4.6) comes after all of
 Amahi-kai. The plans: storage,
 **`docs/plans/storage.md`** (ZFS pools for bitShare, PRs S1–S5, all built; tested on the drives
@@ -23,18 +23,19 @@ privilege model is in `docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`.
 
 ## Workflow
 
-- One PR per change set: branch from `main` → PR → CI green → merge (Troy approves merging fix PRs
-  once CI passes) → Troy runs **System Update** in the NAS web UI and checks → next PR.
-- After each merge, stop and report to Troy in a few plain sentences: what changed, and exactly
+- One PR per change set: branch from `main` → PR → CI green → merge (CatDogBark approves merging fix PRs
+  once CI passes) → CatDogBark runs **System Update** in the NAS web UI and checks → next PR.
+- After each merge, stop and report to CatDogBark in a few plain sentences: what changed, and exactly
   what to click or check on the NAS. Wait for his OK before starting the next PR.
-- Claude can reach the NAS over SSH (Troy's go-ahead, 2026-10-05) for
-  read-only checks. `sudo` there needs Troy's password, which Claude never types, so anything
-  that needs root is Troy's to run: give him the commands, one per block. Never ask for or print
+- Claude can reach the NAS over SSH (CatDogBark's go-ahead, 2026-10-05) for
+  read-only checks. `sudo` there needs CatDogBark's password, which Claude never types, so anything
+  that needs root is CatDogBark's to run: give him the commands, one per block. Never ask for or print
   secrets (tokens, passwords, `amahi.env`, `secret_key_base`). Don't change the NAS directly;
   changes go through PRs and System Update.
-- Commit as `CatDogBark <troyevangelist@gmail.com>`. Keep `CHANGELOG.md` up to date in each PR
+- **This repo is public: the owner is CatDogBark here**, never their real name, and the contact email is
+  catdogbark@pm.me. Commit as `CatDogBark <186357707+CatDogBark@users.noreply.github.com>`. Keep `CHANGELOG.md` up to date in each PR
   (Unreleased → "Security & Fixes" or "Architecture & Code Quality"), written for users.
-- Don't decide things the plan marks as Troy's decision; ask.
+- Don't decide things the plan marks as CatDogBark's decision; ask.
 
 ## Tests and CI
 
@@ -92,7 +93,7 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
   Puma finishes open requests before it stops, so a stream that waits on the update must end
   when Puma is stopping (`server_stopping?` in `SettingsController`), or the restart waits for
   systemd to kill Puma (90 seconds; `force_shutdown_after` in `config/puma.rb` now caps it).
-  If System Update breaks, Troy runs `sudo /opt/amahi-kai/bin/amahi-update` over SSH.
+  If System Update breaks, CatDogBark runs `sudo /opt/amahi-kai/bin/amahi-update` over SSH.
 - **Root access goes through the helper.** User accounts, Samba's files, share folders, Settings →
   Servers, the hostname, dnsmasq, swap, reboot/power off, data drives (format, mount, fstab),
   ZFS pools, Greyhole, package installs (pinned apt repositories, a fixed package list), the Cloudflare
@@ -122,7 +123,7 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
 - **Addresses are made in one place.** Every link to an app goes through `DockerApp#url`, every
   link to Amahi-kai itself through `ApplicationHelper#amahi_url`; never hand-build
   `http://host:port` (`spec/lib/addresses_spec.rb` fails CI if you do). HTTPS is planned as an
-  optional front door, with plain HTTP staying fully working (Troy, 2026-10-06; roadmap), and it
+  optional front door, with plain HTTP staying fully working (CatDogBark, 2026-10-06; roadmap), and it
   depends on this.
 - **App versions and new apps are PRs on the catalog's repo** (`amahi-kai-apps`), not here:
   `script/app-versions --catalog ../amahi-kai-apps/apps --update <app>`. `config/apps` is only the
@@ -134,6 +135,6 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
 - Production refuses to boot without `SECRET_KEY_BASE` and creates `/var/lib/amahi-kai` at boot.
   To check production boot without root: `unshare -rm` and bind a scratch dir over `/var/lib`.
 - Samba config is generated from `Share.samba_conf` and must pass `testparm` before it's installed.
-- The detailed code review (findings, file and line references) is a Claude Doc Troy owns:
+- The detailed code review (findings, file and line references) is a Claude Doc CatDogBark owns:
   https://claude.ai/code/artifact/df32228a-72d8-41b9-b5c1-80e0dea1f32d. Unfixed security
   details stay there, not in this public repo.

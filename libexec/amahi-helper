@@ -2946,7 +2946,7 @@ module AmahiHelper
 
     # Rolls back every dataset in the pool that has the snapshot (snapshots are taken with -r). The
     # apps keeping their data on it are stopped first (ZFS won't roll back a dataset a container
-    # holds open, and a roll-back comes first: Troy, 2026-10-11), and the ones that were running
+    # holds open, and a roll-back comes first: CatDogBark, 2026-10-11), and the ones that were running
     # start again afterwards, rolled back or not.
     def do_rollback_pool(pool, snapshot)
       running = apps_on_pool(pool).select { |id, installed| installed && app_running?(id) }.map(&:first)
