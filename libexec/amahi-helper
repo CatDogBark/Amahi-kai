@@ -3232,6 +3232,11 @@ module AmahiHelper
       File.exist?(BLOCKLIST_PAUSED) ? do_install(BLOCKLIST_PAUSED, content, nil) : install_blocklist(content)
       do_install(BLOCKLIST_STATUS, "#{JSON.generate(status.merge('blocked' => blocked.size))}\n", nil, '0644')
       { 'blocked' => blocked.size }
+    rescue Failed, Refused => e
+      # The page says why; the blocklist before stays, and so does its count.
+      before = read_json(BLOCKLIST_STATUS) || {}
+      do_install(BLOCKLIST_STATUS, "#{JSON.generate(before.merge('refreshed_at' => Time.now.to_i, 'error' => e.message))}\n", nil, '0644')
+      raise
     end
 
     # Downloads a list over HTTPS to +copy+ (replacing it only once it's whole), or says why not.

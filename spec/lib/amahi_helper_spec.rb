@@ -1170,6 +1170,7 @@ RSpec.describe 'AmahiHelper' do
       allow(helper).to receive(:check_unbound_conf) { |path| raise AmahiHelper::Refused, 'duplicate local-zone' if path == AmahiHelper::UNBOUND_MAIN }
       expect { helper.do_refresh_blocklists }.to raise_error(AmahiHelper::Refused, 'duplicate local-zone')
       expect(blocklist).to eq("server:\n")
+      expect(JSON.parse(File.read(AmahiHelper::BLOCKLIST_STATUS))['error']).to eq('duplicate local-zone')
     end
 
     it "pauses: the blocklist leaves Unbound's config, and systemd brings it back after five minutes" do

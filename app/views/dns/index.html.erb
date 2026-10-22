@@ -186,6 +186,8 @@
         <span class="badge bg-warning text-dark">Paused</span>
       <% elsif @refreshing || @blocking_status.nil? %>
         <span class="badge bg-info text-dark">Updating the lists</span>
+      <% elsif @blocking_status['error'] %>
+        <span class="badge bg-danger">Not updated</span>
       <% else %>
         <span class="badge bg-success">On</span>
       <% end %>
@@ -200,10 +202,18 @@
       <% if @blocking && @mode != 'off' %>
         <div class="dns-blocking-state mb-3">
           <% if @paused_until %>
-            <span>Paused until <%= @paused_until.strftime('%H:%M') %>. Devices may take a minute to notice either way.</span>
+            <%# The page looks again when the pause ends. %>
+            <meta http-equiv="refresh" content="<%= (@paused_until - Time.now).ceil + 5 %>">
+            <span>Paused for another <%= distance_of_time_in_words(Time.now, @paused_until) %>. Devices may take a minute to notice either way.</span>
             <%= button_to 'Resume now', dns_resume_blocking_path, method: :post, class: 'btn btn-sm btn-primary', form_class: 'd-inline' %>
-          <% elsif @refreshing || @blocking_status.nil? %>
+          <% elsif @refreshing %>
+            <%# The page looks again in a few seconds: a refresh takes about ten. %>
+            <meta http-equiv="refresh" content="5">
             <span>Downloading the lists. This page shows what's blocked once they're in.</span>
+          <% elsif @blocking_status.nil? %>
+            <span>The lists haven't been downloaded yet. Save again to try now; they're also tried every day.</span>
+          <% elsif @blocking_status['error'] %>
+            <span class="text-danger">✗ The blocklist couldn't be updated: <%= @blocking_status['error'] %>.<%= ' The one before is still in use.' if @blocking_status['blocked'] %></span>
           <% else %>
             <span>Blocking <strong><%= number_with_delimiter(@blocking_status['blocked'].to_i) %></strong> domains, from lists downloaded
               <%= time_ago_in_words(Time.at(@blocking_status['refreshed_at'].to_i)) %> ago.</span>

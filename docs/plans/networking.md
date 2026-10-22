@@ -7,7 +7,11 @@ the NAS as DNS server and `home.arpa`; its name followed its lease in and out of
 host got its address; a second DHCP server on the island was named and refused; and the way back
 stopped dnsmasq, the watcher and the names while DNS kept answering. The island found two bugs,
 both fixed (the lease watcher never fired; the check stopped listening before dnsmasq's offers
-came). Slice 3 (blocklists) is next. CatDogBark wants Amahi-kai's networking modernized
+came). Slice 3 (blocklists) is on `dev` and passed too: the default lists downloaded and built in 8
+seconds (326,252 domains, 155 MB for Unbound), blocked names and their subdomains answered
+`0.0.0.0` and `::`, the allowlist let a domain through, a pause let everything through and
+resumed by itself after five minutes, and off removed the blocklist and its timer. Slice 4 (IPv6)
+is next. CatDogBark wants Amahi-kai's networking modernized
 for privacy and safety, carrying over what original Amahi users did with their home server: put it
 in front of the network. It ships in 1.0, DHCP included, once it passes the tests below.
 

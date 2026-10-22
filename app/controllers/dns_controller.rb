@@ -97,7 +97,8 @@ class DnsController < ApplicationController
   def pause_blocking
     reply = Privileged.call('dns.pause_blocking')
     Setting.set('dns_blocking_paused_until', reply['until'].to_i.to_s, KIND)
-    flash[:notice] = "Blocking is paused until #{Time.at(reply['until'].to_i).strftime('%H:%M')}."
+    # How long, not until when: the server's clock may be in another time zone than the browser.
+    flash[:notice] = "Blocking is paused for #{helpers.distance_of_time_in_words(Time.now, Time.at(reply['until'].to_i))}."
     redirect_to dns_index_path
   rescue Privileged::Error => e
     flash[:alert] = "Couldn't pause blocking: #{e.message}"

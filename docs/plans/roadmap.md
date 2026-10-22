@@ -159,6 +159,12 @@ house's internet is never at risk.
 Smaller findings from the review that no PR covers yet. Fold them into a nearby PR when it
 touches the same code.
 
+- **Times are the server's clock, in UTC** (found 2026-10-22, on the island): Rails' time zone is
+  left at UTC, and the views print clock times (`strftime`), so the dashboard's date turns over at
+  UTC midnight (2 pm in Hawaii), and the file browser's times and System Dependencies' dates are
+  UTC on a server set to UTC. Show times in the browser's zone (or the NAS's own, set once), or as
+  durations. Network → DNS & DHCP's pause already says how long, not until when.
+
 - Several features staged files at fixed `/tmp` paths before a root copy. Samba (L), dnsmasq
   (M1), Greyhole (M2), the tunnel and Tailscale (M3) no longer do: the helper writes the files.
   The Docker app installer did until P4.1 (#58), which replaced it with the helper.

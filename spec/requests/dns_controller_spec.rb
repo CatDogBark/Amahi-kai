@@ -167,6 +167,18 @@ describe 'Network → DNS & DHCP', type: :request do
                                           "HaGeZi Threat Intelligence (mini) couldn't be downloaded (curl exited 22), so its last copy is used")
       end
 
+      it "says why the lists couldn't be updated, and looks again while they're updating" do
+        Setting.set('dns_mode', 'dns')
+        Setting.set('dns_blocking', '1')
+        allow(DnsService).to receive_messages(blocklists_refreshing?: false,
+                                              blocking_status: { 'blocked' => 10, 'error' => 'at most 1000000 fit', 'lists' => {} })
+        get '/network/dns'
+        expect(response.body).to include('Not updated', "The blocklist couldn't be updated: at most 1000000 fit.", 'The one before is still in use.')
+        allow(DnsService).to receive(:blocklists_refreshing?).and_return(true)
+        get '/network/dns'
+        expect(response.body).to include('<meta http-equiv="refresh" content="5">', 'Downloading the lists')
+      end
+
       it 'turns on with the lists and allowlist chosen, while DNS is on' do
         Setting.set('dns_mode', 'dns')
         put '/network/dns/blocking', params: { blocking: '1', lists: %w[hagezi-light oisd-small], allowlist: "Example.com\ncdn.example.net" }
@@ -201,7 +213,7 @@ describe 'Network → DNS & DHCP', type: :request do
       it 'pauses for five minutes, and resumes' do
         allow(Privileged).to receive(:call).with('dns.pause_blocking').and_return('ok' => true, 'until' => Time.now.to_i + 300)
         post '/network/dns/pause_blocking'
-        expect(flash[:notice]).to start_with('Blocking is paused until')
+        expect(flash[:notice]).to eq('Blocking is paused for 5 minutes.')
         expect(DnsService.paused_until).to be_within(5).of(Time.now + 300)
         allow(Privileged).to receive(:call).with('dns.resume_blocking').and_return('ok' => true)
         post '/network/dns/resume_blocking'
