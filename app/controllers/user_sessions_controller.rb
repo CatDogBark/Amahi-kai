@@ -35,6 +35,9 @@ class UserSessionsController < ApplicationController
       redirect_to root_url
     else
       flash.now[:danger] = @user_session.guest? ? t('guests_use_shares') : t('not_a_valid_user_or_password')
+      # The form keeps the name and the Remember me box, so only the password is typed again
+      @login = username
+      @remember_me = remember_me.present?
       render :action => 'new'
     end
   end

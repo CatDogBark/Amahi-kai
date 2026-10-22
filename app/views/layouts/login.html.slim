@@ -1,15 +1,16 @@
 doctype html
 
-/ Dark for everyone: the water background is made for it.
+/ The sign-in page, in the app's look (application.css, then login.css). Dark for everyone:
+/ the water background is made for it.
 html[lang="en" data-theme="dark" data-bs-theme="dark"]
   head
     meta charset="utf-8"
-    meta content="width=device-width, initial-scale=1.0" name="viewport" /
+    meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport" /
     link rel="icon" type="image/svg+xml" href="/favicon.svg"
     link rel="alternate icon" href="/favicon.ico"
     title= @title || "Amahi-kai #{t('log_in')}"
+    = stylesheet_link_tag "application"
     = stylesheet_link_tag "login"
-    = stylesheet_link_tag "ocean-bg"
     = javascript_include_tag "ocean"
     = javascript_include_tag "form_reply"
     = csrf_meta_tags

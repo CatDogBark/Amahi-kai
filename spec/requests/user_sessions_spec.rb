@@ -92,6 +92,15 @@ describe "User Sessions", type: :request do
       expect(response.body).to include("Log In")
     end
 
+    it "keeps the name and Remember me after a wrong password, never the password" do
+      user = create(:user)
+      post user_sessions_path, params: { username: user.login, password: "wrongpassword", remember_me: "1" }
+      form = Nokogiri::HTML(response.body)
+      expect(form.at_css('#username')['value']).to eq(user.login)
+      expect(form.at_css('#remember_me')['checked']).to be_present
+      expect(form.at_css('#password')['value']).to be_nil
+    end
+
     it "rejects nonexistent users" do
       post user_sessions_path, params: { username: "nobody", password: "password" }
       expect(response).to have_http_status(:ok)
