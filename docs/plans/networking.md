@@ -1,8 +1,13 @@
 # Networking: modernized, private, and tested without losing the house's internet
 
-Status 2026-10-22: the island is built; slice 1 (DNS) is on `dev` and passed its island checks
+Status 2026-10-22: the island is built. Slice 1 (DNS) is on `dev` and passed its island checks
 (from the client over IPv4 and IPv6, `tcpdump` showing lookups leave on 853 only, UFW's rules
-following the interface). Slice 2 (DHCP) is next. CatDogBark wants Amahi-kai's networking modernized
+following the interface). Slice 2 (DHCP) is on `dev` and passed too: the client got an address,
+the NAS as DNS server and `home.arpa`; its name followed its lease in and out of DNS; a fixed
+host got its address; a second DHCP server on the island was named and refused; and the way back
+stopped dnsmasq, the watcher and the names while DNS kept answering. The island found two bugs,
+both fixed (the lease watcher never fired; the check stopped listening before dnsmasq's offers
+came). Slice 3 (blocklists) is next. CatDogBark wants Amahi-kai's networking modernized
 for privacy and safety, carrying over what original Amahi users did with their home server: put it
 in front of the network. It ships in 1.0, DHCP included, once it passes the tests below.
 
