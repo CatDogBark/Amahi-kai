@@ -67,6 +67,7 @@ class Share < ApplicationRecord
   # Deleting a share keeps its files: only an empty folder goes (cleanup_directory). A share
   # with files on the pool drives is refused first (keep_files_off_the_pool).
   before_destroy :keep_files_off_the_pool, prepend: true
+  before_destroy :not_given_to_an_app, prepend: true
   before_destroy -> { file_system.cleanup_directory }
   after_create_commit :index_share_files
   after_save -> { access_manager.sync_everyone_access }
@@ -123,6 +124,18 @@ class Share < ApplicationRecord
     return unless reason
 
     errors.add(:base, reason)
+    throw :abort
+  end
+
+  # An app given the share has its folder mounted in its container. Deleted, the share would be
+  # gone from Samba while the app kept the folder, and a ZFS pool it's on couldn't be unmounted.
+  def not_given_to_an_app
+    apps = DockerApp.where.not(status: 'available').order(:name).select { |app| app.shares.any? { |share| share[:name].casecmp?(name) } }
+    return if apps.empty?
+
+    names = apps.map(&:name).to_sentence
+    errors.add(:base, "#{names} #{apps.one? ? 'has' : 'have'} #{name}. Take it off with Change under " \
+                      "#{apps.one? ? 'its' : 'their'} shares on Apps, then delete it.")
     throw :abort
   end
 

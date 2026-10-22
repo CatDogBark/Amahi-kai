@@ -1469,9 +1469,23 @@ module AmahiHelper
       holders = drive_holders(device)
       return if holders.empty?
 
-      apps = holders.map { |name| name.start_with?('amahi-') ? "the app #{name.delete_prefix('amahi-')}" : name }
-      raise Refused, "#{device} is still in use by #{apps.join(' and ')}, which has folders on it mounted: " \
+      raise Refused, "#{device} is still in use by #{holder_labels(holders)}, which has folders on it mounted: " \
                      "restart or stop it on Apps, then #{doing}"
+    end
+
+    # The same for a ZFS pool: ZFS would unmount it here, then refuse to go on ("pool is busy")
+    # while a container still has one of its folders mounted (a share given to the app and
+    # deleted since, say). Checked before anything is unmounted.
+    def pool_not_held!(name, doing)
+      holders = pool_mount_holders(name)
+      return if holders.empty?
+
+      raise Refused, "#{name} is still in use by #{holder_labels(holders)}, which has folders on it mounted: " \
+                     "stop it on Apps, then #{doing}"
+    end
+
+    def holder_labels(holders)
+      holders.map { |name| name.start_with?('amahi-') ? "the app #{name.delete_prefix('amahi-')}" : name }.join(' and ')
     end
 
     # The containers (or other programs) that have the filesystem on +device+ mounted in a view
@@ -1481,13 +1495,54 @@ module AmahiHelper
       return [] unless stat.blockdev?
 
       id = "#{stat.rdev_major}:#{stat.rdev_minor}"
-      views = other_mount_views.select { |view| view[:mountinfo].each_line.any? { |line| line.split[2] == id } }
+      holder_names(holding_views { |fields| fields[2] == id })
+    rescue SystemCallError
+      []
+    end
+
+    # The same for the datasets of the pool +name+: ["amahi-bitshare"].
+    def pool_mount_holders(name)
+      holder_names(holding_views do |fields|
+        dash = fields.index('-')
+        source = dash && fields[dash + 2].to_s
+        dash && fields[dash + 1] == 'zfs' && (source == name || source.start_with?("#{name}/"))
+      end)
+    end
+
+    # The other views of the mounts with a mount the block picks (from its mountinfo fields)
+    # that is their own. Services systemd sandboxes (logind, mariadb, udevd...) see copies of
+    # this view's mounts that follow them (master:<the peer group>), so an unmount here takes
+    # their copies along and they hold nothing; an app container's bind mounts are its own.
+    def holding_views(&pick)
+      groups = system_peer_groups
+      other_mount_views.select do |view|
+        view[:mountinfo].each_line.any? do |line|
+          fields = line.split
+          pick.call(fields) && !follows_system?(fields, groups)
+        end
+      end
+    end
+
+    # Whether a mountinfo line's propagation tags (shared:N, master:N, between its options and
+    # the "-") name one of the system's peer groups.
+    def follows_system?(fields, groups)
+      tags = fields[6...(fields.index('-') || fields.size)] || []
+      tags.any? { |tag| (group = tag[/\A(?:shared|master):(\d+)\z/, 1]) && groups.include?(group) }
+    end
+
+    # The peer groups of the system's own mounts (shared:N in pid 1's mountinfo): ["45", ...].
+    def system_peer_groups
+      File.read('/proc/1/mountinfo').scan(/ shared:(\d+)/).flatten.uniq
+    rescue SystemCallError
+      []
+    end
+
+    # Each view's container ("amahi-bittube"), or its program when it isn't one.
+    def holder_names(views)
       return [] if views.empty?
 
       names = container_names
       views.map { |view| names[view[:cgroup][%r{docker[-/]([0-9a-f]{64})}, 1]] || view[:comm] }.uniq
-    rescue SystemCallError
-      []
     end
 
     # One process's view of the mounts per mount namespace other than the system's (pid 1's):
@@ -1669,6 +1724,7 @@ module AmahiHelper
       raise Refused, "type the pool's name (#{name}) to destroy it" unless confirm == name
       no_shares_on!(name)
       no_apps_on!(name, 'deleted')
+      pool_not_held!(name, 'delete it')
       members = pool_leaves(pool_vdevs(name)).filter_map { |leaf| leaf['device'] }
       tree = block_tree
       disks = members.filter_map { |part| tree.find { |disk| subtree(disk).any? { |n| n['path'] == part } } }.uniq
@@ -1744,6 +1800,7 @@ module AmahiHelper
       name = existing_pool(name)
       no_shares_on!(name)
       no_apps_on!(name, 'taken offline')
+      pool_not_held!(name, 'take it offline')
       { name: name, guid: capture([ZPOOL, 'get', '-H', '-o', 'value', 'guid', name]).strip }
     end
 

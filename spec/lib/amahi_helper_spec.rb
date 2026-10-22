@@ -919,9 +919,13 @@ RSpec.describe 'AmahiHelper' do
       allow(File).to receive(:stat).and_call_original
       allow(File).to receive(:stat).with('/dev/sdb').and_return(stat)
       id = 'a' * 64
+      allow(helper).to receive(:system_peer_groups).and_return(%w[45 46])
       allow(helper).to receive(:other_mount_views).and_return(
         [{ mountinfo: "505 456 8:16 /Test /mnt/storage-2/Test ro - ext4 /dev/sdb rw\n", cgroup: "0::/system.slice/docker-#{id}.scope\n", comm: 'bittube' },
-         { mountinfo: "12 1 8:0 / /mnt/storage-1 rw - ext4 /dev/sda rw\n", cgroup: "0::/x\n", comm: 'other' }]
+         { mountinfo: "12 1 8:0 / /mnt/storage-1 rw - ext4 /dev/sda rw\n", cgroup: "0::/x\n", comm: 'other' },
+         # a service systemd sandboxes: its copy follows the system's mount, so an unmount takes it along
+         { mountinfo: "133 111 8:16 / /mnt/storage-2 ro,nosuid shared:179 master:45 - ext4 /dev/sdb rw\n",
+           cgroup: "0::/system.slice/systemd-logind.service\n", comm: 'systemd-logind' }]
       )
       allow(helper).to receive(:container_names).and_return(id => 'amahi-bittube')
       expect(helper.drive_holders('/dev/sdb')).to eq(['amahi-bittube'])
