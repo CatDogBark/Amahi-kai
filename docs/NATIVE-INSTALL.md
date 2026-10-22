@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- **OS:** Ubuntu 24.04 or Debian 12+
+- **OS:** Ubuntu 24.04 (Server)
 - **RAM:** 2GB minimum (4GB recommended)
 - **Disk:** 10GB+ for OS + app; additional storage for file shares
 - **Network:** Static IP recommended. Amahi-kai can also run DNS and DHCP for your LAN (optional, Network → Gateway)
@@ -10,26 +10,34 @@
 ## Install
 
 ```bash
+curl -fsSL https://amahi-kai.com/install.sh | sudo bash
+```
+
+Or from a checkout (the installer clones it into `/opt/amahi-kai`, with its git history; updates
+then come from GitHub):
+
+```bash
 git clone https://github.com/CatDogBark/Amahi-kai.git
 cd Amahi-kai
 sudo bin/amahi-install
 ```
 
-The installer is idempotent — run it again to update or repair.
+Running it again is safe: it keeps users, shares and settings, pulls the latest code from GitHub,
+and restarts the app.
 
 ## What It Does
 
-1. Installs system packages (build tools, MariaDB, Samba, dnsmasq)
-2. Installs Ruby 3.2 (the system package where there is one, else built with rbenv)
-3. Creates the `amahi` system user
-4. Deploys application to `/opt/amahi-kai`
-5. Configures MariaDB (database + user)
-6. Runs migrations and seeds the database
+1. Installs system packages: build tools, Ruby 3.2 (Ubuntu's), MariaDB, Samba, Avahi, smartmontools
+2. Creates the `amahi` system user
+3. Deploys the application to `/opt/amahi-kai`, with its git history
+4. Configures MariaDB (database + user) and installs the gems
+5. Installs the root helper (`/usr/local/sbin/amahi-helper`), the app's sudoers rules and its
+   systemd services and timers (from `config/systemd`)
+6. Runs migrations and, on a new install, creates the admin account and shows its password
 7. Precompiles assets
-8. Installs the root helper (`/usr/local/sbin/amahi-helper`) and the app's sudoers rules
-9. Creates and enables the `amahi-kai` systemd service
-10. Opens port 3000 in UFW (if active)
-11. Starts Samba (smbd/nmbd) for file sharing
+8. Opens port 3000 in UFW (if active)
+9. Writes Samba's configuration (LAN only) and starts smbd/nmbd
+10. Builds the file search index, then starts Amahi-kai and checks it answers
 
 ## Post-Install
 
@@ -40,7 +48,6 @@ Edit `/etc/amahi-kai/amahi.env` for:
 - `SECRET_KEY_BASE` — auto-generated, don't change unless rotating
 - `DATABASE_*` — MariaDB connection details
 - `RAILS_ALLOWED_HOSTS` — extra host names (comma-separated) the web UI answers to, for a domain that isn't the NAS's own name. Not needed for the Cloudflare Tunnel or Tailscale
-- `AMAHI_DUMMY_MODE` — `true` to stub out system commands (for testing)
 
 ### Service Management
 
@@ -57,7 +64,7 @@ systemctl status dnsmasq      # DNS (if enabled)
 ### First Login
 
 - **Username:** `admin`
-- **Password:** a random one the installer prints when it finishes, once. Save it.
+- **Password:** a random one this install prints, as soon as it's made and again when it finishes. Save it.
 
 The setup wizard won't finish until you choose a password of your own. If the printed one is
 lost before then, set a new one on the server with `sudo /opt/amahi-kai/script/reset-user-password admin`.
@@ -86,5 +93,5 @@ An update pulls the code, installs gems, backs up the database, runs migrations,
 Or re-run the installer:
 
 ```bash
-sudo bin/amahi-install
+sudo /opt/amahi-kai/bin/amahi-install
 ```

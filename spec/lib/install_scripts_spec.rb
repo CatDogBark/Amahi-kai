@@ -44,6 +44,66 @@ RSpec.describe 'install and update scripts' do
     expect(used.grep(/as_app|bin\/rails|sudo/)).to eq([])
   end
 
+  describe 'a fresh install' do
+    let(:install) { File.read(Rails.root.join('bin/amahi-install')) }
+
+    it 'shows the first password as soon as the seeds have used it, not only at the end' do
+      seeded = install.index("bin/rails db:seed")
+      shown = install.index("  echo \"  ── The first admin account")
+      expect(shown).to be > seeded
+      expect(shown).to be < install.index('bin/rails assets:precompile')
+    end
+
+    it "sets the server's address and turns automatic updates off only on a new database" do
+      fresh = install.index('if $FRESH; then')
+      expect(install.index("Setting.set('net'")).to be > fresh
+      expect(install.index('20auto-upgrades')).to be > fresh
+      expect(install).to include('FRESH=true')
+    end
+
+    it "doesn't wait for the VM guest agent's port, which only Proxmox's option adds" do
+      expect(install).not_to include('enable --now qemu-guest-agent')
+      expect(install).to include('if [ -e /dev/virtio-ports/org.qemu.guest_agent.0 ]; then')
+    end
+
+    it "writes Samba's config from the app, as every update does, instead of editing Ubuntu's" do
+      expect(install).to include("bin/rails runner 'exit(SambaService.push_config ? 0 : 1)'")
+      expect(install).not_to include('wide links = yes')
+    end
+
+    it 'restarts the app, running the code just installed, and checks it answers' do
+      expect(install).to include("systemctl restart amahi-kai\nif ! app_answers; then")
+      expect(install).not_to match(/^systemctl start amahi-kai$/)
+    end
+
+    it 'keeps the git history System Update needs, from a checkout as from GitHub' do
+      expect(install).not_to include("--exclude='.git'")
+      expect(install).to include('clone --quiet --no-hardlinks "$SCRIPT_DIR" "$APP_DIR"', 'remote set-url origin "$REPO_URL"')
+    end
+
+    it 'has no --with-greyhole: the wizard or Disks → Greyhole Pool installs Greyhole' do
+      expect(install).to include('--with-greyhole is gone')
+      expect(install).not_to include('greyhole.list')
+    end
+
+    it "leaves the app's own service files to the helper's installer, which updates refresh too" do
+      expect(install).not_to include('cat > /etc/systemd/system/amahi-kai')
+      helper = File.read(Rails.root.join('bin/amahi-install-helper'))
+      expect(helper).to include('for unit in amahi-kai.service amahi-kai-indexer.service amahi-kai-indexer.timer')
+      expect(helper).to include('systemctl enable amahi-kai.service', 'systemctl enable amahi-kai-indexer.timer')
+      expect(helper).not_to include('enable --now amahi-kai.service')
+      expect(File.read(Rails.root.join('config/systemd/amahi-kai.service')))
+        .to include('ExecStart=/usr/bin/bundle exec puma -C config/puma.rb', 'EnvironmentFile=/etc/amahi-kai/amahi.env')
+      expect(File.read(Rails.root.join('config/systemd/amahi-kai-indexer.timer'))).to include('OnUnitActiveSec=10min')
+    end
+
+    it "install.sh hands the installer its options and the code it fetched, from main unless told" do
+      script = File.read(Rails.root.join('site/install.sh'))
+      expect(script).to include('BRANCH="${AMAHI_BRANCH:-main}"', 'export AMAHI_CODE_FETCHED=1', 'exec bin/amahi-install "$@"')
+      expect(install).to include('if [[ "${AMAHI_CODE_FETCHED:-}" == 1 && -d "$APP_DIR/.git" ]]; then')
+    end
+  end
+
   it 'installs and enables the check for updates' do
     text = File.read(Rails.root.join('bin/amahi-install-helper'))
     expect(text).to include('amahi-kai-update-check.service amahi-kai-update-check.timer')

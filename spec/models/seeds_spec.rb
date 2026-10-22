@@ -28,6 +28,12 @@ RSpec.describe 'db/seeds.rb' do
     expect(Setting.get(User::FIRST_PASSWORD_SETTING)).not_to include('Xk3f9QvL2mT8wRz5BnYc')
   end
 
+  it "names the network home.arpa, not the old project's real domain" do
+    password_file("Xk3f9QvL2mT8wRz5BnYc\n")
+    load seeds
+    expect(Setting.get('domain')).to eq('home.arpa')
+  end
+
   it 'refuses a first password shorter than 12 characters' do
     password_file('short')
     expect { load seeds }.to raise_error(/shorter than 12/)

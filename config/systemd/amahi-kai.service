@@ -1,0 +1,24 @@
+# The web UI: Puma on port 3000, as the app user. Ubuntu 24.04's Ruby 3.2 (bin/amahi-install
+# installs it); bin/amahi-install-helper installs this file at install and every update.
+[Unit]
+Description=Amahi-kai Home Server (Puma)
+After=network.target mariadb.service
+Requires=mariadb.service
+
+[Service]
+Type=simple
+User=amahi
+Group=amahi
+WorkingDirectory=/opt/amahi-kai
+EnvironmentFile=/etc/amahi-kai/amahi.env
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
+Environment=RAILS_LOG_TO_STDOUT=true
+ExecStart=/usr/bin/bundle exec puma -C config/puma.rb
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=amahi-kai
+
+[Install]
+WantedBy=multi-user.target

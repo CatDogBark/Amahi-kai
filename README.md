@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/CatDogBark/Amahi-kai/actions/workflows/ci.yml/badge.svg)](https://github.com/CatDogBark/Amahi-kai/actions/workflows/ci.yml)
 
-A web-based home server for Ubuntu/Debian: users, file shares, storage pooling, Docker apps,
+A web-based home server for Ubuntu 24.04: users, file shares, storage pooling, Docker apps,
 networking and remote access, managed from your browser.
 
 A modernized fork of the [original Amahi platform](https://github.com/amahi/platform), revived for
@@ -10,7 +10,7 @@ current Linux.
 
 ## Install
 
-On a dedicated Ubuntu 24.04 or Debian 12+ machine:
+On a dedicated Ubuntu 24.04 machine or VM:
 
 ```bash
 curl -fsSL https://amahi-kai.com/install.sh | sudo bash
@@ -43,12 +43,12 @@ network, drives, storage pool and a first share. More in [docs/NATIVE-INSTALL.md
 - **Dashboard:** CPU, memory, per-drive storage and services; Settings → Servers for each service's
   version, uptime and controls
 - **Security audit:** checks SSH, the firewall and updates, with fixes
-- **Ocean UI:** animated underwater background, glass panels, light/dark/system themes
+- **Ocean UI:** animated underwater background behind dark glass panels
 
 ## Security
 
 - Root actions go through one root helper (`libexec/amahi-helper`) that validates every request
-  and logs it; sudo allows only the helper and Docker. Root owns the installed code.
+  and logs it; sudo allows only the helper. Root owns the installed code.
 - bcrypt passwords; per-request sessions that expire after 7 idle days; a password change signs
   out other browsers
 - CSRF protection, with system actions on POST only; login rate limiting; a host allowlist

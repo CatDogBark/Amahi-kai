@@ -1,29 +1,33 @@
 #!/bin/bash
 # bin/amahi-install — Amahi-kai native production installer for Ubuntu 24.04
-# Idempotent: run it once on a blank server, run it again and nothing breaks.
+# Run it once on a blank server. Running it again keeps users, shares and settings: it brings
+# the code, gems, database and services up to date and restarts the app.
 set -euo pipefail
 
 APP_DIR="/opt/amahi-kai"
 CONFIG_DIR="/etc/amahi-kai"
 ENV_FILE="$CONFIG_DIR/amahi.env"
 SHARE_ROOT="/var/lib/amahi-kai/files"
-RUBY_VERSION="3.2.10"
+REPO_URL="https://github.com/CatDogBark/Amahi-kai.git"
 APP_USER="amahi"
 APP_GROUP="amahi"
+# apt never stops to ask (a changed config file, services to restart).
+export DEBIAN_FRONTEND=noninteractive
 
 # Parse flags
 HEADLESS=false
-WITH_GREYHOLE=false
 for arg in "$@"; do
   case "$arg" in
     --headless)     HEADLESS=true ;;
-    --with-greyhole) WITH_GREYHOLE=true ;;
+    --with-greyhole)
+      echo "--with-greyhole is gone: the setup wizard installs Greyhole, or Disks → Greyhole Pool later." >&2
+      exit 1
+      ;;
     --help|-h)
       echo "Usage: sudo bin/amahi-install [OPTIONS]"
       echo ""
       echo "Options:"
       echo "  --headless        Non-interactive install, generates random admin password"
-      echo "  --with-greyhole   Install Greyhole storage pooling"
       echo "  --help            Show this help"
       exit 0
       ;;
@@ -36,12 +40,9 @@ done
 
 echo "============================================"
 echo "  Amahi-kai Production Installer"
-echo "  Target: Ubuntu 24.04 / Debian 12+"
+echo "  Target: Ubuntu 24.04"
 if $HEADLESS; then
   echo "  Mode: HEADLESS"
-fi
-if $WITH_GREYHOLE; then
-  echo "  Greyhole: YES"
 fi
 echo "============================================"
 echo ""
@@ -52,6 +53,14 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
+# Amahi-kai is made for Ubuntu 24.04: its Ruby (3.2), and the Docker and Tailscale
+# repositories the helper adds, are Ubuntu 24.04's.
+OS_NAME=$(. /etc/os-release 2>/dev/null && echo "${ID:-}-${VERSION_ID:-}" || true)
+if [[ "$OS_NAME" != "ubuntu-24.04" ]]; then
+  echo "⚠ This isn't Ubuntu 24.04 ($(. /etc/os-release 2>/dev/null && echo "${PRETTY_NAME:-unknown}")). Amahi-kai is made for it; elsewhere it may not install or work."
+  echo ""
+fi
+
 # Root owns the code (bin/amahi-set-ownership) and runs only system commands. Everything
 # that loads the app or its gems (bundle, migrations, seeds, rails runner, the asset
 # build) runs as the app user, with the app's environment.
@@ -59,8 +68,20 @@ as_app() {
   sudo -u "$APP_USER" -H bash -lc "set -a && source '$ENV_FILE' && set +a && cd '$APP_DIR' && $1"
 }
 
+# Whether the app answers on its port, waiting up to 90 seconds (as bin/amahi-update does).
+app_answers() {
+  local i
+  for i in $(seq 1 45); do
+    if curl -fsS -o /dev/null --max-time 5 "http://127.0.0.1:3000/login" 2>/dev/null; then
+      return 0
+    fi
+    sleep 2
+  done
+  return 1
+}
+
 # ---------------------------------------------------------------------------
-# 0. Ensure swap exists (critical for low-RAM systems)
+# 1. Ensure swap exists (critical for low-RAM systems)
 # ---------------------------------------------------------------------------
 if ! swapon --show | grep -q '/'; then
   TOTAL_RAM_MB=$(awk '/MemTotal/ {printf "%d", $2/1024}' /proc/meminfo)
@@ -82,7 +103,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 1. System packages
+# 2. System packages, Ruby among them
 # ---------------------------------------------------------------------------
 echo "==> Installing system dependencies..."
 apt-get update
@@ -91,12 +112,16 @@ apt-get install -y --no-install-recommends \
   build-essential \
   curl \
   git \
+  gnupg \
   libffi-dev \
   libmariadb-dev \
   libssl-dev \
   libyaml-dev \
   zlib1g-dev \
   mariadb-server \
+  ruby \
+  ruby-dev \
+  ruby-bundler \
   samba \
   avahi-daemon \
   samba-common-bin \
@@ -105,6 +130,15 @@ apt-get install -y --no-install-recommends \
   smartmontools \
   sudo
 
+# Ruby 3.2, Ubuntu 24.04's own: the app's service files (config/systemd) run /usr/bin/bundle.
+# Ubuntu's bundler (2.4.x) runs Gemfile.lock as it is; no newer one is installed.
+RUBY_FOUND=$(ruby -e 'puts RUBY_VERSION' 2>/dev/null || true)
+if [[ "$RUBY_FOUND" != 3.2.* ]]; then
+  echo "  ❌ Amahi-kai needs Ruby 3.2, Ubuntu 24.04's, and this system has ${RUBY_FOUND:-none}." >&2
+  exit 1
+fi
+echo "==> Ruby $RUBY_FOUND"
+
 # VM guest agent (auto-detect)
 if systemd-detect-virt -q 2>/dev/null; then
   VIRT_TYPE=$(systemd-detect-virt 2>/dev/null || true)
@@ -112,7 +146,15 @@ if systemd-detect-virt -q 2>/dev/null; then
   case "$VIRT_TYPE" in
     kvm|qemu)
       apt-get install -y --no-install-recommends qemu-guest-agent
-      systemctl enable --now qemu-guest-agent 2>/dev/null || true
+      # The agent starts by itself whenever the VM has its port (Proxmox: Options → QEMU Guest
+      # Agent, then a full stop and start). Without it, starting the agent would only wait 90
+      # seconds for the port and fail.
+      if [ -e /dev/virtio-ports/org.qemu.guest_agent.0 ]; then
+        systemctl start qemu-guest-agent 2>/dev/null || true
+      else
+        echo "  The guest agent starts once the VM has its port: in Proxmox, turn on Options → QEMU Guest Agent,"
+        echo "  then stop and start the VM."
+      fi
       ;;
     vmware)
       apt-get install -y --no-install-recommends open-vm-tools
@@ -124,7 +166,6 @@ if systemd-detect-virt -q 2>/dev/null; then
   esac
 fi
 
-# Greyhole (optional)
 # Disable memory-hungry services not needed on a NAS (~70MB savings)
 for svc in fwupd.service multipathd.service; do
   if systemctl is-active --quiet "$svc" 2>/dev/null; then
@@ -134,88 +175,6 @@ for svc in fwupd.service multipathd.service; do
     systemctl mask "$svc" 2>/dev/null || true
   fi
 done
-
-if $WITH_GREYHOLE; then
-  echo "==> Adding Greyhole apt repository..."
-  if [ ! -f /usr/share/keyrings/greyhole-archive-keyring.asc ]; then
-    curl -fsSL -o /usr/share/keyrings/greyhole-archive-keyring.asc https://www.greyhole.net/releases/deb/greyhole-debsig.asc
-  fi
-  if [ ! -f /etc/apt/sources.list.d/greyhole.list ]; then
-    echo "deb [signed-by=/usr/share/keyrings/greyhole-archive-keyring.asc] https://www.greyhole.net/releases/deb stable main" > /etc/apt/sources.list.d/greyhole.list
-    apt-get update
-  fi
-  echo "==> Installing Greyhole and PHP dependencies..."
-  apt-get install -y --no-install-recommends \
-    greyhole \
-    php \
-    php8.3-mysql \
-    php8.3-mbstring
-fi
-
-# ---------------------------------------------------------------------------
-# 2. Ruby — prefer system package, fall back to rbenv
-# ---------------------------------------------------------------------------
-SYSTEM_RUBY_VERSION=$(ruby -e 'puts RUBY_VERSION' 2>/dev/null || true)
-NEED_RBENV=true
-
-if [ -n "$SYSTEM_RUBY_VERSION" ]; then
-  # Check if system Ruby major.minor matches what we need (3.2.x)
-  REQUIRED_MINOR=$(echo "$RUBY_VERSION" | cut -d. -f1,2)
-  SYSTEM_MINOR=$(echo "$SYSTEM_RUBY_VERSION" | cut -d. -f1,2)
-  if [ "$SYSTEM_MINOR" = "$REQUIRED_MINOR" ]; then
-    echo "==> System Ruby $SYSTEM_RUBY_VERSION detected (matches $REQUIRED_MINOR.x) — using it"
-    NEED_RBENV=false
-  else
-    echo "==> System Ruby $SYSTEM_RUBY_VERSION does not match required $REQUIRED_MINOR.x"
-  fi
-fi
-
-if [ "$NEED_RBENV" = true ]; then
-  # Try installing Ruby from apt first (Ubuntu 24.04 ships 3.2)
-  echo "==> Attempting to install Ruby from system packages..."
-  apt-get install -y --no-install-recommends ruby ruby-dev ruby-bundler 2>/dev/null || true
-
-  SYSTEM_RUBY_VERSION=$(ruby -e 'puts RUBY_VERSION' 2>/dev/null || true)
-  REQUIRED_MINOR=$(echo "$RUBY_VERSION" | cut -d. -f1,2)
-  SYSTEM_MINOR=$(echo "$SYSTEM_RUBY_VERSION" | cut -d. -f1,2)
-
-  if [ -n "$SYSTEM_RUBY_VERSION" ] && [ "$SYSTEM_MINOR" = "$REQUIRED_MINOR" ]; then
-    echo "==> System Ruby $SYSTEM_RUBY_VERSION installed from packages"
-    NEED_RBENV=false
-  fi
-fi
-
-if [ "$NEED_RBENV" = true ]; then
-  echo "==> System Ruby not available or wrong version — building via rbenv..."
-  if [ ! -d "/usr/local/rbenv" ]; then
-    echo "==> Installing rbenv + ruby-build system-wide..."
-    git clone https://github.com/rbenv/rbenv.git /usr/local/rbenv
-    git clone https://github.com/rbenv/ruby-build.git /usr/local/rbenv/plugins/ruby-build
-  fi
-
-  export RBENV_ROOT="/usr/local/rbenv"
-  export PATH="$RBENV_ROOT/bin:$RBENV_ROOT/shims:$PATH"
-
-  if ! rbenv versions --bare | grep -q "^${RUBY_VERSION}$"; then
-    echo "==> Installing Ruby ${RUBY_VERSION} from source (this takes a few minutes)..."
-    rbenv install "$RUBY_VERSION"
-  fi
-  rbenv global "$RUBY_VERSION"
-  rbenv rehash
-
-  # Make rbenv available to all users
-  cat > /etc/profile.d/rbenv.sh <<'RBENV'
-export RBENV_ROOT="/usr/local/rbenv"
-export PATH="$RBENV_ROOT/bin:$RBENV_ROOT/shims:$PATH"
-eval "$(rbenv init - bash)"
-RBENV
-fi
-
-# System Ruby 3.2 ships with bundler 2.4.19 which matches Gemfile.lock
-# Do NOT install a newer bundler — version mismatches break native extensions
-if command -v rbenv &>/dev/null; then
-  rbenv rehash
-fi
 
 # ---------------------------------------------------------------------------
 # 3. Create system user
@@ -230,29 +189,31 @@ fi
 usermod -aG users "$APP_USER"
 
 # ---------------------------------------------------------------------------
-# 4. Deploy application code
+# 4. Deploy application code, with its git history (System Update and the check for updates
+#    use it)
 # ---------------------------------------------------------------------------
 echo "==> Deploying application to $APP_DIR..."
 mkdir -p "$APP_DIR"
 
-if [ -d "$APP_DIR/.git" ]; then
+if [[ "${AMAHI_CODE_FETCHED:-}" == 1 && -d "$APP_DIR/.git" ]]; then
+  echo "    Using the code install.sh just fetched"
+elif [ -d "$APP_DIR/.git" ]; then
   echo "    Existing installation found, pulling latest..."
   "$APP_DIR/bin/amahi-set-ownership"
   cd "$APP_DIR"
   git -c core.hooksPath=/dev/null -c core.fsmonitor=false pull origin main 2>&1 || echo "    ⚠ Git pull failed — using code on disk"
 elif [ -f "$APP_DIR/Gemfile" ]; then
   echo "    Existing installation found (no git), using current code..."
-  cd "$APP_DIR"
 else
-  # If we're running from a git checkout, copy it; otherwise clone
+  # Run from a checkout: a clone of it (its committed code), which then follows GitHub.
   SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
   if [ -d "$SCRIPT_DIR/.git" ]; then
-    echo "    Copying from local checkout..."
-    rsync -a --exclude='.git' --exclude='tmp' --exclude='log' --exclude='node_modules' \
-      "$SCRIPT_DIR/" "$APP_DIR/"
+    echo "    Cloning the local checkout..."
+    git -c safe.directory="$SCRIPT_DIR" -c core.hooksPath=/dev/null clone --quiet --no-hardlinks "$SCRIPT_DIR" "$APP_DIR"
+    git -C "$APP_DIR" remote set-url origin "$REPO_URL"
   else
     echo "    Cloning from GitHub..."
-    git clone https://github.com/CatDogBark/Amahi-kai.git "$APP_DIR"
+    git clone "$REPO_URL" "$APP_DIR"
   fi
 fi
 
@@ -271,9 +232,6 @@ mkdir -p "$CONFIG_DIR"
 mkdir -p /var/lib/amahi-kai/tmp
 chown "$APP_USER:$APP_GROUP" /var/lib/amahi-kai/tmp
 
-# ---------------------------------------------------------------------------
-# 6. Generate config (if not exists)
-# ---------------------------------------------------------------------------
 if [ ! -f "$ENV_FILE" ]; then
   echo "==> Generating configuration..."
   SECRET=$(openssl rand -hex 32)
@@ -297,9 +255,6 @@ DATABASE_PASSWORD=$DB_PASS
 # addresses, localhost, this machine's hostname, its Tailscale name or a
 # Cloudflare Tunnel; add other DNS names that point at this server.
 # RAILS_ALLOWED_HOSTS=nas.example.lan
-
-# Share root (default: /var/lib/amahi-kai/files)
-# AMAHI_SHARE_ROOT=/var/lib/amahi-kai/files
 EOF
   chmod 640 "$ENV_FILE"
   chown root:"$APP_USER" "$ENV_FILE"
@@ -316,7 +271,7 @@ source "$ENV_FILE"
 set +a
 
 # ---------------------------------------------------------------------------
-# 8. MariaDB setup
+# 6. MariaDB setup
 # ---------------------------------------------------------------------------
 echo "==> Configuring MariaDB..."
 systemctl enable --now mariadb
@@ -330,36 +285,10 @@ GRANT ALL PRIVILEGES ON \`${DATABASE_NAME:-amahi_production}\`.* TO '${DATABASE_
 FLUSH PRIVILEGES;
 EOSQL
 
-# Greyhole database (if installed)
-if $WITH_GREYHOLE; then
-  echo "==> Creating Greyhole database..."
-  mysql -u root <<EOSQL || true
-CREATE DATABASE IF NOT EXISTS greyhole;
-GRANT ALL PRIVILEGES ON greyhole.* TO '${DATABASE_USER:-amahi}'@'localhost';
-FLUSH PRIVILEGES;
-EOSQL
-  # Initialize Greyhole schema if available
-  if [ -f /usr/share/greyhole/schema-mysql.sql ]; then
-    mysql -u root greyhole < /usr/share/greyhole/schema-mysql.sql 2>/dev/null || true
-  fi
-fi
-
 # ---------------------------------------------------------------------------
-# 9. Bundle install
+# 7. Bundle install
 # ---------------------------------------------------------------------------
 echo "==> Installing Ruby gems..."
-
-# If using system Ruby, disable rbenv to prevent shim conflicts
-# (rbenv may exist from a previous install with a different Ruby platform)
-if [ "$NEED_RBENV" = false ] && [ -f /etc/profile.d/rbenv.sh ]; then
-  echo "    Disabling rbenv (using system Ruby instead)..."
-  mv /etc/profile.d/rbenv.sh /etc/profile.d/rbenv.sh.disabled 2>/dev/null || true
-  # Also clear rbenv from current shell
-  export PATH=$(echo "$PATH" | tr ':' '\n' | grep -v rbenv | tr '\n' ':' | sed 's/:$//')
-  unset RBENV_ROOT 2>/dev/null || true
-  hash -r
-fi
-
 if ! as_app "bundle install"; then
   echo ""
   echo "  ❌ Bundle install failed! Check for missing system libraries."
@@ -370,10 +299,10 @@ if ! as_app "bundle install"; then
 fi
 
 # ---------------------------------------------------------------------------
-# 10. Privileged helper and sudoers rules (before db:seed: creating the admin user
-#     makes its Linux and Samba accounts through the helper)
+# 8. Privileged helper, sudoers rules and the app's service files (before db:seed: creating
+#    the admin user makes its Linux and Samba accounts through the helper)
 # ---------------------------------------------------------------------------
-echo "==> Installing the privileged helper and sudoers rules..."
+echo "==> Installing the privileged helper, sudoers rules and services..."
 if ! "$APP_DIR/bin/amahi-install-helper"; then
   echo ""
   echo "  ❌ The privileged helper or sudoers rules couldn't be installed."
@@ -391,13 +320,8 @@ fi
 /usr/local/sbin/amahi-helper smart.setup </dev/null >/dev/null 2>&1 \
   || echo "  ⚠ Couldn't set up SMART monitoring (System Update tries again)"
 
-# Nothing updates by itself: Ubuntu's automatic updates stay off until they're switched on
-# (Settings → System Dependencies, where updates are installed). apt still refreshes its
-# package lists daily, which is how the page and the dashboard know what's waiting.
-printf 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "0";\n' > /etc/apt/apt.conf.d/20auto-upgrades
-
 # ---------------------------------------------------------------------------
-# 11. Database migrations
+# 9. Database migrations and the first admin
 # ---------------------------------------------------------------------------
 echo "==> Running database migrations..."
 if ! as_app "RAILS_ENV=production bin/rails db:migrate"; then
@@ -429,28 +353,53 @@ if ! as_app "AMAHI_FIRST_PASSWORD_FILE='$PW_FILE' RAILS_ENV=production bin/rails
   echo ""
   exit 1
 fi
+# A new database: the steps below that set things up for the first time run only then, so
+# running the installer again keeps what was changed since.
+FRESH=false
 if [[ -e "$PW_FILE" ]]; then
   ADMIN_PASS=""   # seeding was skipped: the existing accounts keep their passwords
+else
+  FRESH=true
 fi
 rm -rf "$PW_DIR"
 
-# Detect host IP and patch network settings to match this machine
-HOST_IP=$(hostname -I | awk '{print $1}')
-if [ -n "$HOST_IP" ]; then
-  NET_PREFIX=$(echo "$HOST_IP" | cut -d. -f1-3)
-  SELF_ADDR=$(echo "$HOST_IP" | cut -d. -f4)
-  echo "==> Configuring network settings for $HOST_IP..."
-  as_app "RAILS_ENV=production bin/rails runner \"
-    Setting.set('net', '$NET_PREFIX')
-    Setting.set('self-address', '$SELF_ADDR')
-  \""
+show_password() {
+  echo "  Sign in as:  admin"
+  echo "  Password:    $ADMIN_PASS"
+  echo "  (Shown only by this install. Lost it? sudo $APP_DIR/script/reset-user-password admin)"
+}
+
+# Shown now as well as at the end, so it isn't lost if a later step fails.
+if $FRESH; then
+  echo ""
+  echo "  ── The first admin account ──────────────────"
+  show_password
+  echo ""
+
+  # This machine's address, in place of the seeds' defaults (Samba's LAN binding uses it).
+  HOST_IP=$(hostname -I | awk '{print $1}')
+  if [ -n "$HOST_IP" ]; then
+    NET_PREFIX=$(echo "$HOST_IP" | cut -d. -f1-3)
+    SELF_ADDR=$(echo "$HOST_IP" | cut -d. -f4)
+    echo "==> Configuring network settings for $HOST_IP..."
+    as_app "RAILS_ENV=production bin/rails runner \"
+      Setting.set('net', '$NET_PREFIX')
+      Setting.set('self-address', '$SELF_ADDR')
+    \"" || echo "  ⚠ Couldn't save this server's address ($HOST_IP); Samba answers on all networks until it is"
+  fi
+
+  # Nothing updates by itself: Ubuntu's automatic updates stay off until they're switched on
+  # (Settings → System Dependencies, where updates are installed). apt still refreshes its
+  # package lists daily, which is how the page and the dashboard know what's waiting.
+  printf 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "0";\n' > /etc/apt/apt.conf.d/20auto-upgrades
 fi
 
 # Headless mode: no setup wizard. The admin keeps the random first password printed below
 # (so the security audit doesn't ask for it to be changed), and setup is marked complete.
 if $HEADLESS; then
   echo "==> Headless mode: marking setup complete..."
-  as_app "RAILS_ENV=production bin/rails runner \"Setting.where(name: User::FIRST_PASSWORD_SETTING).delete_all; Setting.set('setup_completed', 'true')\""
+  as_app "RAILS_ENV=production bin/rails runner \"Setting.where(name: User::FIRST_PASSWORD_SETTING).delete_all; Setting.set('setup_completed', 'true')\"" \
+    || echo "  ⚠ Couldn't mark setup complete: the setup wizard opens at the first sign-in instead"
 fi
 
 # ---------------------------------------------------------------------------
@@ -467,50 +416,7 @@ if ! as_app "rm -rf tmp/cache/assets && RAILS_ENV=production bin/rails assets:pr
 fi
 
 # ---------------------------------------------------------------------------
-# 12. Systemd service (with RAILS_LOG_TO_STDOUT)
-# ---------------------------------------------------------------------------
-echo "==> Installing systemd service..."
-
-# Detect Ruby path — system or rbenv
-if [ "$NEED_RBENV" = true ]; then
-  RUBY_ENV_LINES="Environment=RBENV_ROOT=/usr/local/rbenv
-Environment=PATH=/usr/local/rbenv/shims:/usr/local/rbenv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
-  BUNDLE_PATH="/usr/local/rbenv/shims/bundle"
-else
-  RUBY_ENV_LINES="Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
-  BUNDLE_PATH="$(which bundle)"
-fi
-
-cat > /etc/systemd/system/amahi-kai.service <<UNIT
-[Unit]
-Description=Amahi-kai Home Server (Puma)
-After=network.target mariadb.service
-Requires=mariadb.service
-
-[Service]
-Type=simple
-User=$APP_USER
-Group=$APP_GROUP
-WorkingDirectory=$APP_DIR
-EnvironmentFile=$ENV_FILE
-$RUBY_ENV_LINES
-Environment=RAILS_LOG_TO_STDOUT=true
-ExecStart=$BUNDLE_PATH exec puma -C config/puma.rb
-Restart=on-failure
-RestartSec=5
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=amahi-kai
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-
-systemctl daemon-reload
-systemctl enable amahi-kai
-
-# ---------------------------------------------------------------------------
-# 13. Firewall — open port 3000 (Puma direct)
+# 11. Firewall — open port 3000 (Puma direct)
 # ---------------------------------------------------------------------------
 if command -v ufw &>/dev/null && ufw status | grep -q "Status: active"; then
   echo "==> Opening port 3000 in UFW..."
@@ -518,77 +424,41 @@ if command -v ufw &>/dev/null && ufw status | grep -q "Status: active"; then
 fi
 
 # ---------------------------------------------------------------------------
-# 14. Enable services (Samba)
+# 12. Samba: its config comes from the app (Share.samba_conf), as at every System Update, so
+#     it answers on the LAN only from the start, without Ubuntu's printer shares.
 # ---------------------------------------------------------------------------
-echo "==> Configuring Samba globals..."
-if [ -f /etc/samba/smb.conf ]; then
-  # Ensure required global settings for Amahi-kai
-  for setting in "wins support = yes" "wide links = yes" "follow symlinks = yes" "allow insecure wide links = yes" "unix extensions = no"; do
-    key=$(echo "$setting" | cut -d= -f1 | xargs)
-    if ! grep -qi "^[[:space:]]*$key" /etc/samba/smb.conf; then
-      sed -i "/^\[global\]/a\\\\t$setting" /etc/samba/smb.conf
-    fi
-  done
-fi
-
-echo "==> Enabling services..."
+echo "==> Writing Samba's configuration..."
 # Clean stale WINS database (causes nmbd segfault on fresh installs)
 rm -f /var/lib/samba/wins.dat /var/cache/samba/wins.tdb
-systemctl enable --now smbd nmbd
+systemctl enable smbd nmbd
+if as_app "RAILS_ENV=production bin/rails runner 'exit(SambaService.push_config ? 0 : 1)'"; then
+  systemctl restart smbd nmbd
+else
+  echo "  ⚠ Samba's configuration wasn't written (System Update tries again); Ubuntu's stays for now"
+  systemctl restart smbd nmbd || true
+fi
 # dnsmasq disabled by default — enable when DNS aliases are configured
 # systemctl enable --now dnsmasq
 
-# Greyhole (enable but don't start — wizard or user configures drives first)
-if $WITH_GREYHOLE && command -v greyhole &>/dev/null; then
-  echo "==> Enabling Greyhole service..."
-  systemctl enable greyhole || true
-fi
-
 # ---------------------------------------------------------------------------
-# 15. File search index
+# 13. File search index (its service and timer come with the helper, step 8)
 # ---------------------------------------------------------------------------
 echo "==> Building file search index..."
 as_app "RAILS_ENV=production bin/rails shares:reindex" || true
-
-# Systemd timer for periodic index updates (every 10 minutes)
-cat > /etc/systemd/system/amahi-kai-indexer.service <<UNIT
-[Unit]
-Description=Amahi-kai Share File Indexer
-After=amahi-kai.service mariadb.service
-
-[Service]
-Type=oneshot
-User=$APP_USER
-Group=$APP_GROUP
-WorkingDirectory=$APP_DIR
-EnvironmentFile=$ENV_FILE
-$RUBY_ENV_LINES
-ExecStart=$BUNDLE_PATH exec rails shares:update_index
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=amahi-kai-indexer
-UNIT
-
-cat > /etc/systemd/system/amahi-kai-indexer.timer <<TIMER
-[Unit]
-Description=Amahi-kai Share File Index Update (every 10 min)
-
-[Timer]
-OnBootSec=2min
-OnUnitActiveSec=10min
-
-[Install]
-WantedBy=timers.target
-TIMER
-
-systemctl daemon-reload
 systemctl enable --now amahi-kai-indexer.timer
 
 # ---------------------------------------------------------------------------
-# 16. Start Amahi-kai
+# 14. Start Amahi-kai (or restart it, running the code installed now) and check it answers
 # ---------------------------------------------------------------------------
 echo "==> Starting Amahi-kai..."
-systemctl start amahi-kai
+systemctl restart amahi-kai
+if ! app_answers; then
+  echo ""
+  echo "  ❌ Amahi-kai didn't answer on port 3000 within 90 seconds."
+  echo "  Check: journalctl -u amahi-kai -n 100"
+  echo ""
+  exit 1
+fi
 
 echo ""
 echo "============================================"
@@ -597,11 +467,9 @@ echo "============================================"
 echo ""
 echo "  Web UI:  http://$(hostname -I | awk '{print $1}'):3000"
 echo "  Tunnel:  (configure Cloudflare Tunnel if needed)"
-if [[ -n "$ADMIN_PASS" ]]; then
+if $FRESH; then
   echo ""
-  echo "  Sign in as:  admin"
-  echo "  Password:    $ADMIN_PASS"
-  echo "  (Shown only here. Lost it? sudo $APP_DIR/script/reset-user-password admin)"
+  show_password
   if $HEADLESS; then
     echo "  Setup wizard: skipped (headless)"
   else
@@ -622,7 +490,4 @@ echo "  Services:"
 echo "    systemctl status amahi-kai   # Rails app (Puma on :3000)"
 echo "    systemctl status mariadb     # Database"
 echo "    systemctl status smbd        # Samba file sharing"
-if $WITH_GREYHOLE; then
-  echo "    systemctl status greyhole    # Storage pooling"
-fi
 echo ""

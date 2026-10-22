@@ -88,9 +88,8 @@ under 2 GB: Amahi-kai, its database and its apps need room there too.
 
 ## Installing Greyhole
 
-Any one of:
+Either:
 
-- the installer's `--with-greyhole` option
 - the setup wizard's Greyhole step
 - **Disks → Greyhole Pool → Install Greyhole** (the progress streams as it installs)
 
