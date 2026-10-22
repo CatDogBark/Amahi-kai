@@ -149,10 +149,10 @@ Decided with CatDogBark on 2026-10-10, while testing on the NAS; when they're bu
 
 ## Networking
 
-Planned 2026-10-22, maybe soon ([`networking.md`](networking.md)): DHCP and DNS modernized
-(encrypted upstream DNS, DNSSEC, local names, blocklists), off by default, and tested first on an
-isolated Proxmox bridge so the house's internet is never at risk. What isn't ready by 1.0 ships
-labelled "in development".
+Planned 2026-10-22, for 1.0 ([`networking.md`](networking.md)): Unbound for DNS (encrypted
+lookups to a provider the owner picks, DNSSEC, local names, blocklists with a switch, IPv6) and
+dnsmasq for DHCP only, off by default, and tested first on an isolated Proxmox bridge so the
+house's internet is never at risk.
 
 ## Open, not yet scheduled
 

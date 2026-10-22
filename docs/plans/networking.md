@@ -1,103 +1,174 @@
-# Networking: modernized, and tested without losing the house's internet
+# Networking: modernized, private, and tested without losing the house's internet
 
-Status 2026-10-22: a plan, nothing built yet. CatDogBark wants Amahi-kai's networking modernized,
-with secure DNS among other things, to carry over what original Amahi users did with their home
-server: put it in front of the network. Until it's been tested as below, the parts that aren't
-ready ship labelled "in development" and stay off. That may still include 1.0.
+Status 2026-10-22: planned, nothing built yet. CatDogBark wants Amahi-kai's networking modernized
+for privacy and safety, carrying over what original Amahi users did with their home server: put it
+in front of the network. It ships in 1.0, DHCP included, once it passes the tests below.
 
-## What's there now
+## Decided (CatDogBark, 2026-10-22)
 
-Setup → Network, shown in Advanced mode:
+- **Engine:** Unbound (Ubuntu's package) for DNS; dnsmasq kept only for DHCP. AdGuard Home is
+  out of scope.
+- **Lookups:** encrypted forwarding to a provider chosen from a list. Every provider on it is open
+  and needs no account.
+- **Blocklists:** included, with one switch to turn them on and off.
+- **DHCP:** ships in 1.0, behind the safety checks below.
+- **IPv6:** handled from the start. Most ISPs hand out IPv6, and devices use it for DNS when they
+  can.
 
-- **Leases**: the addresses dnsmasq's DHCP has handed out.
-- **Hosts**: fixed addresses. A MAC always gets the same address and name (`dhcp-host=`).
-- **Gateway**: installs dnsmasq, and sets the DHCP range, the router, the lease time and whether
-  DHCP and DNS are on.
-- **DNS aliases**: extra names for addresses (`address=/name/ip`).
-- **Settings**: the upstream DNS (Cloudflare, `1.1.1.1` and `1.0.0.1`, by default).
+## What it does
 
-`DnsmasqService` (`lib/dnsmasq_service.rb`) writes the configuration: `dhcp-range`,
-`dhcp-authoritative`, a `dhcp-host` line per fixed address, `local=`, `expand-hosts` and `domain=`
-for the local names (`home.arpa` since #163). The root helper checks it with `dnsmasq --test`
-before installing it (`network.write_dnsmasq_config`).
+### Three modes
 
-Remote Access (Cloudflare Tunnel, Tailscale) and the security audit live on the same tab. They're
-in use on the NAS and aren't part of this plan.
+1. **Off** (the default on a new install). Nothing listens.
+2. **DNS for my network** (the one to recommend). The NAS is the house's DNS server, and the
+   router's own DHCP keeps handing out addresses. The page shows how to point the router's DNS
+   setting at the NAS, or a single device's.
+3. **DNS + DHCP** (advanced). The NAS also hands out addresses, in place of the router.
 
-None of the DHCP and DNS features has been tested end to end; the storage test run didn't cover
-them.
+### DNS (Unbound)
 
-## Why it needs care
+- **Encrypted lookups:** DNS-over-TLS to the chosen provider, so the ISP can't read or change
+  them. The list, with no account needed for any of them:
+  - Quad9 (the default: Swiss, no logging, blocks known malware domains)
+  - Cloudflare
+  - Mullvad DNS
+  - AdGuard DNS (its public, unfiltered service)
+  - DNS.SB
+  - a custom one: its addresses and TLS name.
 
-DHCP and DNS serve the whole house, not just the NAS. Amahi-kai handing out addresses while the
-router's DHCP is still on means two DHCP servers, and devices end up with whichever answers first.
-Wrong DNS means no internet for every device that uses it. No other feature can do that much
-damage, so:
+  Each provider's IPv4 and IPv6 addresses and TLS name are checked against the provider's own
+  page when this is built, not written from memory.
+- **DNSSEC:** answers are checked, and forged ones refused.
+- **A cache**, so repeat lookups are fast and fewer leave the house.
+- **Local names:** `name.home.arpa` for the fixed hosts, the DNS aliases and, with DHCP on, every
+  device that gets an address.
+- **Blocklists** (one switch): ads, trackers and malware, from lists the owner picks, with sensible
+  ones ticked; an allowlist; and "pause blocking for 5 minutes" for when a site breaks. Lists
+  refresh daily.
+- **Private by default:** no record of which device looked up what. The page shows totals only
+  (lookups, how many were blocked, the cache's hit rate).
+- **Firefox's own encrypted DNS** is turned off for the network with its standard signal (the
+  `use-application-dns.net` canary domain), so Firefox uses the house's DNS. Other devices and
+  browsers that ignore the house's DNS need the router's firewall; the page says so.
 
-- **Off unless turned on.** A new install's settings say DHCP and DNS are off (the seeds say on
-  today, though nothing runs until dnsmasq is installed: change them to off). Existing installs
-  keep what they have.
-- **Look before turning DHCP on.** Before DHCP starts, Amahi-kai checks the network for another
-  DHCP server (a DHCP discover, as `nmap --script broadcast-dhcp-discover` sends). If one answers,
-  it refuses and says to turn the router's DHCP off first.
-- **A way back from outside.** The page says how to undo it if the NAS is down: turn the router's
-  DHCP on again, from the router's own page.
-- **Serve one interface.** DHCP and DNS answer on the interface chosen for them, not on every
-  interface the server has. That's also what the test lab below needs.
+### Safety
 
-## Modernizing
+- **Answers the LAN and Tailscale only**, never the internet: the firewall (UFW) opens port 53 to
+  those networks alone, and Unbound refuses everyone else too.
+- **DNS rebinding protection:** a public name can't resolve to an address inside the house (a known
+  way for websites to attack home devices). Local names are exempt.
+- **Before DHCP starts,** the NAS checks the network for another DHCP server (a DHCP discover) and
+  refuses while one answers, saying to turn the router's DHCP off first.
+- **A way back:** the page says how to undo it if the NAS is down: point the router's DNS back at
+  itself, or turn the router's DHCP on again.
+- **One interface:** DNS and DHCP serve the interface chosen for them, not every interface the
+  server has.
+- **If the NAS is down, so is DNS** for every device that uses it. The page explains the trade-off
+  of a second DNS server on the router: a backup, but devices then use either one, which bypasses
+  the blocking and the privacy whenever they pick the router's.
 
-To settle before building:
+### IPv6
 
-- **Encrypted upstream DNS.** Queries to the upstream (Cloudflare, Quad9 and the like) go over
-  DNS-over-TLS or DNS-over-HTTPS, so the ISP can't read or change them. dnsmasq can't do either
-  itself. The likely shape is Unbound (in Ubuntu) as the DNS server, with DNS-over-TLS forwarding,
-  DNSSEC validation and a cache, and dnsmasq kept only for DHCP, telling Unbound the names it
-  hands out. The other route is a forwarding proxy in front of dnsmasq.
-- **DNSSEC validation**, so forged answers are refused.
-- **Blocklists** (ads, trackers, malware), optional, from lists the owner picks, like Pi-hole's.
-- **Local names that just work.** Every device that gets an address is reachable as
-  `name.home.arpa`, alongside the fixed hosts and the DNS aliases.
-- **Tailscale's devices** can use the NAS's DNS (split DNS), so local names work away from home.
-- **Later:** IPv6 (router advertisements, DHCPv6), serving DNS-over-HTTPS to browsers, and
-  per-device query stats.
+- **Unbound listens on IPv6 too**, at a stable address: a ULA (`fd…`) the NAS keeps whatever
+  prefix the ISP hands out today. The ISP's prefix can change, and the DNS address mustn't.
+- **Devices must learn that address,** or they keep asking the router's IPv6 DNS and go around the
+  NAS. In order of preference:
+  1. The router advertises the NAS's address as its IPv6 DNS server (OpenWrt can; many ISP
+     routers can't).
+  2. The router stops advertising an IPv6 DNS server, so devices use the IPv4 one (the NAS).
+  3. The NAS advertises itself (router advertisements carrying a DNS server, `RDNSS`) next to the
+     router's. That's an advanced option, since two advertisers can confuse some devices.
+- **The page checks** which IPv6 DNS servers the network advertises, and warns when it isn't the
+  NAS.
+- **DHCPv6** (handing out IPv6 addresses) stays out: the router keeps that, and devices mostly use
+  SLAAC anyway.
+
+### DHCP (dnsmasq, DHCP only)
+
+- Its DNS is switched off (`port=0`); it only hands out addresses. Unbound learns the names it
+  hands out: Amahi-kai writes them into Unbound's local data and reloads it.
+- What's there today stays: the range, the router, the lease time, fixed hosts (MAC → address and
+  name), and the lease list.
+- Hands out the NAS as the DNS server, and `home.arpa` as the search domain.
+
+### Later
+
+- Tailscale devices using the NAS for DNS (split DNS), so blocklists and local names work away
+  from home.
+- Serving DNS-over-TLS and DNS-over-HTTPS to devices on the LAN (Android's Private DNS needs a
+  certificate for a name; it comes with the HTTPS work on the roadmap).
+- Per-device stats, opt-in.
+
+## How it's built
+
+- **Packages:** `unbound` (and its `unbound-anchor` for DNSSEC), installed by the helper like the
+  others; dnsmasq stays as it is.
+- **Through the helper:** every configuration file is written by the root helper and checked
+  before it's installed (`unbound-checkconf`, `dnsmasq --test`), as dnsmasq's is today.
+  Blocklists are downloaded by the helper over HTTPS, checked (size, syntax), and turned into
+  Unbound `local-zone` entries.
+- **Settings:** the mode, the provider, blocklists on and off, the chosen lists, the allowlist,
+  the interface, and IPv6 advertising. The page is Setup → Network, reorganized around the three
+  modes.
+- **New installs** start Off: the seeds' `dnsmasq_dns` and `dnsmasq_dhcp` become off. Existing
+  installs keep what they have.
+- **Migrating:** an install with dnsmasq's DNS on moves to Unbound, its DNS aliases and fixed hosts
+  carried over.
 
 ## Testing without losing the internet
 
-The house today: the router (with the WAN) → an OpenWrt wireless bridge → the LAN. forge's guests,
-the NAS (`192.168.1.111`) and the test VM (`192.168.1.13`) among them, are on `vmbr0`, the LAN.
+The house: the main router (the WAN, and its DHCP) → an OpenWrt wireless bridge → the LAN. forge's
+guests, the NAS (`192.168.1.111`) and the test VM (`192.168.1.13`) among them, are on `vmbr0`, the
+LAN.
 
-### 1. A lab on forge that can't touch the house
+### 1. An island on forge
 
-Everything, DHCP included, is tried here first.
+Everything, DHCP and IPv6 included, is tried here first. Nothing on the island reaches the house's
+network.
 
-1. In Proxmox: forge → System → Network → Create → Linux Bridge, `vmbr9`, with **no bridge ports
-   and no address**. It's an island: nothing on it reaches the LAN or the router.
-2. The test VM gets a second network device on `vmbr9` with a fixed address there, say
-   `10.99.0.1/24` (netplan). Its first device stays on the LAN, for SSH and its own internet.
-3. Amahi-kai on the test VM serves DHCP and DNS on that second device only (the "serve one
-   interface" setting above), for `10.99.0.0/24`.
-4. A small client VM (an Ubuntu or Alpine cloud image) has its only network device on `vmbr9`.
-   It starts with no address and asks for one.
-5. Check, with snapshots before each run:
-   - the client gets an address from the range, and shows on Leases;
-   - a fixed host gets its fixed address;
-   - `name.home.arpa`, the DNS aliases and outside names resolve from the client. The test VM
-     forwards upstream through its LAN device, so the client needs no internet of its own;
-   - DNSSEC: a deliberately broken domain (such as `dnssec-failed.org`) is refused;
-   - with encrypted upstream DNS on, nothing leaves the test VM on port 53 (`tcpdump`);
-   - the DHCP check finds a second DHCP server put on the island (a dnsmasq on the client) and
-     refuses to start;
-   - turning it all off leaves the client unable to renew. That's the expected result on the
-     island; on the house LAN the router takes over again.
+1. **The bridge:** in Proxmox, forge → System → Network → Create → Linux Bridge, `vmbr9`, with
+   **no bridge ports and no address**.
+2. **The test VM as the island's server:** a second network device on `vmbr9` with fixed addresses
+   (netplan): `10.99.0.1/24` and `fd99::1/64`. Its first device stays on the LAN, for SSH and the
+   encrypted lookups out.
+3. **A client VM:** a small Ubuntu or Alpine cloud image, its only network device on `vmbr9`. It
+   starts with no address.
+4. **Snapshots** of both before each run.
+
+What to check there:
+
+- **DHCP:** the client gets an address from the range, its name resolves as `client.home.arpa`,
+  and it shows on the lease list. A fixed host gets its fixed address.
+- **DNS:** outside names, local names and DNS aliases resolve from the client, over IPv4 and IPv6.
+- **Encryption:** with `tcpdump` on the test VM's LAN device, nothing leaves on port 53; lookups go
+  out on 853 to the chosen provider. Switching providers takes effect.
+- **DNSSEC:** a deliberately broken domain (`dnssec-failed.org`) is refused; a good one resolves.
+- **Blocklists:** a listed domain is blocked with the switch on, resolves with it off, resolves
+  while paused, and resolves when allowlisted.
+- **Rebinding:** a public name that answers with a private address is refused.
+- **Firefox's canary** (`use-application-dns.net`) gets no answer.
+- **Only the island and Tailscale get answers:** a query from the test VM's LAN side, from another
+  LAN machine, is refused.
+- **The DHCP check:** a second DHCP server put on the island (dnsmasq on the client) makes the NAS
+  refuse to start DHCP.
+- **IPv6 advertising:** with the NAS advertising its DNS server, the client picks up `fd99::1`.
+  With a second advertiser on the island (the client's own `radvd`), the page warns.
+- **Turning it off** stops everything, and the client can't renew. That's expected on the island;
+  on the house LAN, the router takes over again.
 
 ### 2. DNS on the house LAN, one device at a time
 
-DNS can be tried without touching DHCP or the router: set one computer's DNS server to the NAS
-by hand. If something breaks, set that one computer back. Nothing else in the house notices.
+Mode "DNS for my network", without touching the router: set one computer's DNS server (IPv4 and
+IPv6) to the NAS by hand. If anything breaks, set that one computer back; nothing else in the house
+notices. Check the blocklists, local names and encrypted lookups from there, and how the network's
+IPv6 advertising looks (the page's check).
 
-### 3. The cut-over, last
+### 3. The house
 
-DHCP for the house only after the lab and the single-device DNS pass, with the way back written
-down first. The main router's DHCP is turned off in its own admin page (the OpenWrt bridge passes
-DHCP along and isn't where it's changed); turning it on again undoes everything.
+The way back written down first, then:
+
+1. **DNS for the whole house:** point the main router's DNS setting (IPv4, and IPv6 if it has
+   one) at the NAS. Undo: point it back.
+2. **DHCP**, if wanted: turn the main router's DHCP off in its own admin page (the OpenWrt bridge
+   passes DHCP along and isn't where it's changed), then turn the NAS's on. Undo: the router's DHCP
+   on again, the NAS's off.
