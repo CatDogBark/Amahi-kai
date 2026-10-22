@@ -162,6 +162,15 @@ class Share < ApplicationRecord
 
   # --- Class methods ---
 
+  # How many copies a new share in the Greyhole pool keeps: the number chosen when the setup
+  # wizard installed Greyhole (the default_pool_copies setting), else 2. Greyhole keeps what
+  # the pool's drives allow and makes the rest once drives are added.
+  DEFAULT_POOL_COPIES = 2
+  def self.default_pool_copies
+    chosen = Setting.get('default_pool_copies').to_i
+    chosen.between?(1, 3) ? chosen : DEFAULT_POOL_COPIES
+  end
+
   def self.default_full_path(name)
     File.join(DEFAULT_SHARES_ROOT, name.downcase)
   end

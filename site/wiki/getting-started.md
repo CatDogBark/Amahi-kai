@@ -106,14 +106,17 @@ Log in as `admin` and the wizard starts:
 1. **Welcome**: checks memory and swap, and can create a swap file if the server needs one.
 2. **Admin password**: choose a new one (at least 8 characters). The wizard can't be finished
    until the default password is changed.
-3. **Network**: confirm the IP address and give the server a name if you like.
+3. **Network**: confirm the IP address and give the server a name if you like. The name becomes
+   the system's hostname and the name your computers see the server by.
 4. **Storage drives**: pick the drives to use. Amahi-kai can format a new drive (ext4), mounts each
    one under `/mnt` with settings that let the server still boot if a drive goes missing, and adds
-   it to the storage pool. The drive the system runs from is never offered for formatting.
-5. **Greyhole**: install storage pooling and choose how many copies of each file to keep (see
-   [Storage Pooling](storage-pooling)). Optional.
-6. **First share**: create a share such as "Movies". Optional.
-7. **Done**: a summary of what was set up; **Go to Dashboard** finishes the wizard.
+   it to the storage pool. A drive with a filesystem Greyhole can't pool (NTFS, exFAT) becomes a
+   share of its own instead. The drive the system runs from is never offered.
+5. **Greyhole**: install storage pooling and choose how many copies of each file new pooled
+   shares keep (see [Storage Pooling](storage-pooling)). Optional.
+6. **First share**: create a share such as "Movies", pooled with those copies once Greyhole is
+   installed. Optional.
+7. **Done**: a summary of what was set up; **Go to the dashboard** finishes the wizard.
 
 You can skip the drive, Greyhole and share steps and do them later from the **Disks** and
 **Shares** tabs. Once setup is finished, the wizard is closed for good.

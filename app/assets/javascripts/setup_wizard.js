@@ -72,16 +72,17 @@ function prepareDrives(event, nextUrl, streamUrl) {
 
 function installGreyhole(streamUrl, nextUrl) {
   var copies = document.getElementById('default_copies').value;
-  wizardTerminal('greyhole-install', streamUrl + '?default_copies=' + copies, nextUrl, /^(Installing|Generating|Starting)/);
+  wizardTerminal('greyhole-install', streamUrl + '?default_copies=' + copies, nextUrl,
+                 /^(Adding|Preparing|Writing|Installing|Loading|Configuring|Enabling)/);
 }
 
 function previewDrive(device, previewUrl) {
   var modal = document.getElementById('preview-modal');
   var body = document.getElementById('preview-body');
   var title = document.getElementById('preview-title');
-  modal.style.display = 'flex';
-  body.innerHTML = '<div style="text-align:center;padding:20px;color:#7f8c9b;"><span style="display:inline-block;width:16px;height:16px;border:2px solid rgba(127,140,155,0.3);border-top-color:#7f8c9b;border-radius:50%;animation:spin 0.8s linear infinite;"></span> Reading drive…</div>';
-  title.textContent = '📂 Preview: ' + device;
+  modal.hidden = false;
+  body.innerHTML = '<div class="preview-loading"><span class="preview-spinner"></span>Reading the drive…</div>';
+  title.textContent = 'Preview: ' + device;
 
   var token = document.querySelector('meta[name="csrf-token"]');
   fetch(previewUrl, {
@@ -92,13 +93,13 @@ function previewDrive(device, previewUrl) {
   .then(function(r) { return r.json(); })
   .then(function(data) {
     if (data.status === 'error') {
-      body.innerHTML = '<div style="color:#ef4444;padding:10px;">' + escapeHtml(data.message) + '</div>';
+      body.innerHTML = '<div class="preview-error">' + escapeHtml(data.message) + '</div>';
       return;
     }
-    var html = '<div style="margin-bottom:12px;font-size:13px;color:#7f8c9b;">' +
+    var html = '<div class="preview-summary">' +
       formatSize(data.total_used) + ' used · ' + data.file_count + ' file' + (data.file_count === 1 ? '' : 's') + '</div>';
     if (data.entries.length === 0) {
-      html += '<div style="color:#7f8c9b;">Drive is empty.</div>';
+      html += '<div class="preview-empty">The drive is empty.</div>';
     } else {
       data.entries.forEach(function(e) {
         var icon = e.type === 'directory' ? '📁' : '📄';
@@ -106,20 +107,19 @@ function previewDrive(device, previewUrl) {
         var name = e.type === 'directory' ? '<strong>' + escapeHtml(e.name) + '</strong>' : escapeHtml(e.name);
         var info = formatSize(e.size);
         if (e.type === 'directory' && e.file_count !== undefined) info += ' · ' + e.file_count + ' files';
-        html += '<div class="preview-entry" style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f1f5f9;font-size:14px;">' +
-          '<span>' + icon + ' ' + name + '</span>' +
-          '<span class="preview-size" style="color:#7f8c9b;font-size:13px;">' + info + '</span></div>';
+        html += '<div class="preview-entry"><span>' + icon + ' ' + name + '</span>' +
+          '<span class="preview-size">' + info + '</span></div>';
       });
     }
     body.innerHTML = html;
   })
   .catch(function(err) {
-    body.innerHTML = '<div style="color:#ef4444;padding:10px;">Failed to preview drive: ' + escapeHtml(err.message) + '</div>';
+    body.innerHTML = '<div class="preview-error">The drive couldn\'t be read: ' + escapeHtml(err.message) + '</div>';
   });
 }
 
 function closePreview() {
-  document.getElementById('preview-modal').style.display = 'none';
+  document.getElementById('preview-modal').hidden = true;
 }
 
 function escapeHtml(text) {

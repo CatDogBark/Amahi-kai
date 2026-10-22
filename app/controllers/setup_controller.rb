@@ -50,15 +50,15 @@ class SetupController < ApplicationController
   def update_admin
     user = current_user
     if params[:password].blank?
-      flash[:error] = "Password cannot be blank."
+      flash.now[:error] = "Password cannot be blank."
       render :admin; return
     end
     if params[:password] != params[:password_confirmation]
-      flash[:error] = "Passwords do not match."
+      flash.now[:error] = "Passwords do not match."
       render :admin; return
     end
     if params[:password].length < 8
-      flash[:error] = "Password must be at least 8 characters."
+      flash.now[:error] = "Password must be at least 8 characters."
       render :admin; return
     end
     user.password = params[:password]
@@ -67,7 +67,7 @@ class SetupController < ApplicationController
       keep_signed_in_after_password_change(user)
       redirect_to setup_network_path
     else
-      flash[:error] = user.errors.full_messages.join(", ")
+      flash.now[:error] = user.errors.full_messages.join(", ")
       render :admin
     end
   end
@@ -89,8 +89,9 @@ class SetupController < ApplicationController
         return
       end
       Setting.set('server-name', name)
-      # Actually change the system hostname
+      # The system hostname, and Samba's name for the server (its netbios name) right away
       flash[:warning] = "Saved the server name, but the system hostname couldn't be changed (details in the Amahi-kai log)" unless Platform.set_hostname!(name)
+      SambaService.push_config
     end
     redirect_to setup_storage_path
   end
@@ -139,7 +140,7 @@ class SetupController < ApplicationController
     rescue LoadError, Greyhole::GreyholeError
       false
     end
-    @default_copies = Setting.get('default_pool_copies') || '2'
+    @default_copies = Share.default_pool_copies
   end
 
   def install_greyhole
@@ -166,11 +167,12 @@ class SetupController < ApplicationController
       redirect_to setup_complete_path; return
     end
 
+    # A name the share refuses (taken, too short) comes back as a RuntimeError with the reasons.
     begin
       SetupService.create_first_share(name)
       session[:first_share_created] = name
-    rescue ActiveRecord::RecordInvalid, Errno::ENOENT, Errno::EACCES => e
-      flash[:error] = e.message
+    rescue RuntimeError, ActiveRecord::RecordInvalid, Errno::ENOENT, Errno::EACCES => e
+      flash.now[:error] = e.message
       render :share; return
     end
 
@@ -183,14 +185,15 @@ class SetupController < ApplicationController
     @server_name = Setting.get('server-name')
     @pool_partitions = DiskPoolPartition.all rescue []
     @first_share = session[:first_share_created]
-    @standalone_drives = session[:standalone_drives] || []
+    # Drives the storage step mounted as shares of their own (a filesystem Greyhole can't pool)
+    @standalone_shares = Share.where('path LIKE ?', '/mnt/%').order(:name)
     @greyhole_installed = begin
       require 'greyhole'
       Greyhole.installed?
     rescue LoadError, Greyhole::GreyholeError
       false
     end
-    @default_copies = Setting.get('default_pool_copies') || '0'
+    @default_copies = Share.default_pool_copies
   end
 
   def finish
@@ -202,9 +205,6 @@ class SetupController < ApplicationController
     end
     Setting.set('setup_completed', 'true')
     session.delete(:first_share_created)
-    session.delete(:greyhole_installed)
-    session.delete(:default_copies)
-    session.delete(:standalone_drives)
     redirect_to root_path, notice: "Setup complete! Welcome to Amahi-kai."
   end
 

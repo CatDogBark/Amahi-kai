@@ -1,28 +1,17 @@
-<% content_for :progress do %>
-  <div class="step done"></div>
-  <div class="step current"></div>
-  <div class="step"></div>
-  <div class="step"></div>
-  <div class="step"></div>
-  <div class="step"></div>
-  <div class="step"></div>
-<% end %>
-
-<h2>🔐 Secure your admin account</h2>
+<h2>Secure your admin account</h2>
 <p>
-  The admin account still has the first password the installer gave it. Choose one of your own.
-  This is <strong>required</strong> before continuing.
+  The admin account still has the first password the installer gave it. Choose one of your own:
+  setup can't finish until you do.
 </p>
 
 <%= form_tag(setup_update_admin_path, method: :post) do %>
-  <label for="password">New Password</label>
+  <label for="password">New password</label>
   <input type="password" name="password" id="password" placeholder="At least 8 characters" required minlength="8" autocomplete="new-password">
 
-  <label for="password_confirmation">Confirm Password</label>
+  <label for="password_confirmation">Confirm password</label>
   <input type="password" name="password_confirmation" id="password_confirmation" placeholder="Type it again" required minlength="8" autocomplete="new-password">
 
   <div class="setup-actions">
-    <div></div>
-    <button type="submit" class="btn-kai">Save &amp; Continue →</button>
+    <button type="submit" class="btn-kai">Save &amp; continue →</button>
   </div>
 <% end %>

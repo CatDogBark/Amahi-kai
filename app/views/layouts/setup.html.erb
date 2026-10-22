@@ -1,289 +1,50 @@
 <!DOCTYPE html>
-<%# Dark for everyone: the water background is made for it. %>
+<%# The first-run setup wizard: one glass panel on the water, in the app's look (application.css,
+    then setup.css). Dark for everyone: the water background is made for it. %>
+<%
+  steps = [%w[welcome Welcome], %w[admin Password], %w[network Network], %w[storage Drives],
+           %w[greyhole Pooling], %w[share Share], %w[complete Done]]
+  # update_admin and create_share render their own step again when they refuse
+  step = steps.index { |key, _| key == controller.action_name.delete_prefix('update_').delete_prefix('create_') }
+%>
 <html lang="en" data-theme="dark" data-bs-theme="dark">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Amahi-kai Setup</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="alternate icon" href="/favicon.ico">
-  <%= stylesheet_link_tag "login" %>
-  <%= stylesheet_link_tag "ocean-bg" %>
+  <%= stylesheet_link_tag "application" %>
+  <%= stylesheet_link_tag "setup" %>
   <%= javascript_include_tag "ocean" %>
   <%= javascript_include_tag "setup" %>
   <%= csrf_meta_tags %>
-  <style>
-    body.setup {
-      border-top-color: #1a2332;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      margin: 0;
-      padding: 20px;
-      background: transparent;
-    }
-    .setup-container {
-      width: 100%;
-      max-width: 640px;
-      background: rgba(255,255,255,0.85);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid rgba(255,255,255,0.2);
-      border-radius: 16px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-    }
-    .setup-header {
-      background: linear-gradient(135deg, #0a6e8a 0%, #0d8aa8 100%);
-      border-radius: 16px 16px 0 0;
-      padding: 28px 32px 20px;
-      color: white;
-    }
-    .setup-header h1 {
-      font-size: 22px;
-      font-weight: 700;
-      margin: 0 0 4px;
-    }
-    .setup-header p {
-      margin: 0;
-      opacity: 0.85;
-      font-size: 14px;
-    }
-    .setup-progress {
-      display: flex;
-      gap: 4px;
-      padding: 0 32px;
-      margin-top: -6px;
-    }
-    .setup-progress .step {
-      flex: 1;
-      height: 4px;
-      border-radius: 2px;
-      background: rgba(255,255,255,0.3);
-    }
-    .setup-progress .step.done {
-      background: #f0a030;
-    }
-    .setup-progress .step.current {
-      background: #f0a030;
-      animation: pulse 1.5s ease-in-out infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.6; }
-    }
-    .setup-body {
-      padding: 28px 32px 32px;
-    }
-    .setup-body h2 {
-      font-size: 18px;
-      font-weight: 600;
-      color: #1a2332;
-      margin: 0 0 16px;
-    }
-    .setup-body p {
-      color: #4a5568;
-      font-size: 14px;
-      line-height: 1.6;
-      margin: 0 0 16px;
-    }
-    .setup-body label {
-      display: block;
-      font-size: 13px;
-      font-weight: 600;
-      color: #2c3e50;
-      margin-bottom: 6px;
-    }
-    .setup-body input[type="text"],
-    .setup-body input[type="password"] {
-      width: 100%;
-      padding: 10px 14px;
-      border: 1px solid #d1d5db;
-      border-radius: 8px;
-      font-size: 14px;
-      margin-bottom: 16px;
-      box-sizing: border-box;
-      transition: border-color 0.2s;
-    }
-    .setup-body input:focus {
-      outline: none;
-      border-color: #0d8aa8;
-      box-shadow: 0 0 0 3px rgba(13,138,168,0.15);
-    }
-    .btn-kai {
-      display: inline-block;
-      padding: 10px 28px;
-      background: linear-gradient(135deg, #0a6e8a, #0d8aa8);
-      color: white;
-      border: none;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      text-decoration: none;
-      transition: transform 0.15s, box-shadow 0.15s;
-    }
-    .btn-kai:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(10,110,138,0.3);
-      color: white;
-    }
-    .btn-skip {
-      display: inline-block;
-      padding: 10px 20px;
-      color: #7f8c9b;
-      background: none;
-      border: 1px solid #d1d5db;
-      border-radius: 8px;
-      font-size: 14px;
-      cursor: pointer;
-      text-decoration: none;
-      margin-left: 8px;
-    }
-    .btn-skip:hover {
-      border-color: #9ca3af;
-      color: #4a5568;
-    }
-    .setup-actions {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-top: 24px;
-    }
-    /* Toast styles (inline for setup layout) */
-    #toast-container {
-      position: fixed;
-      top: 1rem;
-      right: 1rem;
-      z-index: 1090;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-      pointer-events: none;
-      max-width: 420px;
-      width: calc(100% - 2rem);
-    }
-    .amahi-toast {
-      display: flex;
-      align-items: center;
-      gap: 0.65rem;
-      padding: 0.75rem 1rem;
-      border-radius: 8px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.3), 0 1px 4px rgba(0,0,0,0.2);
-      font-size: 0.9rem;
-      line-height: 1.4;
-      pointer-events: auto;
-      cursor: default;
-      transform: translateX(calc(100% + 1rem));
-      opacity: 0;
-      transition: transform 0.3s cubic-bezier(0.22,1,0.36,1), opacity 0.3s ease;
-    }
-    .amahi-toast-visible { transform: translateX(0); opacity: 1; }
-    .amahi-toast-leaving { transform: translateX(calc(100% + 1rem)); opacity: 0; }
-    .amahi-toast-icon { font-size: 1.1rem; font-weight: bold; flex-shrink: 0; width: 1.5rem; text-align: center; }
-    .amahi-toast-text { flex: 1; word-break: break-word; }
-    .amahi-toast-close {
-      background: none; border: none; font-size: 1.3rem; line-height: 1;
-      opacity: 0.7; cursor: pointer; padding: 0 0.25rem; flex-shrink: 0;
-    }
-    .amahi-toast-close:hover { opacity: 1; }
-    .drive-list {
-      margin: 12px 0;
-    }
-    .drive-item {
-      display: flex;
-      align-items: center;
-      padding: 10px 14px;
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      margin-bottom: 8px;
-      font-size: 14px;
-    }
-    .drive-item input[type="checkbox"] {
-      margin-right: 12px;
-      width: 18px;
-      height: 18px;
-    }
-    .drive-item .drive-path { font-weight: 600; color: #1a2332; }
-    .drive-item .drive-size { color: #7f8c9b; margin-left: auto; }
-    .summary-item {
-      display: flex;
-      align-items: center;
-      padding: 8px 0;
-      border-bottom: 1px solid #f1f5f9;
-      font-size: 14px;
-    }
-    .summary-item .check { color: #10b981; margin-right: 10px; font-size: 18px; }
-    .summary-item .skip { color: #9ca3af; margin-right: 10px; font-size: 18px; }
-
-    /* ── Setup utility classes ── */
-    .setup-muted { color: var(--setup-muted, #7f8c9b); }
-    .setup-label { color: var(--setup-label, #cdd6e0); }
-    .setup-success { color: var(--setup-success, #5cb85c); }
-    .setup-danger { color: var(--setup-danger, #ef4444); }
-    .setup-warning { color: var(--setup-warning, #f59e0b); }
-    .setup-link { color: var(--setup-link, #0d8aa8); }
-    .setup-hint { color: var(--setup-hint, #9ca3af); }
-    .setup-danger-box {
-      background: rgba(217, 83, 79, 0.1);
-      border: 1px solid rgba(217, 83, 79, 0.3);
-      border-radius: 6px;
-      color: var(--setup-danger-box, #e8a09c);
-    }
-    .status-badge {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 28px; height: 28px; border-radius: 50%;
-      font-size: 16px; font-weight: bold;
-    }
-    .status-pass { background: var(--status-pass-bg, #d4edda); color: var(--status-pass-fg, #155724); }
-    .status-warn { background: var(--status-warn-bg, #fff3cd); color: var(--status-warn-fg, #856404); }
-    .status-fail { background: var(--status-fail-bg, #f8d7da); color: var(--status-fail-fg, #721c24); }
-
-    /* ── Dark mode ── */
-    @media (prefers-color-scheme: dark) {
-      body.setup { background: transparent; }
-      .setup-container { background: rgba(22, 27, 34, 0.75); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-color: rgba(255,255,255,0.06); box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
-      .setup-body h2 { color: #e6edf3; }
-      .setup-body p { color: #8b949e; }
-      .setup-body label { color: #c9d1d9; }
-      .setup-body input[type="text"],
-      .setup-body input[type="password"] {
-        background: #0d1117;
-        border-color: #30363d;
-        color: #e6edf3;
-      }
-      .setup-body input:focus { border-color: #0d8aa8; box-shadow: 0 0 0 3px rgba(13,138,168,0.25); }
-      .btn-skip { color: #8b949e; border-color: #30363d; }
-      .btn-skip:hover { color: #c9d1d9; border-color: #484f58; }
-      .drive-item { background: #0d1117; border-color: #30363d; }
-      .drive-item .drive-path { color: #e6edf3; }
-      .drive-item .drive-size { color: #8b949e; }
-      .summary-item { border-bottom-color: #21262d; color: #c9d1d9; }
-      /* old flash classes removed — using toasts now */
-    }
-  </style>
 </head>
-<body class="login setup"<%= ' data-form-reply' if form_reply_attribute %>>
+<body class="setup-page"<%= ' data-form-reply' if form_reply_attribute %>>
   <%= render 'layouts/ocean_bg' %>
-  <div class="setup-container">
-    <div class="setup-header">
-      <h1 style="display: flex; align-items: center; gap: 10px;">
-        <img src="/favicon.svg" alt="Amahi-kai" style="height: 36px; width: 36px;">
-        <span style="font-family: 'Segoe UI', system-ui, sans-serif; letter-spacing: -0.5px;">Amahi<span style="color: #7dd3e8;">-kai</span></span>
-      </h1>
-      <p>First-run setup</p>
+  <main class="setup-shell">
+    <div class="setup-top">
+      <span class="kai-brand"><%= lucide_icon('waves', size: 22) %><span>Amahi-kai</span></span>
+      <span class="setup-stepcount">
+        <% if step %>Step <%= step + 1 %> of <%= steps.size %><% else %>First-run setup<% end %>
+      </span>
     </div>
-    <% if content_for?(:progress) %>
-      <div class="setup-progress" style="margin-top: -12px; padding-bottom: 0;">
-        <%= yield :progress %>
+    <% if step %>
+      <div class="setup-progress" aria-hidden="true">
+        <% steps.each_index do |i| %>
+          <div class="step<%= ' done' if i < step %><%= ' current' if i == step %>"></div>
+        <% end %>
       </div>
     <% end %>
-    <div class="setup-body">
-      <% # Flash messages rendered as toasts via inline JS below %>
-      <%= yield %>
+    <div class="setup-container">
+      <div class="setup-body">
+        <% if step && !%w[welcome complete].include?(steps[step][0]) %>
+          <div class="setup-eyebrow"><%= steps[step][1] %></div>
+        <% end %>
+        <%= yield %>
+      </div>
     </div>
-  </div>
+  </main>
 <%= render 'shared/flash_messages' %>
 </body>
 </html>

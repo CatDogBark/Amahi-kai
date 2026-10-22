@@ -72,9 +72,11 @@ RSpec.describe SetupService do
         allow(DiskManager).to receive(:devices).and_return(devices)
       end
 
-      it 'adds ext4 partitions to pool' do
+      it 'adds ext4 partitions to pool, the way Disks → Greyhole Pool does' do
+        allow(DiskService).to receive(:toggle_pool_partition).and_call_original
         described_class.stream_prepare_drives(['/dev/sdb1'], [], sse)
-        expect(DiskPoolPartition.count).to be >= 1
+        expect(DiskService).to have_received(:toggle_pool_partition).with('/mnt/data')
+        expect(DiskPoolPartition.pluck(:path)).to eq(['/mnt/data'])
         expect(sse).to have_received(:done).with('success')
       end
 
@@ -121,6 +123,23 @@ RSpec.describe SetupService do
       described_class.create_first_share('Test')
       expect { described_class.create_first_share('Test') }.to raise_error(RuntimeError)
     end
+
+    it "puts its folder where the Shares page would, a plain share without Greyhole's pool" do
+      share = described_class.create_first_share('My Docs')
+      expect(share.path).to eq(Share.default_full_path('My Docs'))
+      expect(share.disk_pool_copies).to eq(0)
+    end
+
+    it 'keeps the default copies in the pool once Greyhole is installed and has drives' do
+      allow(Greyhole).to receive(:configure!)
+      DiskPoolPartition.create!(path: '/mnt/storage-1', minimum_free: 10)
+      DiskPoolPartition.create!(path: '/mnt/storage-2', minimum_free: 10)
+      allow(Greyhole).to receive(:installed?).and_return(true)
+      expect(described_class.create_first_share('Media').disk_pool_copies).to eq(2)
+
+      allow(Greyhole).to receive(:installed?).and_return(false) # skipped, or its install failed
+      expect(described_class.create_first_share('Photos').disk_pool_copies).to eq(0)
+    end
   end
 
   describe '.stream_greyhole_install' do
@@ -140,6 +159,15 @@ RSpec.describe SetupService do
       described_class.stream_greyhole_install(1, sse)
       expect(sse).to have_received(:emit).at_least(:once)
       expect(sse).to have_received(:done)
+    end
+
+    it 'keeps no copies setting when the install fails' do
+      allow(Rails.env).to receive(:production?).and_return(true)
+      allow(Greyhole).to receive(:install!).and_raise(Greyhole::GreyholeError, 'apt failed')
+      described_class.stream_greyhole_install(2, sse)
+      expect(Setting).not_to have_received(:set)
+      expect(sse).to have_received(:emit).with('✗ Error: apt failed')
+      expect(sse).to have_received(:done).with('error')
     end
   end
 end

@@ -513,9 +513,12 @@ RSpec.describe 'AmahiHelper' do
       expect(steps('services.start', { 'service' => 'greyhole' })).to eq([%w[/usr/bin/systemctl start greyhole.service]])
     end
 
-    it 'enables and disables with --now, so the service starts or stops too' do
-      expect(steps('services.enable', { 'service' => 'dnsmasq' })).to eq([%w[/usr/bin/systemctl enable --now dnsmasq.service]])
-      expect(steps('services.disable', { 'service' => 'dnsmasq' })).to eq([%w[/usr/bin/systemctl disable --now dnsmasq.service]])
+    # Not `enable --now`, which starts nothing for a service with only an init script (Greyhole's).
+    it 'enables then starts, and disables then stops, as two steps' do
+      expect(steps('services.enable', { 'service' => 'greyhole' }))
+        .to eq([%w[/usr/bin/systemctl enable greyhole.service], %w[/usr/bin/systemctl start greyhole.service]])
+      expect(steps('services.disable', { 'service' => 'dnsmasq' }))
+        .to eq([%w[/usr/bin/systemctl disable dnsmasq.service], %w[/usr/bin/systemctl stop dnsmasq.service]])
     end
 
     it 'refuses other services and unit names' do
@@ -679,8 +682,17 @@ RSpec.describe 'AmahiHelper' do
   end
 
   describe 'network' do
-    it 'sets the hostname to one DNS label' do
-      expect(steps('network.set_hostname', { 'hostname' => 'amahi-kai' })).to eq([%w[/usr/bin/hostnamectl set-hostname amahi-kai]])
+    it "sets the hostname to one DNS label, and names it in /etc/hosts" do
+      hosts = Tempfile.new('hosts')
+      hosts.write("127.0.0.1 localhost\n127.0.1.1 troy\n\n::1 ip6-localhost ip6-loopback\n")
+      hosts.close
+      stub_const('AmahiHelper::HOSTS', hosts.path)
+      expect(steps('network.set_hostname', { 'hostname' => 'amahi-kai' })).to eq(
+        [%w[/usr/bin/hostnamectl set-hostname amahi-kai],
+         [:install, hosts.path, "127.0.0.1 localhost\n127.0.1.1 amahi-kai\n\n::1 ip6-localhost ip6-loopback\n", nil]]
+      )
+      File.write(hosts.path, '127.0.0.1 localhost') # no 127.0.1.1 line, nor a final newline
+      expect(helper.hosts_naming('kai')).to eq("127.0.0.1 localhost\n127.0.1.1 kai\n")
       ['my nas', '-nas', 'nas-', 'nas.lan', 'x' * 64, "nas\n"].each do |name|
         expect(refusal('network.set_hostname', { 'hostname' => name })).not_to be_nil, name.inspect
       end

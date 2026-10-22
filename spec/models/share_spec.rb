@@ -197,4 +197,14 @@ describe Share do
     end
   end
 
+  describe '.default_pool_copies' do
+    it "is the setup wizard's choice, else 2" do
+      expect(Share.default_pool_copies).to eq(2)
+      Setting.set('default_pool_copies', '1')
+      expect(Share.default_pool_copies).to eq(1)
+      Setting.set('default_pool_copies', '0') # not a choice the wizard offers
+      expect(Share.default_pool_copies).to eq(2)
+    end
+  end
+
 end

@@ -240,7 +240,7 @@ class SharesController < ApplicationController
   end
 
   # Where a new share lives (the form's Where): "disk", the system disk; "greyhole", the Greyhole
-  # pool, with 2 copies; or "zfs:<pool>", a ZFS pool's shares folder. It's set when the share is
+  # pool, with Share.default_pool_copies; or "zfs:<pool>", a ZFS pool's shares folder. It's set when the share is
   # made: the share model and the root helper check the pool.
   def params_create_share
     attrs = params.require(:share).permit(:name, :visible, :rdonly)
@@ -249,7 +249,7 @@ class SharesController < ApplicationController
     if (pool = where[/\Azfs:(.+)\z/, 1])
       attrs.merge(zfs_pool: pool, path: Share.pool_full_path(pool, name))
     elsif where == 'greyhole'
-      attrs.merge(disk_pool_copies: 2, path: Share.default_full_path(name))
+      attrs.merge(disk_pool_copies: Share.default_pool_copies, path: Share.default_full_path(name))
     else
       attrs.merge(path: Share.default_full_path(name))
     end
