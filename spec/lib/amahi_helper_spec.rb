@@ -513,9 +513,12 @@ RSpec.describe 'AmahiHelper' do
       expect(steps('services.start', { 'service' => 'greyhole' })).to eq([%w[/usr/bin/systemctl start greyhole.service]])
     end
 
-    it 'enables and disables with --now, so the service starts or stops too' do
-      expect(steps('services.enable', { 'service' => 'dnsmasq' })).to eq([%w[/usr/bin/systemctl enable --now dnsmasq.service]])
-      expect(steps('services.disable', { 'service' => 'dnsmasq' })).to eq([%w[/usr/bin/systemctl disable --now dnsmasq.service]])
+    # Not `enable --now`, which starts nothing for a service with only an init script (Greyhole's).
+    it 'enables then starts, and disables then stops, as two steps' do
+      expect(steps('services.enable', { 'service' => 'greyhole' }))
+        .to eq([%w[/usr/bin/systemctl enable greyhole.service], %w[/usr/bin/systemctl start greyhole.service]])
+      expect(steps('services.disable', { 'service' => 'dnsmasq' }))
+        .to eq([%w[/usr/bin/systemctl disable dnsmasq.service], %w[/usr/bin/systemctl stop dnsmasq.service]])
     end
 
     it 'refuses other services and unit names' do

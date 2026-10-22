@@ -404,12 +404,23 @@ module AmahiHelper
   class Refused < StandardError; end
   class Failed < StandardError; end
 
-  # services.<verb>: systemctl <verb> [flags] <unit>, for a service in SERVICES.
-  def self.service_operation(verb, *flags)
+  # services.<verb>: systemctl <verb> <unit>, for a service in SERVICES.
+  def self.service_operation(verb)
     {
       params: %w[service],
       validate: ->(a) { { unit: service_unit(a['service']) } },
-      plan: ->(v) { [['/usr/bin/systemctl', verb, *flags, v[:unit]]] }
+      plan: ->(v) { [['/usr/bin/systemctl', verb, v[:unit]]] }
+    }
+  end
+
+  # services.enable and services.disable: for the next boot, then now. Two steps, not
+  # `enable --now`: a service with only an init script (Greyhole's package ships just
+  # /etc/init.d/greyhole) is enabled through systemd-sysv-install, and --now then starts nothing.
+  def self.service_switch(verb, now)
+    {
+      params: %w[service],
+      validate: ->(a) { { unit: service_unit(a['service']) } },
+      plan: ->(v) { [['/usr/bin/systemctl', verb, v[:unit]], ['/usr/bin/systemctl', now, v[:unit]]] }
     }
   end
 
@@ -509,8 +520,8 @@ module AmahiHelper
     'services.start' => service_operation('start'),
     'services.stop' => service_operation('stop'),
     'services.restart' => service_operation('restart'),
-    'services.enable' => service_operation('enable', '--now'),
-    'services.disable' => service_operation('disable', '--now'),
+    'services.enable' => service_switch('enable', 'start'),
+    'services.disable' => service_switch('disable', 'stop'),
     'system.reboot' => {
       params: [],
       validate: ->(_a) { {} },
