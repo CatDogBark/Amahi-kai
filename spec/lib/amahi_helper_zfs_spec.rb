@@ -158,6 +158,19 @@ RSpec.describe 'AmahiHelper ZFS pools' do
     end
   end
 
+  describe 'smart.setup' do
+    it "clears the unit's virtual machine condition and starts smartd, which may find nothing to watch" do
+      expect(steps('smart.setup', {})).to eq(
+        [[:make_dir, '/etc/systemd/system/smartmontools.service.d', '0755'],
+         [:install, '/etc/systemd/system/smartmontools.service.d/amahi-kai.conf', AmahiHelper::SMARTD_DROPIN_CONTENT, nil],
+         %w[/usr/bin/systemctl daemon-reload],
+         ['/usr/bin/systemctl', 'start', 'smartmontools.service', { allow_failure: true }]]
+      )
+      expect(AmahiHelper::SMARTD_DROPIN_CONTENT.lines.map(&:strip).reject { |l| l.start_with?('#') })
+        .to eq(['[Unit]', 'ConditionVirtualization='])
+    end
+  end
+
   describe 'zfs.setup' do
     it 'caps the cache at 2 GiB, or half the memory on a small machine' do
       meminfo = "#{dir}/meminfo"

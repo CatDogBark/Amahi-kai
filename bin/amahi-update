@@ -334,6 +334,10 @@ if [[ -x /usr/sbin/zpool ]]; then
   reply=$(/usr/local/sbin/amahi-helper zfs.setup </dev/null 2>/dev/null) \
     || log "⚠ Couldn't set ZFS's memory cache cap: $reply"
 fi
+# smartd starts in a virtual machine too: Ubuntu's unit skips it in one, even with the drives
+# passed through to it.
+reply=$(/usr/local/sbin/amahi-helper smart.setup </dev/null 2>/dev/null) \
+  || log "⚠ Couldn't set up SMART monitoring: $reply"
 
 # 6. Restart the app and check that it answers. Inside amahi-kai.service the restart ends
 #    this script, so it's the last thing it does there.

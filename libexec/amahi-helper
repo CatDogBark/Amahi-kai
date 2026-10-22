@@ -150,6 +150,17 @@ module AmahiHelper
   MEMINFO = '/proc/meminfo'
   ZFS_MODPROBE = '/etc/modprobe.d/zfs-amahi.conf'
   ZFS_ARC_MAX = '/sys/module/zfs/parameters/zfs_arc_max'
+  # Ubuntu's smartmontools unit has ConditionVirtualization=no, so smartd never starts in a
+  # virtual machine, even one given real drives (a drive controller passed through to it; the
+  # unit's own comment says to override it then). An empty assignment resets the unit's
+  # conditions, and that's its only one. With only virtual disks, smartd finds nothing with SMART
+  # and stops itself, which System Status shows as idle.
+  SMARTD_DROPIN = '/etc/systemd/system/smartmontools.service.d/amahi-kai.conf'
+  SMARTD_DROPIN_CONTENT = <<~UNIT
+    # Amahi-kai: start in a virtual machine too, which can be given real drives.
+    [Unit]
+    ConditionVirtualization=
+  UNIT
   # Snapshots: amahi-kai-snapshots.timer runs pools.run_snapshots every hour. Each pool keeps
   # its newest N hourly and daily snapshots, N in its own ZFS properties (amahi:snapshot-hourly,
   # amahi:snapshot-daily; unset means the default). Only snapshots named like ours are ever
@@ -600,6 +611,19 @@ module AmahiHelper
       params: [],
       validate: ->(_a) { {} },
       plan: ->(_v) { [[:drive_temperatures]] }
+    },
+    # Lets smartd start in a virtual machine (SMARTD_DROPIN), and starts it. Run by the
+    # installer and at every System Update. Starting can fail with nothing to watch, or without
+    # smartmontools installed; neither is this operation failing.
+    'smart.setup' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: lambda { |_v|
+        [[:make_dir, File.dirname(SMARTD_DROPIN), '0755'],
+         [:install, SMARTD_DROPIN, SMARTD_DROPIN_CONTENT, nil],
+         %w[/usr/bin/systemctl daemon-reload],
+         ['/usr/bin/systemctl', 'start', 'smartmontools.service', { allow_failure: true }]]
+      }
     },
     # Loads ZFS and caps its memory cache (ARC_LIMIT or half the memory), now and at every
     # boot. Run once zfsutils-linux is installed, and at every System Update, so the cap follows
