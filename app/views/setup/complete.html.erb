@@ -35,10 +35,10 @@
     <% end %>
   </div>
 
-  <% @standalone_drives.each do |drive| %>
+  <% @standalone_shares.each do |share| %>
     <div class="summary-item">
       <span class="check">✓</span>
-      <span>Standalone share: <strong><%= drive[:name] %></strong> (<%= drive[:fstype] %> at <%= drive[:path] %>)</span>
+      <span>Drive shared as it is: <strong><%= share.name %></strong> (<%= share.path %>)</span>
     </div>
   <% end %>
 

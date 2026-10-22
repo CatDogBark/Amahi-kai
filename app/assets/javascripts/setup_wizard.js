@@ -72,7 +72,8 @@ function prepareDrives(event, nextUrl, streamUrl) {
 
 function installGreyhole(streamUrl, nextUrl) {
   var copies = document.getElementById('default_copies').value;
-  wizardTerminal('greyhole-install', streamUrl + '?default_copies=' + copies, nextUrl, /^(Installing|Generating|Starting)/);
+  wizardTerminal('greyhole-install', streamUrl + '?default_copies=' + copies, nextUrl,
+                 /^(Adding|Preparing|Writing|Installing|Loading|Configuring|Enabling)/);
 }
 
 function previewDrive(device, previewUrl) {

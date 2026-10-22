@@ -1,5 +1,6 @@
 require 'shell'
 require 'disk_manager'
+require 'disk_service'
 
 # Service object for setup wizard operations.
 # Extracted from SetupController — handles drive preparation,
@@ -78,8 +79,10 @@ module SetupService
           fs_after = will_format ? 'ext4' : part[:fstype].to_s.downcase
           can_pool = supported_fs.include?(fs_after)
 
+          # The same way Disks → Greyhole Pool adds a drive: once Greyhole is installed (going
+          # Back after its step), its config follows and it starts.
           if can_pool
-            DiskPoolPartition.find_or_create_by!(path: mount_point) { |p| p.minimum_free = DiskPoolPartition::MINIMUM_FREE_GB }
+            DiskService.toggle_pool_partition(mount_point) unless DiskPoolPartition.exists?(path: mount_point)
             sse.emit("  ✓ Added to storage pool")
           else
             create_standalone_share(mount_point, part[:fstype], sse)
@@ -102,23 +105,22 @@ module SetupService
       sse.done(success ? "success" : "error")
     end
 
+    # The copies chosen become the default for new pooled shares (Share.default_pool_copies),
+    # once Greyhole is installed: a failed install leaves no setting behind.
     def stream_greyhole_install(default_copies, sse)
-      Setting.set('default_pool_copies', default_copies.to_s)
-
-      unless Rails.env.production?
+      if Rails.env.production?
+        stream_greyhole_install_production(default_copies, sse)
+      else
         stream_greyhole_install_dev(default_copies, sse)
-        return
       end
-
-      stream_greyhole_install_production(default_copies, sse)
     end
 
+    # The first share: in the Greyhole pool, with the default copies, when Greyhole is installed
+    # and has drives; otherwise a plain share on the system disk. Its folder is where the
+    # Shares page would put it.
     def create_first_share(name)
-      path = File.join(Share::DEFAULT_SHARES_ROOT, name.downcase.gsub(/\s+/, '-'))
-
-      # Use default pool copies if Greyhole was installed
-      default_copies = (Setting.get('default_pool_copies') || '0').to_i
-      pool_copies = DiskPoolPartition.any? && default_copies > 0 ? default_copies : 0
+      path = Share.default_full_path(name)
+      pool_copies = DiskPoolPartition.any? && greyhole_installed? ? Share.default_pool_copies : 0
 
       share = Share.new(
         name: name,
@@ -146,6 +148,13 @@ module SetupService
 
     private
 
+    def greyhole_installed?
+      require 'greyhole'
+      Greyhole.installed?
+    rescue LoadError, StandardError
+      false
+    end
+
     def create_standalone_share(mount_point, fstype, sse)
       share_name = File.basename(mount_point).gsub(/[^a-zA-Z0-9\-]/, '')
       share_name = "drive-#{share_name}" if share_name.blank?
@@ -164,31 +173,27 @@ module SetupService
     end
 
     def stream_greyhole_install_dev(default_copies, sse)
+      # The steps Greyhole.install! reports, without installing anything (development and tests).
       lines = [
-        "Installing dependencies...",
-        "  php8.3-cli php8.3-mbstring php8.3-mysql",
-        "  Setting up php8.3-cli...",
-        "Adding Greyhole repository...",
-        "  Downloading signing key...",
-        "  Adding source list...",
-        "Updating package lists...",
-        "Installing Greyhole...",
-        "  Setting up greyhole (0.15.36-1) ...",
-        "✓ Greyhole installed",
+        "Adding the Greyhole apt repository...",
+        "Preparing the Greyhole database...",
+        "Writing the Greyhole config...",
+        "Installing Greyhole and its PHP modules (this takes a few minutes)...",
+        "  Setting up greyhole (0.15.30-1) ...",
+        "✓ Greyhole package installed",
+        "Loading the database schema...",
+        "Configuring Samba for Greyhole...",
+        "Enabling and starting Greyhole...",
         "",
-        "Generating configuration...",
-        "  Writing /etc/greyhole.conf",
         "  #{DiskPoolPartition.count} pool drives configured",
         "  Default copies: #{default_copies}",
-        "✓ Configuration written",
-        "",
-        "Starting Greyhole service...",
         "✓ Greyhole is running!"
       ]
       lines.each do |line|
-        sleep 0.3
+        sleep 0.3 unless Rails.env.test?
         sse.emit(line)
       end
+      Setting.set('default_pool_copies', default_copies.to_s)
       sse.done
     end
 
@@ -197,6 +202,7 @@ module SetupService
       require 'greyhole'
 
       Greyhole.install! { |msg| sse.emit(msg) }
+      Setting.set('default_pool_copies', default_copies.to_s) # only once it's installed (a failure is rescued below)
 
       sse.emit("")
       sse.emit("  #{DiskPoolPartition.count} pool drives configured")

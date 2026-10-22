@@ -133,6 +133,11 @@ describe "Setup Controller", type: :request do
         expect(Privileged.calls).to eq([['network.set_hostname', { hostname: 'my-nas' }]])
       end
 
+      it "gives Samba the new name straight away, not at the next share change" do
+        post setup_update_network_path, params: { server_name: "myhda" }
+        expect(SambaService).to have_received(:push_config)
+      end
+
       it "refuses a name that isn't one, and nothing of it reaches Samba's config" do
         ["nas\nhosts allow = 0.0.0.0/0", "nas;x", "-nas", "a" * 64].each do |name|
           post setup_update_network_path, params: { server_name: name }

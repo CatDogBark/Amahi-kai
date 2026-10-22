@@ -115,7 +115,9 @@ Greyhole's own daily check runs only after its configuration changes, the next m
 
 ## Copies per share
 
-On **Setup → Shares**, open a share and set its **Pool copies** with − and +:
+A new share in the Greyhole pool starts with the copies chosen when the setup wizard installed
+Greyhole (2 if it wasn't chosen there). On
+**Setup → Shares**, open a share and set its **Pool copies** with − and +:
 
 | Pool copies | What happens |
 |-------------|--------------|
