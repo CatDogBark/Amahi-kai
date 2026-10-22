@@ -162,6 +162,34 @@ RSpec.describe 'install and update scripts' do
     expect(File.read(Rails.root.join('bin/amahi-install'))).to include('/usr/local/sbin/amahi-helper smart.setup </dev/null')
   end
 
+  describe 'update channels' do
+    let(:update) { File.read(Rails.root.join('bin/amahi-update')) }
+    let(:install) { File.read(Rails.root.join('bin/amahi-install')) }
+
+    it "checks out the commit the root helper names for the channel, never main's newest" do
+      expect(update).to include('/usr/local/sbin/amahi-helper system.update_target',
+                                'checkout --quiet --force --detach "$TARGET_COMMIT"')
+      # Only an installed helper from before channels (the update that brings them) pulls main, once
+      expect(update.scan('pull origin main').size).to eq(1)
+      expect(update[/legacy\)\n.*?;;/m]).to include('pull origin main')
+    end
+
+    it "repairs the version that runs without looking for another" do
+      expect(update).to match(/if \$REPAIR; then\n  log "Repairing the version that runs/)
+    end
+
+    it 'records the channel at install (development for a dev install), and a re-run keeps its version' do
+      expect(install).to include('AMAHI_UPDATE_CHANNEL=$UPDATE_CHANNEL', '[[ "${AMAHI_BRANCH:-main}" == dev ]] && UPDATE_CHANNEL=development')
+      expect(install).not_to include('pull origin main')
+    end
+
+    it 'has a VERSION file a release tag must match, and a workflow that publishes the release' do
+      expect(File.read(Rails.root.join('VERSION')).strip).to match(/\A\d+\.\d+\.\d+(rc\d+)?\z/)
+      workflow = File.read(Rails.root.join('.github/workflows/release.yml'))
+      expect(workflow).to include('test "v$version" = "$GITHUB_REF_NAME"', 'gh release create', '--prerelease')
+    end
+  end
+
   it 'pulls as root without hooks or an fsmonitor command from the checkout' do
     text = File.read(Rails.root.join('bin/amahi-update'))
     expect(text).to include('git -c core.hooksPath=/dev/null -c core.fsmonitor=false "$@"')

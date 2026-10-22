@@ -11,14 +11,14 @@
       .d-flex.gap-2
         button#check-updates-btn.btn.btn-sm.btn-outline-light type="button" data-call="checkForUpdates" data-args='["@el", "#{settings_check_updates_path}"]' Check now
         - if @update.available?
-          button#update-now-btn.btn.btn-sm.btn-info type="button" data-confirm="Install #{pluralize(@update.behind, 'change')} now? Amahi-kai restarts at the end." data-call="startSystemUpdate" data-args='["update", "#{settings_update_system_path}", "#{settings_update_system_stream_path}"]' Update now
+          button#update-now-btn.btn.btn-sm.btn-info type="button" data-confirm="Install #{@update.summary} now? Amahi-kai restarts at the end." data-call="startSystemUpdate" data-args='["update", "#{settings_update_system_path}", "#{settings_update_system_stream_path}"]' Update now
         - else
           button#repair-btn.btn.btn-sm.btn-outline-secondary type="button" data-tip="Runs every update step again on the version you have" data-confirm="Repair runs every update step again on the version you have (dependencies, database, root helper, Samba config, assets) and restarts Amahi-kai. Go ahead?" data-call="startSystemUpdate" data-args='["update", "#{settings_update_system_path(repair: 1)}", "#{settings_update_system_stream_path}"]' Repair
     .card-body
       - if @update.available?
         p.mb-2
           strong Update available:
-          = " #{pluralize(@update.behind, 'change')} (#{@update.short(@update.current)} → #{@update.short(@update.latest)})"
+          = " #{@update.summary}"
         ul.small.mb-0
           - @update.commits.first(10).each do |change|
             li = update_change_link(change['subject'])
@@ -27,11 +27,11 @@
       - elsif @update.checked?
         p.mb-0
           span.text-success ✓
-          = " Up to date (#{@update.short(@update.current)})"
+          = " Up to date (#{@update.running})"
       - else
         p.mb-0.text-muted Not checked yet. Check now looks for an update.
       - if @update.checked?
-        p.small.text-muted.mb-0.mt-2 = safe_join(['Checked ', relative_time_tag(@update.checked_at, clock: true), '. Amahi-kai checks every 6 hours.'])
+        p.small.text-muted.mb-0.mt-2 = safe_join(['Checked ', relative_time_tag(@update.checked_at, clock: true), '. Amahi-kai checks every 6 hours', (" and follows #{@update.channel_label}" if @update.channel_label), '.'].compact)
       - if @update.error
         p.small.text-warning.mb-0.mt-1 = "Last check: #{@update.error}"
 

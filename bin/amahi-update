@@ -2,16 +2,23 @@
 set -euo pipefail
 
 # Amahi-kai Update Script
-# Pulls latest code, installs dependencies, runs migrations, and restarts. If a step
-# fails, or the new version doesn't answer after the restart, it goes back to the commit
-# that was running.
+# Installs the newest version on this server's update channel, installs dependencies, runs
+# migrations, and restarts. If a step fails, or the new version doesn't answer after the
+# restart, it goes back to the commit that was running.
+#
+# The channel is AMAHI_UPDATE_CHANNEL in /etc/amahi-kai/amahi.env: releases (the default:
+# the newest release published on GitHub), candidates (releases and release candidates) or
+# development (the dev branch, for testing). The root helper decides the version
+# (system.update_target) and this script checks out its commit; it never moves to anything
+# older than what runs.
 #
 # Usage: sudo /opt/amahi-kai/bin/amahi-update [--stream] [--repair]
 #
 # --stream: Output progress messages for SSE streaming (used by web UI)
-# --repair: Run every step even if the pull brings nothing new (to fix an install). Without
-#           it, an update with nothing new stops after the pull. The web UI's Repair asks the
-#           root helper, which leaves /run/amahi-kai-update.repair for this script instead.
+# --repair: Run every step again on the version that runs (to fix an install), without
+#           looking for a newer one. Without it, an update with nothing new stops early. The
+#           web UI's Repair asks the root helper, which leaves /run/amahi-kai-update.repair for
+#           this script instead.
 #
 # System Update in the web UI starts amahi-kai-update.service (the root helper's
 # system.update), which runs this script with --stream and writes its output to
@@ -187,13 +194,44 @@ else
 fi
 BACKUP_FILE=""
 
-log "Pulling latest code..."
 SCRIPT_SUM_BEFORE=$(sha256sum < "$APP_DIR/bin/amahi-update")
 REPO_URL="https://github.com/CatDogBark/Amahi-kai.git"
 
+# The version to install, as the root helper decides it from the update channel: lines of
+# state (ok, legacy or error), channel, commit, version, tag and why it failed. "legacy" is an
+# installed helper from before update channels; this update installs the new one (step 3a).
+update_target() {
+  /usr/local/sbin/amahi-helper system.update_target </dev/null 2>/dev/null \
+    | env -i PATH=/usr/bin:/bin /usr/bin/ruby -rjson -e '
+        reply = (JSON.parse(STDIN.read) rescue {})
+        target = reply["target"].is_a?(Hash) ? reply["target"] : {}
+        error = reply["error"].to_s
+        state = reply["ok"] ? "ok" : (error.include?("unknown operation") ? "legacy" : "error")
+        puts state, target["channel"], target["commit"], target["version"], target["tag"], error.empty? ? "no answer from the root helper" : error'
+}
+
 PULL_FAILED=false
-if [[ -d ".git" ]]; then
-  root_git -C "$APP_DIR" pull origin main 2>&1 || PULL_FAILED=true
+if $REPAIR; then
+  log "Repairing the version that runs (not looking for a newer one)..."
+elif [[ -d ".git" ]]; then
+  log "Finding the version to install..."
+  mapfile -t TARGET < <(update_target)
+  case "${TARGET[0]:-error}" in
+    ok)
+      CHANNEL="${TARGET[1]}"
+      TARGET_COMMIT="${TARGET[2]}"
+      log "Update channel: $CHANNEL${TARGET[4]:+. Newest: ${TARGET[4]}}"
+      [[ "$TARGET_COMMIT" =~ ^[0-9a-f]{40}$ ]] || error "The root helper named no commit to install. Nothing changed; Amahi-kai is still running ${PREV:0:7}."
+      root_git -C "$APP_DIR" checkout --quiet --force --detach "$TARGET_COMMIT" 2>&1 || PULL_FAILED=true
+      ;;
+    legacy)
+      log "Getting the newest code (the next update follows the update channel)..."
+      root_git -C "$APP_DIR" pull origin main 2>&1 || PULL_FAILED=true
+      ;;
+    *)
+      error "Couldn't find the version to install: ${TARGET[5]:-no answer}. Nothing changed; Amahi-kai is still running ${PREV:0:7}."
+      ;;
+  esac
 else
   # No .git — clone to temp and sync files over
   log "No git history found — cloning fresh..."
@@ -219,18 +257,18 @@ if [[ -z "${AMAHI_UPDATE_REEXEC:-}" && "$(sha256sum < "$APP_DIR/bin/amahi-update
 fi
 
 NEW=$(root_git -C "$APP_DIR" rev-parse HEAD 2>/dev/null || true)
+VERSION_NOW=$(cat "$APP_DIR/VERSION" 2>/dev/null || true)
 if $REPAIR; then
-  $PULL_FAILED && log "⚠ Git pull failed; repairing the version on disk"
-  log "Repairing ${NEW:0:7}: running every step again..."
+  log "Repairing ${VERSION_NOW:+$VERSION_NOW, }${NEW:0:7}: running every step again..."
 elif $PULL_FAILED; then
-  error "Couldn't get the latest code from GitHub (the git output is above). Nothing changed; Amahi-kai is still running ${PREV:0:7}."
+  error "Couldn't get the new version's code (the git output is above). Nothing changed; Amahi-kai is still running ${PREV:0:7}."
 elif [[ -n "$PREV" && -n "$NEW" && "$NEW" == "$PREV" ]]; then
   refresh_update_status
   log "✓ Already up to date (${NEW:0:7}). Nothing to install."
   exit 0
 fi
 if [[ -n "$PREV" && -n "$NEW" && "$NEW" != "$PREV" ]]; then
-  log "Updating from ${PREV:0:7} to ${NEW:0:7}"
+  log "Updating from ${PREV:0:7} to ${VERSION_NOW:+$VERSION_NOW, }${NEW:0:7}"
 fi
 
 # The pull may have added files; they're root's already, but a new app folder isn't.

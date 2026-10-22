@@ -1,0 +1,43 @@
+# Publishes a release when its tag is pushed: vX.Y.Z, or vX.Y.ZrcN for a release candidate (a
+# pre-release). The tag must name the version in VERSION, and the release's notes are CHANGELOG.md's
+# section for it (a release candidate's are its release's section, else Unreleased). System
+# Update's releases channel installs published releases; its candidates channel pre-releases too.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The tag names the version in VERSION
+        run: |
+          version=$(tr -d '[:space:]' < VERSION)
+          echo "$GITHUB_REF_NAME" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(rc[0-9]+)?$' \
+            || { echo "A release tag is vX.Y.Z or vX.Y.ZrcN, not $GITHUB_REF_NAME"; exit 1; }
+          test "v$version" = "$GITHUB_REF_NAME" \
+            || { echo "The tag is $GITHUB_REF_NAME but VERSION says $version"; exit 1; }
+
+      - name: The notes, from CHANGELOG.md
+        run: |
+          version=$(tr -d '[:space:]' < VERSION)
+          release=${version%%rc*}
+          section() { awk -v head="## [$1]" 'index($0, head) == 1 { found = 1; next } found && /^## / { exit } found' CHANGELOG.md; }
+          section "$release" > notes.md
+          if ! grep -q '[^[:space:]]' notes.md && [ "$release" != "$version" ]; then section Unreleased > notes.md; fi
+          grep -q '[^[:space:]]' notes.md || { echo "CHANGELOG.md has no section for $release"; exit 1; }
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pre=""
+          case "$GITHUB_REF_NAME" in *rc*) pre="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "Amahi-kai ${GITHUB_REF_NAME#v}" --notes-file notes.md $pre

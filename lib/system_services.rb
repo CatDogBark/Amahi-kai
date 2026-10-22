@@ -222,13 +222,23 @@ class SystemServices
       full ? [upstream_version(full), full] : nil
     end
 
-    # Amahi-kai isn't a package: show the deployed commit, read from .git
-    # directly so it works whoever owns the checkout.
+    # Amahi-kai isn't a package: show its release version and the deployed commit, read from
+    # .git directly so it works whoever owns the checkout.
     def app_version
-      [app_commit, "Rails #{Rails::VERSION::STRING}, Ruby #{RUBY_VERSION}"]
+      shown = [app_release_version, app_commit].compact.join(', ').presence
+      [shown, "Rails #{Rails::VERSION::STRING}, Ruby #{RUBY_VERSION}"]
     end
 
     public
+
+    # The release this code is or comes after ("0.9.0"), from the VERSION file at the
+    # checkout's top; nil without one.
+    def app_release_version
+      value = File.read(Rails.root.join('VERSION')).strip
+      value.match?(/\A\d+\.\d+\.\d+(?:rc\d+)?\z/) ? value : nil
+    rescue SystemCallError
+      nil
+    end
 
     # The deployed commit (7 characters), read from .git directly so it works whoever owns
     # the checkout; nil if there's no checkout. Settings → Servers and System Status show it.

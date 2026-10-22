@@ -10,8 +10,8 @@
 .modal-body
   - if update.available?
     p
-      strong = "#{pluralize(update.behind, 'change')} ready to install"
-      = " (#{update.short(update.current)} → #{update.short(update.latest)}). Amahi-kai restarts at the end."
+      strong = update.summary
+      = " ready to install. Amahi-kai restarts at the end."
     - if update.changelog.any?
       ul.whats-new-changelog
         - update.changelog.each do |entry|
@@ -26,7 +26,7 @@
   - elsif update.checked?
     p.mb-0
       span.text-success ✓
-      = " Up to date (#{update.short(update.current)})."
+      = " Up to date (#{update.running})."
   - else
     p.mb-0.text-muted Not checked yet. Check now looks for an update.
   - if apps.any?
@@ -37,7 +37,7 @@
           li = app_update_label(app)
       a href="/apps/installed_apps" Update on the Apps page →
   - if update.checked?
-    p.small.text-muted.mb-0.mt-3 = safe_join(['Checked ', relative_time_tag(update.checked_at, clock: true), '. Amahi-kai checks itself and its apps every 6 hours.'])
+    p.small.text-muted.mb-0.mt-3 = safe_join(['Checked ', relative_time_tag(update.checked_at, clock: true), '. Amahi-kai checks itself and its apps every 6 hours', (" and follows #{update.channel_label}" if update.channel_label), '.'].compact)
   - if update.error
     p.small.text-warning.mb-0.mt-1 = "Last check: #{update.error}"
 .modal-footer

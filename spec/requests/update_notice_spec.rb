@@ -62,7 +62,7 @@ RSpec.describe 'Update notice', type: :request do
 
     it 'puts a dot on the update button, which opens the dialog instead of updating' do
       button = page.at_css('#update-btn')
-      expect(button['data-tip']).to eq('Update available: 2 changes')
+      expect(button['data-tip']).to eq('Update available: 2 changes (aaaaaaa → bbbbbbb)')
       expect(button.at_css('.update-dot')).not_to be_nil
       expect(button.key?('data-whats-new')).to be(true)
       expect(button['onclick']).to be_nil
@@ -70,14 +70,14 @@ RSpec.describe 'Update notice', type: :request do
 
     it "says so on the dashboard" do
       notice = page.at_css('.update-notice')
-      expect(notice.text).to include("Update available: 2 changes — see what's new")
+      expect(notice.text).to include("Update available: 2 changes (aaaaaaa → bbbbbbb) — see what's new")
       expect(notice.key?('data-whats-new')).to be(true)
     end
 
     it "shows what's new: the changelog entries, the pull requests, and Update now" do
       dialog = page.at_css('#whats-new')
       expect(dialog.at_css('.modal-title').text).to include("What's new")
-      expect(dialog.text).to include('2 changes ready to install (aaaaaaa → bbbbbbb)')
+      expect(dialog.text).to include('2 changes (aaaaaaa → bbbbbbb) ready to install')
       entry = dialog.css('.whats-new-changelog li').first
       expect(entry.at_css('strong').text).to eq('The header says when an update is waiting.')
       expect(entry.at_css('code').text).to eq('update-status.json')
@@ -91,6 +91,33 @@ RSpec.describe 'Update notice', type: :request do
 
     it 'keeps the System Update window on the page' do
       expect(page.at_css('#system-update-install-modal')).not_to be_nil
+    end
+  end
+
+  context 'as an admin, with a release waiting on the releases channel' do
+    before do
+      login_as_admin
+      update_status(available.merge('channel' => 'releases', 'current_version' => '0.9.1', 'latest_version' => '0.9.2', 'tag' => 'v0.9.2'))
+      get root_path
+    end
+
+    it 'names the release and the version running, and the channel it follows' do
+      expect(page.at_css('#update-btn')['data-tip']).to eq('Update available: Amahi-kai 0.9.2 (you have 0.9.1)')
+      dialog = page.at_css('#whats-new')
+      expect(dialog.text).to include('Amahi-kai 0.9.2 (you have 0.9.1) ready to install', 'and follows releases.')
+    end
+  end
+
+  context 'as an admin, on the dev branch' do
+    before do
+      login_as_admin
+      update_status(available.merge('channel' => 'development', 'current_version' => '0.9.1'))
+      get root_path
+    end
+
+    it 'counts the changes on the dev branch' do
+      expect(page.at_css('.update-notice').text).to include('Update available: 2 changes on the dev branch (aaaaaaa → bbbbbbb)')
+      expect(page.at_css('#whats-new').text).to include('and follows the dev branch.')
     end
   end
 
@@ -110,6 +137,9 @@ RSpec.describe 'Update notice', type: :request do
     it 'offers Check now and Repair instead of Update now' do
       dialog = page.at_css('#whats-new')
       expect(dialog.text).to include('Up to date (aaaaaaa).', 'Checked 5 minutes ago')
+      update_status(up_to_date.merge('current_version' => '0.9.1'))
+      get root_path
+      expect(page.at_css('#whats-new').text).to include('Up to date (0.9.1, aaaaaaa).')
       expect(dialog.at_css('#whats-new-check')['data-url']).to eq('/settings/check_updates')
       expect(dialog.at_css('#whats-new-repair')['data-url']).to eq('/settings/update_system?repair=1')
       expect(dialog.at_css('#whats-new-install')).to be_nil
@@ -145,9 +175,9 @@ RSpec.describe 'Update notice', type: :request do
       get '/settings/update_dialog', headers: { 'Accept' => 'application/json' }
       data = response.parsed_body
       expect(data['checked_at']).to eq('2026-10-08T16:21:09Z')
-      expect(data['waiting']).to eq('label' => 'Update available: 1 change', 'dot' => true)
+      expect(data['waiting']).to eq('label' => 'Update available: 1 change (aaaaaaa → bbbbbbb)', 'dot' => true)
       expect(Nokogiri::HTML(data['html']).at_css('.modal-header').text).to include("What's new")
-      expect(data['html']).to include('1 change ready to install', 'Checked ')
+      expect(Nokogiri::HTML(data['html']).text).to include('1 change (aaaaaaa → bbbbbbb) ready to install', 'Checked ')
 
       get '/'
       content = Nokogiri::HTML(response.body).at_css('#whats-new .modal-content')

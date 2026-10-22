@@ -23,11 +23,14 @@ privilege model is in `docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`.
 
 ## Workflow
 
-- **Development is on `dev`** (since 2026-10-21); `main` is the release branch. The process until
-  releases are tagged: commit to `dev` and push → CI green on `dev` → tell CatDogBark and wait for
-  his go → PR `dev` → `main`, merged with a merge commit (not squash, so the two keep one
-  history) → CatDogBark runs **System Update** in the NAS web UI and checks. System Update pulls
-  `main` (`bin/amahi-update`), so changes on `dev` don't reach the NAS until they're merged.
+- **Development is on `dev`** (since 2026-10-21); `main` is the release branch. Commit to `dev`
+  and push → CI green on `dev` → tell CatDogBark and wait for his go → PR `dev` → `main`, merged
+  with a merge commit (not squash, so the two keep one history) → tagged and released as
+  `CONTRIBUTING.md` says (Cutting a release) when he asks. Pull requests into `dev` run no CI.
+- **System Update follows an update channel** (`AMAHI_UPDATE_CHANNEL` in the NAS's `amahi.env`):
+  `releases`, `candidates` or `development` (the `dev` branch). Until 1.0, the NAS and the test VM
+  (`192.168.1.13`) follow `development` as CatDogBark's work needs, so a push to `dev` reaches them
+  through System Update.
 - After each merge, stop and report to CatDogBark in a few plain sentences: what changed, and exactly
   what to click or check on the NAS. Wait for his OK before starting the next PR.
 - Claude can reach the NAS over SSH (CatDogBark's go-ahead, 2026-10-05) for

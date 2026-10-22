@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+### 🚀 Major Features
+
+- **Updates come from releases, on a channel you choose** — System Update installs published releases now, not whatever is newest on `main`. A server follows one update channel, set by `AMAHI_UPDATE_CHANNEL` in `/etc/amahi-kai/amahi.env`: `releases` (the default), `candidates` (release candidates too, to try one before it's out) or `development` (the `dev` branch, for testing what's being built). An update never takes a server back to an older version. The update window, the dashboard and System Status name the version on offer and the one running ("Amahi-kai 0.9.2 (you have 0.9.1)"), and say which channel the server follows. Repair runs every step again on the version you have, without looking for a newer one. Releases are tagged on `main` and published on GitHub with their changelog section as notes, checked against a `VERSION` file ([CONTRIBUTING](CONTRIBUTING.md)). Re-running the installer keeps the version installed.
+
 ## [0.9.0] — 2026-10-22
 
 ### 🚀 Major Features

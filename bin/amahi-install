@@ -198,10 +198,8 @@ mkdir -p "$APP_DIR"
 if [[ "${AMAHI_CODE_FETCHED:-}" == 1 && -d "$APP_DIR/.git" ]]; then
   echo "    Using the code install.sh just fetched"
 elif [ -d "$APP_DIR/.git" ]; then
-  echo "    Existing installation found, pulling latest..."
-  "$APP_DIR/bin/amahi-set-ownership"
-  cd "$APP_DIR"
-  git -c core.hooksPath=/dev/null -c core.fsmonitor=false pull origin main 2>&1 || echo "    ⚠ Git pull failed — using code on disk"
+  # A re-run keeps the version installed: System Update brings new ones, from the update channel.
+  echo "    Existing installation found: keeping the version installed (System Update brings new ones)"
 elif [ -f "$APP_DIR/Gemfile" ]; then
   echo "    Existing installation found (no git), using current code..."
 else
@@ -234,6 +232,9 @@ chown "$APP_USER:$APP_GROUP" /var/lib/amahi-kai/tmp
 
 if [ ! -f "$ENV_FILE" ]; then
   echo "==> Generating configuration..."
+  # A development install (AMAHI_BRANCH=dev through install.sh) keeps following the dev branch.
+  UPDATE_CHANNEL=releases
+  [[ "${AMAHI_BRANCH:-main}" == dev ]] && UPDATE_CHANNEL=development
   SECRET=$(openssl rand -hex 32)
   DB_PASS=$(openssl rand -hex 16)
   cat > "$ENV_FILE" <<EOF
@@ -255,6 +256,10 @@ DATABASE_PASSWORD=$DB_PASS
 # addresses, localhost, this machine's hostname, its Tailscale name or a
 # Cloudflare Tunnel; add other DNS names that point at this server.
 # RAILS_ALLOWED_HOSTS=nas.example.lan
+
+# Where System Update gets new versions: releases (published releases), candidates
+# (releases and release candidates) or development (the dev branch, for testing).
+AMAHI_UPDATE_CHANNEL=$UPDATE_CHANNEL
 EOF
   chmod 640 "$ENV_FILE"
   chown root:"$APP_USER" "$ENV_FILE"

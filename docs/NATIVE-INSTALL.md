@@ -22,8 +22,8 @@ cd Amahi-kai
 sudo bin/amahi-install
 ```
 
-Running it again is safe: it keeps users, shares and settings, pulls the latest code from GitHub,
-and restarts the app.
+Running it again is safe: it keeps users, shares, settings and the version installed, and
+restarts the app. New versions come through System Update (below).
 
 ## What It Does
 
@@ -81,17 +81,14 @@ To reach your server from anywhere, set up a [Cloudflare Tunnel](https://develop
 
 ## Updating
 
-Amahi-kai checks for updates every 6 hours. **Settings → System Status** shows what's new (each change linked to its pull request) with **Update now**, or **Repair** when you're up to date. Over SSH:
+Amahi-kai checks for updates every 6 hours, on its update channel: `releases` (the default), `candidates` (release candidates too) or `development` (the dev branch), set by `AMAHI_UPDATE_CHANNEL` in `/etc/amahi-kai/amahi.env` ([Updating](https://amahi-kai.com/wiki/updating)). **Settings → System Status** shows what's new (each change linked to its pull request) with **Update now**, or **Repair** when you're up to date. Over SSH:
 
 ```bash
 sudo /opt/amahi-kai/bin/amahi-update            # update
 sudo /opt/amahi-kai/bin/amahi-update --repair   # run every step again on the current version
 ```
 
-An update pulls the code, installs gems, backs up the database, runs migrations, installs the root helper and sudoers rules, regenerates the Samba config and restarts the app; if a step or the restarted app fails, it rolls back to the version that was running. With nothing new it stops after the pull. (A bare `git pull` and restart skips the helper and sudoers steps.)
+An update checks out the channel's newest version, installs gems, backs up the database, runs migrations, installs the root helper and sudoers rules, regenerates the Samba config and restarts the app; if a step or the restarted app fails, it rolls back to the version that was running. With nothing new it stops after the pull. (A bare `git pull` and restart skips the helper and sudoers steps.)
 
-Or re-run the installer:
-
-```bash
-sudo /opt/amahi-kai/bin/amahi-install
-```
+Re-running the installer (`sudo /opt/amahi-kai/bin/amahi-install`) sets up the system again
+around the version installed, without changing it.
