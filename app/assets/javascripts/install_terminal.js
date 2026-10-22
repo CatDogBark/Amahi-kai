@@ -24,6 +24,23 @@ function appendTerminalLine(id, text, cls) {
   if (atBottom) terminal.scrollTop = terminal.scrollHeight;
 }
 
+// --- The pill in the title bar: how the job is going (install_terminal.css colours it) ---
+
+var TERMINAL_STATES = { running: 'Running', done: 'Done', failed: 'Failed', waiting: 'Waiting' };
+
+function setTerminalState(id, state, label) {
+  var modal = document.getElementById(id + '-install-modal');
+  if (!modal) return;
+  modal.dataset.state = state;
+  var text = modal.querySelector('.term-pill-text');
+  if (text) text.textContent = label || TERMINAL_STATES[state] || '';
+}
+
+// The pill's state for a finished run's status class.
+function terminalStateFor(cls) {
+  return { error: 'failed', warn: 'waiting' }[cls] || 'done';
+}
+
 // --- The status bar: what's happening, for how long, and how it ended ---
 
 var terminalClocks = {};
@@ -72,6 +89,7 @@ function terminalButton(id) {
 // Ends a run: the cursor stops, the status says how it went, the button appears.
 function finishTerminal(id, cls, message, buttonLabel) {
   var took = stopTerminalClock(id);
+  setTerminalState(id, terminalStateFor(cls));
   document.getElementById(id + '-cursor').style.display = 'none';
   if (message) setTerminalStatus(id, message + (took === null ? '' : ' in ' + formatElapsed(took)), cls);
   var button = terminalButton(id);
@@ -82,6 +100,7 @@ function finishTerminal(id, cls, message, buttonLabel) {
 
 function resetTerminal(id) {
   document.getElementById(id + '-install-modal').style.display = 'flex';
+  setTerminalState(id, 'running');
   document.getElementById(id + '-output').innerHTML = '';
   document.getElementById(id + '-cursor').style.display = '';
   document.getElementById(id + '-install-footer').style.display = 'none';
@@ -127,6 +146,7 @@ function followSystemUpdate(id, url, from, retries) {
     retries = 0;
     terminalLastLines[id] = e.data;
     setTerminalClockLabel(id, 'Updating…');
+    setTerminalState(id, 'running');
     appendTerminalLine(id, e.data);
   };
   // "done" comes from the restarted app, so it's already answering: reloading is all
@@ -145,6 +165,7 @@ function followSystemUpdate(id, url, from, retries) {
     if (retries === 0) {
       appendTerminalLine(id, '… Waiting for Amahi-kai to restart', 'warn');
       setTerminalClockLabel(id, 'Restarting Amahi-kai…');
+      setTerminalState(id, 'running', 'Restarting');
     }
     if (retries >= 90) {
       appendTerminalLine(id, '⚠ Lost track of the update. It keeps running on the NAS; refresh this page in a minute.');
@@ -161,6 +182,7 @@ function followSystemUpdate(id, url, from, retries) {
 // the Cloudflare Tunnel a stopped app comes back as a 502 or 530, which is a miss too.
 function waitForServer(id) {
   document.getElementById(id + '-install-footer').style.display = 'none';
+  setTerminalState(id, 'running', 'Waiting');
   startTerminalClock(id, 'Waiting for Amahi-kai…');
   var attempts = 0;
   var check = function() {
@@ -171,6 +193,7 @@ function waitForServer(id) {
       .then(function(up) {
         if (up) {
           stopTerminalClock(id);
+          setTerminalState(id, 'done', 'Back');
           setTerminalStatus(id, '✓ Amahi-kai is back. Reloading…', 'success');
           setTimeout(function() { window.location.reload(); }, 800);
         } else if (attempts >= 45) {

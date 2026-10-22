@@ -2,7 +2,9 @@
 
 All notable changes to Amahi-kai are documented here.
 
-## [Unreleased] — v1.0.0
+## [Unreleased]
+
+## [0.9.0] — 2026-10-22
 
 ### 🚀 Major Features
 
@@ -51,6 +53,7 @@ All notable changes to Amahi-kai are documented here.
 
 - **Greyhole starts when it's installed** — The setup wizard's install ended with Greyhole enabled for the next boot but not running, so files waited until a restart. Turning a service on now enables it, then starts it, as two steps: `systemctl enable --now` starts nothing for a service with only an init script, which is all Greyhole's package has. Turning one off stops it the same way.
 - **The setup wizard's drives, copies and name, done the app's way** — The drives the wizard pools join the pool the way Disks → Greyhole Pool adds one, so going Back after installing Greyhole also updates its configuration and starts it. The copies chosen when installing Greyhole are kept only once it's installed, and become the default for new pooled shares everywhere (the Shares page used 2 regardless); the first share is pooled only when Greyhole is installed, and its folder is where the Shares page would put it. A drive shared as it is (NTFS, exFAT) shows on the summary. Renaming the server reaches Samba at once, and the helper names the new hostname in `/etc/hosts`: without that, every `sudo`, the app's own included, waited on DNS and warned "unable to resolve host". A browser test now walks the whole wizard, Greyhole's install included.
+- **The install window in the app's look** — The window every install, update and audit streams into (System Update, apps, Greyhole, ZFS, Tailscale, the Cloudflare Tunnel, the security audit, System Dependencies and the setup wizard) is one of the app's glass panels now, instead of a navy terminal with pretend window buttons. Its title bar has a pill saying how the job is going (Running, with a pulsing dot, then Done, Failed or Waiting), steps and results are mint, problems red or amber, and Close and Continue are the app's buttons.
 - **The sign-in page in the app's look** — The last page with the old teal style: the name and its wave mark above one glass panel, labelled fields, the mint button, and messages in the app's colours. After a wrong password the form keeps the name you typed and your Remember me choice, so only the password goes in again.
 - **The setup wizard in the app's look** — Near-black glass over the water, mint, Space Grotesk and the app's buttons, the same as every page after it, and dark on every computer (it went light grey, with labels hard to read, on a computer set to light mode). A bar shows the step (Step 3 of 7). The install and preview windows cover the screen again instead of only the panel. A refused password no longer shows its message again on the next page, a share name that's taken or too short says so instead of failing with an error page, and the wording points to where things are now (Disks → Devices, Disks → Greyhole Pool), with what to do next at the end.
 - **A fresh install, checked on a new Ubuntu 24.04 VM** — The installer shows the admin's first password as soon as it's made, not only at the end, so a later failed step can't lose it. It writes Samba's configuration the way System Update does, answering on your LAN only, without Ubuntu's printer shares. It no longer stalls for 90 seconds on a VM whose guest agent option is off (it says where to turn it on). It finishes by restarting Amahi-kai and checking that it answers. Running it again keeps your server's address and your choice of automatic updates, and restarts the app on the new code.
