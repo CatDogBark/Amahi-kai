@@ -97,6 +97,11 @@ RSpec.describe 'install and update scripts' do
     expect(text).to include("if [[ -x /usr/sbin/zpool ]]; then\n  reply=$(/usr/local/sbin/amahi-helper zfs.setup </dev/null 2>/dev/null)")
   end
 
+  it 'lets smartd start in a virtual machine, at install and every update' do
+    expect(File.read(Rails.root.join('bin/amahi-update'))).to include("reply=$(/usr/local/sbin/amahi-helper smart.setup </dev/null 2>/dev/null)")
+    expect(File.read(Rails.root.join('bin/amahi-install'))).to include('/usr/local/sbin/amahi-helper smart.setup </dev/null')
+  end
+
   it 'pulls as root without hooks or an fsmonitor command from the checkout' do
     text = File.read(Rails.root.join('bin/amahi-update'))
     expect(text).to include('git -c core.hooksPath=/dev/null -c core.fsmonitor=false "$@"')

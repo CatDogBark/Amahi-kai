@@ -23,11 +23,11 @@ privilege model is in `docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`.
 
 ## Workflow
 
-- **Development is on `dev`** (since 2026-10-21): branch from `dev`, PRs target `dev`. `main` is the
-  release branch, merged from `dev` only when CatDogBark says so. System Update pulls `main`
-  (`bin/amahi-update`), so changes on `dev` don't reach the NAS until then.
-- One PR per change set: branch → PR → CI green → merge (CatDogBark approves merging fix PRs
-  once CI passes) → CatDogBark runs **System Update** in the NAS web UI and checks → next PR.
+- **Development is on `dev`** (since 2026-10-21); `main` is the release branch. The process until
+  releases are tagged: commit to `dev` and push → CI green on `dev` → tell CatDogBark and wait for
+  his go → PR `dev` → `main`, merged with a merge commit (not squash, so the two keep one
+  history) → CatDogBark runs **System Update** in the NAS web UI and checks. System Update pulls
+  `main` (`bin/amahi-update`), so changes on `dev` don't reach the NAS until they're merged.
 - After each merge, stop and report to CatDogBark in a few plain sentences: what changed, and exactly
   what to click or check on the NAS. Wait for his OK before starting the next PR.
 - Claude can reach the NAS over SSH (CatDogBark's go-ahead, 2026-10-05) for

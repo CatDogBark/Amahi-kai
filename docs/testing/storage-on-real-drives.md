@@ -27,7 +27,8 @@ command on its own.
 
 - [ ] **Settings → System Status** says **Up to date**.
 - [ ] **Dashboard → Services**: **SMART monitoring** is **Running** (it was Idle on the VM's
-  virtual disk). If it says Idle, reboot the VM once: smartd only starts at boot.
+  virtual disk). If it isn't, run **System Update** once: it lets smartd start in a virtual
+  machine, which Ubuntu's own setup doesn't, and starts it.
 
 ## 2. Drive health, before using the drives
 
