@@ -20,7 +20,8 @@ module SystemDependencies
     { key: 'tailscale', name: 'Tailscale', role: 'Remote access (VPN)', packages: %w[tailscale], source: 'Tailscale' },
     { key: 'cloudflared', name: 'cloudflared', role: 'Remote access (Cloudflare Tunnel)', packages: %w[cloudflared], source: 'Cloudflare' },
     { key: 'avahi', name: 'Avahi', role: 'Names on the LAN (mDNS)', packages: %w[avahi-daemon], source: 'Ubuntu' },
-    { key: 'dnsmasq', name: 'dnsmasq', role: 'DHCP and DNS', packages: %w[dnsmasq], source: 'Ubuntu' },
+    { key: 'dnsmasq', name: 'dnsmasq', role: 'DHCP', packages: %w[dnsmasq], source: 'Ubuntu' },
+    { key: 'unbound', name: 'Unbound', role: 'DNS for the network', packages: %w[unbound dns-root-data], source: 'Ubuntu' },
     { key: 'fail2ban', name: 'fail2ban', role: 'Blocks repeated failed logins', packages: %w[fail2ban], source: 'Ubuntu' },
     { key: 'openssh', name: 'OpenSSH server', role: 'SSH', packages: %w[openssh-server], source: 'Ubuntu' }
   ].freeze

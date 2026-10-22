@@ -1,0 +1,56 @@
+/* Network → DNS: the choices (DNS on or off, the provider) as cards to pick from, the custom
+   server's fields under its card, and the status facts. */
+.dns-choices {
+  display: grid;
+  gap: 10px;
+}
+
+.dns-choice {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 10px;
+  row-gap: 2px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--kai-line);
+  border-radius: 12px;
+  background: var(--kai-light);
+  cursor: pointer;
+}
+
+.dns-choice:hover { background: var(--kai-hover-bg); }
+.dns-choice:has(input:checked) { border-color: var(--kai-mint-ring); background: var(--kai-mint-soft); }
+.dns-choice:has(input:disabled) { opacity: 0.55; cursor: not-allowed; }
+.dns-choice:has(input:focus-visible) { outline: 2px solid var(--kai-mint-ring); outline-offset: 2px; }
+
+.dns-choice input {
+  grid-row: span 2;
+  margin-top: 3px;
+  accent-color: var(--kai-mint);
+}
+
+.dns-choice-title { color: var(--kai-title); font-weight: 600; }
+.dns-choice-text { color: var(--kai-muted); font-size: 13px; }
+
+/* The custom server's fields show while its card is picked. */
+.dns-custom {
+  display: none;
+  grid-column: 1 / -1;
+}
+
+.dns-providers:has(#dns-provider-custom:checked) .dns-custom { display: block; }
+
+.dns-interface { max-width: 480px; }
+
+.dns-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+}
+
+.dns-facts dt { color: var(--kai-muted); font-weight: 500; }
+.dns-facts dd { margin: 0; }
+
+@media (min-width: 900px) {
+  .dns-choices { grid-template-columns: 1fr 1fr; }
+}

@@ -29,18 +29,4 @@ RSpec.describe NetworkHelper, type: :helper do
     end
   end
 
-  describe '#dns_select_options' do
-    it 'returns options for cloudflare, google, and custom' do
-      options = helper.dns_select_options
-      expect(options.map(&:first)).to eq(%w[cloudflare google custom])
-    end
-
-    it 'returns arrays of [provider, label]' do
-      options = helper.dns_select_options
-      options.each do |opt|
-        expect(opt).to be_an(Array)
-        expect(opt.length).to eq(2)
-      end
-    end
-  end
 end

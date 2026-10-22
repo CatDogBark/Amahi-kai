@@ -108,8 +108,8 @@ class SecurityAudit
       true # If we can't check, assume it's fine
     end
 
-    # The fix lets in SSH, the web UI (3000), HTTPS and Samba, plus DNS and DHCP once
-    # Amahi-kai has configured dnsmasq.
+    # The fix lets in SSH, the web UI (3000), HTTPS and Samba, plus DHCP once Amahi-kai has
+    # configured dnsmasq, and DNS to Unbound's addresses while Network → DNS is on.
     def ufw_check(report)
       Check.new(
         name: 'ufw_firewall',

@@ -2,7 +2,7 @@
 # frozen_string_literal: true
 
 # amahi-helper: the program Amahi-kai runs as root for user accounts, Samba, share
-# folders, system services, the hostname, dnsmasq's config, swap, reboot/power off, data
+# folders, system services, the hostname, dnsmasq's and Unbound's configs, swap, reboot/power off, data
 # drives, ZFS pools, Greyhole, package installs, the Cloudflare Tunnel, Tailscale, the
 # security audit's fixes and the Docker apps. It is the app's only sudo rule.
 #
@@ -60,13 +60,17 @@ module AmahiHelper
   TESTPARM = '/usr/bin/testparm'
 
   DNSMASQ_CONF = '/etc/dnsmasq.d/amahi.conf'
-  DNS_ALIASES = '/etc/dnsmasq.d/amahi-aliases.conf'
   DNSMASQ = '/usr/sbin/dnsmasq'
+  UNBOUND = '/usr/sbin/unbound'
+  UNBOUND_CHECKCONF = '/usr/sbin/unbound-checkconf'
+  # Ubuntu's unbound.conf includes every unbound.conf.d/*.conf.
+  UNBOUND_CONF = '/etc/unbound/unbound.conf.d/amahi-kai.conf'
+  CA_CERTS = '/etc/ssl/certs/ca-certificates.crt'
 
   # The services Settings → Servers may control: the entries in lib/system_services.rb
   # that list actions (spec/lib/amahi_helper_spec.rb checks the two lists match).
   SERVICES = {
-    'smbd' => 'smbd.service', 'nmbd' => 'nmbd.service', 'dnsmasq' => 'dnsmasq.service',
+    'smbd' => 'smbd.service', 'nmbd' => 'nmbd.service', 'dnsmasq' => 'dnsmasq.service', 'unbound' => 'unbound.service',
     'greyhole' => 'greyhole.service', 'docker' => 'docker.service', 'avahi-daemon' => 'avahi-daemon.service'
   }.freeze
 
@@ -264,7 +268,7 @@ module AmahiHelper
   # Packages the helper may install.
   PACKAGES = %w[
     greyhole php8.3-mbstring php8.3-mysql cloudflared tailscale docker-ce docker-ce-cli containerd.io
-    dnsmasq fail2ban unattended-upgrades zfsutils-linux smartmontools avahi-daemon
+    dnsmasq unbound dns-root-data fail2ban unattended-upgrades zfsutils-linux smartmontools avahi-daemon
   ].freeze
   APT_ENV = ENV_MIN.merge('DEBIAN_FRONTEND' => 'noninteractive').freeze
 
@@ -383,10 +387,11 @@ module AmahiHelper
   APP_HEALTH_TIMEOUT = 300
 
   # The security audit's fixes. UFW lets in SSH, the web UI, HTTPS, Samba and mDNS (apps
-  # announced on the LAN), plus DNS and DHCP once Amahi-kai has configured dnsmasq.
+  # announced on the LAN), plus DHCP once Amahi-kai has configured dnsmasq. DNS gets in to
+  # Unbound's addresses only, by the rules dns.write_config adds (UFW keeps them while it's off).
   UFW = '/usr/sbin/ufw'
   FIREWALL_PORTS = %w[22/tcp 3000/tcp 443/tcp 445/tcp 139/tcp 137:138/udp 5353/udp].freeze
-  DNSMASQ_PORTS = %w[53 67/udp].freeze
+  DNSMASQ_PORTS = %w[67/udp].freeze
   # sshd uses the first value it reads for a setting, and sshd_config includes
   # sshd_config.d/*.conf first, in name order: 10-amahi-kai.conf comes before Ubuntu's
   # 50-cloud-init.conf.
@@ -599,11 +604,18 @@ module AmahiHelper
       validate: ->(a) { { content: dnsmasq_conf(a['content'], DNSMASQ_LINES) } },
       plan: ->(v) { [[:install, DNSMASQ_CONF, v[:content], :dnsmasq]] }
     },
-    # DNS aliases (Network → DNS Aliases): address=/name/ip lines only.
-    'network.write_dns_aliases' => {
+    # Unbound's config (Network → DNS): only lines Amahi-kai writes, checked with
+    # unbound-checkconf. UFW lets DNS in to the addresses Unbound listens on.
+    'dns.write_config' => {
       params: %w[content],
-      validate: ->(a) { { content: dnsmasq_conf(a['content'], DNS_ALIAS_LINES) } },
-      plan: ->(v) { [[:install, DNS_ALIASES, v[:content], :dnsmasq]] }
+      validate: ->(a) { installed!(UNBOUND) && { content: unbound_conf(a['content']) } },
+      plan: ->(v) { [[:dns_config, v[:content]]] }
+    },
+    # DNS turned off: the config goes, and so do its firewall rules.
+    'dns.remove_config' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:dns_config, nil]] }
     },
     # ext4 on a data drive that isn't mounted. Never a drive the system runs from.
     'disks.format' => {
@@ -1245,7 +1257,9 @@ module AmahiHelper
     /\Aexpand-hosts\z/,
     /\Adomain=#{DOMAIN}\z/i,
     /\Abind-interfaces\z/,
-    /\Aexcept-interface=lo\z/
+    /\Aexcept-interface=lo\z/,
+    /\Aport=0\z/,
+    /\Adhcp-option=option:dns-server,#{IPV4}\z/
   ].freeze
   # Greyhole runs as root and some of its settings run commands, so its config may only
   # hold the lines the app generates. Pool drives must be data drives under /mnt.
@@ -1255,7 +1269,18 @@ module AmahiHelper
     /\Anum_copies\[[[:print:]]{1,64}\] = (?:\d{1,2}|max)\z/
   ].freeze
   GREYHOLE_SHARE_NAME = /\A[A-Za-z0-9][A-Za-z0-9 _-]{0,63}\z/
-  DNS_ALIAS_LINES = [%r{\Aaddress=/[a-z][a-z0-9-]{0,62}/(?:#{IPV4})?\z}i].freeze
+
+  # --- Unbound config checks -----------------------------------------------------------
+
+  # Unbound's config can load Python modules, read and write files and open its control
+  # port, and the app writes the file whole, so every line must be one Amahi-kai generates
+  # (unbound_line?): a clause it uses, or an option with a value it would write.
+  UNBOUND_CLAUSES = %w[server: forward-zone:].freeze
+  UNBOUND_SWITCHES = %w[ip-freebind hide-identity hide-version prefetch qname-minimisation serve-expired
+                        forward-tls-upstream].freeze
+  # A name with its final dot ("nas.home.arpa."), and a TLS name ("dns.quad9.net").
+  UNBOUND_NAME = '(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+'
+  TLS_NAME = '[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?'
 
   class << self
     # --- Entry points --------------------------------------------------------------
@@ -1460,6 +1485,64 @@ module AmahiHelper
         raise Refused, "dnsmasq line #{line.inspect} is not one Amahi-kai writes" unless allowed.any? { |re| line.match?(re) }
       end
       value
+    end
+
+    def unbound_conf(value)
+      value = string(value, 'content', max: 256 * 1024)
+      value.each_line do |line|
+        line = line.strip
+        next if line.empty? || line.start_with?('#')
+        raise Refused, "Unbound line #{line.inspect} is not one Amahi-kai writes" unless unbound_line?(line)
+      end
+      value
+    end
+
+    def unbound_line?(line)
+      return true if UNBOUND_CLAUSES.include?(line)
+      key, value = line.split(/:\s+/, 2)
+      return false unless value
+      case key
+      when *UNBOUND_SWITCHES then value == 'yes'
+      when 'serve-expired-ttl', 'serve-expired-client-timeout' then value.match?(/\A\d{1,6}\z/)
+      when 'interface' then ip_address?(value) && !IPAddr.new(value).to_i.zero?
+      when 'access-control'
+        # Never the whole internet: an open resolver is used against others (amplification).
+        network, action = value.split(' ', 2)
+        action == 'allow' && ip_network?(network) && network.split('/').last.to_i >= (network.include?(':') ? 10 : 8)
+      when 'private-address' then ip_network?(value)
+      when 'local-zone' then value.match?(/\A"#{UNBOUND_NAME}" (?:static|always_nxdomain)\z/io)
+      when 'local-data'
+        match = value.match(/\A"#{UNBOUND_NAME} IN (A|AAAA) ([0-9a-f.:]+)"\z/io)
+        match && ip_address?(match[2], match[1] == 'A' ? :ipv4? : :ipv6?)
+      when 'local-data-ptr'
+        match = value.match(/\A"([0-9a-f.:]+) #{UNBOUND_NAME}"\z/io)
+        match && ip_address?(match[1])
+      when 'tls-cert-bundle' then value == %("#{CA_CERTS}")
+      when 'name' then value == '"."'
+      when 'forward-addr'
+        match = value.match(/\A([0-9a-f.:]+)@853##{TLS_NAME}\z/io)
+        match && ip_address?(match[1])
+      else false
+      end
+    end
+
+    # A plain IPv4 or IPv6 address (+family+ :ipv4? or :ipv6?), with no prefix or zone.
+    def ip_address?(value, family = nil)
+      return false unless value.match?(/\A[0-9a-f.:]{2,39}\z/i)
+      ip = IPAddr.new(value)
+      family ? ip.public_send(family) : true
+    rescue IPAddr::Error
+      false
+    end
+
+    # An IPv4 or IPv6 network with its prefix length ("192.168.1.0/24").
+    def ip_network?(value)
+      address, prefix = value.split('/', 2)
+      return false unless prefix&.match?(/\A\d{1,3}\z/) && ip_address?(address)
+      IPAddr.new(value)
+      true
+    rescue IPAddr::Error
+      false
     end
 
     # --- Data drives ---
@@ -2798,6 +2881,7 @@ module AmahiHelper
       end
       check_smb_conf(tmp) if check == :smb_conf
       check_dnsmasq_conf(tmp) if check == :dnsmasq
+      check_unbound_conf(tmp) if check == :unbound
       File.rename(tmp, target)
       nil
     rescue SystemCallError => e
@@ -2823,6 +2907,39 @@ module AmahiHelper
       _out, err, status = Open3.capture3(ENV_MIN, [DNSMASQ, DNSMASQ], '--test', "--conf-file=#{path}",
                                          unsetenv_others: true, chdir: '/')
       raise Refused, "dnsmasq rejected the config: #{last_lines(err, 2)}" unless status.success?
+    end
+
+    # unbound-checkconf reads the file on its own (it is complete: its clauses and options).
+    def check_unbound_conf(path)
+      out, err, status = Open3.capture3(ENV_MIN, [UNBOUND_CHECKCONF, UNBOUND_CHECKCONF], path,
+                                        unsetenv_others: true, chdir: '/')
+      raise Refused, "unbound-checkconf rejected the config: #{last_lines(err.empty? ? out : err, 2)}" unless status.success?
+    rescue Errno::ENOENT
+      raise Failed, "#{UNBOUND_CHECKCONF} is missing; is Unbound installed?"
+    end
+
+    # Installs Unbound's config (or, given nil, removes it), then has UFW let DNS in to the
+    # addresses Unbound listens on now, and no longer to those it stopped listening on. UFW
+    # keeps the rules while it's off, for when it's turned on.
+    def do_dns_config(content)
+      before = File.exist?(UNBOUND_CONF) ? unbound_listening(File.read(UNBOUND_CONF)) : []
+      content ? do_install(UNBOUND_CONF, content, :unbound) : do_remove_files(UNBOUND_CONF)
+      after = content ? unbound_listening(content) : []
+      return unless File.executable?(UFW)
+      (before - after).each { |address| run_command([UFW, 'delete', 'allow', 'to', address, 'port', '53', { allow_failure: true }]) }
+      # UFW refuses IPv6 rules when its IPv6 is off; then only IPv4 gets in, which is noted.
+      notes = after.filter_map do |address|
+        run_command([UFW, 'allow', 'to', address, 'port', '53', { allow_failure: address.include?(':') }])
+      end
+      notes.empty? ? nil : notes.join('; ')
+    end
+
+    # The addresses an Unbound config listens on, other than the NAS's own (127.0.0.1, ::1).
+    def unbound_listening(content)
+      content.each_line.filter_map do |line|
+        address = line[/\A\s*interface:\s*(\S+)\s*\z/, 1]
+        address if address && ip_address?(address) && !IPAddr.new(address).loopback?
+      end.uniq
     end
 
     # Creates the swap file, turns it on and adds it to fstab. Refuses if the file exists

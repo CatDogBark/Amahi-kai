@@ -124,6 +124,7 @@
   disk_pool_copies: Extra copies
 
   # networking -> aliases
+  dns: DNS
   dns_alias: DNS Alias
   dns_aliases: DNS Aliases
   new_dns_alias: New DNS Alias
@@ -138,10 +139,6 @@
   install: Install
 
   # networking -> settings
-  dns_provider: DNS Provider
-  dns_cloudflare: Cloudflare (1.1.1.1)
-  dns_google: Google Public DNS
-  dns_custom: Custom DNS
   dynamic_ip_range: Dynamic IP Range
 
   # networking -> firewall
@@ -210,9 +207,6 @@
   are_you_sure_host: "Remove the fixed address %{fixed_ip}?"
   create_a_new_dns_alias: New DNS alias
   are_you_sure_dns_alias: "Remove the DNS alias %{dns_alias}?"
-  dns_ip_1: First DNS server
-  dns_ip_2: Second DNS server
-  update_dns_ips: Save DNS servers
   minimum: Starts at
   maximum: Ends at
   lease_time: Lease time

@@ -171,7 +171,7 @@ first and pick a convenient time.
 An Amahi-kai update doesn't update Ubuntu's packages. **Settings → System Dependencies** does:
 
 - **What's there:** what the NAS runs that Amahi-kai depends on (Ruby, Samba, Greyhole and its PHP,
-  ZFS, smartmontools, MariaDB, Docker, Tailscale, cloudflared, Avahi, dnsmasq, fail2ban, OpenSSH),
+  ZFS, smartmontools, MariaDB, Docker, Tailscale, cloudflared, Avahi, dnsmasq, Unbound, fail2ban, OpenSSH),
   each with its installed version, the update waiting and where it comes from, with security
   updates marked; the operating system and kernel, and whether a restart is waiting; Ubuntu's
   other updates; and Amahi-kai's own version and Rails.

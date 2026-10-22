@@ -5,7 +5,7 @@
 - **OS:** Ubuntu 24.04 (Server)
 - **RAM:** 2GB minimum (4GB recommended)
 - **Disk:** 10GB+ for OS + app; additional storage for file shares
-- **Network:** Static IP recommended. Amahi-kai can also run DNS and DHCP for your LAN (optional, Network → Gateway)
+- **Network:** Static IP recommended. Amahi-kai can also run DNS and DHCP for your LAN (optional, Network → DNS and Network → Gateway)
 
 ## Install
 
@@ -58,7 +58,8 @@ journalctl -u amahi-kai -f    # Live logs
 
 systemctl status mariadb      # Database
 systemctl status smbd         # Samba file sharing
-systemctl status dnsmasq      # DNS (if enabled)
+systemctl status unbound      # DNS (if on)
+systemctl status dnsmasq      # DHCP (if on)
 ```
 
 ### First Login

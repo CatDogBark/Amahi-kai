@@ -72,39 +72,11 @@ class NetworkController < ApplicationController
       redirect_to network_index_path
     else
       @net = Setting.get 'net'
-      @dns = Setting.find_or_create_by(KIND, 'dns', 'cloudflare')
-      @dns_ip_1, @dns_ip_2 = DnsIpSetting.custom_dns_ips
-      @dnsmasq_dhcp = Setting.find_or_create_by(KIND, 'dnsmasq_dhcp', '1')
-      @dnsmasq_dns = Setting.find_or_create_by(KIND, 'dnsmasq_dns', '1')
+      @dnsmasq_dhcp = Setting.find_or_create_by(KIND, 'dnsmasq_dhcp', '0')
       @lease_time = Setting.get("lease_time") || "14400"
       @gateway = Setting.find_or_create_by(KIND, 'gateway', '1').value
       @dyn_lo = Setting.find_or_create_by(KIND, 'dyn_lo', '100').value
       @dyn_hi = Setting.find_or_create_by(KIND, 'dyn_hi', '254').value
-    end
-  end
-
-  def update_dns
-    case params[:setting_dns]
-    when 'cloudflare', 'google', 'custom'
-      @saved = Setting.set("dns", params[:setting_dns], KIND)
-      DnsmasqService.restart!
-    else
-      @saved = true
-    end
-    render json: { status: @saved ? :ok : :not_acceptable }
-  end
-
-  def update_dns_ips
-    Setting.transaction do
-      @ip_1_saved = DnsIpSetting.set("dns_ip_1", params[:dns_ip_1], KIND)
-      @ip_2_saved = DnsIpSetting.set("dns_ip_2", params[:dns_ip_2], KIND)
-      Setting.set("dns", 'custom', KIND)
-      DnsmasqService.restart!
-    end
-    if @ip_1_saved && @ip_2_saved
-      render json: { status: :ok }
-    else
-      render json: { status: :not_acceptable, ip_1_saved: @ip_1_saved, ip_2_saved: @ip_2_saved }
     end
   end
 
@@ -166,12 +138,11 @@ class NetworkController < ApplicationController
     @dnsmasq_running = DnsmasqService.running?
     @net = Setting.get('net') || '192.168.1'
     @gateway_ip = Setting.find_or_create_by(KIND, 'gateway', '1').value
-    @dnsmasq_dhcp = Setting.find_or_create_by(KIND, 'dnsmasq_dhcp', '1')
-    @dnsmasq_dns = Setting.find_or_create_by(KIND, 'dnsmasq_dns', '1')
+    @dnsmasq_dhcp = Setting.find_or_create_by(KIND, 'dnsmasq_dhcp', '0')
+    @dns_on = DnsService.on?
     @dyn_lo = Setting.find_or_create_by(KIND, 'dyn_lo', '100').value
     @dyn_hi = Setting.find_or_create_by(KIND, 'dyn_hi', '254').value
     @lease_time = Setting.get("lease_time") || "14400"
-    @dns = Setting.find_or_create_by(KIND, 'dns', 'cloudflare')
   end
 
   def install_dnsmasq_stream
@@ -236,10 +207,9 @@ class NetworkController < ApplicationController
     Setting.set("lease_time", params[:lease_time], KIND) if params[:lease_time].present?
     Setting.set("gateway", params[:gateway], KIND) if params[:gateway].present?
 
-    # Saved, so the form shows what was chosen (it used to forget the checkboxes) and later
-    # rewrites (a static host added) keep them.
+    # Saved, so the form shows what was chosen (it used to forget the checkbox) and later
+    # rewrites (a static host added) keep it.
     Setting.set('dnsmasq_dhcp', params[:dhcp_enabled] == '1' ? '1' : '0', KIND)
-    Setting.set('dnsmasq_dns', params[:dns_enabled] == '1' ? '1' : '0', KIND)
 
     begin
       DnsmasqService.write_config!(DnsmasqService.settings_options)

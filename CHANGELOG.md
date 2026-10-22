@@ -4,6 +4,19 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+### 🚀 Major Features
+
+- **DNS for your network, private and checked** (Network → DNS) — The NAS can be your network's DNS server, with Unbound. Devices ask the NAS, and it asks the provider you pick over an encrypted connection (DNS-over-TLS), so your internet provider can't read or change the answers. Every provider on the list is free and needs no account: Quad9 (the default), Cloudflare, AdGuard DNS (its unfiltered service), DNS.SB, or a server of your own. Answers are checked with DNSSEC, kept for fast repeat lookups, and still given through a short outage. No record is kept of which device looked up what.
+  - **Local names:** the NAS, the fixed hosts (Network → Hosts) and the DNS aliases answer as `name.home.arpa` and as `name`.
+  - **Safety:** it answers the devices on the network you choose, and Tailscale's, and refuses everyone else; the firewall lets DNS in to its addresses only. A public name that points at an address inside your network gets no answer (DNS rebinding). Firefox is told to use this DNS rather than its own.
+  - **Off until you turn it on:** installing Unbound changes nothing; the page says how to point your router (or one device) at the NAS, and how to undo it. The NAS's own lookups don't go through it, so a problem with DNS can't stop the NAS from updating.
+
+### 🔒 Security & Fixes
+
+- **dnsmasq answers no DNS any more** — Unbound does, on Network → DNS. dnsmasq still hands out addresses (Network → Gateway), and gives devices the NAS as their DNS server while DNS is on, the router while it's off. New installs start with DHCP off.
+- **The old DNS provider setting is gone** — Network → Settings let you pick Cloudflare, Google or your own servers, but nothing used the choice. Network → DNS replaces it.
+- **DNS aliases must be IP addresses** (or blank, for the NAS itself); anything else is refused when it's saved.
+
 ## [0.9.1] — 2026-10-22
 
 The first release System Update can install from GitHub's Releases: each server follows an update channel (releases, release candidates or the dev branch) and never goes back to an older version.

@@ -32,34 +32,6 @@
 
       tr
         td.pe-3
-          label = t 'dns_provider'
-        td
-          .dns-area
-            span data-controller="toggle" data-toggle-url-value=network_update_dns_path data-toggle-method-value="PUT"
-              = select_tag "setting_dns", options_for_select(dns_select_options, @dns.value),
-                class: "form-control", data: { toggle_target: "checkbox", action: "change->toggle#toggle" }
-              span.spinner.theme-image data-toggle-target="spinner" style="display:none"
-
-          .dns-ips-area style=(@dns.value == "custom" ? "" : "display: none")
-            form.update-form.form-horizontal action=network_update_dns_ips_path method="post" id="update-dns-ips-form" data-controller="inline-edit" data-inline-edit-url-value=network_update_dns_ips_path data-inline-edit-method-value="PUT" data-action="submit->inline-edit#submit"
-              input type="hidden" name="_method" value="put"
-              input type="hidden" name="authenticity_token" value=form_authenticity_token
-              div data-inline-edit-target="form"
-                .control-group
-                  .controls
-                    = text_field_tag "dns_ip_1", @dns_ip_1, placeholder: t('dns_ip_1'), class: "form-control input-sm"
-                .control-group
-                  .controls
-                    = text_field_tag "dns_ip_2", @dns_ip_2, placeholder: t('dns_ip_2'), class: "form-control input-sm"
-                .control-group
-                  .controls
-                    = spinner
-                    button.btnn type="submit"
-                      = t('update_dns_ips')
-              span.messages data-inline-edit-target="message"
-
-      tr
-        td.pe-3
           label= t 'gateway'
         td data-controller="inline-edit" data-inline-edit-url-value=network_update_gateway_path data-inline-edit-method-value="PUT"
           a.gateway_click_change href="#" data-inline-edit-target="display" data-action="click->inline-edit#edit"

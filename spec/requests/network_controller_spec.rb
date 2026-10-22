@@ -24,12 +24,11 @@ describe "Network Controller", type: :request do
     describe "PUT /network/update_dnsmasq_config" do
       before { allow(DnsmasqService).to receive(:running?).and_return(false) }
 
-      it "saves the DHCP and DNS choices, so the form shows them next time" do
+      it "saves the DHCP choice, so the form shows it next time; dnsmasq answers no DNS" do
         put "/network/update_dnsmasq_config", params: { dhcp_enabled: '1', dyn_lo: '120' }
         expect(Setting.get('dnsmasq_dhcp')).to eq('1')
-        expect(Setting.get('dnsmasq_dns')).to eq('0')
         content = Privileged.calls.find { |op, _| op == 'network.write_dnsmasq_config' }.last[:content]
-        expect(content).to include('dhcp-range=', '.120,')
+        expect(content).to include('port=0', 'dhcp-range=', '.120,')
         expect(content).not_to include('expand-hosts')
         expect(response).to redirect_to('/network/gateway')
       end
@@ -159,46 +158,6 @@ describe "Network Controller", type: :request do
         Setting.find_by(name: "advanced").update!(value: "0")
         get "/network/settings"
         expect(response).to redirect_to("/network")
-      end
-    end
-
-    describe "PUT /network/update_dns" do
-      it "updates dns to google" do
-        put "/network/update_dns", params: { setting_dns: "google" }, as: :json
-        body = JSON.parse(response.body)
-        expect(body["status"]).to eq("ok")
-      end
-
-      it "updates dns to cloudflare" do
-        put "/network/update_dns", params: { setting_dns: "cloudflare" }, as: :json
-        body = JSON.parse(response.body)
-        expect(body["status"]).to eq("ok")
-      end
-
-      it "updates dns to opennic" do
-        put "/network/update_dns", params: { setting_dns: "opennic" }, as: :json
-        body = JSON.parse(response.body)
-        expect(body["status"]).to eq("ok")
-      end
-
-      it "handles unknown dns provider gracefully" do
-        put "/network/update_dns", params: { setting_dns: "unknown_provider" }, as: :json
-        body = JSON.parse(response.body)
-        expect(body["status"]).to eq("ok")
-      end
-    end
-
-    describe "PUT /network/update_dns_ips" do
-      it "updates custom DNS IPs" do
-        put "/network/update_dns_ips", params: { dns_ip_1: "8.8.8.8", dns_ip_2: "8.8.4.4" }, as: :json
-        body = JSON.parse(response.body)
-        expect(body["status"]).to eq("ok")
-      end
-
-      it "rejects invalid DNS IPs" do
-        put "/network/update_dns_ips", params: { dns_ip_1: "not_an_ip", dns_ip_2: "8.8.4.4" }, as: :json
-        body = JSON.parse(response.body)
-        expect(body["status"]).to eq("not_acceptable")
       end
     end
 

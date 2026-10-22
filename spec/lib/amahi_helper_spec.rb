@@ -788,7 +788,7 @@ RSpec.describe 'AmahiHelper' do
 
     let(:dnsmasq_conf) do
       DnsmasqService.write_config!(net: '192.168.1', dyn_lo: 100, dyn_hi: 254, gateway: '1', lease_time: 14_400,
-                                   domain: 'amahi.net', dhcp_enabled: true, dns_enabled: true)
+                                   dhcp_enabled: true)
       Privileged.calls.find { |op, _| op == 'network.write_dnsmasq_config' }.last[:content]
     end
 
@@ -806,13 +806,6 @@ RSpec.describe 'AmahiHelper' do
       end
     end
 
-    it 'accepts only address lines for DNS aliases' do
-      ok = "# aliases\naddress=/files/192.168.1.10\naddress=/blocked/\n"
-      expect(steps('network.write_dns_aliases', { 'content' => ok })).to eq([[:install, '/etc/dnsmasq.d/amahi-aliases.conf', ok, :dnsmasq]])
-      ['address=/a.b/1.2.3.4', 'address=/x/1.2.3.400', 'server=/x/1.2.3.4', 'dhcp-range=1.2.3.4,1.2.3.5,1s'].each do |line|
-        expect(refusal('network.write_dns_aliases', { 'content' => "#{line}\n" })).to include('not one Amahi-kai writes'), line
-      end
-    end
 
     it 'creates the dnsmasq folder if dnsmasq is not installed yet' do
       Dir.mktmpdir do |dir|
@@ -832,6 +825,121 @@ RSpec.describe 'AmahiHelper' do
         expect { helper.check_dnsmasq_conf(conf) }.not_to raise_error
         File.write(conf, "dhcp-rnage=1\n")
         expect { helper.check_dnsmasq_conf(conf) }.to raise_error(AmahiHelper::Refused, /dnsmasq rejected/)
+      end
+    end
+  end
+
+  # Network → DNS: Unbound's config is written by DnsService, checked line by line here and by
+  # unbound-checkconf, and UFW lets DNS in to the addresses Unbound listens on.
+  describe 'Unbound (Network → DNS)' do
+    let(:lan) { NetworkInterfaces::Address.new(ip: IPAddr.new('10.99.0.1'), prefix: 24) }
+    let(:ula) { NetworkInterfaces::Address.new(ip: IPAddr.new('fd99::1'), prefix: 64) }
+    let(:unbound_conf) do
+      allow(NetworkInterfaces).to receive(:lan).and_return('ens19' => [lan, ula])
+      allow(NetworkInterfaces).to receive(:addresses).with('ens19').and_return([lan, ula])
+      allow(NetworkInterfaces).to receive(:addresses).with('tailscale0')
+        .and_return([NetworkInterfaces::Address.new(ip: IPAddr.new('100.64.96.4'), prefix: 32)])
+      allow(DnsService).to receive(:rewrite!)
+      allow(DnsmasqService).to receive(:rewrite_config!)
+      Setting.set('dns_interface', 'ens19')
+      Setting.set('net', '10.99.0')
+      Host.create!(name: 'printer', mac: 'aa:bb:cc:dd:ee:01', address: '20')
+      DnsAlias.create!(name: 'files', address: '10.99.0.30')
+      DnsAlias.create!(name: 'nas', address: '')
+      DnsService.config
+    end
+
+    before { allow(helper).to receive(:installed!).and_call_original }
+
+    it "accepts DnsService's config, for each provider, and installs it with a check" do
+      allow(helper).to receive(:installed!).with(AmahiHelper::UNBOUND).and_return(true)
+      expect(steps('dns.write_config', { 'content' => unbound_conf })).to eq([[:dns_config, unbound_conf]])
+      (DnsService::PROVIDERS.keys - ['quad9']).each do |key|
+        Setting.set('dns_provider', key)
+        expect(refusal('dns.write_config', { 'content' => DnsService.config })).to be_nil, key
+      end
+      Setting.set('dns_provider', 'custom')
+      Setting.set('dns_custom_addresses', '192.168.1.53 fd00::53')
+      Setting.set('dns_custom_tls_name', 'dns.example.org')
+      expect(refusal('dns.write_config', { 'content' => DnsService.config })).to be_nil
+    end
+
+    it "refuses until Unbound is installed" do
+      allow(File).to receive(:executable?).and_call_original
+      allow(File).to receive(:executable?).with(AmahiHelper::UNBOUND).and_return(false)
+      expect(refusal('dns.write_config', { 'content' => "server:\n" })).to include("unbound isn't installed")
+    end
+
+    it 'refuses lines that could load code, read or write files, open the control port, or answer everyone' do
+      allow(helper).to receive(:installed!).with(AmahiHelper::UNBOUND).and_return(true)
+      ['module-config: "python validator iterator"', 'python-script: "/tmp/x.py"', 'include: "/etc/shadow"',
+       'chroot: ""', 'username: root', 'logfile: "/etc/passwd"', 'control-enable: yes', 'remote-control:',
+       'auto-trust-anchor-file: "/tmp/key"', 'tls-cert-bundle: "/tmp/certs"', 'interface: 0.0.0.0', 'interface: ::',
+       'interface: eth0', 'access-control: 0.0.0.0/0 allow', 'access-control: ::/0 allow',
+       'access-control: 10.0.0.0/8 allow_snoop', 'forward-addr: 8.8.8.8', 'forward-addr: 8.8.8.8@53#dns.google',
+       'forward-tls-upstream: no', 'local-zone: "." static', 'local-zone: "x." redirect',
+       'local-data: "x. IN TXT hello"', 'local-data: "x. IN A fd00::1"', 'local-data: "x. IN A 1.2.3.4" extra',
+       'local-data-ptr: "1.2.3.4 x. y."', 'private-address: 10.0.0.0/8 x', 'serve-expired-ttl: -1',
+       "server:\nverbosity: 5"].each do |line|
+        expect(refusal('dns.write_config', { 'content' => "#{line}\n" })).to include('not one Amahi-kai writes'), line
+      end
+    end
+
+    it "removes the config and its firewall rules when DNS is turned off" do
+      expect(steps('dns.remove_config', {})).to eq([[:dns_config, nil]])
+    end
+
+    describe 'installing it' do
+      let(:dir) { Dir.mktmpdir }
+      let(:ran) { [] }
+
+      before do
+        @conf = "#{dir}/amahi-kai.conf"
+        stub_const('AmahiHelper::UNBOUND_CONF', @conf)
+        allow(helper).to receive(:check_unbound_conf)
+        allow(File).to receive(:executable?).and_call_original
+        allow(File).to receive(:executable?).with(AmahiHelper::UFW).and_return(true)
+        allow(helper).to receive(:run_command) { |argv| ran << argv.dup && nil }
+      end
+
+      after { FileUtils.rm_rf(dir) }
+
+      def ufw_rules = ran.map { |argv| argv.drop(1).reject { |a| a.is_a?(Hash) }.join(' ') }
+
+      it 'lets DNS in to the addresses Unbound listens on, and no longer to those it stopped listening on' do
+        helper.do_dns_config("server:\n  interface: 127.0.0.1\n  interface: ::1\n  interface: 10.99.0.1\n  interface: fd99::1\n")
+        expect(File.read(@conf)).to include('interface: 10.99.0.1')
+        expect(helper).to have_received(:check_unbound_conf)
+        expect(ufw_rules).to eq(['allow to 10.99.0.1 port 53', 'allow to fd99::1 port 53'])
+        # UFW with its IPv6 off refuses IPv6 rules; IPv4 still gets in
+        expect(ran.last.last).to eq(allow_failure: true)
+
+        ran.clear
+        helper.do_dns_config("server:\n  interface: 127.0.0.1\n  interface: 10.99.0.2\n")
+        expect(ufw_rules).to eq(['delete allow to 10.99.0.1 port 53', 'delete allow to fd99::1 port 53',
+                                 'allow to 10.99.0.2 port 53'])
+
+        ran.clear
+        helper.do_dns_config(nil)
+        expect(File.exist?(@conf)).to be false
+        expect(ufw_rules).to eq(['delete allow to 10.99.0.2 port 53'])
+      end
+
+      it "leaves the firewall alone where UFW isn't installed" do
+        allow(File).to receive(:executable?).with(AmahiHelper::UFW).and_return(false)
+        helper.do_dns_config("server:\n  interface: 10.99.0.1\n")
+        expect(ran).to be_empty
+      end
+    end
+
+    it 'checks the config with the real unbound-checkconf where Unbound is installed' do
+      skip 'Unbound is not installed' unless File.executable?(AmahiHelper::UNBOUND_CHECKCONF)
+      Dir.mktmpdir do |dir|
+        conf = "#{dir}/amahi-kai.conf"
+        File.write(conf, unbound_conf)
+        expect { helper.check_unbound_conf(conf) }.not_to raise_error
+        File.write(conf, "server:\n  interfase: 10.99.0.1\n")
+        expect { helper.check_unbound_conf(conf) }.to raise_error(AmahiHelper::Refused, /unbound-checkconf rejected/)
       end
     end
   end
@@ -1817,7 +1925,7 @@ RSpec.describe 'AmahiHelper' do
       allow(File).to receive(:executable?).with('/usr/sbin/ufw').and_return(true)
     end
 
-    it 'turns UFW on with SSH, the web UI, HTTPS, Samba and mDNS let in, and DNS and DHCP once dnsmasq is configured' do
+    it 'turns UFW on with SSH, the web UI, HTTPS, Samba and mDNS let in, and DHCP once dnsmasq is configured' do
       stub_const('AmahiHelper::DNSMASQ_CONF', "#{dir}/amahi.conf")
       ufw = '/usr/sbin/ufw'
       base = [[ufw, 'default', 'deny', 'incoming'], [ufw, 'allow', '22/tcp'], [ufw, 'allow', '3000/tcp'],
@@ -1825,7 +1933,7 @@ RSpec.describe 'AmahiHelper' do
               [ufw, 'allow', '5353/udp']]
       expect(steps('security.enable_firewall', {})).to eq([*base, [ufw, '--force', 'enable']])
       File.write("#{dir}/amahi.conf", "bind-interfaces\n")
-      expect(steps('security.enable_firewall', {})).to eq([*base, [ufw, 'allow', '53'], [ufw, 'allow', '67/udp'], [ufw, '--force', 'enable']])
+      expect(steps('security.enable_firewall', {})).to eq([*base, [ufw, 'allow', '67/udp'], [ufw, '--force', 'enable']])
     end
 
     it 'turns off SSH root login' do

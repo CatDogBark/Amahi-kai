@@ -1,0 +1,139 @@
+<div class="container-fluid dns-page">
+  <%# What it is and how it's doing %>
+  <div class="card mb-4 mt-3" id="dns-status">
+    <div class="card-header d-flex align-items-center justify-content-between">
+      <h5 class="mb-0"><%= lucide_icon('globe', size: 18) %> DNS for your network</h5>
+      <% if !@installed %>
+        <span class="badge bg-secondary">Not installed</span>
+      <% elsif @mode == 'off' %>
+        <span class="badge bg-secondary">Off</span>
+      <% elsif @running && @check && @check[:local] && @check[:outside] %>
+        <span class="badge bg-success">Answering</span>
+      <% elsif @running %>
+        <span class="badge bg-warning text-dark">Not answering</span>
+      <% else %>
+        <span class="badge bg-danger">Stopped</span>
+      <% end %>
+    </div>
+    <div class="card-body">
+      <p class="text-muted">
+        The NAS can be your network's DNS server, the service that turns names like <code>example.com</code>
+        into addresses. Devices ask the NAS, and it asks the provider you pick over an encrypted connection,
+        so your internet provider can't read or change the answers. It checks answers with DNSSEC, remembers
+        them so repeat lookups are fast, keeps no record of who looked up what, and gives the NAS and your
+        devices names like <code><%= @nas_name %></code>.
+      </p>
+
+      <% if !@installed %>
+        <p class="text-muted small">It needs Unbound, a DNS server from Ubuntu. Installing it changes nothing on your network: DNS stays off until you turn it on below.</p>
+        <button type="button" class="btn btn-primary" data-call="openInstallTerminal" data-args='["unbound"]'>Install Unbound</button>
+      <% elsif @mode != 'off' %>
+        <dl class="dns-facts mb-0">
+          <dt>Devices use</dt>
+          <dd><%= @addresses.any? ? @addresses.join(', ') : 'no IPv4 address on this interface' %></dd>
+          <dt>Local names</dt>
+          <dd>
+            <% if @check.nil? %>
+              <span class="text-danger">Unbound isn't running.</span>
+            <% elsif @check[:local] %>
+              ✓ Answered in <%= @check[:local] %> ms
+            <% else %>
+              <span class="text-danger">✗ No answer for the NAS's own name.</span>
+            <% end %>
+          </dd>
+          <dt>Outside names</dt>
+          <dd>
+            <% if @check.nil? %>
+              <span class="text-danger">Unbound isn't running.</span>
+            <% elsif @check[:outside] %>
+              ✓ Answered in <%= @check[:outside] %> ms, encrypted, through <%= @provider == 'custom' ? 'your server' : DnsService::PROVIDERS.dig(@provider, :name) %>
+            <% else %>
+              <span class="text-danger">✗ No answer from <%= @provider == 'custom' ? 'your server' : DnsService::PROVIDERS.dig(@provider, :name) %>. Is the internet up? Try another provider.</span>
+            <% end %>
+          </dd>
+        </dl>
+      <% end %>
+    </div>
+  </div>
+
+  <%# The settings %>
+  <form action="<%= dns_update_path %>" method="post" id="dns-settings">
+    <input type="hidden" name="_method" value="put">
+    <input type="hidden" name="authenticity_token" value="<%= form_authenticity_token %>">
+
+    <div class="card mb-4">
+      <div class="card-header"><h5 class="mb-0"><%= lucide_icon('settings', size: 18) %> Settings</h5></div>
+      <div class="card-body">
+        <h6>DNS</h6>
+        <div class="dns-choices mb-4">
+          <label class="dns-choice">
+            <input type="radio" name="mode" value="off" <%= 'checked' if @mode == 'off' %>>
+            <span class="dns-choice-title">Off</span>
+            <span class="dns-choice-text">Nothing listens. Devices keep using your router's DNS.</span>
+          </label>
+          <label class="dns-choice">
+            <input type="radio" name="mode" value="dns" <%= 'checked' if @mode == 'dns' %> <%= 'disabled' unless @installed %>>
+            <span class="dns-choice-title">DNS for my network <span class="badge bg-success ms-1">Recommended</span></span>
+            <span class="dns-choice-text">The NAS answers DNS. Your router keeps handing out addresses; point its DNS setting at the NAS (below), or one device's.</span>
+          </label>
+        </div>
+
+        <h6>Provider</h6>
+        <p class="text-muted small">Where the NAS sends the lookups it can't answer itself. All of them are free, need no account, encrypt the connection and check DNSSEC.</p>
+        <div class="dns-choices dns-providers mb-4">
+          <% DnsService::PROVIDERS.each do |key, provider| %>
+            <label class="dns-choice">
+              <input type="radio" name="provider" value="<%= key %>" <%= 'checked' if @provider == key %>>
+              <span class="dns-choice-title"><%= provider[:name] %><%= ' (default)' if key == DnsService::DEFAULT_PROVIDER %></span>
+              <span class="dns-choice-text"><%= provider[:about] %></span>
+            </label>
+          <% end %>
+          <label class="dns-choice">
+            <input type="radio" name="provider" value="custom" id="dns-provider-custom" <%= 'checked' if @provider == 'custom' %>>
+            <span class="dns-choice-title">Another server</span>
+            <span class="dns-choice-text">Any DNS-over-TLS server: its addresses and the name on its certificate.</span>
+          </label>
+          <div class="dns-custom">
+            <div class="row g-2">
+              <div class="col-md-7">
+                <label class="form-label small" for="dns-custom-addresses">Addresses (one to four, IPv4 or IPv6)</label>
+                <input type="text" class="form-control" id="dns-custom-addresses" name="custom_addresses" value="<%= @custom_addresses %>" placeholder="9.9.9.9 149.112.112.112">
+              </div>
+              <div class="col-md-5">
+                <label class="form-label small" for="dns-custom-tls-name">TLS name</label>
+                <input type="text" class="form-control" id="dns-custom-tls-name" name="custom_tls_name" value="<%= @custom_tls_name %>" placeholder="dns.quad9.net">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <h6>Network interface</h6>
+        <p class="text-muted small">DNS answers on this one, for the devices on its network (and on Tailscale, when it's on).</p>
+        <select name="interface" class="form-select mb-4 dns-interface" aria-label="Network interface">
+          <% @interfaces.each do |name, addresses| %>
+            <option value="<%= name %>" <%= 'selected' if name == @interface %>><%= name %> (<%= addresses.reject(&:link_local?).map(&:to_s).join(', ').presence || 'no address' %>)</option>
+          <% end %>
+        </select>
+
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </div>
+  </form>
+
+  <%# How devices start using it, and how to undo it %>
+  <div class="card mb-4" id="dns-how">
+    <div class="card-header"><h5 class="mb-0"><%= lucide_icon('help-circle', size: 18) %> Using it</h5></div>
+    <div class="card-body">
+      <% server = @addresses.first || 'the NAS\'s address' %>
+      <ol class="mb-3">
+        <li><strong>Give the NAS a fixed address.</strong> In your router's DHCP settings, reserve <code><%= server %></code> for the NAS, so it never changes: every device will be pointed at it.</li>
+        <li><strong>Point devices at it.</strong> For the whole house, set the DNS server in your router's settings to <code><%= server %></code> (often under Internet, WAN or DHCP). To try it first, set one computer's or phone's DNS server to <code><%= server %></code> by hand.</li>
+        <li><strong>Check it:</strong> on that device, open a website, and look up <code><%= @nas_name %></code>.</li>
+      </ol>
+      <p class="text-muted small mb-2"><strong>The way back:</strong> set the router's DNS setting back to automatic (or the one device's back to automatic). While the NAS is off or restarting, the devices that use it can't look up names.</p>
+      <p class="text-muted small mb-0"><strong>Firefox</strong> is told to use this DNS instead of its own encrypted DNS. Other browsers and devices with their own encrypted DNS turned on go around it.</p>
+    </div>
+  </div>
+</div>
+
+<%= render 'shared/install_terminal', id: 'unbound', title: 'Installing Unbound', stream_url: dns_install_stream_path %>

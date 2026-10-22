@@ -21,8 +21,4 @@ module NetworkHelper
     end
   end
 
-  def dns_select_options
-    %w(cloudflare google custom).map { |dns_name| [dns_name, t("dns_#{dns_name}")] }
-  end
-
 end

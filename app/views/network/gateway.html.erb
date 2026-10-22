@@ -3,16 +3,16 @@
     <!-- Not installed -->
     <div class="card mb-3">
       <div class="card-header bg-dark text-white">
-        <h5 class="mb-0">Gateway Mode (DHCP/DNS Server)</h5>
+        <h5 class="mb-0">Gateway Mode (DHCP Server)</h5>
       </div>
       <div class="card-body">
         <p class="text-muted">
-          Use your NAS as the network gateway — it will act as the DHCP and DNS server for your local network.
-          This replaces your router's DHCP/DNS. <strong>Only enable this if you know what you're doing.</strong>
+          Use your NAS as the network's DHCP server — it will hand out addresses to the devices on your network,
+          in place of your router. <strong>Only enable this if you know what you're doing.</strong>
         </p>
         <p class="text-muted small">
-          <strong>When to use this:</strong> You want your NAS to assign IP addresses, manage local DNS names,
-          and have full control over your network. Most users don't need this — your router handles it fine.
+          <strong>When to use this:</strong> You want your NAS to assign IP addresses and have full control over
+          your network. Most users don't need this — your router handles it fine. For DNS, see Network → DNS.
         </p>
         <button type="button" class="btn btn-primary" data-call="openInstallTerminal" data-args='["dnsmasq"]'>
           Install dnsmasq
@@ -24,7 +24,7 @@
     <!-- Installed — Status + Config -->
     <div class="card mb-3">
       <div class="card-header d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">Gateway Mode (DHCP/DNS Server)</h5>
+        <h5 class="mb-0">Gateway Mode (DHCP Server)</h5>
         <% if @dnsmasq_running %>
           <span class="badge bg-success">Running</span>
         <% else %>
@@ -33,7 +33,7 @@
       </div>
       <div class="card-body">
         <p class="text-muted small mb-3">
-          dnsmasq provides DHCP (automatic IP assignment) and DNS (local name resolution) for your network.
+          dnsmasq provides DHCP (automatic IP assignment) for your network.
           Configure the settings below, then start the service.
         </p>
 
@@ -86,23 +86,20 @@
               </div>
             </div>
 
-            <!-- DNS Settings -->
+            <!-- DNS: Unbound, on Network → DNS -->
             <div class="col-md-6">
               <div class="card">
                 <div class="card-header"><strong>DNS (Name Resolution)</strong></div>
                 <div class="card-body">
-                  <div class="form-check form-switch mb-3">
-                    <input class="form-check-input" type="checkbox" name="dns_enabled" value="1"
-                           id="dns-enabled" <%= @dnsmasq_dns.value == '1' ? 'checked' : '' %>>
-                    <label class="form-check-label" for="dns-enabled">Enable Local DNS</label>
-                  </div>
-
-                  <p class="text-muted small">
-                    When enabled, your NAS resolves local hostnames (e.g. <code>mynas.local</code>)
-                    and forwards everything else to your upstream DNS.
+                  <p class="text-muted small mb-2">
+                    DNS is on its own page now: <a href="<%= dns_index_path %>">Network → DNS</a>.
                   </p>
                   <p class="text-muted small mb-0">
-                    DNS aliases configured in the <strong>DNS Aliases</strong> tab will be served by dnsmasq automatically.
+                    <% if @dns_on %>
+                      Devices that get an address here are given the NAS as their DNS server.
+                    <% else %>
+                      DNS is off, so devices that get an address here are given the router as their DNS server.
+                    <% end %>
                   </p>
                 </div>
               </div>
@@ -115,7 +112,7 @@
             <% if @dnsmasq_running %>
               <%= button_to "Stop dnsmasq", network_stop_dnsmasq_path,
                     method: :post, class: "btn btn-outline-danger",
-                    data: { confirm: "This will stop DHCP/DNS — devices on your network may lose connectivity. Continue?" } %>
+                    data: { confirm: "This will stop DHCP — devices on your network may lose connectivity. Continue?" } %>
             <% else %>
               <%= button_to "Start dnsmasq", network_start_dnsmasq_path,
                     method: :post, class: "btn btn-outline-success" %>

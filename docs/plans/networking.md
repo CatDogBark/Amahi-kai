@@ -1,6 +1,6 @@
 # Networking: modernized, private, and tested without losing the house's internet
 
-Status 2026-10-22: planned, nothing built yet. CatDogBark wants Amahi-kai's networking modernized
+Status 2026-10-22: planned; the island is built, and slice 1 (DNS) is under way. CatDogBark wants Amahi-kai's networking modernized
 for privacy and safety, carrying over what original Amahi users did with their home server: put it
 in front of the network. It ships in 1.0, DHCP included, once it passes the tests below.
 
@@ -31,13 +31,14 @@ in front of the network. It ships in 1.0, DHCP included, once it passes the test
   them. The list, with no account needed for any of them:
   - Quad9 (the default: Swiss, no logging, blocks known malware domains)
   - Cloudflare
-  - Mullvad DNS
   - AdGuard DNS (its public, unfiltered service)
   - DNS.SB
   - a custom one: its addresses and TLS name.
 
-  Each provider's IPv4 and IPv6 addresses and TLS name are checked against the provider's own
-  page when this is built, not written from memory.
+  Each provider's IPv4 and IPv6 addresses and TLS name were checked against the provider's own
+  page on 2026-10-22, and each answered over TLS on port 853 and validated DNSSEC in a test.
+  Mullvad DNS was on the list, but Mullvad shuts its public encrypted DNS down on 2026-11-02
+  (its help page says so, and it points people to Quad9).
 - **DNSSEC:** answers are checked, and forged ones refused.
 - **A cache**, so repeat lookups are fast and fewer leave the house.
 - **Local names:** `name.home.arpa` for the fixed hosts, the DNS aliases and, with DHCP on, every
@@ -101,8 +102,21 @@ in front of the network. It ships in 1.0, DHCP included, once it passes the test
 
 ## How it's built
 
-- **Packages:** `unbound` (and its `unbound-anchor` for DNSSEC), installed by the helper like the
-  others; dnsmasq stays as it is.
+- **Packages:** `unbound` and `dns-root-data` (DNSSEC's root key, which Ubuntu's Unbound copies
+  into place when it starts), installed by the helper like the others.
+- **The NAS's own lookups don't change:** it keeps asking the server it had (systemd-resolved, and
+  the router behind it). If Unbound ever breaks, the NAS can still reach the internet to update
+  itself. (Ubuntu's Unbound would register itself with `resolvconf`, but its hook stands down
+  when `resolvconf` is systemd's, as on Ubuntu 24.04.)
+- **Where Unbound listens:** the addresses of the chosen interface (its IPv4 addresses and its
+  ULA), Tailscale's when Tailscale is on, and the NAS's own `127.0.0.1` and `::1`, written as
+  addresses with `ip-freebind` so Unbound starts before the network is up. Not `0.0.0.0`:
+  systemd-resolved holds `127.0.0.53:53`. The NAS needs a fixed address for this anyway, since
+  every device is pointed at it.
+- **Who gets answers:** the subnets on the chosen interface (IPv4 and IPv6) and Tailscale's;
+  everyone else is refused. UFW lets in port 53 to the listening addresses only.
+- **dnsmasq answers no DNS any more** (`port=0`), from the first slice on. The test VM has no
+  dnsmasq (checked 2026-10-22); the NAS is checked before it takes the update.
 - **Through the helper:** every configuration file is written by the root helper and checked
   before it's installed (`unbound-checkconf`, `dnsmasq --test`), as dnsmasq's is today.
   Blocklists are downloaded by the helper over HTTPS, checked (size, syntax), and turned into
@@ -110,10 +124,24 @@ in front of the network. It ships in 1.0, DHCP included, once it passes the test
 - **Settings:** the mode, the provider, blocklists on and off, the chosen lists, the allowlist,
   the interface, and IPv6 advertising. The page is Setup → Network, reorganized around the three
   modes.
-- **New installs** start Off: the seeds' `dnsmasq_dns` and `dnsmasq_dhcp` become off. Existing
-  installs keep what they have.
-- **Migrating:** an install with dnsmasq's DNS on moves to Unbound, its DNS aliases and fixed hosts
-  carried over.
+- **New installs** start Off: the seeds' `dnsmasq_dhcp` becomes off, and `dns_mode` is off.
+- **Settings replaced:** the old DNS provider choice (`dns`, `dns_ip_1`, `dns_ip_2`) was saved
+  but never used by dnsmasq's config; it goes, and `dns_provider` takes its place.
+
+### Build order
+
+Each slice lands on `dev`, passes CI, and is tried on the island before the next starts.
+
+1. **DNS:** Unbound through the helper, the modes Off and "DNS for my network", the provider
+   list, DNSSEC, the cache, local names (the NAS, fixed hosts, DNS aliases), rebinding
+   protection, Firefox's canary, who gets answers, the firewall, and Network → DNS with a
+   working check. dnsmasq stops answering DNS.
+2. **DHCP:** the mode "DNS + DHCP", the DHCP settings moved onto the same page, the names
+   dnsmasq hands out written into Unbound, the check for another DHCP server, and the way back.
+3. **Blocklists:** the switch, the lists, the allowlist, pausing, the daily refresh.
+4. **IPv6:** the stable ULA, advertising the DNS server, and the check of what the network
+   advertises.
+5. **Totals:** lookups, blocked lookups and the cache's hit rate.
 
 ## Testing without losing the internet
 
@@ -131,9 +159,14 @@ network.
 2. **The test VM as the island's server:** a second network device on `vmbr9` with fixed addresses
    (netplan): `10.99.0.1/24` and `fd99::1/64`. Its first device stays on the LAN, for SSH and the
    encrypted lookups out.
-3. **A client VM:** a small Ubuntu or Alpine cloud image, its only network device on `vmbr9`. It
-   starts with no address.
-4. **Snapshots** of both before each run.
+3. **A client:** a Debian 13 container (512 MB), its only network device on `vmbr9`, set to DHCP
+   and SLAAC. It starts with no address; it's reached over SSH through the test VM, at its IPv6
+   link-local address, which needs no DHCP. It has no internet, so packages for the tests
+   (dnsmasq, radvd) are fetched on forge (also Debian 13) and copied in.
+4. **forge stays off the island:** the bridge has no address, and forge's own IPv6 is off on it
+   (`post-up sysctl -w net.ipv6.conf.vmbr9.disable_ipv6=1`), so router advertisements there can't
+   give forge an address or a route.
+5. **Snapshots** of both before each run.
 
 What to check there:
 

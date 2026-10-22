@@ -86,8 +86,11 @@ sudo -n /usr/local/sbin/amahi-helper users.set_password  # stdin: {"login":"ann"
 - Services: only the ones `lib/system_services.rb` gives actions to (`SERVICES` in the helper; a
   spec checks the two lists match), by key, never a unit name from the request.
 - dnsmasq can run scripts as root and read any file from its config, and the app writes its files
-  whole, so every line must match one the app generates (`DNSMASQ_LINES`, `DNS_ALIAS_LINES`), and
-  where dnsmasq is installed, `dnsmasq --test` must accept the file.
+  whole, so every line must match one the app generates (`DNSMASQ_LINES`), and where dnsmasq is
+  installed, `dnsmasq --test` must accept the file.
+- Unbound (Network → DNS, since 2026-10) likewise: every line of its config is a clause or an
+  option Amahi-kai writes, with a value it would write (`unbound_line?`), and
+  `unbound-checkconf` must accept the file.
 - Hostname: one DNS label (letters, digits, hyphens, at most 63). Swap: 1–8 GB at `/swapfile`, only
   when the file doesn't exist.
 
@@ -162,7 +165,7 @@ and `ShareFileSystem#clear_permissions` (`chmod -R a+rwx`, which nothing called)
 | `system.create_swap` {size_gb} | `SwapService` (setup wizard) | create `/swapfile` 600, `fallocate` (or `dd`), `mkswap`, `swapon`, one fstab line |
 | `network.set_hostname` {hostname} | `Platform.set_hostname!` (setup wizard) | `hostnamectl set-hostname` |
 | `network.write_dnsmasq_config` {content} | `DnsmasqService.write_config!` | checked lines, `dnsmasq --test`, atomic write to `/etc/dnsmasq.d/amahi.conf` |
-| `network.write_dns_aliases` {content} | `DnsAlias#regenerate_dnsmasq_config` | `address=` lines only, atomic write to `/etc/dnsmasq.d/amahi-aliases.conf` |
+| `network.write_dns_aliases` {content} | `DnsAlias#regenerate_dnsmasq_config` | `address=` lines only, atomic write to `/etc/dnsmasq.d/amahi-aliases.conf` (removed 2026-10: Unbound answers for aliases, through `dns.write_config`) |
 
 Removed sudoers rules (24): `systemctl start|stop|reload|enable|disable` for `smbd`/`nmbd`, all six
 `dnsmasq.service` rules, `hostnamectl set-hostname *`, the two `cp … /etc/dnsmasq.d/*` rules, and

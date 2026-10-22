@@ -1,5 +1,8 @@
-# Manages dnsmasq DHCP/DNS service lifecycle and configuration.
+# Manages dnsmasq's DHCP service lifecycle and configuration.
 # Extracted from NetworkController to keep the service handling out of controllers.
+#
+# dnsmasq answers no DNS (port=0): Unbound does that (DnsService, Network → DNS). It hands out
+# the NAS as the DNS server while Unbound is on, and the router while it's off.
 #
 # The root helper writes the config (network.write_dnsmasq_config, only lines this
 # module generates) and starts, stops and restarts the service (services.*).
@@ -24,9 +27,7 @@ module DnsmasqService
         dyn_hi: (Setting.get('dyn_hi') || '254').to_i,
         gateway: Setting.get('gateway') || '1',
         lease_time: (Setting.get('lease_time') || '14400').to_i,
-        domain: Setting.get('domain') || 'local',
-        dhcp_enabled: Setting.get('dnsmasq_dhcp') == '1',
-        dns_enabled: Setting.get('dnsmasq_dns') == '1'
+        dhcp_enabled: Setting.get('dnsmasq_dhcp') == '1'
       }
     end
 
@@ -57,37 +58,32 @@ module DnsmasqService
     end
 
     # Write dnsmasq config and restart if running.
-    # Options: net, dyn_lo, dyn_hi, gateway, lease_time, domain, dhcp_enabled, dns_enabled
+    # Options: net, dyn_lo, dyn_hi, gateway, lease_time, dhcp_enabled
     def write_config!(options = {})
       net = options[:net] || '192.168.1'
       dyn_lo = options[:dyn_lo].to_i
       dyn_hi = options[:dyn_hi].to_i
       gateway = options[:gateway] || '1'
       lease_time = options[:lease_time].to_i
-      domain = options[:domain] || 'local'
       dhcp_enabled = options[:dhcp_enabled]
-      dns_enabled = options[:dns_enabled]
 
       config_lines = [
         "# Amahi-kai dnsmasq configuration",
         "# Auto-generated — do not edit manually",
-        ""
+        "",
+        "port=0"
       ]
 
       if dhcp_enabled
         config_lines << "dhcp-range=#{net}.#{dyn_lo},#{net}.#{dyn_hi},#{lease_time}s"
         config_lines << "dhcp-option=option:router,#{net}.#{gateway}"
+        config_lines << "dhcp-option=option:dns-server,#{dns_server(net, gateway)}"
+        config_lines << "domain=#{DnsService.domain}" if DnsService.on?
         config_lines << "dhcp-authoritative"
         # Static addresses (Network → Hosts): this MAC always gets this address and name.
         Host.order(:name).each do |host|
           config_lines << "dhcp-host=#{host.mac.downcase},#{net}.#{host.address},#{host.name.downcase}"
         end
-      end
-
-      if dns_enabled
-        config_lines << "local=/#{domain}/"
-        config_lines << "expand-hosts"
-        config_lines << "domain=#{domain}"
       end
 
       config_lines << "bind-interfaces"
@@ -99,6 +95,11 @@ module DnsmasqService
     end
 
     private
+
+    # The NAS while its DNS is on (and it has an address on DNS's interface), else the router.
+    def dns_server(net, gateway)
+      (DnsService.on? && DnsService.server_addresses.first) || "#{net}.#{gateway}"
+    end
 
     def privileged(operation)
       Privileged.call(operation, service: 'dnsmasq')

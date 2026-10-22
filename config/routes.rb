@@ -22,8 +22,6 @@ Rails.application.routes.draw do
     get 'settings', action: 'settings'
     put 'update_lease_time', action: 'update_lease_time'
     put 'update_gateway', action: 'update_gateway'
-    put 'update_dns', action: 'update_dns'
-    put 'update_dns_ips', action: 'update_dns_ips'
     put 'toggle_setting/:id', action: 'toggle_setting', as: 'toggle_setting'
     put 'update_dhcp_range/:id', action: 'update_dhcp_range', as: 'update_dhcp_range'
     get 'gateway', action: 'gateway'
@@ -31,6 +29,13 @@ Rails.application.routes.draw do
     post 'start_dnsmasq', action: 'start_dnsmasq'
     post 'stop_dnsmasq', action: 'stop_dnsmasq'
     put 'update_dnsmasq_config', action: 'update_dnsmasq_config'
+  end
+
+  # Network → DNS (Unbound)
+  scope '/network/dns', controller: 'dns', as: 'dns' do
+    get '/', action: 'index', as: 'index'
+    put '/', action: 'update', as: 'update'
+    get 'install_stream', action: 'install_stream'
   end
 
   # Remote Access (Cloudflare Tunnel) — split from network
