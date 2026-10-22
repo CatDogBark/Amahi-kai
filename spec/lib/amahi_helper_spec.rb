@@ -977,7 +977,7 @@ RSpec.describe 'AmahiHelper' do
       helper.do_dnsmasq_config(dhcp_on('ens19'))
       expect(ran).to eq(['/usr/sbin/ufw allow in on ens19 to any port 67 proto udp', '/usr/bin/systemctl daemon-reload',
                          '/usr/bin/systemctl enable --now dhcp_names_path'])
-      expect(File.read(AmahiHelper::DHCP_NAMES_PATH)).to include('PathChanged=/var/lib/misc/dnsmasq.leases')
+      expect(File.read(AmahiHelper::DHCP_NAMES_PATH)).to include('PathModified=/var/lib/misc/dnsmasq.leases')
       expect(File.read(AmahiHelper::DHCP_NAMES_SERVICE)).to include('ExecStart=/usr/local/sbin/amahi-helper dns.sync_leases',
                                                                      'StandardInputText={}')
       expect(helper).to have_received(:do_sync_leases)

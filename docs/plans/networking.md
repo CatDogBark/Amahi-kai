@@ -131,7 +131,8 @@ in front of the network. It ships in 1.0, DHCP included, once it passes the test
 - **DHCP's network** is the chosen interface's /24 (DHCP refuses others), not the `net` setting:
   Samba's `hosts allow` reads `net`, so it isn't changed by picking an interface. Fixed hosts'
   addresses follow the same prefix.
-- **The names DHCP hands out:** a systemd path unit watches dnsmasq's lease file
+- **The names DHCP hands out:** a systemd path unit (`PathModified`: dnsmasq keeps the file open
+  and rewrites it in place, so `PathChanged` never fires) watches dnsmasq's lease file
   (`/var/lib/misc/dnsmasq.leases`; Amahi-kai's Ubuntu path pointed at a folder Ubuntu doesn't
   use) and runs the helper's `dns.sync_leases`. It writes the names to a second Unbound file and
   reloads Unbound with `reload_keep_cache`, only when the names change. Names are one label, on

@@ -71,14 +71,15 @@ module AmahiHelper
   UNBOUND_LEASES = '/etc/unbound/unbound.conf.d/amahi-kai-leases.conf'
   CA_CERTS = '/etc/ssl/certs/ca-certificates.crt'
   # While dnsmasq hands out addresses, systemd runs dns.sync_leases each time its lease file
-  # changes, so the devices' names answer in DNS.
+  # changes, so the devices' names answer in DNS. PathModified, not PathChanged: dnsmasq keeps
+  # the file open and rewrites it in place, so it's never closed after a write.
   DHCP_NAMES_PATH = '/etc/systemd/system/amahi-kai-dhcp-names.path'
   DHCP_NAMES_PATH_CONTENT = <<~UNIT
     [Unit]
     Description=Amahi-kai: DNS names for the devices DHCP gives addresses to
 
     [Path]
-    PathChanged=#{DNSMASQ_LEASES}
+    PathModified=#{DNSMASQ_LEASES}
 
     [Install]
     WantedBy=multi-user.target
