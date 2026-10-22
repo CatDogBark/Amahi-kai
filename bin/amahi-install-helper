@@ -5,6 +5,9 @@
 #   /usr/local/sbin/amahi-helper    from libexec/amahi-helper, root:root 0755
 #   /var/log/amahi-kai/helper.log   the helper's audit log, root:amahi 0640
 #   /etc/logrotate.d/amahi-kai      from config/logrotate-amahi-kai.conf
+#   /etc/systemd/system/amahi-kai.service          the web UI (enabled; bin/amahi-install and
+#                                                   bin/amahi-update start and restart it)
+#   /etc/systemd/system/amahi-kai-indexer.{service,timer}   the file search index, every 10 minutes
 #   /etc/systemd/system/amahi-kai-update.service   System Update's job
 #   /etc/systemd/system/amahi-kai-update-check.{service,timer}   the check for updates (Amahi-kai and its apps), every 6 hours
 #   /etc/systemd/system/amahi-kai-storage-check.{service,timer}  the storage health check, every 15 minutes
@@ -37,7 +40,8 @@ install -d -o root -g "$APP_GROUP" -m 0750 /var/log/amahi-kai
 if [[ -d /etc/logrotate.d ]]; then
   install -o root -g root -m 0644 "$APP_DIR/config/logrotate-amahi-kai.conf" /etc/logrotate.d/amahi-kai
 fi
-for unit in amahi-kai-update.service amahi-kai-update-check.service amahi-kai-update-check.timer \
+for unit in amahi-kai.service amahi-kai-indexer.service amahi-kai-indexer.timer \
+            amahi-kai-update.service amahi-kai-update-check.service amahi-kai-update-check.timer \
             amahi-kai-storage-check.service amahi-kai-storage-check.timer \
             amahi-kai-snapshots.service amahi-kai-snapshots.timer amahi-kai-app-firewall.service \
             amahi-kai-app-backups.service amahi-kai-app-backups.timer \
@@ -51,6 +55,12 @@ if [[ -e /etc/systemd/system/amahi-kai-catalog.timer ]]; then
 fi
 if [[ -d /run/systemd/system ]]; then
   systemctl daemon-reload
+  # Enabled for the next boot only: at an install the database isn't ready yet, and an update
+  # restarts the app itself once its code is in place.
+  systemctl enable amahi-kai.service >/dev/null 2>&1 \
+    || echo "Couldn't enable amahi-kai.service; Amahi-kai won't start at boot" >&2
+  systemctl enable amahi-kai-indexer.timer >/dev/null 2>&1 \
+    || echo "Couldn't enable amahi-kai-indexer.timer; file search won't see new files on its own" >&2
   systemctl enable --now amahi-kai-update-check.timer >/dev/null 2>&1 \
     || echo "Couldn't enable amahi-kai-update-check.timer; the web UI's Check now still works" >&2
   systemctl enable --now amahi-kai-storage-check.timer >/dev/null 2>&1 \

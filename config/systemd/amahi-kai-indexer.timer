@@ -1,0 +1,10 @@
+# Runs amahi-kai-indexer.service 2 minutes after boot, then every 10 minutes.
+[Unit]
+Description=Amahi-kai Share File Index Update (every 10 min)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=10min
+
+[Install]
+WantedBy=timers.target

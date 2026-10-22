@@ -11,7 +11,7 @@ end
 
 Setting.set('net', '192.168.1')
 Setting.set('self-address', '10')
-Setting.set('domain', 'amahi.net')
+Setting.set('domain', 'home.arpa') # the name kept for home networks (RFC 8375)
 
 # The admin's first password. bin/amahi-install makes a random one and passes it in a file
 # only the app user can read (AMAHI_FIRST_PASSWORD_FILE), never on a command line, and prints

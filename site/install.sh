@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # Amahi-kai installer — https://amahi-kai.com
 # Usage: curl -fsSL https://amahi-kai.com/install.sh | sudo bash
+# Options go after "bash -s --", e.g.: curl -fsSL https://amahi-kai.com/install.sh | sudo bash -s -- --headless
 set -euo pipefail
 
 REPO="https://github.com/CatDogBark/Amahi-kai.git"
 INSTALL_DIR="/opt/amahi-kai"
-BRANCH="main"
+# main is the release branch. AMAHI_BRANCH=dev installs the code in development, for testing:
+#   curl -fsSL https://amahi-kai.com/install.sh | sudo AMAHI_BRANCH=dev bash
+BRANCH="${AMAHI_BRANCH:-main}"
 
 echo ""
 echo "  🌊  Amahi-kai Installer"
@@ -23,8 +26,9 @@ if [ -f /etc/os-release ]; then
   . /etc/os-release
   echo "  OS: $PRETTY_NAME"
 else
-  echo "⚠️  Cannot detect OS. Amahi-kai supports Ubuntu 24.04+ and Debian 12+."
+  echo "⚠️  Cannot detect OS. Amahi-kai is made for Ubuntu 24.04."
 fi
+[ "$BRANCH" = main ] || echo "  Branch: $BRANCH"
 
 # Install git if missing
 if ! command -v git &>/dev/null; then
@@ -32,13 +36,14 @@ if ! command -v git &>/dev/null; then
   apt-get update -qq && apt-get install -y -qq git
 fi
 
-# Clone or update
+# Clone or update (git as root, without hooks from the checkout)
 if [ -d "$INSTALL_DIR/.git" ]; then
   echo "  Updating existing installation..."
-  git config --global --add safe.directory "$INSTALL_DIR"
+  git config --global --get-all safe.directory 2>/dev/null | grep -qxF "$INSTALL_DIR" \
+    || git config --global --add safe.directory "$INSTALL_DIR"
   cd "$INSTALL_DIR"
-  git fetch origin "$BRANCH"
-  git reset --hard "origin/$BRANCH"
+  git -c core.hooksPath=/dev/null fetch origin "$BRANCH"
+  git -c core.hooksPath=/dev/null checkout -q -f -B "$BRANCH" "origin/$BRANCH"
 else
   echo "  Cloning Amahi-kai..."
   git clone --branch "$BRANCH" "$REPO" "$INSTALL_DIR"
@@ -49,5 +54,6 @@ echo ""
 echo "  Running installer..."
 echo ""
 
-# Hand off to the full installer
-exec bin/amahi-install
+# Hand off to the full installer, which uses the code fetched here as it is.
+export AMAHI_CODE_FETCHED=1
+exec bin/amahi-install "$@"
