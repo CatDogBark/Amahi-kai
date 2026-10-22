@@ -21,37 +21,6 @@ describe "Network Controller", type: :request do
   describe "admin" do
     before { login_as_admin }
 
-    describe "PUT /network/update_dnsmasq_config" do
-      before { allow(DnsmasqService).to receive(:running?).and_return(false) }
-
-      it "saves the DHCP choice, so the form shows it next time; dnsmasq answers no DNS" do
-        put "/network/update_dnsmasq_config", params: { dhcp_enabled: '1', dyn_lo: '120' }
-        expect(Setting.get('dnsmasq_dhcp')).to eq('1')
-        content = Privileged.calls.find { |op, _| op == 'network.write_dnsmasq_config' }.last[:content]
-        expect(content).to include('port=0', 'dhcp-range=', '.120,')
-        expect(content).not_to include('expand-hosts')
-        expect(response).to redirect_to('/network/gateway')
-      end
-    end
-
-    describe "GET /network/install_dnsmasq_stream in production" do
-      before { allow(Rails.env).to receive(:production?).and_return(true) }
-
-      it "installs dnsmasq through the root helper and leaves it stopped until configured" do
-        allow(DnsmasqService).to receive(:stop!).and_return(true)
-        get "/network/install_dnsmasq_stream", headers: same_origin
-        expect(response.body).to include("dnsmasq installed successfully")
-        expect(Privileged.calls).to include(['packages.install', { packages: ['dnsmasq'] }])
-        expect(DnsmasqService).to have_received(:stop!)
-      end
-
-      it "streams the helper's reason when the install fails" do
-        allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('packages.install', 'apt-get exited 100: E: oops'))
-        get "/network/install_dnsmasq_stream", headers: same_origin
-        expect(response.body).to include("apt-get exited 100").and include("Installation failed")
-      end
-    end
-
     describe "GET /network (leases)" do
       it "shows the network page" do
         get "/network"
@@ -144,125 +113,12 @@ describe "Network Controller", type: :request do
       end
     end
 
-    describe "network settings" do
-      before do
-        Setting.create!(name: "advanced", value: "1", kind: 0)
-      end
-
-      it "shows settings page" do
-        get "/network/settings"
-        expect(response).to have_http_status(:ok)
-      end
-
-      it "redirects to index if not advanced" do
-        Setting.find_by(name: "advanced").update!(value: "0")
-        get "/network/settings"
-        expect(response).to redirect_to("/network")
-      end
+    it "sends the old Gateway and Settings pages to DNS & DHCP" do
+      get "/network/gateway"
+      expect(response).to redirect_to("/network/dns")
+      get "/network/settings"
+      expect(response).to redirect_to("/network/dns")
     end
-
-    describe "PUT /network/update_lease_time" do
-      it "updates lease time with valid value" do
-        put "/network/update_lease_time", params: { lease_time: "7200" }, as: :json
-        body = JSON.parse(response.body)
-        expect(body["status"]).to eq("ok")
-      end
-
-      it "rejects zero lease time" do
-        put "/network/update_lease_time", params: { lease_time: "0" }, as: :json
-        body = JSON.parse(response.body)
-        expect(body["status"]).to eq("not_acceptable")
-      end
-
-      it "rejects blank lease time" do
-        put "/network/update_lease_time", params: { lease_time: "" }, as: :json
-        body = JSON.parse(response.body)
-        expect(body["status"]).to eq("not_acceptable")
-      end
-
-      it "rejects negative lease time" do
-        put "/network/update_lease_time", params: { lease_time: "-100" }, as: :json
-        body = JSON.parse(response.body)
-        expect(body["status"]).to eq("not_acceptable")
-      end
-    end
-
-    describe "PUT /network/update_gateway" do
-      it "updates gateway with valid value" do
-        Setting.create!(name: "net", value: "192.168.1", kind: Setting::NETWORK) unless Setting.find_by(name: "net")
-        put "/network/update_gateway", params: { gateway: "1" }, as: :json
-        body = JSON.parse(response.body)
-        expect(body["status"]).to eq("ok")
-        expect(body["data"]).to include("192.168.1.1")
-      end
-
-      it "rejects out-of-range gateway (too high)" do
-        put "/network/update_gateway", params: { gateway: "300" }, as: :json
-        body = JSON.parse(response.body)
-        expect(body["status"]).to eq("not_acceptable")
-      end
-
-      it "rejects zero gateway" do
-        put "/network/update_gateway", params: { gateway: "0" }, as: :json
-        body = JSON.parse(response.body)
-        expect(body["status"]).to eq("not_acceptable")
-      end
-
-      it "rejects negative gateway" do
-        put "/network/update_gateway", params: { gateway: "-1" }, as: :json
-        body = JSON.parse(response.body)
-        expect(body["status"]).to eq("not_acceptable")
-      end
-    end
-
-    describe "PUT /network/toggle_setting/:id" do
-      it "toggles a network setting from 1 to 0" do
-        setting = Setting.create!(name: "dnsmasq_dhcp", value: "1", kind: Setting::NETWORK)
-        put "/network/toggle_setting/#{setting.id}", as: :json
-        expect(response).to have_http_status(:ok)
-        expect(setting.reload.value).to eq("0")
-      end
-
-      it "toggles a network setting from 0 to 1" do
-        setting = Setting.create!(name: "dnsmasq_dns", value: "0", kind: Setting::NETWORK)
-        put "/network/toggle_setting/#{setting.id}", as: :json
-        expect(response).to have_http_status(:ok)
-        expect(setting.reload.value).to eq("1")
-      end
-    end
-
-    describe "PUT /network/update_dhcp_range/:id" do
-      before do
-        Setting.create!(name: "dyn_lo", value: "100", kind: Setting::NETWORK)
-        Setting.create!(name: "dyn_hi", value: "254", kind: Setting::NETWORK)
-      end
-
-      it "updates min range" do
-        put "/network/update_dhcp_range/min", params: { id: "min", dyn_lo: "50" }, as: :json
-        body = JSON.parse(response.body)
-        expect(body["status"]).to eq("ok")
-      end
-
-      it "updates max range" do
-        put "/network/update_dhcp_range/max", params: { id: "max", dyn_hi: "240" }, as: :json
-        body = JSON.parse(response.body)
-        expect(body["status"]).to eq("ok")
-      end
-
-      it "rejects invalid range (too narrow)" do
-        put "/network/update_dhcp_range/min", params: { id: "min", dyn_lo: "250" }, as: :json
-        body = JSON.parse(response.body)
-        expect(body["status"]).to eq("not_acceptable")
-      end
-
-      it "rejects max range below min + IP_RANGE" do
-        put "/network/update_dhcp_range/max", params: { id: "max", dyn_hi: "105" }, as: :json
-        body = JSON.parse(response.body)
-        expect(body["status"]).to eq("not_acceptable")
-      end
-    end
-
-    # --- Remote Access (Cloudflare Tunnel) ---
 
     describe "GET /network/remote_access" do
       it "renders the remote access page" do

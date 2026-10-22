@@ -124,7 +124,7 @@
   disk_pool_copies: Extra copies
 
   # networking -> aliases
-  dns: DNS
+  dns_and_dhcp: DNS & DHCP
   dns_alias: DNS Alias
   dns_aliases: DNS Aliases
   new_dns_alias: New DNS Alias

@@ -16,7 +16,7 @@
 
 class DnsAlias < ApplicationRecord
 
-  # Unbound answers for the aliases (Network → DNS), so a change rewrites its local names.
+  # Unbound answers for the aliases (Network → DNS & DHCP), so a change rewrites its local names.
   after_commit :rewrite_dns
 
   scope :user_visible,->{where(["address != ?", ''])}

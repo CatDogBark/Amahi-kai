@@ -18,7 +18,7 @@ class Host < ApplicationRecord
 
   before_save :convert_address
   # dnsmasq hands out static addresses from its config, and Unbound answers for their names
-  # (Network → DNS), so a change rewrites both.
+  # (Network → DNS & DHCP), so a change rewrites both.
   after_commit :rewrite_dnsmasq_config, :rewrite_dns
 
   # A hostname label: at most 63 characters.

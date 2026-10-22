@@ -1,6 +1,6 @@
 require 'spec_helper'
 
-describe 'Network → DNS', type: :request do
+describe 'Network → DNS & DHCP', type: :request do
   let(:lan) { NetworkInterfaces::Address.new(ip: IPAddr.new('192.168.1.10'), prefix: 24) }
 
   before do
@@ -9,7 +9,7 @@ describe 'Network → DNS', type: :request do
     allow(NetworkInterfaces).to receive(:addresses).and_return([])
     allow(NetworkInterfaces).to receive(:addresses).with('ens18').and_return([lan])
     allow(DnsService).to receive(:running?).and_return(false)
-    allow(DnsmasqService).to receive(:rewrite_config!)
+    allow(DnsmasqService).to receive_messages(installed?: false, running?: false)
   end
 
   it 'is for admins only' do
@@ -21,7 +21,16 @@ describe 'Network → DNS', type: :request do
   end
 
   describe 'as an admin' do
-    before { login_as_admin }
+    before do
+      login_as_admin
+      Setting.set('advanced', '1')
+    end
+
+    it 'is in advanced mode only, like the rest of Network' do
+      Setting.set('advanced', '0')
+      get '/network/dns'
+      expect(response).to redirect_to('/network')
+    end
 
     it 'offers to install Unbound when it is not installed' do
       allow(DnsService).to receive(:installed?).and_return(false)
@@ -59,13 +68,13 @@ describe 'Network → DNS', type: :request do
       it 'turns DNS off' do
         Setting.set('dns_mode', 'dns')
         put '/network/dns', params: { mode: 'off', provider: 'quad9', interface: 'ens18' }
-        expect(flash[:notice]).to eq('DNS is off.')
+        expect(flash[:notice]).to eq('DNS and DHCP are off.')
         expect(Privileged.calls.map(&:first)).to eq(%w[services.disable dns.remove_config])
       end
 
       it 'refuses what it cannot use, and changes nothing' do
         mode = Setting.get('dns_mode')
-        [[{ mode: 'everything', provider: 'quad9', interface: 'ens18' }, 'Choose whether DNS is on'],
+        [[{ mode: 'everything', provider: 'quad9', interface: 'ens18' }, 'Choose Off, DNS for my network, or DNS + DHCP'],
          [{ mode: 'dns', provider: 'google', interface: 'ens18' }, 'Choose a provider'],
          [{ mode: 'dns', provider: 'custom', interface: 'ens18', custom_addresses: '', custom_tls_name: 'x.y' }, 'one to four addresses'],
          [{ mode: 'dns', provider: 'quad9', interface: 'eth9' }, 'Choose the network interface'],
@@ -83,6 +92,59 @@ describe 'Network → DNS', type: :request do
         expect(flash[:alert]).to include('Install Unbound first')
       end
 
+      describe 'with DHCP' do
+        let(:dhcp) { { mode: 'dns_dhcp', provider: 'quad9', interface: 'ens18', dhcp_first: '100', dhcp_last: '200', dhcp_router: '1', lease_time: '14400' } }
+
+        before do
+          allow(DnsmasqService).to receive(:installed?).and_return(true)
+          allow(DnsmasqService).to receive(:other_servers).with('ens18').and_return([])
+        end
+
+        it 'checks for another DHCP server, saves the range, and starts dnsmasq' do
+          put '/network/dns', params: dhcp
+          expect(flash[:notice]).to include('handing out addresses')
+          expect(DnsmasqService.settings).to eq(first: 100, last: 200, router: 1, lease_time: 14_400)
+          expect(Privileged.calls.map(&:first)).to eq(%w[dns.write_config services.enable network.write_dnsmasq_config services.enable])
+          expect(Privileged.calls[2].last[:content]).to include('interface=ens18', 'dhcp-range=192.168.1.100,192.168.1.200,14400s')
+        end
+
+        it 'refuses while another DHCP server answers, and says where' do
+          allow(DnsmasqService).to receive(:other_servers).with('ens18').and_return(['192.168.1.1'])
+          put '/network/dns', params: dhcp
+          expect(flash[:alert]).to include('Another DHCP server answers on ens18 (192.168.1.1)', 'Turn it off first')
+          expect(Privileged.calls).to be_empty
+        end
+
+        it "refuses when it can't check" do
+          allow(DnsmasqService).to receive(:other_servers).and_raise(Privileged::Error.new('dhcp.check_servers', 'Address already in use'))
+          put '/network/dns', params: dhcp
+          expect(flash[:alert]).to include("Couldn't check for another DHCP server", 'Address already in use')
+        end
+
+        it "refuses settings that don't fit, before asking the network" do
+          put '/network/dns', params: dhcp.merge(dhcp_first: '5', dhcp_last: '20')
+          expect(flash[:alert]).to include("takes in the NAS's own address (.10)")
+          expect(DnsmasqService).not_to have_received(:other_servers)
+        end
+
+        it 'needs dnsmasq, and a /24 network' do
+          allow(DnsmasqService).to receive(:installed?).and_return(false)
+          put '/network/dns', params: dhcp
+          expect(flash[:alert]).to include('Install dnsmasq first')
+          allow(DnsmasqService).to receive(:installed?).and_return(true)
+          allow(NetworkInterfaces).to receive(:lan).and_return('ens18' => [NetworkInterfaces::Address.new(ip: IPAddr.new('10.1.2.3'), prefix: 16)])
+          put '/network/dns', params: dhcp
+          expect(flash[:alert]).to include("DHCP needs ens18's network to be a /24")
+        end
+
+        it 'stops dnsmasq when DNS + DHCP is left' do
+          Setting.set('dns_mode', 'dns_dhcp')
+          put '/network/dns', params: dhcp.merge(mode: 'dns')
+          expect(Privileged.calls.map(&:first)).to eq(%w[dns.write_config services.enable network.write_dnsmasq_config services.disable])
+          expect(Privileged.calls[2].last[:content]).not_to include('dhcp-range')
+        end
+      end
+
       it "says so when the settings couldn't be applied" do
         allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('dns.write_config', 'unbound-checkconf rejected the config'))
         put '/network/dns', params: { mode: 'dns', provider: 'quad9', interface: 'ens18' }
@@ -98,6 +160,14 @@ describe 'Network → DNS', type: :request do
         expect(response.body).to include('Unbound installed')
         expect(Privileged.calls).to eq([['packages.install', { packages: %w[unbound dns-root-data] }],
                                         ['services.disable', { service: 'unbound' }]])
+      end
+
+      it "installs dnsmasq after writing its config, answering no DNS, and leaves it stopped outside DNS + DHCP" do
+        get '/network/dns/install_dnsmasq_stream', headers: same_origin
+        expect(response.body).to include('dnsmasq installed')
+        expect(Privileged.calls.map(&:first)).to eq(%w[network.write_dnsmasq_config packages.install services.disable])
+        expect(Privileged.calls.first.last[:content]).to include('port=0')
+        expect(Privileged.calls[1]).to eq(['packages.install', { packages: ['dnsmasq'] }])
       end
 
       it "streams the helper's reason when the install fails" do

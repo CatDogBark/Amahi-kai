@@ -1,11 +1,12 @@
 require 'rails_helper'
 
-# Network → DNS in a real browser: the (simulated) Unbound install, the custom server's fields
-# showing when its card is picked, and saving with DNS off.
-RSpec.describe 'DNS', type: :system do
+# Network → DNS & DHCP in a real browser: the (simulated) Unbound install, the custom server's
+# fields and the DHCP settings showing while they're picked, and saving with DNS off.
+RSpec.describe 'DNS & DHCP', type: :system do
   before do
+    Setting.set('advanced', '1')
     allow(DnsService).to receive(:installed?).and_return(false)
-    allow(DnsmasqService).to receive(:rewrite_config!)
+    allow(DnsmasqService).to receive_messages(installed?: false, running?: false)
   end
 
   it 'installs Unbound in its window' do
@@ -27,6 +28,23 @@ RSpec.describe 'DNS', type: :system do
     find('label.dns-choice', text: 'Quad9').click
     expect(page).to have_no_field('custom_tls_name')
     click_button 'Save'
-    expect(page).to have_text('DNS is off.')
+    expect(page).to have_text('DNS and DHCP are off.')
+  end
+
+  it 'shows the DHCP settings while DNS + DHCP is picked, and offers dnsmasq until it is installed' do
+    allow(DnsService).to receive(:installed?).and_return(true)
+    sign_in_as_admin
+    visit '/network/dns'
+    expect(page).to have_no_button('Install dnsmasq')
+    find('label.dns-choice', text: 'DNS + DHCP').click
+    expect(page).to have_button('Install dnsmasq')
+
+    allow(DnsmasqService).to receive(:installed?).and_return(true)
+    visit '/network/dns'
+    find('label.dns-choice', text: 'DNS + DHCP').click
+    expect(page).to have_field('dhcp_first', with: '100')
+    expect(page).to have_select('lease_time', selected: '4 hours')
+    find('label.dns-choice', text: 'DNS for my network').click
+    expect(page).to have_no_field('dhcp_first')
   end
 end

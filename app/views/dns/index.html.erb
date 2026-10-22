@@ -2,7 +2,7 @@
   <%# What it is and how it's doing %>
   <div class="card mb-4 mt-3" id="dns-status">
     <div class="card-header d-flex align-items-center justify-content-between">
-      <h5 class="mb-0"><%= lucide_icon('globe', size: 18) %> DNS for your network</h5>
+      <h5 class="mb-0"><%= lucide_icon('globe', size: 18) %> DNS and DHCP for your network</h5>
       <% if !@installed %>
         <span class="badge bg-secondary">Not installed</span>
       <% elsif @mode == 'off' %>
@@ -21,7 +21,8 @@
         into addresses. Devices ask the NAS, and it asks the provider you pick over an encrypted connection,
         so your internet provider can't read or change the answers. It checks answers with DNSSEC, remembers
         them so repeat lookups are fast, keeps no record of who looked up what, and gives the NAS and your
-        devices names like <code><%= @nas_name %></code>.
+        devices names like <code><%= @nas_name %></code>. It can also hand out addresses to your devices (DHCP),
+        in place of your router.
       </p>
 
       <% if !@installed %>
@@ -51,6 +52,17 @@
               <span class="text-danger">✗ No answer from <%= @provider == 'custom' ? 'your server' : DnsService::PROVIDERS.dig(@provider, :name) %>. Is the internet up? Try another provider.</span>
             <% end %>
           </dd>
+          <% if @mode == 'dns_dhcp' %>
+            <dt>Addresses</dt>
+            <dd>
+              <% if @dnsmasq_running %>
+                ✓ Handing out <%= @prefix %>.<%= @dhcp[:first] %> to <%= @prefix %>.<%= @dhcp[:last] %>;
+                <a href="<%= network_index_path %>"><%= pluralize(@leases.size, 'device') %></a> <%= @leases.size == 1 ? 'has' : 'have' %> one
+              <% else %>
+                <span class="text-danger">✗ dnsmasq isn't running, so devices can't get an address.</span>
+              <% end %>
+            </dd>
+          <% end %>
         </dl>
       <% end %>
     </div>
@@ -76,6 +88,48 @@
             <span class="dns-choice-title">DNS for my network <span class="badge bg-success ms-1">Recommended</span></span>
             <span class="dns-choice-text">The NAS answers DNS. Your router keeps handing out addresses; point its DNS setting at the NAS (below), or one device's.</span>
           </label>
+          <label class="dns-choice">
+            <input type="radio" name="mode" value="dns_dhcp" <%= 'checked' if @mode == 'dns_dhcp' %> <%= 'disabled' unless @installed %>>
+            <span class="dns-choice-title">DNS + DHCP <span class="badge bg-secondary ms-1">Advanced</span></span>
+            <span class="dns-choice-text">The NAS also hands out addresses, in place of your router. Turn your router's DHCP off first: the NAS won't start while another DHCP server answers.</span>
+          </label>
+        </div>
+
+        <%# Shown while DNS + DHCP is picked (dns.css) %>
+        <div class="dns-dhcp mb-4">
+          <h6>DHCP</h6>
+          <% if !@dnsmasq_installed %>
+            <p class="text-muted small">Handing out addresses needs dnsmasq, from Ubuntu. Installing it changes nothing on your network until you save with DNS + DHCP.</p>
+            <button type="button" class="btn btn-primary" data-call="openInstallTerminal" data-args='["dnsmasq"]'>Install dnsmasq</button>
+          <% else %>
+            <p class="text-muted small">On the interface's network, where the NAS is <%= @addresses.first || 'not yet' %>. Devices get the NAS as their DNS server, and <code><%= @domain %></code> as their domain. Fixed addresses for chosen devices are on <a href="<%= network_hosts_path %>">Network → Hosts</a>.</p>
+            <div class="row g-3 dns-dhcp-fields">
+              <div class="col-md-6">
+                <label class="form-label small" for="dhcp-first">Addresses handed out</label>
+                <div class="input-group">
+                  <span class="input-group-text"><%= @prefix %>.</span>
+                  <input type="number" class="form-control" id="dhcp-first" name="dhcp_first" value="<%= @dhcp[:first] %>" min="2" max="254">
+                  <span class="input-group-text">to <%= @prefix %>.</span>
+                  <input type="number" class="form-control" id="dhcp-last" name="dhcp_last" value="<%= @dhcp[:last] %>" min="2" max="254" aria-label="Last address">
+                </div>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label small" for="dhcp-router">Router</label>
+                <div class="input-group">
+                  <span class="input-group-text"><%= @prefix %>.</span>
+                  <input type="number" class="form-control" id="dhcp-router" name="dhcp_router" value="<%= @dhcp[:router] %>" min="1" max="254">
+                </div>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label small" for="dhcp-lease-time">Devices keep an address for</label>
+                <select class="form-select" id="dhcp-lease-time" name="lease_time">
+                  <% DnsmasqService::LEASE_TIMES.each do |label, seconds| %>
+                    <option value="<%= seconds %>" <%= 'selected' if seconds == @dhcp[:lease_time] %>><%= label %></option>
+                  <% end %>
+                </select>
+              </div>
+            </div>
+          <% end %>
         </div>
 
         <h6>Provider</h6>
@@ -125,15 +179,25 @@
     <div class="card-header"><h5 class="mb-0"><%= lucide_icon('help-circle', size: 18) %> Using it</h5></div>
     <div class="card-body">
       <% server = @addresses.first || 'the NAS\'s address' %>
+      <% if @mode == 'dns_dhcp' %>
+      <ol class="mb-3">
+        <li><strong>Your router's DHCP is off</strong> (the NAS checked before it started). Leave the router's own address as it is.</li>
+        <li><strong>Devices get an address from the NAS</strong> the next time they connect or renew. To hurry one along, turn its Wi-Fi off and on, or unplug its cable for a moment.</li>
+        <li><strong>Check it:</strong> the device shows up on <a href="<%= network_index_path %>">Network → Leases</a>, and answers by its name, like <code>laptop.<%= @domain %></code>.</li>
+      </ol>
+      <p class="text-muted small mb-2"><strong>The way back:</strong> turn your router's DHCP on again, then set this page to DNS for my network or Off. Devices move back to the router as they renew; turning their Wi-Fi off and on hurries them. While the NAS is off, devices can't get a new address.</p>
+      <% else %>
       <ol class="mb-3">
         <li><strong>Give the NAS a fixed address.</strong> In your router's DHCP settings, reserve <code><%= server %></code> for the NAS, so it never changes: every device will be pointed at it.</li>
         <li><strong>Point devices at it.</strong> For the whole house, set the DNS server in your router's settings to <code><%= server %></code> (often under Internet, WAN or DHCP). To try it first, set one computer's or phone's DNS server to <code><%= server %></code> by hand.</li>
         <li><strong>Check it:</strong> on that device, open a website, and look up <code><%= @nas_name %></code>.</li>
       </ol>
       <p class="text-muted small mb-2"><strong>The way back:</strong> set the router's DNS setting back to automatic (or the one device's back to automatic). While the NAS is off or restarting, the devices that use it can't look up names.</p>
+      <% end %>
       <p class="text-muted small mb-0"><strong>Firefox</strong> is told to use this DNS instead of its own encrypted DNS. Other browsers and devices with their own encrypted DNS turned on go around it.</p>
     </div>
   </div>
 </div>
 
 <%= render 'shared/install_terminal', id: 'unbound', title: 'Installing Unbound', stream_url: dns_install_stream_path %>
+<%= render 'shared/install_terminal', id: 'dnsmasq', title: 'Installing dnsmasq', stream_url: dns_install_dnsmasq_stream_path %>

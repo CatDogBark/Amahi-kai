@@ -1,8 +1,9 @@
-# Amahi-kai's DNS server (Network → DNS): Unbound, answering the LAN and Tailscale. Lookups go
+# Amahi-kai's DNS server (Network → DNS & DHCP): Unbound, answering the LAN and Tailscale. Lookups go
 # out over TLS to a provider the owner picks, answers are checked with DNSSEC, and the NAS, the
 # fixed hosts and the DNS aliases have local names. The root helper installs the config
 # (dns.write_config: only lines this module writes, checked with unbound-checkconf) and starts
-# and stops Unbound (services.*). docs/plans/networking.md has the design.
+# and stops Unbound (services.*). In the mode "DNS + DHCP", dnsmasq also hands out addresses
+# on the same interface (DnsmasqService). docs/plans/networking.md has the design.
 #
 # The NAS itself keeps asking the DNS server it had (systemd-resolved, and the router behind it):
 # if Unbound breaks, the NAS can still reach the internet to update itself.
@@ -15,7 +16,8 @@ module DnsService
   KIND = Setting::NETWORK
   UNBOUND = '/usr/sbin/unbound'
   PACKAGES = %w[unbound dns-root-data].freeze
-  MODES = %w[off dns].freeze
+  # Off; DNS for my network; DNS + DHCP.
+  MODES = %w[off dns dns_dhcp].freeze
   DEFAULT_DOMAIN = 'home.arpa'
   DEFAULT_PROVIDER = 'quad9'
   CA_CERTS = '/etc/ssl/certs/ca-certificates.crt'
@@ -65,6 +67,11 @@ module DnsService
       mode != 'off'
     end
 
+    # dnsmasq hands out addresses too.
+    def dhcp?
+      mode == 'dns_dhcp'
+    end
+
     # 'quad9', a key of PROVIDERS, or 'custom'.
     def provider
       value = Setting.get('dns_provider')
@@ -112,6 +119,18 @@ module DnsService
       NetworkInterfaces.addresses(interface.to_s).select(&:ipv4?).map(&:to_s)
     end
 
+    # The NAS's IPv4 address on the interface, when its network is a /24: the one DHCP's range
+    # and the fixed hosts' addresses are in. nil otherwise.
+    def lan_address
+      NetworkInterfaces.addresses(interface.to_s).find { |address| address.ipv4? && address.prefix == 24 }
+    end
+
+    # The first three parts of that address ("192.168.1"), or the net setting without one.
+    def lan_prefix
+      address = lan_address
+      address ? address.to_s.split('.').first(3).join('.') : Setting.get('net').to_s
+    end
+
     # The name local names end in: the domain setting, unless it's .local (mDNS's).
     def domain
       value = Setting.get('domain').to_s.downcase
@@ -121,7 +140,7 @@ module DnsService
     def config
       own = NetworkInterfaces.addresses(interface.to_s)
       tailscale = NetworkInterfaces.addresses(NetworkInterfaces::TAILSCALE)
-      lines = ['# Amahi-kai DNS (Network → DNS): written by Amahi-kai, changes here are lost', 'server:']
+      lines = ['# Amahi-kai DNS (Network → DNS & DHCP): written by Amahi-kai, changes here are lost', 'server:']
       lines.concat(listening(own, tailscale).map { |address| "  interface: #{address}" })
       lines << '  ip-freebind: yes'
       lines.concat(allowed(own, tailscale).map { |network| "  access-control: #{network} allow" })
@@ -139,9 +158,9 @@ module DnsService
       "#{lines.join("\n")}\n"
     end
 
-    # Writes the config and starts (or restarts) Unbound, or stops it and removes the config.
-    # dnsmasq hands out the NAS as the DNS server while DNS is on, the router while it's off.
-    # Raises Privileged::Error with the reason if the helper refuses or fails.
+    # Writes the config and starts (or restarts) Unbound, or stops it and removes the config;
+    # then dnsmasq starts handing out addresses, or stops. Raises Privileged::Error with the
+    # reason if the helper refuses or fails.
     def apply!
       if on?
         Privileged.call('dns.write_config', content: config)
@@ -150,7 +169,7 @@ module DnsService
         Privileged.call('services.disable', service: 'unbound')
         Privileged.call('dns.remove_config')
       end
-      DnsmasqService.rewrite_config!
+      DnsmasqService.apply!
     end
 
     # Rewrites the config for changes made elsewhere (fixed hosts, DNS aliases). Does nothing
@@ -206,7 +225,7 @@ module DnsService
         records[name] = [addresses, reverse]
       end
       add.call(hostname, nas, true)
-      net = Setting.get('net')
+      net = lan_prefix
       Host.order(:name).each { |host| add.call(host.name, ["#{net}.#{host.address}"], true) } if net.present?
       DnsAlias.order(:name).each do |entry|
         add.call(entry.name, entry.address.present? ? [entry.address.strip] : nas, false)

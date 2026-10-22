@@ -5,7 +5,7 @@
 - **OS:** Ubuntu 24.04 (Server)
 - **RAM:** 2GB minimum (4GB recommended)
 - **Disk:** 10GB+ for OS + app; additional storage for file shares
-- **Network:** Static IP recommended. Amahi-kai can also run DNS and DHCP for your LAN (optional, Network → DNS and Network → Gateway)
+- **Network:** Static IP recommended. Amahi-kai can also run DNS and DHCP for your LAN (optional, Network → DNS & DHCP)
 
 ## Install
 

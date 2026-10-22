@@ -126,7 +126,19 @@ in front of the network. It ships in 1.0, DHCP included, once it passes the test
 - **Settings:** the mode, the provider, blocklists on and off, the chosen lists, the allowlist,
   the interface, and IPv6 advertising. The page is Setup → Network, reorganized around the three
   modes.
-- **New installs** start Off: the seeds' `dnsmasq_dhcp` becomes off, and `dns_mode` is off.
+- **New installs** start Off (`dns_mode` off). DHCP is a mode now, so the `dnsmasq_dhcp` switch is
+  retired, and Network → Gateway and Network → Settings are folded into Network → DNS & DHCP.
+- **DHCP's network** is the chosen interface's /24 (DHCP refuses others), not the `net` setting:
+  Samba's `hosts allow` reads `net`, so it isn't changed by picking an interface. Fixed hosts'
+  addresses follow the same prefix.
+- **The names DHCP hands out:** a systemd path unit watches dnsmasq's lease file
+  (`/var/lib/misc/dnsmasq.leases`; Amahi-kai's Ubuntu path pointed at a folder Ubuntu doesn't
+  use) and runs the helper's `dns.sync_leases`. It writes the names to a second Unbound file and
+  reloads Unbound with `reload_keep_cache`, only when the names change. Names are one label, on
+  IPv4; the NAS, the fixed hosts and the aliases come first. dnsmasq runs no script.
+- **The check for another DHCP server:** the helper broadcasts a DHCPDISCOVER on the interface
+  (from its MAC, asking for broadcast replies) and listens 3 seconds for offers, leaving out the
+  NAS's own.
 - **Settings replaced:** the old DNS provider choice (`dns`, `dns_ip_1`, `dns_ip_2`) was saved
   but never used by dnsmasq's config; it goes, and `dns_provider` takes its place.
 

@@ -52,17 +52,14 @@ RSpec.describe DnsmasqService do
     end
   end
 
-  describe '.start!' do
-    it 'starts dnsmasq now and at boot' do
-      described_class.start!
-      expect(Privileged.calls).to eq([['services.enable', { service: 'dnsmasq' }]])
-    end
-  end
-
-  describe '.stop!' do
-    it 'stops dnsmasq now and at boot' do
-      described_class.stop!
-      expect(Privileged.calls).to eq([['services.disable', { service: 'dnsmasq' }]])
+  describe '.settings_problems' do
+    it 'wants a range of at least ten addresses, without the NAS, a router and a lease time from the list' do
+      expect(described_class.settings_problems(100, 200, 1, 14_400, 10)).to be_empty
+      expect(described_class.settings_problems(200, 100, 1, 14_400, 10)).to include(/from 2 to 254/)
+      expect(described_class.settings_problems(100, 105, 1, 14_400, 10)).to include(/at least 10 addresses/)
+      expect(described_class.settings_problems(2, 254, 1, 14_400, 10)).to include("The range takes in the NAS's own address (.10)")
+      expect(described_class.settings_problems(100, 200, 0, 14_400, 10)).to include(/router's address/)
+      expect(described_class.settings_problems(100, 200, 1, 99, 10)).to include('Choose a lease time')
     end
   end
 
@@ -73,63 +70,50 @@ RSpec.describe DnsmasqService do
       Privileged.calls.find { |op, _| op == 'network.write_dnsmasq_config' }&.last&.fetch(:content)
     end
 
-    it 'writes DHCP config when dhcp_enabled' do
-      described_class.write_config!(
-        net: '192.168.1', dyn_lo: 100, dyn_hi: 200,
-        gateway: '1', lease_time: 86400,
-        dhcp_enabled: true
-      )
+    let(:dhcp) { { net: '10.99.0', first: 100, last: 200, router: 1, lease_time: 86_400, interface: 'ens19', dhcp_enabled: true } }
 
-      expect(written).to include('dhcp-range=192.168.1.100,192.168.1.200,86400s')
-      expect(written).to include('dhcp-option=option:router,192.168.1.1')
-      expect(written).to include('dhcp-authoritative')
+    it 'hands out addresses on the interface DNS serves, and nowhere else' do
+      described_class.write_config!(dhcp)
+      expect(written.lines.map(&:strip)).to include('interface=ens19', 'bind-interfaces', 'dhcp-range=10.99.0.100,10.99.0.200,86400s',
+                                                    'dhcp-option=option:router,10.99.0.1', 'dhcp-authoritative')
+      expect(written).not_to include('except-interface')
     end
 
-    it 'answers no DNS: Unbound does (Network → DNS)' do
-      described_class.write_config!(dhcp_enabled: true)
+    it 'answers no DNS: Unbound does' do
+      described_class.write_config!(dhcp)
       expect(written.lines.map(&:strip)).to include('port=0')
       expect(written).not_to include('local=/', 'expand-hosts')
     end
 
-    it 'hands out the router as the DNS server while DNS is off' do
-      described_class.write_config!(net: '192.168.1', gateway: '1', dhcp_enabled: true)
-      expect(written).to include('dhcp-option=option:dns-server,192.168.1.1')
-      expect(written).not_to include('domain=')
+    it 'hands out the NAS as the DNS server, and its domain' do
+      allow(DnsService).to receive_messages(on?: true, server_addresses: ['10.99.0.1'], domain: 'home.arpa')
+      described_class.write_config!(dhcp)
+      expect(written).to include('dhcp-option=option:dns-server,10.99.0.1', 'domain=home.arpa')
     end
 
-    it 'hands out the NAS as the DNS server, and its domain, while DNS is on' do
-      allow(DnsService).to receive_messages(on?: true, server_addresses: ['192.168.1.10'], domain: 'home.arpa')
-      described_class.write_config!(net: '192.168.1', gateway: '1', dhcp_enabled: true)
-      expect(written).to include('dhcp-option=option:dns-server,192.168.1.10', 'domain=home.arpa')
-    end
-
-    it 'always includes bind-interfaces and except-interface' do
-      described_class.write_config!
-      expect(written).to include('bind-interfaces')
-      expect(written).to include('except-interface=lo')
+    it 'hands out nothing while DHCP is off' do
+      described_class.write_config!(dhcp.merge(dhcp_enabled: false))
+      expect(written.lines.map(&:strip)).to include('port=0', 'bind-interfaces', 'except-interface=lo')
+      expect(written).not_to include('dhcp-range', 'interface=ens19')
     end
 
     it 'gives each static host its address and name (Network → Hosts)' do
       allow(DnsmasqService).to receive(:rewrite_config!)
+      allow(DnsService).to receive(:rewrite!)
       Host.create!(name: 'Printer', mac: 'AA:BB:CC:DD:EE:01', address: '20')
-      described_class.write_config!(net: '10.0.0', dhcp_enabled: true)
-      expect(written).to include('dhcp-host=aa:bb:cc:dd:ee:01,10.0.0.20,printer')
-    end
-
-    it 'leaves static hosts out when DHCP is off' do
-      allow(DnsmasqService).to receive(:rewrite_config!)
-      Host.create!(name: 'printer', mac: 'aa:bb:cc:dd:ee:01', address: '20')
-      described_class.write_config!(dhcp_enabled: false)
-      expect(written).not_to include('dhcp-host')
+      described_class.write_config!(dhcp)
+      expect(written).to include('dhcp-host=aa:bb:cc:dd:ee:01,10.99.0.20,printer')
     end
 
     it 'writes only lines the root helper accepts' do
       allow(DnsmasqService).to receive(:rewrite_config!)
-      Host.create!(name: 'nas-backup', mac: 'aa:bb:cc:dd:ee:02', address: '21')
+      allow(DnsService).to receive(:rewrite!)
       allow(DnsService).to receive_messages(on?: true, server_addresses: ['10.0.0.2'], domain: 'home.lan')
-      described_class.write_config!(net: '10.0.0', dyn_lo: 50, dyn_hi: 99, gateway: '254', lease_time: 600,
-                                    dhcp_enabled: true)
+      Host.create!(name: 'nas-backup', mac: 'aa:bb:cc:dd:ee:02', address: '21')
+      described_class.write_config!(dhcp.merge(net: '10.0.0', first: 50, last: 99, router: 254, lease_time: 3600))
       Privileged.operations # loads libexec/amahi-helper
+      expect { AmahiHelper.dnsmasq_conf(written, AmahiHelper::DNSMASQ_LINES) }.not_to raise_error
+      described_class.write_config!(dhcp_enabled: false)
       expect { AmahiHelper.dnsmasq_conf(written, AmahiHelper::DNSMASQ_LINES) }.not_to raise_error
     end
 
@@ -139,34 +123,54 @@ RSpec.describe DnsmasqService do
       expect(Privileged.calls.map(&:first)).to eq(%w[network.write_dnsmasq_config services.restart])
     end
 
-    it 'does not restart if not running' do
-      described_class.write_config!
-      expect(Privileged.calls.map(&:first)).to eq(%w[network.write_dnsmasq_config])
-    end
-
     it "raises the helper's reason when the config is refused" do
       allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('network.write_dnsmasq_config', 'refused'))
       expect { described_class.write_config! }.to raise_error(Privileged::Error, 'refused')
     end
   end
 
-  describe '.rewrite_config!' do
-    before { allow(described_class).to receive(:running?).and_return(false) }
+  describe 'from the saved settings' do
+    before do
+      allow(described_class).to receive_messages(installed?: true, running?: false)
+      allow(DnsService).to receive_messages(lan_prefix: '10.99.0', interface: 'ens19')
+    end
+
+    def written
+      Privileged.calls.select { |op, _| op == 'network.write_dnsmasq_config' }.last.last[:content]
+    end
+
+    it "rewrites the config, handing out addresses only in DNS + DHCP" do
+      Setting.set('dyn_lo', '120')
+      Setting.set('dns_mode', 'dns')
+      expect(described_class.rewrite_config!).to be true
+      expect(written).not_to include('dhcp-range')
+      Setting.set('dns_mode', 'dns_dhcp')
+      described_class.rewrite_config!
+      expect(written).to include('dhcp-range=10.99.0.120,10.99.0.254,14400s', 'interface=ens19')
+    end
 
     it "does nothing when dnsmasq isn't installed" do
       allow(described_class).to receive(:installed?).and_return(false)
       expect(described_class.rewrite_config!).to be false
+      expect(described_class.apply!).to be false
       expect(Privileged.calls).to be_empty
     end
 
-    it 'writes the config from the saved settings' do
-      allow(described_class).to receive(:installed?).and_return(true)
-      Setting.set('dnsmasq_dhcp', '1')
-      Setting.set('dyn_lo', '120')
-      expect(described_class.rewrite_config!).to be true
-      content = Privileged.calls.find { |op, _| op == 'network.write_dnsmasq_config' }.last[:content]
-      expect(content).to include("dhcp-range=#{Setting.get('net')}.120,")
-      expect(content).not_to include('expand-hosts')
+    it 'starts dnsmasq in DNS + DHCP, and stops it otherwise' do
+      Setting.set('dns_mode', 'dns_dhcp')
+      described_class.apply!
+      expect(Privileged.calls.map(&:first)).to eq(%w[network.write_dnsmasq_config services.enable])
+      Privileged.calls.clear
+      Setting.set('dns_mode', 'dns')
+      described_class.apply!
+      expect(Privileged.calls.map(&:first)).to eq(%w[network.write_dnsmasq_config services.disable])
+    end
+  end
+
+  describe '.other_servers' do
+    it "asks the root helper, the way a device would" do
+      allow(Privileged).to receive(:call).with('dhcp.check_servers', interface: 'ens19').and_return('ok' => true, 'servers' => ['10.99.0.7'])
+      expect(described_class.other_servers('ens19')).to eq(['10.99.0.7'])
     end
   end
 end

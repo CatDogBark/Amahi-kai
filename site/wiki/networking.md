@@ -7,20 +7,28 @@ title: "Networking"
 
 Amahi-kai can be your network's DNS server, private and checked, with names for your devices,
 and it can hand out addresses (DHCP) in place of your router. Both are off until you turn them
-on, and both are in **Advanced mode** under the **Network** tab.
+on, on **Network → DNS & DHCP** in **Advanced mode**.
 
 ---
 
 ## Enabling Advanced Mode
 
-DNS, DNS aliases, the gateway, remote access and security are all Advanced mode features:
+DNS and DHCP, DNS aliases, remote access and security are all Advanced mode features:
 
 1. Go to **Settings** tab
 2. Toggle **Advanced mode** on
 
 ---
 
-## DNS (Network → DNS)
+## DNS (Network → DNS & DHCP)
+
+The page has three modes:
+
+1. **Off** (the default): nothing listens, and your router does DNS and DHCP as before.
+2. **DNS for my network** (recommended): the NAS answers DNS; your router keeps handing out
+   addresses.
+3. **DNS + DHCP** (advanced): the NAS also hands out addresses, in place of your router (see DHCP,
+   below).
 
 DNS turns names like `example.com` into addresses. Normally your router does it, by asking your
 internet provider, who can read (and sometimes change) every lookup. With Amahi-kai's DNS on:
@@ -50,8 +58,8 @@ All of them are free, need no account, encrypt the connection and check DNSSEC:
 
 ### Turning it on
 
-1. Go to **Network → DNS** and click **Install Unbound**. Installing changes nothing on your
-   network: DNS stays off.
+1. Go to **Network → DNS & DHCP** and click **Install Unbound**. Installing changes nothing on
+   your network: DNS stays off.
 2. Pick **DNS for my network**, a provider, and the network interface DNS should answer on (the
    one your LAN is on), then **Save**. The page shows whether it's answering, for local names
    and outside ones.
@@ -112,56 +120,44 @@ Static hosts give a device the same IP address and name every time. Manage them 
 - **MAC**: the device's MAC address
 - **Address**: the last part of the IP address to give it (the network part is filled in)
 
-The name answers in DNS (`printer.home.arpa`, and `printer`) while DNS is on. When Amahi-kai's
-gateway hands out addresses, the device always gets this one.
+The name answers in DNS (`printer.home.arpa`, and `printer`) while DNS is on. While the NAS hands
+out addresses (DNS + DHCP), the device always gets this one.
 
 ---
 
-## Gateway (DHCP with dnsmasq)
+## DHCP (DNS + DHCP)
 
-The gateway hands out addresses to the devices on your network, in place of your router's DHCP.
-This is optional; your router almost certainly does it already.
+In the mode **DNS + DHCP**, the NAS also hands out addresses to the devices on your network, in
+place of your router's DHCP. Your router almost certainly does this already, so it's optional:
+it puts the NAS in charge of the network, and gives every device a name in DNS.
 
-### Installing dnsmasq
+1. On **Network → DNS & DHCP**, pick **DNS + DHCP** and click **Install dnsmasq** (installing
+   changes nothing on your network).
+2. **Turn your router's DHCP off** in its own settings (often under LAN or DHCP). Leave the
+   router's own address as it is.
+3. Set the addresses to hand out (a range on the interface's network, at least 10 addresses, not
+   taking in the NAS's own), the router's address, and how long devices keep an address, then
+   **Save**. The NAS first checks the network for another DHCP server, the way a device would,
+   and won't start while one answers.
 
-1. Go to **Network → Gateway** (Advanced mode)
-2. Click **Install dnsmasq**
+Devices pick up an address from the NAS the next time they connect or renew; turning a device's
+Wi-Fi off and on hurries it along. Each one is given the NAS as its DNS server and `home.arpa` as
+its domain, and answers by the name it gives (`laptop.home.arpa`, and `laptop`). Fixed addresses
+for chosen devices are on **Network → Hosts**.
 
-After install, dnsmasq is **stopped and disabled**: it won't touch your network until you
-configure and start it.
+DHCP serves the interface DNS answers on, and nowhere else, and the firewall lets DHCP in on that
+interface only.
 
-### Configuring the Gateway
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| DHCP Enabled | No | Hand out addresses to devices |
-| Gateway IP | `.1` | The router's address (last part) |
-| DHCP Range Low | `.100` | First address it hands out |
-| DHCP Range High | `.254` | Last address it hands out |
-| Lease Time | 14400 seconds | How long a device keeps its address (4 hours) |
-
-Devices that get an address are given the NAS as their DNS server while Network → DNS is on, and
-your router while it's off. dnsmasq itself answers no DNS.
-
-> **Warning**: Running two DHCP servers on the same network causes conflicts. Turn your router's
-> DHCP off before starting Amahi-kai's gateway, and turn it back on if you stop the gateway.
-
-### Starting/Stopping dnsmasq
-
-Use the **Start** and **Stop** buttons on the Gateway page, or from the CLI:
-
-```bash
-sudo systemctl start dnsmasq
-sudo systemctl stop dnsmasq
-sudo systemctl status dnsmasq
-```
+**The way back:** turn your router's DHCP on again, then set the page to DNS for my network or
+Off. Devices move back to the router as they renew. While the NAS is off, devices can't get a new
+address.
 
 ---
 
 ## Network Leases
 
-The **Network** index page shows the devices that got an address from the gateway: each one's
-name, MAC address, IP address and when its lease runs out.
+The **Network** index page shows the devices that got an address from the NAS: each one's name,
+MAC address, IP address and when its lease runs out.
 
 ---
 
@@ -169,7 +165,7 @@ name, MAC address, IP address and when its lease runs out.
 
 ### Names don't resolve from a device
 
-1. Check **Network → DNS**: it should say **Answering**.
+1. Check **Network → DNS & DHCP**: it should say **Answering**.
 2. Check the device asks the NAS: on the device, `nslookup example.com <NAS address>` should
    answer. If it does but plain `nslookup example.com` doesn't use the NAS, the device (or the
    router) is still set to another DNS server.
@@ -186,9 +182,9 @@ sudo unbound-checkconf
 Don't turn off systemd-resolved's stub listener for this: Amahi-kai's DNS listens on the NAS's
 network addresses, not on `127.0.0.53`, so the two don't clash.
 
-### Devices don't get addresses from the gateway
+### Devices don't get addresses from the NAS
 
-- Check dnsmasq is running and DHCP is enabled
+- Check **Network → DNS & DHCP** is in DNS + DHCP, and says it's handing out addresses
 - Check the DHCP range doesn't overlap with static assignments
 - Make sure no other DHCP server is running (turn your router's DHCP off)
 - Check the lease file: `cat /var/lib/misc/dnsmasq.leases`

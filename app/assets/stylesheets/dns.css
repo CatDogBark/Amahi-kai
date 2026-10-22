@@ -1,5 +1,5 @@
-/* Network → DNS: the choices (DNS on or off, the provider) as cards to pick from, the custom
-   server's fields under its card, and the status facts. */
+/* Network → DNS & DHCP: the choices (the mode, the provider) as cards to pick from, the DHCP
+   settings and the custom server's fields shown while they're picked, and the status facts. */
 .dns-choices {
   display: grid;
   gap: 10px;
@@ -31,6 +31,11 @@
 
 .dns-choice-title { color: var(--kai-title); font-weight: 600; }
 .dns-choice-text { color: var(--kai-muted); font-size: 13px; }
+
+/* The DHCP settings show while DNS + DHCP is picked. */
+.dns-dhcp { display: none; }
+#dns-settings:has(input[name="mode"][value="dns_dhcp"]:checked) .dns-dhcp { display: block; }
+.dns-dhcp-fields .input-group-text { color: var(--kai-muted); }
 
 /* The custom server's fields show while its card is picked. */
 .dns-custom {

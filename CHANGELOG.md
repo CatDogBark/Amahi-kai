@@ -6,15 +6,17 @@ All notable changes to Amahi-kai are documented here.
 
 ### 🚀 Major Features
 
-- **DNS for your network, private and checked** (Network → DNS) — The NAS can be your network's DNS server, with Unbound. Devices ask the NAS, and it asks the provider you pick over an encrypted connection (DNS-over-TLS), so your internet provider can't read or change the answers. Every provider on the list is free and needs no account: Quad9 (the default), Cloudflare, AdGuard DNS (its unfiltered service), DNS.SB, or a server of your own. Answers are checked with DNSSEC, kept for fast repeat lookups, and still given through a short outage. No record is kept of which device looked up what.
+- **DNS for your network, private and checked** (Network → DNS & DHCP) — The NAS can be your network's DNS server, with Unbound. Devices ask the NAS, and it asks the provider you pick over an encrypted connection (DNS-over-TLS), so your internet provider can't read or change the answers. Every provider on the list is free and needs no account: Quad9 (the default), Cloudflare, AdGuard DNS (its unfiltered service), DNS.SB, or a server of your own. Answers are checked with DNSSEC, kept for fast repeat lookups, and still given through a short outage. No record is kept of which device looked up what.
   - **Local names:** the NAS, the fixed hosts (Network → Hosts) and the DNS aliases answer as `name.home.arpa` and as `name`.
   - **Safety:** it answers the devices on the network you choose, and Tailscale's, and refuses everyone else; the firewall lets DNS in to its addresses only. A public name that points at an address inside your network gets no answer (DNS rebinding). Firefox is told to use this DNS rather than its own.
   - **Off until you turn it on:** installing Unbound changes nothing; the page says how to point your router (or one device) at the NAS, and how to undo it. The NAS's own lookups don't go through it, so a problem with DNS can't stop the NAS from updating.
+- **DHCP on the same page** — In the mode DNS + DHCP, the NAS also hands out addresses, in place of your router. Before it starts, it checks the network for another DHCP server, the way a device would, and won't start while one answers. It serves the interface DNS answers on and nowhere else (the firewall lets DHCP in there only), hands out the NAS as the DNS server and `home.arpa` as the domain, and each device answers by its own name (`laptop.home.arpa`). The range, router and lease time are checked before they're saved, and the page shows how many devices have an address. Network → Gateway and Network → Settings are folded into it.
 
 ### 🔒 Security & Fixes
 
-- **dnsmasq answers no DNS any more** — Unbound does, on Network → DNS. dnsmasq still hands out addresses (Network → Gateway), and gives devices the NAS as their DNS server while DNS is on, the router while it's off. New installs start with DHCP off.
-- **The old DNS provider setting is gone** — Network → Settings let you pick Cloudflare, Google or your own servers, but nothing used the choice. Network → DNS replaces it.
+- **dnsmasq answers no DNS any more** — Unbound does. dnsmasq only hands out addresses, in the mode DNS + DHCP. New installs start with DNS and DHCP off.
+- **Network → Leases shows the leases** — It read dnsmasq's lease file from a folder Ubuntu doesn't use, so the list was always empty.
+- **The old DNS provider setting is gone** — Network → Settings let you pick Cloudflare, Google or your own servers, but nothing used the choice. Network → DNS & DHCP replaces it.
 - **DNS aliases must be IP addresses** (or blank, for the NAS itself); anything else is refused when it's saved.
 
 ## [0.9.1] — 2026-10-22

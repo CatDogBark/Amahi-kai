@@ -16,6 +16,7 @@ RSpec.describe DnsService do
     allow(described_class).to receive(:hostname).and_return('kai')
     allow(described_class).to receive(:rewrite!).and_call_original
     allow(DnsmasqService).to receive(:rewrite_config!)
+    allow(DnsmasqService).to receive(:apply!)
   end
 
   def lines = described_class.config.lines.map(&:strip)
@@ -104,6 +105,28 @@ RSpec.describe DnsService do
     end
   end
 
+  describe 'the modes' do
+    it 'are off, DNS, and DNS + DHCP; anything else is off' do
+      expect([described_class.mode, described_class.on?, described_class.dhcp?]).to eq(['off', false, false])
+      Setting.set('dns_mode', 'dns')
+      expect([described_class.on?, described_class.dhcp?]).to eq([true, false])
+      Setting.set('dns_mode', 'dns_dhcp')
+      expect([described_class.on?, described_class.dhcp?]).to eq([true, true])
+      Setting.set('dns_mode', 'everything')
+      expect(described_class.mode).to eq('off')
+    end
+  end
+
+  describe '.lan_prefix' do
+    it "is the network of the NAS's /24 address on the interface, else the net setting" do
+      expect(described_class.lan_prefix).to eq('192.168.1')
+      Setting.set('net', '10.0.0')
+      allow(NetworkInterfaces).to receive(:addresses).with('ens18')
+        .and_return([NetworkInterfaces::Address.new(ip: IPAddr.new('172.20.5.9'), prefix: 16)])
+      expect(described_class.lan_prefix).to eq('10.0.0')
+    end
+  end
+
   describe '.interface' do
     it "is the one chosen while it's there, else the one the default route leaves by" do
       expect(described_class.interface).to eq('ens18')
@@ -128,13 +151,13 @@ RSpec.describe DnsService do
   describe '.apply!' do
     before { allow(described_class).to receive(:installed?).and_return(true) }
 
-    it 'writes the config and starts Unbound when DNS is turned on, then rewrites dnsmasq' do
+    it 'writes the config and starts Unbound when DNS is turned on, then hands dnsmasq its part' do
       allow(described_class).to receive(:running?).and_return(false)
       Setting.set('dns_mode', 'dns')
       described_class.apply!
       expect(Privileged.calls.map(&:first)).to eq(%w[dns.write_config services.enable])
       expect(Privileged.calls.last).to eq(['services.enable', { service: 'unbound' }])
-      expect(DnsmasqService).to have_received(:rewrite_config!)
+      expect(DnsmasqService).to have_received(:apply!)
     end
 
     it 'restarts Unbound when it was running' do
@@ -148,7 +171,7 @@ RSpec.describe DnsService do
       Setting.set('dns_mode', 'off')
       described_class.apply!
       expect(Privileged.calls).to eq([['services.disable', { service: 'unbound' }], ['dns.remove_config', {}]])
-      expect(DnsmasqService).to have_received(:rewrite_config!)
+      expect(DnsmasqService).to have_received(:apply!)
     end
 
     it "does nothing to Unbound when it's off and not installed" do

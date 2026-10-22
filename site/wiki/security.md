@@ -46,7 +46,7 @@ Click **Fix All**, or a check's own **Fix** button. The progress streams as it r
 
 - **Firewall:** turns on UFW with Amahi-kai's rules: SSH, the web UI (3000), HTTPS and Samba,
   plus DHCP when Amahi-kai runs dnsmasq for your network, and DNS to the NAS's DNS addresses while
-  Network → DNS is on.
+  Network → DNS & DHCP is on.
 - **SSH:** turns off root login and password login. **Password login is only turned off once an
   account that can log in has an SSH key**, so the fix can't lock you out. Set up a key first
   (below).

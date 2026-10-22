@@ -61,11 +61,40 @@ module AmahiHelper
 
   DNSMASQ_CONF = '/etc/dnsmasq.d/amahi.conf'
   DNSMASQ = '/usr/sbin/dnsmasq'
+  DNSMASQ_LEASES = '/var/lib/misc/dnsmasq.leases'
   UNBOUND = '/usr/sbin/unbound'
   UNBOUND_CHECKCONF = '/usr/sbin/unbound-checkconf'
-  # Ubuntu's unbound.conf includes every unbound.conf.d/*.conf.
+  UNBOUND_CONTROL = '/usr/sbin/unbound-control'
+  # Ubuntu's unbound.conf includes every unbound.conf.d/*.conf: Amahi-kai's, and the names of
+  # the devices dnsmasq gave addresses to (do_sync_leases).
   UNBOUND_CONF = '/etc/unbound/unbound.conf.d/amahi-kai.conf'
+  UNBOUND_LEASES = '/etc/unbound/unbound.conf.d/amahi-kai-leases.conf'
   CA_CERTS = '/etc/ssl/certs/ca-certificates.crt'
+  # While dnsmasq hands out addresses, systemd runs dns.sync_leases each time its lease file
+  # changes, so the devices' names answer in DNS.
+  DHCP_NAMES_PATH = '/etc/systemd/system/amahi-kai-dhcp-names.path'
+  DHCP_NAMES_PATH_CONTENT = <<~UNIT
+    [Unit]
+    Description=Amahi-kai: DNS names for the devices DHCP gives addresses to
+
+    [Path]
+    PathChanged=#{DNSMASQ_LEASES}
+
+    [Install]
+    WantedBy=multi-user.target
+  UNIT
+  DHCP_NAMES_SERVICE = '/etc/systemd/system/amahi-kai-dhcp-names.service'
+  DHCP_NAMES_SERVICE_CONTENT = <<~UNIT
+    [Unit]
+    Description=Amahi-kai: DNS names for the devices DHCP gives addresses to
+
+    [Service]
+    Type=oneshot
+    ExecStart=/usr/local/sbin/amahi-helper dns.sync_leases
+    StandardInputText={}
+  UNIT
+  # How long to listen for another DHCP server's offer.
+  DHCP_WAIT = 3
 
   # The services Settings → Servers may control: the entries in lib/system_services.rb
   # that list actions (spec/lib/amahi_helper_spec.rb checks the two lists match).
@@ -387,11 +416,11 @@ module AmahiHelper
   APP_HEALTH_TIMEOUT = 300
 
   # The security audit's fixes. UFW lets in SSH, the web UI, HTTPS, Samba and mDNS (apps
-  # announced on the LAN), plus DHCP once Amahi-kai has configured dnsmasq. DNS gets in to
-  # Unbound's addresses only, by the rules dns.write_config adds (UFW keeps them while it's off).
+  # announced on the LAN). DNS gets in to Unbound's addresses only, and DHCP on dnsmasq's
+  # interface only, by the rules dns.write_config and network.write_dnsmasq_config add (UFW
+  # keeps them while it's off).
   UFW = '/usr/sbin/ufw'
   FIREWALL_PORTS = %w[22/tcp 3000/tcp 443/tcp 445/tcp 139/tcp 137:138/udp 5353/udp].freeze
-  DNSMASQ_PORTS = %w[67/udp].freeze
   # sshd uses the first value it reads for a setting, and sshd_config includes
   # sshd_config.d/*.conf first, in name order: 10-amahi-kai.conf comes before Ubuntu's
   # 50-cloud-init.conf.
@@ -598,11 +627,20 @@ module AmahiHelper
       validate: ->(a) { { hostname: hostname(a['hostname']) } },
       plan: ->(v) { [['/usr/bin/hostnamectl', 'set-hostname', v[:hostname]], [:install, HOSTS, hosts_naming(v[:hostname]), nil]] }
     },
-    # dnsmasq's DHCP and DNS settings (Network → Gateway), checked with dnsmasq --test.
+    # dnsmasq's DHCP settings (Network → DNS & DHCP), checked with dnsmasq --test. While it
+    # hands out addresses, UFW lets DHCP in on its interface, and the devices' names go to
+    # Unbound (dns.sync_leases).
     'network.write_dnsmasq_config' => {
       params: %w[content],
       validate: ->(a) { { content: dnsmasq_conf(a['content'], DNSMASQ_LINES) } },
-      plan: ->(v) { [[:install, DNSMASQ_CONF, v[:content], :dnsmasq]] }
+      plan: ->(v) { [[:dnsmasq_config, v[:content]]] }
+    },
+    # Another DHCP server answering on the interface (its addresses), before dnsmasq starts
+    # handing out addresses there. The NAS's own offers don't count.
+    'dhcp.check_servers' => {
+      params: %w[interface],
+      validate: ->(a) { { interface: network_interface(a['interface']) } },
+      plan: ->(v) { [[:dhcp_servers, v[:interface]]] }
     },
     # Unbound's config (Network → DNS): only lines Amahi-kai writes, checked with
     # unbound-checkconf. UFW lets DNS in to the addresses Unbound listens on.
@@ -616,6 +654,13 @@ module AmahiHelper
       params: [],
       validate: ->(_a) { {} },
       plan: ->(_v) { [[:dns_config, nil]] }
+    },
+    # The names of the devices dnsmasq gave addresses to, for Unbound. Run by systemd when the
+    # lease file changes (DHCP_NAMES_PATH).
+    'dns.sync_leases' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:sync_leases]] }
     },
     # ext4 on a data drive that isn't mounted. Never a drive the system runs from.
     'disks.format' => {
@@ -1181,10 +1226,9 @@ module AmahiHelper
     },
     'security.enable_firewall' => {
       params: [],
-      validate: ->(_a) { installed!(UFW) && { dnsmasq: File.exist?(DNSMASQ_CONF) } },
-      plan: lambda { |v|
-        ports = FIREWALL_PORTS + (v[:dnsmasq] ? DNSMASQ_PORTS : [])
-        [[UFW, 'default', 'deny', 'incoming'], *ports.map { |port| [UFW, 'allow', port] }, [UFW, '--force', 'enable']]
+      validate: ->(_a) { installed!(UFW) && {} },
+      plan: lambda { |_v|
+        [[UFW, 'default', 'deny', 'incoming'], *FIREWALL_PORTS.map { |port| [UFW, 'allow', port] }, [UFW, '--force', 'enable']]
       }
     },
     # Turns off SSH root login, or password login (only while an account that can log in
@@ -1259,7 +1303,8 @@ module AmahiHelper
     /\Abind-interfaces\z/,
     /\Aexcept-interface=lo\z/,
     /\Aport=0\z/,
-    /\Adhcp-option=option:dns-server,#{IPV4}\z/
+    /\Adhcp-option=option:dns-server,#{IPV4}\z/,
+    /\Ainterface=[A-Za-z0-9_.-]{1,15}\z/
   ].freeze
   # Greyhole runs as root and some of its settings run commands, so its config may only
   # hold the lines the app generates. Pool drives must be data drives under /mnt.
@@ -1474,6 +1519,14 @@ module AmahiHelper
     def hostname(value)
       value = string(value, 'hostname', max: 63)
       raise Refused, "hostname #{value.inspect} must be letters, digits and hyphens, not starting or ending with a hyphen" unless value.match?(/\A[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\z/i)
+      value
+    end
+
+    # A network interface this machine has, by name ("ens18").
+    def network_interface(value)
+      value = string(value, 'interface', max: 15)
+      raise Refused, "#{value.inspect} isn't a network interface here" unless value.match?(/\A[A-Za-z0-9_.-]{1,15}\z/) &&
+                                                                          File.exist?("/sys/class/net/#{value}")
       value
     end
 
@@ -2923,7 +2976,7 @@ module AmahiHelper
     # keeps the rules while it's off, for when it's turned on.
     def do_dns_config(content)
       before = File.exist?(UNBOUND_CONF) ? unbound_listening(File.read(UNBOUND_CONF)) : []
-      content ? do_install(UNBOUND_CONF, content, :unbound) : do_remove_files(UNBOUND_CONF)
+      content ? do_install(UNBOUND_CONF, content, :unbound) : do_remove_files(UNBOUND_CONF, UNBOUND_LEASES)
       after = content ? unbound_listening(content) : []
       return unless File.executable?(UFW)
       (before - after).each { |address| run_command([UFW, 'delete', 'allow', 'to', address, 'port', '53', { allow_failure: true }]) }
@@ -2932,6 +2985,143 @@ module AmahiHelper
         run_command([UFW, 'allow', 'to', address, 'port', '53', { allow_failure: address.include?(':') }])
       end
       notes.empty? ? nil : notes.join('; ')
+    end
+
+    # Installs dnsmasq's config. While it hands out addresses (a dhcp-range), UFW lets DHCP in on
+    # its interface and systemd watches its leases for names (DHCP_NAMES_PATH); otherwise the
+    # rule, the watch and the names go.
+    def do_dnsmasq_config(content)
+      before = File.exist?(DNSMASQ_CONF) ? dhcp_interface(File.read(DNSMASQ_CONF)) : nil
+      do_install(DNSMASQ_CONF, content, :dnsmasq)
+      after = dhcp_interface(content)
+      if File.executable?(UFW)
+        run_command([UFW, 'delete', 'allow', 'in', 'on', before, 'to', 'any', 'port', '67', 'proto', 'udp', { allow_failure: true }]) if before && before != after
+        run_command([UFW, 'allow', 'in', 'on', after, 'to', 'any', 'port', '67', 'proto', 'udp']) if after
+      end
+      after ? dhcp_names_on : dhcp_names_off
+    end
+
+    # The interface a dnsmasq config hands out addresses on, or nil when it hands out none.
+    def dhcp_interface(content)
+      return unless content.match?(/^dhcp-range=/)
+      content[/^interface=([A-Za-z0-9_.-]{1,15})$/, 1]
+    end
+
+    def dhcp_names_on
+      do_install(DHCP_NAMES_SERVICE, DHCP_NAMES_SERVICE_CONTENT, nil)
+      do_install(DHCP_NAMES_PATH, DHCP_NAMES_PATH_CONTENT, nil)
+      run_command(%w[/usr/bin/systemctl daemon-reload])
+      run_command(['/usr/bin/systemctl', 'enable', '--now', File.basename(DHCP_NAMES_PATH)])
+      do_sync_leases
+    end
+
+    def dhcp_names_off
+      if File.exist?(DHCP_NAMES_PATH)
+        run_command(['/usr/bin/systemctl', 'disable', '--now', File.basename(DHCP_NAMES_PATH), { allow_failure: true }])
+      end
+      return unless File.exist?(UNBOUND_LEASES)
+      do_remove_files(UNBOUND_LEASES)
+      unbound_reload
+    end
+
+    # The names of the devices dnsmasq gave addresses to, as Unbound's local data
+    # (UNBOUND_LEASES): name.<domain> and name, with reverse lookups. Only names that are one
+    # label (devices choose their own), on IPv4 addresses, and not one Amahi-kai's config
+    # already gives (the NAS, fixed hosts, DNS aliases). Written, and Unbound reloaded, only
+    # when they change.
+    def do_sync_leases
+      return 'DNS is off' unless File.exist?(UNBOUND_CONF)
+      config = File.read(UNBOUND_CONF)
+      domain = config[/^\s*local-zone: "(#{UNBOUND_NAME})" static$/o, 1] or return 'DNS has no local domain'
+      taken = config.scan(/^\s*local-data: "([a-z0-9-]+)\./).flatten
+      lines = ['# Names of the devices DHCP gave addresses to: written by Amahi-kai, changes here are lost', 'server:']
+      dhcp_leases.each do |address, name|
+        next if taken.include?(name)
+        taken << name
+        lines << %(  local-data: "#{name}.#{domain} IN A #{address}") << %(  local-data: "#{name}. IN A #{address}")
+        lines << %(  local-data-ptr: "#{address} #{name}.#{domain}")
+      end
+      content = "#{lines.join("\n")}\n"
+      return if File.exist?(UNBOUND_LEASES) && File.read(UNBOUND_LEASES) == content
+      do_install(UNBOUND_LEASES, content, :unbound)
+      unbound_reload
+    end
+
+    # [[address, name]] from dnsmasq's leases ("expiry mac address name client-id").
+    def dhcp_leases(path = DNSMASQ_LEASES)
+      return [] unless File.exist?(path)
+      File.foreach(path).filter_map do |line|
+        _expiry, _mac, address, name = line.split
+        name = name.to_s.downcase
+        [address, name] if name.match?(/\A[a-z][a-z0-9-]{0,62}\z/) && ip_address?(address.to_s, :ipv4?)
+      end
+    end
+
+    # Unbound reads its config again, keeping its cache. Nothing to do while it's stopped.
+    def unbound_reload
+      return unless run_command(['/usr/bin/systemctl', 'is-active', '--quiet', 'unbound', { allow_failure: true }]).nil?
+      run_command([UNBOUND_CONTROL, 'reload_keep_cache'])
+    end
+
+    # The addresses of the DHCP servers that offer this machine an address on +interface+,
+    # other than its own: a DHCPDISCOVER from the interface's MAC address, with the broadcast
+    # flag, and every offer for it in DHCP_WAIT seconds.
+    def do_dhcp_servers(interface)
+      own = Socket.getifaddrs.select { |i| i.name == interface && i.addr&.ipv4? }.map { |i| i.addr.ip_address }
+      mac = File.read("/sys/class/net/#{interface}/address").strip
+      xid = SecureRandom.random_number(2**32)
+      servers = []
+      Socket.open(:INET, :DGRAM) do |socket|
+        socket.setsockopt(:SOCKET, :REUSEADDR, true)
+        socket.setsockopt(:SOCKET, :BROADCAST, true)
+        socket.setsockopt(:SOCKET, :BINDTODEVICE, interface)
+        socket.bind(Addrinfo.udp('0.0.0.0', 68))
+        socket.send(dhcp_discover(xid, mac), 0, Addrinfo.udp('255.255.255.255', 67))
+        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + DHCP_WAIT
+        while (left = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)).positive?
+          break unless IO.select([socket], nil, nil, left)
+          data, sender = socket.recvfrom(1500)
+          server = dhcp_offer_from(data, xid, sender.ip_address)
+          servers << server if server && !own.include?(server)
+        end
+      end
+      { 'servers' => servers.uniq }
+    rescue SystemCallError => e
+      raise Failed, "couldn't look for other DHCP servers on #{interface}: #{e.message}"
+    end
+
+    # A DHCPDISCOVER (RFC 2131) from +mac+, asking for broadcast replies, padded to BOOTP's 300 bytes.
+    def dhcp_discover(xid, mac)
+      header = [1, 1, 6, 0, xid, 0, 0x8000, 0, 0, 0, 0].pack('CCCCNnnNNNN')
+      chaddr = [mac.delete(':')].pack('H12').ljust(16, "\0")
+      options = [0x63825363].pack('N') + [53, 1, 1, 55, 3, 1, 3, 6, 255].pack('C*')
+      (header + chaddr + ("\0" * 192) + options).ljust(300, "\0")
+    end
+
+    # The server's address when +data+ is a DHCPOFFER for +xid+ (its server identifier, or
+    # the address it came from), else nil.
+    def dhcp_offer_from(data, xid, sender)
+      data = data.b
+      return unless data.bytesize >= 244 && data.getbyte(0) == 2 && data[4, 4].unpack1('N') == xid &&
+                    data[236, 4].unpack1('N') == 0x63825363
+      options = dhcp_options(data.byteslice(240..))
+      return unless options[53] == "\x02".b
+      options[54]&.bytesize == 4 ? options[54].unpack('C4').join('.') : sender
+    end
+
+    def dhcp_options(bytes)
+      options = {}
+      i = 0
+      while i < bytes.bytesize
+        code = bytes.getbyte(i)
+        break if code == 255
+        i += 1
+        next if code.zero?
+        length = bytes.getbyte(i) or break
+        options[code] ||= bytes.byteslice(i + 1, length)
+        i += 1 + length
+      end
+      options
     end
 
     # The addresses an Unbound config listens on, other than the NAS's own (127.0.0.1, ::1).
