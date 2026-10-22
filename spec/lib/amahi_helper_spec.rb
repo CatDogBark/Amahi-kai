@@ -903,7 +903,7 @@ RSpec.describe 'AmahiHelper' do
 
       after { FileUtils.rm_rf(dir) }
 
-      def ufw_rules = ran.map { |argv| argv.drop(1).reject { |a| a.is_a?(Hash) }.join(' ') }
+      def ufw_rules = ran.select { |argv| argv.first == AmahiHelper::UFW }.map { |argv| argv.drop(1).reject { |a| a.is_a?(Hash) }.join(' ') }
 
       it 'lets DNS in to the addresses Unbound listens on, and no longer to those it stopped listening on' do
         helper.do_dns_config("server:\n  interface: 127.0.0.1\n  interface: ::1\n  interface: 10.99.0.1\n  interface: fd99::1\n")
@@ -1070,6 +1070,147 @@ RSpec.describe 'AmahiHelper' do
         expect(helper.dhcp_offer_from(offer([53, 1, 5, 255]), 0x12345678, 'x')).to be_nil # an ACK
         expect(helper.dhcp_offer_from(discover, 0x12345678, 'x')).to be_nil
         expect(helper.dhcp_offer_from('short', 0x12345678, 'x')).to be_nil
+      end
+    end
+  end
+
+  # Network → DNS & DHCP's blocking: the lists chosen, downloaded daily and made into Unbound's
+  # blocklist (each domain answers 0.0.0.0, with its subdomains), the allowlist, and pausing.
+  describe 'DNS blocklists (Network → DNS & DHCP)' do
+    let(:dir) { Dir.mktmpdir }
+    let(:ran) { [] }
+    let(:blocklist) { File.read(AmahiHelper::UNBOUND_BLOCKLIST) }
+    let(:lists) do
+      { 'hagezi-normal' => "# HaGeZi\nads.example.com\ndeep.ads.example.com\nexample.net\nsub.example.net\n*.wild.example.org\n" \
+                           "track.example.com # a note\nBAD LINE\n1.2.3.4\nlocalhost\nnas.home.arpa\nuse-application-dns.net\n",
+        'hagezi-tif-mini' => "malware.example\nads.example.com\nphish.example.com.\n" }
+    end
+
+    before do
+      stub_const('AmahiHelper::BLOCKLIST_DIR', dir)
+      stub_const('AmahiHelper::BLOCKLIST_CHOSEN', "#{dir}/chosen.json")
+      stub_const('AmahiHelper::BLOCKLIST_STATUS', "#{dir}/status.json")
+      stub_const('AmahiHelper::BLOCKLIST_PAUSED', "#{dir}/blocklist.paused")
+      stub_const('AmahiHelper::BLOCKLIST_SERVICE', "#{dir}/amahi-kai-blocklists.service")
+      stub_const('AmahiHelper::BLOCKLIST_TIMER', "#{dir}/amahi-kai-blocklists.timer")
+      stub_const('AmahiHelper::UNBOUND_BLOCKLIST', "#{dir}/amahi-kai-blocklist.conf")
+      stub_const('AmahiHelper::UNBOUND_CONF', "#{dir}/amahi-kai.conf")
+      File.write(AmahiHelper::UNBOUND_CONF, %(server:\n  local-zone: "home.arpa." static\n  local-zone: "use-application-dns.net." always_nxdomain\n))
+      allow(helper).to receive(:check_unbound_conf)
+      allow(helper).to receive(:run_command) { |argv| ran << argv.reject { |a| a.is_a?(Hash) }.join(' ') && nil }
+      allow(helper).to receive(:fetch_blocklist) { |key, copy| File.write(copy, lists.fetch(key)) && nil }
+    end
+
+    after { FileUtils.rm_rf(dir) }
+
+    def choose(lists, allow = []) = File.write(AmahiHelper::BLOCKLIST_CHOSEN, JSON.generate('lists' => lists, 'allow' => allow))
+
+    it 'takes only lists it knows, and domains for the allowlist' do
+      allow(helper).to receive(:installed!).and_call_original
+      allow(helper).to receive(:installed!).with(AmahiHelper::UNBOUND).and_return(true)
+      expect(steps('dns.set_blocklists', { 'lists' => %w[hagezi-normal], 'allow' => %w[example.com] }))
+        .to eq([[:set_blocklists, %w[hagezi-normal], %w[example.com]]])
+      [[%w[evil-list], []], [[], []], ['hagezi-normal', []], [%w[hagezi-normal], ['not a domain']], [%w[hagezi-normal], ['10.0.0.1']]].each do |lists, allow|
+        expect(refusal('dns.set_blocklists', { 'lists' => lists, 'allow' => allow })).not_to be_nil, [lists, allow].inspect
+      end
+      stub_const('AmahiHelper::ALLOWLIST_MAX', 1)
+      expect(refusal('dns.set_blocklists', { 'lists' => %w[hagezi-normal], 'allow' => %w[a.example b.example] })).to include('at most 1')
+    end
+
+    it 'saves the choice, sets the daily refresh, and starts one in the background' do
+      helper.do_set_blocklists(%w[hagezi-normal], %w[example.com])
+      expect(JSON.parse(File.read(AmahiHelper::BLOCKLIST_CHOSEN))).to eq('lists' => %w[hagezi-normal], 'allow' => %w[example.com])
+      expect(File.read(AmahiHelper::BLOCKLIST_TIMER)).to include('OnCalendar=*-*-* 04:00', 'Persistent=true')
+      expect(File.read(AmahiHelper::BLOCKLIST_SERVICE)).to include('ExecStart=/usr/local/sbin/amahi-helper dns.refresh_blocklists')
+      expect(ran).to eq(['/usr/bin/systemctl daemon-reload', '/usr/bin/systemctl enable --now amahi-kai-blocklists.timer',
+                         '/usr/bin/systemctl start --no-block amahi-kai-blocklists.service'])
+    end
+
+    it 'makes the blocklist: every domain once, the allowlist let through, its own zones left alone' do
+      choose(%w[hagezi-normal hagezi-tif-mini], %w[example.net home.arpa])
+      expect(helper.do_refresh_blocklists).to eq('blocked' => 6)
+      zones = blocklist.scan(/local-zone: "([^"]+)\." always_null/).flatten
+      # deep.ads.example.com is under ads.example.com; sub.example.net stays, listed itself
+      expect(zones).to eq(%w[ads.example.com malware.example phish.example.com sub.example.net track.example.com wild.example.org])
+      expect(blocklist).to include('local-zone: "example.net." transparent')
+      expect(blocklist).not_to include('home.arpa', 'use-application-dns', '1.2.3.4', 'localhost', 'deep.ads')
+      expect { helper.unbound_conf(blocklist.lines.grep_v(/always_null|transparent/).join) }.not_to raise_error
+      expect(helper).to have_received(:check_unbound_conf).with(AmahiHelper::UNBOUND_MAIN)
+      expect(ran.last).to eq("#{AmahiHelper::UNBOUND_CONTROL} reload_keep_cache")
+      status = JSON.parse(File.read(AmahiHelper::BLOCKLIST_STATUS))
+      expect(status['blocked']).to eq(6)
+      expect(status['lists']['hagezi-normal']['domains']).to eq(8) # the names it lists, before the others' and the allowlist
+      expect(File.stat(AmahiHelper::BLOCKLIST_STATUS).mode & 0o777).to eq(0o644)
+    end
+
+    it "keeps a list's last copy when it can't be downloaded, and says why" do
+      choose(%w[hagezi-tif-mini])
+      helper.do_refresh_blocklists
+      File.utime(Time.now - (2 * 86_400), Time.now - (2 * 86_400), "#{dir}/hagezi-tif-mini.txt")
+      allow(helper).to receive(:fetch_blocklist).and_return('curl exited 22: The requested URL returned error: 503')
+      helper.do_refresh_blocklists
+      list = JSON.parse(File.read(AmahiHelper::BLOCKLIST_STATUS))['lists']['hagezi-tif-mini']
+      expect(list).to include('domains' => 3, 'error' => 'curl exited 22: The requested URL returned error: 503')
+      expect(list['downloaded_at']).to be_a(Integer)
+    end
+
+    it "downloads a list again only once its copy is a day old" do
+      choose(%w[hagezi-tif-mini])
+      helper.do_refresh_blocklists
+      helper.do_refresh_blocklists
+      expect(helper).to have_received(:fetch_blocklist).once
+    end
+
+    it 'refuses more domains than fit, and keeps the blocklist it had when Unbound refuses the new one' do
+      choose(%w[hagezi-normal])
+      stub_const('AmahiHelper::BLOCKLIST_MAX_DOMAINS', 2)
+      expect { helper.do_refresh_blocklists }.to raise_error(AmahiHelper::Failed, /at most 2/)
+      stub_const('AmahiHelper::BLOCKLIST_MAX_DOMAINS', 1_000_000)
+      File.write(AmahiHelper::UNBOUND_BLOCKLIST, "server:\n")
+      allow(helper).to receive(:check_unbound_conf) { |path| raise AmahiHelper::Refused, 'duplicate local-zone' if path == AmahiHelper::UNBOUND_MAIN }
+      expect { helper.do_refresh_blocklists }.to raise_error(AmahiHelper::Refused, 'duplicate local-zone')
+      expect(blocklist).to eq("server:\n")
+    end
+
+    it "pauses: the blocklist leaves Unbound's config, and systemd brings it back after five minutes" do
+      choose(%w[hagezi-tif-mini])
+      helper.do_refresh_blocklists
+      ran.clear
+      expect(helper.do_pause_blocking['until']).to be_within(5).of(Time.now.to_i + 300)
+      expect(File.exist?(AmahiHelper::UNBOUND_BLOCKLIST)).to be false
+      expect(File.read(AmahiHelper::BLOCKLIST_PAUSED)).to include('malware.example')
+      expect(ran).to include('/usr/bin/systemd-run --unit=amahi-kai-dns-resume --on-active=300 --timer-property=AccuracySec=5s ' \
+                             '/usr/local/sbin/amahi-helper dns.resume_blocking')
+
+      helper.do_refresh_blocklists # a refresh while paused stays paused
+      expect(File.exist?(AmahiHelper::UNBOUND_BLOCKLIST)).to be false
+
+      helper.do_resume_blocking
+      expect(blocklist).to include('malware.example')
+      expect(File.exist?(AmahiHelper::BLOCKLIST_PAUSED)).to be false
+    end
+
+    it 'turns off, and goes when DNS does' do
+      choose(%w[hagezi-tif-mini])
+      helper.do_set_blocklists(%w[hagezi-tif-mini], [])
+      helper.do_refresh_blocklists
+      helper.do_blocking_off
+      expect(%w[UNBOUND_BLOCKLIST BLOCKLIST_CHOSEN BLOCKLIST_STATUS].map { |c| File.exist?(AmahiHelper.const_get(c)) }).to all(be false)
+      expect(ran).to include('/usr/bin/systemctl disable --now amahi-kai-blocklists.timer')
+
+      helper.do_set_blocklists(%w[hagezi-tif-mini], [])
+      helper.do_refresh_blocklists
+      allow(File).to receive(:executable?).and_call_original
+      allow(File).to receive(:executable?).with(AmahiHelper::UFW).and_return(false)
+      helper.do_dns_config(nil)
+      expect(File.exist?(AmahiHelper::UNBOUND_BLOCKLIST)).to be false
+    end
+
+    it 'reads a line of a list' do
+      { 'ads.example.com' => 'ads.example.com', '*.Wild.Example.org.' => 'wild.example.org', 'x.example.com # why' => 'x.example.com',
+        '# a comment' => nil, '' => nil, '10.0.0.1' => nil, 'localhost' => nil, 'localhost.localdomain' => nil,
+        '0.0.0.0 ads.example.com' => nil, 'under_score.example.com' => 'under_score.example.com' }.each do |line, name|
+        expect(helper.blocklist_domain(line)).to eq(name), line.inspect
       end
     end
   end

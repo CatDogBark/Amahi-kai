@@ -49,6 +49,33 @@ module DnsService
   # so it uses the house's DNS.
   FIREFOX_CANARY = 'use-application-dns.net'
 
+  # The blocklists to choose from: the root helper downloads them (its BLOCKLISTS has their
+  # addresses; a spec checks the keys match), every day, while blocking is on.
+  BLOCKLISTS = {
+    'hagezi-normal' => { name: 'HaGeZi Multi NORMAL', default: true,
+                         about: "Ads, trackers and malware. Made for networks nobody watches over: sites rarely break. About 170,000 domains." },
+    'hagezi-tif-mini' => { name: 'HaGeZi Threat Intelligence (mini)', default: true,
+                           about: 'Malware, phishing and scam sites, the most active ones. About 210,000 domains.' },
+    'hagezi-light' => { name: 'HaGeZi Multi LIGHT', default: false,
+                        about: 'The worst ads and trackers only; next to nothing breaks. About 70,000 domains.' },
+    'hagezi-pro' => { name: 'HaGeZi Multi PRO', default: false,
+                      about: 'Stricter than NORMAL: more trackers, and now and then a site needs the allowlist. About 210,000 domains.' },
+    'hagezi-tif-medium' => { name: 'HaGeZi Threat Intelligence (medium)', default: false,
+                             about: 'More malware, phishing and scam sites than mini: about 710,000 domains. With NORMAL, ' \
+                                    'Unbound needs about 370 MB of memory (about 160 MB with mini).' },
+    'oisd-small' => { name: 'OISD small', default: false,
+                      about: "Another project's list of the most common ads and trackers; rarely blocks too much. About 60,000 domains." },
+    'oisd-big' => { name: 'OISD big', default: false,
+                    about: "OISD's full list: ads, trackers, malware and phishing. It covers what HaGeZi NORMAL does, so pick one. " \
+                           'About 240,000 domains.' }
+  }.freeze
+  # What the helper found at its last refresh (root writes it; anyone may read it).
+  BLOCKLIST_STATUS = '/var/lib/amahi-kai-dns/status.json'
+  BLOCKLIST_SERVICE = 'amahi-kai-blocklists.service'
+  # A name the allowlist may hold (the helper's BLOCK_DOMAIN).
+  BLOCK_DOMAIN = /\A(?=.{4,253}\z)(?:[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]\z/
+  ALLOWLIST_MAX = 1000
+
   class << self
     def installed?
       File.exist?(UNBOUND)
@@ -158,13 +185,14 @@ module DnsService
       "#{lines.join("\n")}\n"
     end
 
-    # Writes the config and starts (or restarts) Unbound, or stops it and removes the config;
-    # then dnsmasq starts handing out addresses, or stops. Raises Privileged::Error with the
+    # Writes the config and starts (or restarts) Unbound with blocking as chosen, or stops it and
+    # removes the config (blocking too); then dnsmasq starts handing out addresses, or stops. Raises Privileged::Error with the
     # reason if the helper refuses or fails.
     def apply!
       if on?
         Privileged.call('dns.write_config', content: config)
         Privileged.call(running? ? 'services.restart' : 'services.enable', service: 'unbound')
+        apply_blocking!
       elsif installed?
         Privileged.call('services.disable', service: 'unbound')
         Privileged.call('dns.remove_config')
@@ -180,6 +208,61 @@ module DnsService
       Privileged.call('dns.write_config', content: config)
       Privileged.call('services.restart', service: 'unbound') if running?
       true
+    end
+
+    # Blocking, while DNS is on: the lists chosen and the allowlist go to the helper, which
+    # downloads the lists in the background; or blocking stops.
+    def apply_blocking!
+      if blocking?
+        Privileged.call('dns.set_blocklists', lists: blocklists, allow: allowlist)
+      else
+        Privileged.call('dns.blocking_off')
+      end
+    end
+
+    def blocking?
+      Setting.get('dns_blocking') == '1'
+    end
+
+    # The lists chosen; those ticked by default until a choice is saved.
+    def blocklists
+      saved = Setting.get('dns_blocklists')
+      return BLOCKLISTS.select { |_key, list| list[:default] }.keys if saved.nil?
+
+      saved.split & BLOCKLISTS.keys
+    end
+
+    def allowlist
+      Setting.get('dns_allowlist').to_s.split
+    end
+
+    # The allowlist from what was typed (a domain a line, or separated by spaces or commas; a
+    # leading "*." or a final dot is let go), and why it can't be used ([] when it can).
+    def parse_allowlist(text)
+      names = text.to_s.downcase.split(/[\s,]+/).map { |name| name.delete_prefix('*.').delete_suffix('.') }.reject(&:empty?).uniq
+      bad = names.grep_v(BLOCK_DOMAIN)
+      problems = []
+      problems << "#{bad.first(3).join(', ')} #{bad.one? ? "isn't a domain" : "aren't domains"}" if bad.any?
+      problems << "The allowlist holds at most #{ALLOWLIST_MAX} domains" if names.size > ALLOWLIST_MAX
+      [names, problems]
+    end
+
+    # The helper's last refresh: when, how many domains, and each list's count or error. nil
+    # before the first.
+    def blocking_status
+      JSON.parse(File.read(BLOCKLIST_STATUS))
+    rescue SystemCallError, JSON::ParserError
+      nil
+    end
+
+    def blocklists_refreshing?
+      Shell.output('systemctl', 'is-active', BLOCKLIST_SERVICE).strip == 'activating'
+    end
+
+    # When a pause ends, while blocking is paused; else nil.
+    def paused_until
+      time = Setting.get('dns_blocking_paused_until').to_i
+      Time.at(time) if time > Time.now.to_i
     end
 
     # Asks Unbound for the NAS's own name and for an outside one:

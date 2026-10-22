@@ -43,9 +43,10 @@ Setting.set('advanced', '1')
 Setting.set('theme', 'amahi-kai')
 Setting.set('guest-dashboard', '0')
 # DNS and DHCP start off: the router keeps doing both until they're turned on (Network → DNS &
-# DHCP). Quad9 is the DNS provider until another is picked.
+# DHCP). Quad9 is the DNS provider until another is picked; blocking is off until it's turned on.
 Setting.set('dns_mode', 'off', Setting::NETWORK)
 Setting.set('dns_provider', 'quad9', Setting::NETWORK)
+Setting.set('dns_blocking', '0', Setting::NETWORK)
 Setting.set('initialized', '1')
 Setting.set('workgroup', 'WORKGROUP')
 Setting.set('setup_completed', 'false')

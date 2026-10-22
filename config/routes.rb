@@ -28,6 +28,9 @@ Rails.application.routes.draw do
     put '/', action: 'update', as: 'update'
     get 'install_stream', action: 'install_stream'
     get 'install_dnsmasq_stream', action: 'install_dnsmasq_stream'
+    put 'blocking', action: 'update_blocking', as: 'update_blocking'
+    post 'pause_blocking', action: 'pause_blocking', as: 'pause_blocking'
+    post 'resume_blocking', action: 'resume_blocking', as: 'resume_blocking'
   end
   get '/network/gateway', to: redirect('/network/dns')
   get '/network/settings', to: redirect('/network/dns')

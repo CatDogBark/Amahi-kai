@@ -27,6 +27,12 @@ class DnsController < ApplicationController
     @custom_addresses = DnsService.custom_addresses.join(' ')
     @custom_tls_name = DnsService.custom_tls_name
     @check = DnsService.check if @running && DnsService.on?
+    @blocking = DnsService.blocking?
+    @blocklists = DnsService.blocklists
+    @allowlist = DnsService.allowlist
+    @blocking_status = DnsService.blocking_status
+    @refreshing = @blocking && DnsService.on? && DnsService.blocklists_refreshing?
+    @paused_until = DnsService.paused_until if @blocking
   end
 
   def update
@@ -58,6 +64,53 @@ class DnsController < ApplicationController
     redirect_to dns_index_path
   rescue Privileged::Error => e
     flash[:alert] = "Saved, but it couldn't be applied: #{e.message}"
+    redirect_to dns_index_path
+  end
+
+  # Network → DNS & DHCP's Blocking card: on or off, the lists and the allowlist. Applied now
+  # while DNS is on, else when it's turned on.
+  def update_blocking
+    on = params[:blocking] == '1'
+    lists = Array(params[:lists]).map(&:to_s) & DnsService::BLOCKLISTS.keys
+    allow, problems = DnsService.parse_allowlist(params[:allowlist])
+    problems << 'Choose at least one list' if on && lists.empty?
+    if problems.any?
+      flash[:alert] = "#{problems.join('. ')}."
+      return redirect_to dns_index_path
+    end
+
+    Setting.set('dns_blocking', on ? '1' : '0', KIND)
+    Setting.set('dns_blocklists', lists.join(' '), KIND)
+    Setting.set('dns_allowlist', allow.join("\n"), KIND)
+    Setting.set('dns_blocking_paused_until', '0', KIND) unless on
+    DnsService.apply_blocking! if DnsService.on? && DnsService.installed?
+    flash[:notice] = if !on then 'Blocking is off.'
+                     elsif DnsService.on? then "Saved. The lists are downloading; blocking starts when they're in."
+                     else 'Saved. Blocking starts when DNS is on.'
+                     end
+    redirect_to dns_index_path
+  rescue Privileged::Error => e
+    flash[:alert] = "Saved, but it couldn't be applied: #{e.message}"
+    redirect_to dns_index_path
+  end
+
+  def pause_blocking
+    reply = Privileged.call('dns.pause_blocking')
+    Setting.set('dns_blocking_paused_until', reply['until'].to_i.to_s, KIND)
+    flash[:notice] = "Blocking is paused until #{Time.at(reply['until'].to_i).strftime('%H:%M')}."
+    redirect_to dns_index_path
+  rescue Privileged::Error => e
+    flash[:alert] = "Couldn't pause blocking: #{e.message}"
+    redirect_to dns_index_path
+  end
+
+  def resume_blocking
+    Privileged.call('dns.resume_blocking')
+    Setting.set('dns_blocking_paused_until', '0', KIND)
+    flash[:notice] = 'Blocking is back on.'
+    redirect_to dns_index_path
+  rescue Privileged::Error => e
+    flash[:alert] = "Couldn't resume blocking: #{e.message}"
     redirect_to dns_index_path
   end
 

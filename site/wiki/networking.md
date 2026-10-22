@@ -86,11 +86,30 @@ NAS is off or restarting, the devices that use it can't look up names.
 - **The NAS's own lookups don't go through it:** the NAS keeps asking your router, so a problem
   with DNS can't stop it from updating.
 
+### Blocking ads, trackers and malware
+
+The **Blocking** card blocks ads, trackers and malware for every device that uses the NAS's DNS:
+a blocked name answers `0.0.0.0`, so what it would load never does, and the names under it are
+blocked too. It's off until you turn it on, and works while DNS is on.
+
+- **The lists** come from two open projects, HaGeZi and OISD (both GPL-3.0), and refresh every
+  day. Two are ticked: **HaGeZi Multi NORMAL** (ads, trackers and malware, made for networks
+  nobody watches over) and **HaGeZi Threat Intelligence (mini)** (malware, phishing and scams).
+  Together they block about 330,000 domains, which takes Unbound about 160 MB of memory. The
+  others are stricter, gentler, or bigger; the page says which.
+- **The allowlist** is for a site a list breaks: a domain there, and the names under it, get
+  through (unless a list blocks one of those names itself).
+- **Pause for 5 minutes** lets everything through for a while, then blocking comes back by
+  itself. Devices remember answers for a minute or two, so a change can take that long to show.
+- A list that can't be downloaded keeps its last copy, and the page says so.
+
 ### Generated configuration
 
 Amahi-kai writes `/etc/unbound/unbound.conf.d/amahi-kai.conf` through its root helper, which only
 accepts the lines Amahi-kai generates, and only after `unbound-checkconf` accepts the file.
-Changes made to it by hand are lost the next time it's written.
+Changes made to it by hand are lost the next time it's written. The blocklist is
+`amahi-kai-blocklist.conf` beside it, and the names of the devices DHCP gave addresses to are in
+`amahi-kai-leases.conf`.
 
 ---
 

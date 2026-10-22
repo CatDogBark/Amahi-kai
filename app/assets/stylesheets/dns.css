@@ -46,6 +46,14 @@
 .dns-providers:has(#dns-provider-custom:checked) .dns-custom { display: block; }
 
 .dns-interface { max-width: 480px; }
+.dns-allowlist { max-width: 480px; font-family: var(--bs-font-monospace); font-size: 13px; }
+
+.dns-blocking-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
 
 .dns-facts {
   display: grid;

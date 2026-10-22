@@ -174,6 +174,79 @@
     </div>
   </form>
 
+  <%# Blocking: on or off, its lists and allowlist, pausing %>
+  <div class="card mb-4" id="dns-blocking">
+    <div class="card-header d-flex align-items-center justify-content-between">
+      <h5 class="mb-0"><%= lucide_icon('shield', size: 18) %> Blocking</h5>
+      <% if !@blocking %>
+        <span class="badge bg-secondary">Off</span>
+      <% elsif @mode == 'off' %>
+        <span class="badge bg-secondary">Waits for DNS</span>
+      <% elsif @paused_until %>
+        <span class="badge bg-warning text-dark">Paused</span>
+      <% elsif @refreshing || @blocking_status.nil? %>
+        <span class="badge bg-info text-dark">Updating the lists</span>
+      <% else %>
+        <span class="badge bg-success">On</span>
+      <% end %>
+    </div>
+    <div class="card-body">
+      <p class="text-muted">
+        Blocks ads, trackers and malware for every device that uses the NAS's DNS: a blocked name answers
+        <code>0.0.0.0</code>, so what it would load never does. The lists come from the projects below and
+        refresh every day.
+      </p>
+
+      <% if @blocking && @mode != 'off' %>
+        <div class="dns-blocking-state mb-3">
+          <% if @paused_until %>
+            <span>Paused until <%= @paused_until.strftime('%H:%M') %>. Devices may take a minute to notice either way.</span>
+            <%= button_to 'Resume now', dns_resume_blocking_path, method: :post, class: 'btn btn-sm btn-primary', form_class: 'd-inline' %>
+          <% elsif @refreshing || @blocking_status.nil? %>
+            <span>Downloading the lists. This page shows what's blocked once they're in.</span>
+          <% else %>
+            <span>Blocking <strong><%= number_with_delimiter(@blocking_status['blocked'].to_i) %></strong> domains, from lists downloaded
+              <%= time_ago_in_words(Time.at(@blocking_status['refreshed_at'].to_i)) %> ago.</span>
+            <%= button_to 'Pause for 5 minutes', dns_pause_blocking_path, method: :post, class: 'btn btn-sm btn-outline-secondary', form_class: 'd-inline' %>
+          <% end %>
+        </div>
+        <% (@blocking_status&.dig('lists') || {}).each do |key, list| %>
+          <% next unless list['error'] %>
+          <p class="small text-warning mb-1">✗ <%= DnsService::BLOCKLISTS.dig(key, :name) || key %> couldn't be downloaded (<%= list['error'] %>)<%= ', so its last copy is used' if list['downloaded_at'] %>.</p>
+        <% end %>
+      <% elsif @blocking %>
+        <p class="small text-muted">Blocking works while DNS is on.</p>
+      <% end %>
+
+      <form action="<%= dns_update_blocking_path %>" method="post" id="dns-blocking-settings">
+        <input type="hidden" name="_method" value="put">
+        <input type="hidden" name="authenticity_token" value="<%= form_authenticity_token %>">
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" role="switch" name="blocking" value="1" id="dns-blocking-on" <%= 'checked' if @blocking %>>
+          <label class="form-check-label" for="dns-blocking-on">Block ads, trackers and malware</label>
+        </div>
+
+        <h6>Lists</h6>
+        <div class="dns-choices dns-lists mb-4">
+          <% DnsService::BLOCKLISTS.each do |key, list| %>
+            <label class="dns-choice">
+              <input type="checkbox" name="lists[]" value="<%= key %>" <%= 'checked' if @blocklists.include?(key) %>>
+              <span class="dns-choice-title"><%= list[:name] %><%= ' (recommended)' if list[:default] %></span>
+              <span class="dns-choice-text"><%= list[:about] %>
+                <% if (count = @blocking_status&.dig('lists', key, 'domains')) %> <%= number_with_delimiter(count) %> domains.<% end %></span>
+            </label>
+          <% end %>
+        </div>
+
+        <h6>Allowlist</h6>
+        <label class="form-label small text-muted" for="dns-allowlist">Domains never blocked, one a line: each one and the names under it get through, unless a list blocks one of those names itself. For a site a list breaks.</label>
+        <textarea class="form-control mb-3 dns-allowlist" id="dns-allowlist" name="allowlist" rows="4" placeholder="example.com"><%= @allowlist.join("\n") %></textarea>
+
+        <button type="submit" class="btn btn-primary">Save</button>
+      </form>
+    </div>
+  </div>
+
   <%# How devices start using it, and how to undo it %>
   <div class="card mb-4" id="dns-how">
     <div class="card-header"><h5 class="mb-0"><%= lucide_icon('help-circle', size: 18) %> Using it</h5></div>

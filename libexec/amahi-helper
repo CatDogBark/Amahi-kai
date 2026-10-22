@@ -98,6 +98,66 @@ module AmahiHelper
   # among them) pings an address for 3 seconds to see it's free before it offers it.
   DHCP_WAIT = 6
 
+  # DNS blocklists (Network → DNS & DHCP). BLOCKLISTS are the lists the NAS may download, by
+  # key; the app names and describes the same keys (DnsService::BLOCKLISTS, a spec checks they
+  # match). Each is a domain a line, "#" comments, and a domain covers its subdomains (HaGeZi's
+  # and OISD's wildcard formats without "*."), as Unbound's local-zone does. Checked against
+  # the projects' own pages 2026-10-22; both GPL-3.0, refreshed daily.
+  HAGEZI = 'https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard'
+  BLOCKLISTS = {
+    'hagezi-light' => { url: "#{HAGEZI}/light-onlydomains.txt" },
+    'hagezi-normal' => { url: "#{HAGEZI}/multi-onlydomains.txt" },
+    'hagezi-pro' => { url: "#{HAGEZI}/pro-onlydomains.txt" },
+    'hagezi-tif-mini' => { url: "#{HAGEZI}/tif.mini-onlydomains.txt" },
+    'hagezi-tif-medium' => { url: "#{HAGEZI}/tif.medium-onlydomains.txt" },
+    'oisd-small' => { url: 'https://small.oisd.nl/domainswild2' },
+    'oisd-big' => { url: 'https://big.oisd.nl/domainswild2' }
+  }.freeze
+  # Root's own folder: the lists chosen and the allowlist, the copies downloaded, the blocklist
+  # while blocking is paused, and the status the app reads. Not the app's: what's here becomes
+  # Unbound's config.
+  BLOCKLIST_DIR = '/var/lib/amahi-kai-dns'
+  BLOCKLIST_CHOSEN = "#{BLOCKLIST_DIR}/chosen.json".freeze
+  BLOCKLIST_STATUS = "#{BLOCKLIST_DIR}/status.json".freeze
+  BLOCKLIST_PAUSED = "#{BLOCKLIST_DIR}/blocklist.paused".freeze
+  UNBOUND_BLOCKLIST = '/etc/unbound/unbound.conf.d/amahi-kai-blocklist.conf'
+  UNBOUND_MAIN = '/etc/unbound/unbound.conf'
+  BLOCKLIST_MAX_BYTES = 64 * 1024 * 1024
+  # About 150 MB of Unbound's memory per 300,000 (measured on Unbound 1.19).
+  BLOCKLIST_MAX_DOMAINS = 1_000_000
+  # A copy downloaded less than this long ago isn't downloaded again.
+  BLOCKLIST_FRESH = 20 * 3600
+  ALLOWLIST_MAX = 1000
+  # A name a list may block: labels, then a top-level domain that isn't a number.
+  BLOCK_DOMAIN = /\A(?=.{4,253}\z)(?:[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]\z/
+  BLOCKLIST_SERVICE = '/etc/systemd/system/amahi-kai-blocklists.service'
+  BLOCKLIST_SERVICE_CONTENT = <<~UNIT
+    [Unit]
+    Description=Amahi-kai: refresh the DNS blocklists
+    Wants=network-online.target
+    After=network-online.target unbound.service
+
+    [Service]
+    Type=oneshot
+    ExecStart=/usr/local/sbin/amahi-helper dns.refresh_blocklists
+  UNIT
+  BLOCKLIST_TIMER = '/etc/systemd/system/amahi-kai-blocklists.timer'
+  BLOCKLIST_TIMER_CONTENT = <<~UNIT
+    [Unit]
+    Description=Amahi-kai: refresh the DNS blocklists every day
+
+    [Timer]
+    OnCalendar=*-*-* 04:00
+    RandomizedDelaySec=2h
+    Persistent=true
+
+    [Install]
+    WantedBy=timers.target
+  UNIT
+  # Pausing blocking: a transient systemd timer resumes it.
+  DNS_RESUME_UNIT = 'amahi-kai-dns-resume'
+  BLOCKING_PAUSE = 300
+
   # The services Settings → Servers may control: the entries in lib/system_services.rb
   # that list actions (spec/lib/amahi_helper_spec.rb checks the two lists match).
   SERVICES = {
@@ -663,6 +723,36 @@ module AmahiHelper
       params: [],
       validate: ->(_a) { {} },
       plan: ->(_v) { [[:sync_leases]] }
+    },
+    # Blocking on, with these lists (keys of BLOCKLISTS) and this allowlist: saved for the daily
+    # refresh (BLOCKLIST_TIMER), which also runs now, in the background.
+    'dns.set_blocklists' => {
+      params: %w[lists allow],
+      validate: ->(a) { installed!(UNBOUND) && { lists: blocklist_keys(a['lists']), allow: allowlist(a['allow']) } },
+      plan: ->(v) { [[:set_blocklists, v[:lists], v[:allow]]] }
+    },
+    'dns.blocking_off' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:blocking_off]] }
+    },
+    # Downloads the chosen lists that are due and rebuilds Unbound's blocklist. Run by
+    # BLOCKLIST_TIMER, and started by dns.set_blocklists.
+    'dns.refresh_blocklists' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:refresh_blocklists]] }
+    },
+    # Blocking stops for BLOCKING_PAUSE seconds, then systemd resumes it (dns.resume_blocking).
+    'dns.pause_blocking' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:pause_blocking]] }
+    },
+    'dns.resume_blocking' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:resume_blocking]] }
     },
     # ext4 on a data drive that isn't mounted. Never a drive the system runs from.
     'disks.format' => {
@@ -1522,6 +1612,22 @@ module AmahiHelper
       value = string(value, 'hostname', max: 63)
       raise Refused, "hostname #{value.inspect} must be letters, digits and hyphens, not starting or ending with a hyphen" unless value.match?(/\A[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\z/i)
       value
+    end
+
+    def blocklist_keys(value)
+      raise Refused, 'lists must be a list of blocklists' unless value.is_a?(Array) && value.all?(String) && value.any?
+      unknown = value - BLOCKLISTS.keys
+      raise Refused, "#{unknown.first.inspect} isn't a blocklist Amahi-kai knows" if unknown.any?
+      value.uniq
+    end
+
+    # Domains never blocked (Network → DNS & DHCP's allowlist).
+    def allowlist(value)
+      raise Refused, 'allow must be a list of domains' unless value.is_a?(Array) && value.all?(String)
+      raise Refused, "the allowlist holds at most #{ALLOWLIST_MAX} domains" if value.size > ALLOWLIST_MAX
+      bad = value.reject { |name| name.match?(BLOCK_DOMAIN) }
+      raise Refused, "#{bad.first.inspect} isn't a domain" if bad.any?
+      value.uniq
     end
 
     # A network interface this machine has, by name ("ens18").
@@ -2978,7 +3084,12 @@ module AmahiHelper
     # keeps the rules while it's off, for when it's turned on.
     def do_dns_config(content)
       before = File.exist?(UNBOUND_CONF) ? unbound_listening(File.read(UNBOUND_CONF)) : []
-      content ? do_install(UNBOUND_CONF, content, :unbound) : do_remove_files(UNBOUND_CONF, UNBOUND_LEASES)
+      if content
+        do_install(UNBOUND_CONF, content, :unbound)
+      else
+        do_remove_files(UNBOUND_CONF, UNBOUND_LEASES)
+        blocking_stop
+      end
       after = content ? unbound_listening(content) : []
       return unless File.executable?(UFW)
       (before - after).each { |address| run_command([UFW, 'delete', 'allow', 'to', address, 'port', '53', { allow_failure: true }]) }
@@ -3057,6 +3168,138 @@ module AmahiHelper
         name = name.to_s.downcase
         [address, name] if name.match?(/\A[a-z][a-z0-9-]{0,62}\z/) && ip_address?(address.to_s, :ipv4?)
       end
+    end
+
+    # Blocking on: the lists and allowlist saved, the daily refresh set, and a refresh now in
+    # the background (it can take a while to download), which the app sees in BLOCKLIST_STATUS.
+    def do_set_blocklists(lists, allow)
+      Dir.mkdir(BLOCKLIST_DIR, 0o755) unless File.directory?(BLOCKLIST_DIR)
+      do_install(BLOCKLIST_CHOSEN, "#{JSON.pretty_generate('lists' => lists, 'allow' => allow)}\n", nil)
+      do_install(BLOCKLIST_SERVICE, BLOCKLIST_SERVICE_CONTENT, nil)
+      do_install(BLOCKLIST_TIMER, BLOCKLIST_TIMER_CONTENT, nil)
+      run_command(%w[/usr/bin/systemctl daemon-reload])
+      run_command(['/usr/bin/systemctl', 'enable', '--now', File.basename(BLOCKLIST_TIMER)])
+      run_command(['/usr/bin/systemctl', 'start', '--no-block', File.basename(BLOCKLIST_SERVICE)])
+    end
+
+    def do_blocking_off
+      blocking_stop
+      do_remove_files(BLOCKLIST_CHOSEN, BLOCKLIST_STATUS)
+      unbound_reload
+    end
+
+    # The blocklist goes from Unbound, paused or not, with its daily refresh and any resume.
+    def blocking_stop
+      if File.exist?(BLOCKLIST_TIMER)
+        run_command(['/usr/bin/systemctl', 'disable', '--now', File.basename(BLOCKLIST_TIMER), { allow_failure: true }])
+      end
+      run_command(['/usr/bin/systemctl', 'stop', "#{DNS_RESUME_UNIT}.timer", { allow_failure: true }])
+      do_remove_files(UNBOUND_BLOCKLIST, BLOCKLIST_PAUSED)
+    end
+
+    # Downloads each chosen list that's due (a list that can't be downloaded keeps its last copy,
+    # and says why in BLOCKLIST_STATUS), and makes Unbound's blocklist from them: each domain
+    # answers 0.0.0.0 and ::, with its subdomains, except the allowlist's and Amahi-kai's own
+    # zones (the local domain, Firefox's canary). Written where it's paused, while it is.
+    def do_refresh_blocklists
+      chosen = read_json(BLOCKLIST_CHOSEN) or return 'blocking is off'
+      return 'DNS is off' unless File.exist?(UNBOUND_CONF)
+      own = File.read(UNBOUND_CONF).scan(/^\s*local-zone: "([^"]+)\." /).flatten
+      allow = Array(chosen['allow']).grep(BLOCK_DOMAIN).reject { |name| under?(name, own) }
+      status = { 'refreshed_at' => Time.now.to_i, 'lists' => {} }
+      domains = {}
+      (Array(chosen['lists']) & BLOCKLISTS.keys).each do |key|
+        copy = "#{BLOCKLIST_DIR}/#{key}.txt"
+        error = fetch_blocklist(key, copy) unless File.exist?(copy) && Time.now - File.mtime(copy) < BLOCKLIST_FRESH
+        count = 0
+        if File.exist?(copy)
+          File.foreach(copy) do |line|
+            name = blocklist_domain(line) or next
+            domains[name] = true
+            count += 1
+          end
+        end
+        status['lists'][key] = { 'domains' => count, 'downloaded_at' => (File.mtime(copy).to_i if File.exist?(copy)), 'error' => error }.compact
+      end
+      allow.each { |name| domains.delete(name) }
+      # A domain blocks the names under it, so those needn't be listed too.
+      blocked = domains.keys.reject { |name| under?(name, own) || parent_listed?(name, domains) }.sort
+      raise Failed, "the lists chosen block #{blocked.size} domains; at most #{BLOCKLIST_MAX_DOMAINS} fit" if blocked.size > BLOCKLIST_MAX_DOMAINS
+      lines = ['# DNS blocklist (Network → DNS & DHCP): written by Amahi-kai, changes here are lost', 'server:']
+      lines.concat(blocked.map { |name| %(  local-zone: "#{name}." always_null) })
+      lines.concat(allow.map { |name| %(  local-zone: "#{name}." transparent) })
+      content = "#{lines.join("\n")}\n"
+      File.exist?(BLOCKLIST_PAUSED) ? do_install(BLOCKLIST_PAUSED, content, nil) : install_blocklist(content)
+      do_install(BLOCKLIST_STATUS, "#{JSON.generate(status.merge('blocked' => blocked.size))}\n", nil, '0644')
+      { 'blocked' => blocked.size }
+    end
+
+    # Downloads a list over HTTPS to +copy+ (replacing it only once it's whole), or says why not.
+    def fetch_blocklist(key, copy)
+      download = "#{copy}.download"
+      run_command(['/usr/bin/curl', '-fsSL', '--proto', '=https', '--proto-redir', '=https', '--tlsv1.2', '--max-time', '180',
+                   '--max-filesize', BLOCKLIST_MAX_BYTES.to_s, '-o', download, BLOCKLISTS.fetch(key)[:url]])
+      raise Failed, 'the download was empty' if File.size(download).zero?
+      File.rename(download, copy)
+      nil
+    rescue Failed, SystemCallError => e
+      File.unlink(download) if File.exist?(download)
+      e.message
+    end
+
+    # The domain a list's line blocks, or nil (a comment, a blank, an address, a name that isn't one).
+    def blocklist_domain(line)
+      name = line.sub(/#.*/, '').strip.downcase.delete_prefix('*.').delete_suffix('.')
+      name if name.match?(BLOCK_DOMAIN) && name != 'localhost.localdomain'
+    end
+
+    def under?(name, zones)
+      zones.any? { |zone| name == zone || name.end_with?(".#{zone}") }
+    end
+
+    def parent_listed?(name, domains)
+      labels = name.split('.')
+      (1...(labels.size - 1)).any? { |i| domains.key?(labels.drop(i).join('.')) }
+    end
+
+    # Installs the blocklist, checked on its own and then with the whole of Unbound's config
+    # (a name twice is an error there); the one before stays if either check fails. Unbound
+    # then reloads, keeping its cache.
+    def install_blocklist(content)
+      previous = File.exist?(UNBOUND_BLOCKLIST) ? File.read(UNBOUND_BLOCKLIST) : nil
+      do_install(UNBOUND_BLOCKLIST, content, :unbound)
+      begin
+        check_unbound_conf(UNBOUND_MAIN)
+      rescue Refused
+        previous ? do_install(UNBOUND_BLOCKLIST, previous, nil) : do_remove_files(UNBOUND_BLOCKLIST)
+        raise
+      end
+      unbound_reload
+    end
+
+    # Blocking stops for BLOCKING_PAUSE seconds: the blocklist moves out of Unbound's config, and
+    # a transient systemd timer runs dns.resume_blocking (a new pause starts the time again).
+    def do_pause_blocking
+      return 'blocking is off' unless File.exist?(UNBOUND_BLOCKLIST) || File.exist?(BLOCKLIST_PAUSED)
+      if File.exist?(UNBOUND_BLOCKLIST)
+        do_install(BLOCKLIST_PAUSED, File.read(UNBOUND_BLOCKLIST), nil)
+        do_remove_files(UNBOUND_BLOCKLIST)
+        unbound_reload
+      end
+      run_command(['/usr/bin/systemctl', 'stop', "#{DNS_RESUME_UNIT}.timer", { allow_failure: true }])
+      run_command(['/usr/bin/systemctl', 'reset-failed', "#{DNS_RESUME_UNIT}.service", { allow_failure: true }])
+      run_command(['/usr/bin/systemd-run', "--unit=#{DNS_RESUME_UNIT}", "--on-active=#{BLOCKING_PAUSE}",
+                   '--timer-property=AccuracySec=5s', '/usr/local/sbin/amahi-helper', 'dns.resume_blocking'])
+      { 'until' => Time.now.to_i + BLOCKING_PAUSE }
+    end
+
+    def do_resume_blocking
+      if File.exist?(BLOCKLIST_PAUSED)
+        install_blocklist(File.read(BLOCKLIST_PAUSED))
+        do_remove_files(BLOCKLIST_PAUSED)
+      end
+      run_command(['/usr/bin/systemctl', 'stop', "#{DNS_RESUME_UNIT}.timer", { allow_failure: true }])
+      nil
     end
 
     # Unbound reads its config again, keeping its cache. Nothing to do while it's stopped.

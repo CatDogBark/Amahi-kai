@@ -1,7 +1,8 @@
 require 'rails_helper'
 
 # Network → DNS & DHCP in a real browser: the (simulated) Unbound install, the custom server's
-# fields and the DHCP settings showing while they're picked, and saving with DNS off.
+# fields and the DHCP settings showing while they're picked, blocking's lists, and saving with
+# DNS off.
 RSpec.describe 'DNS & DHCP', type: :system do
   before do
     Setting.set('advanced', '1')
@@ -27,8 +28,23 @@ RSpec.describe 'DNS & DHCP', type: :system do
     expect(page).to have_field('custom_tls_name')
     find('label.dns-choice', text: 'Quad9').click
     expect(page).to have_no_field('custom_tls_name')
-    click_button 'Save'
+    within('#dns-settings') { click_button 'Save' }
     expect(page).to have_text('DNS and DHCP are off.')
+  end
+
+  it 'offers blocking with the recommended lists ticked' do
+    sign_in_as_admin
+    visit '/network/dns'
+    within('#dns-blocking') do
+      expect(page).to have_unchecked_field('Block ads, trackers and malware')
+      expect(page).to have_checked_field('lists[]', with: 'hagezi-normal')
+      expect(page).to have_checked_field('lists[]', with: 'hagezi-tif-mini')
+      expect(page).to have_unchecked_field('lists[]', with: 'oisd-big')
+      check 'Block ads, trackers and malware'
+      fill_in 'allowlist', with: 'example.com'
+      click_button 'Save'
+    end
+    expect(page).to have_text('Saved. Blocking starts when DNS is on.')
   end
 
   it 'shows the DHCP settings while DNS + DHCP is picked, and offers dnsmasq until it is installed' do

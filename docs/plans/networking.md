@@ -142,6 +142,24 @@ in front of the network. It ships in 1.0, DHCP included, once it passes the test
   use) and runs the helper's `dns.sync_leases`. It writes the names to a second Unbound file and
   reloads Unbound with `reload_keep_cache`, only when the names change. Names are one label, on
   IPv4; the NAS, the fixed hosts and the aliases come first. dnsmasq runs no script.
+- **Blocklists:** HaGeZi (LIGHT, NORMAL, PRO, Threat Intelligence mini and medium) and OISD
+  (small, big), in their domains-only wildcard formats, so a line is a domain that covers its
+  subdomains, as Unbound's `local-zone` does. NORMAL and Threat Intelligence mini are ticked
+  (about 327,000 domains). StevenBlack is out: it lists exact names, which a `local-zone` would
+  widen. URLhaus is out: its download is gone (410) and its terms bar scripts. AdGuard's filter is
+  out: adblock syntax only. Checked 2026-10-22.
+- **How blocking is built:** each domain becomes `local-zone: "d." always_null` (0.0.0.0 and ::),
+  a domain under another listed one is left out, and the allowlist becomes `transparent` zones,
+  which win over a blocked parent. Measured on Unbound 1.19: the default lists take about 155 MB
+  and start in 1.4 seconds; NORMAL with Threat Intelligence medium (825,000) about 365 MB. At
+  most 1,000,000 domains. A reload keeping the cache takes under 200 ms.
+- **Where blocking lives:** the helper downloads (HTTPS only, at most 64 MB a list) into a
+  root-only folder, `/var/lib/amahi-kai-dns`, with the choice, the status the app reads, and the
+  blocklist while paused; not an app-owned folder, since what's there becomes Unbound's config.
+  A list that fails keeps its last copy. A timer refreshes daily around 04:00 (lists less than
+  20 hours old aren't downloaded again); the whole config is checked before Unbound reloads, and
+  the previous blocklist stays if it's refused. Pausing moves the blocklist out, and a transient
+  systemd timer runs `dns.resume_blocking` five minutes later.
 - **The check for another DHCP server:** the helper broadcasts a DHCPDISCOVER on the interface
   (from its MAC, asking for broadcast replies) and listens up to 6 seconds for an offer, leaving
   out the NAS's own. Not 3: dnsmasq, which many routers run, pings an address for 3 seconds

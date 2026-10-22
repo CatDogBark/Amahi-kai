@@ -54,7 +54,7 @@ describe 'Network → DNS & DHCP', type: :request do
         expect(response).to redirect_to('/network/dns')
         expect(flash[:notice]).to include('Unbound is answering')
         expect([Setting.get('dns_mode'), Setting.get('dns_provider'), Setting.get('dns_interface')]).to eq(%w[dns cloudflare ens18])
-        expect(Privileged.calls.map(&:first)).to eq(%w[dns.write_config services.enable])
+        expect(Privileged.calls.map(&:first)).to eq(%w[dns.write_config services.enable dns.blocking_off])
         expect(Privileged.calls.first.last[:content]).to include('forward-addr: 1.1.1.1@853#one.one.one.one')
       end
 
@@ -104,8 +104,8 @@ describe 'Network → DNS & DHCP', type: :request do
           put '/network/dns', params: dhcp
           expect(flash[:notice]).to include('handing out addresses')
           expect(DnsmasqService.settings).to eq(first: 100, last: 200, router: 1, lease_time: 14_400)
-          expect(Privileged.calls.map(&:first)).to eq(%w[dns.write_config services.enable network.write_dnsmasq_config services.enable])
-          expect(Privileged.calls[2].last[:content]).to include('interface=ens18', 'dhcp-range=192.168.1.100,192.168.1.200,14400s')
+          expect(Privileged.calls.map(&:first)).to eq(%w[dns.write_config services.enable dns.blocking_off network.write_dnsmasq_config services.enable])
+          expect(Privileged.calls[3].last[:content]).to include('interface=ens18', 'dhcp-range=192.168.1.100,192.168.1.200,14400s')
         end
 
         it 'refuses while another DHCP server answers, and says where' do
@@ -140,8 +140,8 @@ describe 'Network → DNS & DHCP', type: :request do
         it 'stops dnsmasq when DNS + DHCP is left' do
           Setting.set('dns_mode', 'dns_dhcp')
           put '/network/dns', params: dhcp.merge(mode: 'dns')
-          expect(Privileged.calls.map(&:first)).to eq(%w[dns.write_config services.enable network.write_dnsmasq_config services.disable])
-          expect(Privileged.calls[2].last[:content]).not_to include('dhcp-range')
+          expect(Privileged.calls.map(&:first)).to eq(%w[dns.write_config services.enable dns.blocking_off network.write_dnsmasq_config services.disable])
+          expect(Privileged.calls[3].last[:content]).not_to include('dhcp-range')
         end
       end
 
@@ -149,6 +149,64 @@ describe 'Network → DNS & DHCP', type: :request do
         allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('dns.write_config', 'unbound-checkconf rejected the config'))
         put '/network/dns', params: { mode: 'dns', provider: 'quad9', interface: 'ens18' }
         expect(flash[:alert]).to include("couldn't be applied", 'unbound-checkconf rejected')
+      end
+    end
+
+    describe 'blocking' do
+      before { allow(DnsService).to receive(:installed?).and_return(true) }
+
+      it 'shows how many domains it blocks, and offers a pause' do
+        Setting.set('dns_mode', 'dns')
+        Setting.set('dns_blocking', '1')
+        allow(DnsService).to receive_messages(blocklists_refreshing?: false, blocking_status: {
+          'blocked' => 327_002, 'refreshed_at' => Time.now.to_i - 3600,
+          'lists' => { 'hagezi-normal' => { 'domains' => 171_250 }, 'hagezi-tif-mini' => { 'domains' => 211_791, 'error' => 'curl exited 22', 'downloaded_at' => 1 } }
+        })
+        get '/network/dns'
+        expect(response.body).to include('Blocking <strong>327,002</strong> domains', 'Pause for 5 minutes', '171,250 domains',
+                                          "HaGeZi Threat Intelligence (mini) couldn't be downloaded (curl exited 22), so its last copy is used")
+      end
+
+      it 'turns on with the lists and allowlist chosen, while DNS is on' do
+        Setting.set('dns_mode', 'dns')
+        put '/network/dns/blocking', params: { blocking: '1', lists: %w[hagezi-light oisd-small], allowlist: "Example.com\ncdn.example.net" }
+        expect(flash[:notice]).to include('The lists are downloading')
+        expect(Privileged.calls).to eq([['dns.set_blocklists', { lists: %w[hagezi-light oisd-small], allow: %w[example.com cdn.example.net] }]])
+      end
+
+      it 'saves for later while DNS is off' do
+        put '/network/dns/blocking', params: { blocking: '1', lists: %w[hagezi-normal] }
+        expect(flash[:notice]).to eq('Saved. Blocking starts when DNS is on.')
+        expect(Setting.get('dns_blocking')).to eq('1')
+        expect(Privileged.calls).to be_empty
+      end
+
+      it 'refuses an allowlist with something not a domain, or no list to block with' do
+        put '/network/dns/blocking', params: { blocking: '1', lists: %w[hagezi-normal], allowlist: 'example.com 10.0.0.1' }
+        expect(flash[:alert]).to include("10.0.0.1 isn't a domain")
+        put '/network/dns/blocking', params: { blocking: '1', lists: %w[made-up] }
+        expect(flash[:alert]).to include('Choose at least one list')
+        expect(Setting.get('dns_blocking')).not_to eq('1')
+      end
+
+      it 'turns off, ending any pause' do
+        Setting.set('dns_mode', 'dns')
+        Setting.set('dns_blocking_paused_until', (Time.now.to_i + 100).to_s)
+        put '/network/dns/blocking', params: { lists: %w[hagezi-normal] }
+        expect(flash[:notice]).to eq('Blocking is off.')
+        expect(Privileged.calls).to eq([['dns.blocking_off', {}]])
+        expect(DnsService.paused_until).to be_nil
+      end
+
+      it 'pauses for five minutes, and resumes' do
+        allow(Privileged).to receive(:call).with('dns.pause_blocking').and_return('ok' => true, 'until' => Time.now.to_i + 300)
+        post '/network/dns/pause_blocking'
+        expect(flash[:notice]).to start_with('Blocking is paused until')
+        expect(DnsService.paused_until).to be_within(5).of(Time.now + 300)
+        allow(Privileged).to receive(:call).with('dns.resume_blocking').and_return('ok' => true)
+        post '/network/dns/resume_blocking'
+        expect(flash[:notice]).to eq('Blocking is back on.')
+        expect(DnsService.paused_until).to be_nil
       end
     end
 

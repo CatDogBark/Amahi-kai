@@ -155,16 +155,18 @@ RSpec.describe DnsService do
       allow(described_class).to receive(:running?).and_return(false)
       Setting.set('dns_mode', 'dns')
       described_class.apply!
-      expect(Privileged.calls.map(&:first)).to eq(%w[dns.write_config services.enable])
-      expect(Privileged.calls.last).to eq(['services.enable', { service: 'unbound' }])
+      expect(Privileged.calls.map(&:first)).to eq(%w[dns.write_config services.enable dns.blocking_off])
+      expect(Privileged.calls[1]).to eq(['services.enable', { service: 'unbound' }])
       expect(DnsmasqService).to have_received(:apply!)
     end
 
-    it 'restarts Unbound when it was running' do
+    it 'restarts Unbound when it was running, with blocking as chosen' do
       allow(described_class).to receive(:running?).and_return(true)
       Setting.set('dns_mode', 'dns')
+      Setting.set('dns_blocking', '1')
       described_class.apply!
-      expect(Privileged.calls.map(&:first)).to eq(%w[dns.write_config services.restart])
+      expect(Privileged.calls.map(&:first)).to eq(%w[dns.write_config services.restart dns.set_blocklists])
+      expect(Privileged.calls.last.last).to eq(lists: %w[hagezi-normal hagezi-tif-mini], allow: [])
     end
 
     it 'stops Unbound and removes its config when DNS is turned off' do
@@ -192,6 +194,51 @@ RSpec.describe DnsService do
       Setting.set('dns_mode', 'dns')
       expect(described_class.rewrite!).to be true
       expect(Privileged.calls.map(&:first)).to eq(%w[dns.write_config services.restart])
+    end
+  end
+
+  describe 'blocking' do
+    it 'starts with the recommended lists, until a choice is saved' do
+      expect(described_class.blocklists).to eq(%w[hagezi-normal hagezi-tif-mini])
+      Setting.set('dns_blocklists', 'oisd-big gone-list')
+      expect(described_class.blocklists).to eq(%w[oisd-big])
+      Setting.set('dns_blocklists', '')
+      expect(described_class.blocklists).to eq([])
+    end
+
+    it 'reads the allowlist as typed: a line, a space or a comma apart, "*." and a final dot let go' do
+      names, problems = described_class.parse_allowlist("Example.com\n*.cdn.example.net., ads.example.org  example.com\n")
+      expect([names, problems]).to eq([%w[example.com cdn.example.net ads.example.org], []])
+      expect(described_class.parse_allowlist('localhost 10.0.0.1 ok.example.com').last).to eq(['localhost, 10.0.0.1 aren\'t domains'])
+    end
+
+    it 'sends the lists and allowlist to the helper, or turns blocking off' do
+      Setting.set('dns_blocking', '1')
+      Setting.set('dns_allowlist', "example.com\ncdn.example.net")
+      described_class.apply_blocking!
+      expect(Privileged.calls.last).to eq(['dns.set_blocklists', { lists: %w[hagezi-normal hagezi-tif-mini], allow: %w[example.com cdn.example.net] }])
+      Setting.set('dns_blocking', '0')
+      described_class.apply_blocking!
+      expect(Privileged.calls.last).to eq(['dns.blocking_off', {}])
+    end
+
+    it "reads the helper's last refresh, and how long a pause has left" do
+      Dir.mktmpdir do |dir|
+        stub_const('DnsService::BLOCKLIST_STATUS', "#{dir}/status.json")
+        expect(described_class.blocking_status).to be_nil
+        File.write("#{dir}/status.json", '{"blocked":5,"lists":{}}')
+        expect(described_class.blocking_status['blocked']).to eq(5)
+      end
+      expect(described_class.paused_until).to be_nil
+      Setting.set('dns_blocking_paused_until', (Time.now.to_i + 120).to_s)
+      expect(described_class.paused_until).to be > Time.now
+    end
+
+    it 'knows the same lists as the root helper' do
+      Privileged.operations # loads libexec/amahi-helper
+      expect(described_class::BLOCKLISTS.keys).to match_array(AmahiHelper::BLOCKLISTS.keys)
+      expect(AmahiHelper::BLOCKLISTS.values.map { |list| list[:url] }).to all(start_with('https://'))
+      expect(described_class::BLOCKLISTS.values.count { |list| list[:default] }).to eq(2)
     end
   end
 
