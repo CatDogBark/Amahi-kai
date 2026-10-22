@@ -282,7 +282,8 @@ All notable changes to Amahi-kai are documented here.
 
 - **Native Install** — `curl -fsSL https://amahi-kai.com/install.sh | sudo bash` — single command, full stack.
 - **Samba + Greyhole** — Storage pooling with configurable copy counts per share.
-- **Docker App System** — 14-app catalog, reverse proxy at `/app/{identifier}`, install/uninstall/start/stop from UI.
+- **Docker App System** — A catalog of its own ([amahi-kai-apps](https://github.com/CatDogBark/amahi-kai-apps)): install, uninstall, start, stop and update from the UI, each app on its own port.
+- **amahi-kai.com in the NAS's look** — The home page and the docs share one stylesheet built from the app's colours: near-black glass over the water, mint, Space Grotesk (shipped with the site), and the app's icons in place of emoji. The app list is the catalog's real seven, ZFS pools have a card, and the docs' sections and tables read like the app's. The social preview and the phone home-screen icon are redrawn to match.
 - **Database-backed File Indexer** — Replaced locate-based search. Automatic reindexing via systemd timer.
 - **System Status Dashboard** — Settings subtab with service health, system info.
 
