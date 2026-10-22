@@ -28,6 +28,8 @@ function installTailscale(streamUrl) {
   var terminal = document.getElementById(id + '-terminal');
 
   modal.style.display = 'flex';
+  setTerminalState(id, 'running');
+  setTerminalStatus(id, '');
   output.innerHTML = '';
   cursor.style.display = '';
   footer.style.display = 'none';
@@ -52,13 +54,11 @@ function installTailscale(streamUrl) {
   source.addEventListener('auth_url', function(e) {
     if (!e.data) return;
     var linkDiv = document.createElement('div');
-    linkDiv.className = 'term-line';
-    linkDiv.style.marginTop = '8px';
+    linkDiv.className = 'term-line step';
     var link = document.createElement('a');
     link.href = e.data;
     link.target = '_blank';
     link.rel = 'noopener';
-    link.style.cssText = 'color:#4fc3f7;text-decoration:underline;font-weight:bold;';
     link.textContent = '→ Click here to log in to Tailscale';
     linkDiv.appendChild(link);
     output.appendChild(linkDiv);
@@ -67,12 +67,16 @@ function installTailscale(streamUrl) {
 
   source.addEventListener('done', function() {
     source.close();
+    setTerminalState(id, 'done');
+    setTerminalStatus(id, '✓ Done', 'success');
     cursor.style.display = 'none';
     footer.style.display = 'block';
   });
 
   source.onerror = function() {
     source.close();
+    setTerminalState(id, 'failed');
+    setTerminalStatus(id, '✗ Connection lost', 'error');
     cursor.style.display = 'none';
     footer.style.display = 'block';
   };

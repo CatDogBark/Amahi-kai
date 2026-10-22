@@ -5,7 +5,7 @@
 function terminalCloseButton(id) {
   var button = document.createElement('button');
   button.type = 'button';
-  button.className = 'btn btn-sm btn-outline-light';
+  button.className = 'btn btn-sm btn-primary';
   button.textContent = 'Close & Refresh';
   button.dataset.call = 'closeInstallTerminal';
   button.dataset.args = JSON.stringify([id]);
@@ -21,6 +21,8 @@ function runSecurityAudit(auditUrl, fixUrl) {
   var terminal = document.getElementById(id + '-terminal');
 
   modal.style.display = 'flex';
+  setTerminalState(id, 'running');
+  setTerminalStatus(id, '');
   output.innerHTML = '';
   cursor.style.display = '';
   footer.style.display = 'none';
@@ -36,7 +38,7 @@ function runSecurityAudit(auditUrl, fixUrl) {
     else if (text.match(/^  ✓/)) { line.classList.add('success'); }
     else if (text.match(/^  ✗/) || text.match(/^✗/)) { line.classList.add('error'); }
     else if (text.match(/^  ⚠/) || text.match(/^⚠/)) { line.classList.add('warn'); }
-    else if (text.match(/^───/)) { line.style.color = '#7f8c9b'; line.style.fontWeight = 'bold'; line.style.marginTop = '8px'; }
+    else if (text.match(/^───/)) { line.classList.add('rule'); }
     line.textContent = text;
     output.appendChild(line);
     terminal.scrollTop = terminal.scrollHeight;
@@ -58,12 +60,16 @@ function runSecurityAudit(auditUrl, fixUrl) {
 
   source.addEventListener('done', function() {
     source.close();
+    setTerminalState(id, 'done');
+    setTerminalStatus(id, '✓ Done', 'success');
     cursor.style.display = 'none';
     footer.style.display = 'block';
   });
 
   source.onerror = function() {
     source.close();
+    setTerminalState(id, 'failed');
+    setTerminalStatus(id, '✗ Connection lost', 'error');
     cursor.style.display = 'none';
     footer.style.display = 'block';
     var line = document.createElement('div');

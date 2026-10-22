@@ -14,9 +14,12 @@ RSpec.describe 'stylesheets' do
     expect(css).to include('.amahi-toast').or include('#toast-container')
   end
 
-  it 'builds the login stylesheet with its light and dark colours' do
+  it "builds the sign-in page's stylesheet on the app's theme, which the page loads first" do
     css = Rails.application.assets['login.css'].to_s
-    expect(css).to include('--login-submit-bg: #0a6e8a;').and include('--login-submit-bg: #1a9fc2;')
+    expect(css).to include('body.login').and include('var(--kai-mint)')
+    expect(css).not_to include('#0a6e8a')
+    layout = File.read(Rails.root.join('app/views/layouts/login.html.slim'))
+    expect(layout.index('stylesheet_link_tag "application"')).to be < layout.index('stylesheet_link_tag "login"')
   end
 
   it "loads Bootstrap's JavaScript (with Popper) from the same release" do

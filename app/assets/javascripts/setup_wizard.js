@@ -5,7 +5,7 @@
 function wizardContinueLink(href) {
   var link = document.createElement('a');
   link.href = href;
-  link.className = 'btn btn-sm btn-outline-light';
+  link.className = 'btn btn-sm btn-primary';
   link.textContent = 'Continue →';
   return link;
 }
@@ -18,6 +18,8 @@ function wizardTerminal(id, streamUrl, continueUrl, stepPattern) {
   var terminal = document.getElementById(id + '-terminal');
 
   modal.style.display = 'flex';
+  setTerminalState(id, 'running');
+  setTerminalStatus(id, '');
   output.innerHTML = '';
   cursor.style.display = '';
   footer.style.display = 'none';
@@ -38,14 +40,19 @@ function wizardTerminal(id, streamUrl, continueUrl, stepPattern) {
     terminal.scrollTop = terminal.scrollHeight;
   };
 
-  source.addEventListener('done', function() {
+  source.addEventListener('done', function(e) {
     source.close();
+    var failed = e.data === 'error';
+    setTerminalState(id, failed ? 'failed' : 'done');
+    setTerminalStatus(id, failed ? '✗ Finished with errors: the lines above say which' : '✓ Done', failed ? 'error' : 'success');
     cursor.style.display = 'none';
     footer.style.display = 'block';
   });
 
   source.onerror = function() {
     source.close();
+    setTerminalState(id, 'failed');
+    setTerminalStatus(id, '✗ Connection lost', 'error');
     cursor.style.display = 'none';
     footer.style.display = 'block';
     var line = document.createElement('div');

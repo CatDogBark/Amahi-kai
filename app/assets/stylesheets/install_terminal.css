@@ -1,0 +1,118 @@
+/* The streaming install window (shared/_install_terminal, driven by install_terminal.js): one of
+ * the app's glass panels over the dimmed page. Its title bar has a pill for how the job is
+ * going, from data-state on the window: running (the dot pulses), done, failed or waiting. The
+ * output is monospaced and quiet; steps are mint, results mint, problems red or amber. The
+ * colours are theme.css's tokens (application.css loads this before it). */
+
+.term-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.7);
+}
+.term-window {
+  width: 700px;
+  max-width: 100%;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 18px;
+  background: var(--kai-glass-strong);
+  border: 1px solid var(--kai-line);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  font-family: var(--kai-font);
+}
+
+/* The title bar, and the pill that says how the job is going */
+.term-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--kai-line);
+}
+.term-title {
+  min-width: 0;
+  color: var(--kai-title);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.term-pill {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--kai-mint-soft);
+  color: var(--kai-mint-text);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.term-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--kai-mint); }
+.term-modal[data-state="failed"] .term-pill { background: var(--kai-alert-danger-bg); color: var(--kai-alert-danger-text); }
+.term-modal[data-state="failed"] .term-dot { background: var(--kai-alert-danger-text); }
+.term-modal[data-state="waiting"] .term-pill { background: var(--kai-alert-warning-bg); color: var(--kai-alert-warning-text); }
+.term-modal[data-state="waiting"] .term-dot { background: var(--kai-alert-warning-text); }
+
+/* The output. It takes the height the bars leave, so nothing jumps when the button appears. */
+.term-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 400px;
+  padding: 16px 20px;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--kai-muted);
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.65;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+.term-body::-webkit-scrollbar { width: 6px; }
+.term-body::-webkit-scrollbar-track { background: transparent; }
+.term-body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 3px; }
+.term-line { margin: 0; white-space: pre-wrap; word-break: break-all; }
+.term-line.step { margin-top: 4px; color: var(--kai-mint-text); font-weight: 600; }
+.term-line.success { color: var(--kai-mint); font-weight: 700; }
+.term-line.error { color: var(--kai-alert-danger-text); font-weight: 700; }
+.term-line.warn { color: var(--kai-alert-warning-text); }
+.term-line.rule { margin-top: 8px; color: var(--kai-title); font-weight: 700; }
+.term-line a { color: var(--kai-mint-text); font-weight: 600; text-decoration: underline; }
+.term-cursor { color: var(--kai-mint); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .term-modal[data-state="running"] .term-dot { animation: term-pulse 1.4s ease-in-out infinite; }
+  .term-cursor { animation: term-blink 1s step-end infinite; }
+}
+@keyframes term-pulse { 50% { opacity: 0.3; } }
+@keyframes term-blink { 50% { opacity: 0; } }
+
+/* The status bar: what's happening, for how long, and how it ended; the buttons at the end */
+.term-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 60px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--kai-line);
+}
+.term-status { color: var(--kai-muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+.term-status.success { color: var(--kai-mint-text); }
+.term-status.error { color: var(--kai-alert-danger-text); }
+.term-status.warn { color: var(--kai-alert-warning-text); }
+.term-actions { text-align: right; }

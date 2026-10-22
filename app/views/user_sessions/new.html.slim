@@ -1,22 +1,21 @@
 #login
   #logo
-    a[href="/"]
-      = image_tag 'logo.svg', alt: 'Amahi-kai', style: 'max-height: 55px;'
+    a.kai-brand href="/"
+      = lucide_icon('waves', size: 26)
+      span Amahi-kai
 
   - flash.each do |name, msg|
-    div[class="alert alert-#{name}"]= msg
+    div class="alert alert-#{name}" role=("alert" if %w[danger error].include?(name.to_s)) = msg
 
-  = form_for @user_session do |f|
-    p
-      = text_field_tag 'username', @login, :autofocus => true, :placeholder => t('username')
-    p
-      = password_field_tag 'password', nil, :placeholder => t('password')
+  .login-panel
+    = form_for @user_session do |f|
+      label for="username" = t('username')
+      = text_field_tag 'username', @login, autofocus: true, autocomplete: 'username', placeholder: t('username')
+      label for="password" = t('password')
+      = password_field_tag 'password', nil, autocomplete: 'current-password', placeholder: t('password')
 
-    p[class="rememberme"]
-      label[for="remember_me"]
-        = check_box_tag 'remember_me', '1', @remember_me
-        | &nbsp;
-        = t 'remember_me'
-
-    p[class="submit"]
-      = submit_tag t('log_in')
+      .login-row
+        label.rememberme for="remember_me"
+          = check_box_tag 'remember_me', '1', @remember_me
+          span = t('remember_me')
+        = submit_tag t('log_in'), class: 'btn btn-primary'
