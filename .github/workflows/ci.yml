@@ -1,10 +1,14 @@
 name: CI
 
+# Runs when work lands on dev and on main, and on pull requests into main (a release). Pull
+# requests into dev run nothing here: the full suite, run locally, is their check. Any branch can
+# be checked by hand: gh workflow run ci.yml --ref <branch>.
 on:
   push:
     branches: [main, dev]
   pull_request:
-    branches: [main, dev]
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
   models:

@@ -82,6 +82,16 @@ module AmahiHelper
   UPDATE_STATUS = '/var/lib/amahi-kai/update-status.json'
   UPDATE_REPAIR_FLAG = '/run/amahi-kai-update.repair'
   UPDATE_LIST_LIMIT = 50
+  # Where System Update gets new versions: AMAHI_UPDATE_CHANNEL in ENV_FILE (root's), one of
+  # UPDATE_CHANNELS. releases, the default, installs the newest release published on GitHub;
+  # candidates also its pre-releases (release candidates); development the dev branch's newest
+  # commit, for testing. A release is a tag vX.Y.Z (a candidate vX.Y.ZrcN) whose commit's VERSION
+  # file names that version. Nothing newer than what runs is never a reason to go back.
+  ENV_FILE = '/etc/amahi-kai/amahi.env'
+  UPDATE_CHANNELS = %w[releases candidates development].freeze
+  RELEASES_URL = 'https://api.github.com/repos/CatDogBark/Amahi-kai/releases?per_page=30'
+  RELEASE_TAG = /\Av(\d{1,4})\.(\d{1,4})\.(\d{1,4})(?:rc(\d{1,4}))?\z/
+  RELEASE_VERSION = /\A\d{1,4}\.\d{1,4}\.\d{1,4}(?:rc\d{1,4})?\z/
 
   SWAPFILE = '/swapfile'
   FSTAB = '/etc/fstab'
@@ -556,6 +566,15 @@ module AmahiHelper
     # the manifests that pass every check (see CATALOG_REPO). It never installs anything.
     # amahi-kai-update-check.timer runs it every 6 hours; System Update's and the Apps page's
     # Check now too.
+    # What System Update installs: the update channel's newest version, fetched into the checkout,
+    # as { 'target' => { 'channel', 'commit', 'version', 'tag', 'error' } }; its commit is the one
+    # running when there's nothing newer. bin/amahi-update calls it holding the update lock, so
+    # it takes none itself.
+    'system.update_target' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:update_target]] }
+    },
     'system.check_update' => {
       params: [],
       validate: ->(_a) { {} },
@@ -4298,7 +4317,7 @@ module AmahiHelper
     # --- Checking for updates ---
 
     def do_check_update
-      status = with_update_lock { update_status(fetch_main) }
+      status = with_update_lock { update_status }
       return { 'update' => read_update_status, 'skipped' => 'System Update is running' } unless status
 
       do_install(UPDATE_STATUS, "#{JSON.pretty_generate(status)}\n", nil, '0640', APP_USER)
@@ -4318,26 +4337,134 @@ module AmahiHelper
       end
     end
 
+    # A target System Update can trust: a lookup that failed (GitHub unreachable, no release yet)
+    # is an error, never "nothing new".
+    def do_update_target
+      target = update_target
+      raise Failed, target['error'] if target['error']
+      raise Failed, "couldn't read the running commit" unless target['commit']
+
+      { 'target' => target }
+    end
+
+    def update_status
+      target = update_target
+      current = git_output('rev-parse', 'HEAD')
+      latest = target['commit'] || current
+      behind = current && latest && latest != current ? git_output('rev-list', '--count', "#{current}..#{latest}").to_i : 0
+      { 'checked_at' => Time.now.utc.iso8601, 'channel' => target['channel'],
+        'current' => current, 'current_version' => version_at(current),
+        'latest' => latest, 'latest_version' => target['version'], 'tag' => target['tag'],
+        'available' => behind.positive?, 'behind' => behind,
+        'commits' => behind.positive? ? update_commits("#{current}..#{latest}") : [],
+        'changelog' => behind.positive? ? update_changelog(current, latest) : [],
+        'error' => target['error'] }
+    end
+
+    # The channel's newest version, fetched: { 'channel', 'commit', 'version', 'tag', 'error' }.
+    # 'commit' is the running one when nothing is newer, and nil only when what runs is unknown.
+    def update_target
+      channel = update_channel
+      current = git_output('rev-parse', 'HEAD')
+      found = channel == 'development' ? development_target : release_target(channel == 'candidates', current)
+      newer = found[:commit] && found[:commit] != current && found[:newer]
+      { 'channel' => channel, 'commit' => newer ? found[:commit] : current,
+        'version' => newer ? found[:version] : version_at(current), 'tag' => newer ? found[:tag] : nil,
+        'error' => found[:error] }
+    end
+
+    def update_channel
+      line = File.foreach(ENV_FILE).find { |l| l.start_with?('AMAHI_UPDATE_CHANNEL=') }
+      value = line.to_s.split('=', 2)[1].to_s.strip.delete('"\'').downcase
+      UPDATE_CHANNELS.include?(value) ? value : 'releases'
+    rescue SystemCallError
+      'releases'
+    end
+
+    # The dev branch's newest commit; newer unless it's already in what runs (just after a
+    # release, main's merge commit holds it).
+    def development_target
+      error = git_fetch('origin', 'dev')
+      latest = git_output('rev-parse', '--verify', '--quiet', 'origin/dev^{commit}')
+      current = git_output('rev-parse', 'HEAD')
+      { commit: latest, version: latest && version_at(latest), tag: nil, error: error,
+        newer: latest && current && !git_ancestor?(latest, current) }
+    end
+
+    # The newest release published on GitHub (with pre-releases, for candidates), its tag fetched;
+    # newer when its version is above the running one's (or, with no VERSION running, when it
+    # isn't already in what runs).
+    def release_target(prereleases, current)
+      release, error = newest_release(prereleases)
+      return { error: error || 'no release is published yet' } unless release
+
+      tag = release[:tag]
+      fetch_error = git_fetch('origin', "refs/tags/#{tag}:refs/tags/#{tag}")
+      commit = git_output('rev-parse', '--verify', '--quiet', "refs/tags/#{tag}^{commit}")
+      return { error: fetch_error || "couldn't fetch #{tag}" } unless commit
+      return { error: "#{tag}'s VERSION file says #{version_at(commit).inspect}, not #{release[:version]}" } unless version_at(commit) == release[:version]
+
+      running = version_at(current)
+      newer = running ? (release_key(release[:version]) <=> release_key(running)).positive? : current && !git_ancestor?(commit, current)
+      { commit: commit, version: release[:version], tag: tag, error: nil, newer: newer }
+    end
+
+    # [{ tag:, version: }, error]: the highest version among the releases GitHub lists (drafts never;
+    # pre-releases when asked), or nil and why.
+    def newest_release(prereleases)
+      out, err, status = Open3.capture3(ENV_MIN, ['/usr/bin/timeout', '/usr/bin/timeout'], '30', '/usr/bin/curl', '-fsSL',
+                                        '--proto', '=https', '--tlsv1.2', '--max-time', '25',
+                                        '-H', 'Accept: application/vnd.github+json', RELEASES_URL,
+                                        unsetenv_others: true, chdir: '/')
+      return [nil, "couldn't read the releases from GitHub: #{last_lines(err, 1)}"] unless status.success?
+
+      releases = JSON.parse(out)
+      return [nil, "GitHub's releases list wasn't a list"] unless releases.is_a?(Array)
+
+      picks = releases.filter_map do |r|
+        next unless r.is_a?(Hash) && !r['draft'] && (prereleases || !r['prerelease'])
+        tag = r['tag_name'].to_s
+        { tag: tag, version: tag.delete_prefix('v') } if tag.match?(RELEASE_TAG)
+      end
+      [picks.max_by { |r| release_key(r[:version]) }, nil]
+    rescue JSON::ParserError
+      [nil, "GitHub's releases list wasn't JSON"]
+    rescue SystemCallError => e
+      [nil, "couldn't run curl: #{e.message}"]
+    end
+
+    # Orders versions: 1.0.0rc1 < 1.0.0rc2 < 1.0.0 < 1.0.1.
+    def release_key(version)
+      major, minor, patch, rc = RELEASE_TAG.match("v#{version}")&.captures
+      return [-1] unless major
+
+      [major.to_i, minor.to_i, patch.to_i, rc ? 0 : 1, rc.to_i]
+    end
+
+    # The version a commit's VERSION file names, or nil (none, or not a version).
+    def version_at(commit)
+      return nil unless commit
+
+      value = git_output('show', "#{commit}:VERSION").to_s.strip
+      value.match?(RELEASE_VERSION) ? value : nil
+    end
+
     # nil when the fetch worked, else why not. The comparison then uses what was fetched last.
-    def fetch_main
+    def git_fetch(*refs)
       _out, err, status = Open3.capture3(ENV_MIN.merge('GIT_TERMINAL_PROMPT' => '0'), ['/usr/bin/timeout', '/usr/bin/timeout'],
-                                         '60', GIT, *GIT_OPTIONS, 'fetch', '--quiet', 'origin', 'main',
+                                         '60', GIT, *GIT_OPTIONS, 'fetch', '--quiet', '--no-tags', *refs,
                                          unsetenv_others: true, chdir: '/')
       status.success? ? nil : "couldn't fetch from GitHub: #{last_lines(err, 1)}"
     rescue SystemCallError => e
       "couldn't run git: #{e.message}"
     end
 
-    def update_status(fetch_error)
-      current = git_output('rev-parse', 'HEAD')
-      latest = git_output('rev-parse', '--verify', '--quiet', 'origin/main^{commit}')
-      behind = current && latest ? git_output('rev-list', '--count', "#{current}..#{latest}").to_i : 0
-      range = "#{current}..#{latest}"
-      { 'checked_at' => Time.now.utc.iso8601, 'current' => current, 'latest' => latest,
-        'available' => behind.positive?, 'behind' => behind,
-        'commits' => behind.positive? ? update_commits(range) : [],
-        'changelog' => behind.positive? ? update_changelog(current, latest) : [],
-        'error' => fetch_error }
+    def git_ancestor?(commit, of)
+      _out, _err, status = Open3.capture3(ENV_MIN, [GIT, GIT], *GIT_OPTIONS, 'merge-base', '--is-ancestor', commit, of,
+                                          unsetenv_others: true, chdir: '/')
+      status.success?
+    rescue SystemCallError
+      false
     end
 
     # The merged changes, newest first: [{ 'sha' => 'abc1234', 'subject' => 'Title (#37)' }].

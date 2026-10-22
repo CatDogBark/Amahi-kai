@@ -17,7 +17,7 @@
             <%# Opens the System Update dialog (layouts/_system_update) %>
             <div class="mt-1">
               <a href="#" class="update-notice" data-whats-new="">
-                <span class="update-dot"></span>Update available: <%= pluralize(update_status.behind, 'change') %> — see what's new
+                <span class="update-dot"></span>Update available: <%= update_status.summary %> — see what's new
               </a>
             </div>
           <% end %>

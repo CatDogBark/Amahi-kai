@@ -11,19 +11,46 @@ version that was running.
 
 ---
 
+## Update channels
+
+What counts as an update depends on the server's **update channel**:
+
+| Channel | Installs |
+|---------|----------|
+| `releases` (the default) | The newest release published on [GitHub](https://github.com/CatDogBark/Amahi-kai/releases) |
+| `candidates` | Releases and release candidates (pre-releases such as `1.0.0rc1`), to try one before it's out |
+| `development` | The newest code on the `dev` branch, for testing what's being built |
+
+An update never takes the server back to an older version: a server on `development` that's ahead
+of the newest release stays where it is until a newer one comes out.
+
+The channel is a line in `/etc/amahi-kai/amahi.env`, which only root can change:
+
+```
+AMAHI_UPDATE_CHANNEL=releases
+```
+
+Change it with `sudo nano /etc/amahi-kai/amahi.env`, then click **Check now**. A server installed
+with `AMAHI_BRANCH=dev` starts on `development`; every other one on `releases`.
+
+---
+
 ## Seeing what's new
 
 When an update is waiting, the **System Update** button in the header (the circling arrows, for
-admins) gets an orange dot, and the dashboard says **Update available: N changes — see what's
-new**. Either opens **What's new**: the changelog entries the update brings, the pull requests it
+admins) gets an orange dot, and the dashboard says **Update available: Amahi-kai 0.9.2 (you have
+0.9.1) — see what's new** (on `development`, the number of changes on the dev branch). Either opens **What's new**: the changelog entries the update brings, the pull requests it
 merges (linked to GitHub), and **Update now** or **Later**. With nothing new, the same button
 shows when Amahi-kai last checked, with **Check now** and **Repair**.
 
 **Settings → System Status** has the same in its **System Update** card, which shows one of:
 
-- **Update available: N changes**, with each change listed and linked to its pull request on
-  GitHub, and an **Update now** button.
-- **Up to date (abc1234)**, with a **Repair** button (see below).
+- **Update available**, naming the new version, with each change listed and linked to its pull
+  request on GitHub, and an **Update now** button.
+- **Up to date (0.9.1, abc1234)**: the version and the commit that runs, with a **Repair** button
+  (see below).
+
+It also says which channel the server follows.
 - **Not checked yet**, right after installing.
 
 Amahi-kai checks 10 minutes after the server starts and then every 6 hours (the
@@ -52,7 +79,8 @@ reinstalling or restarting anything.
 
 ### Repair
 
-**Repair** (shown when you're up to date) runs every update step again on the version you have:
+**Repair** (shown when you're up to date) runs every update step again on the version you have,
+without looking for a newer one:
 gems, database migrations, the root helper and its sudo rules, the Samba configuration, file
 ownership, compiled assets and a restart. Use it when something about the install looks broken.
 
@@ -71,8 +99,9 @@ This is also the way in if the web UI itself won't load: SSH to the server and r
 
 ## What an update does
 
-1. **Gets the latest code** from GitHub (as root; the code in `/opt/amahi-kai` belongs to root).
-   If nothing is new, it stops here. If GitHub can't be reached, it stops and changes nothing.
+1. **Gets the new version's code** from GitHub, the one the update channel names (as root; the
+   code in `/opt/amahi-kai` belongs to root). If nothing is new, it stops here. If GitHub can't be
+   reached, or no release is published yet, it stops and changes nothing.
 2. **Installs gems** for the new version.
 3. **Backs up the database** to `/var/lib/amahi-kai/backups` (readable by root only; the last 3
    are kept).

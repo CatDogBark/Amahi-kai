@@ -553,6 +553,7 @@ RSpec.describe 'AmahiHelper' do
 
     describe 'checking for updates' do
       let(:repo) { Dir.mktmpdir }
+      let(:env_file) { "#{repo}/amahi.env" }
 
       def git(*args)
         out, err, status = Open3.capture3('git', '-C', repo, '-c', 'user.name=t', '-c', 'user.email=t@t', *args)
@@ -561,59 +562,146 @@ RSpec.describe 'AmahiHelper' do
         out.strip
       end
 
-      def commit(subject, changelog)
+      def commit(subject, changelog, version)
         File.write("#{repo}/CHANGELOG.md", changelog)
-        git('add', 'CHANGELOG.md')
+        File.write("#{repo}/VERSION", "#{version}\n")
+        git('add', 'CHANGELOG.md', 'VERSION')
         git('commit', '-q', '-m', subject)
         git('rev-parse', 'HEAD')
       end
 
+      def channel(name)
+        File.write(env_file, "SECRET_KEY_BASE=x\nAMAHI_UPDATE_CHANNEL=#{name}\n")
+      end
+
+      def releases(*tags)
+        allow(helper).to receive(:newest_release) do |pre|
+          picks = tags.reject { |t| !pre && t.include?('rc') }.map { |t| { tag: t, version: t.delete_prefix('v') } }
+          [picks.max_by { |r| helper.release_key(r[:version]) }, nil]
+        end
+      end
+
       before do
         git('init', '-q', '-b', 'main')
-        @running = commit('Old (#1)', "# Changelog\n\n- **Old entry.**\n")
-        commit('Drive temperatures (#2)', "# Changelog\n\n- **Old entry.**\n- **Temperatures.** Detail.\n")
-        @latest = commit('Update window (#3)', "# Changelog\n\n- **Old entry.**\n- **Temperatures.** Detail.\n- **Window.**\n")
-        git('update-ref', 'refs/remotes/origin/main', @latest)
+        @running = commit('Old (#1)', "# Changelog\n\n- **Old entry.**\n", '0.9.1')
+        git('tag', 'v0.9.1')
+        commit('Drive temperatures (#2)', "# Changelog\n\n- **Old entry.**\n- **Temperatures.** Detail.\n", '0.9.1')
+        @latest = commit('Update window (#3)', "# Changelog\n\n- **Old entry.**\n- **Temperatures.** Detail.\n- **Window.**\n", '0.9.2')
+        git('tag', 'v0.9.2')
         git('checkout', '-q', @running)
         stub_const('AmahiHelper::GIT_OPTIONS', ['-c', 'core.hooksPath=/dev/null', '-C', repo])
         stub_const('AmahiHelper::GIT', ENV['PATH'].split(':').map { |d| File.join(d, 'git') }.find { |f| File.executable?(f) })
+        stub_const('AmahiHelper::ENV_FILE', env_file)
+        allow(helper).to receive(:git_fetch).and_return(nil) # the tags and branches are already here
+        channel('releases')
+        releases('v0.9.1', 'v0.9.2')
       end
 
       after { FileUtils.rm_rf(repo) }
 
-      it 'plans one action with no arguments' do
+      it 'plans one action each, with no arguments' do
         expect(steps('system.check_update', {})).to eq([[:check_update], [:refresh_catalog], [:check_security_updates]])
         expect(refusal('system.check_update', { 'branch' => 'x' })).to eq('unexpected argument branch')
+        expect(steps('system.update_target', {})).to eq([[:update_target]])
+        expect(refusal('system.update_target', { 'tag' => 'v1' })).to eq('unexpected argument tag')
       end
 
-      it 'lists the merged changes and the changelog entries added since the running commit' do
-        status = helper.update_status(nil)
-        expect(status).to include('current' => @running, 'latest' => @latest, 'available' => true, 'behind' => 2, 'error' => nil)
+      it "goes to the newest release, listing its merged changes and changelog entries" do
+        expect(helper.do_update_target['target']).to eq('channel' => 'releases', 'commit' => @latest, 'version' => '0.9.2',
+                                                        'tag' => 'v0.9.2', 'error' => nil)
+        status = helper.update_status
+        expect(status).to include('channel' => 'releases', 'current' => @running, 'current_version' => '0.9.1',
+                                  'latest' => @latest, 'latest_version' => '0.9.2', 'tag' => 'v0.9.2',
+                                  'available' => true, 'behind' => 2, 'error' => nil)
         expect(status['commits'].map { |c| c['subject'] }).to eq(['Update window (#3)', 'Drive temperatures (#2)'])
         expect(status['changelog']).to eq(['**Temperatures.** Detail.', '**Window.**'])
       end
 
-      it 'is up to date on the latest commit' do
+      it 'never goes back: a release no newer than the running version is nothing to install' do
         git('checkout', '-q', @latest)
-        expect(helper.update_status(nil)).to include('available' => false, 'behind' => 0, 'commits' => [], 'changelog' => [])
+        releases('v0.9.1')
+        expect(helper.update_target).to include('commit' => @latest, 'version' => '0.9.2', 'tag' => nil, 'error' => nil)
+        expect(helper.update_status).to include('available' => false, 'behind' => 0, 'commits' => [], 'changelog' => [])
+      end
+
+      it 'takes release candidates only on the candidates channel, after their release' do
+        rc = commit('Candidate (#4)', "# Changelog\n", '0.9.3rc1')
+        git('tag', 'v0.9.3rc1')
+        git('checkout', '-q', @running)
+        releases('v0.9.2', 'v0.9.3rc1')
+        expect(helper.update_target['tag']).to eq('v0.9.2')
+        channel('candidates')
+        expect(helper.update_target).to include('commit' => rc, 'version' => '0.9.3rc1', 'tag' => 'v0.9.3rc1')
+        expect(%w[0.9.3 0.9.3rc2 0.9.3rc10 0.10.0 0.9.2].sort_by { |v| helper.release_key(v) })
+          .to eq(%w[0.9.2 0.9.3rc2 0.9.3rc10 0.9.3 0.10.0])
+      end
+
+      it "follows the dev branch on the development channel, nothing new while it's already in what runs" do
+        channel('development')
+        git('update-ref', 'refs/remotes/origin/dev', @latest)
+        expect(helper.update_target).to include('channel' => 'development', 'commit' => @latest, 'version' => '0.9.2', 'tag' => nil)
+        expect(helper.update_status).to include('available' => true, 'behind' => 2, 'tag' => nil)
+        git('update-ref', 'refs/remotes/origin/dev', @running)
+        git('checkout', '-q', @latest)
+        expect(helper.update_target).to include('commit' => @latest, 'error' => nil)
+        expect(helper.update_status['available']).to be(false)
+      end
+
+      it "fails the target, rather than saying there's nothing new, when it can't find one" do
+        releases
+        expect(helper.update_target).to include('commit' => @running, 'error' => 'no release is published yet')
+        expect { helper.do_update_target }.to raise_error(AmahiHelper::Failed, 'no release is published yet')
+        allow(helper).to receive(:newest_release).and_return([nil, "couldn't read the releases from GitHub: offline"])
+        expect(helper.update_status).to include('available' => false, 'error' => "couldn't read the releases from GitHub: offline")
+      end
+
+      it "refuses a release whose tag's VERSION names another version" do
+        File.write("#{repo}/VERSION", "0.9.9\n")
+        git('commit', '-q', '-am', 'Wrong version')
+        git('tag', 'v0.9.5')
+        git('checkout', '-q', @running)
+        releases('v0.9.5')
+        expect(helper.update_target['error']).to eq('v0.9.5\'s VERSION file says "0.9.9", not 0.9.5')
+      end
+
+      it 'reads the channel from amahi.env, releases unless it names another' do
+        { "AMAHI_UPDATE_CHANNEL=development\n" => 'development', "AMAHI_UPDATE_CHANNEL=\"Candidates\"\n" => 'candidates',
+          "AMAHI_UPDATE_CHANNEL=nightly\n" => 'releases', "OTHER=1\n" => 'releases' }.each do |text, want|
+          File.write(env_file, text)
+          expect(helper.update_channel).to eq(want), text
+        end
+        FileUtils.rm_f(env_file)
+        expect(helper.update_channel).to eq('releases')
+      end
+
+      it "reads GitHub's releases: the highest version, no drafts, pre-releases when asked" do
+        list = [{ 'tag_name' => 'v0.9.2', 'draft' => false, 'prerelease' => false },
+                { 'tag_name' => 'v0.10.0', 'draft' => true, 'prerelease' => false },
+                { 'tag_name' => 'v0.9.3rc1', 'draft' => false, 'prerelease' => true },
+                { 'tag_name' => 'nightly', 'draft' => false, 'prerelease' => false }]
+        allow(helper).to receive(:newest_release).and_call_original
+        allow(Open3).to receive(:capture3).and_call_original
+        allow(Open3).to receive(:capture3).with(anything, %w[/usr/bin/timeout /usr/bin/timeout], '30', '/usr/bin/curl', any_args)
+                                          .and_return([JSON.generate(list), '', instance_double(Process::Status, success?: true)])
+        expect(helper.newest_release(false)).to eq([{ tag: 'v0.9.2', version: '0.9.2' }, nil])
+        expect(helper.newest_release(true)).to eq([{ tag: 'v0.9.3rc1', version: '0.9.3rc1' }, nil])
       end
 
       it 'writes the status for the app, and skips while an update holds the lock' do
         dir = Dir.mktmpdir
         stub_const('AmahiHelper::UPDATE_LOCK', "#{dir}/lock")
         stub_const('AmahiHelper::UPDATE_STATUS', "#{dir}/status.json")
-        allow(helper).to receive(:fetch_main).and_return("couldn't fetch from GitHub: offline")
         allow(helper).to receive(:do_install) { |path, content, *| File.write(path, content) }
 
         reply = helper.do_check_update
-        expect(reply['update']).to include('available' => true, 'error' => "couldn't fetch from GitHub: offline")
+        expect(reply['update']).to include('available' => true, 'tag' => 'v0.9.2')
         expect(JSON.parse(File.read("#{dir}/status.json"))['behind']).to eq(2)
 
         File.open("#{dir}/lock", File::RDWR | File::CREAT) do |held|
           held.flock(File::LOCK_EX)
           expect(helper.do_check_update).to include('skipped' => 'System Update is running')
         end
-        expect(helper).to have_received(:fetch_main).once
+        expect(helper).to have_received(:newest_release).once
       ensure
         FileUtils.rm_rf(dir)
       end

@@ -54,7 +54,7 @@ module ApplicationHelper
   # and whether its dot shows.
   def update_waiting
     waiting = []
-    waiting << pluralize(update_status.behind, 'change') if update_status.available?
+    waiting << update_status.summary if update_status.available?
     waiting << pluralize(app_updates.size, 'app update') if app_updates.any?
     { label: waiting.any? ? "Update available: #{waiting.join(' and ')}" : 'System Update', dot: waiting.any? }
   end

@@ -147,6 +147,13 @@ Decided with CatDogBark on 2026-10-10, while testing on the NAS; when they're bu
   dataset of their own; bitShare's data moves to a dataset, and its tests on the NAS wait for it
   ([`apps.md`](apps.md#p46-app-storage-and-bitshare)).
 
+## Networking
+
+Planned 2026-10-22, maybe soon ([`networking.md`](networking.md)): DHCP and DNS modernized
+(encrypted upstream DNS, DNSSEC, local names, blocklists), off by default, and tested first on an
+isolated Proxmox bridge so the house's internet is never at risk. What isn't ready by 1.0 ships
+labelled "in development".
+
 ## Open, not yet scheduled
 
 Smaller findings from the review that no PR covers yet. Fold them into a nearby PR when it
