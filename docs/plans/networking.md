@@ -138,8 +138,9 @@ in front of the network. It ships in 1.0, DHCP included, once it passes the test
   reloads Unbound with `reload_keep_cache`, only when the names change. Names are one label, on
   IPv4; the NAS, the fixed hosts and the aliases come first. dnsmasq runs no script.
 - **The check for another DHCP server:** the helper broadcasts a DHCPDISCOVER on the interface
-  (from its MAC, asking for broadcast replies) and listens 3 seconds for offers, leaving out the
-  NAS's own.
+  (from its MAC, asking for broadcast replies) and listens up to 6 seconds for an offer, leaving
+  out the NAS's own. Not 3: dnsmasq, which many routers run, pings an address for 3 seconds
+  before it offers it (seen on the island: both offers came 3.0 seconds after the discover).
 - **Settings replaced:** the old DNS provider choice (`dns`, `dns_ip_1`, `dns_ip_2`) was saved
   but never used by dnsmasq's config; it goes, and `dns_provider` takes its place.
 

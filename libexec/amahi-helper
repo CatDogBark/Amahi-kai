@@ -94,8 +94,9 @@ module AmahiHelper
     ExecStart=/usr/local/sbin/amahi-helper dns.sync_leases
     StandardInputText={}
   UNIT
-  # How long to listen for another DHCP server's offer.
-  DHCP_WAIT = 3
+  # How long to listen for another DHCP server's offer. dnsmasq (which many routers run, OpenWrt
+  # among them) pings an address for 3 seconds to see it's free before it offers it.
+  DHCP_WAIT = 6
 
   # The services Settings → Servers may control: the entries in lib/system_services.rb
   # that list actions (spec/lib/amahi_helper_spec.rb checks the two lists match).
@@ -3064,9 +3065,9 @@ module AmahiHelper
       run_command([UNBOUND_CONTROL, 'reload_keep_cache'])
     end
 
-    # The addresses of the DHCP servers that offer this machine an address on +interface+,
-    # other than its own: a DHCPDISCOVER from the interface's MAC address, with the broadcast
-    # flag, and every offer for it in DHCP_WAIT seconds.
+    # The address of a DHCP server that offers this machine an address on +interface+, other
+    # than its own: a DHCPDISCOVER from the interface's MAC address, with the broadcast flag,
+    # and the first other offer for it in DHCP_WAIT seconds.
     def do_dhcp_servers(interface)
       own = Socket.getifaddrs.select { |i| i.name == interface && i.addr&.ipv4? }.map { |i| i.addr.ip_address }
       mac = File.read("/sys/class/net/#{interface}/address").strip
@@ -3083,7 +3084,9 @@ module AmahiHelper
           break unless IO.select([socket], nil, nil, left)
           data, sender = socket.recvfrom(1500)
           server = dhcp_offer_from(data, xid, sender.ip_address)
-          servers << server if server && !own.include?(server)
+          next unless server && !own.include?(server)
+          servers << server
+          break
         end
       end
       { 'servers' => servers.uniq }
