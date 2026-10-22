@@ -1,60 +1,40 @@
-<% content_for :progress do %>
-  <div class="step current"></div>
-  <div class="step"></div>
-  <div class="step"></div>
-  <div class="step"></div>
-  <div class="step"></div>
-  <div class="step"></div>
-  <div class="step"></div>
-<% end %>
-
-<div style="text-align: center; padding: 20px 0;">
-  <div style="margin-bottom: 16px;"><img src="/favicon.svg" alt="Amahi-kai" style="height: 72px; width: 72px;"></div>
-  <h2 style="font-size: 24px; margin-bottom: 8px;">Welcome to Amahi-kai</h2>
-  <p style="max-width: 400px; margin: 0 auto 24px;">
-    Your home server is almost ready. Let's walk through a few quick steps to get everything configured.
-  </p>
-  <p class="setup-muted" style="font-size: 13px; margin-bottom: 24px;">
-    This will only take a couple of minutes.
+<div class="setup-center">
+  <div class="setup-mark"><%= lucide_icon('waves', size: 34) %></div>
+  <h2>Welcome to Amahi-kai</h2>
+  <p>
+    Your home server is almost ready. A few quick steps set up your password, the server's name,
+    your drives and a first share. It only takes a couple of minutes.
   </p>
 
-  <%# System Memory Check %>
-  <div style="max-width: 420px; margin: 0 auto 24px; text-align: left; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 16px;">
-    <div class="setup-label" style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">
-      🖥️ System Memory
-    </div>
-    <div class="setup-muted" style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px;">
+  <div class="setup-facts" style="max-width: 420px; margin-left: auto; margin-right: auto;">
+    <div class="setup-facts-title"><%= lucide_icon('monitor', size: 15) %> System memory</div>
+    <div class="setup-fact">
       <span>RAM</span>
-      <span class="setup-label"><%= number_to_human_size(@memory[:total_mb] * 1024 * 1024, precision: 1) %></span>
+      <b><%= number_to_human_size(@memory[:total_mb] * 1024 * 1024, precision: 1) %></b>
     </div>
-    <div class="setup-muted" style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 12px;">
+    <div class="setup-fact">
       <span>Swap</span>
       <% if @memory[:has_swap] %>
-        <span class="setup-success"><%= number_to_human_size(@memory[:swap_mb] * 1024 * 1024, precision: 1) %> ✓</span>
+        <b class="setup-success"><%= number_to_human_size(@memory[:swap_mb] * 1024 * 1024, precision: 1) %> ✓</b>
       <% else %>
-        <span class="setup-danger">None</span>
+        <b class="setup-danger">None</b>
       <% end %>
     </div>
     <% if @memory[:needs_swap] %>
-      <div class="setup-danger-box" style="padding: 10px; margin-bottom: 10px; font-size: 12px;">
-        <strong>Recommended:</strong> Create a <%= @memory[:recommended_swap] %> swap file.
-        Systems with less than 8 GB RAM can run out of memory during heavy operations.
+      <div class="setup-danger-box" style="margin-top: 8px;">
+        <strong>Recommended:</strong> create a <%= @memory[:recommended_swap] %> swap file.
+        A server with less than 8 GB of RAM can run out of memory during heavy work.
       </div>
-      <button type="button" class="btn-kai" style="width: 100%; padding: 8px; font-size: 13px;"
+      <button type="button" class="btn-kai" style="width: 100%;"
               data-call="openInstallTerminal" data-args='["swap-setup", "<%= setup_create_swap_path %>?size=<%= @memory[:recommended_swap] %>"]'>
-        Create <%= @memory[:recommended_swap] %> Swap File
+        Create a <%= @memory[:recommended_swap] %> swap file
       </button>
-      <div id="swap-success" class="setup-success" style="display: none; text-align: center; margin-top: 8px; font-size: 12px;">
-        ✓ Swap file created and enabled
-      </div>
     <% elsif @memory[:has_swap] %>
-      <div class="setup-success" style="font-size: 12px;">✓ Memory looks good</div>
+      <div class="setup-success setup-note" style="margin-top: 4px;">✓ Memory looks good</div>
     <% end %>
   </div>
 
-  <a href="<%= setup_admin_path %>" class="btn-kai" style="padding: 12px 40px; font-size: 16px;">
-    Let's get started →
-  </a>
+  <a href="<%= setup_admin_path %>" class="btn-kai btn-wide">Let's get started →</a>
 </div>
 
 <%= render 'shared/install_terminal', id: 'swap-setup', title: 'Creating Swap File' %>

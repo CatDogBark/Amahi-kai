@@ -90,6 +90,12 @@ describe "Setup Controller", type: :request do
         expect(response.body).to include("at least 8 characters")
       end
 
+      it "shows a refusal on its own page only, not again on the next one" do
+        post setup_update_admin_path, params: { password: "newpassword1", password_confirmation: "different" }
+        get setup_network_path
+        expect(response.body).not_to include("do not match")
+      end
+
       it "accepts valid password and redirects to network step" do
         post setup_update_admin_path, params: { password: "newpassword1", password_confirmation: "newpassword1" }
         expect(response).to redirect_to(setup_network_path)
@@ -97,6 +103,11 @@ describe "Setup Controller", type: :request do
     end
 
     describe "GET /setup/network" do
+      it "says which step it is" do
+        get setup_network_path
+        expect(response.body).to include("Step 3 of 7")
+      end
+
       it "renders network step" do
         get setup_network_path
         expect(response).to have_http_status(:ok)
@@ -216,6 +227,18 @@ describe "Setup Controller", type: :request do
         post setup_create_share_path, params: { share_name: "Media" }
         expect(response).to redirect_to(setup_complete_path)
         expect(Share.where(name: "Media").count).to eq(1)
+      end
+
+      it "shows why a name is refused (taken, too short) instead of failing" do
+        allow(SambaService).to receive(:push_config)
+        post setup_create_share_path, params: { share_name: "Media" }
+        post setup_create_share_path, params: { share_name: "media" }
+        expect(response).to have_http_status(:ok)
+        expect(response.body).to include("Name has already been taken")
+        post setup_create_share_path, params: { share_name: "M" }
+        expect(response).to have_http_status(:ok)
+        expect(response.body).to include("Name is invalid")
+        expect(Share.count).to eq(1)
       end
 
       it "skips share creation if name is blank and redirects to complete" do

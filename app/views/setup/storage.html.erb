@@ -1,17 +1,7 @@
-<% content_for :progress do %>
-  <div class="step done"></div>
-  <div class="step done"></div>
-  <div class="step done"></div>
-  <div class="step current"></div>
-  <div class="step"></div>
-  <div class="step"></div>
-  <div class="step"></div>
-<% end %>
-
-<h2>💾 Storage Drives</h2>
+<h2>Choose your storage drives</h2>
 <p>
-  Amahi-kai can detect your drives and prepare them for use.
-  Select drives to add to your Greyhole pool. <strong>OS drives cannot be selected.</strong>
+  Tick the drives to use for your files: Amahi-kai prepares them and adds them to the Greyhole
+  pool. The drive the system runs from is never offered.
 </p>
 
 <% if @devices.any? { |d| !d[:os_disk] && !d[:zfs_pool] } %>
@@ -20,52 +10,43 @@
       <% @devices.each do |device| %>
         <% next if device[:os_disk] || device[:zfs_pool] %>
         <% device[:partitions].each do |part| %>
-          <div class="drive-item" style="flex-wrap: wrap;">
-            <input type="checkbox" name="drives[]" value="<%= part[:path] %>"
-                   id="drive_<%= part[:path].gsub('/', '_') %>"
+          <% box_id = "drive_#{part[:path].gsub('/', '_')}" %>
+          <div class="drive-item">
+            <input type="checkbox" name="drives[]" value="<%= part[:path] %>" id="<%= box_id %>"
                    data-status="<%= part[:status] %>"
                    <%= 'checked' if @pool_paths.include?(part[:path]) || @pool_paths.include?(part[:mountpoint]) %>>
-            <label for="drive_<%= part[:path].gsub('/', '_') %>" style="display: inline; margin: 0; cursor: pointer; flex: 1;">
+            <label for="<%= box_id %>">
               <span class="drive-path"><%= device[:model] %></span>
-              <span class="setup-muted" style="font-size: 13px; margin-left: 6px;">
-                (<%= part[:path] %>)
-              </span>
+              <span class="setup-muted setup-note">(<%= part[:path] %>)</span>
             </label>
             <span class="drive-size"><%= part[:size] %></span>
-            <div style="width: 100%; margin-left: 30px; margin-top: 4px; font-size: 12px;">
+            <div class="drive-detail">
               <% case part[:status] %>
               <% when :mounted %>
                 <span class="setup-success">✓ Mounted at <%= part[:mountpoint] %></span>
                 <span class="setup-muted" style="margin-left: 8px;"><%= part[:fstype] %></span>
               <% when :unmounted %>
-                <% supported_fs = %w[ext2 ext3 ext4 xfs btrfs] %>
-                <% fs_supported = supported_fs.include?(part[:fstype].to_s.downcase) %>
-                <span class="setup-warning">⚠ Has existing <%= part[:fstype] %> filesystem (may contain data)</span>
-                <a href="#" class="setup-link" style="margin-left: 8px; font-size: 12px;"
-                   data-call="previewDrive" data-args='["<%= part[:path] %>", "<%= setup_preview_drive_path %>"]'>Preview contents</a>
+                <% fs_supported = %w[ext2 ext3 ext4 xfs btrfs].include?(part[:fstype].to_s.downcase) %>
+                <span class="setup-warning">⚠ Has a <%= part[:fstype] %> filesystem (it may hold files)</span>
+                <a href="#" class="setup-link" style="margin-left: 8px;"
+                   data-call="previewDrive" data-args='["<%= part[:path] %>", "<%= setup_preview_drive_path %>"]'>Preview its files</a>
                 <div style="margin-top: 4px;">
                   <% unless fs_supported %>
-                    <span class="setup-muted" style="font-size: 12px;">
-                      📂 Will be mounted as a standalone share (not pooled — <%= part[:fstype] %> doesn't support Greyhole)
-                    </span>
-                    <div style="margin-top: 2px;">
-                      <label class="setup-danger" style="font-size: 12px; display: inline; cursor: pointer;">
-                        <input type="checkbox" name="format_drives[]" value="<%= part[:path] %>" style="margin-right: 4px;"
-                               disabled data-requires="drive_<%= part[:path].gsub('/', '_') %>">
-                        Format as ext4 instead (erases all data, enables pooling)
-                      </label>
-                    </div>
-                  <% else %>
-                    <label class="setup-muted" style="font-size: 12px; display: inline; cursor: pointer;">
-                      <input type="checkbox" name="format_drives[]" value="<%= part[:path] %>" style="margin-right: 4px;"
-                             disabled data-requires="drive_<%= part[:path].gsub('/', '_') %>">
-                      Format as ext4 (erases all data)
+                    <div class="setup-muted">Mounted as a share of its own, outside the pool (Greyhole can't use <%= part[:fstype] %>).</div>
+                    <label class="setup-danger">
+                      <input type="checkbox" name="format_drives[]" value="<%= part[:path] %>" disabled data-requires="<%= box_id %>">
+                      Format it as ext4 instead (erases everything on it) to pool it
                     </label>
-                    <span class="setup-hint" style="font-size: 11px; margin-left: 4px;">— or leave unchecked to mount as-is</span>
+                  <% else %>
+                    <label class="setup-muted">
+                      <input type="checkbox" name="format_drives[]" value="<%= part[:path] %>" disabled data-requires="<%= box_id %>">
+                      Format it as ext4 (erases everything on it)
+                    </label>
+                    <span class="setup-hint">or leave it unticked to use it as it is</span>
                   <% end %>
                 </div>
               <% when :unformatted %>
-                <span class="setup-danger">⊘ No filesystem — will be formatted (ext4) and mounted</span>
+                <span class="setup-danger">No filesystem: it will be formatted (ext4) and mounted</span>
               <% end %>
             </div>
           </div>
@@ -73,49 +54,36 @@
       <% end %>
     </div>
 
-    <p class="setup-hint" style="font-size: 12px; margin-top: 4px;">
-      ⚠️ Formatting a drive erases all data on it. Only unformatted drives will be formatted.
+    <p class="setup-hint">
+      ⚠ Formatting erases everything on a drive. A drive with no filesystem is always formatted; one
+      that has a filesystem is formatted only if you tick its Format box.
     </p>
 
     <div class="setup-actions">
       <a href="<%= setup_greyhole_path %>" class="btn-skip">Skip</a>
-      <button type="submit" class="btn-kai">Prepare Drives & Continue →</button>
+      <button type="submit" class="btn-kai">Prepare drives &amp; continue →</button>
     </div>
   </form>
 <% else %>
-  <div class="setup-muted" style="text-align: center; padding: 20px;">
-    <p>No additional drives detected beyond your OS disk.</p>
-    <p style="font-size: 13px;">You can add drives later from the Shares settings.</p>
+  <div class="setup-facts setup-center">
+    <span>No drives found besides the one the system runs from.</span>
+    <span class="setup-hint">You can add drives later on Disks → Devices.</span>
   </div>
   <div class="setup-actions">
-    <div></div>
     <a href="<%= setup_greyhole_path %>" class="btn-kai">Continue →</a>
   </div>
 <% end %>
 
 <%= render 'shared/install_terminal', id: 'prepare-drives', title: 'Preparing Drives', stream_url: '' %>
 
-<!-- Drive Preview Modal -->
-<div id="preview-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); z-index:1000; display:none; align-items:center; justify-content:center;">
-  <div style="background:#fff; border-radius:12px; max-width:500px; width:90%; max-height:80vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.4);">
-    <div style="padding:16px 20px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
-      <strong id="preview-title">📂 Drive Preview</strong>
-      <a href="#" data-call="closePreview" style="color:#9ca3af; text-decoration:none; font-size:20px;">✕</a>
+<div id="preview-modal" class="setup-modal" hidden>
+  <div class="setup-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="preview-title">
+    <div class="setup-modal-head">
+      <strong id="preview-title">Drive preview</strong>
+      <button type="button" class="setup-modal-close" data-call="closePreview" aria-label="Close">✕</button>
     </div>
-    <div id="preview-body" style="padding:16px 20px;">
-      <div style="text-align:center; padding:20px; color:#7f8c9b;">Loading...</div>
+    <div id="preview-body" class="setup-modal-body">
+      <div class="preview-loading">Loading…</div>
     </div>
   </div>
 </div>
-
-<style>
-  @keyframes spin { to { transform: rotate(360deg); } }
-  @media (prefers-color-scheme: dark) {
-    #preview-modal > div { background: #161b22 !important; }
-    #preview-modal > div > div:first-child { border-bottom-color: #30363d !important; }
-    #preview-modal strong { color: #e6edf3; }
-    #preview-modal .preview-entry { border-bottom-color: #21262d !important; color: #c9d1d9; }
-    #preview-modal .preview-size { color: #8b949e !important; }
-  }
-</style>
-

@@ -1,0 +1,392 @@
+/* The first-run setup wizard (layouts/setup): one glass panel on the water, in the app's look.
+ * Loaded after application.css, so the colours, Space Grotesk and the buttons' mint come from
+ * theme.css's tokens; this file only lays the wizard out. Every page is dark. */
+
+body.setup-page {
+  height: auto;
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-block: 32px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  font-size: 14px;
+  color: var(--kai-text);
+}
+
+.setup-shell {
+  width: 100%;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Above the panel: the name, and how far along the wizard is */
+.setup-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 0 6px;
+}
+.setup-top .kai-brand { margin: 0; }
+.setup-stepcount {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--kai-muted);
+  font-variant-numeric: tabular-nums;
+}
+.setup-progress {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  padding: 0 6px;
+}
+.setup-progress .step {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+}
+.setup-progress .step.done { background: var(--kai-mint); }
+.setup-progress .step.current {
+  background: var(--kai-mint-text);
+  box-shadow: 0 0 10px var(--kai-mint-ring);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .setup-progress .step.current { animation: setup-pulse 1.6s ease-in-out infinite; }
+}
+@keyframes setup-pulse { 50% { opacity: 0.55; } }
+
+/* The panel: near-black glass, like the app's cards. Its blur sits on a layer behind the
+   content: on the panel itself, backdrop-filter would make the panel the frame of the install
+   and preview windows (position: fixed), trapping them inside it. Above the water's front
+   bubbles (z-index 1), so those windows cover the whole screen. */
+.setup-container {
+  position: relative;
+  z-index: 2;
+  isolation: isolate;
+  border-radius: 18px;
+  border: 1px solid var(--kai-line);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+}
+.setup-container::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--kai-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.setup-body { padding: 30px 32px 32px; }
+@media (max-width: 480px) {
+  .setup-body { padding: 24px 20px 24px; }
+}
+.setup-eyebrow {
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--kai-mint-text);
+}
+.setup-body h2 {
+  margin: 0 0 12px;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--kai-title);
+  text-wrap: balance;
+}
+.setup-body p {
+  margin: 0 0 16px;
+  max-width: 62ch;
+  line-height: 1.6;
+  color: var(--kai-muted);
+}
+.setup-body p strong { color: var(--kai-text); }
+.setup-body label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--kai-text);
+}
+.setup-body input[type="text"],
+.setup-body input[type="password"],
+.setup-body select {
+  width: 100%;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--kai-input-border);
+  border-radius: 10px;
+  background: var(--kai-input-bg);
+  color: var(--kai-input-text);
+  font: inherit;
+}
+.setup-body select { width: auto; min-width: 240px; max-width: 100%; margin-bottom: 6px; }
+.setup-body input::placeholder { color: var(--kai-placeholder); }
+.setup-body input[type="text"]:focus,
+.setup-body input[type="password"]:focus,
+.setup-body select:focus {
+  outline: none;
+  border-color: var(--kai-mint);
+  box-shadow: 0 0 0 3px var(--kai-mint-soft);
+}
+.setup-body input[type="checkbox"] { accent-color: var(--kai-mint); }
+.setup-body code {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--kai-code-bg);
+  color: var(--kai-mint-text);
+}
+
+/* Welcome and Done: the mark, centred */
+.setup-center { text-align: center; }
+.setup-center p { margin-left: auto; margin-right: auto; }
+.setup-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 68px;
+  height: 68px;
+  margin-bottom: 16px;
+  border-radius: 18px;
+  background: var(--kai-mint-soft);
+  box-shadow: inset 0 0 0 1px var(--kai-mint-ring);
+  color: var(--kai-mint);
+}
+
+/* Facts the server reports (memory, network): label and value rows on a lighter pane */
+.setup-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 18px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--kai-line);
+  text-align: left;
+}
+.setup-facts-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--kai-muted);
+}
+.setup-fact {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--kai-muted);
+  font-variant-numeric: tabular-nums;
+}
+.setup-fact b { font-weight: 600; color: var(--kai-title); }
+
+/* Buttons: the app's mint primary, and a quiet outline for Skip */
+.btn-kai, .btn-skip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 22px;
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+.btn-kai {
+  border: 1px solid var(--kai-mint);
+  background: var(--kai-mint);
+  color: var(--kai-on-mint);
+}
+.btn-kai:hover {
+  border-color: var(--kai-mint-text);
+  background: var(--kai-mint-text);
+  color: var(--kai-on-mint);
+  text-decoration: none;
+}
+.btn-kai.btn-wide { padding: 12px 36px; font-size: 15px; }
+.btn-skip {
+  border: 1px solid var(--kai-btn-outline-border);
+  background: transparent;
+  color: var(--kai-btn-outline-text);
+  font-weight: 600;
+}
+.btn-skip:hover {
+  background: var(--kai-btn-outline-hover-bg);
+  color: var(--kai-btn-outline-hover-text);
+  text-decoration: none;
+}
+.btn-kai:focus-visible, .btn-skip:focus-visible {
+  outline: 2px solid var(--kai-mint-ring);
+  outline-offset: 2px;
+}
+.setup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 24px;
+}
+.setup-actions > :last-child { margin-left: auto; }
+
+/* Storage: one row per drive */
+.drive-list { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.drive-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--kai-line);
+}
+.drive-item:has(> input:checked) {
+  background: var(--kai-mint-soft);
+  border-color: var(--kai-mint-ring);
+}
+.drive-item > input[type="checkbox"] { width: 18px; height: 18px; flex: none; }
+.drive-item > label { flex: 1; min-width: 0; margin: 0; cursor: pointer; }
+.drive-item .drive-path { font-weight: 600; color: var(--kai-title); }
+.drive-item .drive-size { color: var(--kai-muted); font-variant-numeric: tabular-nums; }
+.drive-detail { flex-basis: 100%; padding-left: 30px; font-size: 12px; }
+.drive-detail label { display: inline; font-size: 12px; font-weight: 500; cursor: pointer; }
+.drive-detail input[type="checkbox"] { margin-right: 4px; vertical-align: -2px; }
+
+/* Done: what was set up */
+.summary-list { margin: 20px 0; }
+.summary-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--kai-line);
+  color: var(--kai-text);
+}
+.summary-item:last-child { border-bottom: 0; }
+.summary-item .check, .summary-item .skip, .summary-item .missing { flex: none; width: 18px; text-align: center; font-weight: 700; }
+.summary-item .check { color: var(--kai-mint); }
+.summary-item .skip { color: var(--kai-muted); }
+.summary-item .missing { color: var(--kai-alert-danger-text); }
+.summary-item .setup-muted { color: var(--kai-muted); }
+
+/* Words in a state's colour */
+.setup-muted { color: var(--kai-muted); }
+.setup-label { color: var(--kai-title); }
+.setup-success { color: var(--kai-mint-text); }
+.setup-danger { color: var(--kai-alert-danger-text); }
+.setup-warning { color: var(--kai-alert-warning-text); }
+.setup-link { color: var(--kai-link); }
+.setup-hint { color: var(--kai-placeholder); font-size: 12px; }
+.setup-note { font-size: 13px; }
+.setup-danger-box, .setup-warning-box {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+.setup-danger-box {
+  background: var(--kai-alert-danger-bg);
+  border: 1px solid var(--kai-alert-danger-border);
+  color: var(--kai-alert-danger-text);
+}
+.setup-warning-box {
+  background: var(--kai-alert-warning-bg);
+  border: 1px solid var(--kai-alert-warning-border);
+  color: var(--kai-alert-warning-text);
+}
+.setup-big-number {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--kai-mint-text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A drive's preview: a window over the whole page */
+.setup-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.6);
+}
+.setup-modal[hidden] { display: none; }
+.setup-modal-dialog {
+  width: 500px;
+  max-width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+  border-radius: 16px;
+  background: var(--kai-modal-bg);
+  border: 1px solid var(--kai-modal-border);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  color: var(--kai-modal-text);
+}
+.setup-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--kai-line);
+}
+.setup-modal-head strong { color: var(--kai-title); }
+.setup-modal-close {
+  border: 0;
+  background: transparent;
+  color: var(--kai-muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.setup-modal-close:hover { color: var(--kai-title); }
+.setup-modal-body { padding: 14px 18px 18px; }
+.preview-summary { margin-bottom: 10px; font-size: 13px; color: var(--kai-muted); }
+.preview-entry {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--kai-line);
+  font-size: 14px;
+}
+.preview-entry span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.preview-size { flex: none; color: var(--kai-muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.preview-empty, .preview-loading { padding: 16px 0; text-align: center; color: var(--kai-muted); }
+.preview-error { padding: 10px 0; color: var(--kai-alert-danger-text); }
+.preview-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 6px;
+  vertical-align: -2px;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-top-color: var(--kai-mint);
+  border-radius: 50%;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .preview-spinner { animation: setup-spin 0.8s linear infinite; }
+}
+@keyframes setup-spin { to { transform: rotate(360deg); } }

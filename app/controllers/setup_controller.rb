@@ -50,15 +50,15 @@ class SetupController < ApplicationController
   def update_admin
     user = current_user
     if params[:password].blank?
-      flash[:error] = "Password cannot be blank."
+      flash.now[:error] = "Password cannot be blank."
       render :admin; return
     end
     if params[:password] != params[:password_confirmation]
-      flash[:error] = "Passwords do not match."
+      flash.now[:error] = "Passwords do not match."
       render :admin; return
     end
     if params[:password].length < 8
-      flash[:error] = "Password must be at least 8 characters."
+      flash.now[:error] = "Password must be at least 8 characters."
       render :admin; return
     end
     user.password = params[:password]
@@ -67,7 +67,7 @@ class SetupController < ApplicationController
       keep_signed_in_after_password_change(user)
       redirect_to setup_network_path
     else
-      flash[:error] = user.errors.full_messages.join(", ")
+      flash.now[:error] = user.errors.full_messages.join(", ")
       render :admin
     end
   end
@@ -166,11 +166,12 @@ class SetupController < ApplicationController
       redirect_to setup_complete_path; return
     end
 
+    # A name the share refuses (taken, too short) comes back as a RuntimeError with the reasons.
     begin
       SetupService.create_first_share(name)
       session[:first_share_created] = name
-    rescue ActiveRecord::RecordInvalid, Errno::ENOENT, Errno::EACCES => e
-      flash[:error] = e.message
+    rescue RuntimeError, ActiveRecord::RecordInvalid, Errno::ENOENT, Errno::EACCES => e
+      flash.now[:error] = e.message
       render :share; return
     end
 
