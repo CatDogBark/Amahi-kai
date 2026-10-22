@@ -242,6 +242,73 @@ RSpec.describe DnsService do
     end
   end
 
+  describe 'IPv6' do
+    it 'makes its own unique local range once, and keeps it' do
+      prefix = described_class.ula_prefix
+      expect(prefix).to match(/\Afd[0-9a-f]{2}:[0-9a-f]{4}:[0-9a-f]{4}\z/)
+      expect(described_class.ula_prefix).to eq(prefix)
+      Setting.set('dns_ula_prefix', 'fdab:cdef:1234')
+      expect([described_class.own_ipv6_address, described_class.own_ipv6_network]).to eq(%w[fdab:cdef:1234::53 fdab:cdef:1234::/64])
+    end
+
+    it 'listens on, answers and names the address it announces, while it does' do
+      Setting.set('dns_ula_prefix', 'fdab:cdef:1234')
+      expect(lines).not_to include('interface: fdab:cdef:1234::53')
+      Setting.set('dns_ipv6_advertise', '1')
+      expect(lines).to include('interface: fdab:cdef:1234::53', 'access-control: fdab:cdef:1234::/64 allow',
+                               'local-data: "kai.home.arpa. IN AAAA fdab:cdef:1234::53"')
+      expect(described_class.ipv6_server_address).to eq('fdab:cdef:1234::53')
+    end
+
+    it "uses a unique local address the router hands out, while the NAS doesn't announce one" do
+      expect(described_class.ipv6_server_address).to eq('fd12:3456:789a::10')
+    end
+
+    it 'announces the NAS as the DNS server and its range, never as a router, in lines the root helper accepts' do
+      Setting.set('dns_ula_prefix', 'fdab:cdef:1234')
+      conf = described_class.radvd_config
+      expect(conf).to include('interface ens18 {', 'AdvDefaultLifetime 0;', 'prefix fdab:cdef:1234::/64 {', 'RDNSS fdab:cdef:1234::53 {',
+                              'DNSSL home.arpa {')
+      Privileged.operations # loads libexec/amahi-helper
+      expect { AmahiHelper.radvd_conf(conf) }.not_to raise_error
+    end
+
+    it 'puts its address up before Unbound listens, and starts radvd, while it announces' do
+      allow(described_class).to receive_messages(installed?: true, running?: false, radvd_installed?: true, radvd_running?: false)
+      Setting.set('dns_mode', 'dns')
+      Setting.set('dns_ipv6_advertise', '1')
+      Setting.set('dns_ula_prefix', 'fdab:cdef:1234')
+      described_class.apply!
+      expect(Privileged.calls.map(&:first)).to eq(%w[dns.set_own_address dns.write_config services.enable dns.blocking_off
+                                                     dns.write_radvd_config services.enable])
+      expect(Privileged.calls.first.last).to eq(interface: 'ens18', address: 'fdab:cdef:1234::53')
+      expect(Privileged.calls.last.last).to eq(service: 'radvd')
+    end
+
+    it 'stops announcing, and takes its address away, when that or DNS is turned off' do
+      Dir.mktmpdir do |dir|
+        stub_const('DnsService::RADVD_CONF', "#{dir}/radvd.conf")
+        stub_const('DnsService::ULA_UNIT', "#{dir}/amahi-kai-ula.service")
+        File.write("#{dir}/radvd.conf", '')
+        File.write("#{dir}/amahi-kai-ula.service", '')
+        allow(described_class).to receive_messages(installed?: true, radvd_installed?: true)
+        described_class.apply!
+        expect(Privileged.calls.map(&:first)).to eq(%w[services.disable dns.remove_config services.disable dns.remove_radvd_config
+                                                       dns.remove_own_address])
+      end
+    end
+
+    it 'keeps what the routers announce, and finds the DNS servers that are not the NAS' do
+      allow(Privileged).to receive(:call).with('dns.check_routers', interface: 'ens18').and_return(
+        'ok' => true, 'advertisers' => [{ 'router' => 'fe80::1', 'lifetime' => 1800, 'prefixes' => ['2600:1700:abcd::/64'],
+                                          'dns' => %w[2600:1700:abcd::1 fd12:3456:789a::10], 'domains' => [] }]
+      )
+      described_class.check_routers!
+      expect(described_class.ipv6_check).to include('interface' => 'ens18', 'checked_at' => be_within(5).of(Time.now.to_i))
+      expect(described_class.other_ipv6_dns).to eq([['fe80::1', '2600:1700:abcd::1']])
+    end
+  end
+
   describe '.check' do
     it 'times a lookup of the NAS and of an outside name, nil for one that fails' do
       resolver = instance_double(Resolv::DNS, :timeouts= => nil, close: nil)

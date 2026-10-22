@@ -1216,6 +1216,70 @@ RSpec.describe 'AmahiHelper' do
     end
   end
 
+  # Network → DNS & DHCP's IPv6: radvd announcing the NAS as the IPv6 DNS server, the NAS's own
+  # unique local address, and what the routers announce.
+  describe 'IPv6 (Network → DNS & DHCP)' do
+    let(:dir) { Dir.mktmpdir }
+    let(:ran) { [] }
+
+    before do
+      stub_const('AmahiHelper::ULA_UNIT', "#{dir}/amahi-kai-ula.service")
+      allow(helper).to receive(:run_command) { |argv| ran << argv.reject { |a| a.is_a?(Hash) }.join(' ') && nil }
+    end
+
+    after { FileUtils.rm_rf(dir) }
+
+    it "accepts DnsService's radvd config, and refuses announcing a router, public ranges or other lines" do
+      allow(NetworkInterfaces).to receive(:lan).and_return('ens19' => [])
+      allow(NetworkInterfaces).to receive(:default_name).and_return('ens19')
+      allow(helper).to receive(:installed!).and_call_original
+      allow(helper).to receive(:installed!).with(AmahiHelper::RADVD).and_return(true)
+      conf = DnsService.radvd_config
+      expect(steps('dns.write_radvd_config', { 'content' => conf })).to eq([[:install, AmahiHelper::RADVD_CONF, conf, :radvd]])
+      ['AdvDefaultLifetime 1800;', 'AdvSendAdvert off;', 'prefix 2600:1700:abcd::/64 {', 'prefix fd00::/48 {', 'RDNSS 2606:4700:4700::1111 {',
+       'RDNSS 9.9.9.9 {', 'DNSSL not a domain {', 'AdvManagedFlag on;', 'interface ens19 { AdvSendAdvert on; };'].each do |line|
+        expect(refusal('dns.write_radvd_config', { 'content' => "#{line}\n" })).to include('not one Amahi-kai writes'), line
+      end
+    end
+
+    it 'puts only a unique local address on a real interface' do
+      expect(steps('dns.set_own_address', { 'interface' => 'lo', 'address' => 'fdab:cdef:1234:0::53' })).to eq([[:set_ula, 'lo', 'fdab:cdef:1234::53']])
+      [%w[lo 2600:1700::53], %w[lo 10.0.0.53], %w[lo fdab::53/64], %w[eth99nothere fdab::53]].each do |interface, address|
+        expect(refusal('dns.set_own_address', { 'interface' => interface, 'address' => address })).not_to be_nil, address
+      end
+      expect(steps('dns.check_routers', { 'interface' => 'lo' })).to eq([[:ipv6_advertisers, 'lo']])
+    end
+
+    it "keeps the NAS's own address on the interface at every boot, and takes it away" do
+      helper.do_set_ula('ens19', 'fdab:cdef:1234::53')
+      unit = File.read(AmahiHelper::ULA_UNIT)
+      expect(unit).to include("ExecStart=#{AmahiHelper::IP} -6 addr replace fdab:cdef:1234::53/64 dev ens19",
+                              "ExecStop=#{AmahiHelper::IP} -6 addr del fdab:cdef:1234::53/64 dev ens19", 'WantedBy=multi-user.target')
+      expect(ran).to eq(['/usr/bin/systemctl daemon-reload', '/usr/bin/systemctl enable amahi-kai-ula.service',
+                         '/usr/bin/systemctl restart amahi-kai-ula.service'])
+      ran.clear
+      helper.do_set_ula('ens19', 'fdab:cdef:1234::53')
+      expect(ran).to be_empty # nothing changed
+      helper.do_set_ula('ens18', 'fdab:cdef:1234::53')
+      expect(ran.first).to eq('/usr/bin/systemctl stop amahi-kai-ula.service') # the old address goes first
+      ran.clear
+      helper.do_remove_ula
+      expect(File.exist?(AmahiHelper::ULA_UNIT)).to be false
+      expect(ran).to eq(['/usr/bin/systemctl disable --now amahi-kai-ula.service', '/usr/bin/systemctl daemon-reload'])
+    end
+
+    it "reads a router advertisement: whether it's a router, its ranges, DNS servers and search domains" do
+      advert = [134, 0, 0, 64, 0, 1800, 0, 0].pack('CCnCCnNN') +
+               [3, 4, 64, 0xc0, 86_400, 14_400, 0].pack('CCCCNNN') + IPAddr.new('2600:1700:abcd::').hton +
+               [25, 5, 0, 1200].pack('CCnN') + IPAddr.new('2600:1700:abcd::1').hton + IPAddr.new('fd99::1').hton +
+               [31, 3, 0, 1200].pack('CCnN') + "\x04home\x04arpa\x00".b.ljust(16, "\0".b)
+      expect(helper.router_advertisement(advert)).to eq('lifetime' => 1800, 'prefixes' => ['2600:1700:abcd::/64'],
+                                                         'dns' => %w[2600:1700:abcd::1 fd99::1], 'domains' => ['home.arpa'])
+      expect(helper.router_advertisement([135, 0, 0, 0].pack('CCnN') + ("\0".b * 16))).to be_nil # a neighbor solicitation
+      expect(helper.router_advertisement(advert.byteslice(0, 40))['prefixes']).to eq([]) # cut short
+    end
+  end
+
   # Every drive check reads lsblk's tree. lsblk only nests partitions and volumes under their
   # disk with NAME as the first column; with PATH first it listed every device flat, so a disk
   # seemed to have nothing mounted from it and the system disk passed the checks.

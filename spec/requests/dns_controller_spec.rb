@@ -222,6 +222,43 @@ describe 'Network → DNS & DHCP', type: :request do
       end
     end
 
+    describe 'IPv6' do
+      before do
+        allow(DnsService).to receive(:installed?).and_return(true)
+        Setting.set('dns_mode', 'dns')
+      end
+
+      it 'announces the NAS once radvd is installed' do
+        allow(DnsService).to receive(:radvd_installed?).and_return(false)
+        put '/network/dns', params: { mode: 'dns', provider: 'quad9', interface: 'ens18', ipv6_advertise: '1' }
+        expect(flash[:alert]).to include('Install radvd first')
+        allow(DnsService).to receive_messages(radvd_installed?: true, radvd_running?: false)
+        put '/network/dns', params: { mode: 'dns', provider: 'quad9', interface: 'ens18', ipv6_advertise: '1' }
+        expect(Setting.get('dns_ipv6_advertise')).to eq('1')
+        expect(Privileged.calls.map(&:first)).to include('dns.set_own_address', 'dns.write_radvd_config')
+      end
+
+      it 'asks the routers, and warns when one tells devices about another DNS server' do
+        allow(Privileged).to receive(:call).with('dns.check_routers', interface: 'ens18').and_return(
+          'ok' => true, 'advertisers' => [{ 'router' => 'fe80::1', 'lifetime' => 1800, 'prefixes' => ['2600:1700:abcd::/64'],
+                                            'dns' => ['2600:1700:abcd::1'], 'domains' => [] }]
+        )
+        post '/network/dns/check_routers'
+        expect(response).to redirect_to('/network/dns#dns-ipv6')
+        allow(DnsService).to receive(:check).and_return(nil)
+        get '/network/dns'
+        expect(response.body).to include('<code>fe80::1</code>', '(a router)', 'DNS 2600:1700:abcd::1',
+                                          'tells devices to use <code>2600:1700:abcd::1</code> for DNS')
+      end
+
+      it "says so when no router answers" do
+        allow(Privileged).to receive(:call).with('dns.check_routers', interface: 'ens18').and_return('ok' => true, 'advertisers' => [])
+        post '/network/dns/check_routers'
+        get '/network/dns'
+        expect(response.body).to include('No router answered')
+      end
+    end
+
     describe 'installing Unbound, in production' do
       before { allow(Rails.env).to receive(:production?).and_return(true) }
 

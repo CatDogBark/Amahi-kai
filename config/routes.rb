@@ -31,6 +31,8 @@ Rails.application.routes.draw do
     put 'blocking', action: 'update_blocking', as: 'update_blocking'
     post 'pause_blocking', action: 'pause_blocking', as: 'pause_blocking'
     post 'resume_blocking', action: 'resume_blocking', as: 'resume_blocking'
+    post 'check_routers', action: 'check_routers', as: 'check_routers'
+    get 'install_radvd_stream', action: 'install_radvd_stream'
   end
   get '/network/gateway', to: redirect('/network/dns')
   get '/network/settings', to: redirect('/network/dns')

@@ -158,10 +158,20 @@ module AmahiHelper
   DNS_RESUME_UNIT = 'amahi-kai-dns-resume'
   BLOCKING_PAUSE = 300
 
+  # IPv6 (Network → DNS & DHCP): radvd announces the NAS as the network's IPv6 DNS server, at an
+  # address of its own in a unique local range (ULA_UNIT puts it on the interface at boot).
+  RADVD = '/usr/sbin/radvd'
+  RADVD_CONF = '/etc/radvd.conf'
+  ULA_UNIT = '/etc/systemd/system/amahi-kai-ula.service'
+  ULA = IPAddr.new('fc00::/7')
+  # How long to listen for routers' announcements (a router waits up to 3 seconds between them).
+  RA_WAIT = 4
+
   # The services Settings → Servers may control: the entries in lib/system_services.rb
   # that list actions (spec/lib/amahi_helper_spec.rb checks the two lists match).
   SERVICES = {
     'smbd' => 'smbd.service', 'nmbd' => 'nmbd.service', 'dnsmasq' => 'dnsmasq.service', 'unbound' => 'unbound.service',
+    'radvd' => 'radvd.service',
     'greyhole' => 'greyhole.service', 'docker' => 'docker.service', 'avahi-daemon' => 'avahi-daemon.service'
   }.freeze
 
@@ -359,7 +369,7 @@ module AmahiHelper
   # Packages the helper may install.
   PACKAGES = %w[
     greyhole php8.3-mbstring php8.3-mysql cloudflared tailscale docker-ce docker-ce-cli containerd.io
-    dnsmasq unbound dns-root-data fail2ban unattended-upgrades zfsutils-linux smartmontools avahi-daemon
+    dnsmasq unbound dns-root-data radvd fail2ban unattended-upgrades zfsutils-linux smartmontools avahi-daemon
   ].freeze
   APT_ENV = ENV_MIN.merge('DEBIAN_FRONTEND' => 'noninteractive').freeze
 
@@ -742,6 +752,37 @@ module AmahiHelper
       params: [],
       validate: ->(_a) { {} },
       plan: ->(_v) { [[:refresh_blocklists]] }
+    },
+    # radvd's config: the NAS announces itself as the IPv6 DNS server (RDNSS), and its own range
+    # as on the network, never as a router (AdvDefaultLifetime 0); checked with radvd --configtest.
+    'dns.write_radvd_config' => {
+      params: %w[content],
+      validate: ->(a) { installed!(RADVD) && { content: radvd_conf(a['content']) } },
+      plan: ->(v) { [[:install, RADVD_CONF, v[:content], :radvd]] }
+    },
+    'dns.remove_radvd_config' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:remove_files, RADVD_CONF]] }
+    },
+    # The NAS's own IPv6 address for DNS, a unique local one (fc00::/7), on the interface now and
+    # at every boot (ULA_UNIT).
+    'dns.set_own_address' => {
+      params: %w[interface address],
+      validate: ->(a) { { interface: network_interface(a['interface']), address: ula_address(a['address']) } },
+      plan: ->(v) { [[:set_ula, v[:interface], v[:address]]] }
+    },
+    'dns.remove_own_address' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:remove_ula]] }
+    },
+    # The routers on the interface and what they announce: a router solicitation, and the
+    # advertisements for RA_WAIT seconds (the NAS's own left out).
+    'dns.check_routers' => {
+      params: %w[interface],
+      validate: ->(a) { { interface: network_interface(a['interface']) } },
+      plan: ->(v) { [[:ipv6_advertisers, v[:interface]]] }
     },
     # Blocking stops for BLOCKING_PAUSE seconds, then systemd resumes it (dns.resume_blocking).
     'dns.pause_blocking' => {
@@ -1628,6 +1669,35 @@ module AmahiHelper
       bad = value.reject { |name| name.match?(BLOCK_DOMAIN) }
       raise Refused, "#{bad.first.inspect} isn't a domain" if bad.any?
       value.uniq
+    end
+
+    # A unique local IPv6 address (fc00::/7), with no prefix length.
+    def ula_address(value)
+      value = string(value, 'address', max: 39)
+      raise Refused, "#{value.inspect} isn't a unique local IPv6 address (fc00::/7)" unless ip_address?(value, :ipv6?) && ULA.include?(IPAddr.new(value))
+      IPAddr.new(value).to_s
+    end
+
+    # radvd's config: only what Amahi-kai writes, with unique local addresses.
+    def radvd_conf(value)
+      value = string(value, 'content', max: 4096)
+      value.each_line do |line|
+        line = line.strip
+        next if line.empty? || line.start_with?('#')
+        raise Refused, "radvd line #{line.inspect} is not one Amahi-kai writes" unless radvd_line?(line)
+      end
+      value
+    end
+
+    def radvd_line?(line)
+      return true if ['AdvSendAdvert on;', 'AdvDefaultLifetime 0;', 'AdvOnLink on;', 'AdvAutonomous on;', '};'].include?(line)
+      return true if line.match?(/\Ainterface [A-Za-z0-9_.-]{1,15} \{\z/)
+      return true if line.match?(/\ADNSSL #{UNBOUND_NAME.delete_suffix('+')}*[a-z0-9-]+ \{\z/o)
+      if (match = line.match(%r{\Aprefix ([0-9a-f:]+)/64 \{\z}))
+        return ip_address?(match[1], :ipv6?) && ULA.include?(IPAddr.new(match[1]))
+      end
+      match = line.match(/\ARDNSS ([0-9a-f:]+) \{\z/)
+      !!match && ip_address?(match[1], :ipv6?) && ULA.include?(IPAddr.new(match[1]))
     end
 
     # A network interface this machine has, by name ("ens18").
@@ -3043,6 +3113,7 @@ module AmahiHelper
       check_smb_conf(tmp) if check == :smb_conf
       check_dnsmasq_conf(tmp) if check == :dnsmasq
       check_unbound_conf(tmp) if check == :unbound
+      check_radvd_conf(tmp) if check == :radvd
       File.rename(tmp, target)
       nil
     rescue SystemCallError => e
@@ -3077,6 +3148,115 @@ module AmahiHelper
       raise Refused, "unbound-checkconf rejected the config: #{last_lines(err.empty? ? out : err, 2)}" unless status.success?
     rescue Errno::ENOENT
       raise Failed, "#{UNBOUND_CHECKCONF} is missing; is Unbound installed?"
+    end
+
+    def check_radvd_conf(path)
+      _out, err, status = Open3.capture3(ENV_MIN, [RADVD, RADVD], '--configtest', '--config', path, unsetenv_others: true, chdir: '/')
+      raise Refused, "radvd rejected the config: #{last_lines(err, 2)}" unless status.success?
+    rescue Errno::ENOENT
+      raise Failed, "#{RADVD} is missing; is radvd installed?"
+    end
+
+    # The NAS's own IPv6 address for DNS on +interface+, now and at every boot: a oneshot unit adds
+    # it (replace: running it again changes nothing) and takes it away when stopped. One that was
+    # there before is stopped first, so an old address goes.
+    def do_set_ula(interface, address)
+      content = <<~UNIT
+        [Unit]
+        Description=Amahi-kai: the NAS's own IPv6 address for DNS
+        Wants=network-online.target
+        After=network-online.target
+
+        [Service]
+        Type=oneshot
+        RemainAfterExit=yes
+        ExecStart=#{IP} -6 addr replace #{address}/64 dev #{interface}
+        ExecStop=#{IP} -6 addr del #{address}/64 dev #{interface}
+
+        [Install]
+        WantedBy=multi-user.target
+      UNIT
+      return if File.exist?(ULA_UNIT) && File.read(ULA_UNIT) == content
+      run_command(['/usr/bin/systemctl', 'stop', File.basename(ULA_UNIT), { allow_failure: true }]) if File.exist?(ULA_UNIT)
+      do_install(ULA_UNIT, content, nil)
+      run_command(%w[/usr/bin/systemctl daemon-reload])
+      run_command(['/usr/bin/systemctl', 'enable', File.basename(ULA_UNIT)])
+      run_command(['/usr/bin/systemctl', 'restart', File.basename(ULA_UNIT)])
+    end
+
+    def do_remove_ula
+      return unless File.exist?(ULA_UNIT)
+      run_command(['/usr/bin/systemctl', 'disable', '--now', File.basename(ULA_UNIT), { allow_failure: true }])
+      do_remove_files(ULA_UNIT)
+      run_command(%w[/usr/bin/systemctl daemon-reload])
+    end
+
+    # What the routers on +interface+ announce (RFC 4861): a router solicitation to all routers,
+    # then every advertisement for RA_WAIT seconds, one per router, the NAS's own left out.
+    def do_ipv6_advertisers(interface)
+      links = Socket.getifaddrs.select { |i| i.name == interface }
+      index = links.first&.ifindex or raise Failed, "#{interface} has no index"
+      own = links.filter_map { |i| i.addr.ip_address.sub(/%.*/, '') if i.addr&.ipv6? }
+      found = {}
+      Socket.open(:INET6, :RAW, Socket::IPPROTO_ICMPV6) do |socket|
+        socket.setsockopt(:SOCKET, :BINDTODEVICE, interface)
+        # Routers only answer a solicitation that comes with a hop limit of 255.
+        socket.setsockopt(Socket::IPPROTO_IPV6, Socket::IPV6_MULTICAST_HOPS, [255].pack('i'))
+        socket.setsockopt(Socket::IPPROTO_IPV6, Socket::IPV6_MULTICAST_IF, [index].pack('I'))
+        socket.send([133, 0, 0, 0].pack('CCnN'), 0, Socket.sockaddr_in(0, "ff02::2%#{interface}"))
+        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + RA_WAIT
+        while (left = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)).positive?
+          break unless IO.select([socket], nil, nil, left)
+          data, sender = socket.recvfrom(4096)
+          router = sender.ip_address.sub(/%.*/, '')
+          advert = router_advertisement(data)
+          found[router] ||= advert.merge('router' => router) if advert && !own.include?(router)
+        end
+      end
+      { 'advertisers' => found.values }
+    rescue SystemCallError => e
+      raise Failed, "couldn't listen for IPv6 routers on #{interface}: #{e.message}"
+    end
+
+    # A router advertisement's router lifetime (0: not a default router), prefixes, DNS servers
+    # (RDNSS) and search domains (DNSSL), or nil when +data+ isn't one.
+    def router_advertisement(data)
+      data = data.b
+      return unless data.bytesize >= 16 && data.getbyte(0) == 134
+      advert = { 'lifetime' => data.byteslice(6, 2).unpack1('n'), 'prefixes' => [], 'dns' => [], 'domains' => [] }
+      i = 16
+      while i + 8 <= data.bytesize
+        type = data.getbyte(i)
+        length = data.getbyte(i + 1) * 8
+        break if length.zero? || i + length > data.bytesize
+        option = data.byteslice(i, length)
+        case type
+        when 3 then advert['prefixes'] << "#{IPAddr.new_ntoh(option.byteslice(16, 16))}/#{option.getbyte(2)}" if length == 32
+        when 25 then ((length - 8) / 16).times { |n| advert['dns'] << IPAddr.new_ntoh(option.byteslice(8 + (16 * n), 16)).to_s }
+        when 31 then advert['domains'].concat(dns_names(option.byteslice(8..)))
+        end
+        i += length
+      end
+      advert
+    end
+
+    # The domain names in DNSSL's wire format (labels, each name ending in a zero byte).
+    def dns_names(bytes)
+      names = []
+      labels = []
+      i = 0
+      while i < bytes.bytesize
+        length = bytes.getbyte(i)
+        i += 1
+        if length.zero?
+          names << labels.join('.') if labels.any?
+          labels = []
+        else
+          labels << bytes.byteslice(i, length).to_s
+          i += length
+        end
+      end
+      names
     end
 
     # Installs Unbound's config (or, given nil, removes it), then has UFW let DNS in to the

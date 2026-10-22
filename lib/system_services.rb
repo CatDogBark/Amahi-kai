@@ -31,6 +31,8 @@ class SystemServices
       note: 'Turned on and off on Network → DNS & DHCP', idle: :dhcp_off, actions: %w[start stop restart] },
     { key: 'unbound', name: 'Unbound (DNS)', unit: 'unbound', package: 'unbound', check: '/usr/sbin/unbound',
       note: 'Turned on and off on Network → DNS & DHCP', idle: :dns_off, actions: %w[start stop restart] },
+    { key: 'radvd', name: 'radvd (IPv6 announcements)', unit: 'radvd', package: 'radvd', check: '/usr/sbin/radvd',
+      note: 'Turned on and off on Network → DNS & DHCP', idle: :ipv6_off, actions: %w[start stop restart] },
     { key: 'greyhole', name: 'Greyhole', unit: 'greyhole', package: 'greyhole', check: '/usr/bin/greyhole',
       process: 'greyhole --daemon', actions: %w[start stop restart] },
     { key: 'docker', name: 'Docker', unit: 'docker', package: %w[docker-ce docker.io], check: '/usr/bin/docker',
@@ -65,7 +67,8 @@ class SystemServices
                       'smartd stops itself when no drive has SMART to watch (virtual disks have none). ' \
                       'It starts with the server once a drive with SMART is connected.'],
     dns_off: ['DNS is off', 'Unbound runs while Network → DNS & DHCP is on.'],
-    dhcp_off: ['DHCP is off', 'dnsmasq runs while Network → DNS & DHCP is in the mode DNS + DHCP.']
+    dhcp_off: ['DHCP is off', 'dnsmasq runs while Network → DNS & DHCP is in the mode DNS + DHCP.'],
+    ipv6_off: ['Not announcing', 'radvd runs while Network → DNS & DHCP announces the NAS as the IPv6 DNS server.']
   }.freeze
 
   PROPERTIES = %w[Description LoadState ActiveState SubState ActiveEnterTimestamp
@@ -173,6 +176,8 @@ class SystemServices
         !DnsService.on?
       when :dhcp_off
         !DnsService.dhcp?
+      when :ipv6_off
+        !(DnsService.on? && DnsService.ipv6_advertise?)
       end
     end
 

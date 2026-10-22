@@ -86,6 +86,23 @@ NAS is off or restarting, the devices that use it can't look up names.
 - **The NAS's own lookups don't go through it:** the NAS keeps asking your router, so a problem
   with DNS can't stop it from updating.
 
+### IPv6
+
+Most internet providers hand out IPv6 too, and devices on IPv6 learn their DNS server from the
+network's announcements (router advertisements), usually the router's. If a device learns the
+router as its IPv6 DNS server, it may ask the router instead of the NAS, going around its privacy
+and blocking. The **IPv6** card shows what your routers announce (**Check now**), and warns when
+one announces a DNS server that isn't the NAS. Three ways to fix it, best first:
+
+1. **The router announces the NAS.** If your router lets you set the IPv6 DNS server it announces
+   (OpenWrt does), set it to the NAS's IPv6 address.
+2. **The router announces no IPv6 DNS server.** Devices then use the IPv4 one, the NAS.
+3. **The NAS announces itself** (*Announce the NAS as the IPv6 DNS server*, in Settings): it
+   announces an address of its own (`fd…::53`, in a private range it makes once), which stays the
+   same whatever your internet provider hands out, and never announces itself as a router. Some
+   devices handle two announcers poorly, so the first two are better where the router allows. It
+   needs radvd, which the page installs.
+
 ### Blocking ads, trackers and malware
 
 The **Blocking** card blocks ads, trackers and malware for every device that uses the NAS's DNS:

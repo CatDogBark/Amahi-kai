@@ -164,6 +164,15 @@ in front of the network. It ships in 1.0, DHCP included, once it passes the test
   20 hours old aren't downloaded again); the whole config is checked before Unbound reloads, and
   the previous blocklist stays if it's refused. Pausing moves the blocklist out, and a transient
   systemd timer runs `dns.resume_blocking` five minutes later.
+- **IPv6, as built:** the NAS's own range is a random /48 made once (RFC 4193, kept as
+  `dns_ula_prefix`), and its DNS address is `<prefix>::53`. A oneshot unit
+  (`amahi-kai-ula.service`) puts it on the interface at boot (`ip -6 addr replace`), not netplan,
+  so nothing reconfigures the link. Unbound lists it (with `ip-freebind`) and answers its /64.
+  radvd announces RDNSS and DNSSL for it, and the /64 as on-link and autonomous, so devices get an
+  address in it and reach the NAS from it, with `AdvDefaultLifetime 0`: never a default router.
+  The check sends a router solicitation (hop limit 255) on a raw ICMPv6 socket and reads the
+  advertisements for 4 seconds, leaving out the NAS's own. Operation names can't have digits, so
+  they're `dns.set_own_address`, `dns.check_routers` and so on.
 - **The check for another DHCP server:** the helper broadcasts a DHCPDISCOVER on the interface
   (from its MAC, asking for broadcast replies) and listens up to 6 seconds for an offer, leaving
   out the NAS's own. Not 3: dnsmasq, which many routers run, pings an address for 3 seconds

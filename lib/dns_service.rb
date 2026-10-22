@@ -9,7 +9,9 @@
 # if Unbound breaks, the NAS can still reach the internet to update itself.
 
 require 'ipaddr'
+require 'json'
 require 'resolv'
+require 'securerandom'
 require 'socket'
 
 module DnsService
@@ -75,6 +77,13 @@ module DnsService
   # A name the allowlist may hold (the helper's BLOCK_DOMAIN).
   BLOCK_DOMAIN = /\A(?=.{4,253}\z)(?:[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]\z/
   ALLOWLIST_MAX = 1000
+
+  # IPv6: the NAS can announce itself as the network's IPv6 DNS server (radvd), at an address of
+  # its own in a unique local range (RFC 4193) it makes once, so it stays whatever the ISP hands out.
+  RADVD = '/usr/sbin/radvd'
+  RADVD_CONF = '/etc/radvd.conf'
+  ULA_UNIT = '/etc/systemd/system/amahi-kai-ula.service'
+  ULA_PREFIX = /\Afd[0-9a-f]{2}(?::[0-9a-f]{1,4}){2}\z/
 
   class << self
     def installed?
@@ -158,6 +167,84 @@ module DnsService
       address ? address.to_s.split('.').first(3).join('.') : Setting.get('net').to_s
     end
 
+    # The NAS announces itself as the IPv6 DNS server.
+    def ipv6_advertise?
+      Setting.get('dns_ipv6_advertise') == '1'
+    end
+
+    def radvd_installed?
+      File.exist?(RADVD)
+    end
+
+    # The NAS's own unique local /48 ("fdab:cdef:1234"): made at random the first time, then kept.
+    def ula_prefix
+      saved = Setting.get('dns_ula_prefix').to_s
+      return saved if saved.match?(ULA_PREFIX)
+
+      prefix = "fd#{SecureRandom.hex(5)}".scan(/.{4}/).join(':')
+      Setting.set('dns_ula_prefix', prefix, KIND)
+      prefix
+    end
+
+    # The NAS's own IPv6 address for DNS ("fdab:cdef:1234::53"), on its own range's first /64.
+    def own_ipv6_address
+      IPAddr.new("#{ula_prefix}::53").to_s
+    end
+
+    def own_ipv6_network
+      "#{IPAddr.new("#{ula_prefix}::")}/64"
+    end
+
+    # Where devices ask over IPv6: the NAS's own address while it announces it, else a unique
+    # local address it has on the interface (from a router that hands one out), else nil.
+    def ipv6_server_address
+      return own_ipv6_address if ipv6_advertise?
+
+      NetworkInterfaces.addresses(interface.to_s).find(&:ula?)&.to_s
+    end
+
+    def radvd_config
+      <<~CONF
+        # Amahi-kai (Network → DNS & DHCP): announces the NAS as the IPv6 DNS server, never as a router
+        interface #{interface} {
+          AdvSendAdvert on;
+          AdvDefaultLifetime 0;
+          prefix #{own_ipv6_network} {
+            AdvOnLink on;
+            AdvAutonomous on;
+          };
+          RDNSS #{own_ipv6_address} {
+          };
+          DNSSL #{domain} {
+          };
+        };
+      CONF
+    end
+
+    # Asks the routers on the interface what they announce, and keeps the answer for the page.
+    def check_routers!
+      reply = Privileged.call('dns.check_routers', interface: interface)
+      Setting.set('dns_ipv6_check', JSON.generate('checked_at' => Time.now.to_i, 'interface' => interface,
+                                                  'advertisers' => reply['advertisers'] || []), KIND)
+    end
+
+    # The last check: { 'checked_at', 'interface', 'advertisers' => [{ 'router', 'lifetime',
+    # 'prefixes', 'dns', 'domains' }] }, or nil.
+    def ipv6_check
+      JSON.parse(Setting.get('dns_ipv6_check').to_s)
+    rescue JSON::ParserError
+      nil
+    end
+
+    # The IPv6 DNS servers the routers announce that aren't the NAS: devices may ask those
+    # instead, going around it. [[router, address]]
+    def other_ipv6_dns(check = ipv6_check)
+      own = [ipv6_server_address, *NetworkInterfaces.addresses(interface.to_s).reject(&:ipv4?).map(&:to_s)].compact
+      Array(check&.dig('advertisers')).flat_map do |advert|
+        Array(advert['dns']).reject { |address| own.include?(address) }.map { |address| [advert['router'], address] }
+      end
+    end
+
     # The name local names end in: the domain setting, unless it's .local (mDNS's).
     def domain
       value = Setting.get('domain').to_s.downcase
@@ -190,6 +277,7 @@ module DnsService
     # reason if the helper refuses or fails.
     def apply!
       if on?
+        Privileged.call('dns.set_own_address', interface: interface, address: own_ipv6_address) if ipv6_advertise?
         Privileged.call('dns.write_config', content: config)
         Privileged.call(running? ? 'services.restart' : 'services.enable', service: 'unbound')
         apply_blocking!
@@ -197,7 +285,27 @@ module DnsService
         Privileged.call('services.disable', service: 'unbound')
         Privileged.call('dns.remove_config')
       end
+      apply_ipv6_advertising!
       DnsmasqService.apply!
+    end
+
+    # radvd announces the NAS while DNS is on and that's chosen; otherwise it stops, and the NAS's
+    # own address goes. (Nothing to undo where neither was ever set up.)
+    def apply_ipv6_advertising!
+      if on? && ipv6_advertise?
+        Privileged.call('dns.write_radvd_config', content: radvd_config)
+        Privileged.call(radvd_running? ? 'services.restart' : 'services.enable', service: 'radvd')
+      else
+        if radvd_installed? && File.exist?(RADVD_CONF)
+          Privileged.call('services.disable', service: 'radvd')
+          Privileged.call('dns.remove_radvd_config')
+        end
+        Privileged.call('dns.remove_own_address') if File.exist?(ULA_UNIT)
+      end
+    end
+
+    def radvd_running?
+      radvd_installed? && Shell.output('systemctl', 'is-active', 'radvd').strip == 'active'
     end
 
     # Rewrites the config for changes made elsewhere (fixed hosts, DNS aliases). Does nothing
@@ -282,16 +390,20 @@ module DnsService
 
     private
 
-    # The NAS's own (127.0.0.1, ::1), the interface's IPv4 addresses and ULAs, and Tailscale's.
+    # The NAS's own (127.0.0.1, ::1), the interface's IPv4 addresses and ULAs, the address it
+    # announces (on the interface once its unit runs: ip-freebind lets Unbound start first), and
+    # Tailscale's.
     def listening(own, tailscale)
-      lan = own.select { |address| address.ipv4? || address.ula? }
-      (%w[127.0.0.1 ::1] + (lan + tailscale.reject(&:link_local?)).map(&:to_s)).uniq
+      lan = own.select { |address| address.ipv4? || address.ula? }.map(&:to_s)
+      lan << own_ipv6_address if ipv6_advertise?
+      (%w[127.0.0.1 ::1] + lan + tailscale.reject(&:link_local?).map(&:to_s)).uniq
     end
 
     # The networks on the interface, and Tailscale's when it's on. (Unbound always answers the
     # NAS itself.)
     def allowed(own, tailscale)
       networks = own.reject(&:link_local?).map(&:network)
+      networks << own_ipv6_network if ipv6_advertise?
       networks << 'fe80::/10' if own.any?(&:link_local?)
       networks.concat(NetworkInterfaces::TAILSCALE_NETS) if tailscale.any?
       networks.uniq
@@ -301,6 +413,8 @@ module DnsService
     # the fixed hosts, then the DNS aliases. The NAS and the fixed hosts answer reverse lookups.
     def local_data(own)
       nas = own.select { |address| address.ipv4? || address.ula? }.map(&:to_s)
+      nas << own_ipv6_address if ipv6_advertise?
+      nas.uniq!
       records = {}
       add = lambda do |name, addresses, reverse|
         name = name.to_s.downcase

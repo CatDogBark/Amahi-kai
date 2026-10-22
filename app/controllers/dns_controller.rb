@@ -33,6 +33,12 @@ class DnsController < ApplicationController
     @blocking_status = DnsService.blocking_status
     @refreshing = @blocking && DnsService.on? && DnsService.blocklists_refreshing?
     @paused_until = DnsService.paused_until if @blocking
+    @ipv6_advertise = DnsService.ipv6_advertise?
+    @radvd_installed = DnsService.radvd_installed?
+    @ipv6_address = DnsService.ipv6_server_address
+    @own_ipv6_address = DnsService.own_ipv6_address
+    @ipv6_check = DnsService.ipv6_check
+    @other_ipv6_dns = DnsService.other_ipv6_dns(@ipv6_check)
   end
 
   def update
@@ -49,6 +55,7 @@ class DnsController < ApplicationController
     Setting.set('dns_mode', mode, KIND)
     Setting.set('dns_provider', provider, KIND)
     Setting.set('dns_interface', interface, KIND)
+    Setting.set('dns_ipv6_advertise', params[:ipv6_advertise] == '1' ? '1' : '0', KIND)
     if provider == 'custom'
       Setting.set('dns_custom_addresses', params[:custom_addresses].to_s.split(/[\s,]+/).reject(&:empty?).join(' '), KIND)
       Setting.set('dns_custom_tls_name', params[:custom_tls_name].to_s.strip.downcase, KIND)
@@ -113,6 +120,19 @@ class DnsController < ApplicationController
   rescue Privileged::Error => e
     flash[:alert] = "Couldn't resume blocking: #{e.message}"
     redirect_to dns_index_path
+  end
+
+  # Asks the network's IPv6 routers what they announce (about 4 seconds).
+  def check_routers
+    DnsService.check_routers!
+    redirect_to dns_index_path(anchor: 'dns-ipv6')
+  rescue Privileged::Error => e
+    flash[:alert] = "Couldn't ask the IPv6 routers: #{e.message}"
+    redirect_to dns_index_path
+  end
+
+  def install_radvd_stream
+    install(%w[radvd], 'radvd', 'radvd', 'the NAS announces itself') { DnsService.on? && DnsService.ipv6_advertise? }
   end
 
   def install_stream
@@ -190,6 +210,7 @@ class DnsController < ApplicationController
       problems << "#{interface} has no IPv4 address for devices to use"
     end
     problems << 'Install Unbound first' if mode != 'off' && !DnsService.installed?
+    problems << 'Install radvd first, to announce the NAS over IPv6' if mode != 'off' && params[:ipv6_advertise] == '1' && !DnsService.radvd_installed?
     return problems unless mode == 'dns_dhcp' && problems.empty?
 
     dhcp_problems(interface, interfaces[interface], dhcp)

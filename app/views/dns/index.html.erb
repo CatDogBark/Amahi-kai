@@ -169,6 +169,25 @@
           <% end %>
         </select>
 
+        <h6>IPv6</h6>
+        <div class="form-check mb-1">
+          <input class="form-check-input" type="checkbox" name="ipv6_advertise" value="1" id="dns-ipv6-advertise" <%= 'checked' if @ipv6_advertise %>>
+          <label class="form-check-label" for="dns-ipv6-advertise">Announce the NAS as the IPv6 DNS server <span class="badge bg-secondary ms-1">Advanced</span></label>
+        </div>
+        <p class="text-muted small mb-2">
+          Devices using IPv6 learn their DNS server from the network's announcements, usually your router's. With this on,
+          the NAS announces itself too, at <code><%= @own_ipv6_address %></code>, an address of its own that stays the same
+          whatever your internet provider hands out. It never announces itself as a router. Better still, if your router
+          lets you set the IPv6 DNS server it announces (OpenWrt does), set it to the NAS there; see IPv6, below.
+        </p>
+        <% unless @radvd_installed %>
+          <div class="dns-radvd mb-2">
+            <p class="text-muted small mb-2">Announcing needs radvd, from Ubuntu. Installing it changes nothing until you save with this ticked.</p>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-call="openInstallTerminal" data-args='["radvd"]'>Install radvd</button>
+          </div>
+        <% end %>
+        <div class="mb-4"></div>
+
         <button type="submit" class="btn btn-primary">Save</button>
       </div>
     </div>
@@ -257,6 +276,56 @@
     </div>
   </div>
 
+  <%# IPv6: what the network announces, and whether devices learn the NAS %>
+  <% if @mode != 'off' %>
+  <div class="card mb-4" id="dns-ipv6">
+    <div class="card-header d-flex align-items-center justify-content-between">
+      <h5 class="mb-0"><%= lucide_icon('network', size: 18) %> IPv6</h5>
+      <%= button_to 'Check now', dns_check_routers_path, method: :post, class: 'btn btn-sm btn-outline-secondary', form_class: 'd-inline' %>
+    </div>
+    <div class="card-body">
+      <p class="text-muted small">
+        <% if @ipv6_address %>
+          The NAS answers DNS over IPv6 at <code><%= @ipv6_address %></code><%= @ipv6_advertise ? ', which it announces' : ', from a range your router hands out' %>.
+        <% else %>
+          The NAS has no fixed IPv6 address for DNS on this network, so devices ask it over IPv4.
+        <% end %>
+        <strong>Check now</strong> asks the network's routers what they announce (it takes a few seconds).
+      </p>
+
+      <% if @ipv6_check %>
+        <p class="small mb-2">Checked <%= time_ago_in_words(Time.at(@ipv6_check['checked_at'].to_i)) %> ago, on <%= @ipv6_check['interface'] %>:</p>
+        <% if @ipv6_check['advertisers'].blank? %>
+          <p class="small text-muted">No router answered. Devices here don't use IPv6 (or it's off), so they use the NAS's IPv4 address for DNS.</p>
+        <% else %>
+          <ul class="small dns-routers">
+            <% @ipv6_check['advertisers'].each do |advert| %>
+              <li>
+                <code><%= advert['router'] %></code>
+                <%= advert['lifetime'].to_i.zero? ? '(not a router)' : '(a router)' %>:
+                <%= advert['prefixes'].any? ? "addresses in #{advert['prefixes'].join(', ')}" : 'no address range' %>;
+                <%= advert['dns'].any? ? "DNS #{advert['dns'].join(', ')}" : 'no DNS server' %>
+              </li>
+            <% end %>
+          </ul>
+          <% if @other_ipv6_dns.any? %>
+            <div class="alert alert-warning small mb-0">
+              <% @other_ipv6_dns.each do |router, address| %>
+                <code><%= router %></code> tells devices to use <code><%= address %></code> for DNS.
+              <% end %>
+              Devices may ask that instead of the NAS, going around its privacy and blocking. In that router's IPv6 (or
+              DHCPv6) settings, set the DNS server it announces to <code><%= @ipv6_address || 'the NAS' %></code>, or have it
+              announce none, so devices use the NAS's IPv4 address.
+            </div>
+          <% elsif @ipv6_address %>
+            <p class="small text-success mb-0">✓ Devices learn only the NAS as their IPv6 DNS server.</p>
+          <% end %>
+        <% end %>
+      <% end %>
+    </div>
+  </div>
+  <% end %>
+
   <%# How devices start using it, and how to undo it %>
   <div class="card mb-4" id="dns-how">
     <div class="card-header"><h5 class="mb-0"><%= lucide_icon('help-circle', size: 18) %> Using it</h5></div>
@@ -284,3 +353,4 @@
 
 <%= render 'shared/install_terminal', id: 'unbound', title: 'Installing Unbound', stream_url: dns_install_stream_path %>
 <%= render 'shared/install_terminal', id: 'dnsmasq', title: 'Installing dnsmasq', stream_url: dns_install_dnsmasq_stream_path %>
+<%= render 'shared/install_terminal', id: 'radvd', title: 'Installing radvd', stream_url: dns_install_radvd_stream_path %>
