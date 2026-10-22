@@ -20,7 +20,7 @@ Website: https://amahi-kai.com
 
 ## Modernization History
 
-This fork was created in **February 2026** to modernize the Amahi Platform for current Ubuntu/Debian systems with updated dependencies.
+This fork was created in **February 2026** to modernize the Amahi Platform for current Ubuntu systems with updated dependencies.
 
 **Modernization performed by:**
 - **Kai 🌊** (OpenClaw AI Agent) - Technical implementation
@@ -28,7 +28,7 @@ This fork was created in **February 2026** to modernize the Amahi Platform for c
 
 ### Key Changes from Original
 
-- **Platform**: Migrated from Fedora to Ubuntu 24.04 / Debian 12
+- **Platform**: Migrated from Fedora to Ubuntu 24.04
 - **Ruby**: Upgraded from 2.4.3 → 3.2.10
 - **Rails**: Upgraded from 3.x → 5.2 → 6.0 → 6.1 → 7.0 → 7.1 → 7.2 → 8.0.4
 - **Bootstrap**: Upgraded from 3/4 → 5.3
