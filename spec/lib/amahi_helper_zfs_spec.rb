@@ -65,6 +65,7 @@ RSpec.describe 'AmahiHelper ZFS pools' do
     allow(helper).to receive(:pooled_devices).and_return('/dev/sdh1' => 'old')
     allow(helper).to receive(:stable_path) { |disk| "/dev/disk/by-id/ata-SSD_#{File.basename(disk)}" }
     allow(helper).to receive(:ssd?).and_return(true)
+    allow(helper).to receive(:other_mount_views).and_return([])
   end
 
   after { FileUtils.rm_rf(dir) }
@@ -613,6 +614,28 @@ RSpec.describe 'AmahiHelper ZFS pools' do
       allow(helper).to receive(:do_install) { |path, content, *| File.write(path, content) }
       helper.do_forget_app_storage(%w[gone store])
       expect(JSON.parse(File.read("#{dir}/app-storage.json"))).to eq('other' => 'tank')
+    end
+
+    it "won't take a pool offline or delete it while an app's container has a folder on it mounted, and names the app" do
+      id = 'b' * 64
+      allow(helper).to receive(:system_peer_groups).and_return(%w[45])
+      allow(helper).to receive(:container_names).and_return(id => 'amahi-bitshare')
+      # the share Vault, given to bitShare and deleted since: its folder is still bound in the container
+      container = { mountinfo: "700 650 0:52 /vault /shares/Vault rw,relatime - zfs old/shares rw,xattr\n",
+                    cgroup: "0::/system.slice/docker-#{id}.scope\n", comm: 'bitshare-server' }
+      # a service systemd sandboxes sees the pool too, but its copy follows the system's mount
+      service = { mountinfo: "180 111 0:52 / /srv/pools/old/shares rw shared:90 master:45 - zfs old/shares rw\n",
+                  cgroup: "0::/system.slice/systemd-logind.service\n", comm: 'systemd-logind' }
+      other = { mountinfo: "701 650 0:60 / /data rw - zfs tank/apps/x rw\n", cgroup: "0::/x\n", comm: 'x' }
+      allow(helper).to receive(:other_mount_views).and_return([container, service, other])
+      why = 'old is still in use by the app bitshare, which has folders on it mounted: stop it on Apps, then %s'
+      expect(refusal('pools.export', { 'name' => 'old' })).to eq(format(why, 'take it offline'))
+      expect(refusal('pools.destroy', { 'name' => 'old', 'confirm' => 'old' })).to eq(format(why, 'delete it'))
+
+      allow(helper).to receive(:other_mount_views).and_return([service, other])
+      expect(refusal('pools.destroy', { 'name' => 'old', 'confirm' => 'old' })).to be_nil
+      expect(helper.pool_mount_holders('tank')).to eq(['x']) # no container by that id: its program
+      expect(helper.pool_mount_holders('ol')).to eq([])
     end
 
     it 'destroys a pool only when its name is typed again, then frees its drives' do

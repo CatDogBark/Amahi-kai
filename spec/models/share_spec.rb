@@ -184,6 +184,17 @@ describe Share do
       expect(share.destroy).to be false
       expect(share.errors.full_messages.first).to include("still on the pool drives")
     end
+
+    it "refuses a share an installed app was given, and names the app" do
+      share = create(:share, name: "Vault")
+      app = create(:docker_app, name: 'bitShare', status: 'stopped', shares: [{ name: 'vault', write: true }])
+      expect(share.destroy).to be false
+      expect(share.errors.full_messages.first).to eq('bitShare has Vault. Take it off with Change under its shares on Apps, then delete it.')
+      expect(Privileged.calls.map(&:first)).not_to include('shares.remove_dir')
+
+      app.update!(shares: [])
+      expect(share.destroy).to be_truthy
+    end
   end
 
 end
