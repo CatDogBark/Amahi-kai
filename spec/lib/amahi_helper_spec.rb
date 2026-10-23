@@ -1303,8 +1303,10 @@ RSpec.describe 'AmahiHelper' do
     let(:before_rules) { "# rules.before\n*filter\n:ufw-before-input - [0:0]\n-A ufw-before-input -i lo -j ACCEPT\nCOMMIT\n" }
 
     before do
-      stub_const('AmahiHelper::WAN_NETPLAN', "#{dir}/70-amahi-kai-wan.yaml")
+      stub_const('AmahiHelper::NETPLAN_DIR', "#{dir}/netplan")
+      stub_const('AmahiHelper::WAN_NETPLAN', "#{dir}/netplan/70-amahi-kai-wan.yaml")
       stub_const('AmahiHelper::ROUTER_SYSCTL', "#{dir}/90-amahi-kai-router.conf")
+      Dir.mkdir("#{dir}/netplan")
       stub_const('AmahiHelper::ROUTER_STATE', "#{dir}/router.json")
       stub_const('AmahiHelper::UFW_CONF', "#{dir}/ufw.conf")
       stub_const('AmahiHelper::UFW_BEFORE_RULES', "#{dir}/before.rules")
@@ -1355,7 +1357,7 @@ RSpec.describe 'AmahiHelper' do
                          '/usr/sbin/ufw route allow in on ens19 out on ens20',
                          '/usr/sbin/ufw route allow in on ens20 out on ens19 to 10.99.0.60 port 80 proto tcp',
                          '/usr/sbin/ufw insert 1 deny in on ens20', '/usr/sbin/ufw reload'])
-      expect(JSON.parse(File.read(AmahiHelper::ROUTER_STATE))).to eq('lan' => 'ens19', 'wan' => 'ens20',
+      expect(JSON.parse(File.read(AmahiHelper::ROUTER_STATE))).to eq('lan' => 'ens19', 'wan' => 'ens20', 'pinned' => {},
                                                                       'forwards' => [{ 'protocol' => 'tcp', 'port' => 8080, 'address' => '10.99.0.60', 'to_port' => 80 }])
     end
 
@@ -1391,6 +1393,69 @@ RSpec.describe 'AmahiHelper' do
       ran.clear
       helper.do_router_off # nothing in place: nothing to do
       expect(ran).to be_empty
+    end
+
+    describe "the LAN interface's netplan" do
+      let(:installer_file) { "#{dir}/netplan/50-cloud-init.yaml" }
+      let(:installer_yaml) do
+        "network:\n  version: 2\n  ethernets:\n    ens19:\n      addresses:\n      - \"10.99.0.1/24\"\n      nameservers:\n" \
+          "        addresses:\n        - 192.168.1.1\n        search: []\n      routes:\n      - to: \"default\"\n        via: \"192.168.1.1\"\n"
+      end
+
+      before { File.write(installer_file, installer_yaml) }
+
+      it "puts the LAN's default route behind the internet's, keeping the file as it was beside it" do
+        pinned = helper.pin_lan_netplan('ens19')
+        expect(pinned.keys).to eq([installer_file])
+        after = YAML.safe_load(File.read(installer_file))
+        expect(after['network']['ethernets']['ens19']['routes']).to eq([{ 'to' => 'default', 'via' => '192.168.1.1', 'metric' => 200 }])
+        expect(after['network']['ethernets']['ens19']['addresses']).to eq(['10.99.0.1/24'])
+        expect(File.read("#{installer_file}.amahi-kai-before-router")).to eq(installer_yaml)
+        expect(File.stat(installer_file).mode & 0o777).to eq(0o600)
+        expect(helper.pin_lan_netplan('ens19')).to eq({}) # nothing more to change
+        expect(File.read("#{installer_file}.amahi-kai-before-router")).to eq(installer_yaml) # the first copy is the one kept
+      end
+
+      it 'pins an address the interface got by DHCP, and turns gateway4 into a route behind' do
+        File.write(installer_file, "network:\n  version: 2\n  ethernets:\n    ens19:\n      dhcp4: true\n      gateway4: 10.99.0.254\n")
+        ifaddr = Struct.new(:name, :addr, :netmask)
+        allow(Socket).to receive(:getifaddrs).and_return([ifaddr.new('ens19', Addrinfo.ip('10.99.0.1'), Addrinfo.ip('255.255.255.0')),
+                                                          ifaddr.new('ens19', Addrinfo.ip('fe80::1'), Addrinfo.ip('ffff:ffff:ffff:ffff::'))])
+        helper.pin_lan_netplan('ens19')
+        entry = YAML.safe_load(File.read(installer_file))['network']['ethernets']['ens19']
+        expect(entry).to eq('dhcp4' => false, 'addresses' => ['10.99.0.1/24'], 'routes' => [{ 'to' => 'default', 'via' => '10.99.0.254', 'metric' => 200 }])
+      end
+
+      it "leaves other interfaces, a route that's already behind, and a file it can't read alone" do
+        File.write("#{dir}/netplan/60-island.yaml", "network:\n  version: 2\n  ethernets:\n    ens18:\n      routes:\n      - to: default\n        via: 192.168.1.1\n")
+        File.write("#{dir}/netplan/61-behind.yaml", "network:\n  version: 2\n  ethernets:\n    ens19:\n      routes:\n      - to: default\n        via: 10.99.0.9\n        metric: 100\n")
+        File.write("#{dir}/netplan/62-broken.yaml", "network: [\n")
+        expect(helper.pin_lan_netplan('ens19').keys).to eq([installer_file])
+        expect(File.read("#{dir}/netplan/60-island.yaml")).not_to include('metric')
+        expect(File.read("#{dir}/netplan/61-behind.yaml")).to include('metric: 100')
+        expect(Dir.glob("#{dir}/netplan/*before-router").map { |f| File.basename(f) }).to eq(['50-cloud-init.yaml.amahi-kai-before-router'])
+      end
+
+      it 'is put back by the way back, unless it was changed since' do
+        helper.do_router_on('ens19', 'ens20', [])
+        expect(File.read(installer_file)).to include('metric: 200')
+        expect(JSON.parse(File.read(AmahiHelper::ROUTER_STATE))['pinned'].keys).to eq([installer_file])
+        expect(helper.do_router_off).to be_nil
+        expect(File.read(installer_file)).to eq(installer_yaml)
+        expect(File.exist?("#{installer_file}.amahi-kai-before-router")).to be false
+
+        helper.do_router_on('ens19', 'ens20', [])
+        File.write(installer_file, "#{File.read(installer_file)}# edited by hand\n")
+        expect(helper.do_router_off).to include('was changed since router mode set it up')
+        expect(File.read(installer_file)).to include('edited by hand')
+        expect(File.exist?("#{installer_file}.amahi-kai-before-router")).to be true
+      end
+
+      it 'is put back when netplan refuses the result' do
+        allow(helper).to receive(:run_command) { |argv| raise AmahiHelper::Failed, 'netplan exited 1' if argv[1] == 'generate' }
+        expect { helper.do_router_on('ens19', 'ens20', []) }.to raise_error(AmahiHelper::Failed)
+        expect(File.read(installer_file)).to eq(installer_yaml)
+      end
     end
 
     it "leaves the internet interface out of the apps' LAN subnets while the NAS is the router" do

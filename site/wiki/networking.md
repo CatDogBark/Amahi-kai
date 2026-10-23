@@ -107,6 +107,10 @@ empty, your devices on its LAN ports and Wi-Fi as before).
    refuses if you're connected through the interface that would become the internet side, since
    it would stop answering you).
 
+The NAS's own network settings for the LAN interface are adjusted for you: an address it got
+from the old router is kept as a fixed one, and a route it had through the old router steps
+behind the internet's. The file is put back when you leave router mode.
+
 Nothing from the internet reaches the NAS or your devices except the **ports you let in**, on
 the card that appears: a port, a protocol, the device (give it a fixed address on Network → Hosts
 first) and its port. The NAS's own services (SSH, the web UI, Samba, DNS) never answer the

@@ -176,7 +176,12 @@ module AmahiHelper
   # UFW's rules let the LAN out, the forwards in, and nothing else in on the internet side.
   # ROUTER_STATE holds what's in place, for the way back and for lan_subnets.
   NETPLAN = '/usr/sbin/netplan'
-  WAN_NETPLAN = '/etc/netplan/70-amahi-kai-wan.yaml'
+  NETPLAN_DIR = '/etc/netplan'
+  WAN_NETPLAN = "#{NETPLAN_DIR}/70-amahi-kai-wan.yaml".freeze
+  # The LAN interface's own default route (to the router the NAS replaces) goes behind the
+  # internet interface's (50). Its netplan file is kept as it was, for the way back.
+  LAN_ROUTE_METRIC = 200
+  NETPLAN_BACKUP_SUFFIX = '.amahi-kai-before-router'
   ROUTER_SYSCTL = '/etc/sysctl.d/90-amahi-kai-router.conf'
   ROUTER_STATE = "#{BLOCKLIST_DIR}/router.json".freeze
   UFW_CONF = '/etc/ufw/ufw.conf'
@@ -3340,11 +3345,13 @@ module AmahiHelper
     # rule exists, which the route rule makes sure of). Rules from a previous state go first, so
     # a changed interface or forward leaves nothing behind.
     def do_router_on(lan, wan, forwards)
+      pinned = pin_lan_netplan(lan)
       do_install(WAN_NETPLAN, wan_netplan(wan), nil, '0600')
       begin
         run_command([NETPLAN, 'generate'])
       rescue Failed
         do_remove_files(WAN_NETPLAN)
+        restore_lan_netplan(pinned)
         raise
       end
       run_command([NETPLAN, 'apply'])
@@ -3359,7 +3366,9 @@ module AmahiHelper
       end
       run_command([UFW, 'insert', '1', 'deny', 'in', 'on', wan])
       run_command([UFW, 'reload'])
-      state = { 'lan' => lan, 'wan' => wan, 'forwards' => forwards.map { |f| f.transform_keys(&:to_s) } }
+      previous_pinned = previous ? previous['pinned'] : nil
+      state = { 'lan' => lan, 'wan' => wan, 'forwards' => forwards.map { |f| f.transform_keys(&:to_s) },
+                'pinned' => (previous_pinned || {}).merge(pinned) }
       do_install(ROUTER_STATE, "#{JSON.generate(state)}\n", nil, '0644')
       nil
     end
@@ -3376,13 +3385,77 @@ module AmahiHelper
       end
       do_remove_files(ROUTER_SYSCTL, ROUTER_STATE)
       run_command(['/usr/sbin/sysctl', '-q', '-w', 'net.ipv4.ip_forward=0', { allow_failure: true }])
-      return nil unless File.exist?(WAN_NETPLAN)
+      notes = restore_lan_netplan(state && state['pinned'])
+      return notes unless File.exist?(WAN_NETPLAN)
       wan = File.read(WAN_NETPLAN)[/^    ([A-Za-z0-9_.-]{1,15}):$/, 1]
       do_remove_files(WAN_NETPLAN)
       run_command([NETPLAN, 'apply', { allow_failure: true }])
       # netplan apply leaves an interface it no longer knows as it was; its address goes too.
       run_command([IP, '-4', 'addr', 'flush', 'dev', wan, { allow_failure: true }]) if wan
+      notes
+    end
+
+    # The LAN interface's netplan files made to fit router mode: an address it keeps (one from
+    # the router the NAS replaces would run out), and its default route, if it has one, behind
+    # the internet's. A file changed is kept as it was beside it (NETPLAN_BACKUP_SUFFIX), once.
+    # Comments in it don't survive (it's read and written as YAML); the installer's file has
+    # none. Returns { path => sha256 of what was written }, for the way back.
+    def pin_lan_netplan(lan, dir = NETPLAN_DIR)
+      Dir.glob(File.join(dir, '*.yaml')).sort.each_with_object({}) do |path, pinned|
+        data = netplan_yaml(path) or next
+        kinds = %w[ethernets bridges bonds vlans].select { |kind| data.dig('network', kind, lan).is_a?(Hash) }
+        next if kinds.empty?
+        before = File.read(path)
+        original = Marshal.load(Marshal.dump(data))
+        kinds.each { |kind| pin_lan_entry(data['network'][kind][lan], lan) }
+        next if data == original # nothing to change: the file stays as it is, comments and all
+        content = YAML.dump(data)
+        backup = path + NETPLAN_BACKUP_SUFFIX
+        do_install(backup, before, nil, '0600') unless File.exist?(backup)
+        do_install(path, content, nil, '0600')
+        pinned[path] = Digest::SHA256.hexdigest(content)
+      end
+    end
+
+    def pin_lan_entry(entry, lan)
+      if [true, 'yes', 'true'].include?(entry['dhcp4'])
+        entry['dhcp4'] = false
+        current = Socket.getifaddrs.select { |i| i.name == lan && i.addr&.ipv4? && i.netmask }.map do |i|
+          "#{i.addr.ip_address}/#{IPAddr.new(i.netmask.ip_address).to_i.to_s(2).count('1')}"
+        end
+        entry['addresses'] = (Array(entry['addresses']) + current).uniq
+      end
+      if (gateway = entry.delete('gateway4'))
+        entry['routes'] = Array(entry['routes']) + [{ 'to' => 'default', 'via' => gateway }]
+      end
+      Array(entry['routes']).each do |route|
+        next unless route.is_a?(Hash) && %w[default 0.0.0.0/0].include?(route['to'].to_s) && route['via']
+        route['metric'] = LAN_ROUTE_METRIC if route['metric'].to_i <= 50
+      end
+    end
+
+    def netplan_yaml(path)
+      data = YAML.safe_load(File.read(path))
+      data.is_a?(Hash) && data['network'].is_a?(Hash) ? data : nil
+    rescue Psych::SyntaxError, SystemCallError
       nil
+    end
+
+    # Puts back the files pin_lan_netplan changed, each only while it's still what the helper
+    # wrote (one changed since is left, and said so). Returns the notes, or nil.
+    def restore_lan_netplan(pinned)
+      notes = []
+      (pinned || {}).each do |path, sha|
+        backup = path + NETPLAN_BACKUP_SUFFIX
+        next unless File.exist?(backup)
+        if File.exist?(path) && Digest::SHA256.hexdigest(File.read(path)) != sha
+          notes << "#{path} was changed since router mode set it up, so it's left as it is (its copy from before is #{backup})"
+          next
+        end
+        do_install(path, File.read(backup), nil, '0600')
+        do_remove_files(backup)
+      end
+      notes.empty? ? nil : notes.join('; ')
     end
 
     def router_in_place?

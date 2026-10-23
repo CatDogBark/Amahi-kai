@@ -6,7 +6,7 @@ All notable changes to Amahi-kai are documented here.
 
 ### 🚀 Major Features
 
-- **Router mode** (Network → DNS & DHCP) — A fourth mode: the NAS is the way to the internet. A second network interface takes the provider's connection, your devices reach the internet through the NAS, and your old router becomes an access point. Nothing from the internet reaches the NAS or your devices except the ports you let in, on the page's new card (a port, a protocol, the device, its port). It needs the firewall on, and it refuses to turn the interface you're connected through into the internet side. The page says the way back. IPv6 for the house, PPPoE and a static address come later.
+- **Router mode** (Network → DNS & DHCP) — A fourth mode: the NAS is the way to the internet. A second network interface takes the provider's connection, your devices reach the internet through the NAS, and your old router becomes an access point. Nothing from the internet reaches the NAS or your devices except the ports you let in, on the page's new card (a port, a protocol, the device, its port). It needs the firewall on, and it refuses to turn the interface you're connected through into the internet side. The LAN interface's own network settings are adjusted for you (an address from the old router kept as a fixed one, its route stepped behind the internet's) and put back when you leave the mode. The page says the way back. IPv6 for the house, PPPoE and a static address come later.
 
 ## [0.9.2] — 2026-10-22
 
