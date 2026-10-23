@@ -176,6 +176,14 @@ A fourth mode, **Router**: DNS + DHCP, and the NAS is the way to the internet.
 - **Later:** IPv6 for the house (prefix delegation, a real default route announced), PPPoE, a
   static address, and a WAN-side firewall log.
 
+### Security at the routing layer (planned 2026-10-23)
+
+The switches, their order and their limits are in [`release-1.0.md`](release-1.0.md) §2c: every
+device uses the NAS's DNS (port 53 redirected on the LAN, 853 blocked out, the DoH providers
+blocked by name through Blocking), the vendor tracker lists, Tailscale's port in on the WAN,
+per-device LAN only, anti-spoofing and a dropped-attempts count. The Network tab's split
+(§2d) comes between the first three and the rest.
+
 ### Later
 
 - Tailscale devices using the NAS for DNS (split DNS), so blocklists and local names work away

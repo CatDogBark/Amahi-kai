@@ -47,10 +47,52 @@ announced) is a slice of its own after.
 
 Built and tried on the island on 2026-10-23, with a third leg: `vmbr8` with a fake-ISP container on
 it (DHCP and DNS on its island side, NAT out through the house), the test VM's `ens20` as the WAN,
-the client routed out through the test VM; the forward, the sealed WAN side and the way back all
-passed. What's left is the house, with CatDogBark's laptop tethered to his phone so the
+the client routed out through the test VM; the forward, the sealed WAN side, the way back and a
+reboot all passed. What's left is the house: the Linksys in its Bridge Mode (an access point and
+switch, its two SSIDs kept, the OpenWrt bridge still connecting to it), the modem's cable run to
+forge for the test, and later forge, the Linksys and the modem side by side
+([`testing/networking.md`](../testing/networking.md) §5b), with CatDogBark's laptop tethered to his phone so the
 session survives whatever the NAS does, and the provider's cable moved from his router to a spare
 port on forge (it's an ISP gateway, so its bridge mode is part of that day).
+
+## 2c. Security at the routing layer
+
+CatDogBark (2026-10-23): a home router today should keep devices from spying as far as a
+network can, layered with the encrypted DNS, without breaking the devices or the tunnels.
+Switches in router mode, in this order:
+
+1. **Every device uses the NAS's DNS** (on by default in router mode): lookups a device sends
+   elsewhere (Roku, Google devices and some TVs ask 8.8.8.8 directly) are redirected to the NAS,
+   devices' own encrypted DNS over port 853 is blocked (the NAS's own lookups aren't: they
+   start on the NAS), and the known DoH providers are blocked by name through Blocking
+   (HaGeZi's list, about 3,300 domains), so a device that can't resolve `dns.google` falls back
+   to the NAS. Only a hardcoded DoH address gets past, which is rare.
+2. **Vendor tracker lists** as tickboxes in Blocking: HaGeZi's per-vendor lists, curated to block
+   the telemetry hosts and keep the service ones (Samsung, LG webOS, Roku, Amazon, Apple,
+   Windows/Office, TikTok, Xiaomi; 57 to a few hundred domains each).
+3. **Tailscale's port let in on the WAN** (UDP 41641) when Tailscale is installed, so its
+   connections stay direct instead of relayed. Cloudflare's tunnel needs nothing: it's outbound.
+4. **Per-device "LAN only"** on the devices page: a camera or printer gets no internet.
+5. **Anti-spoofing on the WAN**, and a count of connection attempts from the internet dropped.
+6. Later: per-device DNS strictness (Unbound views), and opt-in per-device counts of blocked
+   lookups.
+
+What the router can't do, said plainly on the page: inspect encrypted traffic, separate
+telemetry from the service on the same host (the curated lists are the limit), or keep devices
+from each other on one flat network (the access point's or VLANs' job).
+
+## 2d. The Network tab, split
+
+DNS & DHCP holds DNS, DHCP, router, blocking, IPv6, forwards and totals already, and 2c adds
+switches. Before 1.0 it becomes: **Devices** (one row per device seen, from the leases: a fixed
+address, LAN only, later DNS strictness; replaces Leases and Hosts), **DNS** (provider, blocking
+and its lists, allowlist, aliases, totals; replaces DNS Aliases), **DHCP** (range, lease time, the
+router option), **Internet** (the WAN interface, forwards, the shield switches, IPv6 later), with
+Remote Access and Security as they are, and a **Wireless** tab beside Internet when the NAS
+manages access points (after 1.0: OpenWrt APs over their API; the NAS hosts no radio). The
+four-way mode becomes a switch on each tab, with the dependencies kept (the router needs DHCP).
+Views move; the logic doesn't. Items 1–3 of 2c land on the page as it is, then the split, then
+items 4–5 on their new tabs.
 
 ## 3. Signed updates
 
