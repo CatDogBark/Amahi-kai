@@ -74,8 +74,12 @@
                 <span class="text-danger">✗ The router's rules aren't in place. Save again, and if it's refused, the message says why.</span>
               <% elsif @wan_addresses.empty? %>
                 <span class="text-warning">No address on <%= @wan_interface %> yet: the provider hasn't answered. Is the cable in?</span>
+              <% elsif @default_route && @default_route.first != @wan_interface %>
+                <span class="text-danger">✗ <%= @wan_interface %> has <%= @wan_addresses.join(', ') %>, but the NAS's own way to the internet still goes through
+                <%= @default_route.first %> (via <%= @default_route.last %>), so devices' traffic goes that way too and never reaches the provider.
+                That interface's network settings have a gateway: remove it, or give its route a metric above 50, then come back here.</span>
               <% else %>
-                ✓ Through <%= @wan_interface %> at <%= @wan_addresses.join(', ') %><%= ", the provider's router #{@default_route.last}" if @default_route&.first == @wan_interface %>;
+                ✓ Through <%= @wan_interface %> at <%= @wan_addresses.join(', ') %><%= ", the provider's router #{@default_route.last}" if @default_route %>;
                 <%= pluralize(@forwards.size, 'port') %> let in
               <% end %>
             </dd>

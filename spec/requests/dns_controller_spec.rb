@@ -275,6 +275,9 @@ describe 'Network → DNS & DHCP', type: :request do
         allow(NetworkInterfaces).to receive(:default_route).and_return(%w[ens19 10.77.0.1])
         get '/network/dns'
         expect(response.body).to include('Through ens19 at 10.77.0.134', 'router 10.77.0.1', '0 ports let in', 'Ports let in from the internet')
+        allow(NetworkInterfaces).to receive(:default_route).and_return(%w[ens18 192.168.1.1])
+        get '/network/dns'
+        expect(response.body).to include('still goes through', 'ens18 (via 192.168.1.1)', 'metric above 50')
         put '/network/dns', params: router.merge(mode: 'dns_dhcp')
         expect(Privileged.calls.map(&:first)).to include('network.router_off')
       end
