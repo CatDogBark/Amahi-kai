@@ -53,7 +53,7 @@ describe 'Network → DNS & DHCP', type: :request do
       Setting.set('dns_mode', 'dns')
       get '/network/dns'
       expect(response.body).to include('12,345 in about 3 hours', '64% answered on the NAS', 'without asking Quad9',
-                                        '4,321 answers checked', 'and 3 forged ones refused')
+                                        '4,321 came signed by their domain, and the signature checked out', '3 failed the check, so the NAS refused them')
     end
 
     describe 'saving' do

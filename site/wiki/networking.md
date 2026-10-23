@@ -41,8 +41,9 @@ internet provider, who can read (and sometimes change) every lookup. With Amahi-
 - **Your devices get names:** the NAS, your fixed hosts and your DNS aliases answer as
   `name.home.arpa` and as plain `name`.
 - **Nothing is logged** about which device looked up what. The page shows totals only: how many
-  lookups, how many the NAS answered itself, and how many answers DNSSEC checked (and refused as
-  forged).
+  lookups, how many the NAS answered itself, and how many answers came signed by their domain and
+  checked out. An answer whose signature fails is refused rather than passed on; that's usually a
+  domain whose signing is broken, not an attack.
 
 It runs Unbound, a DNS server from Ubuntu.
 

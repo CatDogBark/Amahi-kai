@@ -19,7 +19,8 @@
       <p class="text-muted">
         The NAS can be your network's DNS server, the service that turns names like <code>example.com</code>
         into addresses. Devices ask the NAS, and it asks the provider you pick over an encrypted connection,
-        so your internet provider can't read or change the answers. It checks answers with DNSSEC, remembers
+        so your internet provider can't read or change the answers. It checks the signatures domains put on
+        their answers (DNSSEC), and refuses an answer whose signature doesn't match. It remembers
         them so repeat lookups are fast, keeps no record of who looked up what, and gives the NAS and your
         devices names like <code><%= @nas_name %></code>. It can also hand out addresses to your devices (DHCP),
         in place of your router.
@@ -59,10 +60,11 @@
               <%= (100.0 * @totals['answered_here'].to_i / @totals['queries'].to_i).round %>% answered on the NAS (its cache, its names
               and its blocklist), without asking <%= @provider == 'custom' ? 'your server' : DnsService::PROVIDERS.dig(@provider, :name) %>
             </dd>
-            <dt>DNSSEC</dt>
+            <dt>Signed answers</dt>
             <dd>
-              <%= number_with_delimiter(@totals['secure']) %> answers checked<% if @totals['bogus'].to_i.positive? %>,
-                and <%= number_with_delimiter(@totals['bogus']) %> forged <%= @totals['bogus'].to_i == 1 ? 'one' : 'ones' %> refused<% end %>
+              <%= number_with_delimiter(@totals['secure']) %> came signed by their domain, and the signature checked out<% if @totals['bogus'].to_i.positive? %>.
+                <%= number_with_delimiter(@totals['bogus']) %> failed the check, so the NAS refused <%= @totals['bogus'].to_i == 1 ? 'it' : 'them' %> rather
+                than risk passing on a faked address; that's usually a domain whose signing is broken, not an attack<% end %>
             </dd>
           <% end %>
           <% if @mode == 'dns_dhcp' %>
