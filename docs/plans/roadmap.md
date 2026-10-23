@@ -156,6 +156,13 @@ house's internet is never at risk. Built and tried there (all five slices, firew
 reboot) for 0.9.2; the NAS, Tailscale and the house are left:
 [`docs/testing/networking.md`](../testing/networking.md).
 
+## Release 1.0
+
+What's left for 1.0, in order, is [`release-1.0.md`](release-1.0.md) (2026-10-23): the NAS takes
+0.9.2, the real pool and apps on it, signed updates, backups of the NAS's own state, a full code
+review, a docs review, then a release candidate and 1.0. bitShare is its own project and doesn't
+hold 1.0.
+
 ## Open, not yet scheduled
 
 Smaller findings from the review that no PR covers yet. Fold them into a nearby PR when it
