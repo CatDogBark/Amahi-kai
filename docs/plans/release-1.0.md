@@ -2,19 +2,20 @@
 
 Status 2026-10-23: planned, nothing started. 0.9.2 is out (DNS and DHCP for the network).
 
-**What 1.0 means** (CatDogBark, 2026-10-23): Amahi-kai does its job on his NAS, and other people
-can install it and trust it: updates can't be faked, the NAS's own state is backed up, and the
-code and the docs have had a full pass. bitShare is its own project with its own roadmap and
-doesn't hold 1.0; Amahi-kai only has to install, store, update and roll back apps correctly, and
-bitShare is the app that proves the storage part.
+**What 1.0 means** (CatDogBark, 2026-10-23): a release for other people to install and trust:
+updates can't be faked, the NAS's own state is backed up and restorable, and the code and the
+docs have had a full pass. His own NAS isn't the point: it's a development machine that switches
+between the `development` and `releases` channels to try features before they reach `main`.
+bitShare is its own project with its own roadmap and doesn't hold 1.0; Amahi-kai only has to
+install, store, update and roll back apps correctly, and bitShare is the app that proves the
+storage part.
 
-## 1. The NAS takes 0.9.2
+## 1. Networking's last check
 
-The NAS was shut down before the networking work and still runs 0.9.1. Before its next System
-Update, one check (step 1 of [`testing/networking.md`](../testing/networking.md)): dnsmasq isn't
-answering DNS on it. Then the update, and steps 2 and 3 there: the page with everything off, then
-DNS on with nothing pointed at it, Tailscale included. Pointing devices and the house at it (step
-4 on) is CatDogBark's to do as he likes, by using it.
+Everything in 0.9.2's networking was tried on the island except one path: DNS answering Tailscale
+devices, which only a NAS on Tailscale can try (step 3 of
+[`testing/networking.md`](../testing/networking.md)). The rest of that list (the house, the days
+after) is use, at CatDogBark's pace.
 
 ## 2. The real pool, and apps on it
 
@@ -76,14 +77,17 @@ installing on bare metal doesn't have.
   encrypted with a passphrase the owner sets once, and can then sit on a share or a pool dataset
   where other people can reach it. A dataset of its own (`<pool>/backups`) is the natural home;
   a share works for a NAS without a pool.
-- **Restore:** a command for 1.0 (`amahi-restore <archive>`, run as root after a fresh install),
-  with a page later. A restore is tested once on the test VM from its Initial snapshot: fresh
-  install, restore, everything back.
-- **The page:** Settings → Backups: on or off, where, how many to keep, the last one's time and
-  size, and Back up now.
+- **A Backups tab, for admins** (CatDogBark, 2026-10-23: backup and restore both in the UI):
+  on or off, where, how many to keep, the passphrase, Back up now, the list of backups with each
+  one's time and size, and **Restore** from any of them (or from an uploaded archive): the
+  passphrase, a plain warning that it replaces the users, shares and settings there now, then
+  the restore, with the services stopped and started around it. On a fresh install, Restore is
+  the way to bring a NAS back: sign in as the seeded admin, restore, and the wizard is skipped.
+- **Tested once** on the test VM from its Initial snapshot: fresh install, restore, everything
+  back, apps included.
 
-Decisions for CatDogBark (the roadmap has had them since 2026-10-09): the destination, how many
-to keep, and whether a restore page is wanted for 1.0. Two to three days of work.
+Decisions for CatDogBark (the roadmap has had them since 2026-10-09): the destination and how
+many to keep. Three to four days of work.
 
 ## 5. The code review
 
@@ -113,13 +117,35 @@ someone who's never seen Amahi-kai.
    its Initial snapshot through the website's installer, the public path, then a restore of a
    backup onto it.
 2. Whatever that finds, fixed; `1.0.0`.
-3. The NAS and the test VM stay on `development` (CatDogBark: they're part of development).
-   The `releases` channel is for everyone else.
+3. The NAS and the test VM are development machines and switch channels as the work needs.
+   One caution for switching back from `development` to `releases`: an update never goes to a
+   lower version, so the switch takes effect at the next release, and if `dev` ran a migration
+   the release doesn't have, the database is ahead of the code (migrations are written to work
+   with the previous version's code, so this is survivable, but a backup first is the habit).
 4. The five v0.1–v0.2 pre-releases on the Releases page: keep or delete, his call.
 
 ## Not in 1.0
 
 So it doesn't creep in: HTTPS on the LAN, the debug pages as a Settings tab, quotas, the phone
-layout, private folders per user, router mode, P4.6b (Greyhole shares through Samba, which is
-bitTube's need), one sign-in for apps (the capability API), and off-site backups of the files.
-All on the roadmap for after.
+layout, private folders per user, P4.6b (Greyhole shares through Samba, which is bitTube's need),
+one sign-in for apps (the capability API), and off-site backups of the files. All on the roadmap
+for after.
+
+**Router mode** is out too, unless CatDogBark says otherwise (2026-10-23). 0.9.2 has the LAN half
+(DNS and DHCP for the devices); the internet half doesn't exist yet:
+
+- A second network interface for the internet, and getting an address on it (DHCP from the
+  provider, or PPPoE for providers that use it).
+- Forwarding and NAT between the LAN and that interface, so devices reach the internet through
+  the NAS.
+- A firewall facing the internet: nothing in from outside except replies, and the NAS's own
+  services (SSH, the web UI, Samba, DNS, DHCP) never offered on the internet side.
+- IPv6 for the house: a prefix delegated by the provider, and the NAS announcing a real default
+  route on the LAN (today it announces itself with a router lifetime of 0, "not a router", on
+  purpose).
+- A port forwarding page, and the way back: the NAS down means the house is offline, and a
+  System Update's restart is a minute without internet.
+
+A few days for the IPv4 half, more with IPv6 delegation and PPPoE. The island is the test bed
+for it: the test VM already has a LAN leg and an island leg, so the client can be routed out
+through it without touching the house.

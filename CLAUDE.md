@@ -6,9 +6,10 @@ over plain HTTP, through a Cloudflare Tunnel, and through Tailscale. CatDogBark 
 (`CatDogBark/Amahi-kai`, **public**) and the NAS.
 
 Current work (CatDogBark, 2026-10-23): the road to 1.0 is **`docs/plans/release-1.0.md`**, in order:
-the NAS takes 0.9.2, the real pool and apps on it, signed updates, backups, the code review, the
-docs review, a release candidate, 1.0. bitShare (its own project) doesn't hold 1.0. The paragraph
-below is from before and stays for its links.
+networking's Tailscale check, the real pool and apps on it, signed updates, a Backups tab (backup
+and restore), the code review, the docs review, a release candidate, 1.0. 1.0 is for other people
+to install; CatDogBark's NAS is a development machine that switches channels. bitShare (its own
+project) doesn't hold 1.0. The paragraph below is from before and stays for its links.
 
 Earlier (CatDogBark, 2026-10-08): getting Amahi-kai to a shelf-stable state first, by finishing
 its major code work (the October look and cleanup were #101–#112). Then testing everything,

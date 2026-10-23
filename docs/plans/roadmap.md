@@ -158,10 +158,11 @@ reboot) for 0.9.2; the NAS, Tailscale and the house are left:
 
 ## Release 1.0
 
-What's left for 1.0, in order, is [`release-1.0.md`](release-1.0.md) (2026-10-23): the NAS takes
-0.9.2, the real pool and apps on it, signed updates, backups of the NAS's own state, a full code
-review, a docs review, then a release candidate and 1.0. bitShare is its own project and doesn't
-hold 1.0.
+What's left for 1.0, in order, is [`release-1.0.md`](release-1.0.md) (2026-10-23): networking's
+Tailscale check, the real pool and apps on it, signed updates, a Backups tab (backup and restore
+of the NAS's own state), a full code review, a docs review, then a release candidate and 1.0.
+1.0 is for other people to install. bitShare is its own project and doesn't hold 1.0; router mode
+waits (what it still needs is listed there).
 
 ## Open, not yet scheduled
 
