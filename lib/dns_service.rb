@@ -252,7 +252,7 @@ module DnsService
     end
 
     def config
-      own = NetworkInterfaces.addresses(interface.to_s)
+      own = interface_addresses
       tailscale = NetworkInterfaces.addresses(NetworkInterfaces::TAILSCALE)
       lines = ['# Amahi-kai DNS (Network → DNS & DHCP): written by Amahi-kai, changes here are lost', 'server:']
       lines.concat(listening(own, tailscale).map { |address| "  interface: #{address}" })
@@ -389,6 +389,16 @@ module DnsService
     end
 
     private
+
+    # The interface's addresses, but the NAS's own announced range only while it announces it:
+    # when announcing stops, the address leaves the interface only after this config is written.
+    def interface_addresses
+      addresses = NetworkInterfaces.addresses(interface.to_s)
+      return addresses if ipv6_advertise?
+
+      range = IPAddr.new(own_ipv6_network)
+      addresses.reject { |address| address.ula? && range.include?(address.ip) }
+    end
 
     # The NAS's own (127.0.0.1, ::1), the interface's IPv4 addresses and ULAs, the address it
     # announces (on the interface once its unit runs: ip-freebind lets Unbound start first), and

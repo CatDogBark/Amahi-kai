@@ -260,6 +260,16 @@ RSpec.describe DnsService do
       expect(described_class.ipv6_server_address).to eq('fdab:cdef:1234::53')
     end
 
+    it 'leaves its own address out once it stops announcing, though the address is still on the interface' do
+      Setting.set('dns_ula_prefix', 'fdab:cdef:1234')
+      own = NetworkInterfaces::Address.new(ip: IPAddr.new('fdab:cdef:1234::53'), prefix: 64)
+      allow(NetworkInterfaces).to receive(:addresses).with('ens18').and_return([lan, ula, own])
+      expect(lines.join("\n")).not_to include('fdab:cdef:1234')
+      expect(lines).to include('interface: fd12:3456:789a::10')
+      Setting.set('dns_ipv6_advertise', '1')
+      expect(lines).to include('interface: fdab:cdef:1234::53')
+    end
+
     it "uses a unique local address the router hands out, while the NAS doesn't announce one" do
       expect(described_class.ipv6_server_address).to eq('fd12:3456:789a::10')
     end
