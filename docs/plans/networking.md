@@ -28,7 +28,9 @@ The helper now fits the netplan files itself (the LAN's address pinned, every ot
 default route put behind the internet's, the originals kept beside them), tried on the island
 twice: with the route on the LAN's own file it left a file that needed nothing alone, and with
 it on the island's management leg it edited that file, kept the original, and the way back put
-it back byte for byte. No terminal step is left in router mode. Then, with all of it on (DNS + DHCP, blocking,
+it back byte for byte. No terminal step is left in router mode. A reboot of the test VM in router
+mode brought every piece back (the WAN's address and route, forwarding, the rules, the forward,
+the client's internet). Then, with all of it on (DNS + DHCP, blocking,
 announcing) and UFW turned on, through the firewall: the client's lease, DNS over IPv4 and IPv6,
 blocking and names all worked, and other ports were dropped; and after a reboot of the test VM
 every piece came back and worked again from scratch. One more find: the test VM had kept a route
