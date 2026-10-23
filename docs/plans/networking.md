@@ -23,8 +23,12 @@ checks too: the WAN leg took an address from the fake ISP, the client got its le
 as its router and fetched a page from the internet through the NAS's NAT, a port forward reached
 the client's web server from the WAN side while SSH, the web UI and every other port were
 dropped there, and the way back took the address, the rules and forwarding out. One product gap
-found on the way: a LAN interface set up with a gateway keeps a default route that beats the
-WAN's, so the page now warns and says what to change. Then, with all of it on (DNS + DHCP, blocking,
+found on the way: an interface set up with a gateway keeps a default route that beats the WAN's.
+The helper now fits the netplan files itself (the LAN's address pinned, every other interface's
+default route put behind the internet's, the originals kept beside them), tried on the island
+twice: with the route on the LAN's own file it left a file that needed nothing alone, and with
+it on the island's management leg it edited that file, kept the original, and the way back put
+it back byte for byte. No terminal step is left in router mode. Then, with all of it on (DNS + DHCP, blocking,
 announcing) and UFW turned on, through the firewall: the client's lease, DNS over IPv4 and IPv6,
 blocking and names all worked, and other ports were dropped; and after a reboot of the test VM
 every piece came back and worked again from scratch. One more find: the test VM had kept a route
