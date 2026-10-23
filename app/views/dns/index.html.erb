@@ -55,7 +55,7 @@
           <% if @totals && @totals['queries'].to_i.positive? %>
             <dt>Lookups</dt>
             <dd>
-              <%= number_with_delimiter(@totals['queries']) %> in the last <%= distance_of_time_in_words(Time.at(@totals['since'].to_i), Time.now) %>;
+              <%= number_with_delimiter(@totals['queries']) %> in <%= distance_of_time_in_words(Time.at(@totals['since'].to_i), Time.now) %>;
               <%= (100.0 * @totals['answered_here'].to_i / @totals['queries'].to_i).round %>% answered on the NAS (its cache, its names
               and its blocklist), without asking <%= @provider == 'custom' ? 'your server' : DnsService::PROVIDERS.dig(@provider, :name) %>
             </dd>

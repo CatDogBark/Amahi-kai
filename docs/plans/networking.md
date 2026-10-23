@@ -16,7 +16,10 @@ NAS's own address up, and the client heard RDNSS, DNSSL and the range (router li
 an address in it and asked the NAS over IPv6; a second announcer on the client was listed and
 warned about, the NAS's own left out; and the way back took radvd, the address and (after a fix:
 the config was written before the address left the interface) Unbound's use of it away. Slice 5
-(totals) is next. CatDogBark wants Amahi-kai's networking modernized
+(totals) is on `dev` and passed: after lookups from the client, the page showed them, how many
+the NAS answered itself, and DNSSEC's checked answers and the one forged one refused. All five
+slices are built and tried on the island; next come one device on the house LAN, then the house
+(below). CatDogBark wants Amahi-kai's networking modernized
 for privacy and safety, carrying over what original Amahi users did with their home server: put it
 in front of the network. It ships in 1.0, DHCP included, once it passes the tests below.
 
@@ -186,8 +189,8 @@ in front of the network. It ships in 1.0, DHCP included, once it passes the test
   they're `dns.set_own_address`, `dns.check_routers` and so on.
 - **Totals:** the helper's `dns.stats` reads `unbound-control stats_noreset` (with
   `extended-statistics`). A reload starts the counters again but not Unbound's uptime, so the
-  helper notes each reload it makes, and the page says "in the last N hours" from the later of
-  the two.
+  helper notes each reload it makes, and the page counts from the later of the two ("34 in about
+  1 hour").
 - **The check for another DHCP server:** the helper broadcasts a DHCPDISCOVER on the interface
   (from its MAC, asking for broadcast replies) and listens up to 6 seconds for an offer, leaving
   out the NAS's own. Not 3: dnsmasq, which many routers run, pings an address for 3 seconds

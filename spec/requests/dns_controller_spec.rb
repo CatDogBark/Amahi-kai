@@ -52,7 +52,7 @@ describe 'Network → DNS & DHCP', type: :request do
                                                       'secure' => 4_321, 'bogus' => 3 })
       Setting.set('dns_mode', 'dns')
       get '/network/dns'
-      expect(response.body).to include('12,345 in the last about 3 hours', '64% answered on the NAS', 'without asking Quad9',
+      expect(response.body).to include('12,345 in about 3 hours', '64% answered on the NAS', 'without asking Quad9',
                                         '4,321 answers checked', 'and 3 forged ones refused')
     end
 
