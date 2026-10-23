@@ -45,9 +45,10 @@ as the router. It needs the firewall on, and refuses to turn the interface the a
 through into the internet side. IPv6 for the house (a delegated prefix, a real default route
 announced) is a slice of its own after.
 
-Tested on the island with a third leg: `vmbr8` with a fake-ISP container on it (DHCP and DNS on
-its island side, NAT out through the house), the test VM's `ens20` as the WAN, the client routed
-out through the test VM. Then the house, with CatDogBark's laptop tethered to his phone so the
+Built and tried on the island on 2026-10-23, with a third leg: `vmbr8` with a fake-ISP container on
+it (DHCP and DNS on its island side, NAT out through the house), the test VM's `ens20` as the WAN,
+the client routed out through the test VM; the forward, the sealed WAN side and the way back all
+passed. What's left is the house, with CatDogBark's laptop tethered to his phone so the
 session survives whatever the NAS does, and the provider's cable moved from his router to a spare
 port on forge (it's an ISP gateway, so its bridge mode is part of that day).
 
