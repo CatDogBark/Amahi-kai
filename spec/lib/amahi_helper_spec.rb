@@ -1266,7 +1266,8 @@ RSpec.describe 'AmahiHelper' do
     it "keeps the NAS's own address on the interface at every boot, and takes it away" do
       helper.do_set_ula('ens19', 'fdab:cdef:1234::53')
       unit = File.read(AmahiHelper::ULA_UNIT)
-      expect(unit).to include("ExecStart=#{AmahiHelper::IP} -6 addr replace fdab:cdef:1234::53/64 dev ens19",
+      expect(unit).to include("ExecStartPre=-#{AmahiHelper::IP} -6 route del fdab:cdef:1234::/64 dev lo",
+                              "ExecStart=#{AmahiHelper::IP} -6 addr replace fdab:cdef:1234::53/64 dev ens19",
                               "ExecStop=#{AmahiHelper::IP} -6 addr del fdab:cdef:1234::53/64 dev ens19", 'WantedBy=multi-user.target')
       expect(ran).to eq(['/usr/bin/systemctl daemon-reload', '/usr/bin/systemctl enable amahi-kai-ula.service',
                          '/usr/bin/systemctl restart amahi-kai-ula.service'])

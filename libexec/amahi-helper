@@ -3170,8 +3170,11 @@ module AmahiHelper
 
     # The NAS's own IPv6 address for DNS on +interface+, now and at every boot: a oneshot unit adds
     # it (replace: running it again changes nothing) and takes it away when stopped. One that was
-    # there before is stopped first, so an old address goes.
+    # there before is stopped first, so an old address goes. Before adding it, the unit clears a
+    # route for its range on the loopback, if there is one: the test VM was left with one (we
+    # couldn't reproduce how) and it sent every reply to devices in the range back into the NAS.
     def do_set_ula(interface, address)
+      range = "#{IPAddr.new(address).mask(64)}/64"
       content = <<~UNIT
         [Unit]
         Description=Amahi-kai: the NAS's own IPv6 address for DNS
@@ -3181,6 +3184,7 @@ module AmahiHelper
         [Service]
         Type=oneshot
         RemainAfterExit=yes
+        ExecStartPre=-#{IP} -6 route del #{range} dev lo
         ExecStart=#{IP} -6 addr replace #{address}/64 dev #{interface}
         ExecStop=#{IP} -6 addr del #{address}/64 dev #{interface}
 

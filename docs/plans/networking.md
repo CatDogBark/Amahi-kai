@@ -18,8 +18,14 @@ warned about, the NAS's own left out; and the way back took radvd, the address a
 the config was written before the address left the interface) Unbound's use of it away. Slice 5
 (totals) is on `dev` and passed: after lookups from the client, the page showed them, how many
 the NAS answered itself, and DNSSEC's checked answers and the one forged one refused. All five
-slices are built and tried on the island; next come one device on the house LAN, then the house
-(below). CatDogBark wants Amahi-kai's networking modernized
+slices are built and tried on the island. Then, with all of it on (DNS + DHCP, blocking,
+announcing) and UFW turned on, through the firewall: the client's lease, DNS over IPv4 and IPv6,
+blocking and names all worked, and other ports were dropped; and after a reboot of the test VM
+every piece came back and worked again from scratch. One more find: the test VM had kept a route
+for the announced range on `lo` (left from the bug fixed in `0aee8c1`, we think; it couldn't be
+reproduced), which sent replies to devices in the range back into the NAS; the address unit now
+clears such a route before it starts. A one-device test on the house LAN adds little over the
+island; what's left is the house (below), and Tailscale's answers on the NAS. CatDogBark wants Amahi-kai's networking modernized
 for privacy and safety, carrying over what original Amahi users did with their home server: put it
 in front of the network. It ships in 1.0, DHCP included, once it passes the tests below.
 
