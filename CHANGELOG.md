@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+### 🚀 Major Features
+
+- **Router mode** (Network → DNS & DHCP) — A fourth mode: the NAS is the way to the internet. A second network interface takes the provider's connection, your devices reach the internet through the NAS, and your old router becomes an access point. Nothing from the internet reaches the NAS or your devices except the ports you let in, on the page's new card (a port, a protocol, the device, its port). It needs the firewall on, and it refuses to turn the interface you're connected through into the internet side. The page says the way back. IPv6 for the house, PPPoE and a static address come later.
+
 ## [0.9.2] — 2026-10-22
 
 The NAS can be your network's DNS server, private and checked, with blocking, and its DHCP server too, all on one page (Network → DNS & DHCP). All of it is off until you turn it on, so a server that doesn't use it only gets the fixes below. It was built and tried on an isolated test network, firewall on and after a reboot; a whole house and Tailscale are still to try ([the list](docs/testing/networking.md)).

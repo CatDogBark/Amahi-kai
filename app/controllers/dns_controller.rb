@@ -40,6 +40,12 @@ class DnsController < ApplicationController
     @own_ipv6_address = DnsService.own_ipv6_address
     @ipv6_check = DnsService.ipv6_check
     @other_ipv6_dns = DnsService.other_ipv6_dns(@ipv6_check)
+    @wan_interface = DnsService.wan_interface
+    @router_state = DnsService.router_state
+    @wan_addresses = NetworkInterfaces.addresses(@wan_interface.to_s).select(&:ipv4?).map(&:to_s)
+    @default_route = NetworkInterfaces.default_route
+    @firewall_on = DnsService.firewall_on?
+    @forwards = PortForward.order(:protocol, :port)
   end
 
   def update
@@ -57,18 +63,20 @@ class DnsController < ApplicationController
     Setting.set('dns_provider', provider, KIND)
     Setting.set('dns_interface', interface, KIND)
     Setting.set('dns_ipv6_advertise', params[:ipv6_advertise] == '1' ? '1' : '0', KIND)
+    Setting.set('dns_wan_interface', params[:wan_interface].to_s, KIND) if mode == 'router'
     if provider == 'custom'
       Setting.set('dns_custom_addresses', params[:custom_addresses].to_s.split(/[\s,]+/).reject(&:empty?).join(' '), KIND)
       Setting.set('dns_custom_tls_name', params[:custom_tls_name].to_s.strip.downcase, KIND)
     end
-    if mode == 'dns_dhcp'
+    if %w[dns_dhcp router].include?(mode)
       { 'dyn_lo' => :first, 'dyn_hi' => :last, 'gateway' => :router, 'lease_time' => :lease_time }.each do |name, key|
         Setting.set(name, dhcp[key].to_s, KIND)
       end
     end
     DnsService.apply!
     flash[:notice] = { 'off' => 'DNS and DHCP are off.', 'dns' => 'Saved. Unbound is answering with these settings.',
-                       'dns_dhcp' => 'Saved. Unbound is answering, and dnsmasq is handing out addresses.' }.fetch(mode)
+                       'dns_dhcp' => 'Saved. Unbound is answering, and dnsmasq is handing out addresses.',
+                       'router' => 'Saved. The NAS is the router: DNS, addresses, and the way to the internet.' }.fetch(mode)
     redirect_to dns_index_path
   rescue Privileged::Error => e
     flash[:alert] = "Saved, but it couldn't be applied: #{e.message}"
@@ -121,6 +129,24 @@ class DnsController < ApplicationController
   rescue Privileged::Error => e
     flash[:alert] = "Couldn't resume blocking: #{e.message}"
     redirect_to dns_index_path
+  end
+
+  # Port forwards (router mode): a port on the internet side let in to a device on the LAN.
+  def create_forward
+    forward = PortForward.new(forward_params)
+    if forward.save
+      flash[:notice] = "Forwarding #{forward.label} to #{DnsService.lan_prefix}.#{forward.address}."
+    else
+      flash[:alert] = "#{forward.errors.full_messages.join('. ')}."
+    end
+    redirect_to dns_index_path(anchor: 'dns-forwards')
+  end
+
+  def destroy_forward
+    forward = PortForward.find(params[:id])
+    forward.destroy
+    flash[:notice] = "No longer forwarding #{forward.label}."
+    redirect_to dns_index_path(anchor: 'dns-forwards')
   end
 
   # Asks the network's IPv6 routers what they announce (about 4 seconds).
@@ -194,6 +220,10 @@ class DnsController < ApplicationController
     end
   end
 
+  def forward_params
+    params.require(:port_forward).permit(:name, :protocol, :port, :address, :to_port)
+  end
+
   def dhcp_params
     { first: params[:dhcp_first].to_i, last: params[:dhcp_last].to_i, router: params[:dhcp_router].to_i,
       lease_time: params[:lease_time].to_i }
@@ -201,7 +231,7 @@ class DnsController < ApplicationController
 
   def problems_with(mode, provider, interface, dhcp)
     problems = []
-    problems << 'Choose Off, DNS for my network, or DNS + DHCP' unless DnsService::MODES.include?(mode)
+    problems << 'Choose Off, DNS for my network, DNS + DHCP, or Router' unless DnsService::MODES.include?(mode)
     problems << 'Choose a provider' unless DnsService::PROVIDERS.key?(provider) || provider == 'custom'
     problems.concat(DnsService.custom_problems(params[:custom_addresses], params[:custom_tls_name])) if provider == 'custom'
     interfaces = NetworkInterfaces.lan
@@ -212,9 +242,30 @@ class DnsController < ApplicationController
     end
     problems << 'Install Unbound first' if mode != 'off' && !DnsService.installed?
     problems << 'Install radvd first, to announce the NAS over IPv6' if mode != 'off' && params[:ipv6_advertise] == '1' && !DnsService.radvd_installed?
-    return problems unless mode == 'dns_dhcp' && problems.empty?
+    return problems unless %w[dns_dhcp router].include?(mode) && problems.empty?
 
-    dhcp_problems(interface, interfaces[interface], dhcp)
+    problems = dhcp_problems(interface, interfaces[interface], dhcp)
+    return problems unless mode == 'router' && problems.empty?
+
+    router_problems(interface, interfaces)
+  end
+
+  # The router needs a second interface for the internet, the firewall on, and not to be set up
+  # through the interface that's about to face the internet (that would lock the admin out).
+  def router_problems(lan, interfaces)
+    wan = params[:wan_interface].to_s
+    return ['Choose the interface the internet is on'] unless interfaces.key?(wan)
+    return ['The internet interface must differ from the one DNS and DHCP serve'] if wan == lan
+    return ["Turn the firewall on first (Network → Security, the firewall's Fix): it's what keeps the internet out of the NAS"] unless DnsService.firewall_on?
+
+    from = IPAddr.new(request.remote_ip)
+    if interfaces[wan].any? { |address| address.ipv4? && IPAddr.new(address.network).include?(from) }
+      return ["You're connected through #{wan}, which would become the internet side and stop answering you. Connect from the LAN side first"]
+    end
+
+    []
+  rescue IPAddr::Error
+    []
   end
 
   # DHCP needs dnsmasq, a /24 network, settings that fit it, and no other DHCP server answering

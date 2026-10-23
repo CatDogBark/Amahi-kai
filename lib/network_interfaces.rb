@@ -43,11 +43,18 @@ module NetworkInterfaces
 
     # The interface the IPv4 default route leaves by ("ens18"), or nil.
     def default_name(routes = ROUTES)
+      default_route(routes)&.first
+    end
+
+    # The IPv4 default route with the lowest metric: ["ens18", "192.168.1.1"], or nil.
+    def default_route(routes = ROUTES)
+      best = nil
       File.foreach(routes).drop(1).each do |line|
-        name, destination, _gateway, flags, = line.split
-        return name if destination == '00000000' && (flags.to_i(16) & 1).positive?
+        name, destination, gateway, flags, _refcnt, _use, metric, = line.split
+        next unless destination == '00000000' && (flags.to_i(16) & 1).positive?
+        best = [metric.to_i, name, gateway] if best.nil? || metric.to_i < best.first
       end
-      nil
+      best && [best[1], IPAddr.new(best[2].to_i(16), Socket::AF_INET).to_s.split('.').reverse.join('.')]
     rescue SystemCallError
       nil
     end

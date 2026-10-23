@@ -18,8 +18,12 @@ module DnsService
   KIND = Setting::NETWORK
   UNBOUND = '/usr/sbin/unbound'
   PACKAGES = %w[unbound dns-root-data].freeze
-  # Off; DNS for my network; DNS + DHCP.
-  MODES = %w[off dns dns_dhcp].freeze
+  # Off; DNS for my network; DNS + DHCP; Router (DNS + DHCP, and the NAS between the LAN and the
+  # internet).
+  MODES = %w[off dns dns_dhcp router].freeze
+  # What the root helper has in place while the NAS is the router (root writes it; anyone may read).
+  ROUTER_STATE = '/var/lib/amahi-kai-dns/router.json'
+  UFW_CONF = '/etc/ufw/ufw.conf'
   DEFAULT_DOMAIN = 'home.arpa'
   DEFAULT_PROVIDER = 'quad9'
   CA_CERTS = '/etc/ssl/certs/ca-certificates.crt'
@@ -105,7 +109,51 @@ module DnsService
 
     # dnsmasq hands out addresses too.
     def dhcp?
-      mode == 'dns_dhcp'
+      %w[dns_dhcp router].include?(mode)
+    end
+
+    # The NAS is the router: between the LAN and the internet.
+    def router?
+      mode == 'router'
+    end
+
+    # The internet interface chosen for router mode, while the NAS has it.
+    def wan_interface
+      name = Setting.get('dns_wan_interface').presence
+      name if name && NetworkInterfaces.lan.key?(name)
+    end
+
+    # The firewall is on (the security audit's fix); router mode needs it.
+    def firewall_on?
+      File.read(UFW_CONF).match?(/^ENABLED=yes$/)
+    rescue SystemCallError
+      false
+    end
+
+    # What the helper has in place: { 'lan', 'wan', 'forwards' }, or nil while the NAS isn't the
+    # router.
+    def router_state
+      JSON.parse(File.read(ROUTER_STATE))
+    rescue SystemCallError, JSON::ParserError
+      nil
+    end
+
+    # The helper's router rules follow the LAN and internet interfaces and the port forwards.
+    def apply_router!
+      if on? && router? && wan_interface
+        Privileged.call('network.router_on', lan: interface, wan: wan_interface, forwards: PortForward.for_helper(lan_prefix))
+      elsif router_state
+        Privileged.call('network.router_off')
+      end
+    end
+
+    # Rewrites the router's rules for a change made elsewhere (a port forward). Does nothing while
+    # the NAS isn't the router.
+    def rewrite_router!
+      return false unless on? && router? && installed? && wan_interface
+
+      Privileged.call('network.router_on', lan: interface, wan: wan_interface, forwards: PortForward.for_helper(lan_prefix))
+      true
     end
 
     # 'quad9', a key of PROVIDERS, or 'custom'.
@@ -275,7 +323,8 @@ module DnsService
     end
 
     # Writes the config and starts (or restarts) Unbound with blocking as chosen, or stops it and
-    # removes the config (blocking too); then dnsmasq starts handing out addresses, or stops. Raises Privileged::Error with the
+    # removes the config (blocking too); then dnsmasq starts handing out addresses, or stops; then
+    # the router's rules go in, or out. Raises Privileged::Error with the
     # reason if the helper refuses or fails.
     def apply!
       if on?
@@ -289,6 +338,7 @@ module DnsService
       end
       apply_ipv6_advertising!
       DnsmasqService.apply!
+      apply_router!
     end
 
     # radvd announces the NAS while DNS is on and that's chosen; otherwise it stops, and the NAS's

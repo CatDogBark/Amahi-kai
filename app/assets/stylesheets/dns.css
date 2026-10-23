@@ -32,9 +32,13 @@
 .dns-choice-title { color: var(--kai-title); font-weight: 600; }
 .dns-choice-text { color: var(--kai-muted); font-size: 13px; }
 
-/* The DHCP settings show while DNS + DHCP is picked. */
-.dns-dhcp { display: none; }
-#dns-settings:has(input[name="mode"][value="dns_dhcp"]:checked) .dns-dhcp { display: block; }
+/* The DHCP settings show while DNS + DHCP or Router is picked; the internet's while Router is. */
+.dns-dhcp, .dns-router { display: none; }
+#dns-settings:has(input[name="mode"][value="dns_dhcp"]:checked) .dns-dhcp,
+#dns-settings:has(input[name="mode"][value="router"]:checked) .dns-dhcp { display: block; }
+#dns-settings:has(input[name="mode"][value="router"]:checked) .dns-router { display: block; }
+#dns-settings:has(input[name="mode"][value="router"]:checked) .dns-not-router { display: none; }
+.dns-forwards td, .dns-forwards th { vertical-align: middle; }
 .dns-dhcp-fields .input-group-text { color: var(--kai-muted); }
 
 /* The custom server's fields show while its card is picked. */

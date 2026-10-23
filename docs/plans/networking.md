@@ -124,6 +124,35 @@ in front of the network. It ships in 1.0, DHCP included, once it passes the test
   name), and the lease list.
 - Hands out the NAS as the DNS server, and `home.arpa` as the search domain.
 
+### Router (built 2026-10-23, after 0.9.2)
+
+A fourth mode, **Router**: DNS + DHCP, and the NAS is the way to the internet.
+
+- **The internet interface** gets its address from the provider by DHCP (`WAN_NETPLAN`, a
+  netplan file the helper writes and checks with `netplan generate`; its route's metric is 50, so
+  it beats any other default route). PPPoE and a static address are later.
+- **Forwarding** is turned on (`ROUTER_SYSCTL`), and UFW does the rest, so it persists and
+  reloads with the firewall: a NAT block in `before.rules` (masquerade out of the internet
+  interface, a DNAT in for each port forward), `ufw route allow` from the LAN out, one per
+  forward in, and `deny in on <wan>` first of all the rules, so none of the NAS's own services
+  (SSH, the web UI, Samba, DNS, DHCP) answer the internet side. **UFW has to be on** (the
+  security audit's fix): router mode refuses otherwise, since without it nothing would stand
+  between the internet and the NAS.
+- **DHCP hands out the NAS as the router**, not the Router setting, and the apps' firewall leaves
+  the internet interface out of the "LAN" subnets (its address is private too behind another
+  router).
+- **Port forwards** (Network → DNS & DHCP, the card while the NAS is the router): protocol, port,
+  the device (the last part of its address on DHCP's network, like a fixed host) and its port.
+  Each one is a DNAT and a route rule; a change rewrites the rules.
+- **Safety:** refused when the internet interface is the one DNS serves, when the firewall is
+  off, and when the admin's request comes in through the interface that would become the
+  internet side. The page says the way back (DNS + DHCP or Off, then the cable back to the
+  router), and that a NAS restart is a minute without internet.
+- **State:** `router.json` beside the DNS files holds what's in place, so the way back and a
+  changed interface or forward take the old rules out first.
+- **Later:** IPv6 for the house (prefix delegation, a real default route announced), PPPoE, a
+  static address, and a WAN-side firewall log.
+
 ### Later
 
 - Tailscale devices using the NAS for DNS (split DNS), so blocklists and local names work away
@@ -225,6 +254,16 @@ Each slice lands on `dev`, passes CI, and is tried on the island before the next
 The house: the main router (the WAN, and its DHCP) → an OpenWrt wireless bridge → the LAN. forge's
 guests, the NAS (`192.168.1.111`) and the test VM (`192.168.1.13`) among them, are on `vmbr0`, the
 LAN.
+
+### 1b. The island's internet (for router mode)
+
+A third leg, so the router's WAN side can be tried without the house: `vmbr8` (no ports, no
+address, forge's IPv6 off on it), the test VM's `ens20` on it, and a fake-ISP container
+(`isp`, 192.168.1.14 on the house LAN and 10.77.0.1 on `vmbr8`) that hands out
+10.77.0.100–200 by DHCP, answers DNS, and NATs out through the house. The test VM keeps `ens18`
+for management: a router's WAN side drops SSH, so the leg it's reached by can't be the WAN. For
+the test, `ens18`'s default route needs a metric above the WAN's (50), or the client's traffic
+would leave by the management leg.
 
 ### 1. An island on forge
 

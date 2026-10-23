@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_22_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_23_000000) do
   create_table "cap_accesses", force: :cascade do |t|
     t.integer "user_id"
     t.integer "share_id"
@@ -64,6 +64,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_22_000000) do
     t.string "name", null: false
     t.string "mac", default: ""
     t.string "address"
+  end
+
+  create_table "port_forwards", force: :cascade do |t|
+    t.string "name", default: "", null: false
+    t.string "protocol", default: "tcp", null: false
+    t.integer "port", null: false
+    t.string "address", null: false
+    t.integer "to_port", null: false
+    t.index ["protocol", "port"], name: "index_port_forwards_on_protocol_and_port", unique: true
   end
 
   create_table "settings", force: :cascade do |t|

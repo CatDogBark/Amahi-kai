@@ -43,9 +43,11 @@ module DnsmasqService
       problems
     end
 
-    # The options write_config! takes, from the saved settings and DNS's mode and interface.
+    # The options write_config! takes, from the saved settings and DNS's mode and interface. While
+    # the NAS is the router, devices are given the NAS as their router, not the Router setting.
     def options
-      settings.merge(net: DnsService.lan_prefix, interface: DnsService.interface, dhcp_enabled: DnsService.dhcp?)
+      settings.merge(net: DnsService.lan_prefix, interface: DnsService.interface, dhcp_enabled: DnsService.dhcp?,
+                     router_is_nas: DnsService.router?)
     end
 
     # Writes the config, and starts dnsmasq while it hands out addresses or stops it otherwise.
@@ -93,7 +95,7 @@ module DnsmasqService
         config_lines << "interface=#{options[:interface]}"
         config_lines << "bind-interfaces"
         config_lines << "dhcp-range=#{net}.#{options[:first]},#{net}.#{options[:last]},#{options[:lease_time].to_i}s"
-        config_lines << "dhcp-option=option:router,#{net}.#{options[:router]}"
+        config_lines << "dhcp-option=option:router,#{router_address(net, options)}"
         config_lines << "dhcp-option=option:dns-server,#{dns_server(net, options[:router])}"
         config_lines << "domain=#{DnsService.domain}"
         config_lines << "dhcp-authoritative"
@@ -119,6 +121,11 @@ module DnsmasqService
     end
 
     private
+
+    # The NAS itself while it's the router (and has an address on the LAN), else the Router setting.
+    def router_address(net, options)
+      (options[:router_is_nas] && DnsService.server_addresses.first) || "#{net}.#{options[:router]}"
+    end
 
     # The NAS while its DNS is on (and it has an address on DNS's interface), else the router.
     def dns_server(net, router)

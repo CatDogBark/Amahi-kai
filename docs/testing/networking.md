@@ -115,6 +115,29 @@ next to it.
   network** or **Off**. While the NAS is off, devices can't get a new address, so don't leave
   this on while the NAS is being worked on.
 
+## 5b. Router mode (only with a second interface for the internet)
+
+Router mode makes the NAS the house's way to the internet. It was built and tried on the island
+first (a fake provider on a third bridge); this is the house. Have the laptop tethered to a phone
+*and* on the house Wi-Fi for all of it, so the session with Claude survives and the NAS stays
+reachable from the LAN side.
+
+- [ ] A spare network port on the NAS's host is on its own bridge, and the NAS VM has a NIC on it.
+  The provider's gateway is in bridge mode (or the NAS sits behind its NAT, double-NAT, which
+  works but keeps the gateway in charge of the internet side).
+- [ ] **Dry run first:** the new port cabled to a LAN port of the house router instead of the
+  provider. Network → Security's firewall is on. Pick **Router**, the internet interface, and
+  **Save**. The top card says the NAS has an address from "the provider" (the house router).
+  Nothing in the house changes yet, since the house router still hands out addresses.
+- [ ] **The house:** the house router's DHCP off, the provider's cable moved to the NAS's port
+  (power-cycle the modem), the router's internet port empty. Devices renew and reach the
+  internet through the NAS; the top card shows the provider's address.
+- [ ] A port forward to a device works from outside (a phone on cellular, the NAS's internet
+  address and the port). Nothing else answers from outside: the web UI and SSH on the internet
+  address time out.
+- **The way back:** set the page to DNS + DHCP or Off, move the cable back to the router, turn
+  its DHCP on, power-cycle the modem.
+
 ## 6. IPv6
 
 - [ ] With the router's IPv6 off (as now), **IPv6 → Check now** says no router answered, and

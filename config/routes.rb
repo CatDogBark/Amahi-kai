@@ -33,6 +33,8 @@ Rails.application.routes.draw do
     post 'resume_blocking', action: 'resume_blocking', as: 'resume_blocking'
     post 'check_routers', action: 'check_routers', as: 'check_routers'
     get 'install_radvd_stream', action: 'install_radvd_stream'
+    post 'forwards', action: 'create_forward', as: 'create_forward'
+    delete 'forwards/:id', action: 'destroy_forward', as: 'destroy_forward'
   end
   get '/network/gateway', to: redirect('/network/dns')
   get '/network/settings', to: redirect('/network/dns')

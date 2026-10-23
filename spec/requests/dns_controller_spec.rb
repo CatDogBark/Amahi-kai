@@ -84,7 +84,7 @@ describe 'Network → DNS & DHCP', type: :request do
 
       it 'refuses what it cannot use, and changes nothing' do
         mode = Setting.get('dns_mode')
-        [[{ mode: 'everything', provider: 'quad9', interface: 'ens18' }, 'Choose Off, DNS for my network, or DNS + DHCP'],
+        [[{ mode: 'everything', provider: 'quad9', interface: 'ens18' }, 'Choose Off, DNS for my network, DNS + DHCP, or Router'],
          [{ mode: 'dns', provider: 'google', interface: 'ens18' }, 'Choose a provider'],
          [{ mode: 'dns', provider: 'custom', interface: 'ens18', custom_addresses: '', custom_tls_name: 'x.y' }, 'one to four addresses'],
          [{ mode: 'dns', provider: 'quad9', interface: 'eth9' }, 'Choose the network interface'],
@@ -229,6 +229,67 @@ describe 'Network → DNS & DHCP', type: :request do
         post '/network/dns/resume_blocking'
         expect(flash[:notice]).to eq('Blocking is back on.')
         expect(DnsService.paused_until).to be_nil
+      end
+    end
+
+    describe 'router mode' do
+      let(:router) { { mode: 'router', provider: 'quad9', interface: 'ens18', wan_interface: 'ens19', dhcp_first: '100', dhcp_last: '200', dhcp_router: '1', lease_time: '14400' } }
+
+      before do
+        allow(DnsService).to receive_messages(installed?: true, firewall_on?: true, router_state: nil)
+        allow(DnsmasqService).to receive(:installed?).and_return(true)
+        allow(DnsmasqService).to receive(:other_servers).and_return([])
+        allow(NetworkInterfaces).to receive(:lan).and_return('ens18' => [lan], 'ens19' => [NetworkInterfaces::Address.new(ip: IPAddr.new('10.77.0.5'), prefix: 24)])
+      end
+
+      it 'needs an internet interface, a different one, and the firewall on' do
+        put '/network/dns', params: router.merge(wan_interface: '')
+        expect(flash[:alert]).to include('Choose the interface the internet is on')
+        put '/network/dns', params: router.merge(wan_interface: 'ens18')
+        expect(flash[:alert]).to include('must differ')
+        allow(DnsService).to receive(:firewall_on?).and_return(false)
+        put '/network/dns', params: router
+        expect(flash[:alert]).to include('Turn the firewall on first')
+        expect(Privileged.calls).to be_empty
+      end
+
+      it "refuses to make the interface you're connected through the internet side" do
+        put '/network/dns', params: router.merge(interface: 'ens19', wan_interface: 'ens18'), headers: { 'REMOTE_ADDR' => '192.168.1.74' }
+        expect(flash[:alert]).to include("You're connected through ens18")
+      end
+
+      it 'saves, and puts the router in place after DNS and DHCP' do
+        put '/network/dns', params: router
+        expect(flash[:notice]).to include('The NAS is the router')
+        expect([Setting.get('dns_mode'), Setting.get('dns_wan_interface')]).to eq(%w[router ens19])
+        expect(Privileged.calls.map(&:first)).to eq(%w[dns.write_config services.enable dns.blocking_off network.write_dnsmasq_config services.enable network.router_on])
+        expect(Privileged.calls.last.last).to eq(lan: 'ens18', wan: 'ens19', forwards: [])
+        expect(Privileged.calls[3].last[:content]).to include('dhcp-option=option:router,192.168.1.10')
+      end
+
+      it 'shows the internet side, and takes the router down when the mode changes' do
+        Setting.set('dns_mode', 'router')
+        Setting.set('dns_wan_interface', 'ens19')
+        allow(DnsService).to receive_messages(router_state: { 'lan' => 'ens18', 'wan' => 'ens19', 'forwards' => [] }, running?: true, check: nil)
+        allow(NetworkInterfaces).to receive(:addresses).with('ens19').and_return([NetworkInterfaces::Address.new(ip: IPAddr.new('10.77.0.134'), prefix: 24)])
+        allow(NetworkInterfaces).to receive(:default_route).and_return(%w[ens19 10.77.0.1])
+        get '/network/dns'
+        expect(response.body).to include('Through ens19 at 10.77.0.134', 'router 10.77.0.1', '0 ports let in', 'Ports let in from the internet')
+        put '/network/dns', params: router.merge(mode: 'dns_dhcp')
+        expect(Privileged.calls.map(&:first)).to include('network.router_off')
+      end
+
+      it 'adds and removes port forwards, rewriting the rules each time' do
+        Setting.set('dns_mode', 'router')
+        Setting.set('dns_wan_interface', 'ens19')
+        post '/network/dns/forwards', params: { port_forward: { port: '8080', protocol: 'tcp', address: '60', to_port: '80', name: 'camera' } }
+        expect(flash[:notice]).to eq('Forwarding tcp 8080 → 80 to 192.168.1.60.')
+        expect(Privileged.calls.last).to eq(['network.router_on', { lan: 'ens18', wan: 'ens19', forwards: [{ protocol: 'tcp', port: 8080, address: '192.168.1.60', to_port: 80 }] }])
+        post '/network/dns/forwards', params: { port_forward: { port: '8080', protocol: 'tcp', address: '61' } }
+        expect(flash[:alert]).to include('forwarded already')
+        delete "/network/dns/forwards/#{PortForward.last.id}"
+        expect(flash[:notice]).to eq('No longer forwarding tcp 8080 → 80.')
+        expect(Privileged.calls.last.last[:forwards]).to eq([])
       end
     end
 

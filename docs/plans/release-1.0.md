@@ -34,6 +34,23 @@ Decision for CatDogBark: **the drive layout.** The checklist ends with all four 
 pool (about 2.7 TB, one drive may fail), with shares on the pool and Greyhole only tried along
 the way. Confirm that's still the plan before §11, since the pool's layout can't be changed after.
 
+## 2b. Router mode
+
+Original Amahi could be the house's router, so Amahi-kai carries it over (CatDogBark, 2026-10-23:
+in 1.0). 0.9.2 has the LAN half; this adds the internet half as a fourth mode, **Router**, on
+Network → DNS & DHCP: a second interface takes the provider's connection (DHCP for now; PPPoE
+and a static address later), the NAS forwards and NATs the LAN out through it, the firewall lets
+nothing in from the internet except the port forwards the page lists, and DHCP hands out the NAS
+as the router. It needs the firewall on, and refuses to turn the interface the admin is connected
+through into the internet side. IPv6 for the house (a delegated prefix, a real default route
+announced) is a slice of its own after.
+
+Tested on the island with a third leg: `vmbr8` with a fake-ISP container on it (DHCP and DNS on
+its island side, NAT out through the house), the test VM's `ens20` as the WAN, the client routed
+out through the test VM. Then the house, with CatDogBark's laptop tethered to his phone so the
+session survives whatever the NAS does, and the provider's cable moved from his router to a spare
+port on forge (it's an ISP gateway, so its bridge mode is part of that day).
+
 ## 3. Signed updates
 
 Today the updater installs whatever the GitHub Release tag points at, and the helper fetches the

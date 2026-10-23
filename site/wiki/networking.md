@@ -22,12 +22,14 @@ DNS and DHCP, DNS aliases, remote access and security are all Advanced mode feat
 
 ## DNS (Network → DNS & DHCP)
 
-The page has three modes:
+The page has four modes:
 
 1. **Off** (the default): nothing listens, and your router does DNS and DHCP as before.
 2. **DNS for my network** (recommended): the NAS answers DNS; your router keeps handing out
    addresses.
 3. **DNS + DHCP** (advanced): the NAS also hands out addresses, in place of your router (see DHCP,
+   below).
+4. **Router** (advanced): DNS + DHCP, and the NAS is the way to the internet (see Router mode,
    below).
 
 DNS turns names like `example.com` into addresses. Normally your router does it, by asking your
@@ -89,7 +91,34 @@ NAS is off or restarting, the devices that use it can't look up names.
 - **The NAS's own lookups don't go through it:** the NAS keeps asking your router, so a problem
   with DNS can't stop it from updating.
 
-### IPv6
+### Router mode
+
+The fourth mode, **Router**, makes the NAS the house's way to the internet: DNS + DHCP, plus a
+second network interface that takes the provider's connection. Your devices reach the internet
+through the NAS, and your old router becomes an access point (its DHCP off, its internet port
+empty, your devices on its LAN ports and Wi-Fi as before).
+
+1. The NAS needs a **second network interface** with the provider's cable in it (a spare port on
+   the machine, or a NIC added to the VM). If the provider's box is a gateway with its own router
+   inside, put it in bridge mode, or the NAS sits behind its NAT.
+2. **Turn the firewall on** first (Network → Security, the firewall's Fix). Router mode refuses
+   without it: the firewall is what keeps the internet out of the NAS.
+3. Pick **Router**, the internet interface, and **Save**, from a device on the LAN side (the page
+   refuses if you're connected through the interface that would become the internet side, since
+   it would stop answering you).
+
+Nothing from the internet reaches the NAS or your devices except the **ports you let in**, on
+the card that appears: a port, a protocol, the device (give it a fixed address on Network → Hosts
+first) and its port. The NAS's own services (SSH, the web UI, Samba, DNS) never answer the
+internet side.
+
+**The way back:** set the page to DNS + DHCP or Off, move the provider's cable back to your
+router, and turn its DHCP on again. While the NAS is off or restarting, the house has no
+internet: a System Update is a minute of that.
+
+IPv6 for the house (an address range from the provider), PPPoE and a static address come later.
+
+## IPv6
 
 Most internet providers hand out IPv6 too, and devices on IPv6 learn their DNS server from the
 network's announcements (router advertisements), usually the router's. If a device learns the

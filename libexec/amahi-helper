@@ -170,6 +170,21 @@ module AmahiHelper
   # How long to listen for routers' announcements (a router waits up to 3 seconds between them).
   RA_WAIT = 4
 
+  # Router mode (Network → DNS & DHCP): the NAS between the LAN and the internet. The internet
+  # interface gets its address by DHCP (WAN_NETPLAN), the kernel forwards, UFW's before.rules
+  # get a NAT block (ROUTER_BEGIN..ROUTER_END: masquerade out, and the port forwards in), and
+  # UFW's rules let the LAN out, the forwards in, and nothing else in on the internet side.
+  # ROUTER_STATE holds what's in place, for the way back and for lan_subnets.
+  NETPLAN = '/usr/sbin/netplan'
+  WAN_NETPLAN = '/etc/netplan/70-amahi-kai-wan.yaml'
+  ROUTER_SYSCTL = '/etc/sysctl.d/90-amahi-kai-router.conf'
+  ROUTER_STATE = "#{BLOCKLIST_DIR}/router.json".freeze
+  UFW_CONF = '/etc/ufw/ufw.conf'
+  UFW_BEFORE_RULES = '/etc/ufw/before.rules'
+  ROUTER_BEGIN = '# BEGIN amahi-kai router'
+  ROUTER_END = '# END amahi-kai router'
+  PORT_FORWARD_MAX = 50
+
   # The services Settings → Servers may control: the entries in lib/system_services.rb
   # that list actions (spec/lib/amahi_helper_spec.rb checks the two lists match).
   SERVICES = {
@@ -794,6 +809,25 @@ module AmahiHelper
       params: %w[interface],
       validate: ->(a) { { interface: network_interface(a['interface']) } },
       plan: ->(v) { [[:ipv6_advertisers, v[:interface]]] }
+    },
+    # Router mode on: +lan+ is the interface DNS and DHCP serve, +wan+ the internet's, +forwards+
+    # the ports let in from the internet to devices. Needs UFW on (the security audit's firewall
+    # fix): without it nothing would stand between the internet and the NAS's services.
+    'network.router_on' => {
+      params: %w[lan wan forwards],
+      validate: lambda { |a|
+        lan = network_interface(a['lan'])
+        wan = network_interface(a['wan'])
+        raise Refused, 'the LAN and the internet interfaces must differ' if lan == wan
+        raise Refused, "the firewall must be on first (Network → Security, the firewall's Fix)" unless ufw_enabled?
+        installed!(NETPLAN) && { lan: lan, wan: wan, forwards: port_forwards(a['forwards']) }
+      },
+      plan: ->(v) { [[:router_on, v[:lan], v[:wan], v[:forwards]]] }
+    },
+    'network.router_off' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:router_off]] }
     },
     # Blocking stops for BLOCKING_PAUSE seconds, then systemd resumes it (dns.resume_blocking).
     'dns.pause_blocking' => {
@@ -1709,6 +1743,32 @@ module AmahiHelper
       end
       match = line.match(/\ARDNSS ([0-9a-f:]+) \{\z/)
       !!match && ip_address?(match[1], :ipv6?) && ULA.include?(IPAddr.new(match[1]))
+    end
+
+    def ufw_enabled?
+      File.executable?(UFW) && File.read(UFW_CONF).match?(/^ENABLED=yes$/)
+    rescue SystemCallError
+      false
+    end
+
+    # The port forwards: [{ protocol: 'tcp', port: 8080, address: '10.99.0.60', to_port: 80 }],
+    # to devices on a private network only.
+    def port_forwards(value)
+      raise Refused, 'forwards must be a list' unless value.is_a?(Array)
+      raise Refused, "at most #{PORT_FORWARD_MAX} port forwards" if value.size > PORT_FORWARD_MAX
+      value.map do |forward|
+        raise Refused, 'a forward must be an object' unless forward.is_a?(Hash)
+        address = forward['address'].to_s
+        raise Refused, "#{address.inspect} isn't an IPv4 address" unless ip_address?(address, :ipv4?)
+        raise Refused, "#{address} isn't on a private network" unless PRIVATE_NETS.any? { |net| net.include?(IPAddr.new(address)) }
+        { protocol: listed(forward['protocol'], 'protocol', %w[tcp udp]), port: port_number(forward['port'], 'port'),
+          address: address, to_port: port_number(forward['to_port'], 'to_port') }
+      end
+    end
+
+    def port_number(value, name)
+      raise Refused, "#{name} must be a port number (1 to 65535)" unless value.is_a?(Integer) && value.between?(1, 65_535)
+      value
     end
 
     # A network interface this machine has, by name ("ens18").
@@ -3274,6 +3334,110 @@ module AmahiHelper
       names
     end
 
+    # Router mode on. Order: the internet interface's address (checked by netplan generate before
+    # it's applied), forwarding, the NAT block, then UFW's rules: the LAN out, each forward in,
+    # and, first of all the rules, nothing else in on the internet side (inserted once another
+    # rule exists, which the route rule makes sure of). Rules from a previous state go first, so
+    # a changed interface or forward leaves nothing behind.
+    def do_router_on(lan, wan, forwards)
+      do_install(WAN_NETPLAN, wan_netplan(wan), nil, '0600')
+      begin
+        run_command([NETPLAN, 'generate'])
+      rescue Failed
+        do_remove_files(WAN_NETPLAN)
+        raise
+      end
+      run_command([NETPLAN, 'apply'])
+      do_install(ROUTER_SYSCTL, "net.ipv4.ip_forward = 1\n", nil)
+      run_command(['/usr/sbin/sysctl', '-q', '-w', 'net.ipv4.ip_forward=1'])
+      previous = read_json(ROUTER_STATE)
+      ufw_router_rules_off(previous) if previous
+      write_router_nat(wan, forwards)
+      run_command([UFW, 'route', 'allow', 'in', 'on', lan, 'out', 'on', wan])
+      forwards.each do |f|
+        run_command([UFW, 'route', 'allow', 'in', 'on', wan, 'out', 'on', lan, 'to', f[:address], 'port', f[:to_port].to_s, 'proto', f[:protocol]])
+      end
+      run_command([UFW, 'insert', '1', 'deny', 'in', 'on', wan])
+      run_command([UFW, 'reload'])
+      state = { 'lan' => lan, 'wan' => wan, 'forwards' => forwards.map { |f| f.transform_keys(&:to_s) } }
+      do_install(ROUTER_STATE, "#{JSON.generate(state)}\n", nil, '0644')
+      nil
+    end
+
+    # Router mode off: the rules, the NAT block, forwarding and the internet interface's address
+    # go, in that order, each on its own so one failing doesn't keep the rest.
+    def do_router_off
+      return nil unless router_in_place?
+      state = read_json(ROUTER_STATE)
+      if File.executable?(UFW)
+        ufw_router_rules_off(state) if state
+        write_router_nat(nil, [])
+        run_command([UFW, 'reload', { allow_failure: true }]) if ufw_enabled?
+      end
+      do_remove_files(ROUTER_SYSCTL, ROUTER_STATE)
+      run_command(['/usr/sbin/sysctl', '-q', '-w', 'net.ipv4.ip_forward=0', { allow_failure: true }])
+      return nil unless File.exist?(WAN_NETPLAN)
+      wan = File.read(WAN_NETPLAN)[/^    ([A-Za-z0-9_.-]{1,15}):$/, 1]
+      do_remove_files(WAN_NETPLAN)
+      run_command([NETPLAN, 'apply', { allow_failure: true }])
+      # netplan apply leaves an interface it no longer knows as it was; its address goes too.
+      run_command([IP, '-4', 'addr', 'flush', 'dev', wan, { allow_failure: true }]) if wan
+      nil
+    end
+
+    def router_in_place?
+      [ROUTER_STATE, WAN_NETPLAN, ROUTER_SYSCTL].any? { |path| File.exist?(path) } ||
+        (File.exist?(UFW_BEFORE_RULES) && File.read(UFW_BEFORE_RULES).include?(ROUTER_BEGIN))
+    end
+
+    def ufw_router_rules_off(state)
+      lan, wan = state.values_at('lan', 'wan')
+      return unless lan && wan
+      run_command([UFW, 'delete', 'deny', 'in', 'on', wan, { allow_failure: true }])
+      run_command([UFW, 'route', 'delete', 'allow', 'in', 'on', lan, 'out', 'on', wan, { allow_failure: true }])
+      Array(state['forwards']).each do |f|
+        run_command([UFW, 'route', 'delete', 'allow', 'in', 'on', wan, 'out', 'on', lan, 'to', f['address'].to_s, 'port', f['to_port'].to_s,
+                     'proto', f['protocol'].to_s, { allow_failure: true }])
+      end
+    end
+
+    # The internet interface takes an address from the provider; its route beats any other
+    # default route the NAS has (DHCP's usual metric is 100). IPv6 waits for its own slice.
+    def wan_netplan(wan)
+      <<~YAML
+        # Amahi-kai (Network → DNS & DHCP, router): the internet interface, with an address from the provider
+        network:
+          version: 2
+          ethernets:
+            #{wan}:
+              dhcp4: true
+              dhcp6: false
+              accept-ra: false
+              dhcp4-overrides:
+                route-metric: 50
+      YAML
+    end
+
+    # UFW's before.rules with Amahi-kai's NAT block (masquerade out of +wan+, and a DNAT in for
+    # each forward) in front of its filter table, or without it, given nil. The rest of the
+    # file is UFW's own and isn't touched.
+    def write_router_nat(wan, forwards)
+      content = File.read(UFW_BEFORE_RULES)
+      content = content.sub(/#{Regexp.escape(ROUTER_BEGIN)}\n.*?#{Regexp.escape(ROUTER_END)}\n/m, '')
+      if wan
+        lines = [ROUTER_BEGIN, '*nat', ':PREROUTING ACCEPT [0:0]', ':POSTROUTING ACCEPT [0:0]']
+        forwards.each do |f|
+          lines << "-A PREROUTING -i #{wan} -p #{f[:protocol]} --dport #{f[:port]} -j DNAT --to-destination #{f[:address]}:#{f[:to_port]}"
+        end
+        lines.concat(["-A POSTROUTING -o #{wan} -j MASQUERADE", 'COMMIT', ROUTER_END])
+        raise Failed, "#{UFW_BEFORE_RULES} has no filter table to put the NAT block before" unless content.include?("*filter\n")
+        content = content.sub("*filter\n", "#{lines.join("\n")}\n*filter\n")
+      end
+      do_install(UFW_BEFORE_RULES, content, nil, '0640')
+    rescue SystemCallError => e
+      raise Failed, "couldn't read #{UFW_BEFORE_RULES}: #{e.message}"
+    end
+
     # Installs Unbound's config (or, given nil, removes it), then has UFW let DNS in to the
     # addresses Unbound listens on now, and no longer to those it stopped listening on. UFW
     # keeps the rules while it's off, for when it's turned on.
@@ -4660,10 +4824,13 @@ module AmahiHelper
        %w[-j DROP]]
     end
 
-    # ["192.168.1.0/24"]: the private IPv4 subnets of the NAS's own network interfaces.
+    # ["192.168.1.0/24"]: the private IPv4 subnets of the NAS's own network interfaces, the
+    # internet's left out while the NAS is the router (its address is private too behind
+    # another router, and the internet side mustn't reach the apps).
     def lan_subnets
+      wan = read_json(ROUTER_STATE)&.dig('wan')
       JSON.parse(capture([IP, '-j', '-4', 'addr', 'show'])).flat_map do |interface|
-        next [] if interface['ifname'].to_s.match?(NOT_LAN_INTERFACES)
+        next [] if interface['ifname'].to_s.match?(NOT_LAN_INTERFACES) || interface['ifname'] == wan
         Array(interface['addr_info']).filter_map do |addr|
           prefix = addr['prefixlen']
           next unless prefix.is_a?(Integer) && prefix.between?(8, 32)

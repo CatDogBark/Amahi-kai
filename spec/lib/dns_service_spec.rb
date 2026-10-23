@@ -319,6 +319,56 @@ RSpec.describe DnsService do
     end
   end
 
+  describe 'router mode' do
+    let(:dir) { Dir.mktmpdir }
+
+    before do
+      allow(described_class).to receive_messages(installed?: true, running?: false)
+      stub_const('DnsService::ROUTER_STATE', "#{dir}/router.json")
+      stub_const('DnsService::UFW_CONF', "#{dir}/ufw.conf")
+      File.write("#{dir}/ufw.conf", "ENABLED=yes\n")
+    end
+
+    after { FileUtils.rm_rf(dir) }
+
+    it 'is DHCP too, with an internet interface the NAS has' do
+      Setting.set('dns_mode', 'router')
+      expect([described_class.dhcp?, described_class.router?]).to eq([true, true])
+      expect(described_class.wan_interface).to be_nil
+      Setting.set('dns_wan_interface', 'ens19')
+      expect(described_class.wan_interface).to eq('ens19')
+      Setting.set('dns_wan_interface', 'eth9')
+      expect(described_class.wan_interface).to be_nil
+    end
+
+    it "puts the router's rules in last, with the forwards, and takes them out when the mode changes" do
+      Setting.set('dns_mode', 'router')
+      Setting.set('dns_wan_interface', 'ens19')
+      Setting.set('net', '192.168.1')
+      allow(described_class).to receive(:rewrite_router!)
+      PortForward.create!(protocol: 'udp', port: 5000, address: '60')
+      described_class.apply!
+      ops = Privileged.calls.map(&:first)
+      expect(ops.last).to eq('network.router_on')
+      expect(ops.index('network.router_on')).to be > ops.index('services.enable')
+      expect(Privileged.calls.last.last).to eq(lan: 'ens18', wan: 'ens19', forwards: [{ protocol: 'udp', port: 5000, address: '192.168.1.60', to_port: 5000 }])
+      Privileged.calls.clear
+      File.write(described_class::ROUTER_STATE, '{"lan":"ens18","wan":"ens19","forwards":[]}')
+      Setting.set('dns_mode', 'dns_dhcp')
+      described_class.apply!
+      expect(Privileged.calls.map(&:first)).to include('network.router_off')
+      expect(described_class.router_state).to include('wan' => 'ens19')
+    end
+
+    it 'rewrites the rules for a port forward only while the NAS is the router' do
+      expect(described_class.rewrite_router!).to be false
+      Setting.set('dns_mode', 'router')
+      Setting.set('dns_wan_interface', 'ens19')
+      expect(described_class.rewrite_router!).to be true
+      expect(Privileged.calls.map(&:first)).to eq(%w[network.router_on])
+    end
+  end
+
   describe '.totals' do
     it "are the helper's counts, or nil without them" do
       expect(described_class.totals).to be_nil # the simulated helper counts nothing

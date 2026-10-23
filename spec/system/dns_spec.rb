@@ -52,12 +52,12 @@ RSpec.describe 'DNS & DHCP', type: :system do
     sign_in_as_admin
     visit '/network/dns'
     expect(page).to have_no_button('Install dnsmasq')
-    find('label.dns-choice', text: 'DNS + DHCP').click
+    find('label.dns-choice', text: /\ADNS \+ DHCP/).click
     expect(page).to have_button('Install dnsmasq')
 
     allow(DnsmasqService).to receive(:installed?).and_return(true)
     visit '/network/dns'
-    find('label.dns-choice', text: 'DNS + DHCP').click
+    find('label.dns-choice', text: /\ADNS \+ DHCP/).click
     expect(page).to have_field('dhcp_first', with: '100')
     expect(page).to have_select('lease_time', selected: '4 hours')
     find('label.dns-choice', text: 'DNS for my network').click

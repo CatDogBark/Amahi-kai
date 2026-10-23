@@ -32,6 +32,17 @@ RSpec.describe NetworkInterfaces do
                  "ens18\t00000000\t0101A8C0\t0003\t0\t0\t100\t00000000\n")
       file.flush
       expect(described_class.default_name(file.path)).to eq('ens18')
+      expect(described_class.default_route(file.path)).to eq(%w[ens18 192.168.1.1])
+    end
+  end
+
+  it 'picks the default route with the lowest metric, the way the kernel does' do
+    Tempfile.create('route') do |file|
+      file.write("Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\n" \
+                 "ens18\t00000000\t0101A8C0\t0003\t0\t0\t200\t00000000\n" \
+                 "ens20\t00000000\t01004D0A\t0003\t0\t0\t50\t00000000\n")
+      file.flush
+      expect(described_class.default_route(file.path)).to eq(%w[ens20 10.77.0.1])
     end
     expect(described_class.default_name('/nonexistent/route')).to be_nil
   end
