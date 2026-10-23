@@ -73,8 +73,29 @@ module DnsService
                       about: "Another project's list of the most common ads and trackers; rarely blocks too much. About 60,000 domains." },
     'oisd-big' => { name: 'OISD big', default: false,
                     about: "OISD's full list: ads, trackers, malware and phishing. It covers what HaGeZi NORMAL does, so pick one. " \
-                           'About 240,000 domains.' }
+                           'About 240,000 domains.' },
+    'hagezi-doh' => { name: 'Encrypted DNS providers', default: false,
+                      about: "The known DNS-over-HTTPS services, so a device can't go around the NAS's DNS by name. Ticked for you " \
+                             'while every device uses the NAS\'s DNS (Router). About 3,300 domains.' },
+    'hagezi-native-samsung' => { name: 'Samsung TVs and phones', default: false, vendor: true,
+                                 about: "Samsung's own telemetry hosts, with what its devices need left out. About 200 domains." },
+    'hagezi-native-lgwebos' => { name: 'LG TVs (webOS)', default: false, vendor: true,
+                                 about: "LG's own telemetry hosts, with what its TVs need left out. About 230 domains." },
+    'hagezi-native-roku' => { name: 'Roku', default: false, vendor: true,
+                              about: "Roku's own telemetry and ad-measurement hosts, with what its players need left out. About 60 domains." },
+    'hagezi-native-amazon' => { name: 'Amazon devices (Fire TV, Echo, Kindle)', default: false, vendor: true,
+                                about: "Amazon's own telemetry hosts, with what its devices need left out." },
+    'hagezi-native-apple' => { name: 'Apple devices', default: false, vendor: true,
+                               about: "Apple's own telemetry hosts, with what its devices need left out." },
+    'hagezi-native-winoffice' => { name: 'Windows and Office', default: false, vendor: true,
+                                   about: "Microsoft's telemetry hosts for Windows and Office, with what they need left out." },
+    'hagezi-native-tiktok' => { name: 'TikTok', default: false, vendor: true,
+                                about: "TikTok's tracking hosts, with what the app needs left out." },
+    'hagezi-native-xiaomi' => { name: 'Xiaomi devices', default: false, vendor: true,
+                                about: "Xiaomi's own telemetry hosts, with what its devices need left out." }
   }.freeze
+  # The list the Router's "every device uses the NAS's DNS" adds.
+  DOH_LIST = 'hagezi-doh'
   # What the helper found at its last refresh (root writes it; anyone may read it).
   BLOCKLIST_STATUS = '/var/lib/amahi-kai-dns/status.json'
   BLOCKLIST_SERVICE = 'amahi-kai-blocklists.service'
@@ -141,7 +162,7 @@ module DnsService
     # The helper's router rules follow the LAN and internet interfaces and the port forwards.
     def apply_router!
       if on? && router? && wan_interface
-        Privileged.call('network.router_on', lan: interface, wan: wan_interface, forwards: PortForward.for_helper(lan_prefix))
+        Privileged.call('network.router_on', **router_args)
       elsif router_state
         Privileged.call('network.router_off')
       end
@@ -152,8 +173,17 @@ module DnsService
     def rewrite_router!
       return false unless on? && router? && installed? && wan_interface
 
-      Privileged.call('network.router_on', lan: interface, wan: wan_interface, forwards: PortForward.for_helper(lan_prefix))
+      Privileged.call('network.router_on', **router_args)
       true
+    end
+
+    def router_args
+      { lan: interface, wan: wan_interface, forwards: PortForward.for_helper(lan_prefix),
+        dns: (force_dns? ? server_addresses.first : nil) }
+    end
+
+    def tailscale_installed?
+      File.exist?('/usr/bin/tailscale')
     end
 
     # 'quad9', a key of PROVIDERS, or 'custom'.
@@ -374,10 +404,23 @@ module DnsService
     # downloads the lists in the background; or blocking stops.
     def apply_blocking!
       if blocking?
-        Privileged.call('dns.set_blocklists', lists: blocklists, allow: allowlist)
+        Privileged.call('dns.set_blocklists', lists: blocklists_in_force, allow: allowlist)
       else
         Privileged.call('dns.blocking_off')
       end
+    end
+
+    # The lists chosen, plus the encrypted-DNS providers while every device uses the NAS's DNS.
+    def blocklists_in_force
+      lists = blocklists
+      lists |= [DOH_LIST] if router? && force_dns?
+      lists
+    end
+
+    # Router mode: lookups devices send elsewhere come to the NAS, and their own encrypted DNS
+    # doesn't get out. On unless turned off.
+    def force_dns?
+      Setting.get('dns_force_nas') != '0'
     end
 
     def blocking?

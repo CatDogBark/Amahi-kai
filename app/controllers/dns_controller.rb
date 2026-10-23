@@ -46,6 +46,8 @@ class DnsController < ApplicationController
     @default_route = NetworkInterfaces.default_route
     @firewall_on = DnsService.firewall_on?
     @forwards = PortForward.order(:protocol, :port)
+    @force_dns = DnsService.force_dns?
+    @tailscale_installed = DnsService.tailscale_installed?
   end
 
   def update
@@ -63,7 +65,10 @@ class DnsController < ApplicationController
     Setting.set('dns_provider', provider, KIND)
     Setting.set('dns_interface', interface, KIND)
     Setting.set('dns_ipv6_advertise', params[:ipv6_advertise] == '1' ? '1' : '0', KIND)
-    Setting.set('dns_wan_interface', params[:wan_interface].to_s, KIND) if mode == 'router'
+    if mode == 'router'
+      Setting.set('dns_wan_interface', params[:wan_interface].to_s, KIND)
+      Setting.set('dns_force_nas', params[:force_dns] == '1' ? '1' : '0', KIND)
+    end
     if provider == 'custom'
       Setting.set('dns_custom_addresses', params[:custom_addresses].to_s.split(/[\s,]+/).reject(&:empty?).join(' '), KIND)
       Setting.set('dns_custom_tls_name', params[:custom_tls_name].to_s.strip.downcase, KIND)

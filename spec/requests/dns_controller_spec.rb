@@ -233,7 +233,7 @@ describe 'Network → DNS & DHCP', type: :request do
     end
 
     describe 'router mode' do
-      let(:router) { { mode: 'router', provider: 'quad9', interface: 'ens18', wan_interface: 'ens19', dhcp_first: '100', dhcp_last: '200', dhcp_router: '1', lease_time: '14400' } }
+      let(:router) { { mode: 'router', provider: 'quad9', interface: 'ens18', wan_interface: 'ens19', force_dns: '1', dhcp_first: '100', dhcp_last: '200', dhcp_router: '1', lease_time: '14400' } }
 
       before do
         allow(DnsService).to receive_messages(installed?: true, firewall_on?: true, router_state: nil)
@@ -263,8 +263,17 @@ describe 'Network → DNS & DHCP', type: :request do
         expect(flash[:notice]).to include('The NAS is the router')
         expect([Setting.get('dns_mode'), Setting.get('dns_wan_interface')]).to eq(%w[router ens19])
         expect(Privileged.calls.map(&:first)).to eq(%w[dns.write_config services.enable dns.blocking_off network.write_dnsmasq_config services.enable network.router_on])
-        expect(Privileged.calls.last.last).to eq(lan: 'ens18', wan: 'ens19', forwards: [])
+        expect(Privileged.calls.last.last).to eq(lan: 'ens18', wan: 'ens19', forwards: [], dns: '192.168.1.10')
         expect(Privileged.calls[3].last[:content]).to include('dhcp-option=option:router,192.168.1.10')
+        expect(Setting.get('dns_force_nas')).to eq('1')
+      end
+
+      it "leaves devices' DNS alone when that's unticked, and adds the encrypted-DNS list to blocking when it's on" do
+        put '/network/dns', params: router.merge(force_dns: '0')
+        expect(Privileged.calls.last.last[:dns]).to be_nil
+        Setting.set('dns_blocking', '1')
+        put '/network/dns', params: router.merge(force_dns: '1')
+        expect(Privileged.calls.find { |op, _| op == 'dns.set_blocklists' }.last[:lists]).to include('hagezi-doh')
       end
 
       it 'shows the internet side, and takes the router down when the mode changes' do
@@ -287,7 +296,7 @@ describe 'Network → DNS & DHCP', type: :request do
         Setting.set('dns_wan_interface', 'ens19')
         post '/network/dns/forwards', params: { port_forward: { port: '8080', protocol: 'tcp', address: '60', to_port: '80', name: 'camera' } }
         expect(flash[:notice]).to eq('Forwarding tcp 8080 → 80 to 192.168.1.60.')
-        expect(Privileged.calls.last).to eq(['network.router_on', { lan: 'ens18', wan: 'ens19', forwards: [{ protocol: 'tcp', port: 8080, address: '192.168.1.60', to_port: 80 }] }])
+        expect(Privileged.calls.last).to eq(['network.router_on', { lan: 'ens18', wan: 'ens19', forwards: [{ protocol: 'tcp', port: 8080, address: '192.168.1.60', to_port: 80 }], dns: '192.168.1.10' }])
         post '/network/dns/forwards', params: { port_forward: { port: '8080', protocol: 'tcp', address: '61' } }
         expect(flash[:alert]).to include('forwarded already')
         delete "/network/dns/forwards/#{PortForward.last.id}"

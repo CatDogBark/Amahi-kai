@@ -111,6 +111,13 @@ The NAS's own network settings for the LAN interface are adjusted for you: an ad
 from the old router is kept as a fixed one, and a route it had through the old router steps
 behind the internet's. The file is put back when you leave router mode.
 
+**Every device uses the NAS's DNS** (on unless you untick it): some devices ask a DNS server of
+their own choosing (Roku, Google's, some TVs), skipping yours and its blocking. In router mode
+the NAS answers those lookups anyway, keeps a device's own encrypted DNS from getting out, and
+blocks the known encrypted-DNS services by name (the *Encrypted DNS providers* list is added to
+Blocking, so turn Blocking on for that part). If Tailscale is installed, its port is let in on
+the internet side so its connections stay direct; the Cloudflare Tunnel needs nothing.
+
 Nothing from the internet reaches the NAS or your devices except the **ports you let in**, on
 the card that appears: a port, a protocol, the device (give it a fixed address on Network → Hosts
 first) and its port. The NAS's own services (SSH, the web UI, Samba, DNS) never answer the
@@ -150,6 +157,10 @@ blocked too. It's off until you turn it on, and works while DNS is on.
   nobody watches over) and **HaGeZi Threat Intelligence (mini)** (malware, phishing and scams).
   Together they block about 330,000 domains, which takes Unbound about 160 MB of memory. The
   others are stricter, gentler, or bigger; the page says which.
+- **Devices you have:** per-vendor lists (Samsung, LG, Roku, Amazon, Apple, Windows and Office,
+  TikTok, Xiaomi) that block a vendor's own telemetry hosts and keep the hosts its devices need.
+  Tick the kinds you own. A list can't separate telemetry from the service when both use the same
+  host, so this is as far as a network can go; the allowlist is there if something breaks.
 - **The allowlist** is for a site a list breaks: a domain there, and the names under it, get
   through (unless a list blocks one of those names itself).
 - **Pause for 5 minutes** lets everything through for a while, then blocking comes back by

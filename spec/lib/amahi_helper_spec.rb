@@ -1314,6 +1314,7 @@ RSpec.describe 'AmahiHelper' do
       File.write("#{dir}/before.rules", before_rules)
       allow(File).to receive(:executable?).and_call_original
       allow(File).to receive(:executable?).with(AmahiHelper::UFW).and_return(true)
+      allow(File).to receive(:executable?).with(AmahiHelper::TAILSCALE).and_return(false)
       allow(helper).to receive(:run_command) { |argv| ran << argv.reject { |a| a.is_a?(Hash) }.join(' ') && nil }
     end
 
@@ -1326,7 +1327,9 @@ RSpec.describe 'AmahiHelper' do
       expect(refusal('network.router_on', args)).to include('must differ')
       real = Socket.getifaddrs.map(&:name).uniq.find { |n| n != 'lo' } or skip 'no second interface here'
       args['wan'] = real
-      expect(steps('network.router_on', args)).to eq([[:router_on, 'lo', real, []]])
+      expect(steps('network.router_on', args)).to eq([[:router_on, 'lo', real, [], nil]])
+      expect(steps('network.router_on', args.merge('dns' => '127.0.0.1'))).to eq([[:router_on, 'lo', real, [], '127.0.0.1']])
+      expect(refusal('network.router_on', args.merge('dns' => '10.9.9.9'))).to include("isn't an IPv4 address of the NAS's")
       File.write("#{dir}/ufw.conf", "ENABLED=no\n")
       expect(refusal('network.router_on', args)).to include('firewall must be on')
       File.write("#{dir}/ufw.conf", "ENABLED=yes\n")
@@ -1357,8 +1360,28 @@ RSpec.describe 'AmahiHelper' do
                          '/usr/sbin/ufw route allow in on ens19 out on ens20',
                          '/usr/sbin/ufw route allow in on ens20 out on ens19 to 10.99.0.60 port 80 proto tcp',
                          '/usr/sbin/ufw insert 1 deny in on ens20', '/usr/sbin/ufw reload'])
-      expect(JSON.parse(File.read(AmahiHelper::ROUTER_STATE))).to eq('lan' => 'ens19', 'wan' => 'ens20', 'pinned' => {},
+      expect(JSON.parse(File.read(AmahiHelper::ROUTER_STATE))).to eq('lan' => 'ens19', 'wan' => 'ens20', 'pinned' => {}, 'dns' => nil, 'tailscale' => false,
                                                                       'forwards' => [{ 'protocol' => 'tcp', 'port' => 8080, 'address' => '10.99.0.60', 'to_port' => 80 }])
+    end
+
+    it "sends devices' lookups to the NAS, keeps their own encrypted DNS in, and lets Tailscale's port through" do
+      allow(File).to receive(:executable?).with(AmahiHelper::TAILSCALE).and_return(true)
+      helper.do_router_on('ens19', 'ens20', [], '10.99.0.1')
+      rules = File.read(AmahiHelper::UFW_BEFORE_RULES)
+      expect(rules).to include('-A PREROUTING -i ens19 ! -d 10.99.0.1 -p udp --dport 53 -j DNAT --to-destination 10.99.0.1:53',
+                               '-A PREROUTING -i ens19 ! -d 10.99.0.1 -p tcp --dport 53 -j DNAT --to-destination 10.99.0.1:53')
+      ufw = ran.grep(/ufw/).map { |c| c.delete_prefix('/usr/sbin/ufw ') }
+      expect(ufw).to eq(['route allow in on ens19 out on ens20',
+                         'route insert 1 deny in on ens19 out on ens20 to any port 853 proto tcp',
+                         'route insert 1 deny in on ens19 out on ens20 to any port 853 proto udp',
+                         'insert 1 deny in on ens20', 'insert 1 allow in on ens20 to any port 41641 proto udp', 'reload'])
+      expect(JSON.parse(File.read(AmahiHelper::ROUTER_STATE))).to include('dns' => '10.99.0.1', 'tailscale' => true)
+      ran.clear
+      helper.do_router_off
+      expect(ran.grep(/ufw/).map { |c| c.delete_prefix('/usr/sbin/ufw ') }.first(4))
+        .to eq(['delete allow in on ens20 to any port 41641 proto udp', 'delete deny in on ens20',
+                'route delete deny in on ens19 out on ens20 to any port 853 proto tcp', 'route delete deny in on ens19 out on ens20 to any port 853 proto udp'])
+      expect(File.read(AmahiHelper::UFW_BEFORE_RULES)).to eq(before_rules)
     end
 
     it 'takes the old rules out before putting changed ones in, and the block out of before.rules once' do

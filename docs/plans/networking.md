@@ -178,11 +178,13 @@ A fourth mode, **Router**: DNS + DHCP, and the NAS is the way to the internet.
 
 ### Security at the routing layer (planned 2026-10-23)
 
-The switches, their order and their limits are in [`release-1.0.md`](release-1.0.md) §2c: every
-device uses the NAS's DNS (port 53 redirected on the LAN, 853 blocked out, the DoH providers
-blocked by name through Blocking), the vendor tracker lists, Tailscale's port in on the WAN,
-per-device LAN only, anti-spoofing and a dropped-attempts count. The Network tab's split
-(§2d) comes between the first three and the rest.
+The switches, their order and their limits are in [`release-1.0.md`](release-1.0.md) §2c. Built
+2026-10-23, the first three: every device uses the NAS's DNS (a DNAT in the NAT block for port 53
+from the LAN to anything but the NAS, `ufw route deny` for 853 in front of the LAN's allow, and
+HaGeZi's DoH list joined to Blocking's lists while the switch is on in router mode), the vendor
+tracker lists (HaGeZi's `native.*`, shown as "Devices you have"), and Tailscale's UDP 41641 let in
+on the WAN when `/usr/bin/tailscale` exists, in front of the deny. The Network tab's split (§2d)
+comes before per-device LAN only, anti-spoofing and the dropped-attempts count.
 
 ### Later
 

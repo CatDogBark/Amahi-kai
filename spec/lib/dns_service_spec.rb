@@ -239,6 +239,7 @@ RSpec.describe DnsService do
       expect(described_class::BLOCKLISTS.keys).to match_array(AmahiHelper::BLOCKLISTS.keys)
       expect(AmahiHelper::BLOCKLISTS.values.map { |list| list[:url] }).to all(start_with('https://'))
       expect(described_class::BLOCKLISTS.values.count { |list| list[:default] }).to eq(2)
+      expect(described_class::BLOCKLISTS.values.count { |list| list[:vendor] }).to eq(8)
     end
   end
 
@@ -351,13 +352,28 @@ RSpec.describe DnsService do
       ops = Privileged.calls.map(&:first)
       expect(ops.last).to eq('network.router_on')
       expect(ops.index('network.router_on')).to be > ops.index('services.enable')
-      expect(Privileged.calls.last.last).to eq(lan: 'ens18', wan: 'ens19', forwards: [{ protocol: 'udp', port: 5000, address: '192.168.1.60', to_port: 5000 }])
+      expect(Privileged.calls.last.last).to eq(lan: 'ens18', wan: 'ens19', forwards: [{ protocol: 'udp', port: 5000, address: '192.168.1.60', to_port: 5000 }],
+                                               dns: '192.168.1.10')
       Privileged.calls.clear
       File.write(described_class::ROUTER_STATE, '{"lan":"ens18","wan":"ens19","forwards":[]}')
       Setting.set('dns_mode', 'dns_dhcp')
       described_class.apply!
       expect(Privileged.calls.map(&:first)).to include('network.router_off')
       expect(described_class.router_state).to include('wan' => 'ens19')
+    end
+
+    it "sends devices' lookups to the NAS unless that's turned off, and adds the encrypted-DNS list to blocking" do
+      Setting.set('dns_mode', 'router')
+      Setting.set('dns_wan_interface', 'ens19')
+      expect(described_class.force_dns?).to be true
+      expect(described_class.blocklists_in_force).to eq(%w[hagezi-normal hagezi-tif-mini hagezi-doh])
+      Setting.set('dns_force_nas', '0')
+      expect(described_class.blocklists_in_force).to eq(%w[hagezi-normal hagezi-tif-mini])
+      described_class.rewrite_router!
+      expect(Privileged.calls.last.last[:dns]).to be_nil
+      Setting.set('dns_mode', 'dns')
+      Setting.set('dns_force_nas', '1')
+      expect(described_class.blocklists_in_force).to eq(%w[hagezi-normal hagezi-tif-mini]) # only the router can redirect
     end
 
     it 'rewrites the rules for a port forward only while the NAS is the router' do

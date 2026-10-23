@@ -111,7 +111,18 @@ module AmahiHelper
     'hagezi-tif-mini' => { url: "#{HAGEZI}/tif.mini-onlydomains.txt" },
     'hagezi-tif-medium' => { url: "#{HAGEZI}/tif.medium-onlydomains.txt" },
     'oisd-small' => { url: 'https://small.oisd.nl/domainswild2' },
-    'oisd-big' => { url: 'https://big.oisd.nl/domainswild2' }
+    'oisd-big' => { url: 'https://big.oisd.nl/domainswild2' },
+    # The known encrypted-DNS (DoH) providers, so a device can't go around the NAS's DNS by name.
+    'hagezi-doh' => { url: "#{HAGEZI}/doh-onlydomains.txt" },
+    # Vendors' own telemetry hosts, with the hosts their devices need left out.
+    'hagezi-native-samsung' => { url: "#{HAGEZI}/native.samsung-onlydomains.txt" },
+    'hagezi-native-lgwebos' => { url: "#{HAGEZI}/native.lgwebos-onlydomains.txt" },
+    'hagezi-native-roku' => { url: "#{HAGEZI}/native.roku-onlydomains.txt" },
+    'hagezi-native-amazon' => { url: "#{HAGEZI}/native.amazon-onlydomains.txt" },
+    'hagezi-native-apple' => { url: "#{HAGEZI}/native.apple-onlydomains.txt" },
+    'hagezi-native-winoffice' => { url: "#{HAGEZI}/native.winoffice-onlydomains.txt" },
+    'hagezi-native-tiktok' => { url: "#{HAGEZI}/native.tiktok-onlydomains.txt" },
+    'hagezi-native-xiaomi' => { url: "#{HAGEZI}/native.xiaomi-onlydomains.txt" }
   }.freeze
   # Root's own folder: the lists chosen and the allowlist, the copies downloaded, the blocklist
   # while blocking is paused, and the status the app reads. Not the app's: what's here becomes
@@ -189,6 +200,8 @@ module AmahiHelper
   ROUTER_BEGIN = '# BEGIN amahi-kai router'
   ROUTER_END = '# END amahi-kai router'
   PORT_FORWARD_MAX = 50
+  # Tailscale's own port: let in on the internet side so its connections stay direct.
+  TAILSCALE_PORT = '41641'
 
   # The services Settings → Servers may control: the entries in lib/system_services.rb
   # that list actions (spec/lib/amahi_helper_spec.rb checks the two lists match).
@@ -818,16 +831,20 @@ module AmahiHelper
     # Router mode on: +lan+ is the interface DNS and DHCP serve, +wan+ the internet's, +forwards+
     # the ports let in from the internet to devices. Needs UFW on (the security audit's firewall
     # fix): without it nothing would stand between the internet and the NAS's services.
+    # +dns+: the NAS's own address on the LAN; lookups devices send elsewhere are redirected to
+    # it and their encrypted DNS out is blocked (null: left alone).
     'network.router_on' => {
-      params: %w[lan wan forwards],
+      params: %w[lan wan forwards dns],
       validate: lambda { |a|
         lan = network_interface(a['lan'])
         wan = network_interface(a['wan'])
         raise Refused, 'the LAN and the internet interfaces must differ' if lan == wan
         raise Refused, "the firewall must be on first (Network → Security, the firewall's Fix)" unless ufw_enabled?
-        installed!(NETPLAN) && { lan: lan, wan: wan, forwards: port_forwards(a['forwards']) }
+        dns = a['dns']
+        raise Refused, "#{dns.inspect} isn't an IPv4 address of the NAS's" unless dns.nil? || own_ipv4?(dns)
+        installed!(NETPLAN) && { lan: lan, wan: wan, forwards: port_forwards(a['forwards']), dns: dns }
       },
-      plan: ->(v) { [[:router_on, v[:lan], v[:wan], v[:forwards]]] }
+      plan: ->(v) { [[:router_on, v[:lan], v[:wan], v[:forwards], v[:dns]]] }
     },
     'network.router_off' => {
       params: [],
@@ -1769,6 +1786,11 @@ module AmahiHelper
         { protocol: listed(forward['protocol'], 'protocol', %w[tcp udp]), port: port_number(forward['port'], 'port'),
           address: address, to_port: port_number(forward['to_port'], 'to_port') }
       end
+    end
+
+    # An IPv4 address this machine has.
+    def own_ipv4?(value)
+      value.is_a?(String) && ip_address?(value, :ipv4?) && Socket.getifaddrs.any? { |i| i.addr&.ipv4? && i.addr.ip_address == value }
     end
 
     def port_number(value, name)
@@ -3344,7 +3366,7 @@ module AmahiHelper
     # and, first of all the rules, nothing else in on the internet side (inserted once another
     # rule exists, which the route rule makes sure of). Rules from a previous state go first, so
     # a changed interface or forward leaves nothing behind.
-    def do_router_on(lan, wan, forwards)
+    def do_router_on(lan, wan, forwards, dns = nil)
       pinned = pin_lan_netplan(lan, wan)
       do_install(WAN_NETPLAN, wan_netplan(wan), nil, '0600')
       begin
@@ -3359,16 +3381,23 @@ module AmahiHelper
       run_command(['/usr/sbin/sysctl', '-q', '-w', 'net.ipv4.ip_forward=1'])
       previous = read_json(ROUTER_STATE)
       ufw_router_rules_off(previous) if previous
-      write_router_nat(wan, forwards)
+      write_router_nat(wan, forwards, lan, dns)
       run_command([UFW, 'route', 'allow', 'in', 'on', lan, 'out', 'on', wan])
       forwards.each do |f|
         run_command([UFW, 'route', 'allow', 'in', 'on', wan, 'out', 'on', lan, 'to', f[:address], 'port', f[:to_port].to_s, 'proto', f[:protocol]])
       end
+      if dns
+        # Devices' own encrypted DNS (DNS over TLS, 853; QUIC too) doesn't get out; the NAS's
+        # lookups aren't forwarded traffic, so they do.
+        %w[tcp udp].each { |proto| run_command([UFW, 'route', 'insert', '1', 'deny', 'in', 'on', lan, 'out', 'on', wan, 'to', 'any', 'port', '853', 'proto', proto]) }
+      end
       run_command([UFW, 'insert', '1', 'deny', 'in', 'on', wan])
+      tailscale = File.executable?(TAILSCALE)
+      run_command([UFW, 'insert', '1', 'allow', 'in', 'on', wan, 'to', 'any', 'port', TAILSCALE_PORT, 'proto', 'udp']) if tailscale
       run_command([UFW, 'reload'])
       previous_pinned = previous ? previous['pinned'] : nil
       state = { 'lan' => lan, 'wan' => wan, 'forwards' => forwards.map { |f| f.transform_keys(&:to_s) },
-                'pinned' => (previous_pinned || {}).merge(pinned) }
+                'pinned' => (previous_pinned || {}).merge(pinned), 'dns' => dns, 'tailscale' => tailscale }
       do_install(ROUTER_STATE, "#{JSON.generate(state)}\n", nil, '0644')
       nil
     end
@@ -3474,7 +3503,11 @@ module AmahiHelper
     def ufw_router_rules_off(state)
       lan, wan = state.values_at('lan', 'wan')
       return unless lan && wan
+      run_command([UFW, 'delete', 'allow', 'in', 'on', wan, 'to', 'any', 'port', TAILSCALE_PORT, 'proto', 'udp', { allow_failure: true }]) if state['tailscale']
       run_command([UFW, 'delete', 'deny', 'in', 'on', wan, { allow_failure: true }])
+      if state['dns']
+        %w[tcp udp].each { |proto| run_command([UFW, 'route', 'delete', 'deny', 'in', 'on', lan, 'out', 'on', wan, 'to', 'any', 'port', '853', 'proto', proto, { allow_failure: true }]) }
+      end
       run_command([UFW, 'route', 'delete', 'allow', 'in', 'on', lan, 'out', 'on', wan, { allow_failure: true }])
       Array(state['forwards']).each do |f|
         run_command([UFW, 'route', 'delete', 'allow', 'in', 'on', wan, 'out', 'on', lan, 'to', f['address'].to_s, 'port', f['to_port'].to_s,
@@ -3499,14 +3532,17 @@ module AmahiHelper
       YAML
     end
 
-    # UFW's before.rules with Amahi-kai's NAT block (masquerade out of +wan+, and a DNAT in for
-    # each forward) in front of its filter table, or without it, given nil. The rest of the
-    # file is UFW's own and isn't touched.
-    def write_router_nat(wan, forwards)
+    # UFW's before.rules with Amahi-kai's NAT block (masquerade out of +wan+, a DNAT in for each
+    # forward, and lookups from the LAN sent elsewhere redirected to +dns+) in front of its
+    # filter table, or without it, given nil. The rest of the file is UFW's own and isn't touched.
+    def write_router_nat(wan, forwards, lan = nil, dns = nil)
       content = File.read(UFW_BEFORE_RULES)
       content = content.sub(/#{Regexp.escape(ROUTER_BEGIN)}\n.*?#{Regexp.escape(ROUTER_END)}\n/m, '')
       if wan
         lines = [ROUTER_BEGIN, '*nat', ':PREROUTING ACCEPT [0:0]', ':POSTROUTING ACCEPT [0:0]']
+        if dns && lan
+          %w[udp tcp].each { |proto| lines << "-A PREROUTING -i #{lan} ! -d #{dns} -p #{proto} --dport 53 -j DNAT --to-destination #{dns}:53" }
+        end
         forwards.each do |f|
           lines << "-A PREROUTING -i #{wan} -p #{f[:protocol]} --dport #{f[:port]} -j DNAT --to-destination #{f[:address]}:#{f[:to_port]}"
         end

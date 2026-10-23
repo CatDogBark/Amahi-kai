@@ -80,7 +80,10 @@
                 That interface's network settings have a gateway: remove it, or give its route a metric above 50, then come back here.</span>
               <% else %>
                 ✓ Through <%= @wan_interface %> at <%= @wan_addresses.join(', ') %><%= ", the provider's router #{@default_route.last}" if @default_route %>;
-                <%= pluralize(@forwards.size, 'port') %> let in
+                <%= pluralize(@forwards.size, 'port') %> let in<%= '; every device uses the NAS\'s DNS' if @router_state['dns'] %>
+                <% if @router_state['dns'] && !@blocking %>
+                  <br><span class="text-warning">Blocking is off, so devices' own encrypted DNS services aren't blocked by name; turn Blocking on for that part.</span>
+                <% end %>
               <% end %>
             </dd>
           <% end %>
@@ -142,6 +145,19 @@
               <option value="<%= name %>" <%= 'selected' if name == @wan_interface %>><%= name %> (<%= addresses.reject(&:link_local?).map(&:to_s).join(', ').presence || 'no address' %>)</option>
             <% end %>
           </select>
+          <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" name="force_dns" value="1" id="dns-force-nas" <%= 'checked' if @force_dns %>>
+            <label class="form-check-label" for="dns-force-nas">Every device uses the NAS's DNS</label>
+          </div>
+          <p class="text-muted small mb-2">
+            Some devices (Roku, Google's, some TVs) ask a DNS server of their own choosing, skipping yours and its blocking.
+            With this on, every lookup a device sends anywhere comes to the NAS instead, a device's own encrypted DNS doesn't get out,
+            and the known encrypted-DNS services are blocked by name (the <em>Encrypted DNS providers</em> list is added to Blocking).
+            Only a device with an encrypted DNS <em>address</em> built in gets past, which is rare.
+          </p>
+          <% if @tailscale_installed %>
+            <p class="text-muted small mb-2">Tailscale is installed, so its port (UDP 41641) is let in on the internet side: its connections stay direct instead of going through a relay. The Cloudflare Tunnel needs nothing: it connects outward.</p>
+          <% end %>
           <p class="text-muted small mb-0"><strong>The way back:</strong> set this page to DNS + DHCP or Off, then move the provider's cable back to your router. While the NAS is off or restarting, the house has no internet.</p>
         </div>
 
@@ -306,11 +322,24 @@
         </div>
 
         <h6>Lists</h6>
-        <div class="dns-choices dns-lists mb-4">
-          <% DnsService::BLOCKLISTS.each do |key, list| %>
+        <div class="dns-choices dns-lists mb-3">
+          <% DnsService::BLOCKLISTS.reject { |_key, list| list[:vendor] }.each do |key, list| %>
             <label class="dns-choice">
               <input type="checkbox" name="lists[]" value="<%= key %>" <%= 'checked' if @blocklists.include?(key) %>>
               <span class="dns-choice-title"><%= list[:name] %><%= ' (recommended)' if list[:default] %></span>
+              <span class="dns-choice-text"><%= list[:about] %>
+                <% if (count = @blocking_status&.dig('lists', key, 'domains')) %> <%= number_with_delimiter(count) %> domains.<% end %></span>
+            </label>
+          <% end %>
+        </div>
+
+        <h6>Devices you have</h6>
+        <p class="text-muted small">Each vendor's own telemetry hosts, with what its devices need left out, so the device keeps working and stops reporting. Tick the kinds you own.</p>
+        <div class="dns-choices dns-lists mb-4">
+          <% DnsService::BLOCKLISTS.select { |_key, list| list[:vendor] }.each do |key, list| %>
+            <label class="dns-choice">
+              <input type="checkbox" name="lists[]" value="<%= key %>" <%= 'checked' if @blocklists.include?(key) %>>
+              <span class="dns-choice-title"><%= list[:name] %></span>
               <span class="dns-choice-text"><%= list[:about] %>
                 <% if (count = @blocking_status&.dig('lists', key, 'domains')) %> <%= number_with_delimiter(count) %> domains.<% end %></span>
             </label>
