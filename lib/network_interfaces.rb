@@ -24,11 +24,14 @@ module NetworkInterfaces
   end
 
   class << self
-    # { "ens18" => [Address, ...] } for every interface with an IPv4 or IPv6 address.
+    # { "ens18" => [Address, ...] } for every interface, with its IPv4 and IPv6 addresses. One
+    # with none (a port with no cable, or not set up yet: the internet interface before router
+    # mode gives it an address) has an empty list, so it can still be chosen.
     def all(ifaddrs = Socket.getifaddrs)
       ifaddrs.each_with_object({}) do |ifaddr, list|
+        list[ifaddr.name] ||= []
         address = address_of(ifaddr) or next
-        (list[ifaddr.name] ||= []) << address
+        list[ifaddr.name] << address
       end
     end
 

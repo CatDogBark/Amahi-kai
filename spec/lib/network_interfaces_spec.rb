@@ -8,6 +8,7 @@ RSpec.describe NetworkInterfaces do
      ifaddr.new('ens18', Addrinfo.ip('192.168.1.10'), Addrinfo.ip('255.255.255.0')),
      ifaddr.new('ens18', Addrinfo.ip('fd12:3456:789a::10'), Addrinfo.ip('ffff:ffff:ffff:ffff::')),
      ifaddr.new('ens18', Addrinfo.ip('fe80::10'), Addrinfo.ip('ffff:ffff:ffff:ffff::')),
+     ifaddr.new('ens20', nil, nil), # a port with no address yet
      ifaddr.new('docker0', Addrinfo.ip('172.17.0.1'), Addrinfo.ip('255.255.0.0')),
      ifaddr.new('tailscale0', Addrinfo.ip('100.64.96.4'), Addrinfo.ip('255.255.255.255'))]
   end
@@ -20,8 +21,9 @@ RSpec.describe NetworkInterfaces do
     expect(addresses.map(&:link_local?)).to eq([false, false, true])
   end
 
-  it 'leaves loopback, Docker and Tailscale out of the LAN' do
-    expect(described_class.lan(ifaddrs).keys).to eq(['ens18'])
+  it 'leaves loopback, Docker and Tailscale out of the LAN, and keeps a port with no address' do
+    expect(described_class.lan(ifaddrs).keys).to eq(%w[ens18 ens20])
+    expect(described_class.addresses('ens20', ifaddrs)).to eq([])
     expect(described_class.addresses('tailscale0', ifaddrs).map(&:to_s)).to eq(['100.64.96.4'])
   end
 
