@@ -120,6 +120,9 @@ module AmahiHelper
   BLOCKLIST_CHOSEN = "#{BLOCKLIST_DIR}/chosen.json".freeze
   BLOCKLIST_STATUS = "#{BLOCKLIST_DIR}/status.json".freeze
   BLOCKLIST_PAUSED = "#{BLOCKLIST_DIR}/blocklist.paused".freeze
+  # When the helper last reloaded Unbound: its counters start again then (Network → DNS & DHCP's
+  # totals say since when).
+  UNBOUND_RELOADED = "#{BLOCKLIST_DIR}/reloaded_at".freeze
   UNBOUND_BLOCKLIST = '/etc/unbound/unbound.conf.d/amahi-kai-blocklist.conf'
   UNBOUND_MAIN = '/etc/unbound/unbound.conf'
   BLOCKLIST_MAX_BYTES = 64 * 1024 * 1024
@@ -740,6 +743,14 @@ module AmahiHelper
       params: %w[lists allow],
       validate: ->(a) { installed!(UNBOUND) && { lists: blocklist_keys(a['lists']), allow: allowlist(a['allow']) } },
       plan: ->(v) { [[:set_blocklists, v[:lists], v[:allow]]] }
+    },
+    # Unbound's totals since its counters last started: lookups, those answered on the NAS (its
+    # cache, its names, its blocklist), DNSSEC-checked answers and forged ones refused. Totals
+    # only: nothing about who asked for what.
+    'dns.stats' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:dns_stats]] }
     },
     'dns.blocking_off' => {
       params: [],
@@ -1455,7 +1466,7 @@ module AmahiHelper
   # (unbound_line?): a clause it uses, or an option with a value it would write.
   UNBOUND_CLAUSES = %w[server: forward-zone:].freeze
   UNBOUND_SWITCHES = %w[ip-freebind hide-identity hide-version prefetch qname-minimisation serve-expired
-                        forward-tls-upstream].freeze
+                        forward-tls-upstream extended-statistics].freeze
   # A name with its final dot ("nas.home.arpa."), and a TLS name ("dns.quad9.net").
   UNBOUND_NAME = '(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+'
   TLS_NAME = '[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?'
@@ -3487,10 +3498,30 @@ module AmahiHelper
       nil
     end
 
-    # Unbound reads its config again, keeping its cache. Nothing to do while it's stopped.
+    # Unbound reads its config again, keeping its cache (its counters start again). Nothing to do
+    # while it's stopped.
     def unbound_reload
-      return unless run_command(['/usr/bin/systemctl', 'is-active', '--quiet', 'unbound', { allow_failure: true }]).nil?
+      return unless unbound_active?
       run_command([UNBOUND_CONTROL, 'reload_keep_cache'])
+      Dir.mkdir(BLOCKLIST_DIR, 0o755) unless File.directory?(BLOCKLIST_DIR)
+      do_install(UNBOUND_RELOADED, "#{Time.now.to_i}\n", nil, '0644')
+    end
+
+    def unbound_active?
+      run_command(['/usr/bin/systemctl', 'is-active', '--quiet', 'unbound', { allow_failure: true }]).nil?
+    end
+
+    # Unbound's counters (unbound-control stats_noreset, with extended-statistics), and since when
+    # they count: Unbound's start, or the last reload, whichever came later.
+    def do_dns_stats
+      return { 'running' => false } unless unbound_active?
+      stats = capture([UNBOUND_CONTROL, 'stats_noreset']).lines.to_h { |line| line.strip.split('=', 2) }
+      reloaded = File.exist?(UNBOUND_RELOADED) ? File.read(UNBOUND_RELOADED).to_i : 0
+      { 'running' => true, 'since' => [Time.now.to_i - stats['time.up'].to_f.round, reloaded].max,
+        'queries' => stats['total.num.queries'].to_i, 'answered_here' => stats['total.num.cachehits'].to_i,
+        'secure' => stats['num.answer.secure'].to_i, 'bogus' => stats['num.answer.bogus'].to_i }
+    rescue Failed => e
+      { 'running' => true, 'error' => e.message }
     end
 
     # The address of a DHCP server that offers this machine an address on +interface+, other

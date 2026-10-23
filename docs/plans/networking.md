@@ -62,8 +62,14 @@ in front of the network. It ships in 1.0, DHCP included, once it passes the test
 - **Blocklists** (one switch): ads, trackers and malware, from lists the owner picks, with sensible
   ones ticked; an allowlist; and "pause blocking for 5 minutes" for when a site breaks. Lists
   refresh daily.
-- **Private by default:** no record of which device looked up what. The page shows totals only
-  (lookups, how many were blocked, the cache's hit rate).
+- **Private by default:** no record of which device looked up what. The page shows totals only:
+  lookups, how many the NAS answered itself (its cache, its names and its blocklist), and DNSSEC's
+  checked and refused answers, since Unbound's counters last started. Not how many lookups were
+  blocked: Unbound counts blocklist answers as cache hits, and only a response policy zone (RPZ)
+  counts them apart. Measured with the default lists on Unbound 1.19, RPZ took 419 MB and 5.2
+  seconds to start against local zones' 155 MB and 1.4 seconds, and 5.4 seconds to reload the
+  lists against under 0.2; logging each block would record names and devices. The page shows how
+  many domains are blocked instead.
 - **Firefox's own encrypted DNS** is turned off for the network with its standard signal (the
   `use-application-dns.net` canary domain), so Firefox uses the house's DNS. Other devices and
   browsers that ignore the house's DNS need the router's firewall; the page says so.
@@ -178,6 +184,10 @@ in front of the network. It ships in 1.0, DHCP included, once it passes the test
   The check sends a router solicitation (hop limit 255) on a raw ICMPv6 socket and reads the
   advertisements for 4 seconds, leaving out the NAS's own. Operation names can't have digits, so
   they're `dns.set_own_address`, `dns.check_routers` and so on.
+- **Totals:** the helper's `dns.stats` reads `unbound-control stats_noreset` (with
+  `extended-statistics`). A reload starts the counters again but not Unbound's uptime, so the
+  helper notes each reload it makes, and the page says "in the last N hours" from the later of
+  the two.
 - **The check for another DHCP server:** the helper broadcasts a DHCPDISCOVER on the interface
   (from its MAC, asking for broadcast replies) and listens up to 6 seconds for an offer, leaving
   out the NAS's own. Not 3: dnsmasq, which many routers run, pings an address for 3 seconds

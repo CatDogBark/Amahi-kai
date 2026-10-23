@@ -27,6 +27,7 @@ class DnsController < ApplicationController
     @custom_addresses = DnsService.custom_addresses.join(' ')
     @custom_tls_name = DnsService.custom_tls_name
     @check = DnsService.check if @running && DnsService.on?
+    @totals = DnsService.totals if @running && DnsService.on?
     @blocking = DnsService.blocking?
     @blocklists = DnsService.blocklists
     @allowlist = DnsService.allowlist

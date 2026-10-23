@@ -319,6 +319,20 @@ RSpec.describe DnsService do
     end
   end
 
+  describe '.totals' do
+    it "are the helper's counts, or nil without them" do
+      expect(described_class.totals).to be_nil # the simulated helper counts nothing
+      allow(Privileged).to receive(:call).with('dns.stats').and_return('ok' => true, 'queries' => 5, 'answered_here' => 2)
+      expect(described_class.totals['queries']).to eq(5)
+      allow(Privileged).to receive(:call).with('dns.stats').and_raise(Privileged::Error.new('dns.stats', 'unbound-control exited 1'))
+      expect(described_class.totals).to be_nil
+    end
+
+    it 'has Unbound count DNSSEC answers too' do
+      expect(lines).to include('extended-statistics: yes')
+    end
+  end
+
   describe '.check' do
     it 'times a lookup of the NAS and of an outside name, nil for one that fails' do
       resolver = instance_double(Resolv::DNS, :timeouts= => nil, close: nil)

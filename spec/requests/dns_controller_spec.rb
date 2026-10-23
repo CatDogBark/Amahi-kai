@@ -46,6 +46,16 @@ describe 'Network → DNS & DHCP', type: :request do
       expect(response.body).to include('Answering', '192.168.1.10', 'Answered in 24 ms, encrypted, through Quad9')
     end
 
+    it "shows Unbound's totals while it's on: lookups, how many the NAS answered, DNSSEC" do
+      allow(DnsService).to receive_messages(installed?: true, running?: true, check: { local: 1, outside: 24 },
+                                            totals: { 'since' => Time.now.to_i - (3 * 3600), 'queries' => 12_345, 'answered_here' => 7_900,
+                                                      'secure' => 4_321, 'bogus' => 3 })
+      Setting.set('dns_mode', 'dns')
+      get '/network/dns'
+      expect(response.body).to include('12,345 in the last about 3 hours', '64% answered on the NAS', 'without asking Quad9',
+                                        '4,321 answers checked', 'and 3 forged ones refused')
+    end
+
     describe 'saving' do
       before { allow(DnsService).to receive(:installed?).and_return(true) }
 

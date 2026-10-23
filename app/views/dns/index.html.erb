@@ -52,6 +52,19 @@
               <span class="text-danger">✗ No answer from <%= @provider == 'custom' ? 'your server' : DnsService::PROVIDERS.dig(@provider, :name) %>. Is the internet up? Try another provider.</span>
             <% end %>
           </dd>
+          <% if @totals && @totals['queries'].to_i.positive? %>
+            <dt>Lookups</dt>
+            <dd>
+              <%= number_with_delimiter(@totals['queries']) %> in the last <%= distance_of_time_in_words(Time.at(@totals['since'].to_i), Time.now) %>;
+              <%= (100.0 * @totals['answered_here'].to_i / @totals['queries'].to_i).round %>% answered on the NAS (its cache, its names
+              and its blocklist), without asking <%= @provider == 'custom' ? 'your server' : DnsService::PROVIDERS.dig(@provider, :name) %>
+            </dd>
+            <dt>DNSSEC</dt>
+            <dd>
+              <%= number_with_delimiter(@totals['secure']) %> answers checked<% if @totals['bogus'].to_i.positive? %>,
+                and <%= number_with_delimiter(@totals['bogus']) %> forged <%= @totals['bogus'].to_i == 1 ? 'one' : 'ones' %> refused<% end %>
+            </dd>
+          <% end %>
           <% if @mode == 'dns_dhcp' %>
             <dt>Addresses</dt>
             <dd>

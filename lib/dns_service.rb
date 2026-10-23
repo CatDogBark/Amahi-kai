@@ -259,6 +259,8 @@ module DnsService
       lines << '  ip-freebind: yes'
       lines.concat(allowed(own, tailscale).map { |network| "  access-control: #{network} allow" })
       lines.concat(['  hide-identity: yes', '  hide-version: yes', '  qname-minimisation: yes', '  prefetch: yes',
+                    # Counts of DNSSEC's answers too, for the page's totals (no names, no devices).
+                    '  extended-statistics: yes',
                     # Answers past their time are still given (and refreshed) if the provider can't
                     # be reached: names keep working through a short outage.
                     '  serve-expired: yes', '  serve-expired-ttl: 86400', '  serve-expired-client-timeout: 1800'])
@@ -371,6 +373,15 @@ module DnsService
     def paused_until
       time = Setting.get('dns_blocking_paused_until').to_i
       Time.at(time) if time > Time.now.to_i
+    end
+
+    # Unbound's totals (the helper's dns.stats): { 'since', 'queries', 'answered_here', 'secure',
+    # 'bogus' }, or nil when they can't be read.
+    def totals
+      reply = Privileged.call('dns.stats')
+      reply if reply['queries']
+    rescue Privileged::Error
+      nil
     end
 
     # Asks Unbound for the NAS's own name and for an outside one:

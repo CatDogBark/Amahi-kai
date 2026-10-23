@@ -950,9 +950,10 @@ RSpec.describe 'AmahiHelper' do
     let(:ran) { [] }
 
     before do
-      %w[DNSMASQ_CONF DNSMASQ_LEASES UNBOUND_CONF UNBOUND_LEASES DHCP_NAMES_PATH DHCP_NAMES_SERVICE].each do |name|
+      %w[DNSMASQ_CONF DNSMASQ_LEASES UNBOUND_CONF UNBOUND_LEASES DHCP_NAMES_PATH DHCP_NAMES_SERVICE UNBOUND_RELOADED].each do |name|
         stub_const("AmahiHelper::#{name}", "#{dir}/#{name.downcase}")
       end
+      stub_const('AmahiHelper::BLOCKLIST_DIR', dir)
       allow(helper).to receive(:check_dnsmasq_conf)
       allow(helper).to receive(:check_unbound_conf)
       allow(File).to receive(:executable?).and_call_original
@@ -1091,6 +1092,7 @@ RSpec.describe 'AmahiHelper' do
       stub_const('AmahiHelper::BLOCKLIST_CHOSEN', "#{dir}/chosen.json")
       stub_const('AmahiHelper::BLOCKLIST_STATUS', "#{dir}/status.json")
       stub_const('AmahiHelper::BLOCKLIST_PAUSED', "#{dir}/blocklist.paused")
+      stub_const('AmahiHelper::UNBOUND_RELOADED', "#{dir}/reloaded_at")
       stub_const('AmahiHelper::BLOCKLIST_SERVICE', "#{dir}/amahi-kai-blocklists.service")
       stub_const('AmahiHelper::BLOCKLIST_TIMER', "#{dir}/amahi-kai-blocklists.timer")
       stub_const('AmahiHelper::UNBOUND_BLOCKLIST', "#{dir}/amahi-kai-blocklist.conf")
@@ -1205,6 +1207,17 @@ RSpec.describe 'AmahiHelper' do
       allow(File).to receive(:executable?).with(AmahiHelper::UFW).and_return(false)
       helper.do_dns_config(nil)
       expect(File.exist?(AmahiHelper::UNBOUND_BLOCKLIST)).to be false
+    end
+
+    it "reads Unbound's totals, since its start or the last reload, whichever came later" do
+      stats = "total.num.queries=1200\ntotal.num.cachehits=900\nnum.answer.secure=300\nnum.answer.bogus=2\ntime.up=7200.5\n"
+      allow(helper).to receive(:capture).with([AmahiHelper::UNBOUND_CONTROL, 'stats_noreset']).and_return(stats)
+      expect(helper.do_dns_stats).to include('running' => true, 'queries' => 1200, 'answered_here' => 900, 'secure' => 300, 'bogus' => 2,
+                                             'since' => be_within(2).of(Time.now.to_i - 7200))
+      helper.unbound_reload
+      expect(helper.do_dns_stats['since']).to be_within(2).of(Time.now.to_i)
+      allow(helper).to receive(:run_command).and_return('ignored: systemctl exited 3')
+      expect(helper.do_dns_stats).to eq('running' => false)
     end
 
     it 'reads a line of a list' do
