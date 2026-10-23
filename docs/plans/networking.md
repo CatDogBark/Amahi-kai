@@ -11,7 +11,12 @@ came). Slice 3 (blocklists) is on `dev` and passed too: the default lists downlo
 seconds (326,252 domains, 155 MB for Unbound), blocked names and their subdomains answered
 `0.0.0.0` and `::`, the allowlist let a domain through, a pause let everything through and
 resumed by itself after five minutes, and off removed the blocklist and its timer. Slice 4 (IPv6)
-is next. CatDogBark wants Amahi-kai's networking modernized
+is on `dev` and passed too: with no router on the island the check said so; announcing put the
+NAS's own address up, and the client heard RDNSS, DNSSL and the range (router lifetime 0), took
+an address in it and asked the NAS over IPv6; a second announcer on the client was listed and
+warned about, the NAS's own left out; and the way back took radvd, the address and (after a fix:
+the config was written before the address left the interface) Unbound's use of it away. Slice 5
+(totals) is next. CatDogBark wants Amahi-kai's networking modernized
 for privacy and safety, carrying over what original Amahi users did with their home server: put it
 in front of the network. It ships in 1.0, DHCP included, once it passes the tests below.
 
