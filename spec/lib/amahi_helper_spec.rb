@@ -787,15 +787,14 @@ RSpec.describe 'AmahiHelper' do
     end
 
     let(:dnsmasq_conf) do
-      DnsmasqService.write_config!(net: '192.168.1', dyn_lo: 100, dyn_hi: 254, gateway: '1', lease_time: 14_400,
-                                   domain: 'amahi.net', dhcp_enabled: true, dns_enabled: true)
+      DnsmasqService.write_config!(net: '192.168.1', first: 100, last: 254, router: 1, lease_time: 14_400,
+                                   interface: 'ens18', dhcp_enabled: true)
       Privileged.calls.find { |op, _| op == 'network.write_dnsmasq_config' }.last[:content]
     end
 
     it "accepts dnsmasq's generated config and installs it with a dnsmasq check" do
       allow(DnsmasqService).to receive(:running?).and_return(false)
-      expect(steps('network.write_dnsmasq_config', { 'content' => dnsmasq_conf }))
-        .to eq([[:install, '/etc/dnsmasq.d/amahi.conf', dnsmasq_conf, :dnsmasq]])
+      expect(steps('network.write_dnsmasq_config', { 'content' => dnsmasq_conf })).to eq([[:dnsmasq_config, dnsmasq_conf]])
     end
 
     it 'refuses dnsmasq lines that could run scripts, read files or redirect DNS' do
@@ -806,13 +805,6 @@ RSpec.describe 'AmahiHelper' do
       end
     end
 
-    it 'accepts only address lines for DNS aliases' do
-      ok = "# aliases\naddress=/files/192.168.1.10\naddress=/blocked/\n"
-      expect(steps('network.write_dns_aliases', { 'content' => ok })).to eq([[:install, '/etc/dnsmasq.d/amahi-aliases.conf', ok, :dnsmasq]])
-      ['address=/a.b/1.2.3.4', 'address=/x/1.2.3.400', 'server=/x/1.2.3.4', 'dhcp-range=1.2.3.4,1.2.3.5,1s'].each do |line|
-        expect(refusal('network.write_dns_aliases', { 'content' => "#{line}\n" })).to include('not one Amahi-kai writes'), line
-      end
-    end
 
     it 'creates the dnsmasq folder if dnsmasq is not installed yet' do
       Dir.mktmpdir do |dir|
@@ -833,6 +825,472 @@ RSpec.describe 'AmahiHelper' do
         File.write(conf, "dhcp-rnage=1\n")
         expect { helper.check_dnsmasq_conf(conf) }.to raise_error(AmahiHelper::Refused, /dnsmasq rejected/)
       end
+    end
+  end
+
+  # Network → DNS: Unbound's config is written by DnsService, checked line by line here and by
+  # unbound-checkconf, and UFW lets DNS in to the addresses Unbound listens on.
+  describe 'Unbound (Network → DNS)' do
+    let(:lan) { NetworkInterfaces::Address.new(ip: IPAddr.new('10.99.0.1'), prefix: 24) }
+    let(:ula) { NetworkInterfaces::Address.new(ip: IPAddr.new('fd99::1'), prefix: 64) }
+    let(:unbound_conf) do
+      allow(NetworkInterfaces).to receive(:lan).and_return('ens19' => [lan, ula])
+      allow(NetworkInterfaces).to receive(:addresses).with('ens19').and_return([lan, ula])
+      allow(NetworkInterfaces).to receive(:addresses).with('tailscale0')
+        .and_return([NetworkInterfaces::Address.new(ip: IPAddr.new('100.64.96.4'), prefix: 32)])
+      allow(DnsService).to receive(:rewrite!)
+      allow(DnsmasqService).to receive(:rewrite_config!)
+      Setting.set('dns_interface', 'ens19')
+      Setting.set('net', '10.99.0')
+      Host.create!(name: 'printer', mac: 'aa:bb:cc:dd:ee:01', address: '20')
+      DnsAlias.create!(name: 'files', address: '10.99.0.30')
+      DnsAlias.create!(name: 'nas', address: '')
+      DnsService.config
+    end
+
+    before { allow(helper).to receive(:installed!).and_call_original }
+
+    it "accepts DnsService's config, for each provider, and installs it with a check" do
+      allow(helper).to receive(:installed!).with(AmahiHelper::UNBOUND).and_return(true)
+      expect(steps('dns.write_config', { 'content' => unbound_conf })).to eq([[:dns_config, unbound_conf]])
+      (DnsService::PROVIDERS.keys - ['quad9']).each do |key|
+        Setting.set('dns_provider', key)
+        expect(refusal('dns.write_config', { 'content' => DnsService.config })).to be_nil, key
+      end
+      Setting.set('dns_provider', 'custom')
+      Setting.set('dns_custom_addresses', '192.168.1.53 fd00::53')
+      Setting.set('dns_custom_tls_name', 'dns.example.org')
+      expect(refusal('dns.write_config', { 'content' => DnsService.config })).to be_nil
+    end
+
+    it "refuses until Unbound is installed" do
+      allow(File).to receive(:executable?).and_call_original
+      allow(File).to receive(:executable?).with(AmahiHelper::UNBOUND).and_return(false)
+      expect(refusal('dns.write_config', { 'content' => "server:\n" })).to include("unbound isn't installed")
+    end
+
+    it 'refuses lines that could load code, read or write files, open the control port, or answer everyone' do
+      allow(helper).to receive(:installed!).with(AmahiHelper::UNBOUND).and_return(true)
+      ['module-config: "python validator iterator"', 'python-script: "/tmp/x.py"', 'include: "/etc/shadow"',
+       'chroot: ""', 'username: root', 'logfile: "/etc/passwd"', 'control-enable: yes', 'remote-control:',
+       'auto-trust-anchor-file: "/tmp/key"', 'tls-cert-bundle: "/tmp/certs"', 'interface: 0.0.0.0', 'interface: ::',
+       'interface: eth0', 'access-control: 0.0.0.0/0 allow', 'access-control: ::/0 allow',
+       'access-control: 10.0.0.0/8 allow_snoop', 'forward-addr: 8.8.8.8', 'forward-addr: 8.8.8.8@53#dns.google',
+       'forward-tls-upstream: no', 'local-zone: "." static', 'local-zone: "x." redirect',
+       'local-data: "x. IN TXT hello"', 'local-data: "x. IN A fd00::1"', 'local-data: "x. IN A 1.2.3.4" extra',
+       'local-data-ptr: "1.2.3.4 x. y."', 'private-address: 10.0.0.0/8 x', 'serve-expired-ttl: -1',
+       "server:\nverbosity: 5"].each do |line|
+        expect(refusal('dns.write_config', { 'content' => "#{line}\n" })).to include('not one Amahi-kai writes'), line
+      end
+    end
+
+    it "removes the config and its firewall rules when DNS is turned off" do
+      expect(steps('dns.remove_config', {})).to eq([[:dns_config, nil]])
+    end
+
+    describe 'installing it' do
+      let(:dir) { Dir.mktmpdir }
+      let(:ran) { [] }
+
+      before do
+        @conf = "#{dir}/amahi-kai.conf"
+        stub_const('AmahiHelper::UNBOUND_CONF', @conf)
+        allow(helper).to receive(:check_unbound_conf)
+        allow(File).to receive(:executable?).and_call_original
+        allow(File).to receive(:executable?).with(AmahiHelper::UFW).and_return(true)
+        allow(helper).to receive(:run_command) { |argv| ran << argv.dup && nil }
+      end
+
+      after { FileUtils.rm_rf(dir) }
+
+      def ufw_rules = ran.select { |argv| argv.first == AmahiHelper::UFW }.map { |argv| argv.drop(1).reject { |a| a.is_a?(Hash) }.join(' ') }
+
+      it 'lets DNS in to the addresses Unbound listens on, and no longer to those it stopped listening on' do
+        helper.do_dns_config("server:\n  interface: 127.0.0.1\n  interface: ::1\n  interface: 10.99.0.1\n  interface: fd99::1\n")
+        expect(File.read(@conf)).to include('interface: 10.99.0.1')
+        expect(helper).to have_received(:check_unbound_conf)
+        expect(ufw_rules).to eq(['allow to 10.99.0.1 port 53', 'allow to fd99::1 port 53'])
+        # UFW with its IPv6 off refuses IPv6 rules; IPv4 still gets in
+        expect(ran.last.last).to eq(allow_failure: true)
+
+        ran.clear
+        helper.do_dns_config("server:\n  interface: 127.0.0.1\n  interface: 10.99.0.2\n")
+        expect(ufw_rules).to eq(['delete allow to 10.99.0.1 port 53', 'delete allow to fd99::1 port 53',
+                                 'allow to 10.99.0.2 port 53'])
+
+        ran.clear
+        helper.do_dns_config(nil)
+        expect(File.exist?(@conf)).to be false
+        expect(ufw_rules).to eq(['delete allow to 10.99.0.2 port 53'])
+      end
+
+      it "leaves the firewall alone where UFW isn't installed" do
+        allow(File).to receive(:executable?).with(AmahiHelper::UFW).and_return(false)
+        helper.do_dns_config("server:\n  interface: 10.99.0.1\n")
+        expect(ran).to be_empty
+      end
+    end
+
+    it 'checks the config with the real unbound-checkconf where Unbound is installed' do
+      skip 'Unbound is not installed' unless File.executable?(AmahiHelper::UNBOUND_CHECKCONF)
+      Dir.mktmpdir do |dir|
+        conf = "#{dir}/amahi-kai.conf"
+        File.write(conf, unbound_conf)
+        expect { helper.check_unbound_conf(conf) }.not_to raise_error
+        File.write(conf, "server:\n  interfase: 10.99.0.1\n")
+        expect { helper.check_unbound_conf(conf) }.to raise_error(AmahiHelper::Refused, /unbound-checkconf rejected/)
+      end
+    end
+  end
+
+  # Network → DNS & DHCP's DHCP: dnsmasq's config with its firewall rule and the watch on its
+  # leases, the leases' names for Unbound, and the check for another DHCP server.
+  describe 'DHCP (Network → DNS & DHCP)' do
+    let(:dir) { Dir.mktmpdir }
+    let(:ran) { [] }
+
+    before do
+      %w[DNSMASQ_CONF DNSMASQ_LEASES UNBOUND_CONF UNBOUND_LEASES DHCP_NAMES_PATH DHCP_NAMES_SERVICE UNBOUND_RELOADED].each do |name|
+        stub_const("AmahiHelper::#{name}", "#{dir}/#{name.downcase}")
+      end
+      stub_const('AmahiHelper::BLOCKLIST_DIR', dir)
+      allow(helper).to receive(:check_dnsmasq_conf)
+      allow(helper).to receive(:check_unbound_conf)
+      allow(File).to receive(:executable?).and_call_original
+      allow(File).to receive(:executable?).with(AmahiHelper::UFW).and_return(true)
+      allow(helper).to receive(:run_command) { |argv| ran << argv.reject { |a| a.is_a?(Hash) }.join(' ') && nil }
+    end
+
+    after { FileUtils.rm_rf(dir) }
+
+    def dhcp_on(interface) = "port=0\ninterface=#{interface}\nbind-interfaces\ndhcp-range=10.99.0.100,10.99.0.200,14400s\n"
+
+    it 'checks the interface it will look for DHCP servers on' do
+      expect(steps('dhcp.check_servers', { 'interface' => 'lo' })).to eq([[:dhcp_servers, 'lo']])
+      ['eth99nothere', 'ens 18', '../x', ''].each do |name|
+        expect(refusal('dhcp.check_servers', { 'interface' => name })).not_to be_nil, name.inspect
+      end
+      expect(steps('dns.sync_leases', {})).to eq([[:sync_leases]])
+    end
+
+    it "lets DHCP in on dnsmasq's interface, watches its leases for names, and undoes both when it stops" do
+      allow(helper).to receive(:do_sync_leases)
+      helper.do_dnsmasq_config(dhcp_on('ens19'))
+      expect(ran).to eq(['/usr/sbin/ufw allow in on ens19 to any port 67 proto udp', '/usr/bin/systemctl daemon-reload',
+                         '/usr/bin/systemctl enable --now dhcp_names_path'])
+      expect(File.read(AmahiHelper::DHCP_NAMES_PATH)).to include('PathModified=/var/lib/misc/dnsmasq.leases')
+      expect(File.read(AmahiHelper::DHCP_NAMES_SERVICE)).to include('ExecStart=/usr/local/sbin/amahi-helper dns.sync_leases',
+                                                                     'StandardInputText={}')
+      expect(helper).to have_received(:do_sync_leases)
+
+      ran.clear
+      helper.do_dnsmasq_config(dhcp_on('ens18'))
+      expect(ran.first(2)).to eq(['/usr/sbin/ufw delete allow in on ens19 to any port 67 proto udp',
+                                  '/usr/sbin/ufw allow in on ens18 to any port 67 proto udp'])
+
+      ran.clear
+      File.write(AmahiHelper::UNBOUND_LEASES, "server:\n")
+      helper.do_dnsmasq_config("port=0\nbind-interfaces\nexcept-interface=lo\n")
+      expect(ran).to eq(['/usr/sbin/ufw delete allow in on ens18 to any port 67 proto udp',
+                         '/usr/bin/systemctl disable --now dhcp_names_path', '/usr/bin/systemctl is-active --quiet unbound',
+                         "#{AmahiHelper::UNBOUND_CONTROL} reload_keep_cache"])
+      expect(File.exist?(AmahiHelper::UNBOUND_LEASES)).to be false
+    end
+
+    describe "the leases' names" do
+      before do
+        File.write(AmahiHelper::UNBOUND_CONF, %(server:\n  local-zone: "home.arpa." static\n  local-data: "kai.home.arpa. IN A 10.99.0.1"\n))
+        File.write(AmahiHelper::DNSMASQ_LEASES, <<~LEASES)
+          1792700000 bc:24:11:c1:dc:cf 10.99.0.150 client 01:bc:24:11:c1:dc:cf
+          1792700001 aa:bb:cc:dd:ee:01 10.99.0.151 * *
+          1792700002 aa:bb:cc:dd:ee:02 10.99.0.152 Kai *
+          1792700003 aa:bb:cc:dd:ee:03 10.99.0.153 bad.name *
+          1792700004 aa:bb:cc:dd:ee:04 10.99.0.154 Phone *
+          1792700005 aa:bb:cc:dd:ee:05 10.99.0.155 phone *
+        LEASES
+      end
+
+      it "answer as name.<domain> and name, unless they're taken or not one label" do
+        helper.do_sync_leases
+        content = File.read(AmahiHelper::UNBOUND_LEASES)
+        expect(content).to include('local-data: "client.home.arpa. IN A 10.99.0.150"', 'local-data: "client. IN A 10.99.0.150"',
+                                   'local-data-ptr: "10.99.0.150 client.home.arpa."', 'local-data: "phone.home.arpa. IN A 10.99.0.154"')
+        expect(content).not_to include('10.99.0.151', '10.99.0.152', '10.99.0.153', '10.99.0.155')
+        expect { helper.unbound_conf(content) }.not_to raise_error
+        expect(ran).to eq(['/usr/bin/systemctl is-active --quiet unbound', "#{AmahiHelper::UNBOUND_CONTROL} reload_keep_cache"])
+      end
+
+      it 'reload Unbound only when they change' do
+        helper.do_sync_leases
+        ran.clear
+        helper.do_sync_leases
+        expect(ran).to be_empty
+      end
+
+      it 'wait for DNS to be on' do
+        File.unlink(AmahiHelper::UNBOUND_CONF)
+        expect(helper.do_sync_leases).to eq('DNS is off')
+        expect(File.exist?(AmahiHelper::UNBOUND_LEASES)).to be false
+      end
+
+      it 'go when DNS is turned off' do
+        helper.do_sync_leases
+        allow(File).to receive(:executable?).with(AmahiHelper::UFW).and_return(false)
+        helper.do_dns_config(nil)
+        expect(File.exist?(AmahiHelper::UNBOUND_LEASES)).to be false
+      end
+    end
+
+    describe 'looking for another DHCP server' do
+      let(:discover) { helper.dhcp_discover(0x12345678, 'bc:24:11:c1:dc:cf') }
+
+      def offer(options, xid: 0x12345678)
+        packet = discover.dup
+        packet.setbyte(0, 2)
+        packet[4, 4] = [xid].pack('N')
+        packet[240..] = options.pack('C*').ljust(60, "\0".b)
+        packet
+      end
+
+      it 'sends a DHCPDISCOVER from the MAC, asking for broadcast replies' do
+        expect(discover.bytesize).to eq(300)
+        expect(discover.unpack('CCC')).to eq([1, 1, 6])
+        expect(discover[10, 2].unpack1('n')).to eq(0x8000)
+        expect(discover[28, 6].unpack1('H*')).to eq('bc2411c1dccf')
+        expect(discover[236, 4].unpack1('N')).to eq(0x63825363)
+        expect(discover[240, 3].bytes).to eq([53, 1, 1])
+      end
+
+      it "reads an offer's server, by its identifier or where it came from" do
+        expect(helper.dhcp_offer_from(offer([53, 1, 2, 54, 4, 10, 99, 0, 7, 255]), 0x12345678, '10.99.0.9')).to eq('10.99.0.7')
+        expect(helper.dhcp_offer_from(offer([53, 1, 2, 255]), 0x12345678, '10.99.0.9')).to eq('10.99.0.9')
+      end
+
+      it "ignores what isn't an offer for this discover" do
+        expect(helper.dhcp_offer_from(offer([53, 1, 2, 255], xid: 1), 0x12345678, 'x')).to be_nil
+        expect(helper.dhcp_offer_from(offer([53, 1, 5, 255]), 0x12345678, 'x')).to be_nil # an ACK
+        expect(helper.dhcp_offer_from(discover, 0x12345678, 'x')).to be_nil
+        expect(helper.dhcp_offer_from('short', 0x12345678, 'x')).to be_nil
+      end
+    end
+  end
+
+  # Network → DNS & DHCP's blocking: the lists chosen, downloaded daily and made into Unbound's
+  # blocklist (each domain answers 0.0.0.0, with its subdomains), the allowlist, and pausing.
+  describe 'DNS blocklists (Network → DNS & DHCP)' do
+    let(:dir) { Dir.mktmpdir }
+    let(:ran) { [] }
+    let(:blocklist) { File.read(AmahiHelper::UNBOUND_BLOCKLIST) }
+    let(:lists) do
+      { 'hagezi-normal' => "# HaGeZi\nads.example.com\ndeep.ads.example.com\nexample.net\nsub.example.net\n*.wild.example.org\n" \
+                           "track.example.com # a note\nBAD LINE\n1.2.3.4\nlocalhost\nnas.home.arpa\nuse-application-dns.net\n",
+        'hagezi-tif-mini' => "malware.example\nads.example.com\nphish.example.com.\n" }
+    end
+
+    before do
+      stub_const('AmahiHelper::BLOCKLIST_DIR', dir)
+      stub_const('AmahiHelper::BLOCKLIST_CHOSEN', "#{dir}/chosen.json")
+      stub_const('AmahiHelper::BLOCKLIST_STATUS', "#{dir}/status.json")
+      stub_const('AmahiHelper::BLOCKLIST_PAUSED', "#{dir}/blocklist.paused")
+      stub_const('AmahiHelper::UNBOUND_RELOADED', "#{dir}/reloaded_at")
+      stub_const('AmahiHelper::BLOCKLIST_SERVICE', "#{dir}/amahi-kai-blocklists.service")
+      stub_const('AmahiHelper::BLOCKLIST_TIMER', "#{dir}/amahi-kai-blocklists.timer")
+      stub_const('AmahiHelper::UNBOUND_BLOCKLIST', "#{dir}/amahi-kai-blocklist.conf")
+      stub_const('AmahiHelper::UNBOUND_CONF', "#{dir}/amahi-kai.conf")
+      File.write(AmahiHelper::UNBOUND_CONF, %(server:\n  local-zone: "home.arpa." static\n  local-zone: "use-application-dns.net." always_nxdomain\n))
+      allow(helper).to receive(:check_unbound_conf)
+      allow(helper).to receive(:run_command) { |argv| ran << argv.reject { |a| a.is_a?(Hash) }.join(' ') && nil }
+      allow(helper).to receive(:fetch_blocklist) { |key, copy| File.write(copy, lists.fetch(key)) && nil }
+    end
+
+    after { FileUtils.rm_rf(dir) }
+
+    def choose(lists, allow = []) = File.write(AmahiHelper::BLOCKLIST_CHOSEN, JSON.generate('lists' => lists, 'allow' => allow))
+
+    it 'takes only lists it knows, and domains for the allowlist' do
+      allow(helper).to receive(:installed!).and_call_original
+      allow(helper).to receive(:installed!).with(AmahiHelper::UNBOUND).and_return(true)
+      expect(steps('dns.set_blocklists', { 'lists' => %w[hagezi-normal], 'allow' => %w[example.com] }))
+        .to eq([[:set_blocklists, %w[hagezi-normal], %w[example.com]]])
+      [[%w[evil-list], []], [[], []], ['hagezi-normal', []], [%w[hagezi-normal], ['not a domain']], [%w[hagezi-normal], ['10.0.0.1']]].each do |lists, allow|
+        expect(refusal('dns.set_blocklists', { 'lists' => lists, 'allow' => allow })).not_to be_nil, [lists, allow].inspect
+      end
+      stub_const('AmahiHelper::ALLOWLIST_MAX', 1)
+      expect(refusal('dns.set_blocklists', { 'lists' => %w[hagezi-normal], 'allow' => %w[a.example b.example] })).to include('at most 1')
+    end
+
+    it 'saves the choice, sets the daily refresh, and starts one in the background' do
+      helper.do_set_blocklists(%w[hagezi-normal], %w[example.com])
+      expect(JSON.parse(File.read(AmahiHelper::BLOCKLIST_CHOSEN))).to eq('lists' => %w[hagezi-normal], 'allow' => %w[example.com])
+      expect(File.read(AmahiHelper::BLOCKLIST_TIMER)).to include('OnCalendar=*-*-* 04:00', 'Persistent=true')
+      expect(File.read(AmahiHelper::BLOCKLIST_SERVICE)).to include('ExecStart=/usr/local/sbin/amahi-helper dns.refresh_blocklists')
+      expect(ran).to eq(['/usr/bin/systemctl daemon-reload', '/usr/bin/systemctl enable --now amahi-kai-blocklists.timer',
+                         '/usr/bin/systemctl start --no-block amahi-kai-blocklists.service'])
+    end
+
+    it 'makes the blocklist: every domain once, the allowlist let through, its own zones left alone' do
+      choose(%w[hagezi-normal hagezi-tif-mini], %w[example.net home.arpa])
+      expect(helper.do_refresh_blocklists).to eq('blocked' => 6)
+      zones = blocklist.scan(/local-zone: "([^"]+)\." always_null/).flatten
+      # deep.ads.example.com is under ads.example.com; sub.example.net stays, listed itself
+      expect(zones).to eq(%w[ads.example.com malware.example phish.example.com sub.example.net track.example.com wild.example.org])
+      expect(blocklist).to include('local-zone: "example.net." transparent')
+      expect(blocklist).not_to include('home.arpa', 'use-application-dns', '1.2.3.4', 'localhost', 'deep.ads')
+      expect { helper.unbound_conf(blocklist.lines.grep_v(/always_null|transparent/).join) }.not_to raise_error
+      expect(helper).to have_received(:check_unbound_conf).with(AmahiHelper::UNBOUND_MAIN)
+      expect(ran.last).to eq("#{AmahiHelper::UNBOUND_CONTROL} reload_keep_cache")
+      status = JSON.parse(File.read(AmahiHelper::BLOCKLIST_STATUS))
+      expect(status['blocked']).to eq(6)
+      expect(status['lists']['hagezi-normal']['domains']).to eq(8) # the names it lists, before the others' and the allowlist
+      expect(File.stat(AmahiHelper::BLOCKLIST_STATUS).mode & 0o777).to eq(0o644)
+    end
+
+    it "keeps a list's last copy when it can't be downloaded, and says why" do
+      choose(%w[hagezi-tif-mini])
+      helper.do_refresh_blocklists
+      File.utime(Time.now - (2 * 86_400), Time.now - (2 * 86_400), "#{dir}/hagezi-tif-mini.txt")
+      allow(helper).to receive(:fetch_blocklist).and_return('curl exited 22: The requested URL returned error: 503')
+      helper.do_refresh_blocklists
+      list = JSON.parse(File.read(AmahiHelper::BLOCKLIST_STATUS))['lists']['hagezi-tif-mini']
+      expect(list).to include('domains' => 3, 'error' => 'curl exited 22: The requested URL returned error: 503')
+      expect(list['downloaded_at']).to be_a(Integer)
+    end
+
+    it "downloads a list again only once its copy is a day old" do
+      choose(%w[hagezi-tif-mini])
+      helper.do_refresh_blocklists
+      helper.do_refresh_blocklists
+      expect(helper).to have_received(:fetch_blocklist).once
+    end
+
+    it 'refuses more domains than fit, and keeps the blocklist it had when Unbound refuses the new one' do
+      choose(%w[hagezi-normal])
+      stub_const('AmahiHelper::BLOCKLIST_MAX_DOMAINS', 2)
+      expect { helper.do_refresh_blocklists }.to raise_error(AmahiHelper::Failed, /at most 2/)
+      stub_const('AmahiHelper::BLOCKLIST_MAX_DOMAINS', 1_000_000)
+      File.write(AmahiHelper::UNBOUND_BLOCKLIST, "server:\n")
+      allow(helper).to receive(:check_unbound_conf) { |path| raise AmahiHelper::Refused, 'duplicate local-zone' if path == AmahiHelper::UNBOUND_MAIN }
+      expect { helper.do_refresh_blocklists }.to raise_error(AmahiHelper::Refused, 'duplicate local-zone')
+      expect(blocklist).to eq("server:\n")
+      expect(JSON.parse(File.read(AmahiHelper::BLOCKLIST_STATUS))['error']).to eq('duplicate local-zone')
+    end
+
+    it "pauses: the blocklist leaves Unbound's config, and systemd brings it back after five minutes" do
+      choose(%w[hagezi-tif-mini])
+      helper.do_refresh_blocklists
+      ran.clear
+      expect(helper.do_pause_blocking['until']).to be_within(5).of(Time.now.to_i + 300)
+      expect(File.exist?(AmahiHelper::UNBOUND_BLOCKLIST)).to be false
+      expect(File.read(AmahiHelper::BLOCKLIST_PAUSED)).to include('malware.example')
+      expect(ran).to include('/usr/bin/systemd-run --unit=amahi-kai-dns-resume --on-active=300 --timer-property=AccuracySec=5s ' \
+                             '/usr/local/sbin/amahi-helper dns.resume_blocking')
+
+      helper.do_refresh_blocklists # a refresh while paused stays paused
+      expect(File.exist?(AmahiHelper::UNBOUND_BLOCKLIST)).to be false
+
+      helper.do_resume_blocking
+      expect(blocklist).to include('malware.example')
+      expect(File.exist?(AmahiHelper::BLOCKLIST_PAUSED)).to be false
+    end
+
+    it 'turns off, and goes when DNS does' do
+      choose(%w[hagezi-tif-mini])
+      helper.do_set_blocklists(%w[hagezi-tif-mini], [])
+      helper.do_refresh_blocklists
+      helper.do_blocking_off
+      expect(%w[UNBOUND_BLOCKLIST BLOCKLIST_CHOSEN BLOCKLIST_STATUS].map { |c| File.exist?(AmahiHelper.const_get(c)) }).to all(be false)
+      expect(ran).to include('/usr/bin/systemctl disable --now amahi-kai-blocklists.timer')
+
+      helper.do_set_blocklists(%w[hagezi-tif-mini], [])
+      helper.do_refresh_blocklists
+      allow(File).to receive(:executable?).and_call_original
+      allow(File).to receive(:executable?).with(AmahiHelper::UFW).and_return(false)
+      helper.do_dns_config(nil)
+      expect(File.exist?(AmahiHelper::UNBOUND_BLOCKLIST)).to be false
+    end
+
+    it "reads Unbound's totals, since its start or the last reload, whichever came later" do
+      stats = "total.num.queries=1200\ntotal.num.cachehits=900\nnum.answer.secure=300\nnum.answer.bogus=2\ntime.up=7200.5\n"
+      allow(helper).to receive(:capture).with([AmahiHelper::UNBOUND_CONTROL, 'stats_noreset']).and_return(stats)
+      expect(helper.do_dns_stats).to include('running' => true, 'queries' => 1200, 'answered_here' => 900, 'secure' => 300, 'bogus' => 2,
+                                             'since' => be_within(2).of(Time.now.to_i - 7200))
+      helper.unbound_reload
+      expect(helper.do_dns_stats['since']).to be_within(2).of(Time.now.to_i)
+      allow(helper).to receive(:run_command).and_return('ignored: systemctl exited 3')
+      expect(helper.do_dns_stats).to eq('running' => false)
+    end
+
+    it 'reads a line of a list' do
+      { 'ads.example.com' => 'ads.example.com', '*.Wild.Example.org.' => 'wild.example.org', 'x.example.com # why' => 'x.example.com',
+        '# a comment' => nil, '' => nil, '10.0.0.1' => nil, 'localhost' => nil, 'localhost.localdomain' => nil,
+        '0.0.0.0 ads.example.com' => nil, 'under_score.example.com' => 'under_score.example.com' }.each do |line, name|
+        expect(helper.blocklist_domain(line)).to eq(name), line.inspect
+      end
+    end
+  end
+
+  # Network → DNS & DHCP's IPv6: radvd announcing the NAS as the IPv6 DNS server, the NAS's own
+  # unique local address, and what the routers announce.
+  describe 'IPv6 (Network → DNS & DHCP)' do
+    let(:dir) { Dir.mktmpdir }
+    let(:ran) { [] }
+
+    before do
+      stub_const('AmahiHelper::ULA_UNIT', "#{dir}/amahi-kai-ula.service")
+      allow(helper).to receive(:run_command) { |argv| ran << argv.reject { |a| a.is_a?(Hash) }.join(' ') && nil }
+    end
+
+    after { FileUtils.rm_rf(dir) }
+
+    it "accepts DnsService's radvd config, and refuses announcing a router, public ranges or other lines" do
+      allow(NetworkInterfaces).to receive(:lan).and_return('ens19' => [])
+      allow(NetworkInterfaces).to receive(:default_name).and_return('ens19')
+      allow(helper).to receive(:installed!).and_call_original
+      allow(helper).to receive(:installed!).with(AmahiHelper::RADVD).and_return(true)
+      conf = DnsService.radvd_config
+      expect(steps('dns.write_radvd_config', { 'content' => conf })).to eq([[:install, AmahiHelper::RADVD_CONF, conf, :radvd]])
+      ['AdvDefaultLifetime 1800;', 'AdvSendAdvert off;', 'prefix 2600:1700:abcd::/64 {', 'prefix fd00::/48 {', 'RDNSS 2606:4700:4700::1111 {',
+       'RDNSS 9.9.9.9 {', 'DNSSL not a domain {', 'AdvManagedFlag on;', 'interface ens19 { AdvSendAdvert on; };'].each do |line|
+        expect(refusal('dns.write_radvd_config', { 'content' => "#{line}\n" })).to include('not one Amahi-kai writes'), line
+      end
+    end
+
+    it 'puts only a unique local address on a real interface' do
+      expect(steps('dns.set_own_address', { 'interface' => 'lo', 'address' => 'fdab:cdef:1234:0::53' })).to eq([[:set_ula, 'lo', 'fdab:cdef:1234::53']])
+      [%w[lo 2600:1700::53], %w[lo 10.0.0.53], %w[lo fdab::53/64], %w[eth99nothere fdab::53]].each do |interface, address|
+        expect(refusal('dns.set_own_address', { 'interface' => interface, 'address' => address })).not_to be_nil, address
+      end
+      expect(steps('dns.check_routers', { 'interface' => 'lo' })).to eq([[:ipv6_advertisers, 'lo']])
+    end
+
+    it "keeps the NAS's own address on the interface at every boot, and takes it away" do
+      helper.do_set_ula('ens19', 'fdab:cdef:1234::53')
+      unit = File.read(AmahiHelper::ULA_UNIT)
+      expect(unit).to include("ExecStartPre=-#{AmahiHelper::IP} -6 route del fdab:cdef:1234::/64 dev lo",
+                              "ExecStart=#{AmahiHelper::IP} -6 addr replace fdab:cdef:1234::53/64 dev ens19",
+                              "ExecStop=#{AmahiHelper::IP} -6 addr del fdab:cdef:1234::53/64 dev ens19", 'WantedBy=multi-user.target')
+      expect(ran).to eq(['/usr/bin/systemctl daemon-reload', '/usr/bin/systemctl enable amahi-kai-ula.service',
+                         '/usr/bin/systemctl restart amahi-kai-ula.service'])
+      ran.clear
+      helper.do_set_ula('ens19', 'fdab:cdef:1234::53')
+      expect(ran).to be_empty # nothing changed
+      helper.do_set_ula('ens18', 'fdab:cdef:1234::53')
+      expect(ran.first).to eq('/usr/bin/systemctl stop amahi-kai-ula.service') # the old address goes first
+      ran.clear
+      helper.do_remove_ula
+      expect(File.exist?(AmahiHelper::ULA_UNIT)).to be false
+      expect(ran).to eq(['/usr/bin/systemctl disable --now amahi-kai-ula.service', '/usr/bin/systemctl daemon-reload'])
+    end
+
+    it "reads a router advertisement: whether it's a router, its ranges, DNS servers and search domains" do
+      advert = [134, 0, 0, 64, 0, 1800, 0, 0].pack('CCnCCnNN') +
+               [3, 4, 64, 0xc0, 86_400, 14_400, 0].pack('CCCCNNN') + IPAddr.new('2600:1700:abcd::').hton +
+               [25, 5, 0, 1200].pack('CCnN') + IPAddr.new('2600:1700:abcd::1').hton + IPAddr.new('fd99::1').hton +
+               [31, 3, 0, 1200].pack('CCnN') + "\x04home\x04arpa\x00".b.ljust(16, "\0".b)
+      expect(helper.router_advertisement(advert)).to eq('lifetime' => 1800, 'prefixes' => ['2600:1700:abcd::/64'],
+                                                         'dns' => %w[2600:1700:abcd::1 fd99::1], 'domains' => ['home.arpa'])
+      expect(helper.router_advertisement([135, 0, 0, 0].pack('CCnN') + ("\0".b * 16))).to be_nil # a neighbor solicitation
+      expect(helper.router_advertisement(advert.byteslice(0, 40))['prefixes']).to eq([]) # cut short
     end
   end
 
@@ -1817,15 +2275,17 @@ RSpec.describe 'AmahiHelper' do
       allow(File).to receive(:executable?).with('/usr/sbin/ufw').and_return(true)
     end
 
-    it 'turns UFW on with SSH, the web UI, HTTPS, Samba and mDNS let in, and DNS and DHCP once dnsmasq is configured' do
+    # DNS and DHCP get in by their own rules, on their addresses and interface (dns.write_config,
+    # network.write_dnsmasq_config), which UFW keeps while it's off.
+    it 'turns UFW on with SSH, the web UI, HTTPS, Samba and mDNS let in' do
       stub_const('AmahiHelper::DNSMASQ_CONF', "#{dir}/amahi.conf")
       ufw = '/usr/sbin/ufw'
       base = [[ufw, 'default', 'deny', 'incoming'], [ufw, 'allow', '22/tcp'], [ufw, 'allow', '3000/tcp'],
               [ufw, 'allow', '443/tcp'], [ufw, 'allow', '445/tcp'], [ufw, 'allow', '139/tcp'], [ufw, 'allow', '137:138/udp'],
               [ufw, 'allow', '5353/udp']]
       expect(steps('security.enable_firewall', {})).to eq([*base, [ufw, '--force', 'enable']])
-      File.write("#{dir}/amahi.conf", "bind-interfaces\n")
-      expect(steps('security.enable_firewall', {})).to eq([*base, [ufw, 'allow', '53'], [ufw, 'allow', '67/udp'], [ufw, '--force', 'enable']])
+      File.write("#{dir}/amahi.conf", "dhcp-range=192.168.1.100,192.168.1.254,14400s\n")
+      expect(steps('security.enable_firewall', {})).to eq([*base, [ufw, '--force', 'enable']])
     end
 
     it 'turns off SSH root login' do

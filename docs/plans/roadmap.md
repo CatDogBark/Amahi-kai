@@ -149,15 +149,23 @@ Decided with CatDogBark on 2026-10-10, while testing on the NAS; when they're bu
 
 ## Networking
 
-Planned 2026-10-22, maybe soon ([`networking.md`](networking.md)): DHCP and DNS modernized
-(encrypted upstream DNS, DNSSEC, local names, blocklists), off by default, and tested first on an
-isolated Proxmox bridge so the house's internet is never at risk. What isn't ready by 1.0 ships
-labelled "in development".
+Planned 2026-10-22, for 1.0 ([`networking.md`](networking.md)): Unbound for DNS (encrypted
+lookups to a provider the owner picks, DNSSEC, local names, blocklists with a switch, IPv6) and
+dnsmasq for DHCP only, off by default, and tested first on an isolated Proxmox bridge so the
+house's internet is never at risk. Built and tried there (all five slices, firewall on, after a
+reboot) for 0.9.2; the NAS, Tailscale and the house are left:
+[`docs/testing/networking.md`](../testing/networking.md).
 
 ## Open, not yet scheduled
 
 Smaller findings from the review that no PR covers yet. Fold them into a nearby PR when it
 touches the same code.
+
+- **Times are the server's clock, in UTC** (found 2026-10-22, on the island): Rails' time zone is
+  left at UTC, and the views print clock times (`strftime`), so the dashboard's date turns over at
+  UTC midnight (2 pm at UTC−10), and the file browser's times and System Dependencies' dates are
+  UTC on a server set to UTC. Show times in the browser's zone (or the NAS's own, set once), or as
+  durations. Network → DNS & DHCP's pause already says how long, not until when.
 
 - Several features staged files at fixed `/tmp` paths before a root copy. Samba (L), dnsmasq
   (M1), Greyhole (M2), the tunnel and Tailscale (M3) no longer do: the helper writes the files.

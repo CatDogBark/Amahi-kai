@@ -22,9 +22,10 @@ class Platform
   PLATFORMS = ['ubuntu', 'debian']
 
   # Where this platform keeps the files Amahi-kai reads: the DHCP leases (dnsmasq's, for
-  # Network → Leases) and the system log (the debug tab).
+  # Network → Leases; Ubuntu's dnsmasq keeps them where Debian's does) and the system log (the
+  # debug tab).
   FILENAMES = {
-    'ubuntu' => { dhcpleasefile: '/var/lib/dnsmasq/dnsmasq.leases', syslog: '/var/log/syslog' },
+    'ubuntu' => { dhcpleasefile: '/var/lib/misc/dnsmasq.leases', syslog: '/var/log/syslog' },
     'debian' => { dhcpleasefile: '/var/lib/misc/dnsmasq.leases', syslog: '/var/log/syslog' }
   }.freeze
 

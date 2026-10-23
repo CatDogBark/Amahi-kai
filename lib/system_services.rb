@@ -27,8 +27,12 @@ class SystemServices
       actions: %w[start stop restart] },
     { key: 'mariadb', name: 'MariaDB', unit: 'mariadb', package: 'mariadb-server',
       note: 'Amahi-kai needs it running' },
-    { key: 'dnsmasq', name: 'dnsmasq', unit: 'dnsmasq', package: 'dnsmasq', check: '/usr/sbin/dnsmasq',
-      actions: %w[start stop restart] },
+    { key: 'dnsmasq', name: 'dnsmasq (DHCP)', unit: 'dnsmasq', package: 'dnsmasq', check: '/usr/sbin/dnsmasq',
+      note: 'Turned on and off on Network → DNS & DHCP', idle: :dhcp_off, actions: %w[start stop restart] },
+    { key: 'unbound', name: 'Unbound (DNS)', unit: 'unbound', package: 'unbound', check: '/usr/sbin/unbound',
+      note: 'Turned on and off on Network → DNS & DHCP', idle: :dns_off, actions: %w[start stop restart] },
+    { key: 'radvd', name: 'radvd (IPv6 announcements)', unit: 'radvd', package: 'radvd', check: '/usr/sbin/radvd',
+      note: 'Turned on and off on Network → DNS & DHCP', idle: :ipv6_off, actions: %w[start stop restart] },
     { key: 'greyhole', name: 'Greyhole', unit: 'greyhole', package: 'greyhole', check: '/usr/bin/greyhole',
       process: 'greyhole --daemon', actions: %w[start stop restart] },
     { key: 'docker', name: 'Docker', unit: 'docker', package: %w[docker-ce docker.io], check: '/usr/bin/docker',
@@ -61,7 +65,10 @@ class SystemServices
   IDLE_REASONS = {
     no_smart_drives: ['No drive with SMART yet',
                       'smartd stops itself when no drive has SMART to watch (virtual disks have none). ' \
-                      'It starts with the server once a drive with SMART is connected.']
+                      'It starts with the server once a drive with SMART is connected.'],
+    dns_off: ['DNS is off', 'Unbound runs while Network → DNS & DHCP is on.'],
+    dhcp_off: ['DHCP is off', 'dnsmasq runs while Network → DNS & DHCP is in the mode DNS + DHCP.'],
+    ipv6_off: ['Not announcing', 'radvd runs while Network → DNS & DHCP announces the NAS as the IPv6 DNS server.']
   }.freeze
 
   PROPERTIES = %w[Description LoadState ActiveState SubState ActiveEnterTimestamp
@@ -165,6 +172,12 @@ class SystemServices
       when :no_smart_drives
         health = StorageHealth.load
         health.checked? && health.drives.empty? # the last check found no drive with SMART data
+      when :dns_off
+        !DnsService.on?
+      when :dhcp_off
+        !DnsService.dhcp?
+      when :ipv6_off
+        !(DnsService.on? && DnsService.ipv6_advertise?)
       end
     end
 

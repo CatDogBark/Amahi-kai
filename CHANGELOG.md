@@ -4,6 +4,27 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [0.9.2] — 2026-10-22
+
+The NAS can be your network's DNS server, private and checked, with blocking, and its DHCP server too, all on one page (Network → DNS & DHCP). All of it is off until you turn it on, so a server that doesn't use it only gets the fixes below. It was built and tried on an isolated test network, firewall on and after a reboot; a whole house and Tailscale are still to try ([the list](docs/testing/networking.md)).
+
+### 🚀 Major Features
+
+- **DNS for your network, private and checked** (Network → DNS & DHCP) — The NAS can be your network's DNS server, with Unbound. Devices ask the NAS, and it asks the provider you pick over an encrypted connection (DNS-over-TLS), so your internet provider can't read or change the answers. Every provider on the list is free and needs no account: Quad9 (the default), Cloudflare, AdGuard DNS (its unfiltered service), DNS.SB, or a server of your own. Answers are checked with DNSSEC, kept for fast repeat lookups, and still given through a short outage. No record is kept of which device looked up what; the page shows totals only (lookups, how many the NAS answered itself, and how many answers came signed and checked out, or failed and were refused).
+  - **Local names:** the NAS, the fixed hosts (Network → Hosts) and the DNS aliases answer as `name.home.arpa` and as `name`.
+  - **Safety:** it answers the devices on the network you choose, and Tailscale's, and refuses everyone else; the firewall lets DNS in to its addresses only. A public name that points at an address inside your network gets no answer (DNS rebinding). Firefox is told to use this DNS rather than its own.
+  - **Off until you turn it on:** installing Unbound changes nothing; the page says how to point your router (or one device) at the NAS, and how to undo it. The NAS's own lookups don't go through it, so a problem with DNS can't stop the NAS from updating.
+- **Blocking ads, trackers and malware** (Network → DNS & DHCP) — One switch blocks them for every device that uses the NAS's DNS. The lists come from HaGeZi and OISD, open projects that update daily; two are ticked to start (HaGeZi's NORMAL and its Threat Intelligence mini, about 330,000 domains), and the others are there to pick from. They refresh every day, in the background; a list that can't be downloaded keeps its last copy, and the page says so. An allowlist lets through a site a list breaks, and **Pause for 5 minutes** lets everything through for a while. Off until you turn it on.
+- **IPv6 that doesn't go around the NAS** (Network → DNS & DHCP) — **Check now** asks the network's routers what they announce over IPv6, and warns when one tells devices to use another DNS server, since devices could then go around the NAS's privacy and blocking. The page explains how to fix it in the router, or the NAS can announce itself as the IPv6 DNS server (with radvd), at an address of its own that stays the same whatever your internet provider hands out, never as a router.
+- **DHCP on the same page** — In the mode DNS + DHCP, the NAS also hands out addresses, in place of your router. Before it starts, it checks the network for another DHCP server, the way a device would, and won't start while one answers. It serves the interface DNS answers on and nowhere else (the firewall lets DHCP in there only), hands out the NAS as the DNS server and `home.arpa` as the domain, and each device answers by its own name (`laptop.home.arpa`). The range, router and lease time are checked before they're saved, and the page shows how many devices have an address. Network → Gateway and Network → Settings are folded into it.
+
+### 🔒 Security & Fixes
+
+- **dnsmasq answers no DNS any more** — Unbound does. dnsmasq only hands out addresses, in the mode DNS + DHCP. New installs start with DNS and DHCP off.
+- **Network → Leases shows the leases** — It read dnsmasq's lease file from a folder Ubuntu doesn't use, so the list was always empty.
+- **The old DNS provider setting is gone** — Network → Settings let you pick Cloudflare, Google or your own servers, but nothing used the choice. Network → DNS & DHCP replaces it.
+- **DNS aliases must be IP addresses** (or blank, for the NAS itself); anything else is refused when it's saved.
+
 ## [0.9.1] — 2026-10-22
 
 The first release System Update can install from GitHub's Releases: each server follows an update channel (releases, release candidates or the dev branch) and never goes back to an older version.

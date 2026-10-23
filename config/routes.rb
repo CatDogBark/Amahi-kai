@@ -19,19 +19,23 @@ Rails.application.routes.draw do
     get 'dns_aliases', action: 'dns_aliases'
     post 'dns_aliases', action: 'create_dns_alias'
     delete 'dns_alias/:id', action: 'destroy_dns_alias', as: 'destroy_dns_alias'
-    get 'settings', action: 'settings'
-    put 'update_lease_time', action: 'update_lease_time'
-    put 'update_gateway', action: 'update_gateway'
-    put 'update_dns', action: 'update_dns'
-    put 'update_dns_ips', action: 'update_dns_ips'
-    put 'toggle_setting/:id', action: 'toggle_setting', as: 'toggle_setting'
-    put 'update_dhcp_range/:id', action: 'update_dhcp_range', as: 'update_dhcp_range'
-    get 'gateway', action: 'gateway'
-    get 'install_dnsmasq_stream', action: 'install_dnsmasq_stream'
-    post 'start_dnsmasq', action: 'start_dnsmasq'
-    post 'stop_dnsmasq', action: 'stop_dnsmasq'
-    put 'update_dnsmasq_config', action: 'update_dnsmasq_config'
   end
+
+  # Network → DNS & DHCP (Unbound, and dnsmasq for DHCP). Network → Gateway and Settings used to
+  # hold the DHCP settings.
+  scope '/network/dns', controller: 'dns', as: 'dns' do
+    get '/', action: 'index', as: 'index'
+    put '/', action: 'update', as: 'update'
+    get 'install_stream', action: 'install_stream'
+    get 'install_dnsmasq_stream', action: 'install_dnsmasq_stream'
+    put 'blocking', action: 'update_blocking', as: 'update_blocking'
+    post 'pause_blocking', action: 'pause_blocking', as: 'pause_blocking'
+    post 'resume_blocking', action: 'resume_blocking', as: 'resume_blocking'
+    post 'check_routers', action: 'check_routers', as: 'check_routers'
+    get 'install_radvd_stream', action: 'install_radvd_stream'
+  end
+  get '/network/gateway', to: redirect('/network/dns')
+  get '/network/settings', to: redirect('/network/dns')
 
   # Remote Access (Cloudflare Tunnel) — split from network
   scope '/network/remote_access', controller: 'remote_access', as: 'remote_access' do

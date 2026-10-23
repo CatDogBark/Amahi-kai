@@ -25,7 +25,7 @@ web UI to manage it all, from one install command.
 | [Making Apps](making-apps) | Packaging an app of your own for the catalog |
 | [Remote Access](remote-access) | Cloudflare Tunnel and Tailscale |
 | [Security](security) | The security audit and its fixes, how Amahi-kai uses root |
-| [Networking](networking) | DNS aliases, static hosts, the DHCP/DNS gateway |
+| [Networking](networking) | DNS and DHCP for your network, DNS aliases, static hosts |
 | [Updating](updating) | Update checks, Update now, Repair, automatic rollback |
 
 ---

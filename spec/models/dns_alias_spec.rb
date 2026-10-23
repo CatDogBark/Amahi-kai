@@ -6,8 +6,8 @@ describe DnsAlias do
     create(:admin)
     create(:setting, name: "net", value: "1")
     create(:setting, name: "self-address", value: "1")
-    # Stub system call to avoid dnsmasq restart
-    allow_any_instance_of(DnsAlias).to receive(:restart)
+    # Rewriting Unbound's names is checked below; elsewhere it's left out.
+    allow(DnsService).to receive(:rewrite!)
   end
 
   it "should require a name" do
@@ -83,36 +83,30 @@ describe DnsAlias do
     end
   end
 
-  describe "callbacks" do
-    it "should call restart after save" do
-      alias_record = DnsAlias.new(name: "callbacktest", address: "192.168.1.1")
-      expect(alias_record).to receive(:restart)
-      alias_record.save!
+  describe "addresses" do
+    it "takes an IPv4 or IPv6 address" do
+      expect(DnsAlias.new(name: "four", address: "192.168.1.9")).to be_valid
+      expect(DnsAlias.new(name: "six", address: "fd99::9")).to be_valid
     end
 
-    it "should call restart after destroy" do
-      alias_record = DnsAlias.create!(name: "destroyme", address: "192.168.1.1")
-      expect(alias_record).to receive(:restart)
-      alias_record.destroy
+    it "refuses anything else" do
+      %w[nas.local 192.168.1 10.0.0.0/8 1.2.3.4.5].each do |bad|
+        expect(DnsAlias.new(name: "bad", address: bad)).not_to be_valid, bad
+      end
     end
   end
 
-  describe "dnsmasq aliases file" do
-    it "is written through the root helper with every alias, in lines the helper accepts" do
-      DnsAlias.create!(name: "files", address: "192.168.1.10")
-      DnsAlias.create!(name: "blocked", address: "")
-      DnsAlias.new.send(:regenerate_dnsmasq_config)
-
-      op, args = Privileged.calls.last
-      expect(op).to eq('network.write_dns_aliases')
-      expect(args[:content]).to include("address=/files/192.168.1.10\n", "address=/blocked/\n")
-      Privileged.operations # loads libexec/amahi-helper
-      expect { AmahiHelper.dnsmasq_conf(args[:content], AmahiHelper::DNS_ALIAS_LINES) }.not_to raise_error
+  describe "Unbound's local names" do
+    it "are rewritten after a save and after a destroy" do
+      alias_record = DnsAlias.create!(name: "callbacktest", address: "192.168.1.1")
+      alias_record.destroy
+      expect(DnsService).to have_received(:rewrite!).twice
     end
 
-    it "keeps the alias when the helper refuses the file" do
-      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('network.write_dns_aliases', 'refused'))
-      expect { DnsAlias.new.send(:regenerate_dnsmasq_config) }.not_to raise_error
+    it "keep the alias when the helper refuses the config" do
+      allow(DnsService).to receive(:rewrite!).and_raise(Privileged::Error.new('dns.write_config', 'refused'))
+      expect { DnsAlias.create!(name: "kept", address: "192.168.1.1") }.not_to raise_error
+      expect(DnsAlias.find_by(name: "kept")).to be_present
     end
   end
 end

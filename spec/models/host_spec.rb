@@ -135,13 +135,24 @@ describe Host do
   end
 
   describe "callbacks" do
-    before { allow(DnsmasqService).to receive(:rewrite_config!) }
+    before do
+      allow(DnsmasqService).to receive(:rewrite_config!)
+      allow(DnsService).to receive(:rewrite!)
+    end
 
-    it "rewrites dnsmasq's config after each change" do
+    it "rewrites dnsmasq's config and Unbound's names after each change" do
       host = Host.create!(name: "cbhost", mac: "11:22:33:44:55:66", address: "50")
       host.update!(address: "52")
       host.destroy
       expect(DnsmasqService).to have_received(:rewrite_config!).exactly(3).times
+      expect(DnsService).to have_received(:rewrite!).exactly(3).times
+    end
+
+    it "still rewrites Unbound's names when dnsmasq's config is refused" do
+      allow(DnsmasqService).to receive(:rewrite_config!)
+        .and_raise(Privileged::Error.new('network.write_dnsmasq_config', 'refused'))
+      Host.create!(name: "cbhost", mac: "11:22:33:44:55:66", address: "50")
+      expect(DnsService).to have_received(:rewrite!)
     end
 
     it "keeps the host when the helper refuses the config, and logs why" do

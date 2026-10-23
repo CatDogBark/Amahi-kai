@@ -17,8 +17,9 @@
 class Host < ApplicationRecord
 
   before_save :convert_address
-  # dnsmasq hands out static addresses from its config, so a change rewrites it.
-  after_commit :rewrite_dnsmasq_config
+  # dnsmasq hands out static addresses from its config, and Unbound answers for their names
+  # (Network → DNS & DHCP), so a change rewrites both.
+  after_commit :rewrite_dnsmasq_config, :rewrite_dns
 
   # A hostname label: at most 63 characters.
   validates :name, presence: true, format: { with: /\A[a-z][a-z0-9-]{0,62}\z/i }, uniqueness: true
@@ -31,6 +32,12 @@ class Host < ApplicationRecord
     DnsmasqService.rewrite_config!
   rescue Privileged::Error => e
     Rails.logger.error("Host #{name}: dnsmasq config not rewritten: #{e.message}")
+  end
+
+  def rewrite_dns
+    DnsService.rewrite!
+  rescue Privileged::Error => e
+    Rails.logger.error("Host #{name}: DNS names not rewritten: #{e.message}")
   end
 
   def convert_address

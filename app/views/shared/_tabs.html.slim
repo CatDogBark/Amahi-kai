@@ -12,12 +12,11 @@ ruby:
       { id: 'storage_pool', label: 'storage_pool', url: '/disks/storage_pool' },
       { id: 'pools', label: 'zfs_pools', url: '/disks/pools' }
     ]},
-    { id: 'network', label: 'network', url: '/network', advanced: true, controllers: %w[remote_access security], subtabs: [
+    { id: 'network', label: 'network', url: '/network', advanced: true, controllers: %w[dns remote_access security], subtabs: [
       { id: 'index', label: 'leases', url: '/network' },
       { id: 'hosts', label: 'hosts', url: '/network/hosts' },
-      { id: 'gateway', label: 'gateway', url: '/network/gateway', advanced: true },
+      { id: 'dns', label: 'dns_and_dhcp', url: '/network/dns', controller: 'dns', advanced: true },
       { id: 'dns_aliases', label: 'dns_aliases', url: '/network/dns_aliases', advanced: true },
-      { id: 'settings', label: 'settings', url: '/network/settings', advanced: true },
       { id: 'remote_access', label: 'remote_access', url: '/network/remote_access', controller: 'remote_access' },
       { id: 'security', label: 'security', url: '/network/security', controller: 'security' }
     ]},
