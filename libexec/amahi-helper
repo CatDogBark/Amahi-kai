@@ -3345,7 +3345,7 @@ module AmahiHelper
     # rule exists, which the route rule makes sure of). Rules from a previous state go first, so
     # a changed interface or forward leaves nothing behind.
     def do_router_on(lan, wan, forwards)
-      pinned = pin_lan_netplan(lan)
+      pinned = pin_lan_netplan(lan, wan)
       do_install(WAN_NETPLAN, wan_netplan(wan), nil, '0600')
       begin
         run_command([NETPLAN, 'generate'])
@@ -3395,19 +3395,25 @@ module AmahiHelper
       notes
     end
 
-    # The LAN interface's netplan files made to fit router mode: an address it keeps (one from
-    # the router the NAS replaces would run out), and its default route, if it has one, behind
-    # the internet's. A file changed is kept as it was beside it (NETPLAN_BACKUP_SUFFIX), once.
-    # Comments in it don't survive (it's read and written as YAML); the installer's file has
-    # none. Returns { path => sha256 of what was written }, for the way back.
-    def pin_lan_netplan(lan, dir = NETPLAN_DIR)
+    # The netplan files made to fit router mode: the LAN interface keeps an address (one from the
+    # router the NAS replaces would run out), and every interface but the internet's has its
+    # default route, if it has one, put behind the internet's (a third interface, a management
+    # one say, would otherwise take the devices' traffic). A file changed is kept as it was
+    # beside it (NETPLAN_BACKUP_SUFFIX), once. Comments in it don't survive (it's read and written
+    # as YAML); the installer's file has none. Returns { path => sha256 of what was written }, for
+    # the way back.
+    def pin_lan_netplan(lan, wan, dir = NETPLAN_DIR)
       Dir.glob(File.join(dir, '*.yaml')).sort.each_with_object({}) do |path, pinned|
         data = netplan_yaml(path) or next
-        kinds = %w[ethernets bridges bonds vlans].select { |kind| data.dig('network', kind, lan).is_a?(Hash) }
-        next if kinds.empty?
         before = File.read(path)
         original = Marshal.load(Marshal.dump(data))
-        kinds.each { |kind| pin_lan_entry(data['network'][kind][lan], lan) }
+        %w[ethernets bridges bonds vlans].each do |kind|
+          next unless data['network'][kind].is_a?(Hash)
+          data['network'][kind].each do |name, entry|
+            next if name == wan || !entry.is_a?(Hash)
+            pin_lan_entry(entry, name, name == lan)
+          end
+        end
         next if data == original # nothing to change: the file stays as it is, comments and all
         content = YAML.dump(data)
         backup = path + NETPLAN_BACKUP_SUFFIX
@@ -3417,10 +3423,12 @@ module AmahiHelper
       end
     end
 
-    def pin_lan_entry(entry, lan)
-      if [true, 'yes', 'true'].include?(entry['dhcp4'])
+    # +lan+: the interface DNS and DHCP serve, whose address is pinned; the others only have their
+    # default route put behind.
+    def pin_lan_entry(entry, name, lan)
+      if lan && [true, 'yes', 'true'].include?(entry['dhcp4'])
         entry['dhcp4'] = false
-        current = Socket.getifaddrs.select { |i| i.name == lan && i.addr&.ipv4? && i.netmask }.map do |i|
+        current = Socket.getifaddrs.select { |i| i.name == name && i.addr&.ipv4? && i.netmask }.map do |i|
           "#{i.addr.ip_address}/#{IPAddr.new(i.netmask.ip_address).to_i.to_s(2).count('1')}"
         end
         entry['addresses'] = (Array(entry['addresses']) + current).uniq

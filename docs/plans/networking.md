@@ -147,7 +147,9 @@ A fourth mode, **Router**: DNS + DHCP, and the NAS is the way to the internet.
 - **The LAN interface's own netplan** is made to fit (CatDogBark, 2026-10-23: no terminal step
   for this): the helper reads the file that configures it, pins an address it got by DHCP (the
   router being replaced would stop handing one out), puts a default route it has behind the
-  internet's (metric 200 against 50; `gateway4` becomes such a route), writes it back (as YAML:
+  internet's (metric 200 against 50; `gateway4` becomes such a route), and does the same to the
+  default route of any other interface but the internet's (a third, management interface
+  would otherwise take the devices' traffic: the island's `ens18` did), writes it back (as YAML:
   comments don't survive, and the installer's file has none), keeps the file as it was beside it,
   and lets `netplan generate` refuse the lot before anything is applied. The way back puts the
   file back, unless it was changed since (then it's left, and the page says so). A netplan

@@ -1405,14 +1405,14 @@ RSpec.describe 'AmahiHelper' do
       before { File.write(installer_file, installer_yaml) }
 
       it "puts the LAN's default route behind the internet's, keeping the file as it was beside it" do
-        pinned = helper.pin_lan_netplan('ens19')
+        pinned = helper.pin_lan_netplan('ens19', 'ens20')
         expect(pinned.keys).to eq([installer_file])
         after = YAML.safe_load(File.read(installer_file))
         expect(after['network']['ethernets']['ens19']['routes']).to eq([{ 'to' => 'default', 'via' => '192.168.1.1', 'metric' => 200 }])
         expect(after['network']['ethernets']['ens19']['addresses']).to eq(['10.99.0.1/24'])
         expect(File.read("#{installer_file}.amahi-kai-before-router")).to eq(installer_yaml)
         expect(File.stat(installer_file).mode & 0o777).to eq(0o600)
-        expect(helper.pin_lan_netplan('ens19')).to eq({}) # nothing more to change
+        expect(helper.pin_lan_netplan('ens19', 'ens20')).to eq({}) # nothing more to change
         expect(File.read("#{installer_file}.amahi-kai-before-router")).to eq(installer_yaml) # the first copy is the one kept
       end
 
@@ -1421,19 +1421,23 @@ RSpec.describe 'AmahiHelper' do
         ifaddr = Struct.new(:name, :addr, :netmask)
         allow(Socket).to receive(:getifaddrs).and_return([ifaddr.new('ens19', Addrinfo.ip('10.99.0.1'), Addrinfo.ip('255.255.255.0')),
                                                           ifaddr.new('ens19', Addrinfo.ip('fe80::1'), Addrinfo.ip('ffff:ffff:ffff:ffff::'))])
-        helper.pin_lan_netplan('ens19')
+        helper.pin_lan_netplan('ens19', 'ens20')
         entry = YAML.safe_load(File.read(installer_file))['network']['ethernets']['ens19']
         expect(entry).to eq('dhcp4' => false, 'addresses' => ['10.99.0.1/24'], 'routes' => [{ 'to' => 'default', 'via' => '10.99.0.254', 'metric' => 200 }])
       end
 
-      it "leaves other interfaces, a route that's already behind, and a file it can't read alone" do
-        File.write("#{dir}/netplan/60-island.yaml", "network:\n  version: 2\n  ethernets:\n    ens18:\n      routes:\n      - to: default\n        via: 192.168.1.1\n")
+      it "puts a third interface's default route behind too (its address alone), and leaves the internet's, a route already behind, and a file it can't read" do
+        File.write("#{dir}/netplan/60-management.yaml", "network:\n  version: 2\n  ethernets:\n    ens18:\n      dhcp4: true\n      routes:\n      - to: default\n        via: 192.168.1.1\n")
         File.write("#{dir}/netplan/61-behind.yaml", "network:\n  version: 2\n  ethernets:\n    ens19:\n      routes:\n      - to: default\n        via: 10.99.0.9\n        metric: 100\n")
-        File.write("#{dir}/netplan/62-broken.yaml", "network: [\n")
-        expect(helper.pin_lan_netplan('ens19').keys).to eq([installer_file])
-        expect(File.read("#{dir}/netplan/60-island.yaml")).not_to include('metric')
+        File.write("#{dir}/netplan/62-wan.yaml", "network:\n  version: 2\n  ethernets:\n    ens20:\n      routes:\n      - to: default\n        via: 10.77.0.1\n")
+        File.write("#{dir}/netplan/63-broken.yaml", "network: [\n")
+        expect(helper.pin_lan_netplan('ens19', 'ens20').keys).to eq([installer_file, "#{dir}/netplan/60-management.yaml"])
+        management = YAML.safe_load(File.read("#{dir}/netplan/60-management.yaml"))['network']['ethernets']['ens18']
+        expect(management).to eq('dhcp4' => true, 'routes' => [{ 'to' => 'default', 'via' => '192.168.1.1', 'metric' => 200 }])
         expect(File.read("#{dir}/netplan/61-behind.yaml")).to include('metric: 100')
-        expect(Dir.glob("#{dir}/netplan/*before-router").map { |f| File.basename(f) }).to eq(['50-cloud-init.yaml.amahi-kai-before-router'])
+        expect(File.read("#{dir}/netplan/62-wan.yaml")).not_to include('metric')
+        expect(Dir.glob("#{dir}/netplan/*before-router").map { |f| File.basename(f) }.sort)
+          .to eq(['50-cloud-init.yaml.amahi-kai-before-router', '60-management.yaml.amahi-kai-before-router'])
       end
 
       it 'is put back by the way back, unless it was changed since' do
