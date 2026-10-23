@@ -25,7 +25,8 @@ every piece came back and worked again from scratch. One more find: the test VM 
 for the announced range on `lo` (left from the bug fixed in `0aee8c1`, we think; it couldn't be
 reproduced), which sent replies to devices in the range back into the NAS; the address unit now
 clears such a route before it starts. A one-device test on the house LAN adds little over the
-island; what's left is the house (below), and Tailscale's answers on the NAS. CatDogBark wants Amahi-kai's networking modernized
+island; what's left is the NAS, Tailscale's answers, the house and days of running:
+[`docs/testing/networking.md`](../testing/networking.md) is that list. CatDogBark wants Amahi-kai's networking modernized
 for privacy and safety, carrying over what original Amahi users did with their home server: put it
 in front of the network. It ships in 1.0, DHCP included, once it passes the tests below.
 

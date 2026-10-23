@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [0.9.2] — 2026-10-22
+
+The NAS can be your network's DNS server, private and checked, with blocking, and its DHCP server too, all on one page (Network → DNS & DHCP). All of it is off until you turn it on, so a server that doesn't use it only gets the fixes below. It was built and tried on an isolated test network, firewall on and after a reboot; a whole house and Tailscale are still to try ([the list](docs/testing/networking.md)).
+
 ### 🚀 Major Features
 
 - **DNS for your network, private and checked** (Network → DNS & DHCP) — The NAS can be your network's DNS server, with Unbound. Devices ask the NAS, and it asks the provider you pick over an encrypted connection (DNS-over-TLS), so your internet provider can't read or change the answers. Every provider on the list is free and needs no account: Quad9 (the default), Cloudflare, AdGuard DNS (its unfiltered service), DNS.SB, or a server of your own. Answers are checked with DNSSEC, kept for fast repeat lookups, and still given through a short outage. No record is kept of which device looked up what; the page shows totals only (lookups, how many the NAS answered itself, and how many answers came signed and checked out, or failed and were refused).
