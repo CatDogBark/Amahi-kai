@@ -140,6 +140,16 @@ through the helper as the pages do. A normal update stays a no-op for the networ
 changes Unbound's config restarts it (about two seconds of DNS), one that changes the NAT block
 reloads UFW. Decided 2026-10-24 (CatDogBark).
 
+Built 2026-10-24: `DnsService.resync!`, run by `bin/amahi-update` after Samba's push
+(`rails runner 'puts DnsService.resync_report'`, as the app user). Unbound's config, the lists
+chosen for blocking (`chosen.json`), dnsmasq's and radvd's configs are compared with the files
+as the helper left them (all readable by the app; one that can't be read is written again, to
+be safe); the router's rules are compared as the helper's `router.json` against the settings
+(interfaces, forwards, forced DNS, LAN-only devices, Tailscale) and against the shape of the
+rules, a number the helper stamps in the state (`ROUTER_RULES_VERSION`, bumped whenever the
+rules change shape, as the NAT chains did). Only what differs is applied, through the same
+calls the pages make.
+
 ## 3. Signed updates
 
 Today the updater installs whatever the GitHub Release tag points at, and the helper fetches the

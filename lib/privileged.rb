@@ -77,6 +77,13 @@ module Privileged
       AmahiHelper::OPERATIONS.keys
     end
 
+    # The shape of the router's rules this helper makes (DnsService.resync! compares it with
+    # the one in place).
+    def router_rules_version
+      load SOURCE unless defined?(AmahiHelper)
+      AmahiHelper::ROUTER_RULES_VERSION
+    end
+
     private
 
     # Like capture3, but yields stderr lines as they come. If the block fails (a closed

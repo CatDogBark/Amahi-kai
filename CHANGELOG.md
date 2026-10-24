@@ -16,6 +16,7 @@ All notable changes to Amahi-kai are documented here.
 
 ### 🔒 Security & Fixes
 
+- **The network follows an update** — An update restarts only the web UI; DNS, DHCP, blocking and the router keep running off the files already in place. So a fix to how one of those is set up used to wait until you saved its page again. System Update now makes each network config again and puts in place only what differs (Unbound's config, the blocklists, dnsmasq, radvd, the router's rules), saying what it applied in the update's log. Nothing happens while DNS is off, and an update that changes nothing touches nothing.
 - **Router mode's NAT rules no longer pile up** — Every save in router mode (a forward, the DNS switch, now an address change) reloaded the firewall, and each reload added another copy of the NAT rules, because UFW re-reads its rules file without clearing the NAT table. The copies were identical until the NAS's address changed; then an old copy kept redirecting devices' DNS to the address the NAS no longer had, and turning router mode off left the rules in place until a reboot. The rules now live in chains of their own that are emptied and refilled each time, and the way back removes them; a NAS that already has old copies is cleaned up on its next save.
 
 ## [0.9.2] — 2026-10-22

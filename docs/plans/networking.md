@@ -221,6 +221,17 @@ automatic, or fixed with the network size, the router and the DNS servers the NA
   DNS, DHCP and Internet pages too). **Find port** = helper `network.blink_port` →
   `ethtool --identify <iface> 5`, offered for real ports where ethtool is installed.
 
+### The network follows an update (built 2026-10-24)
+
+An update never touched the network (only the web UI restarts), so a change to how a config is
+generated waited for the next Save of its page. `DnsService.resync!`, run by `bin/amahi-update`
+after Samba's push, makes each config again and applies only what differs from the file the
+helper left (Unbound's config, `chosen.json` for the blocklists, dnsmasq's and radvd's configs,
+all 0644 and readable by the app; one that can't be read is written again). The router's rules
+are compared through `router.json`: the settings they were made from, and `rules`, the shape
+number the helper stamps (`ROUTER_RULES_VERSION`, bumped when the rules change shape). The
+update's log says what was applied. Details in `release-1.0.md` §2f.
+
 ### Security at the routing layer (planned 2026-10-23)
 
 The switches, their order and their limits are in [`release-1.0.md`](release-1.0.md) §2c. Built

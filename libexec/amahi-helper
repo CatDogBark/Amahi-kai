@@ -210,6 +210,9 @@ module AmahiHelper
   # the NAS answered pings from the internet.
   ROUTER_FILTER_BEGIN = '# BEGIN amahi-kai router filter'
   ROUTER_FILTER_END = '# END amahi-kai router filter'
+  # The shape of the router's rules, kept in ROUTER_STATE: bumped whenever it changes, so the
+  # app's resync after an update (DnsService.resync!) puts the new shape in place.
+  ROUTER_RULES_VERSION = 2
   PORT_FORWARD_MAX = 50
   # Devices kept off the internet (Network → Devices, LAN only), by address.
   LAN_ONLY_MAX = 200
@@ -3535,7 +3538,7 @@ module AmahiHelper
       previous_pinned = previous ? previous['pinned'] : nil
       state = { 'lan' => lan, 'wan' => wan, 'forwards' => forwards.map { |f| f.transform_keys(&:to_s) },
                 'pinned' => (previous_pinned || {}).merge(pinned), 'dns' => dns, 'tailscale' => tailscale,
-                'lan_only' => lan_only, 'rp_filter' => rp_filter_before, 'since' => Time.now.to_i }
+                'lan_only' => lan_only, 'rp_filter' => rp_filter_before, 'since' => Time.now.to_i, 'rules' => ROUTER_RULES_VERSION }
       do_install(ROUTER_STATE, "#{JSON.generate(state)}\n", nil, '0644')
       nil
     end

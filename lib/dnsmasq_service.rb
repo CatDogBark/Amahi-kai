@@ -82,6 +82,13 @@ module DnsmasqService
     # Write dnsmasq config and restart if running.
     # Options: net, first, last, router, lease_time, interface, dhcp_enabled
     def write_config!(options = {})
+      # Raises Privileged::Error with the reason if the helper refuses or fails.
+      Privileged.call('network.write_dnsmasq_config', content: config_text(options))
+      restart!
+    end
+
+    # The config as it would be written now (DnsService.resync! compares it with the file).
+    def config_text(options = {})
       net = options[:net].presence || '192.168.1'
 
       config_lines = [
@@ -108,9 +115,7 @@ module DnsmasqService
         config_lines << "except-interface=lo"
       end
 
-      # Raises Privileged::Error with the reason if the helper refuses or fails.
-      Privileged.call('network.write_dnsmasq_config', content: config_lines.join("\n") + "\n")
-      restart!
+      config_lines.join("\n") + "\n"
     end
 
     # Restarts dnsmasq so it reads new settings; does nothing if it isn't running.

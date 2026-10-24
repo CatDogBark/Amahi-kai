@@ -1376,7 +1376,7 @@ RSpec.describe 'AmahiHelper' do
                          '/usr/sbin/iptables -w -t nat -D POSTROUTING -j amahi-kai-postrouting', '/usr/sbin/iptables -w -t nat -A POSTROUTING -j amahi-kai-postrouting'])
       state = JSON.parse(File.read(AmahiHelper::ROUTER_STATE))
       expect(state).to include('lan' => 'ens19', 'wan' => 'ens20', 'pinned' => {}, 'dns' => nil, 'tailscale' => false, 'lan_only' => [],
-                               'rp_filter' => { 'all' => '2', 'ens20' => '2' },
+                               'rp_filter' => { 'all' => '2', 'ens20' => '2' }, 'rules' => AmahiHelper::ROUTER_RULES_VERSION,
                                'forwards' => [{ 'protocol' => 'tcp', 'port' => 8080, 'address' => '10.99.0.60', 'to_port' => 80 }])
       expect(state['since']).to be_within(5).of(Time.now.to_i)
     end

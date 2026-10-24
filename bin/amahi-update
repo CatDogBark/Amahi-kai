@@ -317,6 +317,13 @@ else
   log "⚠ Samba config not regenerated; keeping the current one"
 fi
 
+# 3b2. The network's configs (Unbound, the blocklists, dnsmasq, radvd, the router's rules)
+#      are made again and only what differs from what's installed is applied, so a change to
+#      how one is made reaches a NAS whose admin never saves the page again. Nothing while
+#      DNS is off; what was applied is in the log.
+log "Checking the network's configuration..."
+as_app "RAILS_ENV=production bin/rails runner 'puts DnsService.resync_report'" 2>&1 || log "⚠ Network configuration not checked; it stays as it is"
+
 # 3c. Web users' Linux accounts get no login shell and no extra groups (older versions
 #     gave them /bin/sh, and admins the sudo group). Accounts the app didn't create are
 #     left alone.

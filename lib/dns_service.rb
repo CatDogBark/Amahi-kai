@@ -25,6 +25,10 @@ module DnsService
   ROUTER_STATE = '/var/lib/amahi-kai-dns/router.json'
   # The kernel's network counters, the reverse-path drops among them.
   NETSTAT = '/proc/net/netstat'
+  # What the helper has in place, read back after an update (resync!): Unbound's config and
+  # the lists chosen for blocking.
+  UNBOUND_CONF = '/etc/unbound/unbound.conf.d/amahi-kai.conf'
+  BLOCKLIST_CHOSEN = '/var/lib/amahi-kai-dns/chosen.json'
   UFW_CONF = '/etc/ufw/ufw.conf'
   DEFAULT_DOMAIN = 'home.arpa'
   DEFAULT_PROVIDER = 'quad9'
@@ -213,6 +217,64 @@ module DnsService
 
     def tailscale_installed?
       File.exist?('/usr/bin/tailscale')
+    end
+
+    # After an update (bin/amahi-update's network step): each network config is made again and
+    # put in place only where it differs from what's installed, so a change to how one is made
+    # reaches a NAS whose admin never saves the page again. Returns what was applied, in words.
+    # Nothing while DNS is off. A file that can't be read back is written again, to be safe.
+    def resync!
+      return [] unless on? && installed?
+      applied = []
+      if differs?(UNBOUND_CONF, config)
+        rewrite!
+        applied << "Unbound's config"
+      end
+      if blocking? && chosen_blocklists != { 'lists' => blocklists_in_force, 'allow' => allowlist }
+        apply_blocking!
+        applied << 'the blocklists'
+      end
+      if DnsmasqService.installed? && differs?(DnsmasqService::CONFIG_PATH, DnsmasqService.config_text(DnsmasqService.options))
+        DnsmasqService.rewrite_config!
+        applied << "dnsmasq's config"
+      end
+      if ipv6_advertise? && radvd_installed? && differs?(RADVD_CONF, radvd_config)
+        apply_ipv6_advertising!
+        applied << "radvd's config"
+      end
+      if router? && router_stale?
+        apply_router!
+        applied << "the router's rules"
+      end
+      applied
+    end
+
+    # One line for the update's log.
+    def resync_report
+      applied = resync!
+      applied.empty? ? 'Network: nothing to change' : "Network: applied #{applied.join(', ')}"
+    end
+
+    # The router's rules as the helper has them differ from what the settings say now, or were
+    # made by an older shape of the rules (the helper's ROUTER_RULES_VERSION).
+    def router_stale?
+      state = router_state or return true
+      args = router_args
+      state.slice('lan', 'wan', 'dns', 'lan_only') != { 'lan' => args[:lan], 'wan' => args[:wan], 'dns' => args[:dns], 'lan_only' => args[:lan_only] } ||
+        state['forwards'] != args[:forwards].map { |forward| forward.transform_keys(&:to_s) } ||
+        state['tailscale'] != tailscale_installed? || state['rules'] != Privileged.router_rules_version
+    end
+
+    def differs?(path, content)
+      File.read(path) != content
+    rescue SystemCallError
+      true
+    end
+
+    def chosen_blocklists
+      JSON.parse(File.read(BLOCKLIST_CHOSEN)).slice('lists', 'allow')
+    rescue SystemCallError, JSON::ParserError
+      nil
     end
 
     # 'quad9', a key of PROVIDERS, or 'custom'.

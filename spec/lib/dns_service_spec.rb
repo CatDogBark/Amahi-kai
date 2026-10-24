@@ -418,6 +418,74 @@ RSpec.describe DnsService do
     end
   end
 
+  # After an update: each config made again, only what differs put in place.
+  describe '.resync!' do
+    let(:dir) { Dir.mktmpdir }
+
+    before do
+      stub_const('DnsService::UNBOUND_CONF', "#{dir}/amahi-kai.conf")
+      stub_const('DnsService::BLOCKLIST_CHOSEN', "#{dir}/chosen.json")
+      stub_const('DnsService::RADVD_CONF', "#{dir}/radvd.conf")
+      stub_const('DnsService::ROUTER_STATE', "#{dir}/router.json")
+      stub_const('DnsService::UFW_CONF', "#{dir}/ufw.conf")
+      stub_const('DnsmasqService::CONFIG_PATH', "#{dir}/dnsmasq.conf")
+      File.write("#{dir}/ufw.conf", "ENABLED=yes\n")
+      allow(described_class).to receive_messages(installed?: true, running?: true, radvd_installed?: true, radvd_running?: true)
+      allow(DnsmasqService).to receive_messages(installed?: true, running?: false)
+      allow(DnsmasqService).to receive(:rewrite_config!).and_call_original # stubbed for the rest of the file (Host's callbacks)
+      Setting.set('net', '192.168.1')
+    end
+
+    after { FileUtils.rm_rf(dir) }
+
+    it 'does nothing while DNS is off' do
+      expect(described_class.resync!).to eq([])
+      expect(described_class.resync_report).to eq('Network: nothing to change')
+      expect(Privileged.calls).to be_empty
+    end
+
+    it 'puts in place only what differs from the files the helper left, and says what' do
+      Setting.set('dns_mode', 'router')
+      Setting.set('dns_wan_interface', 'ens19')
+      Setting.set('dns_blocking', '1')
+      Setting.set('dns_ipv6_advertise', '1')
+      File.write(described_class::UNBOUND_CONF, described_class.config)
+      File.write(described_class::BLOCKLIST_CHOSEN, "#{JSON.pretty_generate('lists' => described_class.blocklists_in_force, 'allow' => described_class.allowlist)}\n")
+      File.write(DnsmasqService::CONFIG_PATH, DnsmasqService.config_text(DnsmasqService.options))
+      File.write(described_class::RADVD_CONF, described_class.radvd_config)
+      state = described_class.router_args.transform_keys(&:to_s).merge('tailscale' => described_class.tailscale_installed?, 'rules' => Privileged.router_rules_version)
+      File.write(described_class::ROUTER_STATE, JSON.generate(state))
+      expect(described_class.resync!).to eq([])
+      expect(Privileged.calls).to be_empty
+
+      File.write(described_class::UNBOUND_CONF, "# an older shape\n")
+      expect(described_class.resync!).to eq(["Unbound's config"])
+      expect(Privileged.calls.map(&:first)).to eq(%w[dns.write_config services.restart])
+      File.write(described_class::UNBOUND_CONF, described_class.config)
+
+      Privileged.reset!
+      File.write(described_class::BLOCKLIST_CHOSEN, JSON.generate('lists' => ['hagezi-light'], 'allow' => []))
+      File.write(DnsmasqService::CONFIG_PATH, "# an older shape\n")
+      expect(described_class.resync!).to eq(['the blocklists', "dnsmasq's config"])
+      expect(Privileged.calls.map(&:first)).to eq(%w[dns.set_blocklists network.write_dnsmasq_config])
+      File.write(described_class::BLOCKLIST_CHOSEN, "#{JSON.pretty_generate('lists' => described_class.blocklists_in_force, 'allow' => described_class.allowlist)}\n")
+      File.write(DnsmasqService::CONFIG_PATH, DnsmasqService.config_text(DnsmasqService.options))
+
+      Privileged.reset!
+      File.delete(described_class::RADVD_CONF) # can't be read back: written again, to be safe
+      expect(described_class.resync!).to eq(["radvd's config"])
+      expect(Privileged.calls.map(&:first)).to eq(%w[dns.write_radvd_config services.restart])
+      File.write(described_class::RADVD_CONF, described_class.radvd_config)
+
+      Privileged.reset!
+      File.write(described_class::ROUTER_STATE, JSON.generate(state.merge('rules' => Privileged.router_rules_version - 1))) # an older shape of the rules
+      expect(described_class.resync!).to eq(["the router's rules"])
+      expect(Privileged.calls.map(&:first)).to eq(%w[network.router_on])
+      File.write(described_class::ROUTER_STATE, JSON.generate(state.merge('lan_only' => ['192.168.1.52']))) # a device let out since
+      expect(described_class.resync_report).to eq("Network: applied the router's rules")
+    end
+  end
+
   describe '.totals' do
     it "are the helper's counts, or nil without them" do
       expect(described_class.totals).to be_nil # the simulated helper counts nothing
