@@ -145,7 +145,11 @@ A fourth mode, **Router**: DNS + DHCP, and the NAS is the way to the internet.
   it beats any other default route). PPPoE and a static address are later.
 - **Forwarding** is turned on (`ROUTER_SYSCTL`), and UFW does the rest, so it persists and
   reloads with the firewall: a NAT block in `before.rules` (masquerade out of the internet
-  interface, a DNAT in for each port forward), `ufw route allow` from the LAN out, one per
+  interface, a DNAT in for each port forward, in chains of the NAS's own that the block flushes
+  before refilling: `ufw reload` re-reads the file without clearing the nat table, so rules put
+  straight in PREROUTING piled up, a copy per save, and an old copy kept redirecting DNS to the
+  NAS's previous address, found 2026-10-24 by the This NAS test; after each reload the helper
+  keeps one jump into its chains and sweeps out inline copies from before), `ufw route allow` from the LAN out, one per
   forward in, and `deny in on <wan>` first of all the rules, so none of the NAS's own services
   (SSH, the web UI, Samba, DNS, DHCP) answer the internet side. **UFW has to be on** (the
   security audit's fix): router mode refuses otherwise, since without it nothing would stand

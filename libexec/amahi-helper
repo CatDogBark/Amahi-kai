@@ -199,6 +199,12 @@ module AmahiHelper
   UFW_BEFORE_RULES = '/etc/ufw/before.rules'
   ROUTER_BEGIN = '# BEGIN amahi-kai router'
   ROUTER_END = '# END amahi-kai router'
+  # The NAT block's rules live in chains of the NAS's own, which the block flushes before
+  # refilling: UFW's reload re-reads before.rules without clearing the nat table, so rules put
+  # straight in PREROUTING and POSTROUTING pile up, a copy per reload (found 2026-10-24: an old
+  # copy kept redirecting DNS to the NAS's previous address).
+  NAT_PREROUTING = 'amahi-kai-prerouting'
+  NAT_POSTROUTING = 'amahi-kai-postrouting'
   PORT_FORWARD_MAX = 50
   # Tailscale's own port: let in on the internet side so its connections stay direct.
   TAILSCALE_PORT = '41641'
@@ -3488,6 +3494,7 @@ module AmahiHelper
       tailscale = File.executable?(TAILSCALE)
       run_command([UFW, 'insert', '1', 'allow', 'in', 'on', wan, 'to', 'any', 'port', TAILSCALE_PORT, 'proto', 'udp']) if tailscale
       run_command([UFW, 'reload'])
+      settle_router_nat(lan, wan)
       previous_pinned = previous ? previous['pinned'] : nil
       state = { 'lan' => lan, 'wan' => wan, 'forwards' => forwards.map { |f| f.transform_keys(&:to_s) },
                 'pinned' => (previous_pinned || {}).merge(pinned), 'dns' => dns, 'tailscale' => tailscale }
@@ -3504,6 +3511,7 @@ module AmahiHelper
         ufw_router_rules_off(state) if state
         write_router_nat(nil, [])
         run_command([UFW, 'reload', { allow_failure: true }]) if ufw_enabled?
+        clear_router_nat(state)
       end
       do_remove_files(ROUTER_SYSCTL, ROUTER_STATE)
       run_command(['/usr/sbin/sysctl', '-q', '-w', 'net.ipv4.ip_forward=0', { allow_failure: true }])
@@ -3810,20 +3818,65 @@ module AmahiHelper
       content = File.read(UFW_BEFORE_RULES)
       content = content.sub(/#{Regexp.escape(ROUTER_BEGIN)}\n.*?#{Regexp.escape(ROUTER_END)}\n/m, '')
       if wan
-        lines = [ROUTER_BEGIN, '*nat', ':PREROUTING ACCEPT [0:0]', ':POSTROUTING ACCEPT [0:0]']
+        lines = [ROUTER_BEGIN, '*nat', ':PREROUTING ACCEPT [0:0]', ':POSTROUTING ACCEPT [0:0]',
+                 ":#{NAT_PREROUTING} - [0:0]", ":#{NAT_POSTROUTING} - [0:0]", "-F #{NAT_PREROUTING}", "-F #{NAT_POSTROUTING}"]
         if dns && lan
-          %w[udp tcp].each { |proto| lines << "-A PREROUTING -i #{lan} ! -d #{dns} -p #{proto} --dport 53 -j DNAT --to-destination #{dns}:53" }
+          %w[udp tcp].each { |proto| lines << "-A #{NAT_PREROUTING} -i #{lan} ! -d #{dns} -p #{proto} --dport 53 -j DNAT --to-destination #{dns}:53" }
         end
         forwards.each do |f|
-          lines << "-A PREROUTING -i #{wan} -p #{f[:protocol]} --dport #{f[:port]} -j DNAT --to-destination #{f[:address]}:#{f[:to_port]}"
+          lines << "-A #{NAT_PREROUTING} -i #{wan} -p #{f[:protocol]} --dport #{f[:port]} -j DNAT --to-destination #{f[:address]}:#{f[:to_port]}"
         end
-        lines.concat(["-A POSTROUTING -o #{wan} -j MASQUERADE", 'COMMIT', ROUTER_END])
+        lines.concat(["-A #{NAT_POSTROUTING} -o #{wan} -j MASQUERADE", "-A PREROUTING -j #{NAT_PREROUTING}", "-A POSTROUTING -j #{NAT_POSTROUTING}",
+                      'COMMIT', ROUTER_END])
         raise Failed, "#{UFW_BEFORE_RULES} has no filter table to put the NAT block before" unless content.include?("*filter\n")
         content = content.sub("*filter\n", "#{lines.join("\n")}\n*filter\n")
       end
       do_install(UFW_BEFORE_RULES, content, nil, '0640')
     rescue SystemCallError => e
       raise Failed, "couldn't read #{UFW_BEFORE_RULES}: #{e.message}"
+    end
+
+    # After UFW's reload: one jump each into the NAS's nat chains (the reload appended another),
+    # and any rule put straight in the built-in chains by the block as it was before the chains
+    # swept out.
+    def settle_router_nat(lan, wan)
+      { 'PREROUTING' => NAT_PREROUTING, 'POSTROUTING' => NAT_POSTROUTING }.each do |builtin, own|
+        nat_jump_off(builtin, own)
+        run_command([IPTABLES, '-w', '-t', 'nat', '-A', builtin, '-j', own])
+      end
+      sweep_inline_nat(lan, wan)
+    end
+
+    # The way back: the jumps, the NAS's chains and any inline rule from before go.
+    def clear_router_nat(state)
+      { 'PREROUTING' => NAT_PREROUTING, 'POSTROUTING' => NAT_POSTROUTING }.each do |builtin, own|
+        nat_jump_off(builtin, own)
+        run_command([IPTABLES, '-w', '-t', 'nat', '-F', own, { allow_failure: true }])
+        run_command([IPTABLES, '-w', '-t', 'nat', '-X', own, { allow_failure: true }])
+      end
+      sweep_inline_nat(state['lan'], state['wan']) if state
+    end
+
+    # Deletes the jump from +builtin+ into +own+ until none is left (each delete takes one copy).
+    def nat_jump_off(builtin, own)
+      20.times { break if run_command([IPTABLES, '-w', '-t', 'nat', '-D', builtin, '-j', own, { allow_failure: true }]) }
+    end
+
+    # The rules the NAT block put straight in PREROUTING (DNATs in on the two interfaces) and
+    # POSTROUTING (the masquerade out) before it had chains of its own, as many copies as reloads
+    # made. Docker's rules there (its own chain, a masquerade with a source) are left alone.
+    def sweep_inline_nat(lan, wan)
+      return unless lan && wan
+      { 'PREROUTING' => /\A(?=.*-i (?:#{Regexp.escape(lan)}|#{Regexp.escape(wan)}) ).*-j DNAT /,
+        'POSTROUTING' => /\A-o #{Regexp.escape(wan)} -j MASQUERADE\z/ }.each do |builtin, pattern|
+        capture([IPTABLES, '-w', '-t', 'nat', '-S', builtin]).each_line do |line|
+          spec = line.strip.delete_prefix("-A #{builtin} ")
+          next if spec == line.strip || !spec.match?(pattern)
+          run_command([IPTABLES, '-w', '-t', 'nat', '-D', builtin, *spec.split(' '), { allow_failure: true }])
+        end
+      end
+    rescue Failed
+      nil
     end
 
     # Installs Unbound's config (or, given nil, removes it), then has UFW let DNS in to the

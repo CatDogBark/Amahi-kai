@@ -1315,7 +1315,13 @@ RSpec.describe 'AmahiHelper' do
       allow(File).to receive(:executable?).and_call_original
       allow(File).to receive(:executable?).with(AmahiHelper::UFW).and_return(true)
       allow(File).to receive(:executable?).with(AmahiHelper::TAILSCALE).and_return(false)
-      allow(helper).to receive(:run_command) { |argv| ran << argv.reject { |a| a.is_a?(Hash) }.join(' ') && nil }
+      # iptables finds no jump to take out, as on a NAS that hasn't reloaded UFW yet
+      allow(helper).to receive(:run_command) do |argv|
+        ran << argv.reject { |a| a.is_a?(Hash) }.join(' ')
+        argv.first == AmahiHelper::IPTABLES && argv.include?('-D') ? 'ignored: no such rule' : nil
+      end
+      allow(helper).to receive(:capture).with([AmahiHelper::IPTABLES, '-w', '-t', 'nat', '-S', 'PREROUTING']).and_return("-P PREROUTING ACCEPT\n")
+      allow(helper).to receive(:capture).with([AmahiHelper::IPTABLES, '-w', '-t', 'nat', '-S', 'POSTROUTING']).and_return("-P POSTROUTING ACCEPT\n")
     end
 
     after { FileUtils.rm_rf(dir) }
@@ -1353,13 +1359,17 @@ RSpec.describe 'AmahiHelper' do
       expect(File.read(AmahiHelper::ROUTER_SYSCTL)).to eq("net.ipv4.ip_forward = 1\n")
       rules = File.read(AmahiHelper::UFW_BEFORE_RULES)
       expect(rules).to start_with("# rules.before\n# BEGIN amahi-kai router\n*nat\n")
-      expect(rules).to include('-A PREROUTING -i ens20 -p tcp --dport 8080 -j DNAT --to-destination 10.99.0.60:80',
-                               '-A POSTROUTING -o ens20 -j MASQUERADE', "COMMIT\n# END amahi-kai router\n*filter\n")
+      expect(rules).to include(":amahi-kai-prerouting - [0:0]\n:amahi-kai-postrouting - [0:0]\n-F amahi-kai-prerouting\n-F amahi-kai-postrouting\n",
+                               '-A amahi-kai-prerouting -i ens20 -p tcp --dport 8080 -j DNAT --to-destination 10.99.0.60:80',
+                               "-A amahi-kai-postrouting -o ens20 -j MASQUERADE\n-A PREROUTING -j amahi-kai-prerouting\n-A POSTROUTING -j amahi-kai-postrouting\n",
+                               "COMMIT\n# END amahi-kai router\n*filter\n")
       expect(rules).to end_with(before_rules.delete_prefix("# rules.before\n"))
       expect(ran).to eq(["#{AmahiHelper::NETPLAN} generate", "#{AmahiHelper::NETPLAN} apply", '/usr/sbin/sysctl -q -w net.ipv4.ip_forward=1',
                          '/usr/sbin/ufw route allow in on ens19 out on ens20',
                          '/usr/sbin/ufw route allow in on ens20 out on ens19 to 10.99.0.60 port 80 proto tcp',
-                         '/usr/sbin/ufw insert 1 deny in on ens20', '/usr/sbin/ufw reload'])
+                         '/usr/sbin/ufw insert 1 deny in on ens20', '/usr/sbin/ufw reload',
+                         '/usr/sbin/iptables -w -t nat -D PREROUTING -j amahi-kai-prerouting', '/usr/sbin/iptables -w -t nat -A PREROUTING -j amahi-kai-prerouting',
+                         '/usr/sbin/iptables -w -t nat -D POSTROUTING -j amahi-kai-postrouting', '/usr/sbin/iptables -w -t nat -A POSTROUTING -j amahi-kai-postrouting'])
       expect(JSON.parse(File.read(AmahiHelper::ROUTER_STATE))).to eq('lan' => 'ens19', 'wan' => 'ens20', 'pinned' => {}, 'dns' => nil, 'tailscale' => false,
                                                                       'forwards' => [{ 'protocol' => 'tcp', 'port' => 8080, 'address' => '10.99.0.60', 'to_port' => 80 }])
     end
@@ -1368,8 +1378,8 @@ RSpec.describe 'AmahiHelper' do
       allow(File).to receive(:executable?).with(AmahiHelper::TAILSCALE).and_return(true)
       helper.do_router_on('ens19', 'ens20', [], '10.99.0.1')
       rules = File.read(AmahiHelper::UFW_BEFORE_RULES)
-      expect(rules).to include('-A PREROUTING -i ens19 ! -d 10.99.0.1 -p udp --dport 53 -j DNAT --to-destination 10.99.0.1:53',
-                               '-A PREROUTING -i ens19 ! -d 10.99.0.1 -p tcp --dport 53 -j DNAT --to-destination 10.99.0.1:53')
+      expect(rules).to include('-A amahi-kai-prerouting -i ens19 ! -d 10.99.0.1 -p udp --dport 53 -j DNAT --to-destination 10.99.0.1:53',
+                               '-A amahi-kai-prerouting -i ens19 ! -d 10.99.0.1 -p tcp --dport 53 -j DNAT --to-destination 10.99.0.1:53')
       ufw = ran.grep(/ufw/).map { |c| c.delete_prefix('/usr/sbin/ufw ') }
       expect(ufw).to eq(['route allow in on ens19 out on ens20',
                          'route insert 1 deny in on ens19 out on ens20 to any port 853 proto tcp',
@@ -1397,6 +1407,41 @@ RSpec.describe 'AmahiHelper' do
       expect(rules).not_to include('ens20', 'DNAT')
     end
 
+    it "keeps one jump into its chains after UFW's reload, and sweeps out the rules the block used to put straight in" do
+      jumps = { 'PREROUTING' => 2, 'POSTROUTING' => 0 } # copies a reload or two left behind
+      allow(helper).to receive(:run_command) do |argv|
+        ran << argv.reject { |a| a.is_a?(Hash) }.join(' ')
+        next nil unless argv.first == AmahiHelper::IPTABLES && argv.include?('-D') && argv[6] == '-j'
+        if jumps[argv[5]].positive?
+          jumps[argv[5]] -= 1
+          nil
+        else
+          'ignored: no such rule'
+        end
+      end
+      allow(helper).to receive(:capture).with([AmahiHelper::IPTABLES, '-w', '-t', 'nat', '-S', 'PREROUTING']).and_return(<<~RULES)
+        -P PREROUTING ACCEPT
+        -A PREROUTING -m addrtype --dst-type LOCAL -j DOCKER
+        -A PREROUTING -i ens20 -p tcp -m tcp --dport 8080 -j DNAT --to-destination 10.99.0.60:80
+        -A PREROUTING ! -d 10.99.0.1/32 -i ens19 -p udp -m udp --dport 53 -j DNAT --to-destination 10.99.0.1:53
+        -A PREROUTING -j amahi-kai-prerouting
+      RULES
+      allow(helper).to receive(:capture).with([AmahiHelper::IPTABLES, '-w', '-t', 'nat', '-S', 'POSTROUTING']).and_return(<<~RULES)
+        -P POSTROUTING ACCEPT
+        -A POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j MASQUERADE
+        -A POSTROUTING -o ens20 -j MASQUERADE
+        -A POSTROUTING -j amahi-kai-postrouting
+      RULES
+      helper.do_router_on('ens19', 'ens20', [])
+      expect(ran.grep(/iptables/).map { |c| c.delete_prefix('/usr/sbin/iptables -w -t nat ') })
+        .to eq(['-D PREROUTING -j amahi-kai-prerouting', '-D PREROUTING -j amahi-kai-prerouting', '-D PREROUTING -j amahi-kai-prerouting',
+                '-A PREROUTING -j amahi-kai-prerouting',
+                '-D POSTROUTING -j amahi-kai-postrouting', '-A POSTROUTING -j amahi-kai-postrouting',
+                '-D PREROUTING -i ens20 -p tcp -m tcp --dport 8080 -j DNAT --to-destination 10.99.0.60:80',
+                '-D PREROUTING ! -d 10.99.0.1/32 -i ens19 -p udp -m udp --dport 53 -j DNAT --to-destination 10.99.0.1:53',
+                '-D POSTROUTING -o ens20 -j MASQUERADE'])
+    end
+
     it "refuses a netplan file netplan won't take, and leaves nothing behind" do
       allow(helper).to receive(:run_command) { |argv| raise AmahiHelper::Failed, 'netplan exited 1' if argv[1] == 'generate' }
       expect { helper.do_router_on('ens19', 'ens20', []) }.to raise_error(AmahiHelper::Failed, /netplan exited 1/)
@@ -1410,6 +1455,10 @@ RSpec.describe 'AmahiHelper' do
       helper.do_router_off
       expect(ran).to eq(['/usr/sbin/ufw delete deny in on ens20', '/usr/sbin/ufw route delete allow in on ens19 out on ens20',
                          '/usr/sbin/ufw route delete allow in on ens20 out on ens19 to 10.99.0.60 port 80 proto tcp', '/usr/sbin/ufw reload',
+                         '/usr/sbin/iptables -w -t nat -D PREROUTING -j amahi-kai-prerouting', '/usr/sbin/iptables -w -t nat -F amahi-kai-prerouting',
+                         '/usr/sbin/iptables -w -t nat -X amahi-kai-prerouting',
+                         '/usr/sbin/iptables -w -t nat -D POSTROUTING -j amahi-kai-postrouting', '/usr/sbin/iptables -w -t nat -F amahi-kai-postrouting',
+                         '/usr/sbin/iptables -w -t nat -X amahi-kai-postrouting',
                          '/usr/sbin/sysctl -q -w net.ipv4.ip_forward=0', "#{AmahiHelper::NETPLAN} apply", "#{AmahiHelper::IP} -4 addr flush dev ens20"])
       expect(File.read(AmahiHelper::UFW_BEFORE_RULES)).to eq(before_rules)
       expect(%w[WAN_NETPLAN ROUTER_SYSCTL ROUTER_STATE].map { |c| File.exist?(AmahiHelper.const_get(c)) }).to all(be false)

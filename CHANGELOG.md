@@ -12,6 +12,10 @@ All notable changes to Amahi-kai are documented here.
 - **This NAS** (Network → Devices) — The NAS's own address on each network port, set from the page: from the network (your router's DHCP), or fixed, with its network size, router and DNS servers. Nothing needed the terminal before. Changing the address you're connected through moves the page with it: the change is kept only once the NAS answers at the new address, and otherwise the NAS goes back to the old one by itself after 90 seconds, so a wrong address can't lock you out. The shares, DNS, DHCP and the router follow the new address. The internet side in router mode is the Internet page's.
 - **Lists for the devices you have** (Network → DNS, Blocking) — HaGeZi's per-vendor lists, which block a vendor's telemetry hosts and keep the hosts its devices need: Samsung, LG webOS, Roku, Amazon, Apple, Windows and Office, TikTok, Xiaomi. Tick the kinds you own. IPv6 for the house, PPPoE and a static address come later.
 
+### 🔒 Security & Fixes
+
+- **Router mode's NAT rules no longer pile up** — Every save in router mode (a forward, the DNS switch, now an address change) reloaded the firewall, and each reload added another copy of the NAT rules, because UFW re-reads its rules file without clearing the NAT table. The copies were identical until the NAS's address changed; then an old copy kept redirecting devices' DNS to the address the NAS no longer had, and turning router mode off left the rules in place until a reboot. The rules now live in chains of their own that are emptied and refilled each time, and the way back removes them; a NAS that already has old copies is cleaned up on its next save.
+
 ## [0.9.2] — 2026-10-22
 
 The NAS can be your network's DNS server, private and checked, with blocking, and its DHCP server too, all on one page (Network → DNS & DHCP). All of it is off until you turn it on, so a server that doesn't use it only gets the fixes below. It was built and tried on an isolated test network, firewall on and after a reboot; a whole house and Tailscale are still to try ([the list](docs/testing/networking.md)).
