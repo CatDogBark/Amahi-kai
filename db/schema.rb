@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_23_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_24_000000) do
   create_table "cap_accesses", force: :cascade do |t|
     t.integer "user_id"
     t.integer "share_id"
@@ -64,6 +64,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_000000) do
     t.string "name", null: false
     t.string "mac", default: ""
     t.string "address"
+    t.boolean "lan_only", default: false, null: false
   end
 
   create_table "port_forwards", force: :cascade do |t|

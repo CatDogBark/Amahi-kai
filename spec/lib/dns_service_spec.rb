@@ -353,7 +353,10 @@ RSpec.describe DnsService do
       expect(ops.last).to eq('network.router_on')
       expect(ops.index('network.router_on')).to be > ops.index('services.enable')
       expect(Privileged.calls.last.last).to eq(lan: 'ens18', wan: 'ens19', forwards: [{ protocol: 'udp', port: 5000, address: '192.168.1.60', to_port: 5000 }],
-                                               dns: '192.168.1.10')
+                                               dns: '192.168.1.10', lan_only: [])
+      Host.create!(name: 'camera', mac: 'aa:bb:cc:dd:ee:52', address: '52', lan_only: true)
+      Host.create!(name: 'printer', mac: 'aa:bb:cc:dd:ee:53', address: '53')
+      expect(described_class.router_args[:lan_only]).to eq(['192.168.1.52'])
       Privileged.calls.clear
       File.write(described_class::ROUTER_STATE, '{"lan":"ens18","wan":"ens19","forwards":[]}')
       Setting.set('dns_mode', 'dns_dhcp')
@@ -382,6 +385,36 @@ RSpec.describe DnsService do
       Setting.set('dns_wan_interface', 'ens19')
       expect(described_class.rewrite_router!).to be true
       expect(Privileged.calls.map(&:first)).to eq(%w[network.router_on])
+    end
+
+    it "counts what the internet side dropped, since the later of boot and the rules' load, only while the NAS is the router" do
+      expect(described_class.wan_drops).to be_nil
+      Setting.set('dns_mode', 'router')
+      Setting.set('dns_wan_interface', 'ens19')
+      expect(described_class.wan_drops).to be_nil # no state file: the rules aren't in place
+      loaded = Time.now.to_i - 600
+      File.write(described_class::ROUTER_STATE, JSON.generate('lan' => 'ens18', 'wan' => 'ens19', 'forwards' => [], 'since' => loaded))
+      allow(Privileged).to receive(:call).with('network.wan_drops').and_return('ok' => true, 'dropped' => 42, 'since' => loaded)
+      allow(described_class).to receive(:boot_time).and_return(Time.at(loaded - 3600))
+      expect(described_class.wan_drops).to eq(dropped: 42, since: Time.at(loaded))
+      allow(described_class).to receive(:boot_time).and_return(Time.at(loaded + 60)) # rebooted since: the counters started over then
+      expect(described_class.wan_drops[:since]).to eq(Time.at(loaded + 60))
+      allow(Privileged).to receive(:call).with('network.wan_drops').and_raise(Privileged::Error.new('network.wan_drops', 'no'))
+      expect(described_class.wan_drops).to be_nil
+    end
+
+    it "reads the kernel's count of packets that failed the reverse-path check" do
+      Tempfile.create('netstat') do |file|
+        file.write("TcpExt: SyncookiesSent IPReversePathFilter TCPPureAcks\nTcpExt: 0 17 12345\nIpExt: InNoRoutes\nIpExt: 2\n")
+        file.flush
+        expect(described_class.spoof_drops(file.path)).to eq(17)
+        file.rewind
+        file.truncate(0)
+        file.write("TcpExt: SyncookiesSent\nTcpExt: 0\n")
+        file.flush
+        expect(described_class.spoof_drops(file.path)).to be_nil
+      end
+      expect(described_class.spoof_drops('/nonexistent/netstat')).to be_nil
     end
   end
 

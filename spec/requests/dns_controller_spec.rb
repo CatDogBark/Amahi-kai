@@ -45,6 +45,22 @@ describe 'Network → DNS & DHCP', type: :request do
       expect(response.body).to include('The NAS as your router', 'Turn DHCP on first')
     end
 
+    it "shows what the internet side dropped and the devices kept off the internet while the NAS is the router" do
+      allow(DnsService).to receive_messages(installed?: true, running?: true, check: { local: 1, outside: 24 }, wan_interface: 'ens19',
+                                            router_state: { 'lan' => 'ens18', 'wan' => 'ens19', 'forwards' => [], 'dns' => nil },
+                                            wan_drops: { dropped: 1234, since: Time.new(2026, 10, 24, 9, 5) }, spoof_drops: 7, firewall_on?: true)
+      allow(NetworkInterfaces).to receive(:addresses).and_call_original
+      allow(NetworkInterfaces).to receive(:addresses).with('ens19').and_return([NetworkInterfaces::Address.new(ip: IPAddr.new('10.77.0.200'), prefix: 24)])
+      allow(NetworkInterfaces).to receive(:default_route).and_return(%w[ens19 10.77.0.1])
+      Setting.set('dns_mode', 'router')
+      Setting.set('dns_wan_interface', 'ens19')
+      Host.create!(name: 'camera', mac: 'aa:bb:cc:dd:ee:52', address: '52', lan_only: true)
+      get '/network/internet'
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include('1,234 connection attempts at the NAS dropped since 09:05', '7 packets claiming an address inside your network dropped',
+                                        'camera: on the LAN only')
+    end
+
     it 'shows how it is answering while it is on' do
       allow(DnsService).to receive_messages(installed?: true, running?: true, check: { local: 1, outside: 24 })
       Setting.set('dns_mode', 'dns')
@@ -307,7 +323,7 @@ describe 'Network → DNS & DHCP', type: :request do
         expect(flash[:notice]).to include('The NAS is the router')
         expect([Setting.get('dns_mode'), Setting.get('dns_wan_interface')]).to eq(%w[router ens19])
         expect(Privileged.calls.map(&:first)).to eq(%w[dns.write_config services.enable dns.blocking_off network.write_dnsmasq_config services.enable network.router_on])
-        expect(Privileged.calls.last.last).to eq(lan: 'ens18', wan: 'ens19', forwards: [], dns: '192.168.1.10')
+        expect(Privileged.calls.last.last).to eq(lan: 'ens18', wan: 'ens19', forwards: [], dns: '192.168.1.10', lan_only: [])
         expect(Privileged.calls[3].last[:content]).to include('dhcp-option=option:router,192.168.1.10')
         expect(Setting.get('dns_force_nas')).to eq('1')
       end
@@ -341,7 +357,7 @@ describe 'Network → DNS & DHCP', type: :request do
         Setting.set('dns_wan_interface', 'ens19')
         post '/network/dns/forwards', params: { port_forward: { port: '8080', protocol: 'tcp', address: '60', to_port: '80', name: 'camera' } }
         expect(flash[:notice]).to eq('Forwarding tcp 8080 → 80 to 192.168.1.60.')
-        expect(Privileged.calls.last).to eq(['network.router_on', { lan: 'ens18', wan: 'ens19', forwards: [{ protocol: 'tcp', port: 8080, address: '192.168.1.60', to_port: 80 }], dns: '192.168.1.10' }])
+        expect(Privileged.calls.last).to eq(['network.router_on', { lan: 'ens18', wan: 'ens19', forwards: [{ protocol: 'tcp', port: 8080, address: '192.168.1.60', to_port: 80 }], dns: '192.168.1.10', lan_only: [] }])
         post '/network/dns/forwards', params: { port_forward: { port: '8080', protocol: 'tcp', address: '61' } }
         expect(flash[:alert]).to include('forwarded already')
         delete "/network/dns/forwards/#{PortForward.last.id}"

@@ -115,6 +115,13 @@ the card that appears: a port, a protocol, the device (give it a fixed address o
 first) and its port. The NAS's own services (SSH, the web UI, Samba, DNS) never answer the
 internet side.
 
+The page counts what the internet side dropped: **connection attempts** at the NAS from the
+internet since the rules were loaded (every save of this page, and a restart, starts the count
+over; attempts are normal, the internet knocks on every address), and **forged packets**, ones
+arriving from the internet that claim an address inside your own network, which the kernel
+drops before anything sees them. It also lists the devices kept **LAN only** (Network →
+Devices).
+
 **The way back:** turn the switch off, move the provider's cable back to your router, and turn
 its DHCP on again. While the NAS is off or restarting, the house has no
 internet: a System Update is a minute of that.
@@ -233,6 +240,13 @@ one by hand):
 
 The name answers in DNS (`printer.home.arpa`, and `printer`) while DNS is on. While the NAS hands
 out addresses (DNS + DHCP), the device always gets this one.
+
+**LAN only** on a fixed device keeps it off the internet while the NAS is the router (Network →
+Internet): it still reaches the shares, DNS, the NAS and every other device on the LAN, but
+nothing beyond. For a TV, a camera or a toy that has no business out there. *Internet again*
+undoes it. The device needs a fixed address because the rule is by address. While the NAS
+isn't the router yet, the setting waits for when it is. Network → Internet lists the devices
+kept off.
 
 ---
 

@@ -231,8 +231,24 @@ tracker lists (HaGeZi's `native.*`, shown as "Devices you have"), and Tailscale'
 on the WAN when `/usr/bin/tailscale` exists, in front of the deny. Tried on the island the same
 day: from the client, lookups aimed at 8.8.8.8 and 1.1.1.1 (UDP and TCP) came back with the NAS's
 answers (a local name, a blocked domain as 0.0.0.0), `dns.google` resolved to 0.0.0.0, port 853 out
-timed out while 443 and the internet worked. The Network tab's split (§2d) comes before per-device
-LAN only, anti-spoofing and the dropped-attempts count.
+timed out while 443 and the internet worked.
+
+Built 2026-10-24, items 4 and 5. **LAN only** (Network → Devices): a `hosts.lan_only` flag on a
+fixed device, carried to `network.router_on` as `lan_only` (addresses) and put in as
+`ufw route insert 1 deny in on <lan> out on <wan> from <address>`, ahead of the LAN's allow; the
+Host model rewrites the router's rules when the flag, the address or the device changes while
+the NAS is the router (the flag waits otherwise). By address, not MAC: a wireless relay rewrites
+frames' source MACs while the DHCP lease keeps the device's own. **Anti-spoofing**: strict
+reverse-path filtering on the internet side. Ubuntu sets every interface loose (`rp_filter = 2`)
+and the kernel takes the stricter of `all` and the interface's own, so the router's sysctl
+drop-in sets `all` and the WAN to 1 (the LAN's own 2 keeps it loose there), live too; the values
+from before are kept in `router.json` (`rp_filter`) and put back on the way out. A packet from
+the internet claiming one of the NAS's own networks never reaches netfilter, so there's no UFW
+rule to count it; the kernel's `IPReversePathFilter` (`/proc/net/netstat`, readable by the app)
+is the count, since boot. **Dropped attempts**: the packet counter of UFW's
+`deny in on <wan>` rule, read by `network.wan_drops` (`iptables -L ufw-user-input -v -n -x`),
+shown with the later of the rules' load (`router.json` `since`) and boot, when UFW's counters
+start over.
 
 ### Later
 

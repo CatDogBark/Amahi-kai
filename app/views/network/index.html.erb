@@ -95,9 +95,9 @@
     </div>
     <div class="card-body">
       <% if @dhcp_on %>
-        <p class="text-muted small">The devices the NAS has given an address to, and when their address comes up for renewal. A <strong>fixed</strong> address stays with the device (by its hardware address) every time, which port forwards and names rely on.</p>
+        <p class="text-muted small">The devices the NAS has given an address to, and when their address comes up for renewal. A <strong>fixed</strong> address stays with the device (by its hardware address) every time, which port forwards and names rely on. <strong>LAN only</strong> keeps a fixed device off the internet while the NAS is the router (<a href="<%= dns_internet_path %>">Network → Internet</a>): it still reaches the shares, DNS and everything on the LAN, but nothing beyond. For a TV, a camera or a toy that has no business out there.</p>
       <% else %>
-        <p class="text-muted small">Devices appear here while the NAS hands out addresses (<a href="<%= dns_dhcp_path %>">Network → DHCP</a>). A <strong>fixed</strong> address can still be given below: the device answers by its name in DNS (<code>name.<%= @domain %></code>), and gets that address once the NAS hands them out.</p>
+        <p class="text-muted small">Devices appear here while the NAS hands out addresses (<a href="<%= dns_dhcp_path %>">Network → DHCP</a>). A <strong>fixed</strong> address can still be given below: the device answers by its name in DNS (<code>name.<%= @domain %></code>), and gets that address once the NAS hands them out. <strong>LAN only</strong> keeps a fixed device off the internet once the NAS is the router.</p>
       <% end %>
 
       <% if @devices.any? || @unseen_hosts.any? %>
@@ -112,12 +112,14 @@
                 <td>
                   <% if device[:host] %>
                     Fixed at <code><%= @net %>.<%= device[:host].address %></code>
+                    <% if device[:host].lan_only %><span class="badge bg-secondary ms-1">LAN only</span><% end %>
                   <% else %>
                     Renews in <%= distance_of_time_in_words(Time.now, device[:expires]) %>
                   <% end %>
                 </td>
                 <td class="text-end">
                   <% if device[:host] %>
+                    <%= button_to device[:host].lan_only ? 'Internet again' : 'LAN only', network_toggle_lan_only_path(device[:host]), class: 'btn btn-sm btn-outline-secondary me-1', form_class: 'd-inline' %>
                     <%= button_to 'Unfix', network_destroy_host_path(device[:host]), method: :delete, class: 'btn btn-sm btn-outline-secondary', form_class: 'd-inline' %>
                   <% else %>
                     <form action="<%= network_hosts_path %>" method="post" class="d-inline">
@@ -136,8 +138,11 @@
                 <td><%= host.name %></td>
                 <td><code><%= @net %>.<%= host.address %></code></td>
                 <td><code><%= host.mac %></code></td>
-                <td>Fixed; not seen now</td>
-                <td class="text-end"><%= button_to 'Unfix', network_destroy_host_path(host), method: :delete, class: 'btn btn-sm btn-outline-secondary', form_class: 'd-inline' %></td>
+                <td>Fixed; not seen now<% if host.lan_only %> <span class="badge bg-secondary ms-1">LAN only</span><% end %></td>
+                <td class="text-end">
+                  <%= button_to host.lan_only ? 'Internet again' : 'LAN only', network_toggle_lan_only_path(host), class: 'btn btn-sm btn-outline-secondary me-1', form_class: 'd-inline' %>
+                  <%= button_to 'Unfix', network_destroy_host_path(host), method: :delete, class: 'btn btn-sm btn-outline-secondary', form_class: 'd-inline' %>
+                </td>
               </tr>
             <% end %>
           </tbody>

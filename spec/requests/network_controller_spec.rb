@@ -69,6 +69,30 @@ describe "Network Controller", type: :request do
         expect { delete "/network/host/#{host.id}" }.to change(Host, :count).by(-1)
         expect(flash[:notice]).to eq("testhost no longer has a fixed address.")
       end
+
+      it "keeps a fixed device off the internet and lets it out again, rewriting the router's rules while the NAS is the router" do
+        host = Host.create!(name: "camera", mac: "aa:bb:cc:dd:ee:02", address: "52")
+        allow(NetworkAddress).to receive_messages(interfaces: [], nameservers: [], state: nil)
+        allow(NetworkPorts).to receive(:all).and_return({})
+        post "/network/host/#{host.id}/lan_only"
+        expect(response).to redirect_to("/network")
+        expect(flash[:notice]).to eq("camera can't reach the internet once the NAS is the router; the LAN still works for it.")
+        expect(host.reload.lan_only).to be true
+        expect(Privileged.calls.map(&:first)).not_to include('network.router_on') # not the router yet: the flag waits
+        get "/network"
+        expect(response.body).to include("LAN only</span>", ">Internet again</button>")
+
+        allow(DnsService).to receive_messages(router?: true, on?: true, wan_interface: 'ens20', interface: 'ens18', lan_prefix: '192.168.1')
+        Privileged.reset!
+        post "/network/host/#{host.id}/lan_only"
+        expect(flash[:notice]).to eq("camera reaches the internet again.")
+        expect(host.reload.lan_only).to be false
+        router_on = Privileged.calls.find { |op, _args| op == 'network.router_on' }
+        expect(router_on).not_to be_nil
+        expect(router_on.last[:lan_only]).to eq([])
+        post "/network/host/#{host.id}/lan_only"
+        expect(Privileged.calls.last[1][:lan_only]).to eq(['192.168.1.52'])
+      end
     end
 
     describe "This NAS (its own address on each port)" do

@@ -81,6 +81,17 @@ What the router can't do, said plainly on the page: inspect encrypted traffic, s
 telemetry from the service on the same host (the curated lists are the limit), or keep devices
 from each other on one flat network (the access point's or VLANs' job).
 
+Done 2026-10-24, items 4 and 5: **LAN only** on a fixed device's row (Network → Devices; a
+`hosts.lan_only` flag, a `ufw route deny in on <lan> out on <wan> from <address>` ahead of the
+LAN's allow, by address because a wireless relay rewrites frames' MACs; rewritten whenever the
+flag, the address or the device changes while the NAS is the router, and waiting for router
+mode otherwise). **Anti-spoofing**: strict reverse-path filtering on the internet side
+(`net.ipv4.conf.all.rp_filter = 1` and the WAN's own; the kernel takes the stricter of the two,
+so the LAN's own 2 keeps it loose there), put back on the way out; the kernel's
+`IPReversePathFilter` counter is the count of forged packets. **Dropped attempts**: the
+`deny in on <wan>` rule's packet counter, read by the helper (`network.wan_drops`), shown on the
+Internet page with the time the rules were loaded (every router-mode save and boot zero it).
+
 ## 2d. The Network tab, split
 
 DNS & DHCP holds DNS, DHCP, router, blocking, IPv6, forwards and totals already, and 2c adds

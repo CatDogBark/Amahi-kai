@@ -136,6 +136,20 @@ class NetworkController < ApplicationController
     redirect_to network_index_path
   end
 
+  # LAN only: a device with a fixed address keeps the LAN (the shares, DNS, the NAS) but can't
+  # reach the internet through the NAS, by a router rule on its address (Host applies it while
+  # the NAS is the router; otherwise the flag waits for router mode).
+  def toggle_lan_only
+    host = Host.find(params[:id])
+    host.update!(lan_only: !host.lan_only)
+    flash[:notice] = if host.lan_only
+                       "#{host.name} can't reach the internet#{' once the NAS is the router' unless DnsService.router?}; the LAN still works for it."
+                     else
+                       "#{host.name} reaches the internet again."
+                     end
+    redirect_to network_index_path
+  end
+
   private
 
   def set_page_title

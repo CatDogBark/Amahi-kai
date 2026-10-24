@@ -1322,6 +1322,7 @@ RSpec.describe 'AmahiHelper' do
       end
       allow(helper).to receive(:capture).with([AmahiHelper::IPTABLES, '-w', '-t', 'nat', '-S', 'PREROUTING']).and_return("-P PREROUTING ACCEPT\n")
       allow(helper).to receive(:capture).with([AmahiHelper::IPTABLES, '-w', '-t', 'nat', '-S', 'POSTROUTING']).and_return("-P POSTROUTING ACCEPT\n")
+      allow(helper).to receive(:rp_filter_values).and_return('all' => '2', 'ens20' => '2') # Ubuntu's loose setting, as read
     end
 
     after { FileUtils.rm_rf(dir) }
@@ -1333,8 +1334,8 @@ RSpec.describe 'AmahiHelper' do
       expect(refusal('network.router_on', args)).to include('must differ')
       real = Socket.getifaddrs.map(&:name).uniq.find { |n| n != 'lo' } or skip 'no second interface here'
       args['wan'] = real
-      expect(steps('network.router_on', args)).to eq([[:router_on, 'lo', real, [], nil]])
-      expect(steps('network.router_on', args.merge('dns' => '127.0.0.1'))).to eq([[:router_on, 'lo', real, [], '127.0.0.1']])
+      expect(steps('network.router_on', args)).to eq([[:router_on, 'lo', real, [], nil, []]])
+      expect(steps('network.router_on', args.merge('dns' => '127.0.0.1'))).to eq([[:router_on, 'lo', real, [], '127.0.0.1', []]])
       expect(refusal('network.router_on', args.merge('dns' => '10.9.9.9'))).to include("isn't an IPv4 address of the NAS's")
       File.write("#{dir}/ufw.conf", "ENABLED=no\n")
       expect(refusal('network.router_on', args)).to include('firewall must be on')
@@ -1356,7 +1357,7 @@ RSpec.describe 'AmahiHelper' do
       helper.do_router_on('ens19', 'ens20', forwards)
       expect(File.read(AmahiHelper::WAN_NETPLAN)).to include('    ens20:', 'dhcp4: true', 'dhcp6: false', 'route-metric: 50')
       expect(File.stat(AmahiHelper::WAN_NETPLAN).mode & 0o777).to eq(0o600)
-      expect(File.read(AmahiHelper::ROUTER_SYSCTL)).to eq("net.ipv4.ip_forward = 1\n")
+      expect(File.read(AmahiHelper::ROUTER_SYSCTL)).to eq("net.ipv4.ip_forward = 1\nnet.ipv4.conf.all.rp_filter = 1\nnet.ipv4.conf.ens20.rp_filter = 1\n")
       rules = File.read(AmahiHelper::UFW_BEFORE_RULES)
       expect(rules).to start_with("# rules.before\n# BEGIN amahi-kai router\n*nat\n")
       expect(rules).to include(":amahi-kai-prerouting - [0:0]\n:amahi-kai-postrouting - [0:0]\n-F amahi-kai-prerouting\n-F amahi-kai-postrouting\n",
@@ -1364,14 +1365,53 @@ RSpec.describe 'AmahiHelper' do
                                "-A amahi-kai-postrouting -o ens20 -j MASQUERADE\n-A PREROUTING -j amahi-kai-prerouting\n-A POSTROUTING -j amahi-kai-postrouting\n",
                                "COMMIT\n# END amahi-kai router\n*filter\n")
       expect(rules).to end_with(before_rules.delete_prefix("# rules.before\n"))
-      expect(ran).to eq(["#{AmahiHelper::NETPLAN} generate", "#{AmahiHelper::NETPLAN} apply", '/usr/sbin/sysctl -q -w net.ipv4.ip_forward=1',
+      expect(ran).to eq(["#{AmahiHelper::NETPLAN} generate", "#{AmahiHelper::NETPLAN} apply",
+                         '/usr/sbin/sysctl -q -w net.ipv4.ip_forward=1 net.ipv4.conf.all.rp_filter=1 net.ipv4.conf.ens20.rp_filter=1',
                          '/usr/sbin/ufw route allow in on ens19 out on ens20',
                          '/usr/sbin/ufw route allow in on ens20 out on ens19 to 10.99.0.60 port 80 proto tcp',
                          '/usr/sbin/ufw insert 1 deny in on ens20', '/usr/sbin/ufw reload',
                          '/usr/sbin/iptables -w -t nat -D PREROUTING -j amahi-kai-prerouting', '/usr/sbin/iptables -w -t nat -A PREROUTING -j amahi-kai-prerouting',
                          '/usr/sbin/iptables -w -t nat -D POSTROUTING -j amahi-kai-postrouting', '/usr/sbin/iptables -w -t nat -A POSTROUTING -j amahi-kai-postrouting'])
-      expect(JSON.parse(File.read(AmahiHelper::ROUTER_STATE))).to eq('lan' => 'ens19', 'wan' => 'ens20', 'pinned' => {}, 'dns' => nil, 'tailscale' => false,
-                                                                      'forwards' => [{ 'protocol' => 'tcp', 'port' => 8080, 'address' => '10.99.0.60', 'to_port' => 80 }])
+      state = JSON.parse(File.read(AmahiHelper::ROUTER_STATE))
+      expect(state).to include('lan' => 'ens19', 'wan' => 'ens20', 'pinned' => {}, 'dns' => nil, 'tailscale' => false, 'lan_only' => [],
+                               'rp_filter' => { 'all' => '2', 'ens20' => '2' },
+                               'forwards' => [{ 'protocol' => 'tcp', 'port' => 8080, 'address' => '10.99.0.60', 'to_port' => 80 }])
+      expect(state['since']).to be_within(5).of(Time.now.to_i)
+    end
+
+    it "keeps devices off the internet by address, counts what the internet side dropped, and puts the reverse-path settings back" do
+      expect { helper.lan_only_addresses(['8.8.8.8']) }.to raise_error(AmahiHelper::Refused, /private IPv4/)
+      expect { helper.lan_only_addresses(['10.99.0.60'] * 201) }.to raise_error(AmahiHelper::Refused, /up to 200/)
+      expect(helper.lan_only_addresses(['10.99.0.60', '10.99.0.60', '10.99.0.61'])).to eq(['10.99.0.60', '10.99.0.61'])
+
+      helper.do_router_on('ens19', 'ens20', [], nil, ['10.99.0.60', '10.99.0.61'])
+      expect(ran).to include('/usr/sbin/ufw route insert 1 deny in on ens19 out on ens20 from 10.99.0.60',
+                             '/usr/sbin/ufw route insert 1 deny in on ens19 out on ens20 from 10.99.0.61')
+      expect(ran.index('/usr/sbin/ufw route insert 1 deny in on ens19 out on ens20 from 10.99.0.60')).to be > ran.index('/usr/sbin/ufw route allow in on ens19 out on ens20')
+      expect(JSON.parse(File.read(AmahiHelper::ROUTER_STATE))['lan_only']).to eq(['10.99.0.60', '10.99.0.61'])
+
+      allow(helper).to receive(:capture).with([AmahiHelper::IPTABLES, '-w', '-L', 'ufw-user-input', '-v', '-n', '-x']).and_return(<<~RULES)
+        Chain ufw-user-input (1 references)
+            pkts      bytes target     prot opt in     out     source               destination
+              12      720 DROP       all  --  ens20  *       0.0.0.0/0            0.0.0.0/0
+               3      180 ACCEPT     tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            tcp dpt:22
+      RULES
+      expect(helper.do_wan_drops).to include('dropped' => 12)
+      expect(helper.do_wan_drops['since']).to be_within(5).of(Time.now.to_i)
+
+      ran.clear
+      helper.do_router_on('ens19', 'ens20', [], nil, ['10.99.0.61']) # one device let out again: the old rules go first
+      expect(ran).to include('/usr/sbin/ufw route delete deny in on ens19 out on ens20 from 10.99.0.60',
+                             '/usr/sbin/ufw route delete deny in on ens19 out on ens20 from 10.99.0.61',
+                             '/usr/sbin/ufw route insert 1 deny in on ens19 out on ens20 from 10.99.0.61')
+      expect(ran).not_to include('/usr/sbin/ufw route insert 1 deny in on ens19 out on ens20 from 10.99.0.60')
+      expect(JSON.parse(File.read(AmahiHelper::ROUTER_STATE))['rp_filter']).to eq('all' => '2', 'ens20' => '2') # as before router mode, kept across saves
+
+      ran.clear
+      helper.do_router_off
+      expect(ran).to include('/usr/sbin/ufw route delete deny in on ens19 out on ens20 from 10.99.0.61',
+                             '/usr/sbin/sysctl -q -w net.ipv4.ip_forward=0 net.ipv4.conf.all.rp_filter=2 net.ipv4.conf.ens20.rp_filter=2')
+      expect { helper.do_wan_drops }.to raise_error(AmahiHelper::Refused, /isn't the router/)
     end
 
     it "sends devices' lookups to the NAS, keeps their own encrypted DNS in, and lets Tailscale's port through" do
@@ -1459,7 +1499,8 @@ RSpec.describe 'AmahiHelper' do
                          '/usr/sbin/iptables -w -t nat -X amahi-kai-prerouting',
                          '/usr/sbin/iptables -w -t nat -D POSTROUTING -j amahi-kai-postrouting', '/usr/sbin/iptables -w -t nat -F amahi-kai-postrouting',
                          '/usr/sbin/iptables -w -t nat -X amahi-kai-postrouting',
-                         '/usr/sbin/sysctl -q -w net.ipv4.ip_forward=0', "#{AmahiHelper::NETPLAN} apply", "#{AmahiHelper::IP} -4 addr flush dev ens20"])
+                         '/usr/sbin/sysctl -q -w net.ipv4.ip_forward=0 net.ipv4.conf.all.rp_filter=2 net.ipv4.conf.ens20.rp_filter=2',
+                         "#{AmahiHelper::NETPLAN} apply", "#{AmahiHelper::IP} -4 addr flush dev ens20"])
       expect(File.read(AmahiHelper::UFW_BEFORE_RULES)).to eq(before_rules)
       expect(%w[WAN_NETPLAN ROUTER_SYSCTL ROUTER_STATE].map { |c| File.exist?(AmahiHelper.const_get(c)) }).to all(be false)
       ran.clear

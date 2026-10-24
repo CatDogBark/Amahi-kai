@@ -104,6 +104,9 @@ class DnsController < ApplicationController
     @default_route = NetworkInterfaces.default_route
     @firewall_on = DnsService.firewall_on?
     @forwards = PortForward.order(:protocol, :port)
+    @wan_drops = DnsService.wan_drops
+    @spoof_drops = DnsService.spoof_drops
+    @lan_only = Host.where(lan_only: true).order(:name)
     @force_dns = DnsService.force_dns?
     @tailscale_installed = DnsService.tailscale_installed?
     @blocking = DnsService.blocking?

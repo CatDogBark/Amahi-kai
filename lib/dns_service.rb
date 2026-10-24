@@ -23,6 +23,8 @@ module DnsService
   MODES = %w[off dns dns_dhcp router].freeze
   # What the root helper has in place while the NAS is the router (root writes it; anyone may read).
   ROUTER_STATE = '/var/lib/amahi-kai-dns/router.json'
+  # The kernel's network counters, the reverse-path drops among them.
+  NETSTAT = '/proc/net/netstat'
   UFW_CONF = '/etc/ufw/ufw.conf'
   DEFAULT_DOMAIN = 'home.arpa'
   DEFAULT_PROVIDER = 'quad9'
@@ -179,7 +181,34 @@ module DnsService
 
     def router_args
       { lan: interface, wan: wan_interface, forwards: PortForward.for_helper(lan_prefix),
-        dns: (force_dns? ? server_addresses.first : nil) }
+        dns: (force_dns? ? server_addresses.first : nil), lan_only: Host.lan_only_addresses(lan_prefix) }
+    end
+
+    # What the internet side dropped while the NAS is the router: { dropped: packets, since:
+    # Time }, or nil. UFW's counters start over at boot and when its rules reload (every
+    # router-mode save), so since is the later of the two.
+    def wan_drops
+      return nil unless router? && (state = router_state)
+      reply = Privileged.call('network.wan_drops')
+      { dropped: reply['dropped'], since: Time.at([state['since'].to_i, boot_time.to_i].max) }
+    rescue Privileged::Error
+      nil
+    end
+
+    # Packets the kernel dropped for claiming a source address it would route elsewhere
+    # (spoofed, from the internet side while that's strict), since boot; nil if unknown.
+    def spoof_drops(path = NETSTAT)
+      names, values = File.readlines(path).grep(/\ATcpExt:/).first(2).map { |line| line.split.drop(1) }
+      index = names&.index('IPReversePathFilter') or return nil
+      values[index].to_i
+    rescue SystemCallError
+      nil
+    end
+
+    def boot_time
+      Time.now - File.read('/proc/uptime').to_f
+    rescue SystemCallError
+      Time.now
     end
 
     def tailscale_installed?

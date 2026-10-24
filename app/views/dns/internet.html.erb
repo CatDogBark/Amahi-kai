@@ -42,6 +42,30 @@
               <% end %>
             <% end %>
           </dd>
+          <% if @router_state %>
+            <dt>From the internet</dt>
+            <dd>
+              <% if @wan_drops && @wan_drops[:dropped] %>
+                <%= number_with_delimiter(@wan_drops[:dropped]) %> connection <%= @wan_drops[:dropped] == 1 ? 'attempt' : 'attempts' %> at the NAS dropped since <%= @wan_drops[:since].strftime('%H:%M') %> (the rules were loaded then);
+              <% else %>
+                the count of dropped connection attempts isn't available;
+              <% end %>
+              <% if @spoof_drops %>
+                <%= number_with_delimiter(@spoof_drops) %> <%= @spoof_drops == 1 ? 'packet' : 'packets' %> claiming an address inside your network dropped since the NAS started.
+              <% else %>
+                spoofed packets aren't counted on this kernel.
+              <% end %>
+              <span class="text-muted small">Attempts are normal: the internet knocks on every address. A packet from the internet with a source address of your own network is forged, and the kernel drops it before anything sees it.</span>
+            </dd>
+            <dt>Kept off the internet</dt>
+            <dd>
+              <% if @lan_only.any? %>
+                <%= @lan_only.map(&:name).join(', ') %>: on the LAN only (<a href="<%= network_index_path %>">Network → Devices</a>).
+              <% else %>
+                no device; <em>LAN only</em> on a fixed device (<a href="<%= network_index_path %>">Network → Devices</a>) keeps it off the internet.
+              <% end %>
+            </dd>
+          <% end %>
         </dl>
       <% end %>
     </div>
