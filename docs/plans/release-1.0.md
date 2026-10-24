@@ -112,7 +112,22 @@ connected through is applied after the reply and kept only once a request reache
 new address (`network.keep_address`, from the moving page's probe or the admin arriving);
 otherwise the helper's timer puts the old settings back after 90 s. The `net` and `self-address`
 settings, DNS, DHCP, the router and Samba follow the new address. The internet side in router mode
-stays the Internet page's. Built 2026-10-24, island-tested on the test VM's LAN leg.
+stays the Internet page's. Built 2026-10-24, island-tested on the test VM's LAN leg. The same
+day: each port says what it is (model or virtual), its link and MAC, takes a name of the admin's
+shown wherever it comes up, and a real port's light can be blinked to find it.
+
+## 2f. The network follows an update
+
+An update never touches the network: Unbound, dnsmasq, UFW and the kernel run off the files the
+helper wrote, and only the web UI restarts. So a change to how a config is *generated* that
+ships in an update does nothing until the next Save of that page (the NAT-chain fix of
+2026-10-24 reached the test VM only when the Internet page was saved again), and someone on
+`releases` has no reason to Save. Before 1.0, `bin/amahi-update` ends with a resync: while DNS is
+on, regenerate every network config (Unbound, the blocklist choice, dnsmasq, radvd, the router's
+netplan and NAT block, the UFW rules) and apply only what differs from what's installed, each
+through the helper as the pages do. A normal update stays a no-op for the network; one that
+changes Unbound's config restarts it (about two seconds of DNS), one that changes the NAT block
+reloads UFW. Decided 2026-10-24 (CatDogBark).
 
 ## 3. Signed updates
 
