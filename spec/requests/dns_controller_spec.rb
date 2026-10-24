@@ -10,6 +10,8 @@ describe 'Network → DNS & DHCP', type: :request do
     allow(NetworkInterfaces).to receive(:addresses).with('ens18').and_return([lan])
     allow(DnsService).to receive(:running?).and_return(false)
     allow(DnsmasqService).to receive_messages(installed?: false, running?: false)
+    # Every save ends with Samba following the LAN interface (its own spec in samba_service_spec)
+    allow(SambaService).to receive(:follow_interfaces!)
   end
 
   it 'is for admins only' do
