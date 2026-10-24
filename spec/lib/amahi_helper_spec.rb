@@ -1727,6 +1727,26 @@ RSpec.describe 'AmahiHelper' do
         expect(File.read(installer_file)).to eq(installer_yaml)
       end
 
+      it "makes the state folder when it's missing (a NAS that never had blocking), and after a failed try keeps the first copy and leaves nothing behind" do
+        stub_const('AmahiHelper::ADDRESS_STATE', "#{dir}/state/address.json")
+        allow(helper).to receive(:run_command) { |argv| raise AmahiHelper::Failed, 'systemd-run exited 1' if argv.first == '/usr/bin/systemd-run' }
+        expect { helper.do_set_address('ens19', 'fixed', '10.99.0.5/24', nil, [], true) }.to raise_error(AmahiHelper::Failed, /systemd-run/)
+        expect(File.read(installer_file)).to eq(installer_yaml) # put back
+        expect(File.exist?("#{installer_file}.amahi-kai-before-address")).to be false
+        expect(File.exist?("#{dir}/state/address.json")).to be false
+        # A try that failed before this fix left the file half changed with its copy beside it: the copy is the one kept
+        File.write("#{installer_file}.amahi-kai-before-address", installer_yaml)
+        File.write(installer_file, "network:\n  version: 2\n  ethernets:\n    ens19:\n      dhcp4: false\n      addresses:\n      - 10.99.0.9/24\n")
+        allow(helper).to receive(:run_command) { |argv| ran << argv.reject { |a| a.is_a?(Hash) }.join(' ') && nil }
+        helper.do_set_address('ens19', 'fixed', '10.99.0.5/24', nil, [], false)
+        expect(File.read("#{dir}/state/address.json")).to include('"state":"kept"')
+        expect(File.exist?("#{installer_file}.amahi-kai-before-address")).to be false
+        helper.do_set_address('ens19', 'automatic', nil, nil, [], true)
+        expect(File.read("#{installer_file}.amahi-kai-before-address")).to include('10.99.0.5/24')
+        helper.do_revert_address
+        expect(File.read(installer_file)).to include('10.99.0.5/24') # back to what was in place before this change
+      end
+
       it 'takes a change left waiting through a reboot as kept, and goes on' do
         helper.do_set_address('ens19', 'fixed', '10.99.0.5/24', nil, [], true)
         File.write(AmahiHelper::ADDRESS_STATE, JSON.generate(state.merge('since' => Time.now.to_i - 3600)))

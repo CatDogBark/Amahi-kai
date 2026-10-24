@@ -3548,6 +3548,7 @@ module AmahiHelper
       state = { 'lan' => lan, 'wan' => wan, 'forwards' => forwards.map { |f| f.transform_keys(&:to_s) },
                 'pinned' => (previous_pinned || {}).merge(pinned), 'dns' => dns, 'tailscale' => tailscale,
                 'lan_only' => lan_only, 'sysctl' => sysctl_before, 'since' => Time.now.to_i, 'rules' => ROUTER_RULES_VERSION }
+      state_dir!(ROUTER_STATE)
       do_install(ROUTER_STATE, "#{JSON.generate(state)}\n", nil, '0644')
       nil
     end
@@ -3704,7 +3705,8 @@ module AmahiHelper
       files.each_with_index do |path, i|
         if File.exist?(path)
           data = netplan_yaml(path) or raise Failed, "#{path} can't be read as netplan YAML"
-          do_install(path + ADDRESS_BACKUP_SUFFIX, File.read(path), nil, '0600')
+          # A copy from before, kept across a failed try (the file may already be half changed)
+          do_install(path + ADDRESS_BACKUP_SUFFIX, File.read(path), nil, '0600') unless File.exist?(path + ADDRESS_BACKUP_SUFFIX)
         else
           data = { 'network' => { 'version' => 2, 'ethernets' => {} } }
           created << path
@@ -3714,17 +3716,19 @@ module AmahiHelper
       end
       begin
         run_command([NETPLAN, 'generate'])
-      rescue Failed
+        before = Socket.getifaddrs.filter_map { |i| i.addr.ip_address if i.name == interface && i.addr&.ipv4? }
+        write_address_state('state' => 'pending', 'interface' => interface, 'mode' => mode, 'address' => address, 'files' => files,
+                            'created' => created, 'before' => before, 'guard' => guard, 'applied' => false, 'since' => Time.now.to_i, 'until' => nil)
+        if guard
+          arm_timer(ADDRESS_APPLY_UNIT, ADDRESS_APPLY_WAIT, 'network.apply_address')
+        else
+          do_apply_address
+        end
+      rescue Failed, Refused
+        # Nothing of it stays when a step fails before the change is in place.
         restore_address_files(files, created)
+        do_remove_files(ADDRESS_STATE) if (state = read_json(ADDRESS_STATE)) && state['state'] == 'pending' && !state['applied']
         raise
-      end
-      before = Socket.getifaddrs.filter_map { |i| i.addr.ip_address if i.name == interface && i.addr&.ipv4? }
-      write_address_state('state' => 'pending', 'interface' => interface, 'mode' => mode, 'address' => address, 'files' => files,
-                          'created' => created, 'before' => before, 'guard' => guard, 'applied' => false, 'since' => Time.now.to_i, 'until' => nil)
-      if guard
-        arm_timer(ADDRESS_APPLY_UNIT, ADDRESS_APPLY_WAIT, 'network.apply_address')
-      else
-        do_apply_address
       end
       nil
     end
@@ -3848,7 +3852,17 @@ module AmahiHelper
     end
 
     def write_address_state(state)
+      state_dir!(ADDRESS_STATE)
       do_install(ADDRESS_STATE, "#{JSON.generate(state)}\n", nil, '0644')
+    end
+
+    # The helper's state folder (BLOCKLIST_DIR), which blocking makes first on most NASes; one
+    # that goes straight to an address change or router mode doesn't have it yet.
+    def state_dir!(path)
+      dir = File.dirname(path)
+      Dir.mkdir(dir, 0o755) unless File.directory?(dir)
+    rescue SystemCallError => e
+      raise Failed, "couldn't make #{dir}: #{e.message}"
     end
 
     # A one-shot timer that runs one of the helper's operations in +seconds+; a previous one of
