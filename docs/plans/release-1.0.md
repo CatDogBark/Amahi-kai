@@ -19,15 +19,19 @@ after) is use, at CatDogBark's pace.
 
 Done 2026-10-24 on the test VM: after a rewrite of Unbound's settings, its DNS answered the laptop
 over Tailscale (`100.100.32.46`): local names and blocked names, from a device on the tailnet. The
-rewrite was the gap: Unbound and Samba listen on the Tailscale address only when their settings
-name it, and it arrives after the sign-in is approved, so nothing set them up. Now
-`amahi-kai-tailscale.path` watches Tailscale's state file and `bin/amahi-follow-tailscale` (as
-the app user) has `TailscaleService.follow!` make both again once the addresses settle and
-differ from the last seen, and smbd restarts (it binds its addresses when it starts, and a reload
-doesn't add one: tried on the test VM). The service also runs once after each boot, with what was
-seen kept in /run, because smbd starts before Tailscale has its address. Found on the way: a second DNS server behind the NAS router (the test
-VM's own Unbound) can't use DNS over TLS, because the router keeps port 853 from every LAN device
-(§2c, by design). A per-device exemption is on the roadmap, not in 1.0 (CatDogBark: not needed).
+rewrite was the gap: Unbound listens on the Tailscale address only when its settings name it, and
+the address arrives after the sign-in is approved, so nothing set it up. Now
+`amahi-kai-tailscale.path` watches Tailscale's state file, and `bin/amahi-follow-tailscale` (as
+the app user) has `TailscaleService.follow!` write DNS's and Samba's settings again once the
+addresses settle and differ from the last seen. Shares needed more: Samba can't be bound to
+Tailscale's IPv4 address at all (it skips an interface with one address and no broadcast), so
+since 0.10.2 it listens on every address and its allow list decides. A reboot of the test VM the
+same day needed nothing from the watch: Tailscale had its address within seconds, and DNS and the
+shares answered over it, because Unbound may listen on an address that isn't up yet
+(`ip-freebind`) and Samba listens everywhere. Found on the way: a second DNS server behind the NAS
+router (the test VM's own Unbound) can't use DNS over TLS, because the router keeps port 853 from
+every LAN device (§2c, by design). A per-device exemption is on the roadmap, not in 1.0
+(CatDogBark: not needed).
 
 ## 2. The real pool, and apps on it
 

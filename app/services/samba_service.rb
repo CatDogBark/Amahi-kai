@@ -64,10 +64,10 @@ class SambaService
     nil
   end
 
-  # smbd opens its listening sockets when it starts, on the addresses its interfaces have then; a
-  # reload doesn't open one for an address that came later (Tailscale's, after its sign-in). So
-  # when those addresses change, smbd restarts, unless it isn't running (stopped on purpose).
-  # Connections open at that moment reconnect by themselves.
+  # smbd opens its listening sockets when it starts; a reload doesn't open new ones. That matters
+  # while Samba is bound to its interfaces (no allow list yet: Share.samba_network_lines); with
+  # the list it listens on every address. So when the interfaces line changes, smbd restarts,
+  # unless it isn't running (stopped on purpose). Connections open then reconnect by themselves.
   def self.restart_for_new_addresses
     return false unless Shell.success?('systemctl', 'is-active', '--quiet', 'smbd')
 
