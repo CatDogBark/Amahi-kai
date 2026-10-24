@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [0.10.1] — 2026-10-24
+
+Fixes from the first real house turned over to the NAS as its router: the NAS taking the old router's address, a ZFS pool made from drives that had been set up for shares, and a server that had never had DNS blocking on.
+
 ### 🔒 Security & Fixes
 
 - **The moving page now reaches the NAS at its new address from the browser** (Network → Devices, This NAS) — The page's probe calls the NAS at the new address, which the site's Content-Security-Policy forbade (it allows the page's own origin only), so the browser never kept the change and the NAS went back after 90 seconds. The moving page alone may call the new address now, and a browser test runs the probe for real.
