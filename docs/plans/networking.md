@@ -183,8 +183,11 @@ The switches, their order and their limits are in [`release-1.0.md`](release-1.0
 from the LAN to anything but the NAS, `ufw route deny` for 853 in front of the LAN's allow, and
 HaGeZi's DoH list joined to Blocking's lists while the switch is on in router mode), the vendor
 tracker lists (HaGeZi's `native.*`, shown as "Devices you have"), and Tailscale's UDP 41641 let in
-on the WAN when `/usr/bin/tailscale` exists, in front of the deny. The Network tab's split (§2d)
-comes before per-device LAN only, anti-spoofing and the dropped-attempts count.
+on the WAN when `/usr/bin/tailscale` exists, in front of the deny. Tried on the island the same
+day: from the client, lookups aimed at 8.8.8.8 and 1.1.1.1 (UDP and TCP) came back with the NAS's
+answers (a local name, a blocked domain as 0.0.0.0), `dns.google` resolved to 0.0.0.0, port 853 out
+timed out while 443 and the internet worked. The Network tab's split (§2d) comes before per-device
+LAN only, anti-spoofing and the dropped-attempts count.
 
 ### Later
 
