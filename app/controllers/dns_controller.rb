@@ -119,17 +119,6 @@ class DnsController < ApplicationController
     @other_ipv6_dns = DnsService.other_ipv6_dns(@ipv6_check)
   end
 
-  # Network → Internet: Ubuntu's security updates on, by themselves. A NAS that is the house's
-  # router faces the internet; the installer leaves automatic updates off (Settings → System
-  # Dependencies has the switch), so the page offers them while the NAS is the router.
-  def automatic_updates
-    SystemDependencies.set_automatic!(true)
-    flash[:notice] = "Automatic updates are on: Ubuntu installs its security updates by itself."
-    redirect_to dns_internet_path
-  rescue Privileged::Error => e
-    refuse(["Automatic updates couldn't be turned on: #{e.message}"], dns_internet_path)
-  end
-
   def update_internet
     on = params[:router_on] == '1'
     advertise = params[:ipv6_advertise] == '1'

@@ -31,7 +31,7 @@
           | ,
           span.badge.bg-warning.text-dark = pluralize(security, 'security update')
         - if @status[:automatic]
-          | . Automatic updates are on, so Ubuntu installs them by itself.
+          | . Automatic security updates are on, so Ubuntu installs the security fixes by itself.
         - else
           | . Nothing updates by itself: each is installed from here when you choose.
     .table-responsive
@@ -87,15 +87,15 @@
   .card-body.d-flex.flex-wrap.align-items-center.gap-2.small
     span.flex-grow-1
       - if @status[:automatic]
-        strong Automatic updates are on:
-        |  Ubuntu installs its updates by itself every day.
+        strong Automatic security updates are on:
+        |  Ubuntu installs its security fixes by itself every day (from its security channel only: fixes to what's installed, never new versions). Everything else still installs from this page.
       - else
-        strong Automatic updates are off:
-        |  updates install only from this page. The dashboard says when a security update has waited #{SystemDependencies::NOTICE_DAYS} days.
+        strong Automatic security updates are off:
+        |  updates install only from this page. The dashboard says when a security update has waited #{SystemDependencies::NOTICE_DAYS} days. A NAS that is the router (Network → Internet) should have them on.
     = button_to (@status[:automatic] ? 'Turn off' : 'Turn on'), settings_dependencies_automatic_path,
           params: { enabled: @status[:automatic] ? '0' : '1' }, method: :post, form: { class: 'd-inline' },
           class: 'btn btn-sm btn-outline-secondary', id: 'automatic-updates-switch',
-          data: { confirm: (@status[:automatic] ? 'Turn automatic updates off? Updates then install only from this page.' : 'Turn automatic updates on? Ubuntu then installs its updates by itself, every day.') }
+          data: { confirm: (@status[:automatic] ? 'Turn automatic security updates off? Updates then install only from this page.' : "Turn automatic security updates on? Ubuntu then installs its security fixes by itself, every day; nothing else changes.") }
 
 .card.mb-4 id="operating-system"
   .card-header

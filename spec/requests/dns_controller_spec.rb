@@ -61,18 +61,11 @@ describe 'Network → DNS & DHCP', type: :request do
                                         'camera: on the LAN only')
       allow(SystemDependencies).to receive(:automatic?).and_return(false)
       get '/network/internet'
-      expect(response.body).to include("Ubuntu's security updates aren't automatic", '>Turn automatic security updates on</button>')
+      expect(response.body).to include("Ubuntu's security updates aren't automatic", 'href="/settings/dependencies#automatic-updates"')
       allow(SystemDependencies).to receive(:automatic?).and_return(true)
       get '/network/internet'
       expect(response.body).to include("✓ Ubuntu's security updates install by themselves")
-      expect(response.body).not_to include('Turn automatic security updates on')
-    end
-
-    it "turns Ubuntu's automatic updates on from the Internet page" do
-      post '/network/internet/automatic_updates'
-      expect(response).to redirect_to('/network/internet')
-      expect(flash[:notice]).to include('Automatic updates are on')
-      expect(Privileged.calls).to include(['updates.set_automatic', { enabled: true }])
+      expect(response.body).not_to include("updates aren't automatic")
     end
 
     it 'shows how it is answering while it is on' do

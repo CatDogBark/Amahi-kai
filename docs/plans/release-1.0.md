@@ -93,8 +93,8 @@ so the LAN's own 2 keeps it loose there), put back on the way out; the kernel's
 Internet page with the time the rules were loaded (every router-mode save and boot zero it).
 Also, from the "is it a household router yet" comparison: ICMP redirects off and martians
 logged on the internet side (the same sysctl drop-in), and Ubuntu's automatic security updates
-offered on the Internet page (the security audit warns while the NAS is the router without
-them). What a consumer router has that this doesn't, for the roadmap: signed updates (§3), a
+stated on the Internet page with a link to the one switch on Settings → System Dependencies
+(the security audit warns while the NAS is the router without them). What a consumer router has that this doesn't, for the roadmap: signed updates (§3), a
 WAN-side log, IPv6 with its firewall, HTTPS for the admin UI, hairpin NAT, UPnP as an opt-in.
 
 ## 2d. The Network tab, split

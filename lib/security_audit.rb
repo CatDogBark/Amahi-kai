@@ -185,8 +185,8 @@ class SecurityAudit
     end
 
     # A NAS that is the house's router faces the internet, so Ubuntu's security updates should
-    # install by themselves (Network → Internet turns them on). Off the router it's the admin's
-    # choice, as the check above says.
+    # install by themselves (the switch is on Settings → System Dependencies). Off the router
+    # it's the admin's choice, as the check above says.
     def automatic_updates_check
       automatic = SystemDependencies.automatic?
       router = DnsService.router?
@@ -195,7 +195,7 @@ class SecurityAudit
         description: if automatic
                        'Automatic security updates on'
                      elsif router
-                       "The NAS is the router, but Ubuntu's security updates aren't automatic: turn them on (Network → Internet)"
+                       "The NAS is the router, but Ubuntu's security updates aren't automatic: turn them on (Settings → System Dependencies)"
                      else
                        'Automatic security updates off (your choice while the NAS is not the router)'
                      end,

@@ -127,7 +127,7 @@ class SettingsController < ApplicationController
   def dependencies_automatic
     enabled = params[:enabled] == '1'
     SystemDependencies.set_automatic!(enabled)
-    flash[:notice] = enabled ? 'Automatic updates are on: Ubuntu installs its updates by itself.' : 'Automatic updates are off: updates install only from here.'
+    flash[:notice] = enabled ? 'Automatic security updates are on: Ubuntu installs its security fixes by itself.' : 'Automatic security updates are off: updates install only from here.'
     redirect_to settings_dependencies_path
   rescue Privileged::Error => e
     flash[:error] = e.message

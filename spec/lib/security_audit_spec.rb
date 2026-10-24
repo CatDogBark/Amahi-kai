@@ -101,7 +101,7 @@ RSpec.describe SecurityAudit do
       allow(DnsService).to receive(:router?).and_return(true)
       check = described_class.run_all.find { |c| c.name == 'automatic_updates' }
       expect(check.status).to eq(:warn)
-      expect(check.description).to include('Network → Internet')
+      expect(check.description).to include('Settings → System Dependencies')
       allow(SystemDependencies).to receive(:automatic?).and_return(true)
       expect(described_class.run_all.find { |c| c.name == 'automatic_updates' }.status).to eq(:pass)
     end

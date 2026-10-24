@@ -272,9 +272,11 @@ the sysctl drop-in also turns ICMP redirects off on the internet side (`accept_r
 is OR) and logs martians there (`log_martians` on the WAN only, for a WAN log later); every
 value from before is kept in `router.json` (`sysctl`) and put back on the way out, and the
 rules' shape number went to 3 so the resync applies it. And Ubuntu's automatic security
-updates, which the installer leaves off: the Internet page says whether they're on and turns
-them on with a button (`updates.set_automatic`), and the security audit warns while the NAS is
-the router without them (`automatic_updates`, a pass otherwise: the admin's choice).
+updates, which the installer leaves off: the Internet page says whether they're on and links
+to the one switch (Settings → System Dependencies, `updates.set_automatic`, now worded as what
+it is: Ubuntu's security pocket only, never new versions; CatDogBark wanted one place, not two
+buttons), and the security audit warns while the NAS is the router without them
+(`automatic_updates`, a pass otherwise: the admin's choice).
 
 ### Later
 
