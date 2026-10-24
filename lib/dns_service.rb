@@ -460,6 +460,8 @@ module DnsService
       apply_ipv6_advertising!
       DnsmasqService.apply!
       apply_router!
+      # Router mode moves the LAN off the default route's interface, and Samba follows the LAN
+      SambaService.follow_interfaces!
     end
 
     # radvd announces the NAS while DNS is on and that's chosen; otherwise it stops, and the NAS's

@@ -10,6 +10,7 @@ All notable changes to Amahi-kai are documented here.
 
 ### 🔒 Security & Fixes
 
+- **Shares answer on the LAN while the NAS is the router** — Samba listened on the interface the default route leaves by, which in router mode is the internet side: after the next Samba restart (an update does one), the shares stopped answering on the LAN and Samba listened on the modem port instead, where only the firewall kept it from the internet. Samba now follows the router's LAN interface, turning router mode on or off moves Samba with it (restarting it, since it only picks its addresses when it starts), and the security audit fails Samba's binding if it's ever on the internet side.
 - **DNS and shares over Tailscale without a Save** — The NAS's DNS and Samba answer on its Tailscale address only when their settings name it, and Tailscale gets that address only after you approve its sign-in. Turned on after DNS (the usual order), Tailscale devices got no DNS and no shares from the NAS until someone happened to save Network → DNS. Amahi-kai now notices Tailscale signing in, signing out or changing address, and sets both up again by itself, restarting Samba so it listens on the new address (a reload doesn't); it does the same once after each restart of the server, where Samba starts before Tailscale has its address.
 - **An app's shares dialog ticks a share recorded in other capitals** (Apps → Change) — An app given "vault" didn't show the share "Vault" ticked, while the share's delete check and the app itself treated them as one; the dialog now ignores case too.
 

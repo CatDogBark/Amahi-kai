@@ -220,8 +220,10 @@ class SecurityAudit
       return true unless production?
       return true unless File.exist?('/etc/samba/smb.conf')
       content = File.read('/etc/samba/smb.conf')
-      content.match?(/^\s*bind interfaces only\s*=\s*yes/i) &&
-        content.match?(/^\s*interfaces\s*=/i)
+      interfaces = content[/^\s*interfaces\s*=(.*)$/i, 1].to_s.split
+      # Never the internet side while the NAS is the router
+      wan = DnsService.router? && DnsService.router_state&.dig('wan')
+      content.match?(/^\s*bind interfaces only\s*=\s*yes/i) && interfaces.any? && !(wan && interfaces.include?(wan))
     end
 
     # Docker writes its own iptables rules for published ports, ahead of UFW's, so UFW

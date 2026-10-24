@@ -190,6 +190,17 @@ RSpec.describe Share, 'config generation', type: :model do
       expect(result).to include("log level = 5")
     end
 
+    # Samba answers on the LAN: the default route's interface, except while the NAS is the router,
+    # whose default route leaves by the internet side (found on the house NAS: Samba on the modem port).
+    describe '.primary_interface' do
+      it "is the default route's interface, or the router's LAN interface while the NAS is the router" do
+        allow(Shell).to receive(:output).with('ip', '-4', 'route', 'show', 'default').and_return("default via 66.8.144.1 dev ens19 proto dhcp\n")
+        expect(Share.primary_interface).to eq('ens19')
+        allow(DnsService).to receive_messages(router?: true, router_state: { 'lan' => 'ens18', 'wan' => 'ens19' })
+        expect(Share.primary_interface).to eq('ens18')
+      end
+    end
+
     describe 'network access' do
       before do
         Setting.set('net', '192.168.1')

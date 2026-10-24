@@ -147,6 +147,19 @@ RSpec.describe SecurityAudit do
       allow(Shell).to receive(:output).and_return('')
     end
 
+    it "fails Samba's binding while it's on the router's internet side" do
+      conf = "[global]\n\tinterfaces = lo ens19\n\tbind interfaces only = yes\n"
+      allow(File).to receive(:exist?).and_call_original
+      allow(File).to receive(:exist?).with('/etc/samba/smb.conf').and_return(true)
+      allow(File).to receive(:read).and_call_original
+      allow(File).to receive(:read).with('/etc/samba/smb.conf').and_return(conf)
+      expect(checks['samba_lan_binding'].status).to eq(:pass) # not the router: ens19 is just an interface
+      allow(DnsService).to receive_messages(router?: true, router_state: { 'lan' => 'ens18', 'wan' => 'ens19' })
+      expect(SecurityAudit.run_all.find { |c| c.name == 'samba_lan_binding' }.status).to eq(:fail)
+      allow(File).to receive(:read).with('/etc/samba/smb.conf').and_return(conf.sub('ens19', 'ens18'))
+      expect(SecurityAudit.run_all.find { |c| c.name == 'samba_lan_binding' }.status).to eq(:pass)
+    end
+
     it "reads UFW and sshd's effective settings from the root helper" do
       expect(checks['ufw_firewall'].status).to eq(:pass)
       expect(checks['ssh_root_login'].status).to eq(:pass)

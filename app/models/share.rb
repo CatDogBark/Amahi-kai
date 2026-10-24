@@ -361,8 +361,13 @@ class Share < ApplicationRecord
     lines
   end
 
-  # The interface of the default route, such as ens18.
+  # The interface Samba answers on: the LAN's. Usually the one the default route leaves by, such
+  # as ens18; but while the NAS is the router that one is the internet side, so then it's the
+  # router's LAN interface (found on the house NAS: Samba had moved to the modem port).
   def self.primary_interface
+    lan = DnsService.router? && DnsService.router_state&.dig('lan')
+    return lan if lan.present?
+
     Shell.output('ip', '-4', 'route', 'show', 'default')[/\bdev\s+(\S+)/, 1]
   end
 
