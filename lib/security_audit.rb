@@ -209,21 +209,28 @@ class SecurityAudit
       bound = samba_lan_only?
       Check.new(
         name: 'samba_lan_binding',
-        description: 'Samba bound to LAN interfaces only',
+        description: 'Samba answers only the NAS, the LAN and Tailscale',
         status: bound ? :pass : :fail,
         severity: :blocker,
-        fix_command: 'Update smb.conf with interface binding'
+        fix_command: "Rewrite smb.conf with Amahi-kai's allow list"
       )
     end
 
+    # Samba answers only the NAS, the LAN and Tailscale: its allow list names the LAN (smbd
+    # listens on every address since 2026-10-24, Share.samba_network_lines), or, without one, it's
+    # bound to its interfaces. Never the internet side while the NAS is the router.
     def samba_lan_only?
       return true unless production?
       return true unless File.exist?('/etc/samba/smb.conf')
       content = File.read('/etc/samba/smb.conf')
       interfaces = content[/^\s*interfaces\s*=(.*)$/i, 1].to_s.split
-      # Never the internet side while the NAS is the router
+      allow = content[/^\s*hosts allow\s*=(.*)$/i, 1].to_s.split
+      net = Setting.get('net').to_s.strip
       wan = DnsService.router? && DnsService.router_state&.dig('wan')
-      content.match?(/^\s*bind interfaces only\s*=\s*yes/i) && interfaces.any? && !(wan && interfaces.include?(wan))
+      return false if wan && interfaces.include?(wan)
+
+      listed = net.present? && allow.include?("#{net}.") && (allow & %w[ALL all 0.0.0.0/0 ::/0]).empty?
+      listed || (content.match?(/^\s*bind interfaces only\s*=\s*yes/i) && interfaces.any?)
     end
 
     # Docker writes its own iptables rules for published ports, ahead of UFW's, so UFW

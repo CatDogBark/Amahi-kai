@@ -160,6 +160,21 @@ RSpec.describe SecurityAudit do
       expect(SecurityAudit.run_all.find { |c| c.name == 'samba_lan_binding' }.status).to eq(:pass)
     end
 
+    it "passes Samba listening everywhere only with an allow list naming the LAN, and not one letting everyone in" do
+      Setting.set('net', '192.168.1')
+      allow(File).to receive(:exist?).and_call_original
+      allow(File).to receive(:exist?).with('/etc/samba/smb.conf').and_return(true)
+      allow(File).to receive(:read).and_call_original
+      samba = lambda do |conf|
+        allow(File).to receive(:read).with('/etc/samba/smb.conf').and_return(conf)
+        SecurityAudit.run_all.find { |c| c.name == 'samba_lan_binding' }.status
+      end
+      listed = "[global]\n\thosts allow = 127.0.0.1 ::1 192.168.1. 100.64.0.0/10\n\tinterfaces = lo ens18\n\tbind interfaces only = no\n"
+      expect(samba.call(listed)).to eq(:pass)
+      expect(samba.call(listed.sub('192.168.1. ', ''))).to eq(:fail) # no allow list naming the LAN, and not bound
+      expect(samba.call(listed.sub('192.168.1.', '192.168.1. ALL'))).to eq(:fail)
+    end
+
     it "reads UFW and sshd's effective settings from the root helper" do
       expect(checks['ufw_firewall'].status).to eq(:pass)
       expect(checks['ssh_root_login'].status).to eq(:pass)

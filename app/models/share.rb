@@ -342,21 +342,28 @@ class Share < ApplicationRecord
 
   # Samba answers only the NAS itself, the LAN and Tailscale. Anything else, including
   # Docker containers' private ranges, is refused: Docker apps get share folders as
-  # mounted volumes, not over SMB. Binding to interfaces alone wouldn't do it, since a
-  # container can still reach the LAN address; `hosts allow` filters by source.
+  # mounted volumes, not over SMB. `hosts allow` filters by source, and it's what decides:
+  # binding to interfaces never kept a container off the LAN address. smbd listens on every
+  # address (bind interfaces only = no), because it can't bind Tailscale's IPv4 address
+  # (a /32 point-to-point interface, which Samba's interface list leaves out), and it would
+  # only bind addresses that existed when it started (CatDogBark, 2026-10-24). In router mode,
+  # the firewall drops everything from the internet side before Samba sees it. `interfaces`
+  # still tells nmbd where the LAN is. Without the allow list (no LAN prefix yet), Samba stays
+  # bound to its interfaces instead: the helper refuses listening everywhere without one.
   def self.samba_network_lines
     lines = []
     net = Setting.get('net').to_s.strip
     iface = primary_interface
     # Without the LAN prefix the allow list would lock out the LAN, so leave it off.
-    if net.match?(/\A\d{1,3}(\.\d{1,3}){2}\z/)
+    allowed = net.match?(/\A\d{1,3}(\.\d{1,3}){2}\z/)
+    if allowed
       allow = ["127.0.0.1", "::1", "#{net}.", "fe80::/10", *lan_ipv6_prefixes(iface), *TAILSCALE_RANGES]
       lines << "\thosts allow = #{allow.join(' ')}"
     end
     if iface.present?
       ifaces = ["lo", iface]
       ifaces << "tailscale0" if File.exist?("/sys/class/net/tailscale0")
-      lines << "\tinterfaces = #{ifaces.join(' ')}" << "\tbind interfaces only = yes"
+      lines << "\tinterfaces = #{ifaces.join(' ')}" << "\tbind interfaces only = #{allowed ? 'no' : 'yes'}"
     end
     lines
   end

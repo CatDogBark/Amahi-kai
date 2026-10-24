@@ -279,6 +279,14 @@ RSpec.describe 'AmahiHelper' do
       end
     end
 
+    it 'lets Samba listen on every address only with an allow list, and never one that lets everyone in' do
+      expect(helper.samba_problems("#{base}\tbind interfaces only = no\n")).to eq(['[global] bind interfaces only = no needs hosts allow to say who connects'])
+      expect(helper.samba_problems("#{base}\tbind interfaces only = False\n").join).to include('needs hosts allow')
+      expect(helper.samba_problems("#{base}\thosts allow = 127.0.0.1 192.168.1. 100.64.0.0/10\n\tbind interfaces only = no\n")).to eq([])
+      expect(helper.samba_problems("#{base}\thosts allow = 127.0.0.1 ALL\n\tbind interfaces only = no\n")).to eq(['[global] hosts allow lets everyone in'])
+      expect(helper.samba_problems("#{base}\tinterfaces = lo ens18\n\tbind interfaces only = yes\n")).to eq([]) # bound, as without a LAN prefix
+    end
+
     it 'pins the global values it writes, read as Samba reads them, and wants the ones whose default differs' do
       { 'guest account = root' => 'guest account must be nobody', 'guest account = amahi' => 'must be nobody',
         'unix extensions = yes' => 'unix extensions must be no', 'smb1 unix extensions = True' => 'must be no',

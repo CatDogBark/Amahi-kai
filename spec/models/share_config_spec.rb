@@ -216,9 +216,9 @@ RSpec.describe Share, 'config generation', type: :model do
         expect(result).not_to match(/hosts allow.*172\./)
       end
 
-      it 'binds Samba to loopback and the LAN interface' do
+      it "listens on every address, the allow list deciding, and tells nmbd the LAN's interface" do
         result = Share.header_workgroup("example.local")
-        expect(result).to include("interfaces = lo ens18", "bind interfaces only = yes")
+        expect(result).to include("interfaces = lo ens18", "bind interfaces only = no")
       end
 
       it 'adds the Tailscale interface when it exists' do
@@ -226,9 +226,10 @@ RSpec.describe Share, 'config generation', type: :model do
         expect(Share.header_workgroup("example.local")).to include("interfaces = lo ens18 tailscale0")
       end
 
-      it 'leaves the allow list off when the LAN prefix is unknown, rather than lock the LAN out' do
+      it 'leaves the allow list off when the LAN prefix is unknown, rather than lock the LAN out, and stays bound then' do
         Setting.set('net', '')
         expect(Share.header_workgroup("example.local")).not_to include("hosts allow")
+        expect(Share.header_workgroup("example.local")).to include("bind interfaces only = yes")
       end
     end
 

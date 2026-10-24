@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# Run by amahi-kai-tailscale.service, as the app user, once after each boot and whenever
-# Tailscale's state file changes (amahi-kai-tailscale.path): a sign-in, a sign-out, a new
-# address. DNS and Samba answer on the NAS's Tailscale addresses only when their settings name
-# them and, for Samba, only on addresses it had when it started; so once the addresses settle,
-# and only if they differ from the last ones seen since boot, Amahi-kai makes those settings
-# again and restarts smbd (TailscaleService.follow!). Tailscale writes its state for other
-# reasons too; then nothing is booted. The state file is root's, so the addresses are read from
-# the interface instead. What was seen lives in /run, so each boot starts from none.
+# Run by amahi-kai-tailscale.service, as the app user, whenever Tailscale's state file changes
+# (amahi-kai-tailscale.path): a sign-in, a sign-out, a new address. DNS answers on the NAS's
+# Tailscale addresses only when its settings name them, so once the addresses settle, and only
+# if they differ from the last ones seen since boot, Amahi-kai makes those settings again
+# (TailscaleService.follow!). Tailscale writes its state for other reasons too; then nothing is
+# booted. The state file is root's, so the addresses are read from the interface instead. What
+# was seen lives in /run, so the first change after a boot is looked at in any case.
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-/opt/amahi-kai}"

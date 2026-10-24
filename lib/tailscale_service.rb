@@ -88,17 +88,14 @@ module TailscaleService
       false
     end
 
-    # DNS and Samba answer on the NAS's Tailscale addresses only when their settings name them,
-    # and Tailscale's address only arrives once its sign-in is approved, in another tab (or a few
-    # seconds after boot, after smbd has started). So when Tailscale signs in, signs out or
-    # changes address, and once after each boot (amahi-kai-tailscale.service, through
-    # bin/amahi-follow-tailscale), their settings are made again: Unbound's and the router's
-    # through DnsService.resync! (only what differs), Samba's in full, then smbd restarts to listen
-    # on the new addresses. One line each, for the log.
+    # Unbound answers on the NAS's Tailscale addresses only when its settings name them, and
+    # Tailscale's address only arrives once its sign-in is approved, in another tab. So when
+    # Tailscale signs in, signs out or changes address (amahi-kai-tailscale.path, through
+    # bin/amahi-follow-tailscale), its settings and the router's are made again (DnsService.resync!,
+    # only what differs), and Samba's, whose interfaces line tells nmbd about tailscale0. smbd
+    # itself listens on every address, so it needs no restart. One line each, for the log.
     def follow!
-      samba = SambaService.push_config ? 'Samba: settings written' : 'Samba: settings not written (see the log)'
-      samba += SambaService.restart_for_new_addresses ? ', restarted' : ', not restarted'
-      [DnsService.resync_report, samba]
+      [DnsService.resync_report, SambaService.push_config ? 'Samba: settings written' : 'Samba: settings not written (see the log)']
     end
 
     private

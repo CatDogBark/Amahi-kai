@@ -3144,6 +3144,23 @@ module AmahiHelper
       return problems unless text.match?(/^\s*\[global\]/i) # a whole config, not one share's section
       written = params.filter_map { |section, name, _value| name.downcase.delete(" \t") if section == 'global' }
       SAMBA_REQUIRED.each { |line, keys| problems << "[global] #{line} is missing" if (keys & written).empty? }
+      problems.concat(samba_reach_problems(params))
+      problems
+    end
+
+    # Amahi-kai has Samba listen on every address (bind interfaces only = no) only with an allow
+    # list deciding who connects, so a config saying no without one is refused; and the list
+    # itself mustn't let everyone in.
+    def samba_reach_problems(params)
+      global = params.select { |section, _name, _value| section == 'global' }.to_h { |_s, name, value| [name.downcase.delete(" \t"), value] }
+      allow = global['hostsallow'].to_s.split(/[\s,]+/)
+      problems = []
+      if allow.any? { |entry| %w[all 0.0.0.0/0 0.0.0.0/0.0.0.0 ::/0 *].include?(entry.downcase) }
+        problems << '[global] hosts allow lets everyone in'
+      end
+      if allow.empty? && global.key?('bindinterfacesonly') && samba_value?(global['bindinterfacesonly'], 'no')
+        problems << '[global] bind interfaces only = no needs hosts allow to say who connects'
+      end
       problems
     end
 

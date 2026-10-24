@@ -75,9 +75,8 @@ if [[ -d /run/systemd/system ]]; then
     || echo "Couldn't enable amahi-kai-trash.timer; the Trash won't delete old files on its own" >&2
   systemctl enable --now amahi-kai-tailscale.path >/dev/null 2>&1 \
     || echo "Couldn't enable amahi-kai-tailscale.path; after Tailscale signs in, save Network → DNS once" >&2
-  # And once after each boot: smbd starts before Tailscale has its address
-  systemctl enable amahi-kai-tailscale.service >/dev/null 2>&1 \
-    || echo "Couldn't enable amahi-kai-tailscale.service; after a restart, shares may not answer over Tailscale" >&2
+  # It ran once after each boot too, in 0.10.x on dev, when smbd needed a restart for Tailscale
+  systemctl disable amahi-kai-tailscale.service >/dev/null 2>&1 || true
   # Starts with Docker from now on, and now if Docker is running (an update applies the rules).
   systemctl enable amahi-kai-app-firewall.service >/dev/null 2>&1 \
     || echo "Couldn't enable amahi-kai-app-firewall.service; app ports aren't limited to the LAN" >&2

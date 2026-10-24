@@ -134,12 +134,14 @@ RSpec.describe TailscaleService do
   end
 
   describe '.follow!' do
-    it "makes DNS's and Samba's settings again and restarts smbd, saying what it did" do
+    it "makes DNS's and Samba's settings again, saying what it did; smbd listens everywhere, so no restart" do
       allow(DnsService).to receive(:resync_report).and_return("Network: applied Unbound's config")
-      allow(SambaService).to receive_messages(push_config: true, restart_for_new_addresses: true)
-      expect(described_class.follow!).to eq(["Network: applied Unbound's config", 'Samba: settings written, restarted'])
-      allow(SambaService).to receive_messages(push_config: false, restart_for_new_addresses: false)
-      expect(described_class.follow!.last).to eq('Samba: settings not written (see the log), not restarted')
+      allow(SambaService).to receive(:push_config).and_return(true)
+      allow(SambaService).to receive(:restart_for_new_addresses)
+      expect(described_class.follow!).to eq(["Network: applied Unbound's config", 'Samba: settings written'])
+      expect(SambaService).not_to have_received(:restart_for_new_addresses)
+      allow(SambaService).to receive(:push_config).and_return(false)
+      expect(described_class.follow!.last).to eq('Samba: settings not written (see the log)')
     end
   end
 end
