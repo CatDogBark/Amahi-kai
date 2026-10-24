@@ -270,6 +270,20 @@ folder, and deleting a user removes one an older version made. To decide:
 - How big they can get (a quota per user, or none).
 - Whether Files shows your own (and only your own), and so who on the NAS may read them.
 
+### Backups after 1.0
+
+1.0's Backups tab ([`release-1.0.md`](release-1.0.md) §4) brings a NAS's own state back onto a
+fresh install. Left for after (CatDogBark, 2026-10-24):
+
+- **Copies of the files in shares**, to a USB drive and off-site (a cloud bucket, another NAS).
+  Terabytes that change a little each day want an incremental, encrypted tool: restic is the likely
+  one (Ubuntu 24.04 has it), and it reaches Proton Drive through rclone, which
+  [`storage.md`](storage.md) planned as an app.
+- **Matching ports on new hardware:** after a motherboard change, a restore lists the backup's ports
+  that the new machine doesn't have, and the admin sets the network up by hand.
+- **Router mode put back by the restore itself**, in one flow (the standing-in router out of the
+  way, the NAS's address, router mode), instead of the steps its last page lists.
+
 ## Later: HTTPS on the LAN
 
 CatDogBark (2026-10-06): the web UI and every app's page are plain HTTP on the LAN, so anyone on the
