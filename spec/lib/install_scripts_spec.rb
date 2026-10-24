@@ -125,7 +125,9 @@ RSpec.describe 'install and update scripts' do
     expect(text).to include('amahi-kai-tailscale.service amahi-kai-tailscale.path', 'systemctl enable --now amahi-kai-tailscale.path')
     expect(File.read(Rails.root.join('config/systemd/amahi-kai-tailscale.path'))).to include('PathChanged=/var/lib/tailscale/tailscaled.state')
     expect(File.read(Rails.root.join('config/systemd/amahi-kai-tailscale.service')))
-      .to include('User=amahi', 'StateDirectory=amahi-kai-tailscale', 'ExecStart=/opt/amahi-kai/bin/amahi-follow-tailscale')
+      .to include('User=amahi', 'RuntimeDirectory=amahi-kai-tailscale', 'RuntimeDirectoryPreserve=yes',
+                  'ExecStart=/opt/amahi-kai/bin/amahi-follow-tailscale', 'WantedBy=multi-user.target')
+    expect(text).to include('systemctl enable amahi-kai-tailscale.service') # once after each boot
     expect(File.stat(Rails.root.join('bin/amahi-follow-tailscale')).mode & 0o111).to eq(0o111)
   end
 
@@ -136,7 +138,7 @@ RSpec.describe 'install and update scripts' do
     let(:script) { Rails.root.join('bin/amahi-follow-tailscale').to_s }
 
     before do
-      FileUtils.mkdir_p(["#{dir}/bin", "#{dir}/state", "#{dir}/app"])
+      FileUtils.mkdir_p(["#{dir}/bin", "#{dir}/run", "#{dir}/app"])
       File.write("#{dir}/bin/ip", "#!/bin/sh\ncat #{dir}/addresses 2>/dev/null\n")
       File.write("#{dir}/bin/bundle", "#!/bin/sh\necho \"$*\" >> #{dir}/asked\n")
       FileUtils.chmod(0o755, ["#{dir}/bin/ip", "#{dir}/bin/bundle"])
@@ -150,7 +152,7 @@ RSpec.describe 'install and update scripts' do
       copy = "#{dir}/follow"
       File.write(copy, File.read(script).sub('/usr/bin/bundle', "#{dir}/bin/bundle"))
       FileUtils.chmod(0o755, copy)
-      env = { 'PATH' => "#{dir}/bin:/usr/bin:/bin", 'APP_DIR' => "#{dir}/app", 'STATE_DIRECTORY' => "#{dir}/state",
+      env = { 'PATH' => "#{dir}/bin:/usr/bin:/bin", 'APP_DIR' => "#{dir}/app", 'RUNTIME_DIRECTORY' => "#{dir}/run",
               'FOLLOW_TRIES' => '2', 'FOLLOW_WAIT' => '0' }
       _out, err, status = Open3.capture3(env, copy)
       raise "the script failed: #{err}" unless status.success?
@@ -161,12 +163,13 @@ RSpec.describe 'install and update scripts' do
     it "asks the app only when the addresses change, sign-in, a new address and sign-out alike" do
       line = ->(address) { "4: tailscale0    inet #{address} scope global tailscale0\\       valid_lft forever\n" }
       signed_in = line.call('100.100.32.46/32') + "4: tailscale0    inet6 fe80::1/64 scope link\n"
-      expect(follow(signed_in)).to eq(1) # first time: nothing seen before
-      expect(File.read("#{dir}/state/addresses")).to eq('100.100.32.46/32 ') # the link-local one left out
+      expect(follow(nil)).to eq(0) # a boot without Tailscale: nothing seen, nothing there, no app
+      expect(follow(signed_in)).to eq(1) # a sign-in (or a boot with Tailscale: smbd started before it)
+      expect(File.read("#{dir}/run/addresses")).to eq('100.100.32.46/32 ') # the link-local one left out
       expect(follow(signed_in)).to eq(1) # the same addresses: the app isn't booted
       expect(follow(line.call('100.100.32.47/32'))).to eq(2)
       expect(follow(nil)).to eq(3) # signed out: none
-      expect(File.read("#{dir}/state/addresses")).to eq('')
+      expect(File.read("#{dir}/run/addresses")).to eq('')
       expect(File.read("#{dir}/asked")).to include("exec rails runner puts TailscaleService.follow!")
     end
   end

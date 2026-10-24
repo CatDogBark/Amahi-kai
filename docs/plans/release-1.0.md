@@ -23,7 +23,9 @@ rewrite was the gap: Unbound and Samba listen on the Tailscale address only when
 name it, and it arrives after the sign-in is approved, so nothing set them up. Now
 `amahi-kai-tailscale.path` watches Tailscale's state file and `bin/amahi-follow-tailscale` (as
 the app user) has `TailscaleService.follow!` make both again once the addresses settle and
-differ from the last seen. Found on the way: a second DNS server behind the NAS router (the test
+differ from the last seen, and smbd restarts (it binds its addresses when it starts, and a reload
+doesn't add one: tried on the test VM). The service also runs once after each boot, with what was
+seen kept in /run, because smbd starts before Tailscale has its address. Found on the way: a second DNS server behind the NAS router (the test
 VM's own Unbound) can't use DNS over TLS, because the router keeps port 853 from every LAN device
 (§2c, by design). A per-device exemption is on the roadmap, not in 1.0 (CatDogBark: not needed).
 

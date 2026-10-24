@@ -48,4 +48,18 @@ class SambaService
     Rails.logger.error("SambaService: Samba reload failed: #{e.message}")
     false
   end
+
+  # smbd opens its listening sockets when it starts, on the addresses its interfaces have then; a
+  # reload doesn't open one for an address that came later (Tailscale's, after its sign-in). So
+  # when those addresses change, smbd restarts, unless it isn't running (stopped on purpose).
+  # Connections open at that moment reconnect by themselves.
+  def self.restart_for_new_addresses
+    return false unless Shell.success?('systemctl', 'is-active', '--quiet', 'smbd')
+
+    Privileged.call('services.restart', service: 'smbd')
+    true
+  rescue Privileged::Error => e
+    Rails.logger.error("SambaService: Samba restart failed: #{e.message}")
+    false
+  end
 end

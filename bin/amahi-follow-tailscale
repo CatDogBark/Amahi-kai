@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
-# Run by amahi-kai-tailscale.service, as the app user, when Tailscale's state file changes
-# (amahi-kai-tailscale.path): a sign-in, a sign-out, a new address. DNS and Samba answer on the
-# NAS's Tailscale addresses only when their settings name them, so once the addresses settle,
-# and only if they differ from the last ones seen, Amahi-kai makes those settings again
-# (TailscaleService.follow!). Tailscale writes its state for other reasons too; then nothing
-# is booted. The state file is root's, so the addresses are read from the interface instead.
+# Run by amahi-kai-tailscale.service, as the app user, once after each boot and whenever
+# Tailscale's state file changes (amahi-kai-tailscale.path): a sign-in, a sign-out, a new
+# address. DNS and Samba answer on the NAS's Tailscale addresses only when their settings name
+# them and, for Samba, only on addresses it had when it started; so once the addresses settle,
+# and only if they differ from the last ones seen since boot, Amahi-kai makes those settings
+# again and restarts smbd (TailscaleService.follow!). Tailscale writes its state for other
+# reasons too; then nothing is booted. The state file is root's, so the addresses are read from
+# the interface instead. What was seen lives in /run, so each boot starts from none.
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-/opt/amahi-kai}"
-SEEN="${STATE_DIRECTORY:-/var/lib/amahi-kai-tailscale}/addresses"
+SEEN="${RUNTIME_DIRECTORY:-/run/amahi-kai-tailscale}/addresses"
 TRIES="${FOLLOW_TRIES:-30}"
 WAIT="${FOLLOW_WAIT:-2}"
 
@@ -27,7 +29,11 @@ for _ in $(seq 1 "$TRIES"); do
   [[ -n "$now" && "$now" == "$last" ]] && break
 done
 
-if [[ -f "$SEEN" && "$(cat "$SEEN")" == "$now" ]]; then
+# Nothing seen yet counts as no addresses: a server without Tailscale boots without the app
+seen=""
+[[ -f "$SEEN" ]] && seen=$(cat "$SEEN")
+if [[ "$seen" == "$now" ]]; then
+  printf '%s' "$now" > "$SEEN"
   exit 0
 fi
 

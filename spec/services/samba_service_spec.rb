@@ -51,4 +51,16 @@ RSpec.describe SambaService do
       expect(described_class.reload).to be false
     end
   end
+
+  describe '.restart_for_new_addresses' do
+    it "restarts smbd so it listens on addresses that came after it started, unless it's stopped" do
+      allow(Shell).to receive(:success?).with('systemctl', 'is-active', '--quiet', 'smbd').and_return(true)
+      expect(described_class.restart_for_new_addresses).to be true
+      expect(Privileged.calls).to include(['services.restart', { service: 'smbd' }])
+      Privileged.reset!
+      allow(Shell).to receive(:success?).with('systemctl', 'is-active', '--quiet', 'smbd').and_return(false)
+      expect(described_class.restart_for_new_addresses).to be false
+      expect(Privileged.calls).to be_empty
+    end
+  end
 end

@@ -1,8 +1,10 @@
-# Started by amahi-kai-tailscale.path: once Tailscale's addresses settle and differ from the
-# last ones seen, DNS and Samba get settings that name them (bin/amahi-follow-tailscale).
+# Once after each boot, and whenever amahi-kai-tailscale.path sees Tailscale's state change: once
+# Tailscale's addresses settle and differ from the last ones seen since boot, DNS and Samba get
+# settings that name them and smbd restarts to listen on them (bin/amahi-follow-tailscale). At
+# boot smbd starts before Tailscale has its address, which is why it runs then too.
 [Unit]
 Description=Amahi-kai: DNS and Samba follow Tailscale's address
-After=amahi-kai.service mariadb.service
+After=amahi-kai.service mariadb.service tailscaled.service smbd.service
 
 [Service]
 Type=oneshot
@@ -11,8 +13,12 @@ Group=amahi
 WorkingDirectory=/opt/amahi-kai
 EnvironmentFile=/etc/amahi-kai/amahi.env
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
-StateDirectory=amahi-kai-tailscale
+RuntimeDirectory=amahi-kai-tailscale
+RuntimeDirectoryPreserve=yes
 ExecStart=/opt/amahi-kai/bin/amahi-follow-tailscale
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=amahi-kai-tailscale
+
+[Install]
+WantedBy=multi-user.target
