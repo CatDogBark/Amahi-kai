@@ -57,6 +57,15 @@
               <% end %>
               <span class="text-muted small">Attempts are normal: the internet knocks on every address. A packet from the internet with a source address of your own network is forged, and the kernel drops it before anything sees it.</span>
             </dd>
+            <dt>Updates</dt>
+            <dd>
+              <% if @automatic_updates %>
+                ✓ Ubuntu's security updates install by themselves.
+              <% else %>
+                <span class="text-warning">✗ Ubuntu's security updates aren't automatic. A NAS that is the router faces the internet and should take them by itself.</span>
+                <%= button_to 'Turn automatic updates on', dns_automatic_updates_path, class: 'btn btn-sm btn-outline-secondary ms-2', form_class: 'd-inline' %>
+              <% end %>
+            </dd>
             <dt>Kept off the internet</dt>
             <dd>
               <% if @lan_only.any? %>

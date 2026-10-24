@@ -5,7 +5,7 @@ RSpec.describe SecurityAudit do
     it 'returns an array of checks' do
       checks = SecurityAudit.run_all
       expect(checks).to be_an(Array)
-      expect(checks.length).to eq(9)
+      expect(checks.length).to eq(10)
       checks.each do |check|
         expect(check).to be_a(SecurityAudit::Check)
         expect([:pass, :warn, :fail]).to include(check.status)
@@ -91,6 +91,19 @@ RSpec.describe SecurityAudit do
       check = checks.find { |c| c.name == 'security_updates' }
       expect(check).not_to be_nil
       expect(check.severity).to eq(:warning)
+    end
+
+    it 'includes automatic_updates check, which warns only while the NAS is the router' do
+      allow(SystemDependencies).to receive(:automatic?).and_return(false)
+      check = described_class.run_all.find { |c| c.name == 'automatic_updates' }
+      expect(check.status).to eq(:pass)
+      expect(check.description).to include('your choice')
+      allow(DnsService).to receive(:router?).and_return(true)
+      check = described_class.run_all.find { |c| c.name == 'automatic_updates' }
+      expect(check.status).to eq(:warn)
+      expect(check.description).to include('Network → Internet')
+      allow(SystemDependencies).to receive(:automatic?).and_return(true)
+      expect(described_class.run_all.find { |c| c.name == 'automatic_updates' }.status).to eq(:pass)
     end
 
     it 'includes samba_lan_binding check' do

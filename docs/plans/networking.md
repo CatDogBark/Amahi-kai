@@ -266,7 +266,15 @@ rule to count it; the kernel's `IPReversePathFilter` (`/proc/net/netstat`, reada
 is the count, since boot. **Dropped attempts**: the packet counter of UFW's
 `deny in on <wan>` rule, read by `network.wan_drops` (`iptables -L ufw-user-input -v -n -x`),
 shown with the later of the rules' load (`router.json` `since`) and boot, when UFW's counters
-start over.
+start over. Same day, before 0.10.0 (CatDogBark's two from the "household router" comparison):
+the sysctl drop-in also turns ICMP redirects off on the internet side (`accept_redirects` and
+`send_redirects` to 0 on all and the WAN: accepting is AND of the two while forwarding, sending
+is OR) and logs martians there (`log_martians` on the WAN only, for a WAN log later); every
+value from before is kept in `router.json` (`sysctl`) and put back on the way out, and the
+rules' shape number went to 3 so the resync applies it. And Ubuntu's automatic security
+updates, which the installer leaves off: the Internet page says whether they're on and turns
+them on with a button (`updates.set_automatic`), and the security audit warns while the NAS is
+the router without them (`automatic_updates`, a pass otherwise: the admin's choice).
 
 ### Later
 

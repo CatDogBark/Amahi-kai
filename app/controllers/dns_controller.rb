@@ -107,6 +107,7 @@ class DnsController < ApplicationController
     @wan_drops = DnsService.wan_drops
     @spoof_drops = DnsService.spoof_drops
     @lan_only = Host.where(lan_only: true).order(:name)
+    @automatic_updates = SystemDependencies.automatic?
     @force_dns = DnsService.force_dns?
     @tailscale_installed = DnsService.tailscale_installed?
     @blocking = DnsService.blocking?
@@ -116,6 +117,17 @@ class DnsController < ApplicationController
     @own_ipv6_address = DnsService.own_ipv6_address
     @ipv6_check = DnsService.ipv6_check
     @other_ipv6_dns = DnsService.other_ipv6_dns(@ipv6_check)
+  end
+
+  # Network → Internet: Ubuntu's security updates on, by themselves. A NAS that is the house's
+  # router faces the internet; the installer leaves automatic updates off (Settings → System
+  # Dependencies has the switch), so the page offers them while the NAS is the router.
+  def automatic_updates
+    SystemDependencies.set_automatic!(true)
+    flash[:notice] = "Automatic updates are on: Ubuntu installs its security updates by itself."
+    redirect_to dns_internet_path
+  rescue Privileged::Error => e
+    refuse(["Automatic updates couldn't be turned on: #{e.message}"], dns_internet_path)
   end
 
   def update_internet

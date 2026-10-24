@@ -115,7 +115,11 @@ the card that appears: a port, a protocol, the device (give it a fixed address o
 first) and its port. The NAS's own services (SSH, the web UI, Samba, DNS) never answer the
 internet side.
 
-The NAS doesn't answer pings from the internet either. The page counts what the internet side
+The NAS doesn't answer pings from the internet either, nor takes or sends route changes
+(ICMP redirects) there. A NAS that is the router faces the internet, so the page also says
+whether Ubuntu's security updates install by themselves, and turns them on with one click (the
+installer leaves them off; the security audit warns while the NAS is the router without them).
+The page counts what the internet side
 dropped: **connection attempts** at the NAS from the internet, pings among them, since the
 rules were loaded (every save of this page, and a restart, starts the count over; attempts are
 normal, the internet knocks on every address), and **forged packets**, ones

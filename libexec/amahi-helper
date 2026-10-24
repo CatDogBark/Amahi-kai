@@ -212,7 +212,16 @@ module AmahiHelper
   ROUTER_FILTER_END = '# END amahi-kai router filter'
   # The shape of the router's rules, kept in ROUTER_STATE: bumped whenever it changes, so the
   # app's resync after an update (DnsService.resync!) puts the new shape in place.
-  ROUTER_RULES_VERSION = 2
+  ROUTER_RULES_VERSION = 3
+  # The router's kernel settings besides forwarding, for all interfaces and for the internet
+  # side: strict reverse-path filtering there (Ubuntu sets every interface loose, 2, and the
+  # kernel takes the stricter of all and the interface's own, so all goes to 1 and only the
+  # internet interface's own 1 bites); ICMP redirects neither taken nor sent there (a redirect
+  # would move the NAS's routes; accepting is AND of all and the interface's while forwarding,
+  # sending is OR, so both go to 0 on all as well); and martians, packets with an impossible
+  # source, logged on the internet side.
+  ROUTER_SYSCTL_ALL = { 'rp_filter' => '1', 'accept_redirects' => '0', 'send_redirects' => '0' }.freeze
+  ROUTER_SYSCTL_WAN = { 'rp_filter' => '1', 'accept_redirects' => '0', 'send_redirects' => '0', 'log_martians' => '1' }.freeze
   PORT_FORWARD_MAX = 50
   # Devices kept off the internet (Network → Devices, LAN only), by address.
   LAN_ONLY_MAX = 200
@@ -3513,10 +3522,10 @@ module AmahiHelper
       end
       run_command([NETPLAN, 'apply'])
       previous = read_json(ROUTER_STATE)
-      # The reverse-path settings from before router mode, kept across its saves, for the way back.
-      rp_filter_before = previous&.dig('rp_filter') || rp_filter_values(wan)
+      # The kernel settings from before router mode, kept across its saves, for the way back.
+      sysctl_before = sysctl_before(previous, wan)
       do_install(ROUTER_SYSCTL, router_sysctl(wan), nil)
-      run_command(['/usr/sbin/sysctl', '-q', '-w', 'net.ipv4.ip_forward=1', 'net.ipv4.conf.all.rp_filter=1', "net.ipv4.conf.#{wan}.rp_filter=1"])
+      run_command(['/usr/sbin/sysctl', '-q', '-w', *router_sysctl_settings(wan).map { |key, value| "#{key}=#{value}" }])
       ufw_router_rules_off(previous) if previous
       write_router_nat(wan, forwards, lan, dns, lan_only)
       run_command([UFW, 'route', 'allow', 'in', 'on', lan, 'out', 'on', wan])
@@ -3538,7 +3547,7 @@ module AmahiHelper
       previous_pinned = previous ? previous['pinned'] : nil
       state = { 'lan' => lan, 'wan' => wan, 'forwards' => forwards.map { |f| f.transform_keys(&:to_s) },
                 'pinned' => (previous_pinned || {}).merge(pinned), 'dns' => dns, 'tailscale' => tailscale,
-                'lan_only' => lan_only, 'rp_filter' => rp_filter_before, 'since' => Time.now.to_i, 'rules' => ROUTER_RULES_VERSION }
+                'lan_only' => lan_only, 'sysctl' => sysctl_before, 'since' => Time.now.to_i, 'rules' => ROUTER_RULES_VERSION }
       do_install(ROUTER_STATE, "#{JSON.generate(state)}\n", nil, '0644')
       nil
     end
@@ -3555,7 +3564,7 @@ module AmahiHelper
         clear_router_nat(state)
       end
       do_remove_files(ROUTER_SYSCTL, ROUTER_STATE)
-      run_command(['/usr/sbin/sysctl', '-q', '-w', 'net.ipv4.ip_forward=0', *rp_filter_restore(state), { allow_failure: true }])
+      run_command(['/usr/sbin/sysctl', '-q', '-w', 'net.ipv4.ip_forward=0', *sysctl_restore(state), { allow_failure: true }])
       notes = restore_lan_netplan(state && state['pinned'])
       return notes unless File.exist?(WAN_NETPLAN)
       wan = File.read(WAN_NETPLAN)[/^    ([A-Za-z0-9_.-]{1,15}):$/, 1]
@@ -3888,26 +3897,48 @@ module AmahiHelper
       raise Failed, "couldn't read #{UFW_BEFORE_RULES}: #{e.message}"
     end
 
-    # Forwarding, and strict reverse-path filtering on the internet side: a packet arriving there
-    # with a source address the NAS would route elsewhere (one of its own networks, spoofed) is
-    # dropped by the kernel. Ubuntu sets every interface loose (2); the kernel takes the stricter
-    # of all and the interface's own, so all goes to 1 and only the internet interface's own 1
-    # bites; the others keep their 2.
+    # The router's kernel settings (ROUTER_SYSCTL_ALL, ROUTER_SYSCTL_WAN), forwarding first, as
+    # sysctl names them: { 'net.ipv4.conf.all.rp_filter' => '1', ... }.
+    def router_sysctl_settings(wan)
+      settings = { 'net.ipv4.ip_forward' => '1' }
+      ROUTER_SYSCTL_ALL.each { |name, value| settings[sysctl_key('all', name)] = value }
+      ROUTER_SYSCTL_WAN.each { |name, value| settings[sysctl_key(wan, name)] = value }
+      settings
+    end
+
     def router_sysctl(wan)
-      "net.ipv4.ip_forward = 1\nnet.ipv4.conf.all.rp_filter = 1\nnet.ipv4.conf.#{wan}.rp_filter = 1\n"
+      router_sysctl_settings(wan).map { |key, value| "#{key} = #{value}\n" }.join
     end
 
-    # { 'all' => '2', 'ens20' => '2' }: the reverse-path settings as they are.
-    def rp_filter_values(wan)
-      ['all', wan].to_h { |name| [name, File.read("/proc/sys/net/ipv4/conf/#{name}/rp_filter").strip] }
+    # An interface's setting as sysctl and sysctl.d name it; one with a dot in its name (a
+    # VLAN's) takes the slash form throughout.
+    def sysctl_key(scope, name)
+      scope.include?('.') ? "net/ipv4/conf/#{scope}/#{name}" : "net.ipv4.conf.#{scope}.#{name}"
+    end
+
+    # The settings as they were before router mode, for the way back: those a previous state
+    # kept, the rest read now. (A state from before the settings beyond rp_filter kept those two
+    # under 'rp_filter'.)
+    def sysctl_before(previous, wan)
+      kept = (previous && previous['sysctl']).is_a?(Hash) ? previous['sysctl'].dup : {}
+      Hash(previous && previous['rp_filter']).each { |scope, value| kept[sysctl_key(scope.to_s, 'rp_filter')] ||= value }
+      router_sysctl_settings(wan).each_key do |key|
+        next if key == 'net.ipv4.ip_forward' || kept.key?(key)
+        value = read_sysctl(key) and kept[key] = value
+      end
+      kept
+    end
+
+    def read_sysctl(key)
+      File.read("/proc/sys/#{key.include?('/') ? key : key.tr('.', '/')}").strip
     rescue SystemCallError
-      {}
+      nil
     end
 
-    # The sysctl arguments that put them back.
-    def rp_filter_restore(state)
-      Hash(state && state['rp_filter']).filter_map do |name, value|
-        "net.ipv4.conf.#{name}.rp_filter=#{value}" if name.to_s.match?(/\A[A-Za-z0-9_.-]{1,15}\z/) && value.to_s.match?(/\A[0-2]\z/)
+    # The sysctl arguments that put the settings back.
+    def sysctl_restore(state)
+      Hash(state && state['sysctl']).filter_map do |key, value|
+        "#{key}=#{value}" if key.to_s.match?(%r{\Anet[./]ipv4[./]conf[./][A-Za-z0-9_.-]{1,15}[./][a-z_]+\z}) && value.to_s.match?(/\A[0-9]\z/)
       end
     end
 

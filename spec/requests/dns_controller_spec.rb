@@ -59,6 +59,20 @@ describe 'Network → DNS & DHCP', type: :request do
       expect(response).to have_http_status(:ok)
       expect(response.body).to include('1,234 connection attempts at the NAS dropped in the last about 2 hours', '7 packets claiming an address inside your network dropped',
                                         'camera: on the LAN only')
+      allow(SystemDependencies).to receive(:automatic?).and_return(false)
+      get '/network/internet'
+      expect(response.body).to include("Ubuntu's security updates aren't automatic", '>Turn automatic updates on</button>')
+      allow(SystemDependencies).to receive(:automatic?).and_return(true)
+      get '/network/internet'
+      expect(response.body).to include("✓ Ubuntu's security updates install by themselves.")
+      expect(response.body).not_to include('Turn automatic updates on')
+    end
+
+    it "turns Ubuntu's automatic updates on from the Internet page" do
+      post '/network/internet/automatic_updates'
+      expect(response).to redirect_to('/network/internet')
+      expect(flash[:notice]).to include('Automatic updates are on')
+      expect(Privileged.calls).to include(['updates.set_automatic', { enabled: true }])
     end
 
     it 'shows how it is answering while it is on' do

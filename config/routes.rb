@@ -38,6 +38,7 @@ Rails.application.routes.draw do
     put 'dhcp', action: 'update_dhcp', as: 'update_dhcp'
     get 'internet', action: 'internet', as: 'internet'
     put 'internet', action: 'update_internet', as: 'update_internet'
+    post 'internet/automatic_updates', action: 'automatic_updates', as: 'automatic_updates'
     get 'dns/install_stream', action: 'install_stream', as: 'install_stream'
     get 'dns/install_dnsmasq_stream', action: 'install_dnsmasq_stream', as: 'install_dnsmasq_stream'
     get 'dns/install_radvd_stream', action: 'install_radvd_stream', as: 'install_radvd_stream'

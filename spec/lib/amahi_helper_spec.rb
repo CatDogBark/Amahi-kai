@@ -1322,7 +1322,8 @@ RSpec.describe 'AmahiHelper' do
       end
       allow(helper).to receive(:capture).with([AmahiHelper::IPTABLES, '-w', '-t', 'nat', '-S', 'PREROUTING']).and_return("-P PREROUTING ACCEPT\n")
       allow(helper).to receive(:capture).with([AmahiHelper::IPTABLES, '-w', '-t', 'nat', '-S', 'POSTROUTING']).and_return("-P POSTROUTING ACCEPT\n")
-      allow(helper).to receive(:rp_filter_values).and_return('all' => '2', 'ens20' => '2') # Ubuntu's loose setting, as read
+      # Ubuntu's settings, as read: reverse-path loose, redirects taken and sent, martians unlogged
+      allow(helper).to receive(:read_sysctl) { |key| { 'rp_filter' => '2', 'accept_redirects' => '1', 'send_redirects' => '1', 'log_martians' => '0' }[key.split('.').last] }
     end
 
     after { FileUtils.rm_rf(dir) }
@@ -1357,7 +1358,9 @@ RSpec.describe 'AmahiHelper' do
       helper.do_router_on('ens19', 'ens20', forwards)
       expect(File.read(AmahiHelper::WAN_NETPLAN)).to include('    ens20:', 'dhcp4: true', 'dhcp6: false', 'route-metric: 50')
       expect(File.stat(AmahiHelper::WAN_NETPLAN).mode & 0o777).to eq(0o600)
-      expect(File.read(AmahiHelper::ROUTER_SYSCTL)).to eq("net.ipv4.ip_forward = 1\nnet.ipv4.conf.all.rp_filter = 1\nnet.ipv4.conf.ens20.rp_filter = 1\n")
+      expect(File.read(AmahiHelper::ROUTER_SYSCTL)).to eq("net.ipv4.ip_forward = 1\nnet.ipv4.conf.all.rp_filter = 1\nnet.ipv4.conf.all.accept_redirects = 0\n" \
+                                                         "net.ipv4.conf.all.send_redirects = 0\nnet.ipv4.conf.ens20.rp_filter = 1\nnet.ipv4.conf.ens20.accept_redirects = 0\n" \
+                                                         "net.ipv4.conf.ens20.send_redirects = 0\nnet.ipv4.conf.ens20.log_martians = 1\n")
       rules = File.read(AmahiHelper::UFW_BEFORE_RULES)
       expect(rules).to start_with("# rules.before\n# BEGIN amahi-kai router\n*nat\n")
       expect(rules).to include(":amahi-kai-prerouting - [0:0]\n:amahi-kai-postrouting - [0:0]\n-F amahi-kai-prerouting\n-F amahi-kai-postrouting\n",
@@ -1368,7 +1371,9 @@ RSpec.describe 'AmahiHelper' do
       expect(rules).to end_with("-A ufw-before-input -i lo -j ACCEPT\n# BEGIN amahi-kai router filter\n" \
                                 "-I ufw-before-input 1 -i ens20 -p icmp --icmp-type echo-request -j DROP\n# END amahi-kai router filter\nCOMMIT\n")
       expect(ran).to eq(["#{AmahiHelper::NETPLAN} generate", "#{AmahiHelper::NETPLAN} apply",
-                         '/usr/sbin/sysctl -q -w net.ipv4.ip_forward=1 net.ipv4.conf.all.rp_filter=1 net.ipv4.conf.ens20.rp_filter=1',
+                         '/usr/sbin/sysctl -q -w net.ipv4.ip_forward=1 net.ipv4.conf.all.rp_filter=1 net.ipv4.conf.all.accept_redirects=0 ' \
+                         'net.ipv4.conf.all.send_redirects=0 net.ipv4.conf.ens20.rp_filter=1 net.ipv4.conf.ens20.accept_redirects=0 ' \
+                         'net.ipv4.conf.ens20.send_redirects=0 net.ipv4.conf.ens20.log_martians=1',
                          '/usr/sbin/ufw route allow in on ens19 out on ens20',
                          '/usr/sbin/ufw route allow in on ens20 out on ens19 to 10.99.0.60 port 80 proto tcp',
                          '/usr/sbin/ufw insert 1 deny in on ens20', '/usr/sbin/ufw reload',
@@ -1376,7 +1381,10 @@ RSpec.describe 'AmahiHelper' do
                          '/usr/sbin/iptables -w -t nat -D POSTROUTING -j amahi-kai-postrouting', '/usr/sbin/iptables -w -t nat -A POSTROUTING -j amahi-kai-postrouting'])
       state = JSON.parse(File.read(AmahiHelper::ROUTER_STATE))
       expect(state).to include('lan' => 'ens19', 'wan' => 'ens20', 'pinned' => {}, 'dns' => nil, 'tailscale' => false, 'lan_only' => [],
-                               'rp_filter' => { 'all' => '2', 'ens20' => '2' }, 'rules' => AmahiHelper::ROUTER_RULES_VERSION,
+                               'sysctl' => { 'net.ipv4.conf.all.rp_filter' => '2', 'net.ipv4.conf.all.accept_redirects' => '1', 'net.ipv4.conf.all.send_redirects' => '1',
+                                             'net.ipv4.conf.ens20.rp_filter' => '2', 'net.ipv4.conf.ens20.accept_redirects' => '1',
+                                             'net.ipv4.conf.ens20.send_redirects' => '1', 'net.ipv4.conf.ens20.log_martians' => '0' },
+                               'rules' => AmahiHelper::ROUTER_RULES_VERSION,
                                'forwards' => [{ 'protocol' => 'tcp', 'port' => 8080, 'address' => '10.99.0.60', 'to_port' => 80 }])
       expect(state['since']).to be_within(5).of(Time.now.to_i)
     end
@@ -1416,12 +1424,14 @@ RSpec.describe 'AmahiHelper' do
                              '/usr/sbin/ufw route delete deny in on ens19 out on ens20 from 10.99.0.61',
                              '/usr/sbin/ufw route insert 1 deny in on ens19 out on ens20 from 10.99.0.61')
       expect(ran).not_to include('/usr/sbin/ufw route insert 1 deny in on ens19 out on ens20 from 10.99.0.60')
-      expect(JSON.parse(File.read(AmahiHelper::ROUTER_STATE))['rp_filter']).to eq('all' => '2', 'ens20' => '2') # as before router mode, kept across saves
+      expect(JSON.parse(File.read(AmahiHelper::ROUTER_STATE))['sysctl']).to include('net.ipv4.conf.all.rp_filter' => '2') # as before router mode, kept across saves
 
       ran.clear
       helper.do_router_off
       expect(ran).to include('/usr/sbin/ufw route delete deny in on ens19 out on ens20 from 10.99.0.61',
-                             '/usr/sbin/sysctl -q -w net.ipv4.ip_forward=0 net.ipv4.conf.all.rp_filter=2 net.ipv4.conf.ens20.rp_filter=2')
+                             '/usr/sbin/sysctl -q -w net.ipv4.ip_forward=0 net.ipv4.conf.all.rp_filter=2 net.ipv4.conf.all.accept_redirects=1 ' \
+                             'net.ipv4.conf.all.send_redirects=1 net.ipv4.conf.ens20.rp_filter=2 net.ipv4.conf.ens20.accept_redirects=1 ' \
+                             'net.ipv4.conf.ens20.send_redirects=1 net.ipv4.conf.ens20.log_martians=0')
       expect { helper.do_wan_drops }.to raise_error(AmahiHelper::Refused, /isn't the router/)
     end
 
@@ -1511,7 +1521,9 @@ RSpec.describe 'AmahiHelper' do
                          '/usr/sbin/iptables -w -t nat -X amahi-kai-prerouting',
                          '/usr/sbin/iptables -w -t nat -D POSTROUTING -j amahi-kai-postrouting', '/usr/sbin/iptables -w -t nat -F amahi-kai-postrouting',
                          '/usr/sbin/iptables -w -t nat -X amahi-kai-postrouting',
-                         '/usr/sbin/sysctl -q -w net.ipv4.ip_forward=0 net.ipv4.conf.all.rp_filter=2 net.ipv4.conf.ens20.rp_filter=2',
+                         '/usr/sbin/sysctl -q -w net.ipv4.ip_forward=0 net.ipv4.conf.all.rp_filter=2 net.ipv4.conf.all.accept_redirects=1 ' \
+                         'net.ipv4.conf.all.send_redirects=1 net.ipv4.conf.ens20.rp_filter=2 net.ipv4.conf.ens20.accept_redirects=1 ' \
+                         'net.ipv4.conf.ens20.send_redirects=1 net.ipv4.conf.ens20.log_martians=0',
                          "#{AmahiHelper::NETPLAN} apply", "#{AmahiHelper::IP} -4 addr flush dev ens20"])
       expect(File.read(AmahiHelper::UFW_BEFORE_RULES)).to eq(before_rules)
       expect(%w[WAN_NETPLAN ROUTER_SYSCTL ROUTER_STATE].map { |c| File.exist?(AmahiHelper.const_get(c)) }).to all(be false)
