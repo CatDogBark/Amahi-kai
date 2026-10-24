@@ -40,6 +40,14 @@ next to it.
 - [ ] **Network → DNS** opens, says **Not installed** (or **Off**), and offers **Install
   Unbound**. Nothing listens on port 53 on the NAS's addresses (the second command above).
 - [ ] **Network → Hosts** and **DNS Aliases** still list what they did.
+- [ ] **Network → Devices, This NAS** lists each port with its address, *from the network (DHCP)*
+  or *fixed*, and its router. Give the NAS a fixed address on the port you're connected through
+  (the one it has now is fine, or one outside the router's DHCP range): the moving page appears,
+  reaches the NAS at the new address within a few seconds and lands on Devices there, which says
+  the port moved. Then try an address nothing can reach (another network, say `10.250.0.2`):
+  the page counts down, says nothing reached the NAS, and brings you back to the old address
+  about 90 seconds later. `sudo iptables -t nat -S PREROUTING` on the NAS shows each NAT rule
+  once (in `amahi-kai-prerouting`), never a stale copy with an old address.
 - [ ] **Settings → Servers** shows Unbound, dnsmasq and radvd as not installed (or *DNS is off*,
   *DHCP is off*, *Not announcing*), not as failed.
 
