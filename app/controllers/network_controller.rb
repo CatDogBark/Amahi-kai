@@ -68,6 +68,12 @@ class NetworkController < ApplicationController
       @mode = mode
       @new_host = mode == 'fixed' ? address.split('/').first : "#{SystemInfo.hostname}.local"
       @until = Time.now.to_i + NetworkAddress::APPLY_WAIT + NetworkAddress::WAIT
+      # The page's probe calls the NAS at the new address, another origin, which the site's
+      # Content-Security-Policy (connect-src 'self') would forbid: this page alone may call it.
+      if (policy = request.content_security_policy&.clone)
+        policy.connect_src(:self, helpers.amahi_url(@new_host).chomp('/'))
+        request.content_security_policy = policy
+      end
       render 'moving'
     else
       flash[:notice] = mode == 'fixed' ? "#{interface} is at #{address.split('/').first}." : "#{interface} takes its address from the network again."

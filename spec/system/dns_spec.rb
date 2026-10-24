@@ -26,6 +26,31 @@ RSpec.describe 'DNS & DHCP', type: :system do
     expect(page).to have_checked_field('mode-automatic-ens18')
   end
 
+  # The moving page's probe calls the NAS at its new address, another origin (here the same
+  # server by another name, localhost against the session's 127.0.0.1): the page's
+  # Content-Security-Policy has to let it, and a probe that lands keeps the change and sends the
+  # browser to the new address (where it has no session, so it's the sign-in page).
+  it "reaches the NAS at the new address from the browser, keeps the change and goes there" do
+    rows = [NetworkAddress::Interface.new(name: 'ens18', addresses: [NetworkInterfaces::Address.new(ip: IPAddr.new('127.0.0.1'), prefix: 8)],
+                                          automatic: false, gateway: nil, part: nil)]
+    allow(NetworkAddress).to receive_messages(interfaces: rows, nameservers: [], settle!: nil, arrival_interface: 'ens18',
+                                              state: { 'state' => 'pending', 'interface' => 'ens18', 'since' => Time.now.to_i, 'until' => Time.now.to_i + 90 })
+    allow(NetworkPorts).to receive(:all).and_return({})
+    allow(Leases).to receive(:all).and_return([])
+    sign_in_as_admin
+    visit '/network'
+    port = Capybara.current_session.server.port
+    allow(ENV).to receive(:fetch).and_call_original
+    allow(ENV).to receive(:fetch).with('PORT', '3000').and_return(port.to_s)
+    click_link 'Change'
+    fill_in 'address-ens18', with: 'localhost'
+    within('.address-form') { click_button 'Save' }
+    expect(page).to have_text('Moving the NAS to localhost')
+    expect(page).to have_current_path(%r{\Ahttp://localhost:#{port}/}, url: true, wait: 20)
+    expect(page).to have_button(I18n.t('log_in'))
+    expect(Privileged.calls.map(&:first)).to include('network.set_address', 'network.keep_address')
+  end
+
   it 'installs Unbound in its window' do
     sign_in_as_admin
     visit '/network/dns'

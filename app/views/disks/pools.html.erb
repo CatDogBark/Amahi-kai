@@ -247,7 +247,18 @@
                 <td><%= [drive[:model], drive[:serial]].compact.join(' · ').presence || '—' %></td>
                 <td class="text-nowrap"><%= number_to_human_size(drive[:size]) %><%= ' SSD' if drive[:ssd] %></td>
                 <td>
-                  <%= drive_role(drive) %>
+                  <% blocker = @share_drive_blockers[drive[:path]] if @status[:installed] && drive[:role] == :share %>
+                  <% if blocker %>
+                    <span class="tip-text" tabindex="0" data-tip="Not free for a pool: <%= blocker %>. Move that off first, then it can be freed here."><%= drive_role(drive) %></span>
+                  <% else %>
+                    <%= drive_role(drive) %>
+                  <% end %>
+                  <%# A drive in share storage that's empty and unused: unmounted, it's free for a pool %>
+                  <% if @status[:installed] && drive[:role] == :share && !blocker %>
+                    <button type="button" class="btn btn-sm btn-outline-secondary ms-2" data-storage-post="<%= disks_free_pool_drive_path %>"
+                            data-drive="<%= drive[:path] %>" id="free-<%= File.basename(drive[:path]) %>"
+                            data-confirm="Free <%= drive[:path] %> for a pool? It's unmounted from <%= drive[:mounts].join(', ') %> and stops being share storage. Nothing is on it, and a pool made with it erases it.">Free this drive</button>
+                  <% end %>
                   <%# Share storage won't take a disk with a ZFS label; a new pool erases it itself %>
                   <% if @status[:installed] && StoragePools::OLD_LABEL.include?(drive[:role]) %>
                     <button type="button" class="btn btn-sm btn-outline-warning ms-2" data-storage-post="<%= disks_erase_pool_drive_path %>"

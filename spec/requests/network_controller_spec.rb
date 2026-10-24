@@ -29,7 +29,10 @@ describe "Network Controller", type: :request do
   end
 
   describe "admin" do
-    before { login_as_admin }
+    before do
+      login_as_admin
+      allow(DnsService).to receive(:lan_prefix).and_return('192.168.1') # not the test machine's own network
+    end
 
     describe "GET /network (devices)" do
       it "shows the devices seen and the fixed addresses, with the old Hosts page sent here" do
@@ -171,6 +174,10 @@ describe "Network Controller", type: :request do
         expect(response).to have_http_status(:ok)
         expect(response.body).to include('Moving the NAS to 192.168.1.111', 'data-probe="http://192.168.1.111:3000/network/address/reached"',
                                          'data-target="http://192.168.1.111:3000/network"', 'data-status="/network/address"')
+        # The probe calls the new address, another origin: this page's policy lets it, and only this page's
+        expect(response.headers['Content-Security-Policy']).to include("connect-src 'self' http://192.168.1.111:3000")
+        get "/network"
+        expect(response.headers['Content-Security-Policy']).to include("connect-src 'self';")
         expect(Privileged.calls.last).to eq(['network.set_address', { interface: 'ens18', mode: 'fixed', guard: true, address: '192.168.1.111/24', gateway: nil, dns: [] }])
         expect(NetworkAddress).not_to have_received(:settle!)
         put "/network/address", params: { interface: 'ens18', mode: 'automatic' }

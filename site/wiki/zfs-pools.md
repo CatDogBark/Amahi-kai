@@ -30,7 +30,10 @@ offline.
 ## Creating a pool
 
 1. Under **Create a pool**, tick the drives. Only free drives can be ticked: never the system disk,
-   share storage or another pool's drives.
+   share storage or another pool's drives. A drive mounted for share storage on **Disks → Devices**
+   isn't free; leave the drives for a pool unmounted there. If one is mounted and nothing is on it,
+   **Free this drive** in its row here unmounts it (a pool made with it erases it). A drive in
+   share storage that holds files, a share's folder or the Greyhole pool says why it can't be freed.
 2. Choose a **Layout**. The page suggests one for the drives you ticked, and shows the space each
    layout gives and how many drives can fail.
 3. Give it a **Name** (lowercase letters, digits, `_` and `-`). It's mounted at
