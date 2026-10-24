@@ -238,7 +238,14 @@ fixed device, carried to `network.router_on` as `lan_only` (addresses) and put i
 `ufw route insert 1 deny in on <lan> out on <wan> from <address>`, ahead of the LAN's allow; the
 Host model rewrites the router's rules when the flag, the address or the device changes while
 the NAS is the router (the flag waits otherwise). By address, not MAC: a wireless relay rewrites
-frames' source MACs while the DHCP lease keeps the device's own. **Anti-spoofing**: strict
+frames' source MACs while the DHCP lease keeps the device's own. Found on the island: UFW's own
+`before.rules` accept ICMP (echo among them) in `ufw-before-forward` and `ufw-before-input`
+ahead of any rule added through `ufw`, so the kept-off client could still ping the ISP and the
+NAS answered pings from the internet. The router's block in `before.rules` now has a filter
+part too, inserted before the table's COMMIT: `-I ufw-before-forward 1 -i <lan> -o <wan>
+-s <address> -j DROP` per kept-off device and `-I ufw-before-input 1 -i <wan> -p icmp
+--icmp-type echo-request -j DROP`; UFW flushes its own chains on reload, so these don't pile
+up. **Anti-spoofing**: strict
 reverse-path filtering on the internet side. Ubuntu sets every interface loose (`rp_filter = 2`)
 and the kernel takes the stricter of `all` and the interface's own, so the router's sysctl
 drop-in sets `all` and the WAN to 1 (the LAN's own 2 keeps it loose there), live too; the values

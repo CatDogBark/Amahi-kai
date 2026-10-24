@@ -1364,7 +1364,9 @@ RSpec.describe 'AmahiHelper' do
                                '-A amahi-kai-prerouting -i ens20 -p tcp --dport 8080 -j DNAT --to-destination 10.99.0.60:80',
                                "-A amahi-kai-postrouting -o ens20 -j MASQUERADE\n-A PREROUTING -j amahi-kai-prerouting\n-A POSTROUTING -j amahi-kai-postrouting\n",
                                "COMMIT\n# END amahi-kai router\n*filter\n")
-      expect(rules).to end_with(before_rules.delete_prefix("# rules.before\n"))
+      # UFW's own rules stay, and the filter part sits in front of its ICMP accepts, before the table's COMMIT
+      expect(rules).to end_with("-A ufw-before-input -i lo -j ACCEPT\n# BEGIN amahi-kai router filter\n" \
+                                "-I ufw-before-input 1 -i ens20 -p icmp --icmp-type echo-request -j DROP\n# END amahi-kai router filter\nCOMMIT\n")
       expect(ran).to eq(["#{AmahiHelper::NETPLAN} generate", "#{AmahiHelper::NETPLAN} apply",
                          '/usr/sbin/sysctl -q -w net.ipv4.ip_forward=1 net.ipv4.conf.all.rp_filter=1 net.ipv4.conf.ens20.rp_filter=1',
                          '/usr/sbin/ufw route allow in on ens19 out on ens20',
@@ -1389,6 +1391,9 @@ RSpec.describe 'AmahiHelper' do
                              '/usr/sbin/ufw route insert 1 deny in on ens19 out on ens20 from 10.99.0.61')
       expect(ran.index('/usr/sbin/ufw route insert 1 deny in on ens19 out on ens20 from 10.99.0.60')).to be > ran.index('/usr/sbin/ufw route allow in on ens19 out on ens20')
       expect(JSON.parse(File.read(AmahiHelper::ROUTER_STATE))['lan_only']).to eq(['10.99.0.60', '10.99.0.61'])
+      # In front of UFW's ICMP accepts, which would let a kept-off device ping out
+      expect(File.read(AmahiHelper::UFW_BEFORE_RULES)).to include("-I ufw-before-forward 1 -i ens19 -o ens20 -s 10.99.0.60 -j DROP\n" \
+                                                                   "-I ufw-before-forward 1 -i ens19 -o ens20 -s 10.99.0.61 -j DROP\n# END amahi-kai router filter\nCOMMIT\n")
 
       allow(helper).to receive(:capture).with([AmahiHelper::IPTABLES, '-w', '-L', 'ufw-user-input', '-v', '-n', '-x']).and_return(<<~RULES)
         Chain ufw-user-input (1 references)
@@ -1396,7 +1401,13 @@ RSpec.describe 'AmahiHelper' do
               12      720 DROP       all  --  ens20  *       0.0.0.0/0            0.0.0.0/0
                3      180 ACCEPT     tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            tcp dpt:22
       RULES
-      expect(helper.do_wan_drops).to include('dropped' => 12)
+      allow(helper).to receive(:capture).with([AmahiHelper::IPTABLES, '-w', '-L', 'ufw-before-input', '-v', '-n', '-x']).and_return(<<~RULES)
+        Chain ufw-before-input (1 references)
+            pkts      bytes target     prot opt in     out     source               destination
+               5      420 DROP       icmp --  ens20  *       0.0.0.0/0            0.0.0.0/0            icmptype 8
+             900    54000 ACCEPT     all  --  lo     *       0.0.0.0/0            0.0.0.0/0
+      RULES
+      expect(helper.do_wan_drops).to include('dropped' => 17) # the firewall's drops and the pings
       expect(helper.do_wan_drops['since']).to be_within(5).of(Time.now.to_i)
 
       ran.clear
@@ -1442,7 +1453,8 @@ RSpec.describe 'AmahiHelper' do
                              '/usr/sbin/ufw route delete allow in on ens20 out on ens19 to 10.99.0.60 port 80 proto tcp',
                              '/usr/sbin/ufw route allow in on ens19 out on ens21', '/usr/sbin/ufw insert 1 deny in on ens21')
       rules = File.read(AmahiHelper::UFW_BEFORE_RULES)
-      expect(rules.scan('BEGIN amahi-kai router').size).to eq(1)
+      expect(rules.scan("BEGIN amahi-kai router\n").size).to eq(1)
+      expect(rules.scan("BEGIN amahi-kai router filter\n").size).to eq(1)
       expect(rules).to include('-o ens21 -j MASQUERADE')
       expect(rules).not_to include('ens20', 'DNAT')
     end

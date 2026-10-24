@@ -205,6 +205,11 @@ module AmahiHelper
   # copy kept redirecting DNS to the NAS's previous address).
   NAT_PREROUTING = 'amahi-kai-prerouting'
   NAT_POSTROUTING = 'amahi-kai-postrouting'
+  # The block's filter part, in front of UFW's own before rules: those accept ICMP (pings among
+  # them) ahead of any rule added through ufw, so a kept-off device could still ping out and
+  # the NAS answered pings from the internet.
+  ROUTER_FILTER_BEGIN = '# BEGIN amahi-kai router filter'
+  ROUTER_FILTER_END = '# END amahi-kai router filter'
   PORT_FORWARD_MAX = 50
   # Devices kept off the internet (Network → Devices, LAN only), by address.
   LAN_ONLY_MAX = 200
@@ -3510,7 +3515,7 @@ module AmahiHelper
       do_install(ROUTER_SYSCTL, router_sysctl(wan), nil)
       run_command(['/usr/sbin/sysctl', '-q', '-w', 'net.ipv4.ip_forward=1', 'net.ipv4.conf.all.rp_filter=1', "net.ipv4.conf.#{wan}.rp_filter=1"])
       ufw_router_rules_off(previous) if previous
-      write_router_nat(wan, forwards, lan, dns)
+      write_router_nat(wan, forwards, lan, dns, lan_only)
       run_command([UFW, 'route', 'allow', 'in', 'on', lan, 'out', 'on', wan])
       forwards.each do |f|
         run_command([UFW, 'route', 'allow', 'in', 'on', wan, 'out', 'on', lan, 'to', f[:address], 'port', f[:to_port].to_s, 'proto', f[:protocol]])
@@ -3850,10 +3855,18 @@ module AmahiHelper
     # UFW's before.rules with Amahi-kai's NAT block (masquerade out of +wan+, a DNAT in for each
     # forward, and lookups from the LAN sent elsewhere redirected to +dns+) in front of its
     # filter table, or without it, given nil. The rest of the file is UFW's own and isn't touched.
-    def write_router_nat(wan, forwards, lan = nil, dns = nil)
+    def write_router_nat(wan, forwards, lan = nil, dns = nil, lan_only = [])
       content = File.read(UFW_BEFORE_RULES)
       content = content.sub(/#{Regexp.escape(ROUTER_BEGIN)}\n.*?#{Regexp.escape(ROUTER_END)}\n/m, '')
+      content = content.sub(/#{Regexp.escape(ROUTER_FILTER_BEGIN)}\n.*?#{Regexp.escape(ROUTER_FILTER_END)}\n/m, '')
       if wan
+        # In front of UFW's own ICMP accepts (inserted first, before the filter table's COMMIT):
+        # the NAS doesn't answer pings from the internet, and a kept-off device can't ping out.
+        filter = [ROUTER_FILTER_BEGIN, "-I ufw-before-input 1 -i #{wan} -p icmp --icmp-type echo-request -j DROP"]
+        lan_only.each { |address| filter << "-I ufw-before-forward 1 -i #{lan} -o #{wan} -s #{address} -j DROP" } if lan
+        filter << ROUTER_FILTER_END
+        commit = content.rindex("COMMIT\n") or raise Failed, "#{UFW_BEFORE_RULES} has no COMMIT to put the filter rules before"
+        content = "#{content[0...commit]}#{filter.join("\n")}\n#{content[commit..]}"
         lines = [ROUTER_BEGIN, '*nat', ':PREROUTING ACCEPT [0:0]', ':POSTROUTING ACCEPT [0:0]',
                  ":#{NAT_PREROUTING} - [0:0]", ":#{NAT_POSTROUTING} - [0:0]", "-F #{NAT_PREROUTING}", "-F #{NAT_POSTROUTING}"]
         if dns && lan
@@ -3904,7 +3917,12 @@ module AmahiHelper
         packets, _bytes, target, _proto, _opt, input, output, source, destination = line.split
         packets.to_i if target == 'DROP' && input == wan && output == '*' && source == '0.0.0.0/0' && destination == '0.0.0.0/0'
       end.first
-      { 'dropped' => dropped, 'since' => state['since'] }
+      # Pings from the internet, dropped in front of UFW's accept (the block's filter part).
+      pings = capture([IPTABLES, '-w', '-L', 'ufw-before-input', '-v', '-n', '-x']).each_line.filter_map do |line|
+        packets, _bytes, target, proto, _opt, input = line.split
+        packets.to_i if target == 'DROP' && %w[icmp 1].include?(proto) && input == wan
+      end.first.to_i
+      { 'dropped' => dropped && dropped + pings, 'since' => state['since'] }
     end
 
     # After UFW's reload: one jump each into the NAS's nat chains (the reload appended another),

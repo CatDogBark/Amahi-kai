@@ -115,9 +115,10 @@ the card that appears: a port, a protocol, the device (give it a fixed address o
 first) and its port. The NAS's own services (SSH, the web UI, Samba, DNS) never answer the
 internet side.
 
-The page counts what the internet side dropped: **connection attempts** at the NAS from the
-internet since the rules were loaded (every save of this page, and a restart, starts the count
-over; attempts are normal, the internet knocks on every address), and **forged packets**, ones
+The NAS doesn't answer pings from the internet either. The page counts what the internet side
+dropped: **connection attempts** at the NAS from the internet, pings among them, since the
+rules were loaded (every save of this page, and a restart, starts the count over; attempts are
+normal, the internet knocks on every address), and **forged packets**, ones
 arriving from the internet that claim an address inside your own network, which the kernel
 drops before anything sees them. It also lists the devices kept **LAN only** (Network →
 Devices).
