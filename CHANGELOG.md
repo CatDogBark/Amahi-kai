@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-10-24
+
+The NAS can be the house's router: a second network interface takes the provider's connection, every device reaches the internet through the NAS, and the old router becomes an access point. With it comes the shield (every device uses the NAS's DNS, LAN only per device, forged packets dropped, nothing from the internet gets in but the ports you let in), the NAS's own address set from the page with a guard against locking yourself out, and the Network tab split into Devices, DNS, DHCP and Internet. All of it was built and tried on an isolated test network, firewall on and after a reboot ([the list](docs/testing/networking.md)); the house itself, with a real provider, is still to try. A server that doesn't turn any of it on only gets the fixes below.
+
 ### 🚀 Major Features
 
 - **The Network tab, split** — One page held DNS, DHCP, the router, blocking, IPv6 and port forwards. Now **Devices** (the devices the NAS gave addresses to, and their fixed addresses, in one list: Leases and Hosts folded together, with *Fix this address* on any device seen), **DNS** (the provider, blocking and its lists, the allowlist, the names: DNS Aliases folded in), **DHCP** and **Internet** (the router, its forwards, IPv6), beside Remote Access and Security. The one four-way mode became a switch on each page, with the dependencies kept: DHCP needs DNS on, the router needs DHCP on, and turning one off turns off what builds on it. The old addresses open the new pages.
