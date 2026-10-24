@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+### 🚀 Major Features
+
+- **Choose the update channel on the page** (Settings → System Status) — **Follows** picks what System Update installs: releases (the default), releases and release candidates, or the dev branch for testing. It used to take a root edit of `amahi.env`. Saving checks the new channel straight away, and an update never takes the server back to an older version.
+
 ### 🔒 Security & Fixes
 
 - **An app's shares dialog ticks a share recorded in other capitals** (Apps → Change) — An app given "vault" didn't show the share "Vault" ticked, while the share's delete check and the app itself treated them as one; the dialog now ignores case too.

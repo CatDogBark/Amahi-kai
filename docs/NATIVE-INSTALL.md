@@ -82,7 +82,7 @@ To reach your server from anywhere, set up a [Cloudflare Tunnel](https://develop
 
 ## Updating
 
-Amahi-kai checks for updates every 6 hours, on its update channel: `releases` (the default), `candidates` (release candidates too) or `development` (the dev branch), set by `AMAHI_UPDATE_CHANNEL` in `/etc/amahi-kai/amahi.env` ([Updating](https://amahi-kai.com/wiki/updating)). **Settings → System Status** shows what's new (each change linked to its pull request) with **Update now**, or **Repair** when you're up to date. Over SSH:
+Amahi-kai checks for updates every 6 hours, on its update channel: `releases` (the default), `candidates` (release candidates too) or `development` (the dev branch), chosen on **Settings → System Status** (Follows) and kept as `AMAHI_UPDATE_CHANNEL` in `/etc/amahi-kai/amahi.env` ([Updating](https://amahi-kai.com/wiki/updating)). **Settings → System Status** shows what's new (each change linked to its pull request) with **Update now**, or **Repair** when you're up to date. Over SSH:
 
 ```bash
 sudo /opt/amahi-kai/bin/amahi-update            # update

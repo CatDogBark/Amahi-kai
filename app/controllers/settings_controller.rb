@@ -172,6 +172,18 @@ class SettingsController < ApplicationController
     render json: { status: 'error', error: e.message }, status: :unprocessable_entity
   end
 
+  # The update channel, chosen on System Status (it used to take an edit of amahi.env); the
+  # helper checks the new channel straight away, so the page shows what it offers.
+  def update_channel
+    channel = params[:channel].to_s
+    Privileged.call('system.set_update_channel', channel: channel)
+    flash[:notice] = "System Update now follows #{UpdateStatus::CHANNELS.fetch(channel, channel)}."
+    redirect_to settings_system_status_path(anchor: 'update-channel')
+  rescue Privileged::Error => e
+    flash[:error] = e.message
+    redirect_to settings_system_status_path(anchor: 'update-channel')
+  end
+
   # repair=1 runs every step even when there's nothing new (System Status's Repair).
   def update_system
     error = start_update_job(repair: params[:repair] == '1')

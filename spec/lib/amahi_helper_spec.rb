@@ -674,6 +674,24 @@ RSpec.describe 'AmahiHelper' do
         expect(helper.update_channel).to eq('releases')
       end
 
+      it 'changes the channel from System Status: only that line, the file kept as it was, then a check' do
+        expect(steps('system.set_update_channel', 'channel' => 'development')).to eq([[:set_update_channel, 'development'], [:check_update]])
+        expect(refusal('system.set_update_channel', 'channel' => 'nightly')).to include("isn't one Amahi-kai uses")
+        written = []
+        allow(helper).to receive(:do_install) { |target, content, _check, mode, group| File.write(target, content) && written << [mode, group] }
+        File.write(env_file, "SECRET_KEY_BASE=abc\nAMAHI_UPDATE_CHANNEL=development\nRAILS_ENV=production\n")
+        File.chmod(0o600, env_file)
+        helper.do_set_update_channel('releases')
+        expect(File.read(env_file)).to eq("SECRET_KEY_BASE=abc\nAMAHI_UPDATE_CHANNEL=releases\nRAILS_ENV=production\n")
+        expect(written.last.first).to eq('600')
+        expect(helper.update_channel).to eq('releases')
+        File.write(env_file, 'SECRET_KEY_BASE=abc') # no channel yet, no newline at the end
+        helper.do_set_update_channel('candidates')
+        expect(File.read(env_file)).to eq("SECRET_KEY_BASE=abc\nAMAHI_UPDATE_CHANNEL=candidates\n")
+        FileUtils.rm_f(env_file)
+        expect { helper.do_set_update_channel('releases') }.to raise_error(AmahiHelper::Failed, /couldn't change/)
+      end
+
       it "reads GitHub's releases: the highest version, no drafts, pre-releases when asked" do
         list = [{ 'tag_name' => 'v0.9.2', 'draft' => false, 'prerelease' => false },
                 { 'tag_name' => 'v0.10.0', 'draft' => true, 'prerelease' => false },
