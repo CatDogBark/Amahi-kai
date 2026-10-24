@@ -29,6 +29,8 @@ class DisksController < ApplicationController
     @page_title = t('disks')
     # The disk the system runs from first, then the others in the kernel's order.
     @devices = DiskManager.devices.each_with_index.sort_by { |device, i| [device[:os_disk] ? 0 : 1, i] }.map(&:first)
+    # With ZFS installed, an unmounted drive says a pool wants it left so
+    @zfs_installed = StoragePools.zfs_installed?
   end
 
   def format_disk
@@ -177,6 +179,9 @@ class DisksController < ApplicationController
     @drives = StoragePools.drives(@status[:pools], Array(@status[:offline]))
                           .each_with_index.sort_by { |drive, i| [drive[:role] == :os ? 0 : 1, i] }.map(&:first)
     @zfs_removal_blocker = StoragePools.removal_blocker(@status) if @status[:installed]
+    # Drives in share storage a pool could take once freed: nil, or why not
+    @share_drive_blockers = (@status[:installed] ? @drives.select { |drive| drive[:role] == :share } : [])
+                            .to_h { |drive| [drive[:path], StoragePools.share_drive_blocker(drive)] }
     names = @status[:pools].map(&:name)
     @new_pool_name = (1..).lazy.map { |n| "pool#{n}" }.find { |name| names.exclude?(name) }
     @smart_installed = StoragePools.smart_installed?
@@ -204,6 +209,11 @@ class DisksController < ApplicationController
 
   def erase_pool_drive
     pool_change { StoragePools.erase_drive!(params[:drive]) }
+  end
+
+  # A drive in share storage that's empty and unused, unmounted so a new pool may take it.
+  def free_pool_drive
+    pool_change { StoragePools.free_share_drive!(params[:drive]) }
   end
 
   def add_pool_group

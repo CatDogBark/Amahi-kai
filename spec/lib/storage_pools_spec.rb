@@ -88,6 +88,46 @@ RSpec.describe StoragePools do
     end
   end
 
+  # Disks → ZFS Pools' Free this drive: a drive in share storage, empty and unused, unmounted.
+  describe 'freeing a drive in share storage for a pool' do
+    let(:dir) { Dir.mktmpdir }
+    let(:drive) { { path: '/dev/sdb', role: :share, mounts: [dir] } }
+
+    after { FileUtils.rm_rf(dir) }
+
+    it "is blocked by a share's folder, the Greyhole pool or files on it, not by lost+found" do
+      Dir.mkdir("#{dir}/lost+found")
+      expect(described_class.share_drive_blocker(drive, shares: [], greyhole: [])).to be_nil
+      expect(described_class.share_drive_blocker(drive, shares: [['Vault', "#{dir}/vault"]], greyhole: [])).to eq("Vault's folder is on it")
+      expect(described_class.share_drive_blocker(drive, shares: [['Other', "#{dir}-other/x"]], greyhole: [])).to be_nil # beside it, not on it
+      expect(described_class.share_drive_blocker(drive, shares: [], greyhole: [dir])).to eq('it is in the Greyhole pool')
+      %w[b.txt a.txt c d].each { |name| File.write("#{dir}/#{name}", 'x') }
+      expect(described_class.share_drive_blocker(drive, shares: [], greyhole: [])).to eq('it has files on it (a.txt, b.txt, c, …)')
+      expect(described_class.share_drive_blocker({ mounts: ['/nonexistent/storage-9'] }, shares: [], greyhole: []))
+        .to eq("/nonexistent/storage-9 can't be read")
+    end
+
+    it 'unmounts an empty, unused one, and refuses a drive that is not share storage or is in use' do
+      lsblk = { 'blockdevices' => [
+        { 'path' => '/dev/sdb', 'type' => 'disk', 'size' => 1_000, 'fstype' => 'ext4', 'mountpoints' => ['/mnt/storage-2'] },
+        { 'path' => '/dev/sdc', 'type' => 'disk', 'size' => 1_000, 'mountpoints' => [nil] }
+      ] }.to_json
+      allow(Open3).to receive(:capture3)
+        .with('lsblk', '-J', '-b', '-o', 'NAME,PATH,TYPE,SIZE,MODEL,SERIAL,FSTYPE,LABEL,MOUNTPOINTS,ROTA')
+        .and_return([lsblk, '', instance_double(Process::Status, success?: true)])
+      allow(described_class).to receive(:share_drive_blocker).and_return(nil)
+      allow(DiskManager).to receive(:unmount!)
+      described_class.free_share_drive!('/dev/sdb')
+      expect(DiskManager).to have_received(:unmount!).with('/dev/sdb') # the filesystem across the whole disk
+      expect { described_class.free_share_drive!('/dev/sdc') }.to raise_error(StoragePools::Error, "/dev/sdc isn't share storage")
+      allow(described_class).to receive(:share_drive_blocker).and_return('it has files on it (a.txt)')
+      expect { described_class.free_share_drive!('/dev/sdb') }.to raise_error(StoragePools::Error, "/dev/sdb can't be freed: it has files on it (a.txt)")
+      allow(described_class).to receive(:share_drive_blocker).and_return(nil)
+      allow(DiskManager).to receive(:unmount!).and_raise(DiskManager::DiskError, 'umount: target is busy')
+      expect { described_class.free_share_drive!('/dev/sdb') }.to raise_error(StoragePools::Error, 'umount: target is busy')
+    end
+  end
+
   describe '.drives' do
     let(:lsblk) do
       { 'blockdevices' => [

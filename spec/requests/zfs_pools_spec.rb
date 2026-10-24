@@ -168,6 +168,43 @@ RSpec.describe 'ZFS pools', type: :request do
       expect(Privileged.calls).to include(['pools.erase_drive', { device: '/dev/sdg' }])
     end
 
+    it "offers Free this drive for an empty drive in share storage, says why not for one in use, and frees it" do
+      stub_pools(installed: true, drives: drives + [drive('/dev/sdg', :share, mounts: ['/mnt/storage-7'])])
+      allow(StoragePools).to receive(:share_drive_blocker) { |d| d[:path] == '/dev/sdb' ? 'it has files on it (photos)' : nil }
+      get '/disks/pools'
+      buttons = page.css('[data-storage-post="/disks/free_pool_drive"]')
+      expect(buttons.map { |b| b['data-drive'] }).to eq(['/dev/sdg'])
+      expect(buttons.first['data-confirm']).to include('Free /dev/sdg for a pool?', 'unmounted from /mnt/storage-7')
+      row = page.css('#pool-drives tbody tr').find { |tr| tr.text.include?('/dev/sdb') }
+      expect(row.at_css('.tip-text')['data-tip']).to eq('Not free for a pool: it has files on it (photos). Move that off first, then it can be freed here.')
+
+      allow(StoragePools).to receive(:free_share_drive!)
+      post '/disks/free_pool_drive', params: { drive: '/dev/sdg' }, as: :json
+      expect(response.parsed_body).to eq('status' => 'ok')
+      expect(StoragePools).to have_received(:free_share_drive!).with('/dev/sdg')
+      allow(StoragePools).to receive(:free_share_drive!).and_raise(StoragePools::Error, "/dev/sdb can't be freed: it has files on it (photos)")
+      post '/disks/free_pool_drive', params: { drive: '/dev/sdb' }, as: :json
+      expect(response.parsed_body).to eq('status' => 'error', 'error' => "/dev/sdb can't be freed: it has files on it (photos)")
+    end
+
+    it 'says on Devices that a drive for a ZFS pool stays unmounted, while ZFS is installed' do
+      stub_pools(installed: true)
+      allow(DiskManager).to receive(:devices).and_return([
+        { name: 'sdd', path: '/dev/sdd', model: 'SSD', size: '931.5G', os_disk: false, zfs_pool: nil,
+          partitions: [{ path: '/dev/sdd', size: '931.5G', fstype: 'ext4', status: :unmounted, mountpoint: nil }] },
+        { name: 'sde', path: '/dev/sde', model: 'SSD', size: '931.5G', os_disk: false, zfs_pool: nil,
+          partitions: [{ path: '/dev/sde1', size: '931.5G', fstype: nil, status: :unformatted, mountpoint: nil }] }
+      ])
+      allow(StoragePools).to receive(:zfs_installed?).and_return(true)
+      get '/disks/devices'
+      cells = page.css('#disks-table tbody tr').map { |tr| tr.css('td')[4].text.squish }
+      expect(cells).to eq(['— For a ZFS pool, leave it unmounted', "— For a ZFS pool, don't initialize it"])
+      expect(page.css('#disks-table tbody tr td a').first['href']).to eq('/disks/pools')
+      allow(StoragePools).to receive(:zfs_installed?).and_return(false)
+      get '/disks/devices'
+      expect(response.body).not_to include('For a ZFS pool')
+    end
+
     it 'replaces a drive, adds drives and deletes a pool through the helper' do
       post '/disks/replace_pool_drive', params: { name: 'tank', old: '1234', new: '/dev/sdd' }, as: :json
       expect(response.parsed_body).to eq('status' => 'ok')

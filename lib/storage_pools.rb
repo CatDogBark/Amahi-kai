@@ -1,6 +1,7 @@
 require 'json'
 require 'open3'
 require 'privileged'
+require 'disk_manager'
 
 # ZFS pools (docs/plans/storage.md): bitShare's storage, on drives of their own, next to the
 # share storage (simple drives and Greyhole) that SMB shares live on. The root helper installs
@@ -288,6 +289,34 @@ module StoragePools
       changed { privileged('pools.erase_drive', device: device.to_s) }
     end
 
+    # Why a drive in share storage can't be freed for a pool, or nil: a share's folder or the
+    # Greyhole pool on it, or files on it (anything but lost+found).
+    def share_drive_blocker(drive, shares: Share.pluck(:name, :path), greyhole: DiskPoolPartition.pluck(:path))
+      drive[:mounts].each do |mount|
+        inside = ->(path) { path.to_s == mount || path.to_s.start_with?("#{mount}/") }
+        share = shares.find { |_name, path| inside.call(path) }
+        return "#{share.first}'s folder is on it" if share
+        return 'it is in the Greyhole pool' if greyhole.any? { |path| inside.call(path) }
+        entries = Dir.children(mount) - ['lost+found']
+        return "it has files on it (#{entries.sort.first(3).join(', ')}#{', …' if entries.size > 3})" if entries.any?
+      rescue SystemCallError
+        return "#{mount} can't be read"
+      end
+      nil
+    end
+
+    # Frees a drive in share storage that nothing uses and nothing is on, so a new pool may take
+    # it: unmounted, and out of fstab (Disks → Devices' Unmount). The pool then erases it.
+    def free_share_drive!(device)
+      drive = drives.find { |d| d[:path] == device.to_s && d[:role] == :share } or raise Error, "#{device} isn't share storage"
+      if (blocker = share_drive_blocker(drive))
+        raise Error, "#{device} can't be freed: #{blocker}"
+      end
+      mounted_parts(device.to_s).each { |part| DiskManager.unmount!(part) }
+    rescue DiskManager::DiskError => e
+      raise Error, e.message
+    end
+
     # Replaces a pool's drive (+old+: its name in the pool's status) with a free disk.
     def replace!(name:, old:, new:)
       raise Error, 'Choose the new drive' if new.blank?
@@ -373,6 +402,12 @@ module StoragePools
 
     def subtree(node)
       [node, *Array(node['children']).flat_map { |child| subtree(child) }]
+    end
+
+    # The disk's partitions (or the disk itself, with a filesystem across it) that are mounted.
+    def mounted_parts(device)
+      disk = lsblk.find { |d| d['type'] == 'disk' && d['path'] == device } or return []
+      subtree(disk).select { |node| Array(node['mountpoints']).compact.any? }.map { |node| node['path'] }
     end
   end
 end

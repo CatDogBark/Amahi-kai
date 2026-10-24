@@ -7,6 +7,7 @@ All notable changes to Amahi-kai are documented here.
 ### 🔒 Security & Fixes
 
 - **The moving page now reaches the NAS at its new address from the browser** (Network → Devices, This NAS) — The page's probe calls the NAS at the new address, which the site's Content-Security-Policy forbade (it allows the page's own origin only), so the browser never kept the change and the NAS went back after 90 seconds. The moving page alone may call the new address now, and a browser test runs the probe for real.
+- **Drives for a ZFS pool** (Disks) — A drive mounted for share storage can't go into a pool, and nothing said so until the pool page left it out. Devices now says, beside a drive that isn't mounted, that a pool wants it left that way; and on ZFS Pools, a share-storage drive with nothing on it has **Free this drive**, which unmounts it so the pool can take it. One that holds files, a share's folder or the Greyhole pool says why it can't be freed.
 - **This NAS works on a server that never had blocking on** — The helper's state folder didn't exist there, and an address change failed after rewriting the network file, leaving it changed. The folder is made when missing, and a failure after the files are written puts them back.
 
 ## [0.10.0] — 2026-10-24
