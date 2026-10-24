@@ -218,9 +218,10 @@ LAN only, anti-spoofing and the dropped-attempts count.
   before it's installed (`unbound-checkconf`, `dnsmasq --test`), as dnsmasq's is today.
   Blocklists are downloaded by the helper over HTTPS, checked (size, syntax), and turned into
   Unbound `local-zone` entries.
-- **Settings:** the mode, the provider, blocklists on and off, the chosen lists, the allowlist,
-  the interface, and IPv6 advertising. The page is Setup → Network, reorganized around the three
-  modes.
+- **Settings:** the mode (`dns_mode`: off, dns, dns_dhcp, router), the provider, blocklists on
+  and off, the chosen lists, the allowlist, the interface, IPv6 advertising, the internet
+  interface. Since 2026-10-23 the pages are Network → Devices, DNS, DHCP and Internet, each with
+  its own switch; the mode is what the switches compute (DHCP needs DNS, the router needs DHCP).
 - **New installs** start Off (`dns_mode` off). DHCP is a mode now, so the `dnsmasq_dhcp` switch is
   retired, and Network → Gateway and Network → Settings are folded into Network → DNS & DHCP.
 - **DHCP's network** is the chosen interface's /24 (DHCP refuses others), not the `net` setting:

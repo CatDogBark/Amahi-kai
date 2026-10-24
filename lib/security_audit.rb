@@ -109,7 +109,7 @@ class SecurityAudit
     end
 
     # The fix lets in SSH, the web UI (3000), HTTPS and Samba. DNS gets in to Unbound's addresses,
-    # and DHCP on dnsmasq's interface, by rules Network → DNS & DHCP adds while they're on.
+    # and DHCP on dnsmasq's interface, by rules Network → DNS, DHCP and Internet adds while they're on.
     def ufw_check(report)
       Check.new(
         name: 'ufw_firewall',

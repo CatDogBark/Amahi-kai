@@ -37,6 +37,12 @@ describe 'Network → DNS & DHCP', type: :request do
       get '/network/dns'
       expect(response).to have_http_status(:ok)
       expect(response.body).to include('Install Unbound', 'Not installed', 'Quad9 (default)', 'ens18 (192.168.1.10)')
+      get '/network/dhcp'
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include('Addresses for your devices', 'Turn DNS on first')
+      get '/network/internet'
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include('The NAS as your router', 'Turn DHCP on first')
     end
 
     it 'shows how it is answering while it is on' do
@@ -60,7 +66,7 @@ describe 'Network → DNS & DHCP', type: :request do
       before { allow(DnsService).to receive(:installed?).and_return(true) }
 
       it 'turns DNS on with the provider and interface picked' do
-        put '/network/dns', params: { mode: 'dns', provider: 'cloudflare', interface: 'ens18' }
+        put '/network/dns', params: { dns_on: '1', provider: 'cloudflare', interface: 'ens18' }
         expect(response).to redirect_to('/network/dns')
         expect(flash[:notice]).to include('Unbound is answering')
         expect([Setting.get('dns_mode'), Setting.get('dns_provider'), Setting.get('dns_interface')]).to eq(%w[dns cloudflare ens18])
@@ -69,7 +75,7 @@ describe 'Network → DNS & DHCP', type: :request do
       end
 
       it 'saves a custom server, tidied' do
-        put '/network/dns', params: { mode: 'dns', provider: 'custom', interface: 'ens18',
+        put '/network/dns', params: { dns_on: '1', provider: 'custom', interface: 'ens18',
                                       custom_addresses: ' 192.168.1.53,  fd00::53 ', custom_tls_name: ' DNS.Example.org ' }
         expect(Setting.get('dns_custom_addresses')).to eq('192.168.1.53 fd00::53')
         expect(Setting.get('dns_custom_tls_name')).to eq('dns.example.org')
@@ -77,18 +83,17 @@ describe 'Network → DNS & DHCP', type: :request do
 
       it 'turns DNS off' do
         Setting.set('dns_mode', 'dns')
-        put '/network/dns', params: { mode: 'off', provider: 'quad9', interface: 'ens18' }
-        expect(flash[:notice]).to eq('DNS and DHCP are off.')
+        put '/network/dns', params: { provider: 'quad9', interface: 'ens18' }
+        expect(flash[:notice]).to eq('DNS is off.')
         expect(Privileged.calls.map(&:first)).to eq(%w[services.disable dns.remove_config])
       end
 
       it 'refuses what it cannot use, and changes nothing' do
         mode = Setting.get('dns_mode')
-        [[{ mode: 'everything', provider: 'quad9', interface: 'ens18' }, 'Choose Off, DNS for my network, DNS + DHCP, or Router'],
-         [{ mode: 'dns', provider: 'google', interface: 'ens18' }, 'Choose a provider'],
-         [{ mode: 'dns', provider: 'custom', interface: 'ens18', custom_addresses: '', custom_tls_name: 'x.y' }, 'one to four addresses'],
-         [{ mode: 'dns', provider: 'quad9', interface: 'eth9' }, 'Choose the network interface'],
-         [{ mode: 'dns', provider: 'quad9', interface: 'ens19' }, 'ens19 has no IPv4 address']].each do |params, reason|
+        [[{ dns_on: '1', provider: 'google', interface: 'ens18' }, 'Choose a provider'],
+         [{ dns_on: '1', provider: 'custom', interface: 'ens18', custom_addresses: '', custom_tls_name: 'x.y' }, 'one to four addresses'],
+         [{ dns_on: '1', provider: 'quad9', interface: 'eth9' }, 'Choose the network interface'],
+         [{ dns_on: '1', provider: 'quad9', interface: 'ens19' }, 'ens19 has no IPv4 address']].each do |params, reason|
           put '/network/dns', params: params
           expect(flash[:alert]).to include(reason), reason
         end
@@ -98,20 +103,31 @@ describe 'Network → DNS & DHCP', type: :request do
 
       it 'refuses to turn DNS on before Unbound is installed' do
         allow(DnsService).to receive(:installed?).and_return(false)
-        put '/network/dns', params: { mode: 'dns', provider: 'quad9', interface: 'ens18' }
+        put '/network/dns', params: { dns_on: '1', provider: 'quad9', interface: 'ens18' }
         expect(flash[:alert]).to include('Install Unbound first')
       end
 
-      describe 'with DHCP' do
-        let(:dhcp) { { mode: 'dns_dhcp', provider: 'quad9', interface: 'ens18', dhcp_first: '100', dhcp_last: '200', dhcp_router: '1', lease_time: '14400' } }
+      describe 'with DHCP (Network → DHCP)' do
+        let(:dhcp) { { dhcp_on: '1', dhcp_first: '100', dhcp_last: '200', dhcp_router: '1', lease_time: '14400' } }
 
         before do
           allow(DnsmasqService).to receive(:installed?).and_return(true)
           allow(DnsmasqService).to receive(:other_servers).with('ens18').and_return([])
+          Setting.set('dns_mode', 'dns')
+          Setting.set('dns_interface', 'ens18')
+        end
+
+        it 'needs DNS on first' do
+          Setting.set('dns_mode', 'off')
+          put '/network/dhcp', params: dhcp
+          expect(flash[:alert]).to include('Turn DNS on first')
+          expect(Privileged.calls).to be_empty
+          get '/network/dhcp'
+          expect(response.body).to include('Turn DNS on first')
         end
 
         it 'checks for another DHCP server, saves the range, and starts dnsmasq' do
-          put '/network/dns', params: dhcp
+          put '/network/dhcp', params: dhcp
           expect(flash[:notice]).to include('handing out addresses')
           expect(DnsmasqService.settings).to eq(first: 100, last: 200, router: 1, lease_time: 14_400)
           expect(Privileged.calls.map(&:first)).to eq(%w[dns.write_config services.enable dns.blocking_off network.write_dnsmasq_config services.enable])
@@ -120,36 +136,37 @@ describe 'Network → DNS & DHCP', type: :request do
 
         it 'refuses while another DHCP server answers, and says where' do
           allow(DnsmasqService).to receive(:other_servers).with('ens18').and_return(['192.168.1.1'])
-          put '/network/dns', params: dhcp
+          put '/network/dhcp', params: dhcp
           expect(flash[:alert]).to include('Another DHCP server answers on ens18 (192.168.1.1)', 'Turn it off first')
           expect(Privileged.calls).to be_empty
         end
 
         it "refuses when it can't check" do
           allow(DnsmasqService).to receive(:other_servers).and_raise(Privileged::Error.new('dhcp.check_servers', 'Address already in use'))
-          put '/network/dns', params: dhcp
+          put '/network/dhcp', params: dhcp
           expect(flash[:alert]).to include("Couldn't check for another DHCP server", 'Address already in use')
         end
 
         it "refuses settings that don't fit, before asking the network" do
-          put '/network/dns', params: dhcp.merge(dhcp_first: '5', dhcp_last: '20')
+          put '/network/dhcp', params: dhcp.merge(dhcp_first: '5', dhcp_last: '20')
           expect(flash[:alert]).to include("takes in the NAS's own address (.10)")
           expect(DnsmasqService).not_to have_received(:other_servers)
         end
 
         it 'needs dnsmasq, and a /24 network' do
           allow(DnsmasqService).to receive(:installed?).and_return(false)
-          put '/network/dns', params: dhcp
+          put '/network/dhcp', params: dhcp
           expect(flash[:alert]).to include('Install dnsmasq first')
           allow(DnsmasqService).to receive(:installed?).and_return(true)
           allow(NetworkInterfaces).to receive(:lan).and_return('ens18' => [NetworkInterfaces::Address.new(ip: IPAddr.new('10.1.2.3'), prefix: 16)])
-          put '/network/dns', params: dhcp
+          put '/network/dhcp', params: dhcp
           expect(flash[:alert]).to include("DHCP needs ens18's network to be a /24")
         end
 
-        it 'stops dnsmasq when DNS + DHCP is left' do
+        it 'stops dnsmasq when DHCP is turned off' do
           Setting.set('dns_mode', 'dns_dhcp')
-          put '/network/dns', params: dhcp.merge(mode: 'dns')
+          put '/network/dhcp', params: dhcp.except(:dhcp_on)
+          expect(flash[:notice]).to eq('DHCP is off.')
           expect(Privileged.calls.map(&:first)).to eq(%w[dns.write_config services.enable dns.blocking_off network.write_dnsmasq_config services.disable])
           expect(Privileged.calls[3].last[:content]).not_to include('dhcp-range')
         end
@@ -157,8 +174,28 @@ describe 'Network → DNS & DHCP', type: :request do
 
       it "says so when the settings couldn't be applied" do
         allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('dns.write_config', 'unbound-checkconf rejected the config'))
-        put '/network/dns', params: { mode: 'dns', provider: 'quad9', interface: 'ens18' }
+        put '/network/dns', params: { dns_on: '1', provider: 'quad9', interface: 'ens18' }
         expect(flash[:alert]).to include("couldn't be applied", 'unbound-checkconf rejected')
+      end
+    end
+
+    describe 'names (DNS aliases)' do
+      before do
+        allow(DnsService).to receive(:rewrite!)
+        allow(DnsService).to receive(:installed?).and_return(true)
+      end
+
+      it 'adds a name, shows it, and removes it' do
+        post '/network/dns/aliases', params: { dns_alias: { name: 'files', address: '' } }
+        expect(response).to redirect_to('/network/dns#dns-aliases')
+        expect(flash[:notice]).to eq('files.home.arpa points at the NAS.')
+        get '/network/dns'
+        expect(response.body).to include('files.home.arpa', 'the NAS')
+        post '/network/dns/aliases', params: { dns_alias: { name: 'files', address: '192.168.1.5' } }
+        expect(flash[:alert]).to include('Name has already been taken')
+        delete "/network/dns/aliases/#{DnsAlias.find_by(name: 'files').id}"
+        expect(flash[:notice]).to eq('files is no longer a name here.')
+        expect(DnsAlias.count).to eq(0)
       end
     end
 
@@ -233,33 +270,40 @@ describe 'Network → DNS & DHCP', type: :request do
     end
 
     describe 'router mode' do
-      let(:router) { { mode: 'router', provider: 'quad9', interface: 'ens18', wan_interface: 'ens19', force_dns: '1', dhcp_first: '100', dhcp_last: '200', dhcp_router: '1', lease_time: '14400' } }
+      let(:router) { { router_on: '1', wan_interface: 'ens19', force_dns: '1' } }
 
       before do
         allow(DnsService).to receive_messages(installed?: true, firewall_on?: true, router_state: nil)
         allow(DnsmasqService).to receive(:installed?).and_return(true)
         allow(DnsmasqService).to receive(:other_servers).and_return([])
+        Setting.set('dns_mode', 'dns_dhcp')
+        Setting.set('dns_interface', 'ens18')
         allow(NetworkInterfaces).to receive(:lan).and_return('ens18' => [lan], 'ens19' => [NetworkInterfaces::Address.new(ip: IPAddr.new('10.77.0.5'), prefix: 24)])
       end
 
-      it 'needs an internet interface, a different one, and the firewall on' do
-        put '/network/dns', params: router.merge(wan_interface: '')
+      it 'needs DHCP on, an internet interface, a different one, and the firewall on' do
+        Setting.set('dns_mode', 'dns')
+        put '/network/internet', params: router
+        expect(flash[:alert]).to include('Turn DHCP on first')
+        Setting.set('dns_mode', 'dns_dhcp')
+        put '/network/internet', params: router.merge(wan_interface: '')
         expect(flash[:alert]).to include('Choose the interface the internet is on')
-        put '/network/dns', params: router.merge(wan_interface: 'ens18')
+        put '/network/internet', params: router.merge(wan_interface: 'ens18')
         expect(flash[:alert]).to include('must differ')
         allow(DnsService).to receive(:firewall_on?).and_return(false)
-        put '/network/dns', params: router
+        put '/network/internet', params: router
         expect(flash[:alert]).to include('Turn the firewall on first')
         expect(Privileged.calls).to be_empty
       end
 
       it "refuses to make the interface you're connected through the internet side" do
-        put '/network/dns', params: router.merge(interface: 'ens19', wan_interface: 'ens18'), headers: { 'REMOTE_ADDR' => '192.168.1.74' }
+        Setting.set('dns_interface', 'ens19')
+        put '/network/internet', params: router.merge(wan_interface: 'ens18'), headers: { 'REMOTE_ADDR' => '192.168.1.74' }
         expect(flash[:alert]).to include("You're connected through ens18")
       end
 
       it 'saves, and puts the router in place after DNS and DHCP' do
-        put '/network/dns', params: router
+        put '/network/internet', params: router
         expect(flash[:notice]).to include('The NAS is the router')
         expect([Setting.get('dns_mode'), Setting.get('dns_wan_interface')]).to eq(%w[router ens19])
         expect(Privileged.calls.map(&:first)).to eq(%w[dns.write_config services.enable dns.blocking_off network.write_dnsmasq_config services.enable network.router_on])
@@ -269,10 +313,10 @@ describe 'Network → DNS & DHCP', type: :request do
       end
 
       it "leaves devices' DNS alone when that's unticked, and adds the encrypted-DNS list to blocking when it's on" do
-        put '/network/dns', params: router.merge(force_dns: '0')
+        put '/network/internet', params: router.merge(force_dns: '0')
         expect(Privileged.calls.last.last[:dns]).to be_nil
         Setting.set('dns_blocking', '1')
-        put '/network/dns', params: router.merge(force_dns: '1')
+        put '/network/internet', params: router.merge(force_dns: '1')
         expect(Privileged.calls.find { |op, _| op == 'dns.set_blocklists' }.last[:lists]).to include('hagezi-doh')
       end
 
@@ -282,12 +326,13 @@ describe 'Network → DNS & DHCP', type: :request do
         allow(DnsService).to receive_messages(router_state: { 'lan' => 'ens18', 'wan' => 'ens19', 'forwards' => [] }, running?: true, check: nil)
         allow(NetworkInterfaces).to receive(:addresses).with('ens19').and_return([NetworkInterfaces::Address.new(ip: IPAddr.new('10.77.0.134'), prefix: 24)])
         allow(NetworkInterfaces).to receive(:default_route).and_return(%w[ens19 10.77.0.1])
-        get '/network/dns'
+        get '/network/internet'
         expect(response.body).to include('Through ens19 at 10.77.0.134', 'router 10.77.0.1', '0 ports let in', 'Ports let in from the internet')
         allow(NetworkInterfaces).to receive(:default_route).and_return(%w[ens18 192.168.1.1])
-        get '/network/dns'
+        get '/network/internet'
         expect(response.body).to include('still goes through', 'ens18 (via 192.168.1.1)', 'metric above 50')
-        put '/network/dns', params: router.merge(mode: 'dns_dhcp')
+        put '/network/internet', params: router.except(:router_on)
+        expect(flash[:notice]).to eq('Saved. The NAS is not the router.')
         expect(Privileged.calls.map(&:first)).to include('network.router_off')
       end
 
@@ -313,10 +358,10 @@ describe 'Network → DNS & DHCP', type: :request do
 
       it 'announces the NAS once radvd is installed' do
         allow(DnsService).to receive(:radvd_installed?).and_return(false)
-        put '/network/dns', params: { mode: 'dns', provider: 'quad9', interface: 'ens18', ipv6_advertise: '1' }
+        put '/network/internet', params: { ipv6_advertise: '1' }
         expect(flash[:alert]).to include('Install radvd first')
         allow(DnsService).to receive_messages(radvd_installed?: true, radvd_running?: false)
-        put '/network/dns', params: { mode: 'dns', provider: 'quad9', interface: 'ens18', ipv6_advertise: '1' }
+        put '/network/internet', params: { ipv6_advertise: '1' }
         expect(Setting.get('dns_ipv6_advertise')).to eq('1')
         expect(Privileged.calls.map(&:first)).to include('dns.set_own_address', 'dns.write_radvd_config')
       end
@@ -327,9 +372,8 @@ describe 'Network → DNS & DHCP', type: :request do
                                             'dns' => ['2600:1700:abcd::1'], 'domains' => [] }]
         )
         post '/network/dns/check_routers'
-        expect(response).to redirect_to('/network/dns#dns-ipv6')
-        allow(DnsService).to receive(:check).and_return(nil)
-        get '/network/dns'
+        expect(response).to redirect_to('/network/internet#dns-ipv6')
+        get '/network/internet'
         expect(response.body).to include('<code>fe80::1</code>', '(a router)', 'DNS 2600:1700:abcd::1',
                                           'tells devices to use <code>2600:1700:abcd::1</code> for DNS')
       end
@@ -337,7 +381,7 @@ describe 'Network → DNS & DHCP', type: :request do
       it "says so when no router answers" do
         allow(Privileged).to receive(:call).with('dns.check_routers', interface: 'ens18').and_return('ok' => true, 'advertisers' => [])
         post '/network/dns/check_routers'
-        get '/network/dns'
+        get '/network/internet'
         expect(response.body).to include('No router answered')
       end
     end

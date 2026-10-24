@@ -1,0 +1,85 @@
+<div class="container-fluid dns-page">
+  <div class="card mb-4 mt-3" id="devices">
+    <div class="card-header d-flex align-items-center justify-content-between">
+      <h5 class="mb-0"><%= lucide_icon('monitor', size: 18) %> Devices</h5>
+      <span class="badge bg-secondary"><%= pluralize(@devices.size, 'device') %> seen</span>
+    </div>
+    <div class="card-body">
+      <% if @dhcp_on %>
+        <p class="text-muted small">The devices the NAS has given an address to, and when their address comes up for renewal. A <strong>fixed</strong> address stays with the device (by its hardware address) every time, which port forwards and names rely on.</p>
+      <% else %>
+        <p class="text-muted small">Devices appear here while the NAS hands out addresses (<a href="<%= dns_dhcp_path %>">Network → DHCP</a>). A <strong>fixed</strong> address can still be given below: the device answers by its name in DNS (<code>name.<%= @domain %></code>), and gets that address once the NAS hands them out.</p>
+      <% end %>
+
+      <% if @devices.any? || @unseen_hosts.any? %>
+        <table class="table table-sm dns-forwards mb-4">
+          <thead><tr><th>Name</th><th>Address</th><th>Hardware address</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            <% @devices.each do |device| %>
+              <tr>
+                <td><%= device[:host]&.name || device[:name] || '(no name)' %></td>
+                <td><code><%= device[:ip] %></code></td>
+                <td><code><%= device[:mac] %></code></td>
+                <td>
+                  <% if device[:host] %>
+                    Fixed at <code><%= @net %>.<%= device[:host].address %></code>
+                  <% else %>
+                    Renews in <%= distance_of_time_in_words(Time.now, device[:expires]) %>
+                  <% end %>
+                </td>
+                <td class="text-end">
+                  <% if device[:host] %>
+                    <%= button_to 'Unfix', network_destroy_host_path(device[:host]), method: :delete, class: 'btn btn-sm btn-outline-secondary', form_class: 'd-inline' %>
+                  <% else %>
+                    <form action="<%= network_hosts_path %>" method="post" class="d-inline">
+                      <input type="hidden" name="authenticity_token" value="<%= form_authenticity_token %>">
+                      <input type="hidden" name="host[name]" value="<%= device[:name].to_s.downcase.gsub(/[^a-z0-9-]/, '-').presence || 'device' %>">
+                      <input type="hidden" name="host[mac]" value="<%= device[:mac] %>">
+                      <input type="hidden" name="host[address]" value="<%= device[:ip].to_s.split('.').last %>">
+                      <button type="submit" class="btn btn-sm btn-outline-secondary">Fix this address</button>
+                    </form>
+                  <% end %>
+                </td>
+              </tr>
+            <% end %>
+            <% @unseen_hosts.each do |host| %>
+              <tr class="text-muted">
+                <td><%= host.name %></td>
+                <td><code><%= @net %>.<%= host.address %></code></td>
+                <td><code><%= host.mac %></code></td>
+                <td>Fixed; not seen now</td>
+                <td class="text-end"><%= button_to 'Unfix', network_destroy_host_path(host), method: :delete, class: 'btn btn-sm btn-outline-secondary', form_class: 'd-inline' %></td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      <% else %>
+        <p class="small text-muted mb-4">No devices yet.</p>
+      <% end %>
+
+      <h6>Give a device a fixed address</h6>
+      <p class="text-muted small">For a device that isn't in the list: its name (letters, digits and hyphens), its hardware address, and the last part of the address it should keep on <code><%= @net %>.x</code>.</p>
+      <form action="<%= network_hosts_path %>" method="post" class="row g-2 align-items-end">
+        <input type="hidden" name="authenticity_token" value="<%= form_authenticity_token %>">
+        <div class="col-md-4">
+          <label class="form-label small" for="host-name">Name</label>
+          <input type="text" class="form-control" id="host-name" name="host[name]" maxlength="63" required placeholder="printer">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small" for="host-mac">Hardware address</label>
+          <input type="text" class="form-control" id="host-mac" name="host[mac]" required placeholder="aa:bb:cc:dd:ee:ff">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small" for="host-address">Address</label>
+          <div class="input-group">
+            <span class="input-group-text"><%= @net %>.</span>
+            <input type="number" class="form-control" id="host-address" name="host[address]" min="2" max="254" required>
+          </div>
+        </div>
+        <div class="col-md-1">
+          <button type="submit" class="btn btn-primary w-100">Add</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

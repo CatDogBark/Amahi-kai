@@ -98,7 +98,7 @@ module AmahiHelper
   # among them) pings an address for 3 seconds to see it's free before it offers it.
   DHCP_WAIT = 6
 
-  # DNS blocklists (Network → DNS & DHCP). BLOCKLISTS are the lists the NAS may download, by
+  # DNS blocklists (Network → DNS, DHCP and Internet). BLOCKLISTS are the lists the NAS may download, by
   # key; the app names and describes the same keys (DnsService::BLOCKLISTS, a spec checks they
   # match). Each is a domain a line, "#" comments, and a domain covers its subdomains (HaGeZi's
   # and OISD's wildcard formats without "*."), as Unbound's local-zone does. Checked against
@@ -131,7 +131,7 @@ module AmahiHelper
   BLOCKLIST_CHOSEN = "#{BLOCKLIST_DIR}/chosen.json".freeze
   BLOCKLIST_STATUS = "#{BLOCKLIST_DIR}/status.json".freeze
   BLOCKLIST_PAUSED = "#{BLOCKLIST_DIR}/blocklist.paused".freeze
-  # When the helper last reloaded Unbound: its counters start again then (Network → DNS & DHCP's
+  # When the helper last reloaded Unbound: its counters start again then (Network → DNS, DHCP and Internet's
   # totals say since when).
   UNBOUND_RELOADED = "#{BLOCKLIST_DIR}/reloaded_at".freeze
   UNBOUND_BLOCKLIST = '/etc/unbound/unbound.conf.d/amahi-kai-blocklist.conf'
@@ -172,7 +172,7 @@ module AmahiHelper
   DNS_RESUME_UNIT = 'amahi-kai-dns-resume'
   BLOCKING_PAUSE = 300
 
-  # IPv6 (Network → DNS & DHCP): radvd announces the NAS as the network's IPv6 DNS server, at an
+  # IPv6 (Network → DNS, DHCP and Internet): radvd announces the NAS as the network's IPv6 DNS server, at an
   # address of its own in a unique local range (ULA_UNIT puts it on the interface at boot).
   RADVD = '/usr/sbin/radvd'
   RADVD_CONF = '/etc/radvd.conf'
@@ -181,7 +181,7 @@ module AmahiHelper
   # How long to listen for routers' announcements (a router waits up to 3 seconds between them).
   RA_WAIT = 4
 
-  # Router mode (Network → DNS & DHCP): the NAS between the LAN and the internet. The internet
+  # Router mode (Network → DNS, DHCP and Internet): the NAS between the LAN and the internet. The internet
   # interface gets its address by DHCP (WAN_NETPLAN), the kernel forwards, UFW's before.rules
   # get a NAT block (ROUTER_BEGIN..ROUTER_END: masquerade out, and the port forwards in), and
   # UFW's rules let the LAN out, the forwards in, and nothing else in on the internet side.
@@ -735,7 +735,7 @@ module AmahiHelper
       validate: ->(a) { { hostname: hostname(a['hostname']) } },
       plan: ->(v) { [['/usr/bin/hostnamectl', 'set-hostname', v[:hostname]], [:install, HOSTS, hosts_naming(v[:hostname]), nil]] }
     },
-    # dnsmasq's DHCP settings (Network → DNS & DHCP), checked with dnsmasq --test. While it
+    # dnsmasq's DHCP settings (Network → DNS, DHCP and Internet), checked with dnsmasq --test. While it
     # hands out addresses, UFW lets DHCP in on its interface, and the devices' names go to
     # Unbound (dns.sync_leases).
     'network.write_dnsmasq_config' => {
@@ -1729,7 +1729,7 @@ module AmahiHelper
       value.uniq
     end
 
-    # Domains never blocked (Network → DNS & DHCP's allowlist).
+    # Domains never blocked (Network → DNS, DHCP and Internet's allowlist).
     def allowlist(value)
       raise Refused, 'allow must be a list of domains' unless value.is_a?(Array) && value.all?(String)
       raise Refused, "the allowlist holds at most #{ALLOWLIST_MAX} domains" if value.size > ALLOWLIST_MAX
@@ -3519,7 +3519,7 @@ module AmahiHelper
     # default route the NAS has (DHCP's usual metric is 100). IPv6 waits for its own slice.
     def wan_netplan(wan)
       <<~YAML
-        # Amahi-kai (Network → DNS & DHCP, router): the internet interface, with an address from the provider
+        # Amahi-kai (Network → DNS, DHCP and Internet, router): the internet interface, with an address from the provider
         network:
           version: 2
           ethernets:
@@ -3701,7 +3701,7 @@ module AmahiHelper
       # A domain blocks the names under it, so those needn't be listed too.
       blocked = domains.keys.reject { |name| under?(name, own) || parent_listed?(name, domains) }.sort
       raise Failed, "the lists chosen block #{blocked.size} domains; at most #{BLOCKLIST_MAX_DOMAINS} fit" if blocked.size > BLOCKLIST_MAX_DOMAINS
-      lines = ['# DNS blocklist (Network → DNS & DHCP): written by Amahi-kai, changes here are lost', 'server:']
+      lines = ['# DNS blocklist (Network → DNS, DHCP and Internet): written by Amahi-kai, changes here are lost', 'server:']
       lines.concat(blocked.map { |name| %(  local-zone: "#{name}." always_null) })
       lines.concat(allow.map { |name| %(  local-zone: "#{name}." transparent) })
       content = "#{lines.join("\n")}\n"

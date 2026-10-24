@@ -21,101 +21,50 @@ describe "Network Controller", type: :request do
   describe "admin" do
     before { login_as_admin }
 
-    describe "GET /network (leases)" do
-      it "shows the network page" do
+    describe "GET /network (devices)" do
+      it "shows the devices seen and the fixed addresses, with the old Hosts page sent here" do
+        allow(DnsmasqService).to receive(:rewrite_config!)
+        allow(DnsService).to receive(:rewrite!)
+        Host.create!(name: "printer", mac: "aa:bb:cc:dd:ee:01", address: "20")
+        allow(Leases).to receive(:all).and_return([{ expiration: Time.now.to_i + 3600, mac: "aa:bb:cc:dd:ee:01", ip: "192.168.1.20", name: "printer" },
+                                                   { expiration: Time.now.to_i + 600, mac: "aa:bb:cc:dd:ee:02", ip: "192.168.1.150", name: "laptop" }])
         get "/network"
         expect(response).to have_http_status(:ok)
-      end
-    end
-
-    describe "GET /network/hosts" do
-      it "shows the hosts page" do
+        expect(response.body).to include("2 devices seen", "Fixed at <code>192.168.1.20</code>", "laptop", "Fix this address", "Unfix")
         get "/network/hosts"
-        expect(response).to have_http_status(:ok)
-      end
-    end
-
-    it "shows why it refused a new host or alias, in the form, open, with what was typed" do
-      post "/network/hosts", params: { host: { name: "my_host", mac: "aa:bb", address: "50" } }
-      page = Nokogiri::HTML(response.body)
-      expect(page.at_css('#new-host-step1')['style']).to be_nil
-      expect(page.at_css('#new-host-step1 .alert-danger').text).to include('Mac')
-      expect(page.at_css('input[name="host[mac]"]')['value']).to eq('aa:bb')
-
-      post "/network/dns_aliases", params: { dns_alias: { name: "", address: "60" } }
-      page = Nokogiri::HTML(response.body)
-      expect(page.at_css('#new-dns-alias-step1')['style']).to be_nil
-      expect(page.at_css('input[name="dns_alias[address]"]')['value']).to eq('60')
-    end
-
-    describe "POST /network/hosts" do
-      it "creates a new host" do
-        allow_any_instance_of(Host).to receive(:restart)
-        expect {
-          post "/network/hosts", params: { host: { name: "myhost", mac: "aa:bb:cc:dd:ee:ff", address: "50" } }, as: :json
-        }.to change(Host, :count).by(1)
-      end
-
-      it "rejects host with invalid mac" do
-        allow_any_instance_of(Host).to receive(:restart)
-        expect {
-          post "/network/hosts", params: { host: { name: "myhost", mac: "invalid", address: "50" } }, as: :json
-        }.not_to change(Host, :count)
-      end
-    end
-
-    describe "DELETE /network/host/:id" do
-      it "destroys a host" do
-        allow_any_instance_of(Host).to receive(:restart)
-        host = Host.create!(name: "testhost", mac: "aa:bb:cc:dd:ee:01", address: "51")
-        expect {
-          delete "/network/host/#{host.id}", as: :json
-        }.to change(Host, :count).by(-1)
-      end
-    end
-
-    describe "DNS aliases" do
-      before do
-        Setting.create!(name: "advanced", value: "1", kind: 0)
-      end
-
-      it "shows dns aliases page" do
-        get "/network/dns_aliases"
-        expect(response).to have_http_status(:ok)
-      end
-
-      it "creates a dns alias" do
-        allow_any_instance_of(DnsAlias).to receive(:restart)
-        expect {
-          post "/network/dns_aliases", params: { dns_alias: { name: "myalias", address: "192.168.1.100" } }, as: :json
-        }.to change(DnsAlias, :count).by(1)
-      end
-
-      it "destroys a dns alias" do
-        allow_any_instance_of(DnsAlias).to receive(:restart)
-        dns_alias = DnsAlias.create!(name: "testalias", address: "192.168.1.100")
-        expect {
-          delete "/network/dns_alias/#{dns_alias.id}", as: :json
-        }.to change(DnsAlias, :count).by(-1)
-      end
-
-      it "rejects dns alias with blank name" do
-        allow_any_instance_of(DnsAlias).to receive(:restart)
-        expect {
-          post "/network/dns_aliases", params: { dns_alias: { name: "", address: "192.168.1.100" } }, as: :json
-        }.not_to change(DnsAlias, :count)
-      end
-
-      it "redirects to index if not advanced" do
-        Setting.find_by(name: "advanced").update!(value: "0")
-        get "/network/dns_aliases"
         expect(response).to redirect_to("/network")
       end
     end
 
-    it "sends the old Gateway and Settings pages to DNS & DHCP" do
+    describe "POST /network/hosts" do
+      before do
+        allow(DnsmasqService).to receive(:rewrite_config!)
+        allow(DnsService).to receive(:rewrite!)
+      end
+
+      it "gives a device a fixed address" do
+        expect { post "/network/hosts", params: { host: { name: "myhost", mac: "aa:bb:cc:dd:ee:ff", address: "50" } } }.to change(Host, :count).by(1)
+        expect(response).to redirect_to("/network")
+        expect(flash[:notice]).to eq("myhost keeps 192.168.1.50.")
+      end
+
+      it "says why it refused one" do
+        expect { post "/network/hosts", params: { host: { name: "my_host", mac: "aa:bb", address: "50" } } }.not_to change(Host, :count)
+        expect(flash[:alert]).to include("Mac")
+      end
+
+      it "takes a fixed address away" do
+        host = Host.create!(name: "testhost", mac: "aa:bb:cc:dd:ee:01", address: "51")
+        expect { delete "/network/host/#{host.id}" }.to change(Host, :count).by(-1)
+        expect(flash[:notice]).to eq("testhost no longer has a fixed address.")
+      end
+    end
+
+    it "sends the old DNS Aliases, Gateway and Settings pages to the new tabs" do
+      get "/network/dns_aliases"
+      expect(response).to redirect_to("/network/dns#dns-aliases")
       get "/network/gateway"
-      expect(response).to redirect_to("/network/dns")
+      expect(response).to redirect_to("/network/dhcp")
       get "/network/settings"
       expect(response).to redirect_to("/network/dns")
     end

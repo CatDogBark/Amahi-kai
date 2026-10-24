@@ -38,17 +38,16 @@ RSpec.describe "Full integration flows", type: :request do
       Setting.find_by(name: "advanced").update!(value: "1")
     end
 
-    it "creates and destroys a DNS alias" do
-      allow_any_instance_of(DnsAlias).to receive(:restart)
+    it "creates and destroys a DNS alias (Network → DNS, the Names card)" do
+      allow(DnsService).to receive(:rewrite!)
 
-      post "/network/dns_aliases", params: {
-        dns_alias: { name: "testflow", address: "192.168.1.200" }
-      }, as: :json
+      post "/network/dns/aliases", params: { dns_alias: { name: "testflow", address: "192.168.1.200" } }
+      expect(response).to redirect_to("/network/dns#dns-aliases")
       dns = DnsAlias.find_by(name: "testflow")
       expect(dns).to be_present
       expect(dns.address).to eq("192.168.1.200")
 
-      delete "/network/dns_alias/#{dns.id}", as: :json
+      delete "/network/dns/aliases/#{dns.id}"
       expect(DnsAlias.find_by(id: dns.id)).to be_nil
     end
   end

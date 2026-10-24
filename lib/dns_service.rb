@@ -1,4 +1,4 @@
-# Amahi-kai's DNS server (Network → DNS & DHCP): Unbound, answering the LAN and Tailscale. Lookups go
+# Amahi-kai's DNS server (Network → DNS, DHCP and Internet): Unbound, answering the LAN and Tailscale. Lookups go
 # out over TLS to a provider the owner picks, answers are checked with DNSSEC, and the NAS, the
 # fixed hosts and the DNS aliases have local names. The root helper installs the config
 # (dns.write_config: only lines this module writes, checked with unbound-checkconf) and starts
@@ -283,7 +283,7 @@ module DnsService
 
     def radvd_config
       <<~CONF
-        # Amahi-kai (Network → DNS & DHCP): announces the NAS as the IPv6 DNS server, never as a router
+        # Amahi-kai (Network → DNS, DHCP and Internet): announces the NAS as the IPv6 DNS server, never as a router
         interface #{interface} {
           AdvSendAdvert on;
           AdvDefaultLifetime 0;
@@ -332,7 +332,7 @@ module DnsService
     def config
       own = interface_addresses
       tailscale = NetworkInterfaces.addresses(NetworkInterfaces::TAILSCALE)
-      lines = ['# Amahi-kai DNS (Network → DNS & DHCP): written by Amahi-kai, changes here are lost', 'server:']
+      lines = ['# Amahi-kai DNS (Network → DNS, DHCP and Internet): written by Amahi-kai, changes here are lost', 'server:']
       lines.concat(listening(own, tailscale).map { |address| "  interface: #{address}" })
       lines << '  ip-freebind: yes'
       lines.concat(allowed(own, tailscale).map { |network| "  access-control: #{network} allow" })

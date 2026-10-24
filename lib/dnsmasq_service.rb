@@ -1,4 +1,4 @@
-# dnsmasq hands out addresses (DHCP) while Network → DNS & DHCP is in the mode "DNS + DHCP",
+# dnsmasq hands out addresses (DHCP) while Network → DNS, DHCP and Internet is in the mode "DNS + DHCP",
 # on the interface DNS serves, and nowhere else. It answers no DNS (port=0): Unbound does that
 # (DnsService), and dnsmasq hands out the NAS as the DNS server.
 #

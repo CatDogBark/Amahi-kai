@@ -13,10 +13,10 @@ ruby:
       { id: 'pools', label: 'zfs_pools', url: '/disks/pools' }
     ]},
     { id: 'network', label: 'network', url: '/network', advanced: true, controllers: %w[dns remote_access security], subtabs: [
-      { id: 'index', label: 'leases', url: '/network' },
-      { id: 'hosts', label: 'hosts', url: '/network/hosts' },
-      { id: 'dns', label: 'dns_and_dhcp', url: '/network/dns', controller: 'dns', advanced: true },
-      { id: 'dns_aliases', label: 'dns_aliases', url: '/network/dns_aliases', advanced: true },
+      { id: 'index', label: 'devices', url: '/network' },
+      { id: 'dns', label: 'dns', url: '/network/dns', controller: 'dns', action: 'index', advanced: true },
+      { id: 'dhcp', label: 'dhcp', url: '/network/dhcp', controller: 'dns', action: 'dhcp', advanced: true },
+      { id: 'internet', label: 'internet', url: '/network/internet', controller: 'dns', action: 'internet', advanced: true },
       { id: 'remote_access', label: 'remote_access', url: '/network/remote_access', controller: 'remote_access' },
       { id: 'security', label: 'security', url: '/network/security', controller: 'security' }
     ]},
@@ -38,11 +38,11 @@ ruby:
   # A tab owns the controller named after it plus any listed in :controllers.
   # (Matching on the action name alone lit up Shares for every page whose action is "index".)
   active_tab = visible_tabs.find { |t| t[:id] == ctrl || t[:controllers]&.include?(ctrl) }
-  # A subtab with its own :controller is active on that controller's pages; the others
-  # only on the tab's own controller.
+  # A subtab with its own :controller is active on that controller's pages (one with an :action
+  # too, on that action's page only); the others only on the tab's own controller.
   subtab_active = lambda do |tab, subtab|
     if subtab[:controller]
-      subtab[:controller] == ctrl
+      subtab[:controller] == ctrl && (subtab[:action].nil? || subtab[:action] == act)
     else
       ctrl == tab[:id] && (subtab[:id] == act || (subtab[:id] == 'index' && act == tab[:id]) || subtab[:url] == request.path)
     end

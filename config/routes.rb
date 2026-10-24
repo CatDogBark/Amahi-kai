@@ -11,32 +11,39 @@ Rails.application.routes.draw do
   end
 
   # Network (consolidated from plugin)
+  # Network → Devices: the devices seen (DHCP's leases) and the fixed addresses. The old Hosts
+  # page is part of it; DNS aliases moved to the DNS tab.
   scope '/network', controller: 'network', as: 'network' do
     get '/', action: 'index', as: 'index'
-    get 'hosts', action: 'hosts'
+    get 'hosts', to: redirect('/network')
     post 'hosts', action: 'create_host'
     delete 'host/:id', action: 'destroy_host', as: 'destroy_host'
-    get 'dns_aliases', action: 'dns_aliases'
-    post 'dns_aliases', action: 'create_dns_alias'
-    delete 'dns_alias/:id', action: 'destroy_dns_alias', as: 'destroy_dns_alias'
+    get 'dns_aliases', to: redirect('/network/dns#dns-aliases')
   end
 
-  # Network → DNS & DHCP (Unbound, and dnsmasq for DHCP). Network → Gateway and Settings used to
-  # hold the DHCP settings.
-  scope '/network/dns', controller: 'dns', as: 'dns' do
-    get '/', action: 'index', as: 'index'
-    put '/', action: 'update', as: 'update'
-    get 'install_stream', action: 'install_stream'
-    get 'install_dnsmasq_stream', action: 'install_dnsmasq_stream'
-    put 'blocking', action: 'update_blocking', as: 'update_blocking'
-    post 'pause_blocking', action: 'pause_blocking', as: 'pause_blocking'
-    post 'resume_blocking', action: 'resume_blocking', as: 'resume_blocking'
-    post 'check_routers', action: 'check_routers', as: 'check_routers'
-    get 'install_radvd_stream', action: 'install_radvd_stream'
-    post 'forwards', action: 'create_forward', as: 'create_forward'
-    delete 'forwards/:id', action: 'destroy_forward', as: 'destroy_forward'
+  # Network → DNS, DHCP and Internet: one controller, since they share the LAN interface and the
+  # mode (Unbound for DNS, dnsmasq for DHCP, UFW and netplan for the router). Network → Gateway
+  # and Settings, and the one DNS & DHCP page, used to hold all of it.
+  scope '/network', controller: 'dns', as: 'dns' do
+    get 'dns', action: 'index', as: 'index'
+    put 'dns', action: 'update', as: 'update'
+    get 'dhcp', action: 'dhcp', as: 'dhcp'
+    put 'dhcp', action: 'update_dhcp', as: 'update_dhcp'
+    get 'internet', action: 'internet', as: 'internet'
+    put 'internet', action: 'update_internet', as: 'update_internet'
+    get 'dns/install_stream', action: 'install_stream', as: 'install_stream'
+    get 'dns/install_dnsmasq_stream', action: 'install_dnsmasq_stream', as: 'install_dnsmasq_stream'
+    get 'dns/install_radvd_stream', action: 'install_radvd_stream', as: 'install_radvd_stream'
+    put 'dns/blocking', action: 'update_blocking', as: 'update_blocking'
+    post 'dns/pause_blocking', action: 'pause_blocking', as: 'pause_blocking'
+    post 'dns/resume_blocking', action: 'resume_blocking', as: 'resume_blocking'
+    post 'dns/aliases', action: 'create_alias', as: 'create_alias'
+    delete 'dns/aliases/:id', action: 'destroy_alias', as: 'destroy_alias'
+    post 'dns/check_routers', action: 'check_routers', as: 'check_routers'
+    post 'dns/forwards', action: 'create_forward', as: 'create_forward'
+    delete 'dns/forwards/:id', action: 'destroy_forward', as: 'destroy_forward'
   end
-  get '/network/gateway', to: redirect('/network/dns')
+  get '/network/gateway', to: redirect('/network/dhcp')
   get '/network/settings', to: redirect('/network/dns')
 
   # Remote Access (Cloudflare Tunnel) — split from network

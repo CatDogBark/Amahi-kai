@@ -94,6 +94,12 @@ four-way mode becomes a switch on each tab, with the dependencies kept (the rout
 Views move; the logic doesn't. Items 1–3 of 2c land on the page as it is, then the split, then
 items 4–5 on their new tabs.
 
+Done 2026-10-23: Devices (leases and fixed addresses in one list, with *Fix this address* on any
+device seen), DNS (with Blocking and the Names card), DHCP and Internet (the router, forwards,
+IPv6); the switches with their dependency chain (DHCP needs DNS, the router needs DHCP, turning
+one off turns off what builds on it); the old addresses redirect. The old pages' JavaScript
+forms (hosts, aliases) became plain forms.
+
 ## 3. Signed updates
 
 Today the updater installs whatever the GitHub Release tag points at, and the helper fetches the

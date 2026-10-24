@@ -1,5 +1,5 @@
 # The NAS's network interfaces and their addresses, read with getifaddrs (no command runs), and
-# the interface its default route leaves by. Network → DNS & DHCP serves one of them.
+# the interface its default route leaves by. Network → DNS, DHCP and Internet serves one of them.
 
 require 'ipaddr'
 require 'socket'

@@ -5,9 +5,11 @@ title: "Networking"
 
 # Networking
 
-Amahi-kai can be your network's DNS server, private and checked, with names for your devices,
-and it can hand out addresses (DHCP) in place of your router. Both are off until you turn them
-on, on **Network → DNS & DHCP** in **Advanced mode**.
+Amahi-kai can be your network's DNS server, private and checked, with names for your devices; it
+can hand out addresses (DHCP) in place of your router; and it can be your router. Each has its
+own page under **Network**, in **Advanced mode**: **DNS**, **DHCP** and **Internet**, with
+**Devices** for the devices on the network and their fixed addresses. Everything is off until
+you turn it on, and each builds on the one before: DHCP needs DNS, the router needs DHCP.
 
 ---
 
@@ -20,17 +22,7 @@ DNS and DHCP, DNS aliases, remote access and security are all Advanced mode feat
 
 ---
 
-## DNS (Network → DNS & DHCP)
-
-The page has four modes:
-
-1. **Off** (the default): nothing listens, and your router does DNS and DHCP as before.
-2. **DNS for my network** (recommended): the NAS answers DNS; your router keeps handing out
-   addresses.
-3. **DNS + DHCP** (advanced): the NAS also hands out addresses, in place of your router (see DHCP,
-   below).
-4. **Router** (advanced): DNS + DHCP, and the NAS is the way to the internet (see Router mode,
-   below).
+## DNS (Network → DNS)
 
 DNS turns names like `example.com` into addresses. Normally your router does it, by asking your
 internet provider, who can read (and sometimes change) every lookup. With Amahi-kai's DNS on:
@@ -63,10 +55,10 @@ All of them are free, need no account, encrypt the connection and check DNSSEC:
 
 ### Turning it on
 
-1. Go to **Network → DNS & DHCP** and click **Install Unbound**. Installing changes nothing on
-   your network: DNS stays off.
-2. Pick **DNS for my network**, a provider, and the network interface DNS should answer on (the
-   one your LAN is on), then **Save**. The page shows whether it's answering, for local names
+1. Go to **Network → DNS** and click **Install Unbound**. Installing changes nothing on your
+   network: DNS stays off.
+2. Turn on **DNS for my network**, pick a provider and the network interface DNS should answer
+   on (the one your LAN is on), then **Save**. The page shows whether it's answering, for local names
    and outside ones.
 3. **Give the NAS a fixed address:** in your router's DHCP settings, reserve the NAS's address so
    it never changes. Every device will be pointed at it.
@@ -91,9 +83,9 @@ NAS is off or restarting, the devices that use it can't look up names.
 - **The NAS's own lookups don't go through it:** the NAS keeps asking your router, so a problem
   with DNS can't stop it from updating.
 
-### Router mode
+### Router (Network → Internet)
 
-The fourth mode, **Router**, makes the NAS the house's way to the internet: DNS + DHCP, plus a
+**The NAS is the router** makes the NAS the house's way to the internet: DNS and DHCP, plus a
 second network interface that takes the provider's connection. Your devices reach the internet
 through the NAS, and your old router becomes an access point (its DHCP off, its internet port
 empty, your devices on its LAN ports and Wi-Fi as before).
@@ -103,7 +95,7 @@ empty, your devices on its LAN ports and Wi-Fi as before).
    inside, put it in bridge mode, or the NAS sits behind its NAT.
 2. **Turn the firewall on** first (Network → Security, the firewall's Fix). Router mode refuses
    without it: the firewall is what keeps the internet out of the NAS.
-3. Pick **Router**, the internet interface, and **Save**, from a device on the LAN side (the page
+3. On **Network → Internet**, turn the switch on, pick the internet interface, and **Save**, from a device on the LAN side (the page
    refuses if you're connected through the interface that would become the internet side, since
    it would stop answering you).
 
@@ -119,12 +111,12 @@ Blocking, so turn Blocking on for that part). If Tailscale is installed, its por
 the internet side so its connections stay direct; the Cloudflare Tunnel needs nothing.
 
 Nothing from the internet reaches the NAS or your devices except the **ports you let in**, on
-the card that appears: a port, a protocol, the device (give it a fixed address on Network → Hosts
+the card that appears: a port, a protocol, the device (give it a fixed address on Network → Devices
 first) and its port. The NAS's own services (SSH, the web UI, Samba, DNS) never answer the
 internet side.
 
-**The way back:** set the page to DNS + DHCP or Off, move the provider's cable back to your
-router, and turn its DHCP on again. While the NAS is off or restarting, the house has no
+**The way back:** turn the switch off, move the provider's cable back to your router, and turn
+its DHCP on again. While the NAS is off or restarting, the house has no
 internet: a System Update is a minute of that.
 
 IPv6 for the house (an address range from the provider), PPPoE and a static address come later.
@@ -177,12 +169,12 @@ Changes made to it by hand are lost the next time it's written. The blocklist is
 
 ---
 
-## DNS Aliases
+## Names (DNS aliases)
 
-DNS aliases are extra names on your network: `files` for the NAS, or `printer` for your printer's
-address.
+Extra names on your network: `files` for the NAS, or `printer` for your printer's address. They're
+the **Names** card on **Network → DNS**.
 
-1. Go to **Network → DNS Aliases** (Advanced mode)
+1. Go to **Network → DNS**, the Names card
 2. Enter a **name** (e.g., `files`): it must start with a letter, and can contain letters, numbers
    and hyphens
 3. Enter an **address** (IPv4 or IPv6), or leave it blank to point the name at the NAS
@@ -194,10 +186,11 @@ aliases.
 
 ---
 
-## Static Hosts
+## Devices and fixed addresses
 
-Static hosts give a device the same IP address and name every time. Manage them on
-**Network → Hosts**:
+**Network → Devices** lists the devices the NAS has given an address to, and lets you fix a
+device's address so it keeps it every time (**Fix this address** on a device in the list, or add
+one by hand):
 
 - **Name**: the device's name on the network (letters, numbers and hyphens, up to 63 characters)
 - **MAC**: the device's MAC address
@@ -208,19 +201,18 @@ out addresses (DNS + DHCP), the device always gets this one.
 
 ---
 
-## DHCP (DNS + DHCP)
+## DHCP (Network → DHCP)
 
-In the mode **DNS + DHCP**, the NAS also hands out addresses to the devices on your network, in
+With **The NAS hands out addresses** on, the NAS hands out addresses to the devices on your network, in
 place of your router's DHCP. Your router almost certainly does this already, so it's optional:
 it puts the NAS in charge of the network, and gives every device a name in DNS.
 
-1. On **Network → DNS & DHCP**, pick **DNS + DHCP** and click **Install dnsmasq** (installing
-   changes nothing on your network).
+1. On **Network → DHCP**, click **Install dnsmasq** (installing changes nothing on your network).
 2. **Turn your router's DHCP off** in its own settings (often under LAN or DHCP). Leave the
    router's own address as it is.
-3. Set the addresses to hand out (a range on the interface's network, at least 10 addresses, not
-   taking in the NAS's own), the router's address, and how long devices keep an address, then
-   **Save**. The NAS first checks the network for another DHCP server, the way a device would,
+3. Turn the switch on, set the addresses to hand out (a range on the interface's network, at
+   least 10 addresses, not taking in the NAS's own), the router's address, and how long devices
+   keep an address, then **Save**. The NAS first checks the network for another DHCP server, the way a device would,
    and won't start while one answers.
 
 Devices pick up an address from the NAS the next time they connect or renew; turning a device's
@@ -231,16 +223,8 @@ for chosen devices are on **Network → Hosts**.
 DHCP serves the interface DNS answers on, and nowhere else, and the firewall lets DHCP in on that
 interface only.
 
-**The way back:** turn your router's DHCP on again, then set the page to DNS for my network or
-Off. Devices move back to the router as they renew. While the NAS is off, devices can't get a new
+**The way back:** turn your router's DHCP on again, then turn the switch off. Devices move back to the router as they renew. While the NAS is off, devices can't get a new
 address.
-
----
-
-## Network Leases
-
-The **Network** index page shows the devices that got an address from the NAS: each one's name,
-MAC address, IP address and when its lease runs out.
 
 ---
 
@@ -248,7 +232,7 @@ MAC address, IP address and when its lease runs out.
 
 ### Names don't resolve from a device
 
-1. Check **Network → DNS & DHCP**: it should say **Answering**.
+1. Check **Network → DNS**: it should say **Answering**.
 2. Check the device asks the NAS: on the device, `nslookup example.com <NAS address>` should
    answer. If it does but plain `nslookup example.com` doesn't use the NAS, the device (or the
    router) is still set to another DNS server.
@@ -267,7 +251,7 @@ network addresses, not on `127.0.0.53`, so the two don't clash.
 
 ### Devices don't get addresses from the NAS
 
-- Check **Network → DNS & DHCP** is in DNS + DHCP, and says it's handing out addresses
+- Check **Network → DHCP** is on and says it's handing out addresses
 - Check the DHCP range doesn't overlap with static assignments
 - Make sure no other DHCP server is running (turn your router's DHCP off)
 - Check the lease file: `cat /var/lib/misc/dnsmasq.leases`
