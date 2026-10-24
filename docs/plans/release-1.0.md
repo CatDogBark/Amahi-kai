@@ -157,6 +157,9 @@ calls the pages make.
 
 ## 3. Signed updates
 
+**Deferred, not in 1.0** (CatDogBark, 2026-10-24): see *Not in 1.0*. The design below is kept
+for when other people run Amahi-kai.
+
 Today the updater installs whatever the GitHub Release tag points at, and the helper fetches the
 app catalog's `main` the same way. Nothing is checked against a key the NAS holds, so control of
 the GitHub account (or of GitHub) alone puts code on every NAS. Fine with one user; not for 1.0.
@@ -252,21 +255,11 @@ layout, private folders per user, P4.6b (Greyhole shares through Samba, which is
 one sign-in for apps (the capability API), and off-site backups of the files. All on the roadmap
 for after.
 
-**Router mode** is out too, unless CatDogBark says otherwise (2026-10-23). 0.9.2 has the LAN half
-(DNS and DHCP for the devices); the internet half doesn't exist yet:
+**Router mode**, listed here until 2026-10-23, came into 1.0 after all and shipped in 0.10.0
+(§2b–2f); the house runs on it since 2026-10-24.
 
-- A second network interface for the internet, and getting an address on it (DHCP from the
-  provider, or PPPoE for providers that use it).
-- Forwarding and NAT between the LAN and that interface, so devices reach the internet through
-  the NAS.
-- A firewall facing the internet: nothing in from outside except replies, and the NAS's own
-  services (SSH, the web UI, Samba, DNS, DHCP) never offered on the internet side.
-- IPv6 for the house: a prefix delegated by the provider, and the NAS announcing a real default
-  route on the LAN (today it announces itself with a router lifetime of 0, "not a router", on
-  purpose).
-- A port forwarding page, and the way back: the NAS down means the house is offline, and a
-  System Update's restart is a minute without internet.
-
-A few days for the IPv4 half, more with IPv6 delegation and PPPoE. The island is the test bed
-for it: the test VM already has a LAN leg and an island leg, so the client can be routed out
-through it without touching the house.
+**Signed updates (§3)** are out of 1.0 too (CatDogBark, 2026-10-24): with one user, the key to
+keep and back up outweighs the risk it covers. They come back when other people run
+Amahi-kai; the design in §3 stands for then, with two trusted keys from the start (one on
+the laptop, a spare in Proton Drive). Deferring closes nothing: the release that adds the
+check is installed by whatever updater is out there, as any release is.
