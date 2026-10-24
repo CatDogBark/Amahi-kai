@@ -153,16 +153,35 @@ Planned 2026-10-22, for 1.0 ([`networking.md`](networking.md)): Unbound for DNS 
 lookups to a provider the owner picks, DNSSEC, local names, blocklists with a switch, IPv6) and
 dnsmasq for DHCP only, off by default, and tested first on an isolated Proxmox bridge so the
 house's internet is never at risk. Built and tried there (all five slices, firewall on, after a
-reboot) for 0.9.2; the NAS, Tailscale and the house are left:
-[`docs/testing/networking.md`](../testing/networking.md).
+reboot) for 0.9.2. 0.10.0 (2026-10-24) added router mode, the shield (forced DNS, vendor
+lists, Tailscale's port, LAN only per device, anti-spoofing, the drop counts), This NAS (each
+port's address with the lockout guard, port names, Find port), the Network tab split into
+Devices / DNS / DHCP / Internet, and the network resync on update, all island-verified. The
+NAS, Tailscale and the house are left: [`docs/testing/networking.md`](../testing/networking.md).
+
+Against a household router (CatDogBark, 2026-10-24): ahead on DNS (encrypted, checked,
+blocking, forced), LAN only, no UPnP, anti-spoofing, no WAN ping; level on the stateful
+firewall and NAT. Still behind, to consider after 1.0 unless listed earlier:
+
+- **A WAN-side log**: who knocked, when (the kernel logs martians on the WAN already; UFW's
+  deny rule would need `log`, rate-limited, and the helper to read `/var/log/ufw.log`).
+- **IPv6 for the house** with its own WAN firewall: prefix delegation, a real default route
+  announced; the WAN is IPv6-off until then, which is safe but a feature gap.
+- **HTTPS on the LAN** as the optional front door (its own section below).
+- **Hairpin NAT**: a forwarded port reached by the WAN address from inside; local names make
+  it moot, so low.
+- **UPnP/NAT-PMP as an opt-in** (miniupnpd) with a per-device allow, for consoles and VoIP
+  that want it; off is the safer default and stays so.
+- **OpenWrt access points managed from the NAS** (a Wireless tab): documented, after 1.0.
 
 ## Release 1.0
 
 What's left for 1.0, in order, is [`release-1.0.md`](release-1.0.md) (2026-10-23): networking's
 Tailscale check, the real pool and apps on it, signed updates, a Backups tab (backup and restore
 of the NAS's own state), a full code review, a docs review, then a release candidate and 1.0.
-1.0 is for other people to install. bitShare is its own project and doesn't hold 1.0; router mode
-waits (what it still needs is listed there).
+1.0 is for other people to install. bitShare is its own project and doesn't hold 1.0. Networking
+(§1–2f there) shipped in 0.10.0; what's left of it before 1.0 is the house stage of router
+mode and the Tailscale check.
 
 ## Open, not yet scheduled
 
