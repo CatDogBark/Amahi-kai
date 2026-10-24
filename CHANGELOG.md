@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [0.10.2] — 2026-10-24
+
+Shares work again on the LAN of a NAS that is the router, and over Tailscale for the first time; DNS follows Tailscale by itself; and the update channel is chosen on the page. Checked from outside the house over a phone's mobile connection: every port on the router's internet side is closed.
+
 ### 🚀 Major Features
 
 - **Choose the update channel on the page** (Settings → System Status) — **Follows** picks what System Update installs: releases (the default), releases and release candidates, or the dev branch for testing. It used to take a root edit of `amahi.env`. Saving checks the new channel straight away, and an update never takes the server back to an older version.
