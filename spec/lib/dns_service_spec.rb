@@ -239,6 +239,7 @@ RSpec.describe DnsService do
       expect(described_class::BLOCKLISTS.keys).to match_array(AmahiHelper::BLOCKLISTS.keys)
       expect(AmahiHelper::BLOCKLISTS.values.map { |list| list[:url] }).to all(start_with('https://'))
       expect(described_class::BLOCKLISTS.values.count { |list| list[:default] }).to eq(2)
+      expect(described_class::BLOCKLISTS.values.count { |list| list[:vendor] }).to eq(8)
     end
   end
 
@@ -316,6 +317,172 @@ RSpec.describe DnsService do
       described_class.check_routers!
       expect(described_class.ipv6_check).to include('interface' => 'ens18', 'checked_at' => be_within(5).of(Time.now.to_i))
       expect(described_class.other_ipv6_dns).to eq([['fe80::1', '2600:1700:abcd::1']])
+    end
+  end
+
+  describe 'router mode' do
+    let(:dir) { Dir.mktmpdir }
+
+    before do
+      allow(described_class).to receive_messages(installed?: true, running?: false)
+      stub_const('DnsService::ROUTER_STATE', "#{dir}/router.json")
+      stub_const('DnsService::UFW_CONF', "#{dir}/ufw.conf")
+      File.write("#{dir}/ufw.conf", "ENABLED=yes\n")
+    end
+
+    after { FileUtils.rm_rf(dir) }
+
+    it 'is DHCP too, with an internet interface the NAS has' do
+      Setting.set('dns_mode', 'router')
+      expect([described_class.dhcp?, described_class.router?]).to eq([true, true])
+      expect(described_class.wan_interface).to be_nil
+      Setting.set('dns_wan_interface', 'ens19')
+      expect(described_class.wan_interface).to eq('ens19')
+      Setting.set('dns_wan_interface', 'eth9')
+      expect(described_class.wan_interface).to be_nil
+    end
+
+    it "puts the router's rules in last, with the forwards, and takes them out when the mode changes" do
+      Setting.set('dns_mode', 'router')
+      Setting.set('dns_wan_interface', 'ens19')
+      Setting.set('net', '192.168.1')
+      allow(described_class).to receive(:rewrite_router!)
+      PortForward.create!(protocol: 'udp', port: 5000, address: '60')
+      described_class.apply!
+      ops = Privileged.calls.map(&:first)
+      expect(ops.last).to eq('network.router_on')
+      expect(ops.index('network.router_on')).to be > ops.index('services.enable')
+      expect(Privileged.calls.last.last).to eq(lan: 'ens18', wan: 'ens19', forwards: [{ protocol: 'udp', port: 5000, address: '192.168.1.60', to_port: 5000 }],
+                                               dns: '192.168.1.10', lan_only: [])
+      Host.create!(name: 'camera', mac: 'aa:bb:cc:dd:ee:52', address: '52', lan_only: true)
+      Host.create!(name: 'printer', mac: 'aa:bb:cc:dd:ee:53', address: '53')
+      expect(described_class.router_args[:lan_only]).to eq(['192.168.1.52'])
+      Privileged.calls.clear
+      File.write(described_class::ROUTER_STATE, '{"lan":"ens18","wan":"ens19","forwards":[]}')
+      Setting.set('dns_mode', 'dns_dhcp')
+      described_class.apply!
+      expect(Privileged.calls.map(&:first)).to include('network.router_off')
+      expect(described_class.router_state).to include('wan' => 'ens19')
+    end
+
+    it "sends devices' lookups to the NAS unless that's turned off, and adds the encrypted-DNS list to blocking" do
+      Setting.set('dns_mode', 'router')
+      Setting.set('dns_wan_interface', 'ens19')
+      expect(described_class.force_dns?).to be true
+      expect(described_class.blocklists_in_force).to eq(%w[hagezi-normal hagezi-tif-mini hagezi-doh])
+      Setting.set('dns_force_nas', '0')
+      expect(described_class.blocklists_in_force).to eq(%w[hagezi-normal hagezi-tif-mini])
+      described_class.rewrite_router!
+      expect(Privileged.calls.last.last[:dns]).to be_nil
+      Setting.set('dns_mode', 'dns')
+      Setting.set('dns_force_nas', '1')
+      expect(described_class.blocklists_in_force).to eq(%w[hagezi-normal hagezi-tif-mini]) # only the router can redirect
+    end
+
+    it 'rewrites the rules for a port forward only while the NAS is the router' do
+      expect(described_class.rewrite_router!).to be false
+      Setting.set('dns_mode', 'router')
+      Setting.set('dns_wan_interface', 'ens19')
+      expect(described_class.rewrite_router!).to be true
+      expect(Privileged.calls.map(&:first)).to eq(%w[network.router_on])
+    end
+
+    it "counts what the internet side dropped, since the later of boot and the rules' load, only while the NAS is the router" do
+      expect(described_class.wan_drops).to be_nil
+      Setting.set('dns_mode', 'router')
+      Setting.set('dns_wan_interface', 'ens19')
+      expect(described_class.wan_drops).to be_nil # no state file: the rules aren't in place
+      loaded = Time.now.to_i - 600
+      File.write(described_class::ROUTER_STATE, JSON.generate('lan' => 'ens18', 'wan' => 'ens19', 'forwards' => [], 'since' => loaded))
+      allow(Privileged).to receive(:call).with('network.wan_drops').and_return('ok' => true, 'dropped' => 42, 'since' => loaded)
+      allow(described_class).to receive(:boot_time).and_return(Time.at(loaded - 3600))
+      expect(described_class.wan_drops).to eq(dropped: 42, since: Time.at(loaded))
+      allow(described_class).to receive(:boot_time).and_return(Time.at(loaded + 60)) # rebooted since: the counters started over then
+      expect(described_class.wan_drops[:since]).to eq(Time.at(loaded + 60))
+      allow(Privileged).to receive(:call).with('network.wan_drops').and_raise(Privileged::Error.new('network.wan_drops', 'no'))
+      expect(described_class.wan_drops).to be_nil
+    end
+
+    it "reads the kernel's count of packets that failed the reverse-path check" do
+      Tempfile.create('netstat') do |file|
+        file.write("TcpExt: SyncookiesSent IPReversePathFilter TCPPureAcks\nTcpExt: 0 17 12345\nIpExt: InNoRoutes\nIpExt: 2\n")
+        file.flush
+        expect(described_class.spoof_drops(file.path)).to eq(17)
+        file.rewind
+        file.truncate(0)
+        file.write("TcpExt: SyncookiesSent\nTcpExt: 0\n")
+        file.flush
+        expect(described_class.spoof_drops(file.path)).to be_nil
+      end
+      expect(described_class.spoof_drops('/nonexistent/netstat')).to be_nil
+    end
+  end
+
+  # After an update: each config made again, only what differs put in place.
+  describe '.resync!' do
+    let(:dir) { Dir.mktmpdir }
+
+    before do
+      stub_const('DnsService::UNBOUND_CONF', "#{dir}/amahi-kai.conf")
+      stub_const('DnsService::BLOCKLIST_CHOSEN', "#{dir}/chosen.json")
+      stub_const('DnsService::RADVD_CONF', "#{dir}/radvd.conf")
+      stub_const('DnsService::ROUTER_STATE', "#{dir}/router.json")
+      stub_const('DnsService::UFW_CONF', "#{dir}/ufw.conf")
+      stub_const('DnsmasqService::CONFIG_PATH', "#{dir}/dnsmasq.conf")
+      File.write("#{dir}/ufw.conf", "ENABLED=yes\n")
+      allow(described_class).to receive_messages(installed?: true, running?: true, radvd_installed?: true, radvd_running?: true)
+      allow(DnsmasqService).to receive_messages(installed?: true, running?: false)
+      allow(DnsmasqService).to receive(:rewrite_config!).and_call_original # stubbed for the rest of the file (Host's callbacks)
+      Setting.set('net', '192.168.1')
+    end
+
+    after { FileUtils.rm_rf(dir) }
+
+    it 'does nothing while DNS is off' do
+      expect(described_class.resync!).to eq([])
+      expect(described_class.resync_report).to eq('Network: nothing to change')
+      expect(Privileged.calls).to be_empty
+    end
+
+    it 'puts in place only what differs from the files the helper left, and says what' do
+      Setting.set('dns_mode', 'router')
+      Setting.set('dns_wan_interface', 'ens19')
+      Setting.set('dns_blocking', '1')
+      Setting.set('dns_ipv6_advertise', '1')
+      File.write(described_class::UNBOUND_CONF, described_class.config)
+      File.write(described_class::BLOCKLIST_CHOSEN, "#{JSON.pretty_generate('lists' => described_class.blocklists_in_force, 'allow' => described_class.allowlist)}\n")
+      File.write(DnsmasqService::CONFIG_PATH, DnsmasqService.config_text(DnsmasqService.options))
+      File.write(described_class::RADVD_CONF, described_class.radvd_config)
+      state = described_class.router_args.transform_keys(&:to_s).merge('tailscale' => described_class.tailscale_installed?, 'rules' => Privileged.router_rules_version)
+      File.write(described_class::ROUTER_STATE, JSON.generate(state))
+      expect(described_class.resync!).to eq([])
+      expect(Privileged.calls).to be_empty
+
+      File.write(described_class::UNBOUND_CONF, "# an older shape\n")
+      expect(described_class.resync!).to eq(["Unbound's config"])
+      expect(Privileged.calls.map(&:first)).to eq(%w[dns.write_config services.restart])
+      File.write(described_class::UNBOUND_CONF, described_class.config)
+
+      Privileged.reset!
+      File.write(described_class::BLOCKLIST_CHOSEN, JSON.generate('lists' => ['hagezi-light'], 'allow' => []))
+      File.write(DnsmasqService::CONFIG_PATH, "# an older shape\n")
+      expect(described_class.resync!).to eq(['the blocklists', "dnsmasq's config"])
+      expect(Privileged.calls.map(&:first)).to eq(%w[dns.set_blocklists network.write_dnsmasq_config])
+      File.write(described_class::BLOCKLIST_CHOSEN, "#{JSON.pretty_generate('lists' => described_class.blocklists_in_force, 'allow' => described_class.allowlist)}\n")
+      File.write(DnsmasqService::CONFIG_PATH, DnsmasqService.config_text(DnsmasqService.options))
+
+      Privileged.reset!
+      File.delete(described_class::RADVD_CONF) # can't be read back: written again, to be safe
+      expect(described_class.resync!).to eq(["radvd's config"])
+      expect(Privileged.calls.map(&:first)).to eq(%w[dns.write_radvd_config services.restart])
+      File.write(described_class::RADVD_CONF, described_class.radvd_config)
+
+      Privileged.reset!
+      File.write(described_class::ROUTER_STATE, JSON.generate(state.merge('rules' => Privileged.router_rules_version - 1))) # an older shape of the rules
+      expect(described_class.resync!).to eq(["the router's rules"])
+      expect(Privileged.calls.map(&:first)).to eq(%w[network.router_on])
+      File.write(described_class::ROUTER_STATE, JSON.generate(state.merge('lan_only' => ['192.168.1.52']))) # a device let out since
+      expect(described_class.resync_report).to eq("Network: applied the router's rules")
     end
   end
 

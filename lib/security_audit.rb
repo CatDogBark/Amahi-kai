@@ -20,6 +20,7 @@ class SecurityAudit
         ssh_password_auth_check(report),
         fail2ban_check,
         security_updates_check,
+        automatic_updates_check,
         samba_lan_binding_check,
         docker_ports_check,
         open_ports_check
@@ -109,7 +110,7 @@ class SecurityAudit
     end
 
     # The fix lets in SSH, the web UI (3000), HTTPS and Samba. DNS gets in to Unbound's addresses,
-    # and DHCP on dnsmasq's interface, by rules Network → DNS & DHCP adds while they're on.
+    # and DHCP on dnsmasq's interface, by rules Network → DNS, DHCP and Internet adds while they're on.
     def ufw_check(report)
       Check.new(
         name: 'ufw_firewall',
@@ -178,6 +179,27 @@ class SecurityAudit
                          'install on Settings → System Dependencies'
                      end,
         status: waiting.empty? ? :pass : :warn,
+        severity: :warning,
+        fix_command: nil
+      )
+    end
+
+    # A NAS that is the house's router faces the internet, so Ubuntu's security updates should
+    # install by themselves (the switch is on Settings → System Dependencies). Off the router
+    # it's the admin's choice, as the check above says.
+    def automatic_updates_check
+      automatic = SystemDependencies.automatic?
+      router = DnsService.router?
+      Check.new(
+        name: 'automatic_updates',
+        description: if automatic
+                       'Automatic security updates on'
+                     elsif router
+                       "The NAS is the router, but Ubuntu's security updates aren't automatic: turn them on (Settings → System Dependencies)"
+                     else
+                       'Automatic security updates off (your choice while the NAS is not the router)'
+                     end,
+        status: automatic || !router ? :pass : :warn,
         severity: :warning,
         fix_command: nil
       )

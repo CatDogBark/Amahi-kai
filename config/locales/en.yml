@@ -13,6 +13,9 @@
   dependencies: System Dependencies
   leases: Leases
   hosts: Hosts
+  devices: Devices
+  dhcp: DHCP
+  internet: Internet
   gateway: Gateway
   expiration: Expiration
   mac: Mac
@@ -124,7 +127,7 @@
   disk_pool_copies: Extra copies
 
   # networking -> aliases
-  dns_and_dhcp: DNS & DHCP
+  dns: DNS
   dns_alias: DNS Alias
   dns_aliases: DNS Aliases
   new_dns_alias: New DNS Alias

@@ -178,6 +178,13 @@ RSpec.describe 'install and update scripts' do
       expect(update).to match(/if \$REPAIR; then\n  log "Repairing the version that runs/)
     end
 
+    it "has the network's configs follow the update, after Samba's and before the app restarts" do
+      resync = update.index("bin/rails runner 'puts DnsService.resync_report'")
+      expect(resync).not_to be_nil
+      expect(resync).to be > update.index("bin/rails runner 'exit(SambaService.push_config ? 0 : 1)'")
+      expect(resync).to be < update.index('restart_app || rollback')
+    end
+
     it 'records the channel at install (development for a dev install), and a re-run keeps its version' do
       expect(install).to include('AMAHI_UPDATE_CHANNEL=$UPDATE_CHANNEL', '[[ "${AMAHI_BRANCH:-main}" == dev ]] && UPDATE_CHANNEL=development')
       expect(install).not_to include('pull origin main')

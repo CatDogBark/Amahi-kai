@@ -91,6 +91,13 @@ RSpec.describe DnsmasqService do
       expect(written).to include('dhcp-option=option:dns-server,10.99.0.1', 'domain=home.arpa')
     end
 
+    it 'hands out the NAS as the router while the NAS is the router' do
+      allow(DnsService).to receive_messages(server_addresses: ['10.99.0.1'])
+      described_class.write_config!(dhcp.merge(router_is_nas: true))
+      expect(written).to include('dhcp-option=option:router,10.99.0.1')
+      expect(written).not_to include('option:router,10.99.0.1,')
+    end
+
     it 'hands out nothing while DHCP is off' do
       described_class.write_config!(dhcp.merge(dhcp_enabled: false))
       expect(written.lines.map(&:strip)).to include('port=0', 'bind-interfaces', 'except-interface=lo')

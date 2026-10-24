@@ -1,4 +1,4 @@
-# Amahi-kai's DNS server (Network → DNS & DHCP): Unbound, answering the LAN and Tailscale. Lookups go
+# Amahi-kai's DNS server (Network → DNS, DHCP and Internet): Unbound, answering the LAN and Tailscale. Lookups go
 # out over TLS to a provider the owner picks, answers are checked with DNSSEC, and the NAS, the
 # fixed hosts and the DNS aliases have local names. The root helper installs the config
 # (dns.write_config: only lines this module writes, checked with unbound-checkconf) and starts
@@ -18,8 +18,18 @@ module DnsService
   KIND = Setting::NETWORK
   UNBOUND = '/usr/sbin/unbound'
   PACKAGES = %w[unbound dns-root-data].freeze
-  # Off; DNS for my network; DNS + DHCP.
-  MODES = %w[off dns dns_dhcp].freeze
+  # Off; DNS for my network; DNS + DHCP; Router (DNS + DHCP, and the NAS between the LAN and the
+  # internet).
+  MODES = %w[off dns dns_dhcp router].freeze
+  # What the root helper has in place while the NAS is the router (root writes it; anyone may read).
+  ROUTER_STATE = '/var/lib/amahi-kai-dns/router.json'
+  # The kernel's network counters, the reverse-path drops among them.
+  NETSTAT = '/proc/net/netstat'
+  # What the helper has in place, read back after an update (resync!): Unbound's config and
+  # the lists chosen for blocking.
+  UNBOUND_CONF = '/etc/unbound/unbound.conf.d/amahi-kai.conf'
+  BLOCKLIST_CHOSEN = '/var/lib/amahi-kai-dns/chosen.json'
+  UFW_CONF = '/etc/ufw/ufw.conf'
   DEFAULT_DOMAIN = 'home.arpa'
   DEFAULT_PROVIDER = 'quad9'
   CA_CERTS = '/etc/ssl/certs/ca-certificates.crt'
@@ -69,8 +79,29 @@ module DnsService
                       about: "Another project's list of the most common ads and trackers; rarely blocks too much. About 60,000 domains." },
     'oisd-big' => { name: 'OISD big', default: false,
                     about: "OISD's full list: ads, trackers, malware and phishing. It covers what HaGeZi NORMAL does, so pick one. " \
-                           'About 240,000 domains.' }
+                           'About 240,000 domains.' },
+    'hagezi-doh' => { name: 'Encrypted DNS providers', default: false,
+                      about: "The known DNS-over-HTTPS services, so a device can't go around the NAS's DNS by name. Ticked for you " \
+                             'while every device uses the NAS\'s DNS (Router). About 3,300 domains.' },
+    'hagezi-native-samsung' => { name: 'Samsung TVs and phones', default: false, vendor: true,
+                                 about: "Samsung's own telemetry hosts, with what its devices need left out. About 200 domains." },
+    'hagezi-native-lgwebos' => { name: 'LG TVs (webOS)', default: false, vendor: true,
+                                 about: "LG's own telemetry hosts, with what its TVs need left out. About 230 domains." },
+    'hagezi-native-roku' => { name: 'Roku', default: false, vendor: true,
+                              about: "Roku's own telemetry and ad-measurement hosts, with what its players need left out. About 60 domains." },
+    'hagezi-native-amazon' => { name: 'Amazon devices (Fire TV, Echo, Kindle)', default: false, vendor: true,
+                                about: "Amazon's own telemetry hosts, with what its devices need left out." },
+    'hagezi-native-apple' => { name: 'Apple devices', default: false, vendor: true,
+                               about: "Apple's own telemetry hosts, with what its devices need left out." },
+    'hagezi-native-winoffice' => { name: 'Windows and Office', default: false, vendor: true,
+                                   about: "Microsoft's telemetry hosts for Windows and Office, with what they need left out." },
+    'hagezi-native-tiktok' => { name: 'TikTok', default: false, vendor: true,
+                                about: "TikTok's tracking hosts, with what the app needs left out." },
+    'hagezi-native-xiaomi' => { name: 'Xiaomi devices', default: false, vendor: true,
+                                about: "Xiaomi's own telemetry hosts, with what its devices need left out." }
   }.freeze
+  # The list the Router's "every device uses the NAS's DNS" adds.
+  DOH_LIST = 'hagezi-doh'
   # What the helper found at its last refresh (root writes it; anyone may read it).
   BLOCKLIST_STATUS = '/var/lib/amahi-kai-dns/status.json'
   BLOCKLIST_SERVICE = 'amahi-kai-blocklists.service'
@@ -105,7 +136,145 @@ module DnsService
 
     # dnsmasq hands out addresses too.
     def dhcp?
-      mode == 'dns_dhcp'
+      %w[dns_dhcp router].include?(mode)
+    end
+
+    # The NAS is the router: between the LAN and the internet.
+    def router?
+      mode == 'router'
+    end
+
+    # The internet interface chosen for router mode, while the NAS has it.
+    def wan_interface
+      name = Setting.get('dns_wan_interface').presence
+      name if name && NetworkInterfaces.lan.key?(name)
+    end
+
+    # The firewall is on (the security audit's fix); router mode needs it.
+    def firewall_on?
+      File.read(UFW_CONF).match?(/^ENABLED=yes$/)
+    rescue SystemCallError
+      false
+    end
+
+    # What the helper has in place: { 'lan', 'wan', 'forwards' }, or nil while the NAS isn't the
+    # router.
+    def router_state
+      JSON.parse(File.read(ROUTER_STATE))
+    rescue SystemCallError, JSON::ParserError
+      nil
+    end
+
+    # The helper's router rules follow the LAN and internet interfaces and the port forwards.
+    def apply_router!
+      if on? && router? && wan_interface
+        Privileged.call('network.router_on', **router_args)
+      elsif router_state
+        Privileged.call('network.router_off')
+      end
+    end
+
+    # Rewrites the router's rules for a change made elsewhere (a port forward). Does nothing while
+    # the NAS isn't the router.
+    def rewrite_router!
+      return false unless on? && router? && installed? && wan_interface
+
+      Privileged.call('network.router_on', **router_args)
+      true
+    end
+
+    def router_args
+      { lan: interface, wan: wan_interface, forwards: PortForward.for_helper(lan_prefix),
+        dns: (force_dns? ? server_addresses.first : nil), lan_only: Host.lan_only_addresses(lan_prefix) }
+    end
+
+    # What the internet side dropped while the NAS is the router: { dropped: packets, since:
+    # Time }, or nil. UFW's counters start over at boot and when its rules reload (every
+    # router-mode save), so since is the later of the two.
+    def wan_drops
+      return nil unless router? && (state = router_state)
+      reply = Privileged.call('network.wan_drops')
+      { dropped: reply['dropped'], since: Time.at([state['since'].to_i, boot_time.to_i].max) }
+    rescue Privileged::Error
+      nil
+    end
+
+    # Packets the kernel dropped for claiming a source address it would route elsewhere
+    # (spoofed, from the internet side while that's strict), since boot; nil if unknown.
+    def spoof_drops(path = NETSTAT)
+      names, values = File.readlines(path).grep(/\ATcpExt:/).first(2).map { |line| line.split.drop(1) }
+      index = names&.index('IPReversePathFilter') or return nil
+      values[index].to_i
+    rescue SystemCallError
+      nil
+    end
+
+    def boot_time
+      Time.now - File.read('/proc/uptime').to_f
+    rescue SystemCallError
+      Time.now
+    end
+
+    def tailscale_installed?
+      File.exist?('/usr/bin/tailscale')
+    end
+
+    # After an update (bin/amahi-update's network step): each network config is made again and
+    # put in place only where it differs from what's installed, so a change to how one is made
+    # reaches a NAS whose admin never saves the page again. Returns what was applied, in words.
+    # Nothing while DNS is off. A file that can't be read back is written again, to be safe.
+    def resync!
+      return [] unless on? && installed?
+      applied = []
+      if differs?(UNBOUND_CONF, config)
+        rewrite!
+        applied << "Unbound's config"
+      end
+      if blocking? && chosen_blocklists != { 'lists' => blocklists_in_force, 'allow' => allowlist }
+        apply_blocking!
+        applied << 'the blocklists'
+      end
+      if DnsmasqService.installed? && differs?(DnsmasqService::CONFIG_PATH, DnsmasqService.config_text(DnsmasqService.options))
+        DnsmasqService.rewrite_config!
+        applied << "dnsmasq's config"
+      end
+      if ipv6_advertise? && radvd_installed? && differs?(RADVD_CONF, radvd_config)
+        apply_ipv6_advertising!
+        applied << "radvd's config"
+      end
+      if router? && router_stale?
+        apply_router!
+        applied << "the router's rules"
+      end
+      applied
+    end
+
+    # One line for the update's log.
+    def resync_report
+      applied = resync!
+      applied.empty? ? 'Network: nothing to change' : "Network: applied #{applied.join(', ')}"
+    end
+
+    # The router's rules as the helper has them differ from what the settings say now, or were
+    # made by an older shape of the rules (the helper's ROUTER_RULES_VERSION).
+    def router_stale?
+      state = router_state or return true
+      args = router_args
+      state.slice('lan', 'wan', 'dns', 'lan_only') != { 'lan' => args[:lan], 'wan' => args[:wan], 'dns' => args[:dns], 'lan_only' => args[:lan_only] } ||
+        state['forwards'] != args[:forwards].map { |forward| forward.transform_keys(&:to_s) } ||
+        state['tailscale'] != tailscale_installed? || state['rules'] != Privileged.router_rules_version
+    end
+
+    def differs?(path, content)
+      File.read(path) != content
+    rescue SystemCallError
+      true
+    end
+
+    def chosen_blocklists
+      JSON.parse(File.read(BLOCKLIST_CHOSEN)).slice('lists', 'allow')
+    rescue SystemCallError, JSON::ParserError
+      nil
     end
 
     # 'quad9', a key of PROVIDERS, or 'custom'.
@@ -205,7 +374,7 @@ module DnsService
 
     def radvd_config
       <<~CONF
-        # Amahi-kai (Network → DNS & DHCP): announces the NAS as the IPv6 DNS server, never as a router
+        # Amahi-kai (Network → DNS, DHCP and Internet): announces the NAS as the IPv6 DNS server, never as a router
         interface #{interface} {
           AdvSendAdvert on;
           AdvDefaultLifetime 0;
@@ -254,7 +423,7 @@ module DnsService
     def config
       own = interface_addresses
       tailscale = NetworkInterfaces.addresses(NetworkInterfaces::TAILSCALE)
-      lines = ['# Amahi-kai DNS (Network → DNS & DHCP): written by Amahi-kai, changes here are lost', 'server:']
+      lines = ['# Amahi-kai DNS (Network → DNS, DHCP and Internet): written by Amahi-kai, changes here are lost', 'server:']
       lines.concat(listening(own, tailscale).map { |address| "  interface: #{address}" })
       lines << '  ip-freebind: yes'
       lines.concat(allowed(own, tailscale).map { |network| "  access-control: #{network} allow" })
@@ -275,7 +444,8 @@ module DnsService
     end
 
     # Writes the config and starts (or restarts) Unbound with blocking as chosen, or stops it and
-    # removes the config (blocking too); then dnsmasq starts handing out addresses, or stops. Raises Privileged::Error with the
+    # removes the config (blocking too); then dnsmasq starts handing out addresses, or stops; then
+    # the router's rules go in, or out. Raises Privileged::Error with the
     # reason if the helper refuses or fails.
     def apply!
       if on?
@@ -289,6 +459,7 @@ module DnsService
       end
       apply_ipv6_advertising!
       DnsmasqService.apply!
+      apply_router!
     end
 
     # radvd announces the NAS while DNS is on and that's chosen; otherwise it stops, and the NAS's
@@ -324,10 +495,23 @@ module DnsService
     # downloads the lists in the background; or blocking stops.
     def apply_blocking!
       if blocking?
-        Privileged.call('dns.set_blocklists', lists: blocklists, allow: allowlist)
+        Privileged.call('dns.set_blocklists', lists: blocklists_in_force, allow: allowlist)
       else
         Privileged.call('dns.blocking_off')
       end
+    end
+
+    # The lists chosen, plus the encrypted-DNS providers while every device uses the NAS's DNS.
+    def blocklists_in_force
+      lists = blocklists
+      lists |= [DOH_LIST] if router? && force_dns?
+      lists
+    end
+
+    # Router mode: lookups devices send elsewhere come to the NAS, and their own encrypted DNS
+    # doesn't get out. On unless turned off.
+    def force_dns?
+      Setting.get('dns_force_nas') != '0'
     end
 
     def blocking?

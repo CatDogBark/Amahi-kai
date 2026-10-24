@@ -1,0 +1,21 @@
+<div class="container-fluid dns-page">
+  <div class="card mb-4 mt-3" id="address-move"
+       data-probe="<%= amahi_url(@new_host) %>network/address/reached"
+       data-target="<%= amahi_url(@new_host) %>network"
+       data-back="<%= amahi_url(request.host) %>network"
+       data-status="<%= network_address_status_path %>"
+       data-until="<%= @until %>" data-new="<%= @new_host %>" data-old="<%= request.host %>">
+    <div class="card-header"><h5 class="mb-0"><%= lucide_icon('network', size: 18) %> Moving the NAS to <%= @new_host %></h5></div>
+    <div class="card-body">
+      <p>
+        In a moment <code><%= @interface %></code>
+        <% if @mode == 'fixed' %>takes <code><%= @new_host %></code><% else %>asks the network for an address, and answers by its name, <code><%= @new_host %></code><% end %>,
+        and <code><%= request.host %></code>, where this page came from, stops answering.
+        This page keeps trying the NAS at the new address and goes there once it answers; that's what keeps the change.
+      </p>
+      <p class="mb-3"><span class="address-move-state">Waiting for the NAS to answer at <%= @new_host %>…</span> <span class="address-move-countdown text-muted small"></span></p>
+      <p class="text-muted small">If nothing reaches the NAS there within <%= NetworkAddress::WAIT %> seconds, it goes back to <%= request.host %> by itself, and this page follows. You may be asked to sign in again at the new address.</p>
+      <p class="text-muted small mb-0">Bookmarks and devices that use <%= request.host %> need the new address afterwards. DNS, DHCP, the router and the shares follow it by themselves.</p>
+    </div>
+  </div>
+</div>

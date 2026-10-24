@@ -1,5 +1,5 @@
 # The NAS's network interfaces and their addresses, read with getifaddrs (no command runs), and
-# the interface its default route leaves by. Network → DNS & DHCP serves one of them.
+# the interface its default route leaves by. Network → DNS, DHCP and Internet serves one of them.
 
 require 'ipaddr'
 require 'socket'
@@ -24,11 +24,14 @@ module NetworkInterfaces
   end
 
   class << self
-    # { "ens18" => [Address, ...] } for every interface with an IPv4 or IPv6 address.
+    # { "ens18" => [Address, ...] } for every interface, with its IPv4 and IPv6 addresses. One
+    # with none (a port with no cable, or not set up yet: the internet interface before router
+    # mode gives it an address) has an empty list, so it can still be chosen.
     def all(ifaddrs = Socket.getifaddrs)
       ifaddrs.each_with_object({}) do |ifaddr, list|
+        list[ifaddr.name] ||= []
         address = address_of(ifaddr) or next
-        (list[ifaddr.name] ||= []) << address
+        list[ifaddr.name] << address
       end
     end
 
@@ -43,13 +46,23 @@ module NetworkInterfaces
 
     # The interface the IPv4 default route leaves by ("ens18"), or nil.
     def default_name(routes = ROUTES)
-      File.foreach(routes).drop(1).each do |line|
-        name, destination, _gateway, flags, = line.split
-        return name if destination == '00000000' && (flags.to_i(16) & 1).positive?
-      end
-      nil
+      default_route(routes)&.first
+    end
+
+    # The IPv4 default route with the lowest metric: ["ens18", "192.168.1.1"], or nil.
+    def default_route(routes = ROUTES)
+      default_routes(routes).first&.first(2)
+    end
+
+    # Every IPv4 default route, the lowest metric first: [["ens18", "192.168.1.1", 100], ...].
+    def default_routes(routes = ROUTES)
+      File.foreach(routes).drop(1).filter_map do |line|
+        name, destination, gateway, flags, _refcnt, _use, metric, = line.split
+        next unless destination == '00000000' && (flags.to_i(16) & 1).positive?
+        [name, IPAddr.new(gateway.to_i(16), Socket::AF_INET).to_s.split('.').reverse.join('.'), metric.to_i]
+      end.sort_by(&:last)
     rescue SystemCallError
-      nil
+      []
     end
 
     private

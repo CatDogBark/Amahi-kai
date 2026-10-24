@@ -110,7 +110,8 @@ RSpec.describe Privileged do
   # found as quoted strings in the helper's namespaces, so names kept in a table (as in
   # SystemServices::ACTION_OPERATIONS) count too, and so do the systemd units that run one
   # (ExecStart=/usr/local/sbin/amahi-helper pools.run_snapshots, or ExecStart=-/usr/... for one
-  # whose failure the unit ignores), the helper's own units among them (dns.sync_leases).
+  # whose failure the unit ignores), the helper's own units among them (dns.sync_leases), and
+  # the timers the helper arms with systemd-run (arm_timer(..., 'network.apply_address')).
   describe 'contract with libexec/amahi-helper' do
     let(:called) do
       namespaces = described_class.operations.map { |op| op.split('.').first }.uniq
@@ -119,6 +120,7 @@ RSpec.describe Privileged do
       in_units = [*Dir[Rails.root.join('config/systemd/*.service')], Rails.root.join('libexec/amahi-helper')].flat_map do |file|
         File.read(file).scan(%r{^\s*ExecStart=-?/usr/local/sbin/amahi-helper ([a-z]+\.[a-z_]+)$}).flatten
       end
+      in_units += File.read(Rails.root.join('libexec/amahi-helper')).scan(/arm_timer\(.*?'([a-z]+\.[a-z_]+)'\)/).flatten
       in_scripts = Dir[Rails.root.join('bin/amahi-*')].flat_map do |file|
         File.read(file).scan(%r{/usr/local/sbin/amahi-helper ([a-z]+\.[a-z_]+)}).flatten
       end

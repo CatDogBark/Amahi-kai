@@ -72,11 +72,11 @@ module RequestHelpers
     end
 
     def hosts_path
-      "/network/hosts"
+      "/network"
     end
 
     def dns_aliases_path
-      "/network/dns_aliases"
+      "/network/dns"
     end
   end
 end

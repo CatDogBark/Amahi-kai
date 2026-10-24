@@ -1,6 +1,6 @@
 # Networking tests on the NAS and in the house
 
-Everything in Network → DNS & DHCP (DNS, DHCP, blocking, IPv6, totals) was built in five slices
+Everything in Network → DNS (DNS, DHCP, blocking, IPv6, totals) was built in five slices
 and tried on an isolated test network on forge: the test VM as the server, a container as the only
 device, nothing reaching the house ([`docs/plans/networking.md`](../plans/networking.md) has what
 was checked, slice by slice). Then, with all of it on and the firewall on, it was tried again
@@ -35,18 +35,26 @@ next to it.
 ## 2. The NAS, with everything still off
 
 - [ ] **System Update** finishes with "✓ Amahi-kai updated and running!".
-- [ ] **Network** has the tabs Leases, Hosts, DNS & DHCP, DNS Aliases, Remote Access and
-  Security. Gateway and Settings are gone; their old addresses open DNS & DHCP.
-- [ ] **Network → DNS & DHCP** opens, says **Not installed** (or **Off**), and offers **Install
+- [ ] **Network** has the tabs Devices, DNS, DHCP, Internet, Remote Access and Security. Leases,
+  Hosts, DNS Aliases, Gateway and Settings are gone; their old addresses open the new tabs.
+- [ ] **Network → DNS** opens, says **Not installed** (or **Off**), and offers **Install
   Unbound**. Nothing listens on port 53 on the NAS's addresses (the second command above).
 - [ ] **Network → Hosts** and **DNS Aliases** still list what they did.
+- [ ] **Network → Devices, This NAS** lists each port with its address, *from the network (DHCP)*
+  or *fixed*, and its router. Give the NAS a fixed address on the port you're connected through
+  (the one it has now is fine, or one outside the router's DHCP range): the moving page appears,
+  reaches the NAS at the new address within a few seconds and lands on Devices there, which says
+  the port moved. Then try an address nothing can reach (another network, say `10.250.0.2`):
+  the page counts down, says nothing reached the NAS, and brings you back to the old address
+  about 90 seconds later. `sudo iptables -t nat -S PREROUTING` on the NAS shows each NAT rule
+  once (in `amahi-kai-prerouting`), never a stale copy with an old address.
 - [ ] **Settings → Servers** shows Unbound, dnsmasq and radvd as not installed (or *DNS is off*,
   *DHCP is off*, *Not announcing*), not as failed.
 
 ## 3. DNS on the NAS, nothing pointed at it yet
 
-- [ ] **Install Unbound**, then pick **DNS for my network**, the NAS's LAN interface (`ens18`,
-  `192.168.1.111`) and Quad9, and **Save**. The top card says **Answering**, with local and
+- [ ] **Install Unbound**, then turn **DNS for my network** on, pick the NAS's LAN interface
+  (`ens18`, `192.168.1.111`) and Quad9, and **Save**. The top card says **Answering**, with local and
   outside names answered.
 - [ ] From the laptop, without changing its settings (the NAS's name in place of `nas`):
 
@@ -79,7 +87,7 @@ next to it.
   many domains it blocks (about 326,000). From the laptop, `dig @192.168.1.111 app-measurement.com`
   answers `0.0.0.0`.
 
-**The way back:** pick **Off** and **Save**.
+**The way back:** turn the switch off and **Save**.
 
 ## 4. One device, then the house
 
@@ -104,16 +112,47 @@ next to it.
 
 ## 5. DHCP from the NAS (optional, advanced)
 
-- [ ] **The check finds the router:** with the router's DHCP still on, pick **DNS + DHCP** and
-  **Save**. It must refuse, naming the router (`192.168.1.1`) as another DHCP server. That's the
+- [ ] **The check finds the router:** with the router's DHCP still on, turn **Network → DHCP** on
+  and **Save**. It must refuse, naming the router (`192.168.1.1`) as another DHCP server. That's the
   check working against a router, not just dnsmasq.
 - [ ] Only if you want the NAS to hand out addresses: turn the router's DHCP **off** in its own
-  settings, then save **DNS + DHCP** with a range that leaves out the NAS, the router and anything
+  settings, then save DHCP on with a range that leaves out the NAS, the router and anything
   with a fixed address. Devices get addresses as they renew, show on **Network → Leases**, and
   answer by name (`laptop.home.arpa`).
-- **The way back:** turn the router's DHCP **on** again first, then set the page to **DNS for my
-  network** or **Off**. While the NAS is off, devices can't get a new address, so don't leave
+- **The way back:** turn the router's DHCP **on** again first, then turn DHCP off. While the NAS is off, devices can't get a new address, so don't leave
   this on while the NAS is being worked on.
+
+## 5b. Router mode (only with a second interface for the internet)
+
+Router mode makes the NAS the house's way to the internet. It was built and tried on the island
+first (a fake provider on a third bridge); this is the house. Have the laptop tethered to a phone
+*and* on the house Wi-Fi for all of it, so the session with Claude survives and the NAS stays
+reachable from the LAN side.
+
+The layout (CatDogBark, 2026-10-23): the NAS is the router; the Linksys at .1 becomes an access
+point and switch (its **Bridge Mode**: Connectivity → Internet Settings → Connection Type) with its
+two SSIDs kept; the OpenWrt bridge at .2 keeps connecting to the Linksys's Wi-Fi as it does now,
+so the far room's wired devices stay on the one LAN. For the test, the modem's cable runs to
+forge; in the end forge, the Linksys and the modem sit side by side.
+
+- [ ] A spare network port on forge is on its own bridge, and the NAS VM has a NIC on it. The
+  provider's gateway is in bridge mode (or the NAS sits behind its NAT, double-NAT, which works
+  but keeps the gateway in charge of the internet side).
+- [ ] **Dry run first:** the new port cabled to a LAN port of the Linksys instead of the modem.
+  Network → Security's firewall is on. Pick **Router**, the internet interface, and **Save**. The
+  top card says the NAS has an address from "the provider" (the Linksys). Nothing in the house
+  changes yet, since the Linksys still hands out addresses.
+- [ ] **A speed test from the main room before the switch**, to compare after: with the modem's
+  cable at forge, the main room's internet crosses the wireless bridge.
+- [ ] **The house:** the Linksys into Bridge Mode (its DHCP and NAT stop; give it a fixed address on
+  Network → Hosts), the modem's cable moved to forge's port (power-cycle the modem). Devices
+  renew and reach the internet through the NAS; the top card shows the provider's address; the
+  speed test again.
+- [ ] A port forward to a device works from outside (a phone on cellular, the NAS's internet
+  address and the port). Nothing else answers from outside: the web UI and SSH on the internet
+  address time out.
+- **The way back:** turn the switch off on Network → Internet, move the cable back to the Linksys's
+  internet port, take the Linksys out of Bridge Mode, power-cycle the modem.
 
 ## 6. IPv6
 

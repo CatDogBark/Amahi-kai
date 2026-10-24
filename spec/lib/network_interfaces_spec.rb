@@ -8,6 +8,7 @@ RSpec.describe NetworkInterfaces do
      ifaddr.new('ens18', Addrinfo.ip('192.168.1.10'), Addrinfo.ip('255.255.255.0')),
      ifaddr.new('ens18', Addrinfo.ip('fd12:3456:789a::10'), Addrinfo.ip('ffff:ffff:ffff:ffff::')),
      ifaddr.new('ens18', Addrinfo.ip('fe80::10'), Addrinfo.ip('ffff:ffff:ffff:ffff::')),
+     ifaddr.new('ens20', nil, nil), # a port with no address yet
      ifaddr.new('docker0', Addrinfo.ip('172.17.0.1'), Addrinfo.ip('255.255.0.0')),
      ifaddr.new('tailscale0', Addrinfo.ip('100.64.96.4'), Addrinfo.ip('255.255.255.255'))]
   end
@@ -20,8 +21,9 @@ RSpec.describe NetworkInterfaces do
     expect(addresses.map(&:link_local?)).to eq([false, false, true])
   end
 
-  it 'leaves loopback, Docker and Tailscale out of the LAN' do
-    expect(described_class.lan(ifaddrs).keys).to eq(['ens18'])
+  it 'leaves loopback, Docker and Tailscale out of the LAN, and keeps a port with no address' do
+    expect(described_class.lan(ifaddrs).keys).to eq(%w[ens18 ens20])
+    expect(described_class.addresses('ens20', ifaddrs)).to eq([])
     expect(described_class.addresses('tailscale0', ifaddrs).map(&:to_s)).to eq(['100.64.96.4'])
   end
 
@@ -32,8 +34,30 @@ RSpec.describe NetworkInterfaces do
                  "ens18\t00000000\t0101A8C0\t0003\t0\t0\t100\t00000000\n")
       file.flush
       expect(described_class.default_name(file.path)).to eq('ens18')
+      expect(described_class.default_route(file.path)).to eq(%w[ens18 192.168.1.1])
+    end
+  end
+
+  it 'picks the default route with the lowest metric, the way the kernel does' do
+    Tempfile.create('route') do |file|
+      file.write("Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\n" \
+                 "ens18\t00000000\t0101A8C0\t0003\t0\t0\t200\t00000000\n" \
+                 "ens20\t00000000\t01004D0A\t0003\t0\t0\t50\t00000000\n")
+      file.flush
+      expect(described_class.default_route(file.path)).to eq(%w[ens20 10.77.0.1])
     end
     expect(described_class.default_name('/nonexistent/route')).to be_nil
+  end
+
+  it 'lists every default route, the lowest metric first' do
+    Tempfile.create('route') do |file|
+      file.write("Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\n" \
+                 "ens18\t00000000\t0101A8C0\t0003\t0\t0\t200\t00000000\n" \
+                 "ens20\t00000000\t01004D0A\t0003\t0\t0\t50\t00000000\n")
+      file.flush
+      expect(described_class.default_routes(file.path)).to eq([['ens20', '10.77.0.1', 50], ['ens18', '192.168.1.1', 200]])
+    end
+    expect(described_class.default_routes('/nonexistent/route')).to eq([])
   end
 
   it "reads this machine's interfaces" do

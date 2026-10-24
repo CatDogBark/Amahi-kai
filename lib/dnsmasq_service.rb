@@ -1,4 +1,4 @@
-# dnsmasq hands out addresses (DHCP) while Network → DNS & DHCP is in the mode "DNS + DHCP",
+# dnsmasq hands out addresses (DHCP) while Network → DNS, DHCP and Internet is in the mode "DNS + DHCP",
 # on the interface DNS serves, and nowhere else. It answers no DNS (port=0): Unbound does that
 # (DnsService), and dnsmasq hands out the NAS as the DNS server.
 #
@@ -43,9 +43,11 @@ module DnsmasqService
       problems
     end
 
-    # The options write_config! takes, from the saved settings and DNS's mode and interface.
+    # The options write_config! takes, from the saved settings and DNS's mode and interface. While
+    # the NAS is the router, devices are given the NAS as their router, not the Router setting.
     def options
-      settings.merge(net: DnsService.lan_prefix, interface: DnsService.interface, dhcp_enabled: DnsService.dhcp?)
+      settings.merge(net: DnsService.lan_prefix, interface: DnsService.interface, dhcp_enabled: DnsService.dhcp?,
+                     router_is_nas: DnsService.router?)
     end
 
     # Writes the config, and starts dnsmasq while it hands out addresses or stops it otherwise.
@@ -80,6 +82,13 @@ module DnsmasqService
     # Write dnsmasq config and restart if running.
     # Options: net, first, last, router, lease_time, interface, dhcp_enabled
     def write_config!(options = {})
+      # Raises Privileged::Error with the reason if the helper refuses or fails.
+      Privileged.call('network.write_dnsmasq_config', content: config_text(options))
+      restart!
+    end
+
+    # The config as it would be written now (DnsService.resync! compares it with the file).
+    def config_text(options = {})
       net = options[:net].presence || '192.168.1'
 
       config_lines = [
@@ -93,7 +102,7 @@ module DnsmasqService
         config_lines << "interface=#{options[:interface]}"
         config_lines << "bind-interfaces"
         config_lines << "dhcp-range=#{net}.#{options[:first]},#{net}.#{options[:last]},#{options[:lease_time].to_i}s"
-        config_lines << "dhcp-option=option:router,#{net}.#{options[:router]}"
+        config_lines << "dhcp-option=option:router,#{router_address(net, options)}"
         config_lines << "dhcp-option=option:dns-server,#{dns_server(net, options[:router])}"
         config_lines << "domain=#{DnsService.domain}"
         config_lines << "dhcp-authoritative"
@@ -106,9 +115,7 @@ module DnsmasqService
         config_lines << "except-interface=lo"
       end
 
-      # Raises Privileged::Error with the reason if the helper refuses or fails.
-      Privileged.call('network.write_dnsmasq_config', content: config_lines.join("\n") + "\n")
-      restart!
+      config_lines.join("\n") + "\n"
     end
 
     # Restarts dnsmasq so it reads new settings; does nothing if it isn't running.
@@ -119,6 +126,11 @@ module DnsmasqService
     end
 
     private
+
+    # The NAS itself while it's the router (and has an address on the LAN), else the Router setting.
+    def router_address(net, options)
+      (options[:router_is_nas] && DnsService.server_addresses.first) || "#{net}.#{options[:router]}"
+    end
 
     # The NAS while its DNS is on (and it has an address on DNS's interface), else the router.
     def dns_server(net, router)

@@ -2,10 +2,10 @@
   <%# What it is and how it's doing %>
   <div class="card mb-4 mt-3" id="dns-status">
     <div class="card-header d-flex align-items-center justify-content-between">
-      <h5 class="mb-0"><%= lucide_icon('globe', size: 18) %> DNS and DHCP for your network</h5>
+      <h5 class="mb-0"><%= lucide_icon('globe', size: 18) %> DNS for your network</h5>
       <% if !@installed %>
         <span class="badge bg-secondary">Not installed</span>
-      <% elsif @mode == 'off' %>
+      <% elsif !@dns_on %>
         <span class="badge bg-secondary">Off</span>
       <% elsif @running && @check && @check[:local] && @check[:outside] %>
         <span class="badge bg-success">Answering</span>
@@ -22,17 +22,17 @@
         so your internet provider can't read or change the answers. It checks the signatures domains put on
         their answers (DNSSEC), and refuses an answer whose signature doesn't match. It remembers
         answers so repeat lookups are fast, keeps no record of who looked up what, and gives the NAS and your
-        devices names like <code><%= @nas_name %></code>. It can also hand out addresses to your devices (DHCP),
-        in place of your router.
+        devices names like <code><%= @nas_name %></code>. Handing out addresses is <a href="<%= dns_dhcp_path %>">DHCP</a>'s page,
+        and the NAS as your router is <a href="<%= dns_internet_path %>">Internet</a>'s.
       </p>
 
       <% if !@installed %>
         <p class="text-muted small">It needs Unbound, a DNS server from Ubuntu. Installing it changes nothing on your network: DNS stays off until you turn it on below.</p>
         <button type="button" class="btn btn-primary" data-call="openInstallTerminal" data-args='["unbound"]'>Install Unbound</button>
-      <% elsif @mode != 'off' %>
+      <% elsif @dns_on %>
         <dl class="dns-facts mb-0">
           <dt>Devices use</dt>
-          <dd><%= @addresses.any? ? @addresses.join(', ') : 'no IPv4 address on this interface' %></dd>
+          <dd><%= @addresses.any? ? @addresses.join(', ') : 'no IPv4 address on this interface' %><%= " (and #{@ipv6_address} over IPv6)" if @ipv6_address %></dd>
           <dt>Local names</dt>
           <dd>
             <% if @check.nil? %>
@@ -67,17 +67,6 @@
                 than risk passing on a faked address; that's usually a domain whose signing is broken, not an attack<% end %>
             </dd>
           <% end %>
-          <% if @mode == 'dns_dhcp' %>
-            <dt>Addresses</dt>
-            <dd>
-              <% if @dnsmasq_running %>
-                ✓ Handing out <%= @prefix %>.<%= @dhcp[:first] %> to <%= @prefix %>.<%= @dhcp[:last] %>;
-                <a href="<%= network_index_path %>"><%= pluralize(@leases.size, 'device') %></a> <%= @leases.size == 1 ? 'has' : 'have' %> one
-              <% else %>
-                <span class="text-danger">✗ dnsmasq isn't running, so devices can't get an address.</span>
-              <% end %>
-            </dd>
-          <% end %>
         </dl>
       <% end %>
     </div>
@@ -91,61 +80,11 @@
     <div class="card mb-4">
       <div class="card-header"><h5 class="mb-0"><%= lucide_icon('settings', size: 18) %> Settings</h5></div>
       <div class="card-body">
-        <h6>DNS</h6>
-        <div class="dns-choices mb-4">
-          <label class="dns-choice">
-            <input type="radio" name="mode" value="off" <%= 'checked' if @mode == 'off' %>>
-            <span class="dns-choice-title">Off</span>
-            <span class="dns-choice-text">Nothing listens. Devices keep using your router's DNS.</span>
-          </label>
-          <label class="dns-choice">
-            <input type="radio" name="mode" value="dns" <%= 'checked' if @mode == 'dns' %> <%= 'disabled' unless @installed %>>
-            <span class="dns-choice-title">DNS for my network <span class="badge bg-success ms-1">Recommended</span></span>
-            <span class="dns-choice-text">The NAS answers DNS. Your router keeps handing out addresses; point its DNS setting at the NAS (below), or one device's.</span>
-          </label>
-          <label class="dns-choice">
-            <input type="radio" name="mode" value="dns_dhcp" <%= 'checked' if @mode == 'dns_dhcp' %> <%= 'disabled' unless @installed %>>
-            <span class="dns-choice-title">DNS + DHCP <span class="badge bg-secondary ms-1">Advanced</span></span>
-            <span class="dns-choice-text">The NAS also hands out addresses, in place of your router. Turn your router's DHCP off first: the NAS won't start while another DHCP server answers.</span>
-          </label>
+        <div class="form-check form-switch mb-1">
+          <input class="form-check-input" type="checkbox" role="switch" name="dns_on" value="1" id="dns-on" <%= 'checked' if @dns_on %> <%= 'disabled' unless @installed %>>
+          <label class="form-check-label" for="dns-on">DNS for my network</label>
         </div>
-
-        <%# Shown while DNS + DHCP is picked (dns.css) %>
-        <div class="dns-dhcp mb-4">
-          <h6>DHCP</h6>
-          <% if !@dnsmasq_installed %>
-            <p class="text-muted small">Handing out addresses needs dnsmasq, from Ubuntu. Installing it changes nothing on your network until you save with DNS + DHCP.</p>
-            <button type="button" class="btn btn-primary" data-call="openInstallTerminal" data-args='["dnsmasq"]'>Install dnsmasq</button>
-          <% else %>
-            <p class="text-muted small">On the interface's network, where the NAS is <%= @addresses.first || 'not yet' %>. Devices get the NAS as their DNS server, and <code><%= @domain %></code> as their domain. Fixed addresses for chosen devices are on <a href="<%= network_hosts_path %>">Network → Hosts</a>.</p>
-            <div class="row g-3 dns-dhcp-fields">
-              <div class="col-md-6">
-                <label class="form-label small" for="dhcp-first">Addresses handed out</label>
-                <div class="input-group">
-                  <span class="input-group-text"><%= @prefix %>.</span>
-                  <input type="number" class="form-control" id="dhcp-first" name="dhcp_first" value="<%= @dhcp[:first] %>" min="2" max="254">
-                  <span class="input-group-text">to <%= @prefix %>.</span>
-                  <input type="number" class="form-control" id="dhcp-last" name="dhcp_last" value="<%= @dhcp[:last] %>" min="2" max="254" aria-label="Last address">
-                </div>
-              </div>
-              <div class="col-md-3">
-                <label class="form-label small" for="dhcp-router">Router</label>
-                <div class="input-group">
-                  <span class="input-group-text"><%= @prefix %>.</span>
-                  <input type="number" class="form-control" id="dhcp-router" name="dhcp_router" value="<%= @dhcp[:router] %>" min="1" max="254">
-                </div>
-              </div>
-              <div class="col-md-3">
-                <label class="form-label small" for="dhcp-lease-time">Devices keep an address for</label>
-                <select class="form-select" id="dhcp-lease-time" name="lease_time">
-                  <% DnsmasqService::LEASE_TIMES.each do |label, seconds| %>
-                    <option value="<%= seconds %>" <%= 'selected' if seconds == @dhcp[:lease_time] %>><%= label %></option>
-                  <% end %>
-                </select>
-              </div>
-            </div>
-          <% end %>
-        </div>
+        <p class="text-muted small mb-4">The NAS answers DNS for the devices on the interface below. Your router keeps handing out addresses unless <a href="<%= dns_dhcp_path %>">DHCP</a> is on here; point its DNS setting at the NAS (see Using it, below), or one device's. Turning this off turns DHCP and the router off too.</p>
 
         <h6>Provider</h6>
         <p class="text-muted small">Where the NAS sends the lookups it can't answer itself. All of them are free, need no account, encrypt the connection and check DNSSEC.</p>
@@ -177,31 +116,12 @@
         </div>
 
         <h6>Network interface</h6>
-        <p class="text-muted small">DNS answers on this one, for the devices on its network (and on Tailscale, when it's on).</p>
+        <p class="text-muted small">DNS answers on this one, for the devices on its network (and on Tailscale, when it's on). DHCP and the router use the same one.</p>
         <select name="interface" class="form-select mb-4 dns-interface" aria-label="Network interface">
           <% @interfaces.each do |name, addresses| %>
-            <option value="<%= name %>" <%= 'selected' if name == @interface %>><%= name %> (<%= addresses.reject(&:link_local?).map(&:to_s).join(', ').presence || 'no address' %>)</option>
+            <option value="<%= name %>" <%= 'selected' if name == @interface %>><%= port_display(name) %> (<%= addresses.reject(&:link_local?).map(&:to_s).join(', ').presence || 'no address' %>)</option>
           <% end %>
         </select>
-
-        <h6>IPv6</h6>
-        <div class="form-check mb-1">
-          <input class="form-check-input" type="checkbox" name="ipv6_advertise" value="1" id="dns-ipv6-advertise" <%= 'checked' if @ipv6_advertise %>>
-          <label class="form-check-label" for="dns-ipv6-advertise">Announce the NAS as the IPv6 DNS server <span class="badge bg-secondary ms-1">Advanced</span></label>
-        </div>
-        <p class="text-muted small mb-2">
-          Devices using IPv6 learn their DNS server from the network's announcements, usually your router's. With this on,
-          the NAS announces itself too, at <code><%= @own_ipv6_address %></code>, an address of its own that stays the same
-          whatever your internet provider hands out. It never announces itself as a router. Better still, if your router
-          lets you set the IPv6 DNS server it announces (OpenWrt does), set it to the NAS there; see IPv6, below.
-        </p>
-        <% unless @radvd_installed %>
-          <div class="dns-radvd mb-2">
-            <p class="text-muted small mb-2">Announcing needs radvd, from Ubuntu. Installing it changes nothing until you save with this ticked.</p>
-            <button type="button" class="btn btn-sm btn-outline-secondary" data-call="openInstallTerminal" data-args='["radvd"]'>Install radvd</button>
-          </div>
-        <% end %>
-        <div class="mb-4"></div>
 
         <button type="submit" class="btn btn-primary">Save</button>
       </div>
@@ -214,7 +134,7 @@
       <h5 class="mb-0"><%= lucide_icon('shield', size: 18) %> Blocking</h5>
       <% if !@blocking %>
         <span class="badge bg-secondary">Off</span>
-      <% elsif @mode == 'off' %>
+      <% elsif !@dns_on %>
         <span class="badge bg-secondary">Waits for DNS</span>
       <% elsif @paused_until %>
         <span class="badge bg-warning text-dark">Paused</span>
@@ -233,7 +153,7 @@
         refresh every day.
       </p>
 
-      <% if @blocking && @mode != 'off' %>
+      <% if @blocking && @dns_on %>
         <div class="dns-blocking-state mb-3">
           <% if @paused_until %>
             <%# The page looks again when the pause ends. %>
@@ -271,11 +191,24 @@
         </div>
 
         <h6>Lists</h6>
-        <div class="dns-choices dns-lists mb-4">
-          <% DnsService::BLOCKLISTS.each do |key, list| %>
+        <div class="dns-choices dns-lists mb-3">
+          <% DnsService::BLOCKLISTS.reject { |_key, list| list[:vendor] }.each do |key, list| %>
             <label class="dns-choice">
               <input type="checkbox" name="lists[]" value="<%= key %>" <%= 'checked' if @blocklists.include?(key) %>>
               <span class="dns-choice-title"><%= list[:name] %><%= ' (recommended)' if list[:default] %></span>
+              <span class="dns-choice-text"><%= list[:about] %>
+                <% if (count = @blocking_status&.dig('lists', key, 'domains')) %> <%= number_with_delimiter(count) %> domains.<% end %></span>
+            </label>
+          <% end %>
+        </div>
+
+        <h6>Devices you have</h6>
+        <p class="text-muted small">Each vendor's own telemetry hosts, with what its devices need left out, so the device keeps working and stops reporting. Tick the kinds you own.</p>
+        <div class="dns-choices dns-lists mb-4">
+          <% DnsService::BLOCKLISTS.select { |_key, list| list[:vendor] }.each do |key, list| %>
+            <label class="dns-choice">
+              <input type="checkbox" name="lists[]" value="<%= key %>" <%= 'checked' if @blocklists.include?(key) %>>
+              <span class="dns-choice-title"><%= list[:name] %></span>
               <span class="dns-choice-text"><%= list[:about] %>
                 <% if (count = @blocking_status&.dig('lists', key, 'domains')) %> <%= number_with_delimiter(count) %> domains.<% end %></span>
             </label>
@@ -291,68 +224,51 @@
     </div>
   </div>
 
-  <%# IPv6: what the network announces, and whether devices learn the NAS %>
-  <% if @mode != 'off' %>
-  <div class="card mb-4" id="dns-ipv6">
-    <div class="card-header d-flex align-items-center justify-content-between">
-      <h5 class="mb-0"><%= lucide_icon('network', size: 18) %> IPv6</h5>
-      <%= button_to 'Check now', dns_check_routers_path, method: :post, class: 'btn btn-sm btn-outline-secondary', form_class: 'd-inline' %>
-    </div>
+  <%# Extra names on the network %>
+  <div class="card mb-4" id="dns-aliases">
+    <div class="card-header"><h5 class="mb-0"><%= lucide_icon('file-text', size: 18) %> Names</h5></div>
     <div class="card-body">
-      <p class="text-muted small">
-        <% if @ipv6_address %>
-          The NAS answers DNS over IPv6 at <code><%= @ipv6_address %></code><%= @ipv6_advertise ? ', which it announces' : ', from a range your router hands out' %>.
-        <% else %>
-          The NAS has no fixed IPv6 address for DNS on this network, so devices ask it over IPv4.
-        <% end %>
-        <strong>Check now</strong> asks the network's routers what they announce (it takes a few seconds).
-      </p>
-
-      <% if @ipv6_check %>
-        <p class="small mb-2">Checked <%= time_ago_in_words(Time.at(@ipv6_check['checked_at'].to_i)) %> ago, on <%= @ipv6_check['interface'] %>:</p>
-        <% if @ipv6_check['advertisers'].blank? %>
-          <p class="small text-muted">No router answered. Devices here don't use IPv6 (or it's off), so they use the NAS's IPv4 address for DNS.</p>
-        <% else %>
-          <ul class="small dns-routers">
-            <% @ipv6_check['advertisers'].each do |advert| %>
-              <li>
-                <code><%= advert['router'] %></code>
-                <%= advert['lifetime'].to_i.zero? ? '(not a router)' : '(a router)' %>:
-                <%= advert['prefixes'].any? ? "addresses in #{advert['prefixes'].join(', ')}" : 'no address range' %>;
-                <%= advert['dns'].any? ? "DNS #{advert['dns'].join(', ')}" : 'no DNS server' %>
-              </li>
+      <p class="text-muted small">Extra names on your network, for devices that use the NAS's DNS: <code>files</code> for the NAS, or <code>printer</code> for the printer's address. Each answers as <code>name.<%= @domain %></code> and as <code>name</code>. The NAS and the devices with a fixed address (<a href="<%= network_index_path %>">Devices</a>) already have theirs.</p>
+      <% if @aliases.any? %>
+        <table class="table table-sm dns-forwards mb-3">
+          <thead><tr><th>Name</th><th>Points at</th><th></th></tr></thead>
+          <tbody>
+            <% @aliases.each do |dns_alias| %>
+              <tr>
+                <td><code><%= dns_alias.name %>.<%= @domain %></code></td>
+                <td><%= dns_alias.address.presence || 'the NAS' %></td>
+                <td class="text-end"><%= button_to 'Remove', dns_destroy_alias_path(dns_alias), method: :delete, class: 'btn btn-sm btn-outline-danger', form_class: 'd-inline' %></td>
+              </tr>
             <% end %>
-          </ul>
-          <% if @other_ipv6_dns.any? %>
-            <div class="alert alert-warning small mb-0">
-              <% @other_ipv6_dns.each do |router, address| %>
-                <code><%= router %></code> tells devices to use <code><%= address %></code> for DNS.
-              <% end %>
-              Devices may ask that instead of the NAS, going around its privacy and blocking. In that router's IPv6 (or
-              DHCPv6) settings, set the DNS server it announces to <code><%= @ipv6_address || 'the NAS' %></code>, or have it
-              announce none, so devices use the NAS's IPv4 address.
-            </div>
-          <% elsif @ipv6_address %>
-            <p class="small text-success mb-0">✓ Devices learn only the NAS as their IPv6 DNS server.</p>
-          <% end %>
-        <% end %>
+          </tbody>
+        </table>
       <% end %>
+      <form action="<%= dns_create_alias_path %>" method="post" class="row g-2 align-items-end">
+        <input type="hidden" name="authenticity_token" value="<%= form_authenticity_token %>">
+        <div class="col-md-4">
+          <label class="form-label small" for="alias-name">Name</label>
+          <input type="text" class="form-control" id="alias-name" name="dns_alias[name]" maxlength="63" required placeholder="files">
+        </div>
+        <div class="col-md-5">
+          <label class="form-label small" for="alias-address">Points at</label>
+          <input type="text" class="form-control" id="alias-address" name="dns_alias[address]" placeholder="an address, or empty for the NAS">
+        </div>
+        <div class="col-md-1">
+          <button type="submit" class="btn btn-primary w-100">Add</button>
+        </div>
+      </form>
     </div>
   </div>
-  <% end %>
 
   <%# How devices start using it, and how to undo it %>
   <div class="card mb-4" id="dns-how">
     <div class="card-header"><h5 class="mb-0"><%= lucide_icon('help-circle', size: 18) %> Using it</h5></div>
     <div class="card-body">
       <% server = @addresses.first || 'the NAS\'s address' %>
-      <% if @mode == 'dns_dhcp' %>
-      <ol class="mb-3">
-        <li><strong>Your router's DHCP is off</strong> (the NAS checked before it started). Leave the router's own address as it is.</li>
-        <li><strong>Devices get an address from the NAS</strong> the next time they connect or renew. To hurry one along, turn its Wi-Fi off and on, or unplug its cable for a moment.</li>
-        <li><strong>Check it:</strong> the device shows up on <a href="<%= network_index_path %>">Network → Leases</a>, and answers by its name, like <code>laptop.<%= @domain %></code>.</li>
-      </ol>
-      <p class="text-muted small mb-2"><strong>The way back:</strong> turn your router's DHCP on again, then set this page to DNS for my network or Off. Devices move back to the router as they renew; turning their Wi-Fi off and on hurries them. While the NAS is off, devices can't get a new address.</p>
+      <% if @mode == 'router' %>
+        <p class="text-muted small mb-2">The NAS is the router (<a href="<%= dns_internet_path %>">Internet</a>), so every device gets the NAS as its DNS server with its address; nothing to set up here.</p>
+      <% elsif @mode == 'dns_dhcp' %>
+        <p class="text-muted small mb-2">The NAS hands out addresses (<a href="<%= dns_dhcp_path %>">DHCP</a>) and gives every device the NAS as its DNS server; nothing to set up here.</p>
       <% else %>
       <ol class="mb-3">
         <li><strong>Give the NAS a fixed address.</strong> In your router's DHCP settings, reserve <code><%= server %></code> for the NAS, so it never changes: every device will be pointed at it.</li>
@@ -361,11 +277,9 @@
       </ol>
       <p class="text-muted small mb-2"><strong>The way back:</strong> set the router's DNS setting back to automatic (or the one device's back to automatic). While the NAS is off or restarting, the devices that use it can't look up names.</p>
       <% end %>
-      <p class="text-muted small mb-0"><strong>Firefox</strong> is told to use this DNS instead of its own encrypted DNS. Other browsers and devices with their own encrypted DNS turned on go around it.</p>
+      <p class="text-muted small mb-0"><strong>Firefox</strong> is told to use this DNS instead of its own encrypted DNS. Other browsers and devices with their own encrypted DNS turned on go around it, unless the NAS is the router with <em>Every device uses the NAS's DNS</em> on.</p>
     </div>
   </div>
 </div>
 
 <%= render 'shared/install_terminal', id: 'unbound', title: 'Installing Unbound', stream_url: dns_install_stream_path %>
-<%= render 'shared/install_terminal', id: 'dnsmasq', title: 'Installing dnsmasq', stream_url: dns_install_dnsmasq_stream_path %>
-<%= render 'shared/install_terminal', id: 'radvd', title: 'Installing radvd', stream_url: dns_install_radvd_stream_path %>

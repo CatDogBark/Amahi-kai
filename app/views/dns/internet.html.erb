@@ -1,0 +1,266 @@
+<div class="container-fluid dns-page">
+  <div class="card mb-4 mt-3" id="internet-status">
+    <div class="card-header d-flex align-items-center justify-content-between">
+      <h5 class="mb-0"><%= lucide_icon('globe', size: 18) %> The NAS as your router</h5>
+      <% if !@router_on %>
+        <span class="badge bg-secondary">Off</span>
+      <% elsif @router_state.nil? %>
+        <span class="badge bg-danger">Not in place</span>
+      <% elsif @wan_addresses.empty? %>
+        <span class="badge bg-warning text-dark">No address yet</span>
+      <% elsif @default_route && @default_route.first != @wan_interface %>
+        <span class="badge bg-warning text-dark">Route in the way</span>
+      <% else %>
+        <span class="badge bg-success">Routing</span>
+      <% end %>
+    </div>
+    <div class="card-body">
+      <p class="text-muted">
+        The NAS can be the way to the internet for the whole house: a second network interface takes the provider's
+        connection, your devices reach the internet through the NAS, and your old router becomes an access point.
+        Nothing from the internet reaches the NAS or your devices except the ports you let in below. It needs
+        DHCP on (<a href="<%= dns_dhcp_path %>">Network → DHCP</a>) and the firewall on (<a href="<%= security_index_path %>">Network → Security</a>).
+      </p>
+
+      <% if @router_on %>
+        <dl class="dns-facts mb-0">
+          <dt>Internet</dt>
+          <dd>
+            <% if @router_state.nil? %>
+              <span class="text-danger">✗ The router's rules aren't in place. Save again, and if it's refused, the message says why.</span>
+            <% elsif @wan_addresses.empty? %>
+              <span class="text-warning">No address on <%= port_display(@wan_interface) %> yet: the provider hasn't answered. Is the cable in?</span>
+            <% elsif @default_route && @default_route.first != @wan_interface %>
+              <span class="text-danger">✗ <%= port_display(@wan_interface) %> has <%= @wan_addresses.join(', ') %>, but the NAS's own way to the internet still goes through
+              <%= @default_route.first %> (via <%= @default_route.last %>), so devices' traffic goes that way too and never reaches the provider.
+              That interface's network settings have a gateway: remove it, or give its route a metric above 50, then come back here.</span>
+            <% else %>
+              ✓ Through <%= port_display(@wan_interface) %> at <%= @wan_addresses.join(', ') %><%= ", the provider's router #{@default_route.last}" if @default_route %>;
+              <%= pluralize(@forwards.size, 'port') %> let in<%= '; every device uses the NAS\'s DNS' if @router_state['dns'] %>
+              <% if @router_state['dns'] && !@blocking %>
+                <br><span class="text-warning">Blocking is off, so devices' own encrypted DNS services aren't blocked by name; turn Blocking on (<a href="<%= dns_index_path(anchor: 'dns-blocking') %>">Network → DNS</a>) for that part.</span>
+              <% end %>
+            <% end %>
+          </dd>
+          <% if @router_state %>
+            <dt>From the internet</dt>
+            <dd>
+              <% if @wan_drops && @wan_drops[:dropped] %>
+                <%= number_with_delimiter(@wan_drops[:dropped]) %> connection <%= @wan_drops[:dropped] == 1 ? 'attempt' : 'attempts' %> at the NAS dropped in the last <%= distance_of_time_in_words(@wan_drops[:since], Time.now) %> (since the rules were loaded);
+              <% else %>
+                the count of dropped connection attempts isn't available;
+              <% end %>
+              <% if @spoof_drops %>
+                <%= number_with_delimiter(@spoof_drops) %> <%= @spoof_drops == 1 ? 'packet' : 'packets' %> claiming an address inside your network dropped since the NAS started.
+              <% else %>
+                spoofed packets aren't counted on this kernel.
+              <% end %>
+              <span class="text-muted small">Attempts are normal: the internet knocks on every address. A packet from the internet with a source address of your own network is forged, and the kernel drops it before anything sees it.</span>
+            </dd>
+            <dt>Updates</dt>
+            <dd>
+              <% if @automatic_updates %>
+                ✓ Ubuntu's security updates install by themselves (security fixes only, never new versions of anything).
+              <% else %>
+                <span class="text-warning">✗ Ubuntu's security updates aren't automatic. A NAS that is the router faces the internet and should take them by itself: security fixes only, from Ubuntu's security channel, never new versions of anything.
+                Turn them on under <a href="<%= settings_dependencies_path(anchor: 'automatic-updates') %>">Settings → System Dependencies</a>.</span>
+              <% end %>
+            </dd>
+            <dt>Kept off the internet</dt>
+            <dd>
+              <% if @lan_only.any? %>
+                <%= @lan_only.map(&:name).join(', ') %>: on the LAN only (<a href="<%= network_index_path %>">Network → Devices</a>).
+              <% else %>
+                no device; <em>LAN only</em> on a fixed device (<a href="<%= network_index_path %>">Network → Devices</a>) keeps it off the internet.
+              <% end %>
+            </dd>
+          <% end %>
+        </dl>
+      <% end %>
+    </div>
+  </div>
+
+  <form action="<%= dns_update_internet_path %>" method="post" id="internet-settings">
+    <input type="hidden" name="_method" value="put">
+    <input type="hidden" name="authenticity_token" value="<%= form_authenticity_token %>">
+
+    <div class="card mb-4">
+      <div class="card-header"><h5 class="mb-0"><%= lucide_icon('settings', size: 18) %> Settings</h5></div>
+      <div class="card-body">
+        <div class="form-check form-switch mb-1">
+          <input class="form-check-input" type="checkbox" role="switch" name="router_on" value="1" id="router-on" <%= 'checked' if @router_on %> <%= 'disabled' unless @dhcp_on %>>
+          <label class="form-check-label" for="router-on">The NAS is the router <span class="badge bg-secondary ms-1">Advanced</span></label>
+        </div>
+        <p class="text-muted small mb-4">
+          <% unless @dhcp_on %>Turn DHCP on first (<a href="<%= dns_dhcp_path %>">Network → DHCP</a>). <% end %>
+          <% unless @firewall_on %>Turn the firewall on first (<a href="<%= security_index_path %>">Network → Security</a>, the firewall's Fix). <% end %>
+          Save from a device on the LAN side: the page refuses if you're connected through the interface that would become the internet side.
+        </p>
+
+        <h6>Internet interface</h6>
+        <p class="text-muted small">The interface the provider's connection is plugged into. It takes an address from the provider.</p>
+        <select name="wan_interface" class="form-select mb-4 dns-interface" aria-label="Internet interface">
+          <option value="">Choose the internet interface</option>
+          <% @interfaces.each do |name, addresses| %>
+            <option value="<%= name %>" <%= 'selected' if name == @wan_interface %>><%= port_display(name) %> (<%= addresses.reject(&:link_local?).map(&:to_s).join(', ').presence || 'no address' %>)</option>
+          <% end %>
+        </select>
+
+        <div class="form-check mb-1">
+          <input class="form-check-input" type="checkbox" name="force_dns" value="1" id="dns-force-nas" <%= 'checked' if @force_dns %>>
+          <label class="form-check-label" for="dns-force-nas">Every device uses the NAS's DNS</label>
+        </div>
+        <p class="text-muted small mb-4">
+          Some devices (Roku, Google's, some TVs) ask a DNS server of their own choosing, skipping yours and its blocking.
+          With this on, every lookup a device sends anywhere comes to the NAS instead, a device's own encrypted DNS doesn't get out,
+          and the known encrypted-DNS services are blocked by name (the <em>Encrypted DNS providers</em> list is added to Blocking).
+          Only a device with an encrypted DNS <em>address</em> built in gets past, which is rare.
+          <% if @tailscale_installed %>Tailscale is installed, so its port (UDP 41641) is let in on the internet side: its connections stay direct instead of going through a relay. The Cloudflare Tunnel needs nothing: it connects outward.<% end %>
+        </p>
+
+        <h6>IPv6</h6>
+        <div class="form-check mb-1">
+          <input class="form-check-input" type="checkbox" name="ipv6_advertise" value="1" id="dns-ipv6-advertise" <%= 'checked' if @ipv6_advertise %>>
+          <label class="form-check-label" for="dns-ipv6-advertise">Announce the NAS as the IPv6 DNS server <span class="badge bg-secondary ms-1">Advanced</span></label>
+        </div>
+        <p class="text-muted small mb-2">
+          Devices using IPv6 learn their DNS server from the network's announcements, usually your router's. With this on,
+          the NAS announces itself too, at <code><%= @own_ipv6_address %></code>, an address of its own that stays the same
+          whatever your internet provider hands out. It never announces itself as a router. Better still, if your router
+          lets you set the IPv6 DNS server it announces (OpenWrt does), set it to the NAS there; see IPv6, below. The
+          NAS as the router doesn't do IPv6 for the house yet.
+        </p>
+        <% unless @radvd_installed %>
+          <div class="dns-radvd mb-2">
+            <p class="text-muted small mb-2">Announcing needs radvd, from Ubuntu. Installing it changes nothing until you save with this ticked.</p>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-call="openInstallTerminal" data-args='["radvd"]'>Install radvd</button>
+          </div>
+        <% end %>
+        <div class="mb-4"></div>
+
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </div>
+  </form>
+
+  <%# Port forwards, while the NAS is the router %>
+  <% if @router_on %>
+  <div class="card mb-4" id="dns-forwards">
+    <div class="card-header"><h5 class="mb-0"><%= lucide_icon('network', size: 18) %> Ports let in from the internet</h5></div>
+    <div class="card-body">
+      <p class="text-muted small">A port on the NAS's internet address, passed to a device on the LAN: a game server, a camera. Everything else from the internet is dropped. Give the device a fixed address on <a href="<%= network_index_path %>">Network → Devices</a> first, so the forward keeps pointing at it.</p>
+      <% if @forwards.any? %>
+        <table class="table table-sm dns-forwards mb-3">
+          <thead><tr><th>From the internet</th><th>To</th><th>Name</th><th></th></tr></thead>
+          <tbody>
+            <% @forwards.each do |forward| %>
+              <tr>
+                <td><code><%= forward.protocol %> <%= forward.port %></code></td>
+                <td><code><%= @prefix %>.<%= forward.address %>:<%= forward.to_port %></code></td>
+                <td><%= forward.name %></td>
+                <td class="text-end"><%= button_to 'Remove', dns_destroy_forward_path(forward), method: :delete, class: 'btn btn-sm btn-outline-danger', form_class: 'd-inline' %></td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      <% end %>
+      <form action="<%= dns_create_forward_path %>" method="post" class="row g-2 align-items-end">
+        <input type="hidden" name="authenticity_token" value="<%= form_authenticity_token %>">
+        <div class="col-6 col-md-2">
+          <label class="form-label small" for="forward-port">Port</label>
+          <input type="number" class="form-control" id="forward-port" name="port_forward[port]" min="1" max="65535" required>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label small" for="forward-protocol">Protocol</label>
+          <select class="form-select" id="forward-protocol" name="port_forward[protocol]">
+            <option value="tcp">TCP</option>
+            <option value="udp">UDP</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label small" for="forward-address">To the device</label>
+          <div class="input-group">
+            <span class="input-group-text"><%= @prefix %>.</span>
+            <input type="number" class="form-control" id="forward-address" name="port_forward[address]" min="2" max="254" required>
+          </div>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label small" for="forward-to-port">Its port</label>
+          <input type="number" class="form-control" id="forward-to-port" name="port_forward[to_port]" min="1" max="65535" placeholder="same">
+        </div>
+        <div class="col-8 col-md-2">
+          <label class="form-label small" for="forward-name">Name</label>
+          <input type="text" class="form-control" id="forward-name" name="port_forward[name]" maxlength="40" placeholder="optional">
+        </div>
+        <div class="col-4 col-md-1">
+          <button type="submit" class="btn btn-primary w-100">Add</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <% end %>
+
+  <%# IPv6: what the network announces, and whether devices learn the NAS %>
+  <% if @dns_on %>
+  <div class="card mb-4" id="dns-ipv6">
+    <div class="card-header d-flex align-items-center justify-content-between">
+      <h5 class="mb-0"><%= lucide_icon('network', size: 18) %> IPv6</h5>
+      <%= button_to 'Check now', dns_check_routers_path, method: :post, class: 'btn btn-sm btn-outline-secondary', form_class: 'd-inline' %>
+    </div>
+    <div class="card-body">
+      <p class="text-muted small">
+        <% if @ipv6_address %>
+          The NAS answers DNS over IPv6 at <code><%= @ipv6_address %></code><%= @ipv6_advertise ? ', which it announces' : ', from a range your router hands out' %>.
+        <% else %>
+          The NAS has no fixed IPv6 address for DNS on this network, so devices ask it over IPv4.
+        <% end %>
+        <strong>Check now</strong> asks the network's routers what they announce (it takes a few seconds).
+      </p>
+
+      <% if @ipv6_check %>
+        <p class="small mb-2">Checked <%= time_ago_in_words(Time.at(@ipv6_check['checked_at'].to_i)) %> ago, on <%= @ipv6_check['interface'] %>:</p>
+        <% if @ipv6_check['advertisers'].blank? %>
+          <p class="small text-muted">No router answered. Devices here don't use IPv6 (or it's off), so they use the NAS's IPv4 address for DNS.</p>
+        <% else %>
+          <ul class="small dns-routers">
+            <% @ipv6_check['advertisers'].each do |advert| %>
+              <li>
+                <code><%= advert['router'] %></code>
+                <%= advert['lifetime'].to_i.zero? ? '(not a router)' : '(a router)' %>:
+                <%= advert['prefixes'].any? ? "addresses in #{advert['prefixes'].join(', ')}" : 'no address range' %>;
+                <%= advert['dns'].any? ? "DNS #{advert['dns'].join(', ')}" : 'no DNS server' %>
+              </li>
+            <% end %>
+          </ul>
+          <% if @other_ipv6_dns.any? %>
+            <div class="alert alert-warning small mb-0">
+              <% @other_ipv6_dns.each do |router, address| %>
+                <code><%= router %></code> tells devices to use <code><%= address %></code> for DNS.
+              <% end %>
+              Devices may ask that instead of the NAS, going around its privacy and blocking. In that router's IPv6 (or
+              DHCPv6) settings, set the DNS server it announces to <code><%= @ipv6_address || 'the NAS' %></code>, or have it
+              announce none, so devices use the NAS's IPv4 address.
+            </div>
+          <% elsif @ipv6_address %>
+            <p class="small text-success mb-0">✓ Devices learn only the NAS as their IPv6 DNS server.</p>
+          <% end %>
+        <% end %>
+      <% end %>
+    </div>
+  </div>
+  <% end %>
+
+  <div class="card mb-4" id="internet-how">
+    <div class="card-header"><h5 class="mb-0"><%= lucide_icon('help-circle', size: 18) %> Using it</h5></div>
+    <div class="card-body">
+      <ol class="mb-3">
+        <li><strong>The provider's cable goes into the internet interface</strong>, and your old router becomes an access point: its DHCP off, its own internet port empty, your devices on its LAN ports and Wi-Fi as before.</li>
+        <li><strong>Devices get everything from the NAS</strong> as they renew: an address, the NAS as their router and DNS server. To hurry one along, turn its Wi-Fi off and on.</li>
+        <li><strong>Check it:</strong> a device opens a website, and the card above says the NAS has an address from the provider.</li>
+      </ol>
+      <p class="text-muted small mb-0"><strong>The way back:</strong> turn this off, move the provider's cable back to your router, and turn its DHCP on again. While the NAS is off or restarting, the house has no internet: a System Update is a minute of that.</p>
+    </div>
+  </div>
+</div>
+
+<%= render 'shared/install_terminal', id: 'radvd', title: 'Installing radvd', stream_url: dns_install_radvd_stream_path %>

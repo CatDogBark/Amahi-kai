@@ -1,0 +1,179 @@
+<div class="container-fluid dns-page">
+  <div class="card mb-4 mt-3" id="this-nas">
+    <div class="card-header"><h5 class="mb-0"><%= lucide_icon('server', size: 18) %> This NAS</h5></div>
+    <div class="card-body">
+      <p class="text-muted small">The NAS's own address on each network port. One it takes from the network (your router's DHCP) can change; a fixed one stays, which the shares, DNS and the router rely on. Changing the address you're connected through moves this page with it, and the change is kept only once the NAS answers there, so a wrong one can't lock you out. <strong>Name</strong> gives a port a name of your own, shown wherever it comes up; <strong>Find port</strong> blinks a real port's light for five seconds.</p>
+      <% if @address_note %><div class="alert alert-info py-2 small"><%= @address_note %></div><% end %>
+      <% @interfaces.each do |interface| %>
+        <% port = @ports[interface.name] %>
+        <div class="this-nas-row mb-3">
+          <% if port&.label %><strong><%= port.label %></strong><% end %>
+          <code><%= interface.name %></code>
+          <% if interface.part == :lan %><span class="badge bg-secondary">LAN</span><% elsif interface.part == :internet %><span class="badge bg-secondary">Internet</span><% end %>
+          · <%= interface.addresses.any? ? interface.addresses.map { |address| "#{address.ip}/#{address.prefix}" }.join(', ') : 'no address' %>
+          <% if interface.part == :internet %>
+            · from the provider
+            <span class="text-muted small ms-2">Managed by <a href="<%= dns_internet_path %>">Network → Internet</a></span>
+          <% else %>
+            <% if interface.automatic %>· from the network (DHCP)<% elsif interface.addresses.any? %>· fixed<% end %>
+            <% if interface.gateway %>· router <%= interface.gateway %><% end %>
+            <a href="#" class="btn btn-sm btn-outline-secondary ms-2" data-reveal=".address-form">Change</a>
+          <% end %>
+          <a href="#" class="btn btn-sm btn-outline-secondary ms-1" data-reveal=".label-form">Name</a>
+          <% if port && NetworkPorts.blinkable?(port) %>
+            <%= button_to 'Find port', network_blink_port_path, params: { interface: interface.name }, class: 'btn btn-sm btn-outline-secondary ms-1', form_class: 'd-inline' %>
+          <% end %>
+          <% if port %>
+            <div class="text-muted small"><%= port.kind %> · <%= port.link_text %><%= " · #{port.mac}" if port.mac %></div>
+          <% end %>
+          <form action="<%= network_update_port_label_path %>" method="post" class="label-form row g-2 align-items-end mt-1" style="display: none">
+            <input type="hidden" name="_method" value="put">
+            <input type="hidden" name="authenticity_token" value="<%= form_authenticity_token %>">
+            <input type="hidden" name="interface" value="<%= interface.name %>">
+            <div class="col-md-4">
+              <label class="form-label small" for="label-<%= interface.name %>">Name</label>
+              <input type="text" class="form-control" id="label-<%= interface.name %>" name="label" value="<%= port&.label %>" maxlength="<%= NetworkPorts::LABEL_MAX %>" placeholder="LAN, Modem, Office…">
+            </div>
+            <div class="col-md-1">
+              <button type="submit" class="btn btn-primary w-100">Save</button>
+            </div>
+            <div class="col-12 form-text">Shown beside <code><%= interface.name %></code> wherever the port is named. Leave it empty to drop the name.</div>
+          </form>
+          <% unless interface.part == :internet %>
+            <form action="<%= network_update_address_path %>" method="post" class="address-form row g-2 align-items-end mt-1" style="display: none">
+              <input type="hidden" name="_method" value="put">
+              <input type="hidden" name="authenticity_token" value="<%= form_authenticity_token %>">
+              <input type="hidden" name="interface" value="<%= interface.name %>">
+              <div class="col-12">
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="radio" name="mode" value="automatic" id="mode-automatic-<%= interface.name %>" <%= 'checked' if interface.automatic %> <%= 'disabled' if interface.name == @dhcp_interface %>>
+                  <label class="form-check-label" for="mode-automatic-<%= interface.name %>">From the network (DHCP)</label>
+                </div>
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="radio" name="mode" value="fixed" id="mode-fixed-<%= interface.name %>" <%= 'checked' unless interface.automatic %>>
+                  <label class="form-check-label" for="mode-fixed-<%= interface.name %>">Fixed</label>
+                </div>
+                <% if interface.name == @dhcp_interface %><span class="text-muted small ms-2">The NAS hands out addresses here, so it needs a fixed one.</span><% end %>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label small" for="address-<%= interface.name %>">Fixed address</label>
+                <input type="text" class="form-control" id="address-<%= interface.name %>" name="address" value="<%= interface.addresses.first&.ip %>" placeholder="192.168.1.10">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small" for="prefix-<%= interface.name %>">Network size (/n)</label>
+                <input type="number" class="form-control" id="prefix-<%= interface.name %>" name="prefix" value="<%= interface.addresses.first&.prefix || 24 %>" min="8" max="30">
+              </div>
+              <% unless @router_mode && interface.part == :lan %>
+                <div class="col-md-3">
+                  <label class="form-label small" for="gateway-<%= interface.name %>">Router</label>
+                  <input type="text" class="form-control" id="gateway-<%= interface.name %>" name="gateway" value="<%= interface.gateway %>" placeholder="192.168.1.1">
+                </div>
+              <% end %>
+              <div class="col-md-3">
+                <label class="form-label small" for="dns-<%= interface.name %>">DNS servers</label>
+                <input type="text" class="form-control" id="dns-<%= interface.name %>" name="dns" value="<%= @nameservers.join(' ') %>" placeholder="192.168.1.1">
+              </div>
+              <div class="col-md-1">
+                <button type="submit" class="btn btn-primary w-100">Save</button>
+              </div>
+              <div class="col-12 form-text">
+                The fixed address, its network size (/24 is the usual home network, 256 addresses), the router and the DNS servers only matter for a fixed address.
+                Pick one your router doesn't hand out (outside its DHCP range), or reserve it on the router.
+                <% if @router_mode && interface.part == :lan %>The NAS is the router here, so it has none of its own.<% end %>
+              </div>
+            </form>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+  </div>
+
+  <div class="card mb-4 mt-3" id="devices">
+    <div class="card-header d-flex align-items-center justify-content-between">
+      <h5 class="mb-0"><%= lucide_icon('monitor', size: 18) %> Devices</h5>
+      <span class="badge bg-secondary"><%= pluralize(@devices.size, 'device') %> seen</span>
+    </div>
+    <div class="card-body">
+      <% if @dhcp_on %>
+        <p class="text-muted small">The devices the NAS has given an address to, and when their address comes up for renewal. A <strong>fixed</strong> address stays with the device (by its hardware address) every time, which port forwards and names rely on. <strong>LAN only</strong> keeps a fixed device off the internet while the NAS is the router (<a href="<%= dns_internet_path %>">Network → Internet</a>): it still reaches the shares, DNS and everything on the LAN, but nothing beyond. For a TV, a camera or a toy that has no business out there.</p>
+      <% else %>
+        <p class="text-muted small">Devices appear here while the NAS hands out addresses (<a href="<%= dns_dhcp_path %>">Network → DHCP</a>). A <strong>fixed</strong> address can still be given below: the device answers by its name in DNS (<code>name.<%= @domain %></code>), and gets that address once the NAS hands them out. <strong>LAN only</strong> keeps a fixed device off the internet once the NAS is the router.</p>
+      <% end %>
+
+      <% if @devices.any? || @unseen_hosts.any? %>
+        <table class="table table-sm dns-forwards mb-4">
+          <thead><tr><th>Name</th><th>Address</th><th>Hardware address</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            <% @devices.each do |device| %>
+              <tr>
+                <td><%= device[:host]&.name || device[:name] || '(no name)' %></td>
+                <td><code><%= device[:ip] %></code></td>
+                <td><code><%= device[:mac] %></code></td>
+                <td>
+                  <% if device[:host] %>
+                    Fixed at <code><%= @net %>.<%= device[:host].address %></code>
+                    <% if device[:host].lan_only %><span class="badge bg-secondary ms-1">LAN only</span><% end %>
+                  <% else %>
+                    Renews in <%= distance_of_time_in_words(Time.now, device[:expires]) %>
+                  <% end %>
+                </td>
+                <td class="text-end">
+                  <% if device[:host] %>
+                    <%= button_to device[:host].lan_only ? 'Internet again' : 'LAN only', network_toggle_lan_only_path(device[:host]), class: 'btn btn-sm btn-outline-secondary me-1', form_class: 'd-inline' %>
+                    <%= button_to 'Unfix', network_destroy_host_path(device[:host]), method: :delete, class: 'btn btn-sm btn-outline-secondary', form_class: 'd-inline' %>
+                  <% else %>
+                    <form action="<%= network_hosts_path %>" method="post" class="d-inline">
+                      <input type="hidden" name="authenticity_token" value="<%= form_authenticity_token %>">
+                      <input type="hidden" name="host[name]" value="<%= device[:name].to_s.downcase.gsub(/[^a-z0-9-]/, '-').presence || 'device' %>">
+                      <input type="hidden" name="host[mac]" value="<%= device[:mac] %>">
+                      <input type="hidden" name="host[address]" value="<%= device[:ip].to_s.split('.').last %>">
+                      <button type="submit" class="btn btn-sm btn-outline-secondary">Fix this address</button>
+                    </form>
+                  <% end %>
+                </td>
+              </tr>
+            <% end %>
+            <% @unseen_hosts.each do |host| %>
+              <tr class="text-muted">
+                <td><%= host.name %></td>
+                <td><code><%= @net %>.<%= host.address %></code></td>
+                <td><code><%= host.mac %></code></td>
+                <td>Fixed; not seen now<% if host.lan_only %> <span class="badge bg-secondary ms-1">LAN only</span><% end %></td>
+                <td class="text-end">
+                  <%= button_to host.lan_only ? 'Internet again' : 'LAN only', network_toggle_lan_only_path(host), class: 'btn btn-sm btn-outline-secondary me-1', form_class: 'd-inline' %>
+                  <%= button_to 'Unfix', network_destroy_host_path(host), method: :delete, class: 'btn btn-sm btn-outline-secondary', form_class: 'd-inline' %>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      <% else %>
+        <p class="small text-muted mb-4">No devices yet.</p>
+      <% end %>
+
+      <h6>Give a device a fixed address</h6>
+      <p class="text-muted small">For a device that isn't in the list: its name (letters, digits and hyphens), its hardware address, and the last part of the address it should keep on <code><%= @net %>.x</code>.</p>
+      <form action="<%= network_hosts_path %>" method="post" class="row g-2 align-items-end">
+        <input type="hidden" name="authenticity_token" value="<%= form_authenticity_token %>">
+        <div class="col-md-4">
+          <label class="form-label small" for="host-name">Name</label>
+          <input type="text" class="form-control" id="host-name" name="host[name]" maxlength="63" required placeholder="printer">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small" for="host-mac">Hardware address</label>
+          <input type="text" class="form-control" id="host-mac" name="host[mac]" required placeholder="aa:bb:cc:dd:ee:ff">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small" for="host-address">Address</label>
+          <div class="input-group">
+            <span class="input-group-text"><%= @net %>.</span>
+            <input type="number" class="form-control" id="host-address" name="host[address]" min="2" max="254" required>
+          </div>
+        </div>
+        <div class="col-md-1">
+          <button type="submit" class="btn btn-primary w-100">Add</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

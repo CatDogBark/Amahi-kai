@@ -98,7 +98,7 @@ module AmahiHelper
   # among them) pings an address for 3 seconds to see it's free before it offers it.
   DHCP_WAIT = 6
 
-  # DNS blocklists (Network → DNS & DHCP). BLOCKLISTS are the lists the NAS may download, by
+  # DNS blocklists (Network → DNS, DHCP and Internet). BLOCKLISTS are the lists the NAS may download, by
   # key; the app names and describes the same keys (DnsService::BLOCKLISTS, a spec checks they
   # match). Each is a domain a line, "#" comments, and a domain covers its subdomains (HaGeZi's
   # and OISD's wildcard formats without "*."), as Unbound's local-zone does. Checked against
@@ -111,7 +111,18 @@ module AmahiHelper
     'hagezi-tif-mini' => { url: "#{HAGEZI}/tif.mini-onlydomains.txt" },
     'hagezi-tif-medium' => { url: "#{HAGEZI}/tif.medium-onlydomains.txt" },
     'oisd-small' => { url: 'https://small.oisd.nl/domainswild2' },
-    'oisd-big' => { url: 'https://big.oisd.nl/domainswild2' }
+    'oisd-big' => { url: 'https://big.oisd.nl/domainswild2' },
+    # The known encrypted-DNS (DoH) providers, so a device can't go around the NAS's DNS by name.
+    'hagezi-doh' => { url: "#{HAGEZI}/doh-onlydomains.txt" },
+    # Vendors' own telemetry hosts, with the hosts their devices need left out.
+    'hagezi-native-samsung' => { url: "#{HAGEZI}/native.samsung-onlydomains.txt" },
+    'hagezi-native-lgwebos' => { url: "#{HAGEZI}/native.lgwebos-onlydomains.txt" },
+    'hagezi-native-roku' => { url: "#{HAGEZI}/native.roku-onlydomains.txt" },
+    'hagezi-native-amazon' => { url: "#{HAGEZI}/native.amazon-onlydomains.txt" },
+    'hagezi-native-apple' => { url: "#{HAGEZI}/native.apple-onlydomains.txt" },
+    'hagezi-native-winoffice' => { url: "#{HAGEZI}/native.winoffice-onlydomains.txt" },
+    'hagezi-native-tiktok' => { url: "#{HAGEZI}/native.tiktok-onlydomains.txt" },
+    'hagezi-native-xiaomi' => { url: "#{HAGEZI}/native.xiaomi-onlydomains.txt" }
   }.freeze
   # Root's own folder: the lists chosen and the allowlist, the copies downloaded, the blocklist
   # while blocking is paused, and the status the app reads. Not the app's: what's here becomes
@@ -120,7 +131,7 @@ module AmahiHelper
   BLOCKLIST_CHOSEN = "#{BLOCKLIST_DIR}/chosen.json".freeze
   BLOCKLIST_STATUS = "#{BLOCKLIST_DIR}/status.json".freeze
   BLOCKLIST_PAUSED = "#{BLOCKLIST_DIR}/blocklist.paused".freeze
-  # When the helper last reloaded Unbound: its counters start again then (Network → DNS & DHCP's
+  # When the helper last reloaded Unbound: its counters start again then (Network → DNS, DHCP and Internet's
   # totals say since when).
   UNBOUND_RELOADED = "#{BLOCKLIST_DIR}/reloaded_at".freeze
   UNBOUND_BLOCKLIST = '/etc/unbound/unbound.conf.d/amahi-kai-blocklist.conf'
@@ -161,7 +172,7 @@ module AmahiHelper
   DNS_RESUME_UNIT = 'amahi-kai-dns-resume'
   BLOCKING_PAUSE = 300
 
-  # IPv6 (Network → DNS & DHCP): radvd announces the NAS as the network's IPv6 DNS server, at an
+  # IPv6 (Network → DNS, DHCP and Internet): radvd announces the NAS as the network's IPv6 DNS server, at an
   # address of its own in a unique local range (ULA_UNIT puts it on the interface at boot).
   RADVD = '/usr/sbin/radvd'
   RADVD_CONF = '/etc/radvd.conf'
@@ -169,6 +180,72 @@ module AmahiHelper
   ULA = IPAddr.new('fc00::/7')
   # How long to listen for routers' announcements (a router waits up to 3 seconds between them).
   RA_WAIT = 4
+
+  # Router mode (Network → DNS, DHCP and Internet): the NAS between the LAN and the internet. The internet
+  # interface gets its address by DHCP (WAN_NETPLAN), the kernel forwards, UFW's before.rules
+  # get a NAT block (ROUTER_BEGIN..ROUTER_END: masquerade out, and the port forwards in), and
+  # UFW's rules let the LAN out, the forwards in, and nothing else in on the internet side.
+  # ROUTER_STATE holds what's in place, for the way back and for lan_subnets.
+  NETPLAN = '/usr/sbin/netplan'
+  NETPLAN_DIR = '/etc/netplan'
+  WAN_NETPLAN = "#{NETPLAN_DIR}/70-amahi-kai-wan.yaml".freeze
+  # The LAN interface's own default route (to the router the NAS replaces) goes behind the
+  # internet interface's (50). Its netplan file is kept as it was, for the way back.
+  LAN_ROUTE_METRIC = 200
+  NETPLAN_BACKUP_SUFFIX = '.amahi-kai-before-router'
+  ROUTER_SYSCTL = '/etc/sysctl.d/90-amahi-kai-router.conf'
+  ROUTER_STATE = "#{BLOCKLIST_DIR}/router.json".freeze
+  UFW_CONF = '/etc/ufw/ufw.conf'
+  UFW_BEFORE_RULES = '/etc/ufw/before.rules'
+  ROUTER_BEGIN = '# BEGIN amahi-kai router'
+  ROUTER_END = '# END amahi-kai router'
+  # The NAT block's rules live in chains of the NAS's own, which the block flushes before
+  # refilling: UFW's reload re-reads before.rules without clearing the nat table, so rules put
+  # straight in PREROUTING and POSTROUTING pile up, a copy per reload (found 2026-10-24: an old
+  # copy kept redirecting DNS to the NAS's previous address).
+  NAT_PREROUTING = 'amahi-kai-prerouting'
+  NAT_POSTROUTING = 'amahi-kai-postrouting'
+  # The block's filter part, in front of UFW's own before rules: those accept ICMP (pings among
+  # them) ahead of any rule added through ufw, so a kept-off device could still ping out and
+  # the NAS answered pings from the internet.
+  ROUTER_FILTER_BEGIN = '# BEGIN amahi-kai router filter'
+  ROUTER_FILTER_END = '# END amahi-kai router filter'
+  # The shape of the router's rules, kept in ROUTER_STATE: bumped whenever it changes, so the
+  # app's resync after an update (DnsService.resync!) puts the new shape in place.
+  ROUTER_RULES_VERSION = 3
+  # The router's kernel settings besides forwarding, for all interfaces and for the internet
+  # side: strict reverse-path filtering there (Ubuntu sets every interface loose, 2, and the
+  # kernel takes the stricter of all and the interface's own, so all goes to 1 and only the
+  # internet interface's own 1 bites); ICMP redirects neither taken nor sent there (a redirect
+  # would move the NAS's routes; accepting is AND of all and the interface's while forwarding,
+  # sending is OR, so both go to 0 on all as well); and martians, packets with an impossible
+  # source, logged on the internet side.
+  ROUTER_SYSCTL_ALL = { 'rp_filter' => '1', 'accept_redirects' => '0', 'send_redirects' => '0' }.freeze
+  ROUTER_SYSCTL_WAN = { 'rp_filter' => '1', 'accept_redirects' => '0', 'send_redirects' => '0', 'log_martians' => '1' }.freeze
+  PORT_FORWARD_MAX = 50
+  # Devices kept off the internet (Network → Devices, LAN only), by address.
+  LAN_ONLY_MAX = 200
+  # Tailscale's own port: let in on the internet side so its connections stay direct.
+  TAILSCALE_PORT = '41641'
+
+  # The NAS's own address on an interface (Network → Devices, This NAS): the IPv4 part of the
+  # interface's netplan entry is rewritten, automatic (DHCP) or a fixed address with its router
+  # and DNS servers, each file changed kept as it was beside it (ADDRESS_BACKUP_SUFFIX). A change
+  # to the interface the admin is connected through (guard) is applied ADDRESS_APPLY_WAIT seconds
+  # after the reply, so the reply gets out, and kept only once something reaches the NAS at the
+  # new address within ADDRESS_KEEP_WAIT seconds (network.keep_address); otherwise the revert
+  # timer puts the files back. ADDRESS_STATE says where that stands.
+  ADDRESS_STATE = "#{BLOCKLIST_DIR}/address.json".freeze
+  ADDRESS_BACKUP_SUFFIX = '.amahi-kai-before-address'
+  ADDRESS_APPLY_UNIT = 'amahi-kai-address-apply'
+  ADDRESS_REVERT_UNIT = 'amahi-kai-address-revert'
+  ADDRESS_APPLY_WAIT = 2
+  ADDRESS_KEEP_WAIT = 90
+  # A change left waiting this long (the NAS rebooted meanwhile, and its timers with it) is
+  # taken as kept: whoever asks for the next one reached the NAS as it is.
+  ADDRESS_STALE = 600
+  # Addresses an interface can't have.
+  UNUSABLE_NETS = %w[0.0.0.0/8 127.0.0.0/8 224.0.0.0/3].map { |net| IPAddr.new(net) }.freeze
 
   # The services Settings → Servers may control: the entries in lib/system_services.rb
   # that list actions (spec/lib/amahi_helper_spec.rb checks the two lists match).
@@ -468,6 +545,8 @@ module AmahiHelper
   # NAS itself (cloudflared) doesn't pass through it. Apps are published on IPv4 only.
   IPTABLES = '/usr/sbin/iptables'
   IP = '/usr/sbin/ip'
+  # A port's light, to find it on the NAS (Network → Devices, This NAS).
+  ETHTOOL = '/usr/sbin/ethtool'
   APP_CHAIN = 'AMAHI-APPS'
   DOCKER_BRIDGE = 'docker0'
   PRIVATE_NETS = %w[10.0.0.0/8 172.16.0.0/12 192.168.0.0/16].map { |net| IPAddr.new(net) }.freeze
@@ -702,7 +781,7 @@ module AmahiHelper
       validate: ->(a) { { hostname: hostname(a['hostname']) } },
       plan: ->(v) { [['/usr/bin/hostnamectl', 'set-hostname', v[:hostname]], [:install, HOSTS, hosts_naming(v[:hostname]), nil]] }
     },
-    # dnsmasq's DHCP settings (Network → DNS & DHCP), checked with dnsmasq --test. While it
+    # dnsmasq's DHCP settings (Network → DNS, DHCP and Internet), checked with dnsmasq --test. While it
     # hands out addresses, UFW lets DHCP in on its interface, and the devices' names go to
     # Unbound (dns.sync_leases).
     'network.write_dnsmasq_config' => {
@@ -794,6 +873,78 @@ module AmahiHelper
       params: %w[interface],
       validate: ->(a) { { interface: network_interface(a['interface']) } },
       plan: ->(v) { [[:ipv6_advertisers, v[:interface]]] }
+    },
+    # Router mode on: +lan+ is the interface DNS and DHCP serve, +wan+ the internet's, +forwards+
+    # the ports let in from the internet to devices. Needs UFW on (the security audit's firewall
+    # fix): without it nothing would stand between the internet and the NAS's services.
+    # +dns+: the NAS's own address on the LAN; lookups devices send elsewhere are redirected to
+    # it and their encrypted DNS out is blocked (null: left alone).
+    'network.router_on' => {
+      params: %w[lan wan forwards dns lan_only],
+      validate: lambda { |a|
+        lan = network_interface(a['lan'])
+        wan = network_interface(a['wan'])
+        raise Refused, 'the LAN and the internet interfaces must differ' if lan == wan
+        raise Refused, "the firewall must be on first (Network → Security, the firewall's Fix)" unless ufw_enabled?
+        dns = a['dns']
+        raise Refused, "#{dns.inspect} isn't an IPv4 address of the NAS's" unless dns.nil? || own_ipv4?(dns)
+        installed!(NETPLAN) && { lan: lan, wan: wan, forwards: port_forwards(a['forwards']), dns: dns, lan_only: lan_only_addresses(a['lan_only']) }
+      },
+      plan: ->(v) { [[:router_on, v[:lan], v[:wan], v[:forwards], v[:dns], v[:lan_only]]] }
+    },
+    # What the internet side has dropped (Network → Internet).
+    'network.wan_drops' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:wan_drops]] }
+    },
+    'network.router_off' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:router_off]] }
+    },
+    # The NAS's own IPv4 address on an interface (Network → Devices, This NAS). +guard+: the
+    # admin is connected through this interface, so the change is applied after the reply and
+    # kept only once the NAS is reached at the new address (the three operations below).
+    'network.set_address' => {
+      params: %w[interface mode address gateway dns guard],
+      validate: lambda { |a|
+        interface = network_interface(a['interface'])
+        raise Refused, "#{interface} isn't a LAN interface" if interface.match?(NOT_LAN_INTERFACES)
+        if interface == read_json(ROUTER_STATE)&.dig('wan')
+          raise Refused, "#{interface} is the internet side while the NAS is the router (Network → Internet)"
+        end
+        raise Refused, 'guard must be true or false' unless [true, false, nil].include?(a['guard'])
+        values = { interface: interface, mode: listed(a['mode'], 'mode', %w[automatic fixed]), guard: a['guard'] == true }
+        if values[:mode] == 'fixed'
+          values[:address] = ipv4_cidr(a['address'])
+          values[:gateway] = a['gateway'].nil? ? nil : ipv4_in(a['gateway'], 'gateway', values[:address])
+          values[:dns] = dns_servers(a['dns'])
+        end
+        installed!(NETPLAN) && values
+      },
+      plan: ->(v) { [[:set_address, v[:interface], v[:mode], v[:address], v[:gateway], v[:dns] || [], v[:guard]]] }
+    },
+    'network.apply_address' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:apply_address]] }
+    },
+    'network.keep_address' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:keep_address]] }
+    },
+    'network.revert_address' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:revert_address]] }
+    },
+    # A port's light blinks for five seconds, to find its socket on the NAS.
+    'network.blink_port' => {
+      params: %w[interface],
+      validate: ->(a) { installed!(ETHTOOL) && { interface: network_interface(a['interface']) } },
+      plan: ->(v) { [[ETHTOOL, '--identify', v[:interface], '5']] }
     },
     # Blocking stops for BLOCKING_PAUSE seconds, then systemd resumes it (dns.resume_blocking).
     'dns.pause_blocking' => {
@@ -1673,7 +1824,7 @@ module AmahiHelper
       value.uniq
     end
 
-    # Domains never blocked (Network → DNS & DHCP's allowlist).
+    # Domains never blocked (Network → DNS, DHCP and Internet's allowlist).
     def allowlist(value)
       raise Refused, 'allow must be a list of domains' unless value.is_a?(Array) && value.all?(String)
       raise Refused, "the allowlist holds at most #{ALLOWLIST_MAX} domains" if value.size > ALLOWLIST_MAX
@@ -1709,6 +1860,86 @@ module AmahiHelper
       end
       match = line.match(/\ARDNSS ([0-9a-f:]+) \{\z/)
       !!match && ip_address?(match[1], :ipv6?) && ULA.include?(IPAddr.new(match[1]))
+    end
+
+    def ufw_enabled?
+      File.executable?(UFW) && File.read(UFW_CONF).match?(/^ENABLED=yes$/)
+    rescue SystemCallError
+      false
+    end
+
+    # The port forwards: [{ protocol: 'tcp', port: 8080, address: '10.99.0.60', to_port: 80 }],
+    # to devices on a private network only.
+    def port_forwards(value)
+      raise Refused, 'forwards must be a list' unless value.is_a?(Array)
+      raise Refused, "at most #{PORT_FORWARD_MAX} port forwards" if value.size > PORT_FORWARD_MAX
+      value.map do |forward|
+        raise Refused, 'a forward must be an object' unless forward.is_a?(Hash)
+        address = forward['address'].to_s
+        raise Refused, "#{address.inspect} isn't an IPv4 address" unless ip_address?(address, :ipv4?)
+        raise Refused, "#{address} isn't on a private network" unless PRIVATE_NETS.any? { |net| net.include?(IPAddr.new(address)) }
+        { protocol: listed(forward['protocol'], 'protocol', %w[tcp udp]), port: port_number(forward['port'], 'port'),
+          address: address, to_port: port_number(forward['to_port'], 'to_port') }
+      end
+    end
+
+    # An IPv4 address this machine has.
+    def own_ipv4?(value)
+      value.is_a?(String) && ip_address?(value, :ipv4?) && Socket.getifaddrs.any? { |i| i.addr&.ipv4? && i.addr.ip_address == value }
+    end
+
+    # "192.168.1.10/24": an IPv4 address an interface can have, with its network's prefix length.
+    def ipv4_cidr(value)
+      value = string(value, 'address', max: 18)
+      address, prefix = value.split('/', 2)
+      unless ip_address?(address.to_s, :ipv4?) && prefix.to_s.match?(/\A\d{1,2}\z/) && prefix.to_i.between?(8, 30)
+        raise Refused, "#{value.inspect} isn't an IPv4 address with its network's size (like 192.168.1.10/24)"
+      end
+      ip = IPAddr.new(address)
+      raise Refused, "#{address} isn't an address an interface can have" if UNUSABLE_NETS.any? { |net| net.include?(ip) }
+      network = ip.mask(prefix.to_i)
+      raise Refused, "#{address} is the network's own address" if ip == network
+      raise Refused, "#{address} is the network's broadcast address" if ip.to_i == network.to_i | (0xffffffff >> prefix.to_i)
+      "#{ip}/#{prefix.to_i}"
+    end
+
+    # An IPv4 address on the network of +cidr+, other than its own address.
+    def ipv4_in(value, what, cidr)
+      value = string(value, what, max: 15)
+      address, prefix = cidr.split('/')
+      network = IPAddr.new(cidr)
+      unless ip_address?(value, :ipv4?) && network.include?(IPAddr.new(value))
+        raise Refused, "#{what} #{value.inspect} isn't an IPv4 address on #{network}/#{prefix}"
+      end
+      raise Refused, "#{what} #{value} is the NAS's own address" if value == address
+      value
+    end
+
+    # The devices kept off the internet: up to LAN_ONLY_MAX private IPv4 addresses.
+    def lan_only_addresses(value)
+      value = [] if value.nil?
+      raise Refused, "lan_only must be a list of up to #{LAN_ONLY_MAX} addresses" unless value.is_a?(Array) && value.size <= LAN_ONLY_MAX
+      value.map do |address|
+        unless address.is_a?(String) && ip_address?(address, :ipv4?) && PRIVATE_NETS.any? { |net| net.include?(IPAddr.new(address)) }
+          raise Refused, "#{address.inspect} isn't a private IPv4 address"
+        end
+        address
+      end.uniq
+    end
+
+    # Up to three IPv4 DNS servers.
+    def dns_servers(value)
+      value = [] if value.nil?
+      raise Refused, 'dns must be a list of up to 3 IPv4 addresses' unless value.is_a?(Array) && value.size <= 3
+      value.map do |server|
+        raise Refused, "DNS server #{server.inspect} isn't an IPv4 address" unless server.is_a?(String) && ip_address?(server, :ipv4?)
+        IPAddr.new(server).to_s
+      end
+    end
+
+    def port_number(value, name)
+      raise Refused, "#{name} must be a port number (1 to 65535)" unless value.is_a?(Integer) && value.between?(1, 65_535)
+      value
     end
 
     # A network interface this machine has, by name ("ens18").
@@ -3274,6 +3505,503 @@ module AmahiHelper
       names
     end
 
+    # Router mode on. Order: the internet interface's address (checked by netplan generate before
+    # it's applied), forwarding, the NAT block, then UFW's rules: the LAN out, each forward in,
+    # and, first of all the rules, nothing else in on the internet side (inserted once another
+    # rule exists, which the route rule makes sure of). Rules from a previous state go first, so
+    # a changed interface or forward leaves nothing behind.
+    def do_router_on(lan, wan, forwards, dns = nil, lan_only = [])
+      pinned = pin_lan_netplan(lan, wan)
+      do_install(WAN_NETPLAN, wan_netplan(wan), nil, '0600')
+      begin
+        run_command([NETPLAN, 'generate'])
+      rescue Failed
+        do_remove_files(WAN_NETPLAN)
+        restore_lan_netplan(pinned)
+        raise
+      end
+      run_command([NETPLAN, 'apply'])
+      previous = read_json(ROUTER_STATE)
+      # The kernel settings from before router mode, kept across its saves, for the way back.
+      sysctl_before = sysctl_before(previous, wan)
+      do_install(ROUTER_SYSCTL, router_sysctl(wan), nil)
+      run_command(['/usr/sbin/sysctl', '-q', '-w', *router_sysctl_settings(wan).map { |key, value| "#{key}=#{value}" }])
+      ufw_router_rules_off(previous) if previous
+      write_router_nat(wan, forwards, lan, dns, lan_only)
+      run_command([UFW, 'route', 'allow', 'in', 'on', lan, 'out', 'on', wan])
+      forwards.each do |f|
+        run_command([UFW, 'route', 'allow', 'in', 'on', wan, 'out', 'on', lan, 'to', f[:address], 'port', f[:to_port].to_s, 'proto', f[:protocol]])
+      end
+      if dns
+        # Devices' own encrypted DNS (DNS over TLS, 853; QUIC too) doesn't get out; the NAS's
+        # lookups aren't forwarded traffic, so they do.
+        %w[tcp udp].each { |proto| run_command([UFW, 'route', 'insert', '1', 'deny', 'in', 'on', lan, 'out', 'on', wan, 'to', 'any', 'port', '853', 'proto', proto]) }
+      end
+      run_command([UFW, 'insert', '1', 'deny', 'in', 'on', wan])
+      # Devices kept off the internet: no forwarding out for them, ahead of the LAN's allow.
+      lan_only.each { |address| run_command([UFW, 'route', 'insert', '1', 'deny', 'in', 'on', lan, 'out', 'on', wan, 'from', address]) }
+      tailscale = File.executable?(TAILSCALE)
+      run_command([UFW, 'insert', '1', 'allow', 'in', 'on', wan, 'to', 'any', 'port', TAILSCALE_PORT, 'proto', 'udp']) if tailscale
+      run_command([UFW, 'reload'])
+      settle_router_nat(lan, wan)
+      previous_pinned = previous ? previous['pinned'] : nil
+      state = { 'lan' => lan, 'wan' => wan, 'forwards' => forwards.map { |f| f.transform_keys(&:to_s) },
+                'pinned' => (previous_pinned || {}).merge(pinned), 'dns' => dns, 'tailscale' => tailscale,
+                'lan_only' => lan_only, 'sysctl' => sysctl_before, 'since' => Time.now.to_i, 'rules' => ROUTER_RULES_VERSION }
+      do_install(ROUTER_STATE, "#{JSON.generate(state)}\n", nil, '0644')
+      nil
+    end
+
+    # Router mode off: the rules, the NAT block, forwarding and the internet interface's address
+    # go, in that order, each on its own so one failing doesn't keep the rest.
+    def do_router_off
+      return nil unless router_in_place?
+      state = read_json(ROUTER_STATE)
+      if File.executable?(UFW)
+        ufw_router_rules_off(state) if state
+        write_router_nat(nil, [])
+        run_command([UFW, 'reload', { allow_failure: true }]) if ufw_enabled?
+        clear_router_nat(state)
+      end
+      do_remove_files(ROUTER_SYSCTL, ROUTER_STATE)
+      run_command(['/usr/sbin/sysctl', '-q', '-w', 'net.ipv4.ip_forward=0', *sysctl_restore(state), { allow_failure: true }])
+      notes = restore_lan_netplan(state && state['pinned'])
+      return notes unless File.exist?(WAN_NETPLAN)
+      wan = File.read(WAN_NETPLAN)[/^    ([A-Za-z0-9_.-]{1,15}):$/, 1]
+      do_remove_files(WAN_NETPLAN)
+      run_command([NETPLAN, 'apply', { allow_failure: true }])
+      # netplan apply leaves an interface it no longer knows as it was; its address goes too.
+      run_command([IP, '-4', 'addr', 'flush', 'dev', wan, { allow_failure: true }]) if wan
+      notes
+    end
+
+    # The netplan files made to fit router mode: the LAN interface keeps an address (one from the
+    # router the NAS replaces would run out), and every interface but the internet's has its
+    # default route, if it has one, put behind the internet's (a third interface, a management
+    # one say, would otherwise take the devices' traffic). A file changed is kept as it was
+    # beside it (NETPLAN_BACKUP_SUFFIX), once. Comments in it don't survive (it's read and written
+    # as YAML); the installer's file has none. Returns { path => sha256 of what was written }, for
+    # the way back.
+    def pin_lan_netplan(lan, wan, dir = NETPLAN_DIR)
+      Dir.glob(File.join(dir, '*.yaml')).sort.each_with_object({}) do |path, pinned|
+        data = netplan_yaml(path) or next
+        before = File.read(path)
+        original = Marshal.load(Marshal.dump(data))
+        %w[ethernets bridges bonds vlans].each do |kind|
+          next unless data['network'][kind].is_a?(Hash)
+          data['network'][kind].each do |name, entry|
+            next if name == wan || !entry.is_a?(Hash)
+            pin_lan_entry(entry, name, name == lan)
+          end
+        end
+        next if data == original # nothing to change: the file stays as it is, comments and all
+        content = YAML.dump(data)
+        backup = path + NETPLAN_BACKUP_SUFFIX
+        do_install(backup, before, nil, '0600') unless File.exist?(backup)
+        do_install(path, content, nil, '0600')
+        pinned[path] = Digest::SHA256.hexdigest(content)
+      end
+    end
+
+    # +lan+: the interface DNS and DHCP serve, whose address is pinned; the others only have their
+    # default route put behind.
+    def pin_lan_entry(entry, name, lan)
+      if lan && [true, 'yes', 'true'].include?(entry['dhcp4'])
+        entry['dhcp4'] = false
+        current = Socket.getifaddrs.select { |i| i.name == name && i.addr&.ipv4? && i.netmask }.map do |i|
+          "#{i.addr.ip_address}/#{IPAddr.new(i.netmask.ip_address).to_i.to_s(2).count('1')}"
+        end
+        entry['addresses'] = (Array(entry['addresses']) + current).uniq
+      end
+      if (gateway = entry.delete('gateway4'))
+        entry['routes'] = Array(entry['routes']) + [{ 'to' => 'default', 'via' => gateway }]
+      end
+      Array(entry['routes']).each do |route|
+        next unless route.is_a?(Hash) && %w[default 0.0.0.0/0].include?(route['to'].to_s) && route['via']
+        route['metric'] = LAN_ROUTE_METRIC if route['metric'].to_i <= 50
+      end
+    end
+
+    def netplan_yaml(path)
+      data = YAML.safe_load(File.read(path))
+      data.is_a?(Hash) && data['network'].is_a?(Hash) ? data : nil
+    rescue Psych::SyntaxError, SystemCallError
+      nil
+    end
+
+    # Puts back the files pin_lan_netplan changed, each only while it's still what the helper
+    # wrote (one changed since is left, and said so). Returns the notes, or nil.
+    def restore_lan_netplan(pinned)
+      notes = []
+      (pinned || {}).each do |path, sha|
+        backup = path + NETPLAN_BACKUP_SUFFIX
+        next unless File.exist?(backup)
+        if File.exist?(path) && Digest::SHA256.hexdigest(File.read(path)) != sha
+          notes << "#{path} was changed since router mode set it up, so it's left as it is (its copy from before is #{backup})"
+          next
+        end
+        do_install(path, File.read(backup), nil, '0600')
+        do_remove_files(backup)
+      end
+      notes.empty? ? nil : notes.join('; ')
+    end
+
+    def router_in_place?
+      [ROUTER_STATE, WAN_NETPLAN, ROUTER_SYSCTL].any? { |path| File.exist?(path) } ||
+        (File.exist?(UFW_BEFORE_RULES) && File.read(UFW_BEFORE_RULES).include?(ROUTER_BEGIN))
+    end
+
+    def ufw_router_rules_off(state)
+      lan, wan = state.values_at('lan', 'wan')
+      return unless lan && wan
+      run_command([UFW, 'delete', 'allow', 'in', 'on', wan, 'to', 'any', 'port', TAILSCALE_PORT, 'proto', 'udp', { allow_failure: true }]) if state['tailscale']
+      run_command([UFW, 'delete', 'deny', 'in', 'on', wan, { allow_failure: true }])
+      if state['dns']
+        %w[tcp udp].each { |proto| run_command([UFW, 'route', 'delete', 'deny', 'in', 'on', lan, 'out', 'on', wan, 'to', 'any', 'port', '853', 'proto', proto, { allow_failure: true }]) }
+      end
+      run_command([UFW, 'route', 'delete', 'allow', 'in', 'on', lan, 'out', 'on', wan, { allow_failure: true }])
+      Array(state['lan_only']).each do |address|
+        run_command([UFW, 'route', 'delete', 'deny', 'in', 'on', lan, 'out', 'on', wan, 'from', address.to_s, { allow_failure: true }])
+      end
+      Array(state['forwards']).each do |f|
+        run_command([UFW, 'route', 'delete', 'allow', 'in', 'on', wan, 'out', 'on', lan, 'to', f['address'].to_s, 'port', f['to_port'].to_s,
+                     'proto', f['protocol'].to_s, { allow_failure: true }])
+      end
+    end
+
+    # The internet interface takes an address from the provider; its route beats any other
+    # default route the NAS has (DHCP's usual metric is 100). IPv6 waits for its own slice.
+    def wan_netplan(wan)
+      <<~YAML
+        # Amahi-kai (Network → DNS, DHCP and Internet, router): the internet interface, with an address from the provider
+        network:
+          version: 2
+          ethernets:
+            #{wan}:
+              dhcp4: true
+              dhcp6: false
+              accept-ra: false
+              dhcp4-overrides:
+                route-metric: 50
+      YAML
+    end
+
+    # The NAS's own address on +interface+: the last netplan file naming it (netplan lets a later
+    # file override an earlier one) gets the new IPv4 part, and any earlier one loses its IPv4
+    # part, so nothing older can win; a new file when none names it. Checked by netplan generate
+    # before anything is applied. With +guard+, the apply waits for the reply to get out
+    # (ADDRESS_APPLY_UNIT) and the change is kept only once the NAS is reached; without, it's
+    # applied and kept here and now.
+    def do_set_address(interface, mode, address, gateway, dns, guard)
+      state = read_json(ADDRESS_STATE)
+      if state && state['state'] == 'pending'
+        raise Refused, "a change to #{state['interface']} is still waiting; try again in a minute" if Time.now.to_i - state['since'].to_i < ADDRESS_STALE
+        do_keep_address(stale: true)
+      end
+      files = netplan_files_naming(interface)
+      files = ["#{NETPLAN_DIR}/80-amahi-kai-#{interface}.yaml"] if files.empty?
+      created = []
+      files.each_with_index do |path, i|
+        if File.exist?(path)
+          data = netplan_yaml(path) or raise Failed, "#{path} can't be read as netplan YAML"
+          do_install(path + ADDRESS_BACKUP_SUFFIX, File.read(path), nil, '0600')
+        else
+          data = { 'network' => { 'version' => 2, 'ethernets' => {} } }
+          created << path
+        end
+        set_ipv4_entry(netplan_entry(data, interface), interface, i == files.size - 1 ? mode : nil, address, gateway, dns)
+        do_install(path, YAML.dump(data), nil, '0600')
+      end
+      begin
+        run_command([NETPLAN, 'generate'])
+      rescue Failed
+        restore_address_files(files, created)
+        raise
+      end
+      before = Socket.getifaddrs.filter_map { |i| i.addr.ip_address if i.name == interface && i.addr&.ipv4? }
+      write_address_state('state' => 'pending', 'interface' => interface, 'mode' => mode, 'address' => address, 'files' => files,
+                          'created' => created, 'before' => before, 'guard' => guard, 'applied' => false, 'since' => Time.now.to_i, 'until' => nil)
+      if guard
+        arm_timer(ADDRESS_APPLY_UNIT, ADDRESS_APPLY_WAIT, 'network.apply_address')
+      else
+        do_apply_address
+      end
+      nil
+    end
+
+    # netplan apply for the change waiting, the revert timer armed first where the change is
+    # guarded: one that can't be reached is put back whatever happens to the apply. Without a
+    # guard it's kept at once.
+    def do_apply_address
+      state = read_json(ADDRESS_STATE)
+      return 'no address change is waiting' unless state && state['state'] == 'pending' && !state['applied']
+      arm_timer(ADDRESS_REVERT_UNIT, ADDRESS_KEEP_WAIT, 'network.revert_address') if state['guard']
+      write_address_state(state.merge('applied' => true, 'until' => state['guard'] ? Time.now.to_i + ADDRESS_KEEP_WAIT : nil))
+      begin
+        run_command([NETPLAN, 'apply'])
+      rescue Failed
+        do_revert_address
+        raise
+      end
+      do_keep_address unless state['guard']
+      nil
+    end
+
+    # The change waiting is kept: the revert timer goes, and the copies from before.
+    def do_keep_address(stale: false)
+      state = read_json(ADDRESS_STATE)
+      raise Refused, 'no address change is waiting' unless state && state['state'] == 'pending'
+      raise Refused, "the change isn't applied yet" unless state['applied'] || stale
+      stop_timer(ADDRESS_APPLY_UNIT) if stale
+      stop_timer(ADDRESS_REVERT_UNIT)
+      do_remove_files(*Array(state['files']).map { |path| path + ADDRESS_BACKUP_SUFFIX })
+      write_address_state(state.merge('state' => 'kept', 'applied' => true, 'until' => nil))
+      nil
+    end
+
+    # The change waiting is put back: the files as they were, applied again where the change had
+    # been. A fixed address netplan no longer knows stays on the interface, so it goes too,
+    # unless it was there before.
+    def do_revert_address
+      state = read_json(ADDRESS_STATE)
+      return 'no address change is waiting' unless state && state['state'] == 'pending'
+      stop_timer(ADDRESS_APPLY_UNIT)
+      stop_timer(ADDRESS_REVERT_UNIT)
+      restore_address_files(state['files'], state['created'])
+      if state['applied']
+        run_command([NETPLAN, 'apply', { allow_failure: true }])
+        address = state['address'].to_s
+        if state['mode'] == 'fixed' && !Array(state['before']).include?(address.split('/').first)
+          run_command([IP, '-4', 'addr', 'del', address, 'dev', state['interface'], { allow_failure: true }])
+        end
+      end
+      write_address_state(state.merge('state' => 'reverted', 'until' => nil))
+      nil
+    end
+
+    # The netplan files that name +interface+, in the order netplan reads them.
+    def netplan_files_naming(interface)
+      Dir.glob(File.join(NETPLAN_DIR, '*.yaml')).sort.select do |path|
+        (data = netplan_yaml(path)) && netplan_entry(data, interface, create: false)
+      end
+    end
+
+    # The interface's entry in a netplan document, under whichever kind it's defined; made under
+    # ethernets when asked and missing.
+    def netplan_entry(data, interface, create: true)
+      %w[ethernets bridges bonds vlans].each do |kind|
+        entry = data['network'][kind].is_a?(Hash) && data['network'][kind][interface]
+        return entry if entry.is_a?(Hash)
+      end
+      return nil unless create
+      data['network']['ethernets'] = {} unless data['network']['ethernets'].is_a?(Hash)
+      data['network']['ethernets'][interface] = {}
+    end
+
+    # The IPv4 part of an interface's netplan entry: +mode+ 'automatic' (DHCP), 'fixed' (the
+    # address, its router as the default route, its DNS servers), or nil for none at all. The
+    # IPv6 settings stay as they are. The default route goes behind the internet's while the NAS
+    # is the router, as pin_lan_entry puts it.
+    def set_ipv4_entry(entry, interface, mode, address, gateway, dns)
+      ipv6 = ->(value) { value.to_s.include?(':') }
+      entry.delete('gateway4')
+      entry.delete('dhcp4')
+      addresses = Array(entry['addresses']).select(&ipv6)
+      routes = Array(entry['routes']).reject { |r| r.is_a?(Hash) && %w[default 0.0.0.0/0].include?(r['to'].to_s) && !ipv6.call(r['via']) }
+      nameservers = Array(entry.dig('nameservers', 'addresses')).select(&ipv6)
+      case mode
+      when 'automatic'
+        entry['dhcp4'] = true
+      when 'fixed'
+        entry['dhcp4'] = false
+        addresses << address
+        if gateway
+          route = { 'to' => 'default', 'via' => gateway }
+          router = read_json(ROUTER_STATE)
+          route['metric'] = LAN_ROUTE_METRIC if router && router['wan'] != interface
+          routes << route
+        end
+        nameservers += dns
+      end
+      addresses.empty? ? entry.delete('addresses') : entry['addresses'] = addresses
+      routes.empty? ? entry.delete('routes') : entry['routes'] = routes
+      if nameservers.empty?
+        entry['nameservers'].delete('addresses') if entry['nameservers'].is_a?(Hash)
+        entry.delete('nameservers') if entry['nameservers'].is_a?(Hash) && entry['nameservers'].empty?
+      else
+        entry['nameservers'] = {} unless entry['nameservers'].is_a?(Hash)
+        entry['nameservers']['addresses'] = nameservers
+      end
+      entry
+    end
+
+    def restore_address_files(files, created)
+      Array(files).each do |path|
+        backup = path + ADDRESS_BACKUP_SUFFIX
+        if File.exist?(backup)
+          do_install(path, File.read(backup), nil, '0600')
+          do_remove_files(backup)
+        elsif Array(created).include?(path)
+          do_remove_files(path)
+        end
+      end
+    end
+
+    def write_address_state(state)
+      do_install(ADDRESS_STATE, "#{JSON.generate(state)}\n", nil, '0644')
+    end
+
+    # A one-shot timer that runs one of the helper's operations in +seconds+; a previous one of
+    # the same name goes first.
+    def arm_timer(unit, seconds, operation)
+      stop_timer(unit)
+      run_command(['/usr/bin/systemd-run', "--unit=#{unit}", "--on-active=#{seconds}", '--timer-property=AccuracySec=1s',
+                   '/usr/local/sbin/amahi-helper', operation])
+    end
+
+    def stop_timer(unit)
+      run_command(['/usr/bin/systemctl', 'stop', "#{unit}.timer", { allow_failure: true }])
+      run_command(['/usr/bin/systemctl', 'reset-failed', "#{unit}.service", { allow_failure: true }])
+    end
+
+    # UFW's before.rules with Amahi-kai's NAT block (masquerade out of +wan+, a DNAT in for each
+    # forward, and lookups from the LAN sent elsewhere redirected to +dns+) in front of its
+    # filter table, or without it, given nil. The rest of the file is UFW's own and isn't touched.
+    def write_router_nat(wan, forwards, lan = nil, dns = nil, lan_only = [])
+      content = File.read(UFW_BEFORE_RULES)
+      content = content.sub(/#{Regexp.escape(ROUTER_BEGIN)}\n.*?#{Regexp.escape(ROUTER_END)}\n/m, '')
+      content = content.sub(/#{Regexp.escape(ROUTER_FILTER_BEGIN)}\n.*?#{Regexp.escape(ROUTER_FILTER_END)}\n/m, '')
+      if wan
+        # In front of UFW's own ICMP accepts (inserted first, before the filter table's COMMIT):
+        # the NAS doesn't answer pings from the internet, and a kept-off device can't ping out.
+        filter = [ROUTER_FILTER_BEGIN, "-I ufw-before-input 1 -i #{wan} -p icmp --icmp-type echo-request -j DROP"]
+        lan_only.each { |address| filter << "-I ufw-before-forward 1 -i #{lan} -o #{wan} -s #{address} -j DROP" } if lan
+        filter << ROUTER_FILTER_END
+        commit = content.rindex("COMMIT\n") or raise Failed, "#{UFW_BEFORE_RULES} has no COMMIT to put the filter rules before"
+        content = "#{content[0...commit]}#{filter.join("\n")}\n#{content[commit..]}"
+        lines = [ROUTER_BEGIN, '*nat', ':PREROUTING ACCEPT [0:0]', ':POSTROUTING ACCEPT [0:0]',
+                 ":#{NAT_PREROUTING} - [0:0]", ":#{NAT_POSTROUTING} - [0:0]", "-F #{NAT_PREROUTING}", "-F #{NAT_POSTROUTING}"]
+        if dns && lan
+          %w[udp tcp].each { |proto| lines << "-A #{NAT_PREROUTING} -i #{lan} ! -d #{dns} -p #{proto} --dport 53 -j DNAT --to-destination #{dns}:53" }
+        end
+        forwards.each do |f|
+          lines << "-A #{NAT_PREROUTING} -i #{wan} -p #{f[:protocol]} --dport #{f[:port]} -j DNAT --to-destination #{f[:address]}:#{f[:to_port]}"
+        end
+        lines.concat(["-A #{NAT_POSTROUTING} -o #{wan} -j MASQUERADE", "-A PREROUTING -j #{NAT_PREROUTING}", "-A POSTROUTING -j #{NAT_POSTROUTING}",
+                      'COMMIT', ROUTER_END])
+        raise Failed, "#{UFW_BEFORE_RULES} has no filter table to put the NAT block before" unless content.include?("*filter\n")
+        content = content.sub("*filter\n", "#{lines.join("\n")}\n*filter\n")
+      end
+      do_install(UFW_BEFORE_RULES, content, nil, '0640')
+    rescue SystemCallError => e
+      raise Failed, "couldn't read #{UFW_BEFORE_RULES}: #{e.message}"
+    end
+
+    # The router's kernel settings (ROUTER_SYSCTL_ALL, ROUTER_SYSCTL_WAN), forwarding first, as
+    # sysctl names them: { 'net.ipv4.conf.all.rp_filter' => '1', ... }.
+    def router_sysctl_settings(wan)
+      settings = { 'net.ipv4.ip_forward' => '1' }
+      ROUTER_SYSCTL_ALL.each { |name, value| settings[sysctl_key('all', name)] = value }
+      ROUTER_SYSCTL_WAN.each { |name, value| settings[sysctl_key(wan, name)] = value }
+      settings
+    end
+
+    def router_sysctl(wan)
+      router_sysctl_settings(wan).map { |key, value| "#{key} = #{value}\n" }.join
+    end
+
+    # An interface's setting as sysctl and sysctl.d name it; one with a dot in its name (a
+    # VLAN's) takes the slash form throughout.
+    def sysctl_key(scope, name)
+      scope.include?('.') ? "net/ipv4/conf/#{scope}/#{name}" : "net.ipv4.conf.#{scope}.#{name}"
+    end
+
+    # The settings as they were before router mode, for the way back: those a previous state
+    # kept, the rest read now. (A state from before the settings beyond rp_filter kept those two
+    # under 'rp_filter'.)
+    def sysctl_before(previous, wan)
+      kept = (previous && previous['sysctl']).is_a?(Hash) ? previous['sysctl'].dup : {}
+      Hash(previous && previous['rp_filter']).each { |scope, value| kept[sysctl_key(scope.to_s, 'rp_filter')] ||= value }
+      router_sysctl_settings(wan).each_key do |key|
+        next if key == 'net.ipv4.ip_forward' || kept.key?(key)
+        value = read_sysctl(key) and kept[key] = value
+      end
+      kept
+    end
+
+    def read_sysctl(key)
+      File.read("/proc/sys/#{key.include?('/') ? key : key.tr('.', '/')}").strip
+    rescue SystemCallError
+      nil
+    end
+
+    # The sysctl arguments that put the settings back.
+    def sysctl_restore(state)
+      Hash(state && state['sysctl']).filter_map do |key, value|
+        "#{key}=#{value}" if key.to_s.match?(%r{\Anet[./]ipv4[./]conf[./][A-Za-z0-9_.-]{1,15}[./][a-z_]+\z}) && value.to_s.match?(/\A[0-9]\z/)
+      end
+    end
+
+    # What the internet side dropped: the firewall's count on its "deny in on <wan>" rule
+    # (packets, since UFW last loaded its rules), and when router mode's rules went in.
+    def do_wan_drops
+      state = read_json(ROUTER_STATE) or raise Refused, "the NAS isn't the router"
+      wan = state['wan']
+      dropped = capture([IPTABLES, '-w', '-L', 'ufw-user-input', '-v', '-n', '-x']).each_line.filter_map do |line|
+        packets, _bytes, target, _proto, _opt, input, output, source, destination = line.split
+        packets.to_i if target == 'DROP' && input == wan && output == '*' && source == '0.0.0.0/0' && destination == '0.0.0.0/0'
+      end.first
+      # Pings from the internet, dropped in front of UFW's accept (the block's filter part).
+      pings = capture([IPTABLES, '-w', '-L', 'ufw-before-input', '-v', '-n', '-x']).each_line.filter_map do |line|
+        packets, _bytes, target, proto, _opt, input = line.split
+        packets.to_i if target == 'DROP' && %w[icmp 1].include?(proto) && input == wan
+      end.first.to_i
+      { 'dropped' => dropped && dropped + pings, 'since' => state['since'] }
+    end
+
+    # After UFW's reload: one jump each into the NAS's nat chains (the reload appended another),
+    # and any rule put straight in the built-in chains by the block as it was before the chains
+    # swept out.
+    def settle_router_nat(lan, wan)
+      { 'PREROUTING' => NAT_PREROUTING, 'POSTROUTING' => NAT_POSTROUTING }.each do |builtin, own|
+        nat_jump_off(builtin, own)
+        run_command([IPTABLES, '-w', '-t', 'nat', '-A', builtin, '-j', own])
+      end
+      sweep_inline_nat(lan, wan)
+    end
+
+    # The way back: the jumps, the NAS's chains and any inline rule from before go.
+    def clear_router_nat(state)
+      { 'PREROUTING' => NAT_PREROUTING, 'POSTROUTING' => NAT_POSTROUTING }.each do |builtin, own|
+        nat_jump_off(builtin, own)
+        run_command([IPTABLES, '-w', '-t', 'nat', '-F', own, { allow_failure: true }])
+        run_command([IPTABLES, '-w', '-t', 'nat', '-X', own, { allow_failure: true }])
+      end
+      sweep_inline_nat(state['lan'], state['wan']) if state
+    end
+
+    # Deletes the jump from +builtin+ into +own+ until none is left (each delete takes one copy).
+    def nat_jump_off(builtin, own)
+      20.times { break if run_command([IPTABLES, '-w', '-t', 'nat', '-D', builtin, '-j', own, { allow_failure: true }]) }
+    end
+
+    # The rules the NAT block put straight in PREROUTING (DNATs in on the two interfaces) and
+    # POSTROUTING (the masquerade out) before it had chains of its own, as many copies as reloads
+    # made. Docker's rules there (its own chain, a masquerade with a source) are left alone.
+    def sweep_inline_nat(lan, wan)
+      return unless lan && wan
+      { 'PREROUTING' => /\A(?=.*-i (?:#{Regexp.escape(lan)}|#{Regexp.escape(wan)}) ).*-j DNAT /,
+        'POSTROUTING' => /\A-o #{Regexp.escape(wan)} -j MASQUERADE\z/ }.each do |builtin, pattern|
+        capture([IPTABLES, '-w', '-t', 'nat', '-S', builtin]).each_line do |line|
+          spec = line.strip.delete_prefix("-A #{builtin} ")
+          next if spec == line.strip || !spec.match?(pattern)
+          run_command([IPTABLES, '-w', '-t', 'nat', '-D', builtin, *spec.split(' '), { allow_failure: true }])
+        end
+      end
+    rescue Failed
+      nil
+    end
+
     # Installs Unbound's config (or, given nil, removes it), then has UFW let DNS in to the
     # addresses Unbound listens on now, and no longer to those it stopped listening on. UFW
     # keeps the rules while it's off, for when it's turned on.
@@ -3420,7 +4148,7 @@ module AmahiHelper
       # A domain blocks the names under it, so those needn't be listed too.
       blocked = domains.keys.reject { |name| under?(name, own) || parent_listed?(name, domains) }.sort
       raise Failed, "the lists chosen block #{blocked.size} domains; at most #{BLOCKLIST_MAX_DOMAINS} fit" if blocked.size > BLOCKLIST_MAX_DOMAINS
-      lines = ['# DNS blocklist (Network → DNS & DHCP): written by Amahi-kai, changes here are lost', 'server:']
+      lines = ['# DNS blocklist (Network → DNS, DHCP and Internet): written by Amahi-kai, changes here are lost', 'server:']
       lines.concat(blocked.map { |name| %(  local-zone: "#{name}." always_null) })
       lines.concat(allow.map { |name| %(  local-zone: "#{name}." transparent) })
       content = "#{lines.join("\n")}\n"
@@ -4660,10 +5388,13 @@ module AmahiHelper
        %w[-j DROP]]
     end
 
-    # ["192.168.1.0/24"]: the private IPv4 subnets of the NAS's own network interfaces.
+    # ["192.168.1.0/24"]: the private IPv4 subnets of the NAS's own network interfaces, the
+    # internet's left out while the NAS is the router (its address is private too behind
+    # another router, and the internet side mustn't reach the apps).
     def lan_subnets
+      wan = read_json(ROUTER_STATE)&.dig('wan')
       JSON.parse(capture([IP, '-j', '-4', 'addr', 'show'])).flat_map do |interface|
-        next [] if interface['ifname'].to_s.match?(NOT_LAN_INTERFACES)
+        next [] if interface['ifname'].to_s.match?(NOT_LAN_INTERFACES) || interface['ifname'] == wan
         Array(interface['addr_info']).filter_map do |addr|
           prefix = addr['prefixlen']
           next unless prefix.is_a?(Integer) && prefix.between?(8, 32)

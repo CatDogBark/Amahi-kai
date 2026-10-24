@@ -75,7 +75,7 @@ RSpec.describe 'Settings → System Dependencies', type: :request do
     end
 
     it 'says automatic updates are off, with Turn on' do
-      expect(page.at_css('#automatic-updates').text.squish).to include('Automatic updates are off', '2 days')
+      expect(page.at_css('#automatic-updates').text.squish).to include('Automatic security updates are off', '2 days')
       expect(page.at_css('#automatic-updates-switch').text).to eq('Turn on')
     end
 
@@ -83,7 +83,7 @@ RSpec.describe 'Settings → System Dependencies', type: :request do
       let(:automatic) { true }
 
       it 'says so, with Turn off' do
-        expect(page.at_css('#dependencies-summary').text.squish).to include('Automatic updates are on')
+        expect(page.at_css('#dependencies-summary').text.squish).to include('Automatic security updates are on')
         expect(page.at_css('#automatic-updates-switch').text).to eq('Turn off')
       end
     end
@@ -94,7 +94,7 @@ RSpec.describe 'Settings → System Dependencies', type: :request do
       expect(flash[:notice]).to eq('Held at their versions: samba.')
       post '/settings/dependencies_hold', params: { packages: ['greyhole'], held: '0' }
       post '/settings/dependencies_automatic', params: { enabled: '0' }
-      expect(flash[:notice]).to start_with('Automatic updates are off')
+      expect(flash[:notice]).to start_with('Automatic security updates are off')
       expect(Privileged.calls).to eq([['packages.hold', { packages: ['samba'], held: true }],
                                       ['packages.hold', { packages: ['greyhole'], held: false }],
                                       ['updates.set_automatic', { enabled: false }]])

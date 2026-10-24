@@ -18,7 +18,19 @@ warned about, the NAS's own left out; and the way back took radvd, the address a
 the config was written before the address left the interface) Unbound's use of it away. Slice 5
 (totals) is on `dev` and passed: after lookups from the client, the page showed them, how many
 the NAS answered itself, and DNSSEC's checked answers and the one forged one refused. All five
-slices are built and tried on the island. Then, with all of it on (DNS + DHCP, blocking,
+slices are built and tried on the island. Router mode (a sixth slice, 2026-10-23) passed its island
+checks too: the WAN leg took an address from the fake ISP, the client got its lease with the NAS
+as its router and fetched a page from the internet through the NAS's NAT, a port forward reached
+the client's web server from the WAN side while SSH, the web UI and every other port were
+dropped there, and the way back took the address, the rules and forwarding out. One product gap
+found on the way: an interface set up with a gateway keeps a default route that beats the WAN's.
+The helper now fits the netplan files itself (the LAN's address pinned, every other interface's
+default route put behind the internet's, the originals kept beside them), tried on the island
+twice: with the route on the LAN's own file it left a file that needed nothing alone, and with
+it on the island's management leg it edited that file, kept the original, and the way back put
+it back byte for byte. No terminal step is left in router mode. A reboot of the test VM in router
+mode brought every piece back (the WAN's address and route, forwarding, the rules, the forward,
+the client's internet). Then, with all of it on (DNS + DHCP, blocking,
 announcing) and UFW turned on, through the firewall: the client's lease, DNS over IPv4 and IPv6,
 blocking and names all worked, and other ports were dropped; and after a reboot of the test VM
 every piece came back and worked again from scratch. One more find: the test VM had kept a route
@@ -124,6 +136,148 @@ in front of the network. It ships in 1.0, DHCP included, once it passes the test
   name), and the lease list.
 - Hands out the NAS as the DNS server, and `home.arpa` as the search domain.
 
+### Router (built 2026-10-23, after 0.9.2)
+
+A fourth mode, **Router**: DNS + DHCP, and the NAS is the way to the internet.
+
+- **The internet interface** gets its address from the provider by DHCP (`WAN_NETPLAN`, a
+  netplan file the helper writes and checks with `netplan generate`; its route's metric is 50, so
+  it beats any other default route). PPPoE and a static address are later.
+- **Forwarding** is turned on (`ROUTER_SYSCTL`), and UFW does the rest, so it persists and
+  reloads with the firewall: a NAT block in `before.rules` (masquerade out of the internet
+  interface, a DNAT in for each port forward, in chains of the NAS's own that the block flushes
+  before refilling: `ufw reload` re-reads the file without clearing the nat table, so rules put
+  straight in PREROUTING piled up, a copy per save, and an old copy kept redirecting DNS to the
+  NAS's previous address, found 2026-10-24 by the This NAS test; after each reload the helper
+  keeps one jump into its chains and sweeps out inline copies from before), `ufw route allow` from the LAN out, one per
+  forward in, and `deny in on <wan>` first of all the rules, so none of the NAS's own services
+  (SSH, the web UI, Samba, DNS, DHCP) answer the internet side. **UFW has to be on** (the
+  security audit's fix): router mode refuses otherwise, since without it nothing would stand
+  between the internet and the NAS.
+- **The LAN interface's own netplan** is made to fit (CatDogBark, 2026-10-23: no terminal step
+  for this): the helper reads the file that configures it, pins an address it got by DHCP (the
+  router being replaced would stop handing one out), puts a default route it has behind the
+  internet's (metric 200 against 50; `gateway4` becomes such a route), and does the same to the
+  default route of any other interface but the internet's (a third, management interface
+  would otherwise take the devices' traffic: the island's `ens18` did), writes it back (as YAML:
+  comments don't survive, and the installer's file has none), keeps the file as it was beside it,
+  and lets `netplan generate` refuse the lot before anything is applied. The way back puts the
+  file back, unless it was changed since (then it's left, and the page says so). A netplan
+  override file can't do this: a later file only adds routes, it can't take one away or change
+  its metric (tried 2026-10-23 with `netplan generate --root-dir`).
+- **DHCP hands out the NAS as the router**, not the Router setting, and the apps' firewall leaves
+  the internet interface out of the "LAN" subnets (its address is private too behind another
+  router).
+- **Port forwards** (Network → DNS & DHCP, the card while the NAS is the router): protocol, port,
+  the device (the last part of its address on DHCP's network, like a fixed host) and its port.
+  Each one is a DNAT and a route rule; a change rewrites the rules.
+- **Safety:** refused when the internet interface is the one DNS serves, when the firewall is
+  off, and when the admin's request comes in through the interface that would become the
+  internet side. The page says the way back (DNS + DHCP or Off, then the cable back to the
+  router), and that a NAS restart is a minute without internet.
+- **State:** `router.json` beside the DNS files holds what's in place, so the way back and a
+  changed interface or forward take the old rules out first.
+- **Later:** IPv6 for the house (prefix delegation, a real default route announced), PPPoE, a
+  static address, and a WAN-side firewall log.
+
+### This NAS: its own address (built 2026-10-24)
+
+The pages read the NAS's address off its interfaces but never set one (CatDogBark, 2026-10-24: a
+fresh install has whatever Ubuntu's installer left, DHCP from the router, and nothing in the UI
+to fix it). Network → Devices gets a **This NAS** card, one row per port: its IPv4 address,
+whether it came from DHCP (the kernel's *dynamic* flag, `ip -j addr`), its router (the port's
+default route) and its part (the LAN DNS serves, the internet side). *Change* sets it:
+automatic, or fixed with the network size, the router and the DNS servers the NAS itself asks
+(suggested from `/run/systemd/resolve/resolv.conf`).
+
+- **The helper** (`network.set_address`) rewrites the IPv4 part of the port's netplan entry in
+  the last file naming it (netplan lets later files override earlier ones) and clears the IPv4
+  part of any earlier file naming it, IPv6 settings untouched, each file kept beside it as
+  `.amahi-kai-before-address`; `netplan generate` checks the result before anything is applied.
+  While the NAS is the router, a fixed port's default route gets metric 200, as pinning does.
+- **The lockout guard.** When the change is to the port the request came in through (Puma's
+  socket says which address it arrived on), the helper applies it 2 s after replying (a
+  transient timer, `amahi-kai-address-apply`), arms a 90 s revert timer
+  (`amahi-kai-address-revert` → `network.revert_address`: the files back, `netplan apply`, the
+  new address off the port) and marks the change pending in `address.json`. The page the admin
+  sees meanwhile (`network/moving`) probes `POST /network/address/reached` at the new address
+  every 3 s (no-cors, no sign-in: a request that came in through the changed port is what
+  "reached" means, and it can only keep a change already waiting), and goes there once it
+  answers; the probe's arrival runs `network.keep_address`, which drops the revert timer and
+  the copies. Automatic mode's new address isn't known, so the probe goes to
+  `<hostname>.local` (mDNS). A change to another port is applied and kept at once. A pending
+  change older than 10 minutes (a reboot took the timers) counts as kept.
+- **What follows the address** (`NetworkAddress.settle!`): the `net` and `self-address`
+  settings (Samba's `hosts allow`, lmhosts, the aliases), `DnsService.apply!` (Unbound, dnsmasq,
+  the router's rules, all of which name the NAS's address) and Samba's config.
+- **Refused:** the internet side in router mode (the Internet page's), automatic on the port the
+  NAS hands out addresses on, a network or broadcast address, a router outside the network.
+- **The ports as hardware** (`lib/network_ports.rb`, 2026-10-24, CatDogBark: a NAS with a
+  four-port card needs more than `ens18`): under each port, what it is (the driver from sysfs;
+  over PCI the model `lspci -mm` names; a *virtual port* for virtio, vmxnet3, Hyper-V, Xen, where
+  no socket exists: a VM can't know which physical port its bridge sits on, only the admin
+  does), the link (`carrier`, `speed`), the MAC, and a **name the admin gives** (setting
+  `port-label:<iface>`, shown as "Modem (ens20)" by `port_display` wherever a port is named: the
+  DNS, DHCP and Internet pages too). **Find port** = helper `network.blink_port` →
+  `ethtool --identify <iface> 5`, offered for real ports where ethtool is installed.
+
+### The network follows an update (built 2026-10-24)
+
+An update never touched the network (only the web UI restarts), so a change to how a config is
+generated waited for the next Save of its page. `DnsService.resync!`, run by `bin/amahi-update`
+after Samba's push, makes each config again and applies only what differs from the file the
+helper left (Unbound's config, `chosen.json` for the blocklists, dnsmasq's and radvd's configs,
+all 0644 and readable by the app; one that can't be read is written again). The router's rules
+are compared through `router.json`: the settings they were made from, and `rules`, the shape
+number the helper stamps (`ROUTER_RULES_VERSION`, bumped when the rules change shape). The
+update's log says what was applied. Details in `release-1.0.md` §2f.
+
+### Security at the routing layer (planned 2026-10-23)
+
+The switches, their order and their limits are in [`release-1.0.md`](release-1.0.md) §2c. Built
+2026-10-23, the first three: every device uses the NAS's DNS (a DNAT in the NAT block for port 53
+from the LAN to anything but the NAS, `ufw route deny` for 853 in front of the LAN's allow, and
+HaGeZi's DoH list joined to Blocking's lists while the switch is on in router mode), the vendor
+tracker lists (HaGeZi's `native.*`, shown as "Devices you have"), and Tailscale's UDP 41641 let in
+on the WAN when `/usr/bin/tailscale` exists, in front of the deny. Tried on the island the same
+day: from the client, lookups aimed at 8.8.8.8 and 1.1.1.1 (UDP and TCP) came back with the NAS's
+answers (a local name, a blocked domain as 0.0.0.0), `dns.google` resolved to 0.0.0.0, port 853 out
+timed out while 443 and the internet worked.
+
+Built 2026-10-24, items 4 and 5. **LAN only** (Network → Devices): a `hosts.lan_only` flag on a
+fixed device, carried to `network.router_on` as `lan_only` (addresses) and put in as
+`ufw route insert 1 deny in on <lan> out on <wan> from <address>`, ahead of the LAN's allow; the
+Host model rewrites the router's rules when the flag, the address or the device changes while
+the NAS is the router (the flag waits otherwise). By address, not MAC: a wireless relay rewrites
+frames' source MACs while the DHCP lease keeps the device's own. Found on the island: UFW's own
+`before.rules` accept ICMP (echo among them) in `ufw-before-forward` and `ufw-before-input`
+ahead of any rule added through `ufw`, so the kept-off client could still ping the ISP and the
+NAS answered pings from the internet. The router's block in `before.rules` now has a filter
+part too, inserted before the table's COMMIT: `-I ufw-before-forward 1 -i <lan> -o <wan>
+-s <address> -j DROP` per kept-off device and `-I ufw-before-input 1 -i <wan> -p icmp
+--icmp-type echo-request -j DROP`; UFW flushes its own chains on reload, so these don't pile
+up. **Anti-spoofing**: strict
+reverse-path filtering on the internet side. Ubuntu sets every interface loose (`rp_filter = 2`)
+and the kernel takes the stricter of `all` and the interface's own, so the router's sysctl
+drop-in sets `all` and the WAN to 1 (the LAN's own 2 keeps it loose there), live too; the values
+from before are kept in `router.json` (`rp_filter`) and put back on the way out. A packet from
+the internet claiming one of the NAS's own networks never reaches netfilter, so there's no UFW
+rule to count it; the kernel's `IPReversePathFilter` (`/proc/net/netstat`, readable by the app)
+is the count, since boot. **Dropped attempts**: the packet counter of UFW's
+`deny in on <wan>` rule, read by `network.wan_drops` (`iptables -L ufw-user-input -v -n -x`),
+shown with the later of the rules' load (`router.json` `since`) and boot, when UFW's counters
+start over. Same day, before 0.10.0 (CatDogBark's two from the "household router" comparison):
+the sysctl drop-in also turns ICMP redirects off on the internet side (`accept_redirects` and
+`send_redirects` to 0 on all and the WAN: accepting is AND of the two while forwarding, sending
+is OR) and logs martians there (`log_martians` on the WAN only, for a WAN log later); every
+value from before is kept in `router.json` (`sysctl`) and put back on the way out, and the
+rules' shape number went to 3 so the resync applies it. And Ubuntu's automatic security
+updates, which the installer leaves off: the Internet page says whether they're on and links
+to the one switch (Settings → System Dependencies, `updates.set_automatic`, now worded as what
+it is: Ubuntu's security pocket only, never new versions; CatDogBark wanted one place, not two
+buttons), and the security audit warns while the NAS is the router without them
+(`automatic_updates`, a pass otherwise: the admin's choice).
+
 ### Later
 
 - Tailscale devices using the NAS for DNS (split DNS), so blocklists and local names work away
@@ -153,9 +307,10 @@ in front of the network. It ships in 1.0, DHCP included, once it passes the test
   before it's installed (`unbound-checkconf`, `dnsmasq --test`), as dnsmasq's is today.
   Blocklists are downloaded by the helper over HTTPS, checked (size, syntax), and turned into
   Unbound `local-zone` entries.
-- **Settings:** the mode, the provider, blocklists on and off, the chosen lists, the allowlist,
-  the interface, and IPv6 advertising. The page is Setup → Network, reorganized around the three
-  modes.
+- **Settings:** the mode (`dns_mode`: off, dns, dns_dhcp, router), the provider, blocklists on
+  and off, the chosen lists, the allowlist, the interface, IPv6 advertising, the internet
+  interface. Since 2026-10-23 the pages are Network → Devices, DNS, DHCP and Internet, each with
+  its own switch; the mode is what the switches compute (DHCP needs DNS, the router needs DHCP).
 - **New installs** start Off (`dns_mode` off). DHCP is a mode now, so the `dnsmasq_dhcp` switch is
   retired, and Network → Gateway and Network → Settings are folded into Network → DNS & DHCP.
 - **DHCP's network** is the chosen interface's /24 (DHCP refuses others), not the `net` setting:
@@ -225,6 +380,16 @@ Each slice lands on `dev`, passes CI, and is tried on the island before the next
 The house: the main router (the WAN, and its DHCP) → an OpenWrt wireless bridge → the LAN. forge's
 guests, the NAS (`192.168.1.111`) and the test VM (`192.168.1.13`) among them, are on `vmbr0`, the
 LAN.
+
+### 1b. The island's internet (for router mode)
+
+A third leg, so the router's WAN side can be tried without the house: `vmbr8` (no ports, no
+address, forge's IPv6 off on it), the test VM's `ens20` on it, and a fake-ISP container
+(`isp`, 192.168.1.14 on the house LAN and 10.77.0.1 on `vmbr8`) that hands out
+10.77.0.100–200 by DHCP, answers DNS, and NATs out through the house. The test VM keeps `ens18`
+for management: a router's WAN side drops SSH, so the leg it's reached by can't be the WAN. For
+the test, `ens18`'s default route needs a metric above the WAN's (50), or the client's traffic
+would leave by the management leg.
 
 ### 1. An island on forge
 

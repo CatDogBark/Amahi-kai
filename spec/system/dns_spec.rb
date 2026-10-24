@@ -10,6 +10,22 @@ RSpec.describe 'DNS & DHCP', type: :system do
     allow(DnsmasqService).to receive_messages(installed?: false, running?: false)
   end
 
+  it "shows This NAS on Devices, with a port's form behind Change" do
+    rows = [NetworkAddress::Interface.new(name: 'ens18', addresses: [NetworkInterfaces::Address.new(ip: IPAddr.new('192.168.1.13'), prefix: 24)],
+                                          automatic: true, gateway: '192.168.1.1', part: :lan)]
+    allow(NetworkAddress).to receive_messages(interfaces: rows, nameservers: ['192.168.1.1'], state: nil)
+    allow(Leases).to receive(:all).and_return([])
+    sign_in_as_admin
+    visit '/network'
+    expect(page).to have_text('This NAS')
+    expect(page).to have_text('192.168.1.13/24')
+    expect(page).to have_no_field('address-ens18')
+    click_link 'Change'
+    expect(page).to have_field('address-ens18', with: '192.168.1.13')
+    expect(page).to have_field('dns-ens18', with: '192.168.1.1')
+    expect(page).to have_checked_field('mode-automatic-ens18')
+  end
+
   it 'installs Unbound in its window' do
     sign_in_as_admin
     visit '/network/dns'
@@ -29,7 +45,7 @@ RSpec.describe 'DNS & DHCP', type: :system do
     find('label.dns-choice', text: 'Quad9').click
     expect(page).to have_no_field('custom_tls_name')
     within('#dns-settings') { click_button 'Save' }
-    expect(page).to have_text('DNS and DHCP are off.')
+    expect(page).to have_text('DNS is off.')
   end
 
   it 'offers blocking with the recommended lists ticked' do
@@ -47,20 +63,18 @@ RSpec.describe 'DNS & DHCP', type: :system do
     expect(page).to have_text('Saved. Blocking starts when DNS is on.')
   end
 
-  it 'shows the DHCP settings while DNS + DHCP is picked, and offers dnsmasq until it is installed' do
+  it 'has its own DHCP page, offering dnsmasq until it is installed' do
     allow(DnsService).to receive(:installed?).and_return(true)
     sign_in_as_admin
-    visit '/network/dns'
-    expect(page).to have_no_button('Install dnsmasq')
-    find('label.dns-choice', text: 'DNS + DHCP').click
+    visit '/network/dhcp'
     expect(page).to have_button('Install dnsmasq')
+    expect(page).to have_no_field('dhcp_first')
 
     allow(DnsmasqService).to receive(:installed?).and_return(true)
-    visit '/network/dns'
-    find('label.dns-choice', text: 'DNS + DHCP').click
+    visit '/network/dhcp'
     expect(page).to have_field('dhcp_first', with: '100')
     expect(page).to have_select('lease_time', selected: '4 hours')
-    find('label.dns-choice', text: 'DNS for my network').click
-    expect(page).to have_no_field('dhcp_first')
+    within('.setup-subtab') { click_link 'Internet' }
+    expect(page).to have_text('The NAS as your router')
   end
 end
