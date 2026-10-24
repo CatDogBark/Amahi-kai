@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Run by amahi-kai-tailscale.service, as the app user, whenever Tailscale's state file changes
+# (amahi-kai-tailscale.path): a sign-in, a sign-out, a new address. DNS answers on the NAS's
+# Tailscale addresses only when its settings name them, so once the addresses settle, and only
+# if they differ from the last ones seen since boot, Amahi-kai makes those settings again
+# (TailscaleService.follow!). Tailscale writes its state for other reasons too; then nothing is
+# booted. The state file is root's, so the addresses are read from the interface instead. What
+# was seen lives in /run, so the first change after a boot is looked at in any case.
+set -euo pipefail
+
+APP_DIR="${APP_DIR:-/opt/amahi-kai}"
+SEEN="${RUNTIME_DIRECTORY:-/run/amahi-kai-tailscale}/addresses"
+TRIES="${FOLLOW_TRIES:-30}"
+WAIT="${FOLLOW_WAIT:-2}"
+
+# The NAS's Tailscale addresses, sorted, without the link-local one: "" while it isn't signed in.
+addresses() {
+  ip -o addr show dev tailscale0 2>/dev/null | awk '{print $4}' | grep -v '^fe80:' | sort | tr '\n' ' ' || true
+}
+
+# A sign-in writes the state before the address arrives: wait for the same addresses twice in
+# a row, at most TRIES times WAIT seconds (a sign-out never gets any, and ends with none).
+now=$(addresses)
+for _ in $(seq 1 "$TRIES"); do
+  sleep "$WAIT"
+  last=$now
+  now=$(addresses)
+  [[ -n "$now" && "$now" == "$last" ]] && break
+done
+
+# Nothing seen yet counts as no addresses: a server without Tailscale boots without the app
+seen=""
+[[ -f "$SEEN" ]] && seen=$(cat "$SEEN")
+if [[ "$seen" == "$now" ]]; then
+  printf '%s' "$now" > "$SEEN"
+  exit 0
+fi
+
+cd "$APP_DIR"
+/usr/bin/bundle exec rails runner 'puts TailscaleService.follow!'
+printf '%s' "$now" > "$SEEN"

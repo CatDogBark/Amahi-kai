@@ -34,6 +34,15 @@
         p.small.text-muted.mb-0.mt-2 = safe_join(['Checked ', relative_time_tag(@update.checked_at, clock: true), '. Amahi-kai checks every 6 hours', (" and follows #{@update.channel_label}" if @update.channel_label), '.'].compact)
       - if @update.error
         p.small.text-warning.mb-0.mt-1 = "Last check: #{@update.error}"
+      /! The update channel: releases (the default), candidates, or the dev branch
+      form.d-flex.flex-wrap.align-items-center.gap-2.mt-3#update-channel action=settings_update_channel_path method="post"
+        input type="hidden" name="authenticity_token" value=form_authenticity_token
+        label.small.mb-0 for="update-channel-select" Follows
+        select.form-select.form-select-sm#update-channel-select name="channel" style="width: auto"
+          - UpdateStatus::CHANNELS.each do |key, label|
+            option value=key selected=(key == (@update.channel || 'releases')) = label
+        button.btn.btn-sm.btn-outline-secondary type="submit" Save
+        span.small.text-muted Releases are the tested versions; the dev branch is the newest code, for testing, and can break. Nothing older than what runs is ever installed.
 
   == render 'shared/install_terminal', id: 'update', title: 'Updating Amahi-kai', stream_url: settings_update_system_stream_path
 

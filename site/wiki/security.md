@@ -27,7 +27,7 @@ Go to **Network → Security** (Advanced mode) and run the audit. Each check is 
 |-------|----------|------------------|
 | Admin password changed | Blocker | The `admin` account no longer accepts the default password |
 | UFW firewall active | Blocker | UFW is turned on |
-| Samba bound to LAN | Blocker | Samba only listens on the LAN (and Tailscale) |
+| Samba answers only the LAN | Blocker | Samba lets in only the NAS itself, the LAN and Tailscale, and never sits on the router's internet side |
 | SSH root login disabled | Warning | Root can't log in over SSH |
 | SSH password login disabled | Warning | SSH accepts keys only |
 | Fail2ban | Warning | Repeated failed SSH logins get blocked |
@@ -51,8 +51,11 @@ Click **Fix All**, or a check's own **Fix** button. The progress streams as it r
   account that can log in has an SSH key**, so the fix can't lock you out. Set up a key first
   (below).
 - **Fail2ban:** installs it; its SSH jail is on by default.
-- **Samba binding:** Amahi-kai generates Samba's configuration with the LAN binding built in, so
-  this passes on its own unless the configuration was edited by hand.
+- **Samba's allow list:** Amahi-kai generates Samba's configuration with its allow list built in
+  (the NAS itself, the LAN and Tailscale; everyone else is turned away when they connect), so this
+  passes on its own unless the configuration was edited by hand. Samba listens on every address,
+  because Tailscale's IPv4 address is one it can't be bound to; the list is what keeps others out,
+  and in router mode the firewall drops the internet side before Samba sees it.
 
 Not fixed automatically:
 

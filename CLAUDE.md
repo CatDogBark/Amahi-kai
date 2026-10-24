@@ -5,11 +5,12 @@ development: the one install is CatDogBark's NAS, an Ubuntu 24.04 VM on Proxmox,
 over plain HTTP, through a Cloudflare Tunnel, and through Tailscale. CatDogBark owns the repo
 (`CatDogBark/Amahi-kai`, **public**) and the NAS.
 
-Current work (CatDogBark, 2026-10-23): the road to 1.0 is **`docs/plans/release-1.0.md`**, in order:
-networking's Tailscale check, the real pool and apps on it, signed updates, a Backups tab (backup
-and restore), the code review, the docs review, a release candidate, 1.0. 1.0 is for other people
-to install; CatDogBark's NAS is a development machine that switches channels. bitShare (its own
-project) doesn't hold 1.0. The paragraph below is from before and stays for its links.
+Current work (CatDogBark, 2026-10-24): the road to 1.0 is **`docs/plans/release-1.0.md`**, in order:
+networking's Tailscale check, the real pool and apps on it, a Backups tab (backup and restore),
+the code review, the docs review, a release candidate, 1.0. Signed updates are deferred until
+other people run Amahi-kai. 1.0 is for other people to install. CatDogBark's NAS is the house's
+router now and follows releases; the test VM takes `dev` first. bitShare (its own project)
+doesn't hold 1.0. The paragraph below is from before and stays for its links.
 
 Earlier (CatDogBark, 2026-10-08): getting Amahi-kai to a shelf-stable state first, by finishing
 its major code work (the October look and cleanup were #101–#112). Then testing everything,
@@ -34,11 +35,13 @@ privilege model is in `docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`.
   with a merge commit (not squash, so the two keep one history) → tagged and released as
   `CONTRIBUTING.md` says (Cutting a release) when he asks. Pull requests into `dev` run no CI.
 - **System Update follows an update channel** (`AMAHI_UPDATE_CHANNEL` in the NAS's `amahi.env`):
-  `releases`, `candidates` or `development` (the `dev` branch). Until 1.0, the NAS and the test VM
-  (`192.168.1.13`) follow `development` as CatDogBark's work needs, so a push to `dev` reaches them
-  through System Update.
+  `releases`, `candidates` or `development` (the `dev` branch). Since 2026-10-24 the NAS
+  (`192.168.1.1`) is the house's router, so it follows `releases`; the test VM (`192.168.1.13`)
+  follows `development`. A push to `dev` is tried on the test VM first, and reaches the NAS only in
+  a release.
 - After each merge, stop and report to CatDogBark in a few plain sentences: what changed, and exactly
-  what to click or check on the NAS. Wait for his OK before starting the next PR.
+  what to click or check on the test VM (the NAS, for a release). Wait for his OK before starting
+  the next PR.
 - Claude can reach the NAS over SSH (CatDogBark's go-ahead, 2026-10-05) for
   read-only checks. `sudo` there needs CatDogBark's password, which Claude never types, so anything
   that needs root is CatDogBark's to run: give him the commands, one per block. Never ask for or print

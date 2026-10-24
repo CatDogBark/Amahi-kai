@@ -17,6 +17,7 @@ RSpec.describe DnsService do
     allow(described_class).to receive(:rewrite!).and_call_original
     allow(DnsmasqService).to receive(:rewrite_config!)
     allow(DnsmasqService).to receive(:apply!)
+    allow(SambaService).to receive(:follow_interfaces!)
   end
 
   def lines = described_class.config.lines.map(&:strip)
@@ -158,6 +159,7 @@ RSpec.describe DnsService do
       expect(Privileged.calls.map(&:first)).to eq(%w[dns.write_config services.enable dns.blocking_off])
       expect(Privileged.calls[1]).to eq(['services.enable', { service: 'unbound' }])
       expect(DnsmasqService).to have_received(:apply!)
+      expect(SambaService).to have_received(:follow_interfaces!) # router mode moves the LAN, and Samba with it
     end
 
     it 'restarts Unbound when it was running, with blocking as chosen' do

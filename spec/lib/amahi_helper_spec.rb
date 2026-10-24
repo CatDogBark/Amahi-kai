@@ -279,6 +279,14 @@ RSpec.describe 'AmahiHelper' do
       end
     end
 
+    it 'lets Samba listen on every address only with an allow list, and never one that lets everyone in' do
+      expect(helper.samba_problems("#{base}\tbind interfaces only = no\n")).to eq(['[global] bind interfaces only = no needs hosts allow to say who connects'])
+      expect(helper.samba_problems("#{base}\tbind interfaces only = False\n").join).to include('needs hosts allow')
+      expect(helper.samba_problems("#{base}\thosts allow = 127.0.0.1 192.168.1. 100.64.0.0/10\n\tbind interfaces only = no\n")).to eq([])
+      expect(helper.samba_problems("#{base}\thosts allow = 127.0.0.1 ALL\n\tbind interfaces only = no\n")).to eq(['[global] hosts allow lets everyone in'])
+      expect(helper.samba_problems("#{base}\tinterfaces = lo ens18\n\tbind interfaces only = yes\n")).to eq([]) # bound, as without a LAN prefix
+    end
+
     it 'pins the global values it writes, read as Samba reads them, and wants the ones whose default differs' do
       { 'guest account = root' => 'guest account must be nobody', 'guest account = amahi' => 'must be nobody',
         'unix extensions = yes' => 'unix extensions must be no', 'smb1 unix extensions = True' => 'must be no',
@@ -672,6 +680,24 @@ RSpec.describe 'AmahiHelper' do
         end
         FileUtils.rm_f(env_file)
         expect(helper.update_channel).to eq('releases')
+      end
+
+      it 'changes the channel from System Status: only that line, the file kept as it was, then a check' do
+        expect(steps('system.set_update_channel', 'channel' => 'development')).to eq([[:set_update_channel, 'development'], [:check_update]])
+        expect(refusal('system.set_update_channel', 'channel' => 'nightly')).to include("isn't one Amahi-kai uses")
+        written = []
+        allow(helper).to receive(:do_install) { |target, content, _check, mode, group| File.write(target, content) && written << [mode, group] }
+        File.write(env_file, "SECRET_KEY_BASE=abc\nAMAHI_UPDATE_CHANNEL=development\nRAILS_ENV=production\n")
+        File.chmod(0o600, env_file)
+        helper.do_set_update_channel('releases')
+        expect(File.read(env_file)).to eq("SECRET_KEY_BASE=abc\nAMAHI_UPDATE_CHANNEL=releases\nRAILS_ENV=production\n")
+        expect(written.last.first).to eq('600')
+        expect(helper.update_channel).to eq('releases')
+        File.write(env_file, 'SECRET_KEY_BASE=abc') # no channel yet, no newline at the end
+        helper.do_set_update_channel('candidates')
+        expect(File.read(env_file)).to eq("SECRET_KEY_BASE=abc\nAMAHI_UPDATE_CHANNEL=candidates\n")
+        FileUtils.rm_f(env_file)
+        expect { helper.do_set_update_channel('releases') }.to raise_error(AmahiHelper::Failed, /couldn't change/)
       end
 
       it "reads GitHub's releases: the highest version, no drafts, pre-releases when asked" do

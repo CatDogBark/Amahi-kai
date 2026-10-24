@@ -17,6 +17,18 @@ devices, which only a NAS on Tailscale can try (step 3 of
 [`testing/networking.md`](../testing/networking.md)). The rest of that list (the house, the days
 after) is use, at CatDogBark's pace.
 
+Done 2026-10-24 on the test VM: after a rewrite of Unbound's settings, its DNS answered the laptop
+over Tailscale (`100.100.32.46`): local names and blocked names, from a device on the tailnet. The
+rewrite was the gap: Unbound and Samba listen on the Tailscale address only when their settings
+name it, and it arrives after the sign-in is approved, so nothing set them up. Now
+`amahi-kai-tailscale.path` watches Tailscale's state file and `bin/amahi-follow-tailscale` (as
+the app user) has `TailscaleService.follow!` make both again once the addresses settle and
+differ from the last seen, and smbd restarts (it binds its addresses when it starts, and a reload
+doesn't add one: tried on the test VM). The service also runs once after each boot, with what was
+seen kept in /run, because smbd starts before Tailscale has its address. Found on the way: a second DNS server behind the NAS router (the test
+VM's own Unbound) can't use DNS over TLS, because the router keeps port 853 from every LAN device
+(§2c, by design). A per-device exemption is on the roadmap, not in 1.0 (CatDogBark: not needed).
+
 ## 2. The real pool, and apps on it
 
 The four SSDs are in and healthy (SMART and long self-tests passed 2026-10-21); nothing is built on
@@ -157,6 +169,9 @@ calls the pages make.
 
 ## 3. Signed updates
 
+**Deferred, not in 1.0** (CatDogBark, 2026-10-24): see *Not in 1.0*. The design below is kept
+for when other people run Amahi-kai.
+
 Today the updater installs whatever the GitHub Release tag points at, and the helper fetches the
 app catalog's `main` the same way. Nothing is checked against a key the NAS holds, so control of
 the GitHub account (or of GitHub) alone puts code on every NAS. Fine with one user; not for 1.0.
@@ -252,21 +267,11 @@ layout, private folders per user, P4.6b (Greyhole shares through Samba, which is
 one sign-in for apps (the capability API), and off-site backups of the files. All on the roadmap
 for after.
 
-**Router mode** is out too, unless CatDogBark says otherwise (2026-10-23). 0.9.2 has the LAN half
-(DNS and DHCP for the devices); the internet half doesn't exist yet:
+**Router mode**, listed here until 2026-10-23, came into 1.0 after all and shipped in 0.10.0
+(§2b–2f); the house runs on it since 2026-10-24.
 
-- A second network interface for the internet, and getting an address on it (DHCP from the
-  provider, or PPPoE for providers that use it).
-- Forwarding and NAT between the LAN and that interface, so devices reach the internet through
-  the NAS.
-- A firewall facing the internet: nothing in from outside except replies, and the NAS's own
-  services (SSH, the web UI, Samba, DNS, DHCP) never offered on the internet side.
-- IPv6 for the house: a prefix delegated by the provider, and the NAS announcing a real default
-  route on the LAN (today it announces itself with a router lifetime of 0, "not a router", on
-  purpose).
-- A port forwarding page, and the way back: the NAS down means the house is offline, and a
-  System Update's restart is a minute without internet.
-
-A few days for the IPv4 half, more with IPv6 delegation and PPPoE. The island is the test bed
-for it: the test VM already has a LAN leg and an island leg, so the client can be routed out
-through it without touching the house.
+**Signed updates (§3)** are out of 1.0 too (CatDogBark, 2026-10-24): with one user, the key to
+keep and back up outweighs the risk it covers. They come back when other people run
+Amahi-kai; the design in §3 stands for then, with two trusted keys from the start (one on
+the laptop, a spare in Proton Drive). Deferring closes nothing: the release that adds the
+check is installed by whatever updater is out there, as any release is.

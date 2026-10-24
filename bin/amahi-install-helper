@@ -15,6 +15,7 @@
 #   /etc/systemd/system/amahi-kai-app-firewall.service   app ports kept to the LAN and Tailscale, with Docker
 #   /etc/systemd/system/amahi-kai-app-backups.{service,timer}    app update copies deleted after 30 days, daily
 #   /etc/systemd/system/amahi-kai-trash.{service,timer}          files kept in the Trash too long deleted, daily
+#   /etc/systemd/system/amahi-kai-tailscale.{service,path}       DNS and Samba follow Tailscale's address
 #   /etc/sudoers.d/amahi-kai        from config/sudoers/amahi-kai, only if visudo accepts it
 #
 # It also takes the app's user out of the docker group (Docker runs only through the helper).
@@ -45,7 +46,8 @@ for unit in amahi-kai.service amahi-kai-indexer.service amahi-kai-indexer.timer 
             amahi-kai-storage-check.service amahi-kai-storage-check.timer \
             amahi-kai-snapshots.service amahi-kai-snapshots.timer amahi-kai-app-firewall.service \
             amahi-kai-app-backups.service amahi-kai-app-backups.timer \
-            amahi-kai-trash.service amahi-kai-trash.timer; do
+            amahi-kai-trash.service amahi-kai-trash.timer \
+            amahi-kai-tailscale.service amahi-kai-tailscale.path; do
   install -o root -g root -m 0644 "$APP_DIR/config/systemd/$unit" "/etc/systemd/system/$unit"
 done
 # The app catalog had a timer of its own; the update check fetches it now.
@@ -71,6 +73,10 @@ if [[ -d /run/systemd/system ]]; then
     || echo "Couldn't enable amahi-kai-app-backups.timer; app update copies won't be deleted after 30 days" >&2
   systemctl enable --now amahi-kai-trash.timer >/dev/null 2>&1 \
     || echo "Couldn't enable amahi-kai-trash.timer; the Trash won't delete old files on its own" >&2
+  systemctl enable --now amahi-kai-tailscale.path >/dev/null 2>&1 \
+    || echo "Couldn't enable amahi-kai-tailscale.path; after Tailscale signs in, save Network → DNS once" >&2
+  # It ran once after each boot too, in 0.10.x on dev, when smbd needed a restart for Tailscale
+  systemctl disable amahi-kai-tailscale.service >/dev/null 2>&1 || true
   # Starts with Docker from now on, and now if Docker is running (an update applies the rules).
   systemctl enable amahi-kai-app-firewall.service >/dev/null 2>&1 \
     || echo "Couldn't enable amahi-kai-app-firewall.service; app ports aren't limited to the LAN" >&2

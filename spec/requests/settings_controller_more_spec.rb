@@ -10,6 +10,24 @@ RSpec.describe "SettingsController more", type: :request do
       get '/settings/system_status'
       expect(response).to have_http_status(:ok)
     end
+
+    it "shows the channel System Update follows, and changes it through the helper" do
+      allow(UpdateStatus).to receive(:load).and_return(UpdateStatus.new('channel' => 'development', 'checked_at' => Time.now.iso8601))
+      get '/settings/system_status'
+      page = Nokogiri::HTML(response.body)
+      expect(page.css('#update-channel-select option').map { |o| [o['value'], o.text] })
+        .to eq([%w[releases releases], ['candidates', 'releases and release candidates'], ['development', 'the dev branch']])
+      expect(page.at_css('#update-channel-select option[selected]')['value']).to eq('development')
+
+      post '/settings/update_channel', params: { channel: 'releases' }
+      expect(response).to redirect_to('/settings/system_status#update-channel')
+      expect(flash[:notice]).to eq('System Update now follows releases.')
+      expect(Privileged.calls).to include(['system.set_update_channel', { channel: 'releases' }])
+
+      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('system.set_update_channel', 'channel "nightly" isn\'t one Amahi-kai uses', refused: true))
+      post '/settings/update_channel', params: { channel: 'nightly' }
+      expect(flash[:error]).to eq('channel "nightly" isn\'t one Amahi-kai uses')
+    end
   end
 
   # --- Update system ---

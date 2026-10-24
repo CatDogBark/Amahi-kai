@@ -48,4 +48,33 @@ class SambaService
     Rails.logger.error("SambaService: Samba reload failed: #{e.message}")
     false
   end
+
+  # Samba's interfaces follow the LAN interface (Share.primary_interface), which router mode
+  # changes; smbd opens its sockets only when it starts, so when the interfaces line changes, it
+  # restarts. Called after router mode goes on or off.
+  def self.follow_interfaces!
+    before = interfaces_line
+    push_config
+    restart_for_new_addresses if interfaces_line != before
+  end
+
+  def self.interfaces_line(path = '/etc/samba/smb.conf')
+    File.read(path)[/^\s*interfaces\s*=.*$/]&.strip
+  rescue SystemCallError
+    nil
+  end
+
+  # smbd opens its listening sockets when it starts, on the addresses its interfaces have then; a
+  # reload doesn't open one for an address that came later (Tailscale's, after its sign-in). So
+  # when those addresses change, smbd restarts, unless it isn't running (stopped on purpose).
+  # Connections open at that moment reconnect by themselves.
+  def self.restart_for_new_addresses
+    return false unless Shell.success?('systemctl', 'is-active', '--quiet', 'smbd')
+
+    Privileged.call('services.restart', service: 'smbd')
+    true
+  rescue Privileged::Error => e
+    Rails.logger.error("SambaService: Samba restart failed: #{e.message}")
+    false
+  end
 end

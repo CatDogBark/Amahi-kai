@@ -24,14 +24,11 @@ What counts as an update depends on the server's **update channel**:
 An update never takes the server back to an older version: a server on `development` that's ahead
 of the newest release stays where it is until a newer one comes out.
 
-The channel is a line in `/etc/amahi-kai/amahi.env`, which only root can change:
-
-```
-AMAHI_UPDATE_CHANNEL=releases
-```
-
-Change it with `sudo nano /etc/amahi-kai/amahi.env`, then click **Check now**. A server installed
-with `AMAHI_BRANCH=dev` starts on `development`; every other one on `releases`.
+Choose it on **Settings → System Status**: under System Update, **Follows** lists the three; pick
+one and **Save**. The server checks the new channel straight away, so the card shows what it
+offers. A server installed with `AMAHI_BRANCH=dev` starts on `development`; every other one on
+`releases`. Underneath, the channel is the line `AMAHI_UPDATE_CHANNEL=releases` in
+`/etc/amahi-kai/amahi.env` (root's), which Save changes and nothing else in that file.
 
 ---
 

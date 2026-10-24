@@ -86,7 +86,7 @@ Use two of the SSDs (here `/dev/sdb` and `/dev/sdc`).
 - [ ] **Browse** the share in the web UI: the files list, **images, video and audio preview**,
   **Download** works, and **Download this folder** gives a zip that opens. There's no Upload,
   New Folder, Rename or Delete.
-- [ ] Samba still answers on the LAN only (the security audit's **Samba bound to LAN** check
+- [ ] Samba still answers on the LAN only (the security audit's **Samba answers only the NAS, the LAN and Tailscale** check
   passes), with Greyhole's settings in place.
 
 ## 5. A drive missing at boot

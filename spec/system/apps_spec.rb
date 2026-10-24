@@ -64,6 +64,40 @@ RSpec.describe 'Apps', type: :system do
     end
   end
 
+  # Change ticks the shares an installed app was given. A name recorded in other capitals (the share
+  # deleted and made again as "vault") still counts, as it does for the helper and for the share's
+  # delete check, which both ignore case.
+  describe "an installed app's shares" do
+    before do
+      allow(DockerService).to receive_messages(installed?: true, running?: true)
+      create(:share, name: 'Vault')
+      create(:share, name: 'Movies')
+    end
+
+    def open_change(app)
+      sign_in_as_admin
+      visit '/apps'
+      find("[data-app-shares='#{app.identifier}'][data-verb='Save and restart']").click
+    end
+
+    it 'ticks the shares it was given' do
+      app = create(:docker_app, identifier: 'uptimekuma', name: 'Uptime Kuma', status: 'running')
+      app.update!(shares: [{ name: 'Vault', write: false }])
+      open_change(app)
+      within('#app-shares-dialog') do
+        expect(find('tr[data-share="Vault"] [data-role="give"]')).to be_checked
+        expect(find('tr[data-share="Movies"] [data-role="give"]')).not_to be_checked
+      end
+    end
+
+    it 'ticks a share recorded in other capitals' do
+      app = create(:docker_app, identifier: 'uptimekuma', name: 'Uptime Kuma', status: 'running')
+      app.update!(shares: [{ name: 'vault', write: false }])
+      open_change(app)
+      within('#app-shares-dialog') { expect(find('tr[data-share="Vault"] [data-role="give"]')).to be_checked }
+    end
+  end
+
   it 'shows the installed apps page' do
     sign_in_as_admin
     visit '/apps/installed_apps'

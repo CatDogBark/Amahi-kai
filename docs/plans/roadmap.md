@@ -173,15 +173,19 @@ firewall and NAT. Still behind, to consider after 1.0 unless listed earlier:
 - **UPnP/NAT-PMP as an opt-in** (miniupnpd) with a per-device allow, for consoles and VoIP
   that want it; off is the safer default and stays so.
 - **OpenWrt access points managed from the NAS** (a Wireless tab): documented, after 1.0.
+- **A device's own DNS** (a per-device exemption on Devices): a second resolver behind the NAS
+  router (a Pi-hole, another Amahi-kai) can't use DNS over TLS, since the router keeps port 853
+  from LAN devices. Not needed in the house (2026-10-24); for whoever runs one.
 
 ## Release 1.0
 
 What's left for 1.0, in order, is [`release-1.0.md`](release-1.0.md) (2026-10-23): networking's
-Tailscale check, the real pool and apps on it, signed updates, a Backups tab (backup and restore
-of the NAS's own state), a full code review, a docs review, then a release candidate and 1.0.
-1.0 is for other people to install. bitShare is its own project and doesn't hold 1.0. Networking
-(§1–2f there) shipped in 0.10.0; what's left of it before 1.0 is the house stage of router
-mode and the Tailscale check.
+Tailscale check, the real pool and apps on it, a Backups tab (backup and restore of the NAS's own
+state), a full code review, a docs review, then a release candidate and 1.0. 1.0 is for other
+people to install. bitShare is its own project and doesn't hold 1.0. Networking (§1–2f there)
+shipped in 0.10.0, and the house runs on router mode since 2026-10-24; what's left of it before
+1.0 is the Tailscale check. **Signed updates** are deferred until other people run Amahi-kai
+(CatDogBark, 2026-10-24: one user doesn't justify a key to keep); the design waits in §3.
 
 ## Open, not yet scheduled
 

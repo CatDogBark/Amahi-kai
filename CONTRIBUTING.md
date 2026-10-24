@@ -51,8 +51,9 @@ Servers on the `releases` channel offer the new version at their next check (eve
 
 ## Update channels
 
-Each server follows one channel, set by `AMAHI_UPDATE_CHANNEL` in `/etc/amahi-kai/amahi.env`
-(root's):
+Each server follows one channel, chosen on Settings → System Status (Follows) and kept as
+`AMAHI_UPDATE_CHANNEL` in `/etc/amahi-kai/amahi.env` (root's; the helper's
+`system.set_update_channel` changes that line only):
 
 - `releases`, the default: published releases.
 - `candidates`: releases and release candidates.

@@ -88,6 +88,16 @@ module TailscaleService
       false
     end
 
+    # Unbound answers on the NAS's Tailscale addresses only when its settings name them, and
+    # Tailscale's address only arrives once its sign-in is approved, in another tab. So when
+    # Tailscale signs in, signs out or changes address (amahi-kai-tailscale.path, through
+    # bin/amahi-follow-tailscale), its settings and the router's are made again (DnsService.resync!,
+    # only what differs), and Samba's, whose interfaces line tells nmbd about tailscale0. smbd
+    # itself listens on every address, so it needs no restart. One line each, for the log.
+    def follow!
+      [DnsService.resync_report, SambaService.push_config ? 'Samba: settings written' : 'Samba: settings not written (see the log)']
+    end
+
     private
 
     # `tailscale status --json`, which any user may read; nil if it can't be read.

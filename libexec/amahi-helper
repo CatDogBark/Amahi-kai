@@ -768,6 +768,13 @@ module AmahiHelper
       validate: ->(_a) { {} },
       plan: ->(_v) { [[:check_update], [:refresh_catalog], [:check_security_updates]] }
     },
+    # The channel System Update follows (Settings → System Status), then a check on it, so the page
+    # shows what the new channel offers. Only that line of ENV_FILE changes.
+    'system.set_update_channel' => {
+      params: %w[channel],
+      validate: ->(a) { { channel: listed(a['channel'], 'channel', UPDATE_CHANNELS) } },
+      plan: ->(v) { [[:set_update_channel, v[:channel]], [:check_update]] }
+    },
     'system.create_swap' => {
       params: %w[size_gb],
       validate: ->(a) { { size_gb: integer(a, 'size_gb', 1..8) } },
@@ -3137,6 +3144,23 @@ module AmahiHelper
       return problems unless text.match?(/^\s*\[global\]/i) # a whole config, not one share's section
       written = params.filter_map { |section, name, _value| name.downcase.delete(" \t") if section == 'global' }
       SAMBA_REQUIRED.each { |line, keys| problems << "[global] #{line} is missing" if (keys & written).empty? }
+      problems.concat(samba_reach_problems(params))
+      problems
+    end
+
+    # Amahi-kai has Samba listen on every address (bind interfaces only = no) only with an allow
+    # list deciding who connects, so a config saying no without one is refused; and the list
+    # itself mustn't let everyone in.
+    def samba_reach_problems(params)
+      global = params.select { |section, _name, _value| section == 'global' }.to_h { |_s, name, value| [name.downcase.delete(" \t"), value] }
+      allow = global['hostsallow'].to_s.split(/[\s,]+/)
+      problems = []
+      if allow.any? { |entry| %w[all 0.0.0.0/0 0.0.0.0/0.0.0.0 ::/0 *].include?(entry.downcase) }
+        problems << '[global] hosts allow lets everyone in'
+      end
+      if allow.empty? && global.key?('bindinterfacesonly') && samba_value?(global['bindinterfacesonly'], 'no')
+        problems << '[global] bind interfaces only = no needs hosts allow to say who connects'
+      end
       problems
     end
 
@@ -5890,6 +5914,26 @@ module AmahiHelper
       { 'channel' => channel, 'commit' => newer ? found[:commit] : current,
         'version' => newer ? found[:version] : version_at(current), 'tag' => newer ? found[:tag] : nil,
         'error' => found[:error] }
+    end
+
+    # Writes AMAHI_UPDATE_CHANNEL into ENV_FILE (that line replaced, or added at the end), keeping
+    # every other line and the file's mode and group. The file holds the app's secrets: nothing of
+    # it is logged or returned.
+    def do_set_update_channel(channel)
+      stat = File.stat(ENV_FILE)
+      lines = File.readlines(ENV_FILE)
+      setting = "AMAHI_UPDATE_CHANNEL=#{channel}\n"
+      if (index = lines.index { |l| l.start_with?('AMAHI_UPDATE_CHANNEL=') })
+        lines[index] = setting
+      else
+        lines[-1] = "#{lines[-1]}\n" unless lines.empty? || lines[-1].end_with?("\n")
+        lines << setting
+      end
+      group = stat.gid.zero? ? nil : Etc.getgrgid(stat.gid).name
+      do_install(ENV_FILE, lines.join, nil, format('%o', stat.mode & 0o777), group)
+      nil
+    rescue SystemCallError, ArgumentError => e
+      raise Failed, "couldn't change #{ENV_FILE}: #{e.message}"
     end
 
     def update_channel
