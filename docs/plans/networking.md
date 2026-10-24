@@ -212,6 +212,14 @@ automatic, or fixed with the network size, the router and the DNS servers the NA
   the router's rules, all of which name the NAS's address) and Samba's config.
 - **Refused:** the internet side in router mode (the Internet page's), automatic on the port the
   NAS hands out addresses on, a network or broadcast address, a router outside the network.
+- **Found on the house NAS (2026-10-24), both fixed the same night:** the helper's state folder
+  (`/var/lib/amahi-kai-dns`) didn't exist on a NAS that never had blocking on, and the change
+  failed after rewriting the netplan file (now the folder is made, and a failure after the
+  files are written puts them back). And the moving page's probe never got through from the
+  browser: the site's Content-Security-Policy is `connect-src 'self'`, and the probe's whole
+  point is another origin. The island check had used curl, which no policy governs. The page
+  now gets a per-request policy that adds the new origin, and a browser spec runs the probe
+  for real against the test server under another host name (`localhost` beside `127.0.0.1`).
 - **The ports as hardware** (`lib/network_ports.rb`, 2026-10-24, CatDogBark: a NAS with a
   four-port card needs more than `ens18`): under each port, what it is (the driver from sysfs;
   over PCI the model `lspci -mm` names; a *virtual port* for virtio, vmxnet3, Hyper-V, Xen, where

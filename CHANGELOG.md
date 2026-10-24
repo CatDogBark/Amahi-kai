@@ -4,6 +4,11 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+### 🔒 Security & Fixes
+
+- **The moving page now reaches the NAS at its new address from the browser** (Network → Devices, This NAS) — The page's probe calls the NAS at the new address, which the site's Content-Security-Policy forbade (it allows the page's own origin only), so the browser never kept the change and the NAS went back after 90 seconds. The moving page alone may call the new address now, and a browser test runs the probe for real.
+- **This NAS works on a server that never had blocking on** — The helper's state folder didn't exist there, and an address change failed after rewriting the network file, leaving it changed. The folder is made when missing, and a failure after the files are written puts them back.
+
 ## [0.10.0] — 2026-10-24
 
 The NAS can be the house's router: a second network interface takes the provider's connection, every device reaches the internet through the NAS, and the old router becomes an access point. With it comes the shield (every device uses the NAS's DNS, LAN only per device, forged packets dropped, nothing from the internet gets in but the ports you let in), the NAS's own address set from the page with a guard against locking yourself out, and the Network tab split into Devices, DNS, DHCP and Internet. All of it was built and tried on an isolated test network, firewall on and after a reboot ([the list](docs/testing/networking.md)); the house itself, with a real provider, is still to try. A server that doesn't turn any of it on only gets the fixes below.
