@@ -48,7 +48,7 @@ describe 'Network → DNS & DHCP', type: :request do
     it "shows what the internet side dropped and the devices kept off the internet while the NAS is the router" do
       allow(DnsService).to receive_messages(installed?: true, running?: true, check: { local: 1, outside: 24 }, wan_interface: 'ens19',
                                             router_state: { 'lan' => 'ens18', 'wan' => 'ens19', 'forwards' => [], 'dns' => nil },
-                                            wan_drops: { dropped: 1234, since: Time.new(2026, 10, 24, 9, 5) }, spoof_drops: 7, firewall_on?: true)
+                                            wan_drops: { dropped: 1234, since: 2.hours.ago }, spoof_drops: 7, firewall_on?: true)
       allow(NetworkInterfaces).to receive(:addresses).and_call_original
       allow(NetworkInterfaces).to receive(:addresses).with('ens19').and_return([NetworkInterfaces::Address.new(ip: IPAddr.new('10.77.0.200'), prefix: 24)])
       allow(NetworkInterfaces).to receive(:default_route).and_return(%w[ens19 10.77.0.1])
@@ -57,7 +57,7 @@ describe 'Network → DNS & DHCP', type: :request do
       Host.create!(name: 'camera', mac: 'aa:bb:cc:dd:ee:52', address: '52', lan_only: true)
       get '/network/internet'
       expect(response).to have_http_status(:ok)
-      expect(response.body).to include('1,234 connection attempts at the NAS dropped since 09:05', '7 packets claiming an address inside your network dropped',
+      expect(response.body).to include('1,234 connection attempts at the NAS dropped in the last about 2 hours', '7 packets claiming an address inside your network dropped',
                                         'camera: on the LAN only')
     end
 

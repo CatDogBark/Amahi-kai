@@ -46,7 +46,7 @@
             <dt>From the internet</dt>
             <dd>
               <% if @wan_drops && @wan_drops[:dropped] %>
-                <%= number_with_delimiter(@wan_drops[:dropped]) %> connection <%= @wan_drops[:dropped] == 1 ? 'attempt' : 'attempts' %> at the NAS dropped since <%= @wan_drops[:since].strftime('%H:%M') %> (the rules were loaded then);
+                <%= number_with_delimiter(@wan_drops[:dropped]) %> connection <%= @wan_drops[:dropped] == 1 ? 'attempt' : 'attempts' %> at the NAS dropped in the last <%= distance_of_time_in_words(@wan_drops[:since], Time.now) %> (since the rules were loaded);
               <% else %>
                 the count of dropped connection attempts isn't available;
               <% end %>
