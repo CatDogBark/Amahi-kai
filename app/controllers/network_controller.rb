@@ -3,6 +3,7 @@
 
 require 'leases'
 require 'network_address'
+require 'network_ports'
 
 # Network → Devices: the NAS's own address on each interface (This NAS), and the devices the NAS
 # gave addresses to (dnsmasq's leases) with the fixed addresses (Network → Hosts, before), in one
@@ -19,6 +20,7 @@ class NetworkController < ApplicationController
     @dhcp_on = DnsService.dhcp?
     @domain = DnsService.domain
     @interfaces = NetworkAddress.interfaces
+    @ports = NetworkPorts.all(@interfaces.map(&:name))
     @nameservers = NetworkAddress.nameservers
     @router_mode = DnsService.router?
     @dhcp_interface = @dhcp_on ? DnsService.interface : nil
@@ -92,6 +94,29 @@ class NetworkController < ApplicationController
   # through another interface).
   def address_status
     render json: (NetworkAddress.state || {}).slice('state', 'interface', 'mode', 'address', 'until', 'since')
+  end
+
+  # This NAS: the name the admin gives a port, shown beside it wherever a port is named.
+  def update_port_label
+    interface = params[:interface].to_s
+    return refuse("#{interface} isn't a network interface here") unless NetworkInterfaces.lan.key?(interface)
+    label = NetworkPorts.set_label!(interface, params[:label])
+    flash[:notice] = label ? "#{interface} is #{label}." : "#{interface} has no name of its own."
+    redirect_to network_index_path
+  rescue ArgumentError => e
+    refuse(e.message.sub(/\A./, &:upcase))
+  end
+
+  # This NAS: a real port's light blinks for five seconds (the helper, with ethtool), to find
+  # its socket on the NAS.
+  def blink_port
+    interface = params[:interface].to_s
+    return refuse("#{interface} isn't a network interface here") unless NetworkInterfaces.lan.key?(interface)
+    NetworkPorts.blink!(interface)
+    flash[:notice] = "#{NetworkPorts.display(interface)}'s light blinked for five seconds."
+    redirect_to network_index_path
+  rescue Privileged::Error => e
+    refuse(e.message)
   end
 
   def create_host

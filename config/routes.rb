@@ -23,6 +23,8 @@ Rails.application.routes.draw do
     put 'address', action: 'update_address', as: 'update_address'
     get 'address', action: 'address_status', as: 'address_status'
     post 'address/reached', action: 'address_reached', as: 'address_reached'
+    put 'port/label', action: 'update_port_label', as: 'update_port_label'
+    post 'port/blink', action: 'blink_port', as: 'blink_port'
   end
 
   # Network → DNS, DHCP and Internet: one controller, since they share the LAN interface and the

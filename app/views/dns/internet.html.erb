@@ -29,13 +29,13 @@
             <% if @router_state.nil? %>
               <span class="text-danger">✗ The router's rules aren't in place. Save again, and if it's refused, the message says why.</span>
             <% elsif @wan_addresses.empty? %>
-              <span class="text-warning">No address on <%= @wan_interface %> yet: the provider hasn't answered. Is the cable in?</span>
+              <span class="text-warning">No address on <%= port_display(@wan_interface) %> yet: the provider hasn't answered. Is the cable in?</span>
             <% elsif @default_route && @default_route.first != @wan_interface %>
-              <span class="text-danger">✗ <%= @wan_interface %> has <%= @wan_addresses.join(', ') %>, but the NAS's own way to the internet still goes through
+              <span class="text-danger">✗ <%= port_display(@wan_interface) %> has <%= @wan_addresses.join(', ') %>, but the NAS's own way to the internet still goes through
               <%= @default_route.first %> (via <%= @default_route.last %>), so devices' traffic goes that way too and never reaches the provider.
               That interface's network settings have a gateway: remove it, or give its route a metric above 50, then come back here.</span>
             <% else %>
-              ✓ Through <%= @wan_interface %> at <%= @wan_addresses.join(', ') %><%= ", the provider's router #{@default_route.last}" if @default_route %>;
+              ✓ Through <%= port_display(@wan_interface) %> at <%= @wan_addresses.join(', ') %><%= ", the provider's router #{@default_route.last}" if @default_route %>;
               <%= pluralize(@forwards.size, 'port') %> let in<%= '; every device uses the NAS\'s DNS' if @router_state['dns'] %>
               <% if @router_state['dns'] && !@blocking %>
                 <br><span class="text-warning">Blocking is off, so devices' own encrypted DNS services aren't blocked by name; turn Blocking on (<a href="<%= dns_index_path(anchor: 'dns-blocking') %>">Network → DNS</a>) for that part.</span>
@@ -69,7 +69,7 @@
         <select name="wan_interface" class="form-select mb-4 dns-interface" aria-label="Internet interface">
           <option value="">Choose the internet interface</option>
           <% @interfaces.each do |name, addresses| %>
-            <option value="<%= name %>" <%= 'selected' if name == @wan_interface %>><%= name %> (<%= addresses.reject(&:link_local?).map(&:to_s).join(', ').presence || 'no address' %>)</option>
+            <option value="<%= name %>" <%= 'selected' if name == @wan_interface %>><%= port_display(name) %> (<%= addresses.reject(&:link_local?).map(&:to_s).join(', ').presence || 'no address' %>)</option>
           <% end %>
         </select>
 

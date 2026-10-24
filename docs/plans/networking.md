@@ -212,6 +212,14 @@ automatic, or fixed with the network size, the router and the DNS servers the NA
   the router's rules, all of which name the NAS's address) and Samba's config.
 - **Refused:** the internet side in router mode (the Internet page's), automatic on the port the
   NAS hands out addresses on, a network or broadcast address, a router outside the network.
+- **The ports as hardware** (`lib/network_ports.rb`, 2026-10-24, CatDogBark: a NAS with a
+  four-port card needs more than `ens18`): under each port, what it is (the driver from sysfs;
+  over PCI the model `lspci -mm` names; a *virtual port* for virtio, vmxnet3, Hyper-V, Xen, where
+  no socket exists: a VM can't know which physical port its bridge sits on, only the admin
+  does), the link (`carrier`, `speed`), the MAC, and a **name the admin gives** (setting
+  `port-label:<iface>`, shown as "Modem (ens20)" by `port_display` wherever a port is named: the
+  DNS, DHCP and Internet pages too). **Find port** = helper `network.blink_port` →
+  `ethtool --identify <iface> 5`, offered for real ports where ethtool is installed.
 
 ### Security at the routing layer (planned 2026-10-23)
 

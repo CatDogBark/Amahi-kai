@@ -526,6 +526,8 @@ module AmahiHelper
   # NAS itself (cloudflared) doesn't pass through it. Apps are published on IPv4 only.
   IPTABLES = '/usr/sbin/iptables'
   IP = '/usr/sbin/ip'
+  # A port's light, to find it on the NAS (Network → Devices, This NAS).
+  ETHTOOL = '/usr/sbin/ethtool'
   APP_CHAIN = 'AMAHI-APPS'
   DOCKER_BRIDGE = 'docker0'
   PRIVATE_NETS = %w[10.0.0.0/8 172.16.0.0/12 192.168.0.0/16].map { |net| IPAddr.new(net) }.freeze
@@ -912,6 +914,12 @@ module AmahiHelper
       params: [],
       validate: ->(_a) { {} },
       plan: ->(_v) { [[:revert_address]] }
+    },
+    # A port's light blinks for five seconds, to find its socket on the NAS.
+    'network.blink_port' => {
+      params: %w[interface],
+      validate: ->(a) { installed!(ETHTOOL) && { interface: network_interface(a['interface']) } },
+      plan: ->(v) { [[ETHTOOL, '--identify', v[:interface], '5']] }
     },
     # Blocking stops for BLOCKING_PAUSE seconds, then systemd resumes it (dns.resume_blocking).
     'dns.pause_blocking' => {

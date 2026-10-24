@@ -1,4 +1,10 @@
 module NetworkHelper
+  # A port wherever it's named: "Modem (ens20)" once the admin named it (Network → Devices,
+  # This NAS), or "ens20".
+  def port_display(name)
+    NetworkPorts.display(name.to_s)
+  end
+
   def confirm_host_destroy_message(host)
     t('are_you_sure_host', :fixed_ip => host)
   end

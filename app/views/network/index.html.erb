@@ -2,10 +2,12 @@
   <div class="card mb-4 mt-3" id="this-nas">
     <div class="card-header"><h5 class="mb-0"><%= lucide_icon('server', size: 18) %> This NAS</h5></div>
     <div class="card-body">
-      <p class="text-muted small">The NAS's own address on each network port. One it takes from the network (your router's DHCP) can change; a fixed one stays, which the shares, DNS and the router rely on. Changing the address you're connected through moves this page with it, and the change is kept only once the NAS answers there, so a wrong one can't lock you out.</p>
+      <p class="text-muted small">The NAS's own address on each network port. One it takes from the network (your router's DHCP) can change; a fixed one stays, which the shares, DNS and the router rely on. Changing the address you're connected through moves this page with it, and the change is kept only once the NAS answers there, so a wrong one can't lock you out. <strong>Name</strong> gives a port a name of your own, shown wherever it comes up; <strong>Find port</strong> blinks a real port's light for five seconds.</p>
       <% if @address_note %><div class="alert alert-info py-2 small"><%= @address_note %></div><% end %>
       <% @interfaces.each do |interface| %>
+        <% port = @ports[interface.name] %>
         <div class="this-nas-row mb-3">
+          <% if port&.label %><strong><%= port.label %></strong><% end %>
           <code><%= interface.name %></code>
           <% if interface.part == :lan %><span class="badge bg-secondary">LAN</span><% elsif interface.part == :internet %><span class="badge bg-secondary">Internet</span><% end %>
           · <%= interface.addresses.any? ? interface.addresses.map { |address| "#{address.ip}/#{address.prefix}" }.join(', ') : 'no address' %>
@@ -16,6 +18,28 @@
             <% if interface.automatic %>· from the network (DHCP)<% elsif interface.addresses.any? %>· fixed<% end %>
             <% if interface.gateway %>· router <%= interface.gateway %><% end %>
             <a href="#" class="btn btn-sm btn-outline-secondary ms-2" data-reveal=".address-form">Change</a>
+          <% end %>
+          <a href="#" class="btn btn-sm btn-outline-secondary ms-1" data-reveal=".label-form">Name</a>
+          <% if port && NetworkPorts.blinkable?(port) %>
+            <%= button_to 'Find port', network_blink_port_path, params: { interface: interface.name }, class: 'btn btn-sm btn-outline-secondary ms-1', form_class: 'd-inline' %>
+          <% end %>
+          <% if port %>
+            <div class="text-muted small"><%= port.kind %> · <%= port.link_text %><%= " · #{port.mac}" if port.mac %></div>
+          <% end %>
+          <form action="<%= network_update_port_label_path %>" method="post" class="label-form row g-2 align-items-end mt-1" style="display: none">
+            <input type="hidden" name="_method" value="put">
+            <input type="hidden" name="authenticity_token" value="<%= form_authenticity_token %>">
+            <input type="hidden" name="interface" value="<%= interface.name %>">
+            <div class="col-md-4">
+              <label class="form-label small" for="label-<%= interface.name %>">Name</label>
+              <input type="text" class="form-control" id="label-<%= interface.name %>" name="label" value="<%= port&.label %>" maxlength="<%= NetworkPorts::LABEL_MAX %>" placeholder="LAN, Modem, Office…">
+            </div>
+            <div class="col-md-1">
+              <button type="submit" class="btn btn-primary w-100">Save</button>
+            </div>
+            <div class="col-12 form-text">Shown beside <code><%= interface.name %></code> wherever the port is named. Leave it empty to drop the name.</div>
+          </form>
+          <% unless interface.part == :internet %>
             <form action="<%= network_update_address_path %>" method="post" class="address-form row g-2 align-items-end mt-1" style="display: none">
               <input type="hidden" name="_method" value="put">
               <input type="hidden" name="authenticity_token" value="<%= form_authenticity_token %>">

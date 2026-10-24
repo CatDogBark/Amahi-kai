@@ -78,8 +78,17 @@ describe "Network Controller", type: :request do
          NetworkAddress::Interface.new(name: 'ens20', addresses: [], automatic: false, gateway: '10.77.0.1', part: :internet)]
       end
 
+      let(:ports) do
+        { 'ens18' => NetworkPorts::Port.new(name: 'ens18', label: nil, driver: 'igb', model: 'Intel I350 Gigabit Network Connection', virtual: false,
+                                            link: true, speed: 1000, mac: 'a0:36:9f:12:34:56'),
+          'ens20' => NetworkPorts::Port.new(name: 'ens20', label: 'Modem', driver: 'virtio_net', model: nil, virtual: true, link: true, speed: nil, mac: 'bc:24:11:4c:4a:46') }
+      end
+
       before do
         allow(NetworkAddress).to receive_messages(interfaces: rows, nameservers: ['192.168.1.1'], state: nil, settle!: nil)
+        allow(NetworkPorts).to receive(:all).and_return(ports)
+        allow(NetworkPorts).to receive(:blinkable?) { |port| !port.virtual }
+        allow(NetworkInterfaces).to receive(:lan).and_return('ens18' => [], 'ens20' => [])
         allow(Leases).to receive(:all).and_return([])
       end
 
@@ -88,7 +97,38 @@ describe "Network Controller", type: :request do
         expect(response).to have_http_status(:ok)
         expect(response.body).to include("This NAS", "192.168.1.13/24", "from the network (DHCP)", "router 192.168.1.1", "Managed by", "Change")
         expect(response.body).to include('name="interface" value="ens18"')
-        expect(response.body).not_to include('name="interface" value="ens20"')
+        expect(response.body).not_to include('name="address" value="ens20"')
+      end
+
+      it "shows what each port is, its link and MAC, its given name, and Find port for a real one only" do
+        get "/network"
+        expect(response.body).to include("Intel I350 Gigabit Network Connection · link up, 1000 Mb/s · a0:36:9f:12:34:56",
+                                         "virtual port (virtio) · link up · bc:24:11:4c:4a:46", "<strong>Modem</strong>")
+        expect(response.body.scan('>Find port</button>').size).to eq(1) # the real port's; the virtual one has none
+        expect(response.body).to include('id="label-ens20"')
+      end
+
+      it "names a port, shows the name wherever the port comes up, and drops it again" do
+        put "/network/port/label", params: { interface: 'ens18', label: ' Office ' }
+        expect(response).to redirect_to("/network")
+        expect(flash[:notice]).to eq("ens18 is Office.")
+        expect(Setting.get('port-label:ens18')).to eq('Office')
+        allow(DnsService).to receive_messages(interface: 'ens18', wan_interface: 'ens20', installed?: false, on?: false)
+        get "/network/dns"
+        expect(response.body).to include("Office (ens18) (")
+        put "/network/port/label", params: { interface: 'ens18', label: '' }
+        expect(flash[:notice]).to eq("ens18 has no name of its own.")
+        put "/network/port/label", params: { interface: 'ens18', label: 'x' * 40 }
+        expect(flash[:alert]).to eq("A port's name is up to 32 characters.")
+        put "/network/port/label", params: { interface: 'ens99', label: 'x' }
+        expect(flash[:alert]).to include("isn't a network interface")
+      end
+
+      it "blinks a port's light through the helper" do
+        post "/network/port/blink", params: { interface: 'ens18' }
+        expect(response).to redirect_to("/network")
+        expect(flash[:notice]).to eq("ens18's light blinked for five seconds.")
+        expect(Privileged.calls).to eq([['network.blink_port', { interface: 'ens18' }]])
       end
 
       it "changes another port's address at once, and what follows the address follows" do

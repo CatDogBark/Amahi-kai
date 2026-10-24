@@ -28,7 +28,7 @@
           <dt>Addresses</dt>
           <dd>
             <% if @dnsmasq_running %>
-              ✓ Handing out <%= @prefix %>.<%= @dhcp[:first] %> to <%= @prefix %>.<%= @dhcp[:last] %> on <%= @interface %>;
+              ✓ Handing out <%= @prefix %>.<%= @dhcp[:first] %> to <%= @prefix %>.<%= @dhcp[:last] %> on <%= port_display(@interface) %>;
               <a href="<%= network_index_path %>"><%= pluralize(@leases.size, 'device') %></a> <%= @leases.size == 1 ? 'has' : 'have' %> one
             <% else %>
               <span class="text-danger">✗ dnsmasq isn't running, so devices can't get an address.</span>
@@ -59,7 +59,7 @@
         </p>
 
         <% if @dnsmasq_installed %>
-        <p class="text-muted small">On <%= @interface %>'s network, where the NAS is <%= @addresses.first || 'not yet' %>. Fixed addresses for chosen devices are on <a href="<%= network_index_path %>">Network → Devices</a>.</p>
+        <p class="text-muted small">On <%= port_display(@interface) %>'s network, where the NAS is <%= @addresses.first || 'not yet' %>. Fixed addresses for chosen devices are on <a href="<%= network_index_path %>">Network → Devices</a>.</p>
         <div class="row g-3 dns-dhcp-fields mb-4">
           <div class="col-md-6">
             <label class="form-label small" for="dhcp-first">Addresses handed out</label>

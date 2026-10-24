@@ -213,6 +213,14 @@ port the NAS hands out addresses on (Network → DHCP) needs a fixed address.
 Afterwards, bookmarks and devices that used the old address need the new one; DNS, DHCP, the
 router and the shares follow it by themselves.
 
+Under each port the page says what it is (the network card's model, or a *virtual port* on a
+server that runs as a virtual machine, which has no socket of its own), whether a cable is in
+and at what speed, and its hardware (MAC) address. **Name** gives the port a name of your own
+("Modem", "Office") that then shows wherever the port comes up, on the DNS, DHCP and Internet
+pages too; a server with several ports is hard to follow by `enp3s0f1` alone. **Find port**
+blinks a real port's light for five seconds, to see which socket it is on the back of the
+server.
+
 ## Devices and fixed addresses
 
 **Network → Devices** lists the devices the NAS has given an address to, and lets you fix a

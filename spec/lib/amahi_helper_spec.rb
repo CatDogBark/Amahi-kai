@@ -1583,6 +1583,14 @@ RSpec.describe 'AmahiHelper' do
         expect(steps('network.set_address', 'interface' => 'ens19', 'mode' => 'automatic')).to eq([[:set_address, 'ens19', 'automatic', nil, nil, [], false]])
       end
 
+      it "blinks a port's light with ethtool, where it's installed" do
+        allow(File).to receive(:executable?).and_call_original
+        allow(File).to receive(:executable?).with(AmahiHelper::ETHTOOL).and_return(true)
+        expect(steps('network.blink_port', 'interface' => 'ens19')).to eq([['/usr/sbin/ethtool', '--identify', 'ens19', '5']])
+        allow(File).to receive(:executable?).with(AmahiHelper::ETHTOOL).and_return(false)
+        expect(refusal('network.blink_port', 'interface' => 'ens19')).to include("ethtool isn't installed")
+      end
+
       it "refuses what an interface can't have, and the internet side" do
         base = { 'interface' => 'ens19', 'mode' => 'fixed' }
         expect(refusal('network.set_address', base.merge('address' => '10.99.0.5'))).to include("network's size")
