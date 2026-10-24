@@ -19,6 +19,10 @@ Rails.application.routes.draw do
     post 'hosts', action: 'create_host'
     delete 'host/:id', action: 'destroy_host', as: 'destroy_host'
     get 'dns_aliases', to: redirect('/network/dns#dns-aliases')
+    # This NAS: its own address on an interface, and the way a change is kept (lib/network_address.rb)
+    put 'address', action: 'update_address', as: 'update_address'
+    get 'address', action: 'address_status', as: 'address_status'
+    post 'address/reached', action: 'address_reached', as: 'address_reached'
   end
 
   # Network → DNS, DHCP and Internet: one controller, since they share the LAN interface and the

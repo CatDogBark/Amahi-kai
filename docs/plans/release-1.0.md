@@ -100,6 +100,20 @@ IPv6); the switches with their dependency chain (DHCP needs DNS, the router need
 one off turns off what builds on it); the old addresses redirect. The old pages' JavaScript
 forms (hosts, aliases) became plain forms.
 
+## 2e. This NAS: its own address
+
+The pages read the NAS's address off its interfaces but never set one, so a fresh install kept
+whatever Ubuntu's installer left (DHCP from the router, which can change), and Samba's
+`hosts allow` kept the `net` the installer copied once. Network → Devices gets a **This NAS** card:
+each port's address and how it got it, changed from the page (automatic, or fixed with its
+network size, router and DNS servers), through the helper (`network.set_address`), which rewrites
+the port's netplan entry and checks it with `netplan generate`. A change to the port the admin is
+connected through is applied after the reply and kept only once a request reaches the NAS at the
+new address (`network.keep_address`, from the moving page's probe or the admin arriving);
+otherwise the helper's timer puts the old settings back after 90 s. The `net` and `self-address`
+settings, DNS, DHCP, the router and Samba follow the new address. The internet side in router mode
+stays the Internet page's. Built 2026-10-24, island-tested on the test VM's LAN leg.
+
 ## 3. Signed updates
 
 Today the updater installs whatever the GitHub Release tag points at, and the helper fetches the

@@ -51,15 +51,18 @@ module NetworkInterfaces
 
     # The IPv4 default route with the lowest metric: ["ens18", "192.168.1.1"], or nil.
     def default_route(routes = ROUTES)
-      best = nil
-      File.foreach(routes).drop(1).each do |line|
+      default_routes(routes).first&.first(2)
+    end
+
+    # Every IPv4 default route, the lowest metric first: [["ens18", "192.168.1.1", 100], ...].
+    def default_routes(routes = ROUTES)
+      File.foreach(routes).drop(1).filter_map do |line|
         name, destination, gateway, flags, _refcnt, _use, metric, = line.split
         next unless destination == '00000000' && (flags.to_i(16) & 1).positive?
-        best = [metric.to_i, name, gateway] if best.nil? || metric.to_i < best.first
-      end
-      best && [best[1], IPAddr.new(best[2].to_i(16), Socket::AF_INET).to_s.split('.').reverse.join('.')]
+        [name, IPAddr.new(gateway.to_i(16), Socket::AF_INET).to_s.split('.').reverse.join('.'), metric.to_i]
+      end.sort_by(&:last)
     rescue SystemCallError
-      nil
+      []
     end
 
     private

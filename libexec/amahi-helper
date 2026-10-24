@@ -203,6 +203,25 @@ module AmahiHelper
   # Tailscale's own port: let in on the internet side so its connections stay direct.
   TAILSCALE_PORT = '41641'
 
+  # The NAS's own address on an interface (Network → Devices, This NAS): the IPv4 part of the
+  # interface's netplan entry is rewritten, automatic (DHCP) or a fixed address with its router
+  # and DNS servers, each file changed kept as it was beside it (ADDRESS_BACKUP_SUFFIX). A change
+  # to the interface the admin is connected through (guard) is applied ADDRESS_APPLY_WAIT seconds
+  # after the reply, so the reply gets out, and kept only once something reaches the NAS at the
+  # new address within ADDRESS_KEEP_WAIT seconds (network.keep_address); otherwise the revert
+  # timer puts the files back. ADDRESS_STATE says where that stands.
+  ADDRESS_STATE = "#{BLOCKLIST_DIR}/address.json".freeze
+  ADDRESS_BACKUP_SUFFIX = '.amahi-kai-before-address'
+  ADDRESS_APPLY_UNIT = 'amahi-kai-address-apply'
+  ADDRESS_REVERT_UNIT = 'amahi-kai-address-revert'
+  ADDRESS_APPLY_WAIT = 2
+  ADDRESS_KEEP_WAIT = 90
+  # A change left waiting this long (the NAS rebooted meanwhile, and its timers with it) is
+  # taken as kept: whoever asks for the next one reached the NAS as it is.
+  ADDRESS_STALE = 600
+  # Addresses an interface can't have.
+  UNUSABLE_NETS = %w[0.0.0.0/8 127.0.0.0/8 224.0.0.0/3].map { |net| IPAddr.new(net) }.freeze
+
   # The services Settings → Servers may control: the entries in lib/system_services.rb
   # that list actions (spec/lib/amahi_helper_spec.rb checks the two lists match).
   SERVICES = {
@@ -850,6 +869,43 @@ module AmahiHelper
       params: [],
       validate: ->(_a) { {} },
       plan: ->(_v) { [[:router_off]] }
+    },
+    # The NAS's own IPv4 address on an interface (Network → Devices, This NAS). +guard+: the
+    # admin is connected through this interface, so the change is applied after the reply and
+    # kept only once the NAS is reached at the new address (the three operations below).
+    'network.set_address' => {
+      params: %w[interface mode address gateway dns guard],
+      validate: lambda { |a|
+        interface = network_interface(a['interface'])
+        raise Refused, "#{interface} isn't a LAN interface" if interface.match?(NOT_LAN_INTERFACES)
+        if interface == read_json(ROUTER_STATE)&.dig('wan')
+          raise Refused, "#{interface} is the internet side while the NAS is the router (Network → Internet)"
+        end
+        raise Refused, 'guard must be true or false' unless [true, false, nil].include?(a['guard'])
+        values = { interface: interface, mode: listed(a['mode'], 'mode', %w[automatic fixed]), guard: a['guard'] == true }
+        if values[:mode] == 'fixed'
+          values[:address] = ipv4_cidr(a['address'])
+          values[:gateway] = a['gateway'].nil? ? nil : ipv4_in(a['gateway'], 'gateway', values[:address])
+          values[:dns] = dns_servers(a['dns'])
+        end
+        installed!(NETPLAN) && values
+      },
+      plan: ->(v) { [[:set_address, v[:interface], v[:mode], v[:address], v[:gateway], v[:dns] || [], v[:guard]]] }
+    },
+    'network.apply_address' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:apply_address]] }
+    },
+    'network.keep_address' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:keep_address]] }
+    },
+    'network.revert_address' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:revert_address]] }
     },
     # Blocking stops for BLOCKING_PAUSE seconds, then systemd resumes it (dns.resume_blocking).
     'dns.pause_blocking' => {
@@ -1791,6 +1847,43 @@ module AmahiHelper
     # An IPv4 address this machine has.
     def own_ipv4?(value)
       value.is_a?(String) && ip_address?(value, :ipv4?) && Socket.getifaddrs.any? { |i| i.addr&.ipv4? && i.addr.ip_address == value }
+    end
+
+    # "192.168.1.10/24": an IPv4 address an interface can have, with its network's prefix length.
+    def ipv4_cidr(value)
+      value = string(value, 'address', max: 18)
+      address, prefix = value.split('/', 2)
+      unless ip_address?(address.to_s, :ipv4?) && prefix.to_s.match?(/\A\d{1,2}\z/) && prefix.to_i.between?(8, 30)
+        raise Refused, "#{value.inspect} isn't an IPv4 address with its network's size (like 192.168.1.10/24)"
+      end
+      ip = IPAddr.new(address)
+      raise Refused, "#{address} isn't an address an interface can have" if UNUSABLE_NETS.any? { |net| net.include?(ip) }
+      network = ip.mask(prefix.to_i)
+      raise Refused, "#{address} is the network's own address" if ip == network
+      raise Refused, "#{address} is the network's broadcast address" if ip.to_i == network.to_i | (0xffffffff >> prefix.to_i)
+      "#{ip}/#{prefix.to_i}"
+    end
+
+    # An IPv4 address on the network of +cidr+, other than its own address.
+    def ipv4_in(value, what, cidr)
+      value = string(value, what, max: 15)
+      address, prefix = cidr.split('/')
+      network = IPAddr.new(cidr)
+      unless ip_address?(value, :ipv4?) && network.include?(IPAddr.new(value))
+        raise Refused, "#{what} #{value.inspect} isn't an IPv4 address on #{network}/#{prefix}"
+      end
+      raise Refused, "#{what} #{value} is the NAS's own address" if value == address
+      value
+    end
+
+    # Up to three IPv4 DNS servers.
+    def dns_servers(value)
+      value = [] if value.nil?
+      raise Refused, 'dns must be a list of up to 3 IPv4 addresses' unless value.is_a?(Array) && value.size <= 3
+      value.map do |server|
+        raise Refused, "DNS server #{server.inspect} isn't an IPv4 address" unless server.is_a?(String) && ip_address?(server, :ipv4?)
+        IPAddr.new(server).to_s
+      end
     end
 
     def port_number(value, name)
@@ -3530,6 +3623,184 @@ module AmahiHelper
               dhcp4-overrides:
                 route-metric: 50
       YAML
+    end
+
+    # The NAS's own address on +interface+: the last netplan file naming it (netplan lets a later
+    # file override an earlier one) gets the new IPv4 part, and any earlier one loses its IPv4
+    # part, so nothing older can win; a new file when none names it. Checked by netplan generate
+    # before anything is applied. With +guard+, the apply waits for the reply to get out
+    # (ADDRESS_APPLY_UNIT) and the change is kept only once the NAS is reached; without, it's
+    # applied and kept here and now.
+    def do_set_address(interface, mode, address, gateway, dns, guard)
+      state = read_json(ADDRESS_STATE)
+      if state && state['state'] == 'pending'
+        raise Refused, "a change to #{state['interface']} is still waiting; try again in a minute" if Time.now.to_i - state['since'].to_i < ADDRESS_STALE
+        do_keep_address(stale: true)
+      end
+      files = netplan_files_naming(interface)
+      files = ["#{NETPLAN_DIR}/80-amahi-kai-#{interface}.yaml"] if files.empty?
+      created = []
+      files.each_with_index do |path, i|
+        if File.exist?(path)
+          data = netplan_yaml(path) or raise Failed, "#{path} can't be read as netplan YAML"
+          do_install(path + ADDRESS_BACKUP_SUFFIX, File.read(path), nil, '0600')
+        else
+          data = { 'network' => { 'version' => 2, 'ethernets' => {} } }
+          created << path
+        end
+        set_ipv4_entry(netplan_entry(data, interface), interface, i == files.size - 1 ? mode : nil, address, gateway, dns)
+        do_install(path, YAML.dump(data), nil, '0600')
+      end
+      begin
+        run_command([NETPLAN, 'generate'])
+      rescue Failed
+        restore_address_files(files, created)
+        raise
+      end
+      before = Socket.getifaddrs.filter_map { |i| i.addr.ip_address if i.name == interface && i.addr&.ipv4? }
+      write_address_state('state' => 'pending', 'interface' => interface, 'mode' => mode, 'address' => address, 'files' => files,
+                          'created' => created, 'before' => before, 'guard' => guard, 'applied' => false, 'since' => Time.now.to_i, 'until' => nil)
+      if guard
+        arm_timer(ADDRESS_APPLY_UNIT, ADDRESS_APPLY_WAIT, 'network.apply_address')
+      else
+        do_apply_address
+      end
+      nil
+    end
+
+    # netplan apply for the change waiting, the revert timer armed first where the change is
+    # guarded: one that can't be reached is put back whatever happens to the apply. Without a
+    # guard it's kept at once.
+    def do_apply_address
+      state = read_json(ADDRESS_STATE)
+      return 'no address change is waiting' unless state && state['state'] == 'pending' && !state['applied']
+      arm_timer(ADDRESS_REVERT_UNIT, ADDRESS_KEEP_WAIT, 'network.revert_address') if state['guard']
+      write_address_state(state.merge('applied' => true, 'until' => state['guard'] ? Time.now.to_i + ADDRESS_KEEP_WAIT : nil))
+      begin
+        run_command([NETPLAN, 'apply'])
+      rescue Failed
+        do_revert_address
+        raise
+      end
+      do_keep_address unless state['guard']
+      nil
+    end
+
+    # The change waiting is kept: the revert timer goes, and the copies from before.
+    def do_keep_address(stale: false)
+      state = read_json(ADDRESS_STATE)
+      raise Refused, 'no address change is waiting' unless state && state['state'] == 'pending'
+      raise Refused, "the change isn't applied yet" unless state['applied'] || stale
+      stop_timer(ADDRESS_APPLY_UNIT) if stale
+      stop_timer(ADDRESS_REVERT_UNIT)
+      do_remove_files(*Array(state['files']).map { |path| path + ADDRESS_BACKUP_SUFFIX })
+      write_address_state(state.merge('state' => 'kept', 'applied' => true, 'until' => nil))
+      nil
+    end
+
+    # The change waiting is put back: the files as they were, applied again where the change had
+    # been. A fixed address netplan no longer knows stays on the interface, so it goes too,
+    # unless it was there before.
+    def do_revert_address
+      state = read_json(ADDRESS_STATE)
+      return 'no address change is waiting' unless state && state['state'] == 'pending'
+      stop_timer(ADDRESS_APPLY_UNIT)
+      stop_timer(ADDRESS_REVERT_UNIT)
+      restore_address_files(state['files'], state['created'])
+      if state['applied']
+        run_command([NETPLAN, 'apply', { allow_failure: true }])
+        address = state['address'].to_s
+        if state['mode'] == 'fixed' && !Array(state['before']).include?(address.split('/').first)
+          run_command([IP, '-4', 'addr', 'del', address, 'dev', state['interface'], { allow_failure: true }])
+        end
+      end
+      write_address_state(state.merge('state' => 'reverted', 'until' => nil))
+      nil
+    end
+
+    # The netplan files that name +interface+, in the order netplan reads them.
+    def netplan_files_naming(interface)
+      Dir.glob(File.join(NETPLAN_DIR, '*.yaml')).sort.select do |path|
+        (data = netplan_yaml(path)) && netplan_entry(data, interface, create: false)
+      end
+    end
+
+    # The interface's entry in a netplan document, under whichever kind it's defined; made under
+    # ethernets when asked and missing.
+    def netplan_entry(data, interface, create: true)
+      %w[ethernets bridges bonds vlans].each do |kind|
+        entry = data['network'][kind].is_a?(Hash) && data['network'][kind][interface]
+        return entry if entry.is_a?(Hash)
+      end
+      return nil unless create
+      data['network']['ethernets'] = {} unless data['network']['ethernets'].is_a?(Hash)
+      data['network']['ethernets'][interface] = {}
+    end
+
+    # The IPv4 part of an interface's netplan entry: +mode+ 'automatic' (DHCP), 'fixed' (the
+    # address, its router as the default route, its DNS servers), or nil for none at all. The
+    # IPv6 settings stay as they are. The default route goes behind the internet's while the NAS
+    # is the router, as pin_lan_entry puts it.
+    def set_ipv4_entry(entry, interface, mode, address, gateway, dns)
+      ipv6 = ->(value) { value.to_s.include?(':') }
+      entry.delete('gateway4')
+      entry.delete('dhcp4')
+      addresses = Array(entry['addresses']).select(&ipv6)
+      routes = Array(entry['routes']).reject { |r| r.is_a?(Hash) && %w[default 0.0.0.0/0].include?(r['to'].to_s) && !ipv6.call(r['via']) }
+      nameservers = Array(entry.dig('nameservers', 'addresses')).select(&ipv6)
+      case mode
+      when 'automatic'
+        entry['dhcp4'] = true
+      when 'fixed'
+        entry['dhcp4'] = false
+        addresses << address
+        if gateway
+          route = { 'to' => 'default', 'via' => gateway }
+          router = read_json(ROUTER_STATE)
+          route['metric'] = LAN_ROUTE_METRIC if router && router['wan'] != interface
+          routes << route
+        end
+        nameservers += dns
+      end
+      addresses.empty? ? entry.delete('addresses') : entry['addresses'] = addresses
+      routes.empty? ? entry.delete('routes') : entry['routes'] = routes
+      if nameservers.empty?
+        entry['nameservers'].delete('addresses') if entry['nameservers'].is_a?(Hash)
+        entry.delete('nameservers') if entry['nameservers'].is_a?(Hash) && entry['nameservers'].empty?
+      else
+        entry['nameservers'] = {} unless entry['nameservers'].is_a?(Hash)
+        entry['nameservers']['addresses'] = nameservers
+      end
+      entry
+    end
+
+    def restore_address_files(files, created)
+      Array(files).each do |path|
+        backup = path + ADDRESS_BACKUP_SUFFIX
+        if File.exist?(backup)
+          do_install(path, File.read(backup), nil, '0600')
+          do_remove_files(backup)
+        elsif Array(created).include?(path)
+          do_remove_files(path)
+        end
+      end
+    end
+
+    def write_address_state(state)
+      do_install(ADDRESS_STATE, "#{JSON.generate(state)}\n", nil, '0644')
+    end
+
+    # A one-shot timer that runs one of the helper's operations in +seconds+; a previous one of
+    # the same name goes first.
+    def arm_timer(unit, seconds, operation)
+      stop_timer(unit)
+      run_command(['/usr/bin/systemd-run', "--unit=#{unit}", "--on-active=#{seconds}", '--timer-property=AccuracySec=1s',
+                   '/usr/local/sbin/amahi-helper', operation])
+    end
+
+    def stop_timer(unit)
+      run_command(['/usr/bin/systemctl', 'stop', "#{unit}.timer", { allow_failure: true }])
+      run_command(['/usr/bin/systemctl', 'reset-failed', "#{unit}.service", { allow_failure: true }])
     end
 
     # UFW's before.rules with Amahi-kai's NAT block (masquerade out of +wan+, a DNAT in for each

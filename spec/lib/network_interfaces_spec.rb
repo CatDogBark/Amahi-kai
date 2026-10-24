@@ -49,6 +49,17 @@ RSpec.describe NetworkInterfaces do
     expect(described_class.default_name('/nonexistent/route')).to be_nil
   end
 
+  it 'lists every default route, the lowest metric first' do
+    Tempfile.create('route') do |file|
+      file.write("Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\n" \
+                 "ens18\t00000000\t0101A8C0\t0003\t0\t0\t200\t00000000\n" \
+                 "ens20\t00000000\t01004D0A\t0003\t0\t0\t50\t00000000\n")
+      file.flush
+      expect(described_class.default_routes(file.path)).to eq([['ens20', '10.77.0.1', 50], ['ens18', '192.168.1.1', 200]])
+    end
+    expect(described_class.default_routes('/nonexistent/route')).to eq([])
+  end
+
   it "reads this machine's interfaces" do
     expect { described_class.all }.not_to raise_error
   end

@@ -176,6 +176,39 @@ A fourth mode, **Router**: DNS + DHCP, and the NAS is the way to the internet.
 - **Later:** IPv6 for the house (prefix delegation, a real default route announced), PPPoE, a
   static address, and a WAN-side firewall log.
 
+### This NAS: its own address (built 2026-10-24)
+
+The pages read the NAS's address off its interfaces but never set one (CatDogBark, 2026-10-24: a
+fresh install has whatever Ubuntu's installer left, DHCP from the router, and nothing in the UI
+to fix it). Network → Devices gets a **This NAS** card, one row per port: its IPv4 address,
+whether it came from DHCP (the kernel's *dynamic* flag, `ip -j addr`), its router (the port's
+default route) and its part (the LAN DNS serves, the internet side). *Change* sets it:
+automatic, or fixed with the network size, the router and the DNS servers the NAS itself asks
+(suggested from `/run/systemd/resolve/resolv.conf`).
+
+- **The helper** (`network.set_address`) rewrites the IPv4 part of the port's netplan entry in
+  the last file naming it (netplan lets later files override earlier ones) and clears the IPv4
+  part of any earlier file naming it, IPv6 settings untouched, each file kept beside it as
+  `.amahi-kai-before-address`; `netplan generate` checks the result before anything is applied.
+  While the NAS is the router, a fixed port's default route gets metric 200, as pinning does.
+- **The lockout guard.** When the change is to the port the request came in through (Puma's
+  socket says which address it arrived on), the helper applies it 2 s after replying (a
+  transient timer, `amahi-kai-address-apply`), arms a 90 s revert timer
+  (`amahi-kai-address-revert` → `network.revert_address`: the files back, `netplan apply`, the
+  new address off the port) and marks the change pending in `address.json`. The page the admin
+  sees meanwhile (`network/moving`) probes `POST /network/address/reached` at the new address
+  every 3 s (no-cors, no sign-in: a request that came in through the changed port is what
+  "reached" means, and it can only keep a change already waiting), and goes there once it
+  answers; the probe's arrival runs `network.keep_address`, which drops the revert timer and
+  the copies. Automatic mode's new address isn't known, so the probe goes to
+  `<hostname>.local` (mDNS). A change to another port is applied and kept at once. A pending
+  change older than 10 minutes (a reboot took the timers) counts as kept.
+- **What follows the address** (`NetworkAddress.settle!`): the `net` and `self-address`
+  settings (Samba's `hosts allow`, lmhosts, the aliases), `DnsService.apply!` (Unbound, dnsmasq,
+  the router's rules, all of which name the NAS's address) and Samba's config.
+- **Refused:** the internet side in router mode (the Internet page's), automatic on the port the
+  NAS hands out addresses on, a network or broadcast address, a router outside the network.
+
 ### Security at the routing layer (planned 2026-10-23)
 
 The switches, their order and their limits are in [`release-1.0.md`](release-1.0.md) §2c. Built

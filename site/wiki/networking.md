@@ -186,6 +186,33 @@ aliases.
 
 ---
 
+## This NAS: its own address
+
+The top of **Network → Devices** shows the NAS's own address on each network port, and how it
+got it: **from the network** (your router's DHCP, which can give it a different one some day) or
+**fixed**. The shares, DNS, DHCP and the router all rely on the NAS's address, so a fixed one is
+the better choice. **Change** on a port sets it:
+
+- **From the network (DHCP)**: the router hands the NAS an address.
+- **Fixed**: the address, its network size (`/24` is the usual home network), the router's address
+  and the DNS servers the NAS itself should ask. Pick an address your router doesn't hand out
+  (outside its DHCP range), or reserve the address on the router, so no device is given the same
+  one later.
+
+Changing the address of the port you're connected through moves the page with it: a page
+appears that keeps trying the NAS at the new address and goes there once it answers (you may
+have to sign in again there). That answer is what keeps the change; if nothing reaches the NAS
+at the new address within 90 seconds, the NAS goes back to the old address by itself, and the
+page follows. A wrong address can't lock you out. Changing another port's address happens at
+once.
+
+While the NAS is the router (Network → Internet), the internet side's address comes from the
+provider and is managed there, and the LAN port has no router of its own (the NAS is it). The
+port the NAS hands out addresses on (Network → DHCP) needs a fixed address.
+
+Afterwards, bookmarks and devices that used the old address need the new one; DNS, DHCP, the
+router and the shares follow it by themselves.
+
 ## Devices and fixed addresses
 
 **Network → Devices** lists the devices the NAS has given an address to, and lets you fix a

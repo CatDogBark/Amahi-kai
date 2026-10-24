@@ -1496,6 +1496,174 @@ RSpec.describe 'AmahiHelper' do
     end
   end
 
+  # Network → Devices, This NAS: the NAS's own address on an interface, the IPv4 part of its
+  # netplan entry; a change to the interface the admin came in through is kept only once the NAS
+  # is reached at the new address.
+  describe "the NAS's own address (Network → Devices)" do
+    let(:dir) { Dir.mktmpdir }
+    let(:ran) { [] }
+    let(:installer_file) { "#{dir}/netplan/50-cloud-init.yaml" }
+    let(:installer_yaml) { "network:\n  version: 2\n  ethernets:\n    ens19:\n      dhcp4: true\n      dhcp6: false\n" }
+    let(:ifaddr) { Struct.new(:name, :addr, :netmask) }
+
+    before do
+      stub_const('AmahiHelper::NETPLAN_DIR', "#{dir}/netplan")
+      stub_const('AmahiHelper::ROUTER_STATE', "#{dir}/router.json")
+      stub_const('AmahiHelper::ADDRESS_STATE', "#{dir}/address.json")
+      Dir.mkdir("#{dir}/netplan")
+      File.write(installer_file, installer_yaml)
+      allow(Socket).to receive(:getifaddrs).and_return([ifaddr.new('ens19', Addrinfo.ip('10.99.0.1'), Addrinfo.ip('255.255.255.0'))])
+      allow(helper).to receive(:run_command) { |argv| ran << argv.reject { |a| a.is_a?(Hash) }.join(' ') && nil }
+    end
+
+    after { FileUtils.rm_rf(dir) }
+
+    def state = JSON.parse(File.read(AmahiHelper::ADDRESS_STATE))
+    def entry(path = installer_file, name = 'ens19') = YAML.safe_load(File.read(path))['network']['ethernets'][name]
+
+    describe 'the request' do
+      before do
+        allow(helper).to receive(:installed!).and_call_original
+        allow(helper).to receive(:installed!).with(AmahiHelper::NETPLAN).and_return(true)
+        allow(helper).to receive(:network_interface) { |name| name }
+      end
+
+      it 'takes a fixed address with its network, its router and DNS servers, or automatic' do
+        args = { 'interface' => 'ens19', 'mode' => 'fixed', 'address' => '10.99.0.5/24', 'gateway' => '10.99.0.254', 'dns' => ['10.99.0.254', '9.9.9.9'], 'guard' => true }
+        expect(steps('network.set_address', args)).to eq([[:set_address, 'ens19', 'fixed', '10.99.0.5/24', '10.99.0.254', ['10.99.0.254', '9.9.9.9'], true]])
+        expect(steps('network.set_address', 'interface' => 'ens19', 'mode' => 'automatic')).to eq([[:set_address, 'ens19', 'automatic', nil, nil, [], false]])
+      end
+
+      it "refuses what an interface can't have, and the internet side" do
+        base = { 'interface' => 'ens19', 'mode' => 'fixed' }
+        expect(refusal('network.set_address', base.merge('address' => '10.99.0.5'))).to include("network's size")
+        expect(refusal('network.set_address', base.merge('address' => '10.99.0.0/24'))).to include("network's own address")
+        expect(refusal('network.set_address', base.merge('address' => '10.99.0.255/24'))).to include('broadcast')
+        expect(refusal('network.set_address', base.merge('address' => '127.0.0.5/8'))).to include("isn't an address an interface can have")
+        expect(refusal('network.set_address', base.merge('address' => '10.99.0.5/24', 'gateway' => '10.99.1.1'))).to include("isn't an IPv4 address on 10.99.0.0/24")
+        expect(refusal('network.set_address', base.merge('address' => '10.99.0.5/24', 'gateway' => '10.99.0.5'))).to include("NAS's own address")
+        expect(refusal('network.set_address', base.merge('address' => '10.99.0.5/24', 'dns' => %w[1.1.1.1 2.2.2.2 3.3.3.3 4.4.4.4]))).to include('up to 3')
+        expect(refusal('network.set_address', base.merge('address' => '10.99.0.5/24', 'dns' => ['nine']))).to include("isn't an IPv4 address")
+        expect(refusal('network.set_address', base.merge('mode' => 'static'))).to include('mode')
+        expect(refusal('network.set_address', 'interface' => 'lo', 'mode' => 'automatic')).to include("isn't a LAN interface")
+        File.write(AmahiHelper::ROUTER_STATE, JSON.generate('lan' => 'ens19', 'wan' => 'ens20'))
+        expect(refusal('network.set_address', 'interface' => 'ens20', 'mode' => 'automatic')).to include('internet side')
+      end
+    end
+
+    describe 'a guarded change (the admin came in through the interface)' do
+      it 'rewrites the IPv4 part, keeps a copy, checks it and arms the apply; the apply arms the revert; keep tidies up' do
+        helper.do_set_address('ens19', 'fixed', '10.99.0.5/24', '10.99.0.254', ['9.9.9.9'], true)
+        expect(entry).to eq('dhcp4' => false, 'dhcp6' => false, 'addresses' => ['10.99.0.5/24'],
+                            'routes' => [{ 'to' => 'default', 'via' => '10.99.0.254' }], 'nameservers' => { 'addresses' => ['9.9.9.9'] })
+        expect(File.read("#{installer_file}.amahi-kai-before-address")).to eq(installer_yaml)
+        expect(File.stat(installer_file).mode & 0o777).to eq(0o600)
+        expect(state).to include('state' => 'pending', 'interface' => 'ens19', 'mode' => 'fixed', 'address' => '10.99.0.5/24',
+                                 'before' => ['10.99.0.1'], 'guard' => true, 'applied' => false, 'files' => [installer_file])
+        expect(ran).to include('/usr/sbin/netplan generate',
+                               '/usr/bin/systemd-run --unit=amahi-kai-address-apply --on-active=2 --timer-property=AccuracySec=1s /usr/local/sbin/amahi-helper network.apply_address')
+        expect(ran).not_to include('/usr/sbin/netplan apply')
+        expect { helper.do_set_address('ens19', 'automatic', nil, nil, [], false) }.to raise_error(AmahiHelper::Refused, /still waiting/)
+        expect { helper.do_keep_address }.to raise_error(AmahiHelper::Refused, /isn't applied yet/)
+
+        ran.clear
+        expect(helper.do_apply_address).to be_nil
+        expect(ran).to eq(['/usr/bin/systemctl stop amahi-kai-address-revert.timer', '/usr/bin/systemctl reset-failed amahi-kai-address-revert.service',
+                           '/usr/bin/systemd-run --unit=amahi-kai-address-revert --on-active=90 --timer-property=AccuracySec=1s /usr/local/sbin/amahi-helper network.revert_address',
+                           '/usr/sbin/netplan apply'])
+        expect(state).to include('applied' => true)
+        expect(state['until']).to be > Time.now.to_i + 80
+        expect(helper.do_apply_address).to eq('no address change is waiting')
+
+        ran.clear
+        expect(helper.do_keep_address).to be_nil
+        expect(state).to include('state' => 'kept', 'until' => nil)
+        expect(File.exist?("#{installer_file}.amahi-kai-before-address")).to be false
+        expect(ran).to include('/usr/bin/systemctl stop amahi-kai-address-revert.timer')
+        expect(File.read(installer_file)).to include('10.99.0.5/24')
+        expect { helper.do_keep_address }.to raise_error(AmahiHelper::Refused, /no address change is waiting/)
+      end
+
+      it 'is put back by the revert timer: the file as it was, applied, and the new address off the interface' do
+        helper.do_set_address('ens19', 'fixed', '10.99.0.5/24', nil, [], true)
+        helper.do_apply_address
+        ran.clear
+        expect(helper.do_revert_address).to be_nil
+        expect(File.read(installer_file)).to eq(installer_yaml)
+        expect(File.exist?("#{installer_file}.amahi-kai-before-address")).to be false
+        expect(ran).to include('/usr/sbin/netplan apply', '/usr/sbin/ip -4 addr del 10.99.0.5/24 dev ens19')
+        expect(state).to include('state' => 'reverted', 'until' => nil)
+        expect(helper.do_revert_address).to eq('no address change is waiting')
+      end
+
+      it 'leaves an address the interface had before on it when putting back, and only unarms a change not yet applied' do
+        helper.do_set_address('ens19', 'fixed', '10.99.0.1/24', nil, [], true)
+        ran.clear
+        helper.do_revert_address
+        expect(ran).to eq(['/usr/bin/systemctl stop amahi-kai-address-apply.timer', '/usr/bin/systemctl reset-failed amahi-kai-address-apply.service',
+                           '/usr/bin/systemctl stop amahi-kai-address-revert.timer', '/usr/bin/systemctl reset-failed amahi-kai-address-revert.service'])
+        expect(File.read(installer_file)).to eq(installer_yaml)
+      end
+
+      it 'takes a change left waiting through a reboot as kept, and goes on' do
+        helper.do_set_address('ens19', 'fixed', '10.99.0.5/24', nil, [], true)
+        File.write(AmahiHelper::ADDRESS_STATE, JSON.generate(state.merge('since' => Time.now.to_i - 3600)))
+        helper.do_set_address('ens19', 'fixed', '10.99.0.6/24', nil, [], true)
+        expect(entry['addresses']).to eq(['10.99.0.6/24'])
+        expect(File.read("#{installer_file}.amahi-kai-before-address")).to include('10.99.0.5/24')
+      end
+    end
+
+    describe 'an unguarded change (another interface than the admin came in through)' do
+      it 'is applied and kept at once' do
+        helper.do_set_address('ens19', 'automatic', nil, nil, [], false)
+        expect(entry).to eq('dhcp4' => true, 'dhcp6' => false)
+        expect(ran).to include('/usr/sbin/netplan generate', '/usr/sbin/netplan apply')
+        expect(ran.grep(/systemd-run/)).to be_empty
+        expect(state).to include('state' => 'kept', 'applied' => true, 'guard' => false)
+        expect(File.exist?("#{installer_file}.amahi-kai-before-address")).to be false
+      end
+
+      it 'puts the files back and says so when netplan refuses them, or the apply fails' do
+        allow(helper).to receive(:run_command) { |argv| raise AmahiHelper::Failed, 'netplan exited 1' if argv[1] == 'generate' }
+        expect { helper.do_set_address('ens19', 'fixed', '10.99.0.5/24', nil, [], false) }.to raise_error(AmahiHelper::Failed, /netplan exited 1/)
+        expect(File.read(installer_file)).to eq(installer_yaml)
+        expect(File.exist?(AmahiHelper::ADDRESS_STATE)).to be false
+        allow(helper).to receive(:run_command) { |argv| raise AmahiHelper::Failed, 'netplan exited 2' if argv[1] == 'apply' && !argv.last.is_a?(Hash) }
+        expect { helper.do_set_address('ens19', 'fixed', '10.99.0.5/24', nil, [], false) }.to raise_error(AmahiHelper::Failed, /netplan exited 2/)
+        expect(File.read(installer_file)).to eq(installer_yaml)
+        expect(state).to include('state' => 'reverted')
+      end
+    end
+
+    describe 'the netplan files' do
+      it "settles the last file naming the interface and clears the IPv4 part of earlier ones, IPv6 kept; the route goes behind the internet's while the NAS is the router" do
+        File.write(installer_file, "network:\n  version: 2\n  ethernets:\n    ens19:\n      dhcp4: true\n      addresses:\n      - fd99::1/64\n" \
+                                   "      nameservers:\n        addresses: [192.168.1.1, fd99::53]\n        search: [home.arpa]\n")
+        island = "#{dir}/netplan/60-island.yaml"
+        File.write(island, "network:\n  version: 2\n  ethernets:\n    ens19:\n      addresses: [10.99.0.1/24]\n      gateway4: 10.99.0.254\n" \
+                           "      routes:\n      - to: 10.5.0.0/16\n        via: 10.99.0.9\n")
+        File.write(AmahiHelper::ROUTER_STATE, JSON.generate('lan' => 'ens19', 'wan' => 'ens20'))
+        helper.do_set_address('ens19', 'fixed', '10.99.0.5/24', '10.99.0.254', ['10.99.0.254'], false)
+        expect(entry).to eq('addresses' => ['fd99::1/64'], 'nameservers' => { 'addresses' => ['fd99::53'], 'search' => ['home.arpa'] })
+        expect(entry(island)).to eq('dhcp4' => false, 'addresses' => ['10.99.0.5/24'],
+                                    'routes' => [{ 'to' => '10.5.0.0/16', 'via' => '10.99.0.9' }, { 'to' => 'default', 'via' => '10.99.0.254', 'metric' => 200 }],
+                                    'nameservers' => { 'addresses' => ['10.99.0.254'] })
+        expect(state['files']).to eq([installer_file, island])
+      end
+
+      it 'makes a file for an interface none names, which the revert removes again' do
+        helper.do_set_address('ens21', 'fixed', '10.5.0.2/24', nil, [], true)
+        path = "#{dir}/netplan/80-amahi-kai-ens21.yaml"
+        expect(YAML.safe_load(File.read(path))).to eq('network' => { 'version' => 2, 'ethernets' => { 'ens21' => { 'dhcp4' => false, 'addresses' => ['10.5.0.2/24'] } } })
+        expect(state).to include('created' => [path], 'before' => [])
+        helper.do_revert_address
+        expect(File.exist?(path)).to be false
+        expect(File.read(installer_file)).to eq(installer_yaml)
+      end
+    end
+  end
+
   # Every drive check reads lsblk's tree. lsblk only nests partitions and volumes under their
   # disk with NAME as the first column; with PATH first it listed every device flat, so a disk
   # seemed to have nothing mounted from it and the system disk passed the checks.
