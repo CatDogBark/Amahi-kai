@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+### 🔒 Security & Fixes
+
+- **An app's shares dialog ticks a share recorded in other capitals** (Apps → Change) — An app given "vault" didn't show the share "Vault" ticked, while the share's delete check and the app itself treated them as one; the dialog now ignores case too.
+
 ## [0.10.1] — 2026-10-24
 
 Fixes from the first real house turned over to the NAS as its router: the NAS taking the old router's address, a ZFS pool made from drives that had been set up for shares, and a server that had never had DNS blocking on.

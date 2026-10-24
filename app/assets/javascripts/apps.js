@@ -74,7 +74,8 @@ function openShareDialog(button) {
   var storage = storageChoice(dialog, button);
   dialog.querySelector('[data-role="read-only-note"]').hidden = writes;
   rows.forEach(function(row) {
-    var given = current.filter(function(share) { return share.name === row.dataset.share; })[0];
+    // Share names don't depend on case (the helper, the share's delete check and MariaDB all ignore it)
+    var given = current.filter(function(share) { return share.name.toLowerCase() === row.dataset.share.toLowerCase(); })[0];
     var pooled = row.dataset.pooled === 'true';
     row.querySelector('[data-role="give"]').checked = !!given;
     row.querySelector('[data-role="access"]').value = given && given.write ? 'write' : 'read';
