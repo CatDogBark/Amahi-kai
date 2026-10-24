@@ -173,6 +173,9 @@ firewall and NAT. Still behind, to consider after 1.0 unless listed earlier:
 - **UPnP/NAT-PMP as an opt-in** (miniupnpd) with a per-device allow, for consoles and VoIP
   that want it; off is the safer default and stays so.
 - **OpenWrt access points managed from the NAS** (a Wireless tab): documented, after 1.0.
+- **A device's own DNS** (a per-device exemption on Devices): a second resolver behind the NAS
+  router (a Pi-hole, another Amahi-kai) can't use DNS over TLS, since the router keeps port 853
+  from LAN devices. Not needed in the house (2026-10-24); for whoever runs one.
 
 ## Release 1.0
 

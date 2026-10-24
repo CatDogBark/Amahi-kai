@@ -120,6 +120,57 @@ RSpec.describe 'install and update scripts' do
       .to include('ExecStart=/usr/local/sbin/amahi-helper apps.firewall', 'ExecStart=-/usr/local/sbin/amahi-helper apps.announce')
   end
 
+  it "installs and enables the watch that has DNS and Samba follow Tailscale, run as the app user" do
+    text = File.read(Rails.root.join('bin/amahi-install-helper'))
+    expect(text).to include('amahi-kai-tailscale.service amahi-kai-tailscale.path', 'systemctl enable --now amahi-kai-tailscale.path')
+    expect(File.read(Rails.root.join('config/systemd/amahi-kai-tailscale.path'))).to include('PathChanged=/var/lib/tailscale/tailscaled.state')
+    expect(File.read(Rails.root.join('config/systemd/amahi-kai-tailscale.service')))
+      .to include('User=amahi', 'StateDirectory=amahi-kai-tailscale', 'ExecStart=/opt/amahi-kai/bin/amahi-follow-tailscale')
+    expect(File.stat(Rails.root.join('bin/amahi-follow-tailscale')).mode & 0o111).to eq(0o111)
+  end
+
+  # bin/amahi-follow-tailscale with a stand-in `ip` (the interface's addresses, from a file) and
+  # a stand-in `bundle` that only records that the app was asked.
+  describe 'following Tailscale' do
+    let(:dir) { Dir.mktmpdir }
+    let(:script) { Rails.root.join('bin/amahi-follow-tailscale').to_s }
+
+    before do
+      FileUtils.mkdir_p(["#{dir}/bin", "#{dir}/state", "#{dir}/app"])
+      File.write("#{dir}/bin/ip", "#!/bin/sh\ncat #{dir}/addresses 2>/dev/null\n")
+      File.write("#{dir}/bin/bundle", "#!/bin/sh\necho \"$*\" >> #{dir}/asked\n")
+      FileUtils.chmod(0o755, ["#{dir}/bin/ip", "#{dir}/bin/bundle"])
+    end
+
+    after { FileUtils.rm_rf(dir) }
+
+    def follow(addresses)
+      addresses ? File.write("#{dir}/addresses", addresses) : FileUtils.rm_f("#{dir}/addresses")
+      # The script calls /usr/bin/bundle; the stand-in takes its place by a copy of the script
+      copy = "#{dir}/follow"
+      File.write(copy, File.read(script).sub('/usr/bin/bundle', "#{dir}/bin/bundle"))
+      FileUtils.chmod(0o755, copy)
+      env = { 'PATH' => "#{dir}/bin:/usr/bin:/bin", 'APP_DIR' => "#{dir}/app", 'STATE_DIRECTORY' => "#{dir}/state",
+              'FOLLOW_TRIES' => '2', 'FOLLOW_WAIT' => '0' }
+      _out, err, status = Open3.capture3(env, copy)
+      raise "the script failed: #{err}" unless status.success?
+
+      File.exist?("#{dir}/asked") ? File.readlines("#{dir}/asked").size : 0
+    end
+
+    it "asks the app only when the addresses change, sign-in, a new address and sign-out alike" do
+      line = ->(address) { "4: tailscale0    inet #{address} scope global tailscale0\\       valid_lft forever\n" }
+      signed_in = line.call('100.100.32.46/32') + "4: tailscale0    inet6 fe80::1/64 scope link\n"
+      expect(follow(signed_in)).to eq(1) # first time: nothing seen before
+      expect(File.read("#{dir}/state/addresses")).to eq('100.100.32.46/32 ') # the link-local one left out
+      expect(follow(signed_in)).to eq(1) # the same addresses: the app isn't booted
+      expect(follow(line.call('100.100.32.47/32'))).to eq(2)
+      expect(follow(nil)).to eq(3) # signed out: none
+      expect(File.read("#{dir}/state/addresses")).to eq('')
+      expect(File.read("#{dir}/asked")).to include("exec rails runner puts TailscaleService.follow!")
+    end
+  end
+
   it "removes the app catalog's own timer: the update check fetches the catalog" do
     text = File.read(Rails.root.join('bin/amahi-install-helper'))
     expect(text).to include('systemctl disable --now amahi-kai-catalog.timer',

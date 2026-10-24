@@ -107,7 +107,10 @@ sudo systemctl daemon-reload
 
 The server then shows up in your tailnet with a name like `amahi-kai.tail1234.ts.net`. Amahi-kai
 recognizes that name automatically, and Samba accepts connections from your tailnet, so the web
-UI and your shares work from anywhere your devices are signed in.
+UI and your shares work from anywhere your devices are signed in. If the NAS is your DNS server
+(Network → DNS), your Tailscale devices can use it too, at the server's Tailscale address:
+blocking and the local names included. Amahi-kai notices when Tailscale signs in, signs out or
+gets a new address, and sets DNS and Samba up for it within a minute or so; nothing to save.
 
 **Stop** disconnects; **Log out** removes the server from your tailnet.
 

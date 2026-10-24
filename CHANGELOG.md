@@ -10,6 +10,7 @@ All notable changes to Amahi-kai are documented here.
 
 ### 🔒 Security & Fixes
 
+- **DNS and shares over Tailscale without a Save** — The NAS's DNS and Samba answer on its Tailscale address only when their settings name it, and Tailscale gets that address only after you approve its sign-in. Turned on after DNS (the usual order), Tailscale devices got no DNS and no shares from the NAS until someone happened to save Network → DNS. Amahi-kai now notices Tailscale signing in, signing out or changing address, and sets both up again by itself.
 - **An app's shares dialog ticks a share recorded in other capitals** (Apps → Change) — An app given "vault" didn't show the share "Vault" ticked, while the share's delete check and the app itself treated them as one; the dialog now ignores case too.
 
 ## [0.10.1] — 2026-10-24

@@ -1,0 +1,18 @@
+# Started by amahi-kai-tailscale.path: once Tailscale's addresses settle and differ from the
+# last ones seen, DNS and Samba get settings that name them (bin/amahi-follow-tailscale).
+[Unit]
+Description=Amahi-kai: DNS and Samba follow Tailscale's address
+After=amahi-kai.service mariadb.service
+
+[Service]
+Type=oneshot
+User=amahi
+Group=amahi
+WorkingDirectory=/opt/amahi-kai
+EnvironmentFile=/etc/amahi-kai/amahi.env
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
+StateDirectory=amahi-kai-tailscale
+ExecStart=/opt/amahi-kai/bin/amahi-follow-tailscale
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=amahi-kai-tailscale

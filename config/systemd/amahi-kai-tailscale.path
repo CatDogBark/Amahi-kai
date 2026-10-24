@@ -1,0 +1,12 @@
+# Tailscale's state changes when it signs in or out, or its address changes: DNS and Samba
+# follow (amahi-kai-tailscale.service). Before Tailscale is installed, systemd watches the
+# nearest folder that exists, and starts watching the file once it's there.
+[Unit]
+Description=Amahi-kai: follow Tailscale's address
+
+[Path]
+PathChanged=/var/lib/tailscale/tailscaled.state
+Unit=amahi-kai-tailscale.service
+
+[Install]
+WantedBy=multi-user.target

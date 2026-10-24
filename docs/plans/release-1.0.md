@@ -17,6 +17,16 @@ devices, which only a NAS on Tailscale can try (step 3 of
 [`testing/networking.md`](../testing/networking.md)). The rest of that list (the house, the days
 after) is use, at CatDogBark's pace.
 
+Done 2026-10-24 on the test VM: after a rewrite of Unbound's settings, its DNS answered the laptop
+over Tailscale (`100.100.32.46`): local names and blocked names, from a device on the tailnet. The
+rewrite was the gap: Unbound and Samba listen on the Tailscale address only when their settings
+name it, and it arrives after the sign-in is approved, so nothing set them up. Now
+`amahi-kai-tailscale.path` watches Tailscale's state file and `bin/amahi-follow-tailscale` (as
+the app user) has `TailscaleService.follow!` make both again once the addresses settle and
+differ from the last seen. Found on the way: a second DNS server behind the NAS router (the test
+VM's own Unbound) can't use DNS over TLS, because the router keeps port 853 from every LAN device
+(§2c, by design). A per-device exemption is on the roadmap, not in 1.0 (CatDogBark: not needed).
+
 ## 2. The real pool, and apps on it
 
 The four SSDs are in and healthy (SMART and long self-tests passed 2026-10-21); nothing is built on
