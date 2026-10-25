@@ -347,7 +347,7 @@
           <div class="mb-3" style="max-width: 320px;">
             <label for="pool-name" class="form-label fw-semibold mb-1">Name</label>
             <input type="text" class="form-control form-control-sm" id="pool-name" name="name" value="<%= @new_pool_name %>"
-                   maxlength="32" pattern="[a-z][a-z0-9_-]*" autocomplete="off">
+                   maxlength="32" pattern="[a-z][a-z0-9_\-]*" autocomplete="off">
             <div class="small text-muted mt-1">Lowercase letters, digits, _ and -. It's mounted at /srv/pools/&lt;name&gt;.</div>
           </div>
           <div class="form-check mb-3">
