@@ -58,7 +58,8 @@
                      Fix
                   </button>
                 <% elsif check.name == 'admin_password' && check.status != :pass %>
-                  <a href="/settings" class="btn btn-sm btn-outline-warning">Change Password</a>
+                  <%# A password changes on Users, the admin's own row %>
+                  <a href="<%= users_path %>" class="btn btn-sm btn-outline-warning">Change Password</a>
                 <% end %>
               </td>
             </tr>

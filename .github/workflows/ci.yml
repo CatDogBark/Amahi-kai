@@ -306,7 +306,7 @@ jobs:
       RAILS_ENV: test
       BUNDLE_JOBS: 4
       BUNDLE_WITHOUT: production
-      DATABASE_URL: mysql2://root:ci-only@127.0.0.1:3306/amahi_test
+      DATABASE_URL: mysql2://root:ci-only@127.0.0.1:3306/amahi_test?encoding=utf8mb4&collation=utf8mb4_general_ci
     steps:
       - uses: actions/checkout@v4
       - name: Install system dependencies
@@ -327,7 +327,7 @@ jobs:
       # versions). Without db/schema.rb in place db:migrate runs them instead of loading it.
       - name: The migrations run on MariaDB
         env:
-          DATABASE_URL: mysql2://root:ci-only@127.0.0.1:3306/amahi_migrations
+          DATABASE_URL: mysql2://root:ci-only@127.0.0.1:3306/amahi_migrations?encoding=utf8mb4&collation=utf8mb4_general_ci
         run: |
           rm db/schema.rb
           bundle exec rails db:create db:migrate

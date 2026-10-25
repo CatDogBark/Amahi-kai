@@ -18,11 +18,20 @@
 
       var url = this.urlValue;
       var btn = event.currentTarget;
+      // The button's own nodes, put back as they were: its text names the share, so it's never
+      // read back in as HTML.
+      var original = btn ? Array.from(btn.childNodes) : [];
+      var restore = function() {
+        if (!btn) return;
+        btn.replaceChildren.apply(btn, original);
+        btn.style.pointerEvents = '';
+      };
 
       // Show loading state on button (match create style)
       if (btn) {
-        btn.dataset.originalText = btn.textContent;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Deleting...';
+        var spinner = document.createElement('span');
+        spinner.className = 'spinner-border spinner-border-sm me-1';
+        btn.replaceChildren(spinner, ' Deleting...');
         btn.style.pointerEvents = 'none';
       }
 
@@ -44,21 +53,14 @@
             if (typeof showToast === 'function') showToast('Deleted successfully', 'success');
             _this.dispatch("success", { detail: data });
           } else {
-            // Restore button
-            if (btn) {
-              btn.innerHTML = btn.dataset.originalText;
-              btn.style.pointerEvents = '';
-            }
+            restore();
             // The server's reason when it gives one (a share with files on the pool drives)
             if (typeof showToast === 'function') showToast(data.message || data.status || "Error", 'error');
           }
         })
         .catch(function(err) {
           console.error("Delete failed:", err);
-          if (btn) {
-            btn.innerHTML = btn.dataset.originalText;
-            btn.style.pointerEvents = '';
-          }
+          restore();
         });
     }
   };

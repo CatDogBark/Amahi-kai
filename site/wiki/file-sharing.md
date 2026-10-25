@@ -26,7 +26,9 @@ header) for using shares from a web browser. When you create, change or delete a
 ## Creating a share
 
 1. Go to **Setup → Shares**.
-2. Under **Create a New Share**, enter a name, choose **Where** its files are kept, and click
+2. Under **Create a New Share**, enter a name (letters, digits, spaces, hyphens and underscores,
+   starting with a letter or digit; not `global`, `homes` or `printers`, which are Samba's own),
+   choose **Where** its files are kept, and click
    **Create**.
 
 Amahi-kai creates the folder (owner `amahi`, group `users`, so share users can write to it), adds

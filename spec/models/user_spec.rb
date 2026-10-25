@@ -71,6 +71,15 @@ describe User do
     end
   end
 
+  it "takes its share permissions along when deleted" do
+    user = create(:user)
+    share = create(:share)
+    CapAccess.create!(user: user, share: share)
+    CapWriter.create!(user: user, share: share)
+    user.destroy
+    expect([CapAccess.count, CapWriter.count]).to eq([0, 0])
+  end
+
   describe "scopes" do
     it "should return only admins with .admins scope" do
       regular = create(:user)

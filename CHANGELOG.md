@@ -56,6 +56,24 @@ All notable changes to Amahi-kai are documented here.
 - **The internet side drops service discovery** (Network → Internet) — UFW lets mDNS and SSDP in ahead of all its other rules, the internet side's deny among them, so the NAS's discovery services could be asked from the provider's network. Router mode drops both on the internet port, over IPv4 and IPv6.
 - **Network changes take turns** — Two at once (This NAS's address kept and put back at the same moment, or two saves of router mode) could interleave their steps; each waits for the one before it now.
 - **Tighter checks on network settings** — The root helper refuses the interface names `.` and `..`, a radvd config that doesn't say the NAS is no router, a dnsmasq config that would answer DNS, and Unbound access lists that add up to a large part of the internet.
+- **Sign-in limits hold whatever the path** — The limits on sign-in attempts matched the form's exact path, so another spelling of it (`/user_sessions.json`) went around them, and the hourly ban counted successful sign-ins too, shutting out someone who signs in often. They're counted at the sign-in itself now, and only wrong passwords count toward the ban.
+- **Remember me does what it says** — Every sign-in lasted seven days, ticked or not. Unticked, a sign-in ends when the browser closes or after 12 hours unused; ticked, after 7 days unused. Any sign-in ends 30 days after it was made.
+- **Signing out ends the sign-in everywhere** — The sign-in lives in the browser's cookie, and signing out cleared only that browser's copy; a copy kept elsewhere went on working. Signing out now ends every sign-in of the account. Through the Cloudflare Tunnel the cookie is sent over HTTPS only.
+- **Amahi-kai answers to its names as they are now** — The names it answers to were read when it started, so after a rename, and for its name in the NAS's DNS (`nas.home.arpa`) and the DNS aliases pointing at it, browsers got the "doesn't answer to the name" page. Those names work at once now.
+- **Names with emoji save** — The database connection used MariaDB's three-byte utf8, which can't hold emoji: a user's name with one wasn't saved, and a file named with one stayed out of the search. The database and its tables move to utf8mb4 with this update.
+- **The setup wizard won't take the installer's password back** — Typed again as the new one, it was accepted, and the security audit then took the password as changed.
+- **Security fixes say why they didn't work** (Network → Security) — A fix's reason was kept in one place for every request, so it could be another one's, and Samba's fix gave none.
+- **Jobs show the security updates off when they are** (Settings → Jobs, Dashboard) — They showed as daily and OK.
+- **Share links work with spaces and subfolders** (Shares, Search) — A space became a + and a subfolder's slashes were encoded, so the links opened nothing.
+- **Phones get the phone layout** — The main pages had no viewport setting, so a phone showed the desktop page shrunk, and the header's phone menu never appeared.
+- **The audit's Change Password opens Users**, where passwords change, not Settings.
+- **System Status shows the LAN address** — It showed whichever address the system listed first, which can be the public one while the NAS is the router.
+- **Share sizes and the Delete button put text into the page as text** (Shares) — They put it in as HTML: du's messages, which name files, and the button's own text, which names the share.
+- **Deleting a user deletes its share permissions** — They were left behind; the ones left by users deleted before go with this update.
+- **New share names are ones Samba can use** — A share could be named `global` or `homes`, Samba's own sections, or with punctuation Samba and Greyhole don't take. New names are letters, digits, spaces, hyphens and underscores; shares named before keep theirs.
+- **A share's Samba settings are saved only once Samba takes them** — An older way in to the same action saved them unchecked; it's gone.
+- **A share's size counts the share** — The count followed links anywhere, other filesystems included. It stays on the share's own filesystem now (a pooled share's Greyhole links still count), and stops after 30 seconds.
+- **Times are in your time zone** — The dashboard's date, file dates, Jobs, the pools' next scrub and snapshots, Servers, the apps' Undo, shares' and users' dates and the tunnel's start were the server's clock, which is UTC on most NASes: the dashboard's date turned over at 2 pm in Hawaii. The browser writes them in its own time zone now.
 
 ### 🔧 Architecture & Code Quality
 

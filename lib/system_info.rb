@@ -19,9 +19,11 @@ module SystemInfo
     'unknown'
   end
 
-  # The first address `hostname -I` lists: on the NAS, its LAN address.
+  # The NAS's IPv4 address on its LAN: the interface DNS serves (or, before DNS, the one its
+  # default route leaves by). `hostname -I` lists every address by interface, and the first
+  # can be the internet side's, the public one, while the NAS is the router; it's the fallback.
   def ip_address
-    Shell.output('hostname', '-I').split.first || 'unknown'
+    DnsService.server_addresses.first || Shell.output('hostname', '-I').split.first || 'unknown'
   end
 
   def kernel

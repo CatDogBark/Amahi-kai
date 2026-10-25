@@ -115,6 +115,93 @@ describe "User Sessions", type: :request do
       delete user_session_path(0)
       expect(response).to redirect_to(root_path)
     end
+
+    # The session lives in the cookie: a copy of it would go on working after a sign-out.
+    it "signs the user out in every browser, a copy of the cookie included" do
+      ensure_setup_completed!
+      user = create(:user)
+      other_browser = open_session
+      other_browser.post user_sessions_path, params: { username: user.login, password: "secretpassword" }
+      login_as(user)
+      copy = cookies['_amahi_kai_session']
+      delete user_session_path(0)
+      other_browser.get root_path
+      expect(other_browser.response.location).to include(new_user_session_path)
+      cookies['_amahi_kai_session'] = copy
+      get root_path
+      expect(response).to redirect_to(new_user_session_path)
+    end
+  end
+
+  # Counted at the action, however its path is spelt: the old throttles matched the exact path.
+  describe "sign-in attempts" do
+    let(:user) { create(:user) }
+
+    before { ensure_setup_completed! }
+
+    it "are limited to 5 in 20 seconds from one address, /user_sessions.json included" do
+      5.times { |n| post "/user_sessions#{'.json' if n.odd?}", params: { username: "nobody#{n}", password: 'x' } }
+      post '/user_sessions.json', params: { username: user.login, password: 'secretpassword' }
+      expect(response).to have_http_status(:too_many_requests)
+      expect(response.body).to include('Too many sign-in attempts. Wait a minute, then try again.')
+      expect(session[:user_id]).to be_nil
+      travel 21.seconds do
+        post user_sessions_path, params: { username: user.login, password: 'secretpassword' }
+        expect(session[:user_id]).to eq(user.id)
+      end
+    end
+
+    it "are limited to 10 a minute for one login name, however it's spelt" do
+      10.times do |n|
+        travel_to(Time.current + (n * 5).seconds) { post user_sessions_path, params: { username: n.even? ? user.login : " #{user.login.upcase}", password: 'x' } }
+      end
+      travel_to(Time.current + 52.seconds) { post user_sessions_path, params: { username: user.login, password: 'secretpassword' } }
+      expect(response).to have_http_status(:too_many_requests)
+    end
+
+    it "close sign-in to an address for an hour after 20 wrong passwords, and only wrong ones count" do
+      start = Time.current
+      # Five every 31 seconds: neither limit stands in the way (5 in 20 seconds, 10 a minute)
+      sign_in = lambda do |n, password|
+        travel_to(start + ((n / 5) * 31).seconds) { post user_sessions_path, params: { username: user.login, password: password } }
+      end
+      25.times { |n| sign_in.call(n, 'secretpassword') } # successful ones
+      expect(response).to redirect_to(root_url)
+      20.times { |n| sign_in.call(25 + n, 'wrong') }
+      sign_in.call(45, 'secretpassword')
+      expect(response).to have_http_status(:forbidden)
+      expect(response.body).to include('sign-in is closed to it for an hour')
+      travel_to(start + 2.hours) { post user_sessions_path, params: { username: user.login, password: 'secretpassword' } }
+      expect(response).to redirect_to(root_url)
+    end
+  end
+
+  describe "Remember me" do
+    let(:user) { create(:user) }
+
+    before { ensure_setup_completed! }
+
+    def session_cookie = Array(response.headers['Set-Cookie']).flat_map { |h| h.split("\n") }.find { |c| c.start_with?('_amahi_kai_session=') }
+
+    it "keeps the sign-in past the browser's closing only when ticked" do
+      post user_sessions_path, params: { username: user.login, password: 'secretpassword' }
+      expect(session_cookie).not_to match(/expires=/i) # ends with the browser
+      get root_path
+      expect(session_cookie.to_s).not_to match(/expires=/i)
+
+      post user_sessions_path, params: { username: user.login, password: 'secretpassword', remember_me: '1' }
+      expect(session_cookie).to match(/expires=/i)
+      get root_path
+      expect(session_cookie).to match(/expires=/i) # seven days from each request
+    end
+
+    it "marks the cookie Secure when the browser came over HTTPS (the Cloudflare Tunnel), and not on the LAN" do
+      post user_sessions_path, params: { username: user.login, password: 'secretpassword' }
+      expect(session_cookie).not_to match(/secure/i)
+      post user_sessions_path, params: { username: user.login, password: 'secretpassword' },
+                               headers: { 'X-Forwarded-Proto' => 'https', 'CF-Connecting-IP' => '203.0.113.7' }
+      expect(session_cookie).to match(/secure/i)
+    end
   end
 
   # The legacy first-run flow created an admin without logging in and never

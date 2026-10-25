@@ -20,6 +20,7 @@ RSpec.configure do |config|
   config.order = "random"
 
   config.include FactoryBot::Syntax::Methods
+  config.include ActiveSupport::Testing::TimeHelpers
 
   config.before(:each) do |example|
     # Specs never run system commands or the root helper, even those that stub
@@ -34,6 +35,9 @@ RSpec.configure do |config|
     load "#{Rails.root}/db/seeds.rb"
     # Root helper calls recorded outside production (the seeds make some); start each example empty.
     Privileged.reset!
+    # Sign-in attempts are counted per address, and every example signs in from the same one.
+    UserSessionsController::ATTEMPTS.clear
+    AllowedHosts.forget_names
   end
 
   config.after(:each) do

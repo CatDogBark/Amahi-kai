@@ -71,6 +71,17 @@ RSpec.describe CloudflareService do
         expect(lines).to eq(['Setting up cloudflared (2026.9.0) ...'])
       end
 
+      # A Time, for the page to write in the viewer's time zone: systemd's own text is the server's.
+      it "says since when the tunnel runs, as a time" do
+        allow(Shell).to receive(:success?).with('systemctl', 'is-active', '--quiet', 'cloudflared').and_return(true)
+        allow(Shell).to receive(:output).with('systemctl', 'show', 'cloudflared', '--timestamp=unix', '--property=ActiveEnterTimestamp')
+                                        .and_return("ActiveEnterTimestamp=@1792963405\n")
+        expect(CloudflareService.connected_since).to eq(Time.at(1_792_963_405))
+        allow(Shell).to receive(:output).with('systemctl', 'show', 'cloudflared', '--timestamp=unix', '--property=ActiveEnterTimestamp')
+                                        .and_return("ActiveEnterTimestamp=\n")
+        expect(CloudflareService.connected_since).to be_nil
+      end
+
       it 'starts, stops and restarts through the helper, reporting failure as false' do
         expect([CloudflareService.start!, CloudflareService.stop!, CloudflareService.restart!]).to all(be true)
         expect(Privileged.calls.map(&:first)).to eq(%w[tunnel.start tunnel.stop tunnel.restart])

@@ -168,10 +168,36 @@ RSpec.describe UserSession, type: :model do
       expect(mock_controller).to have_received(:reset_session).twice  # login, then expiry
     end
 
-    it 'ends a session unused for more than 7 days' do
-      log_in
-      store[:seen_at] = (8.days.ago).to_i
+    it 'ends a remembered session unused for more than 7 days' do
+      UserSession.new(login: user.login, password: 'secretpassword', remember_me: '1').save
+      store[:seen_at] = 6.days.ago.to_i
+      expect(UserSession.find&.record).to eq(user)
+      store[:seen_at] = 8.days.ago.to_i
       expect(UserSession.find).to be_nil
+    end
+
+    it 'ends a session without Remember me after 12 hours unused' do
+      log_in
+      expect(store[:remember]).to be_nil
+      store[:seen_at] = 11.hours.ago.to_i
+      expect(UserSession.find&.record).to eq(user)
+      store[:seen_at] = 13.hours.ago.to_i
+      expect(UserSession.find).to be_nil
+    end
+
+    it 'ends any session 30 days after the sign-in, however busy' do
+      UserSession.new(login: user.login, password: 'secretpassword', remember_me: '1').save
+      store[:signed_in_at] = 29.days.ago.to_i
+      expect(UserSession.find&.record).to eq(user)
+      store[:signed_in_at] = 31.days.ago.to_i
+      expect(UserSession.find).to be_nil
+    end
+
+    it 'takes a session from before these limits as remembered, made now' do
+      signed_in_as(user)
+      store[:seen_at] = 2.days.ago.to_i
+      expect(UserSession.find&.record).to eq(user)
+      expect(store).to include(remember: true, signed_in_at: be_within(5).of(Time.current.to_i))
     end
 
     it 'keeps an active session and refreshes its last-seen time' do

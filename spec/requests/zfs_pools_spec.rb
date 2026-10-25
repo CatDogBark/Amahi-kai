@@ -481,7 +481,7 @@ RSpec.describe 'ZFS pools', type: :request do
     end
 
     it 'offers Scrub now (not while scrubbing) and says when the next automatic scrub is' do
-      allow(StoragePools).to receive(:next_scrub).and_return(Time.local(2026, 10, 11, 0, 24))
+      allow(StoragePools).to receive(:next_scrub).and_return(Time.utc(2026, 10, 11, 0, 24))
       scrubbing = pool.dup.tap { |p| p.scan = 'scrub in progress since Sun Oct  4 10:00:00 2026' }
       stub_pools(installed: true, pools: [pool, StoragePools::Pool.new(**scrubbing.to_h, name: 'busy')])
       get '/disks/pools'
@@ -489,7 +489,9 @@ RSpec.describe 'ZFS pools', type: :request do
       expect(scrub['data-name']).to eq('tank')
       expect(scrub.text.strip).to eq('Scrub now')
       expect(page.at_css('#pool-busy [data-storage-post="/disks/scrub_pool"]')['disabled']).not_to be_nil
-      expect(page.at_css('#pool-tank').text).to include('Next automatic scrub: Sunday, October 11 at 00:24.')
+      # Written in the viewer's time zone by time_ago.js; the server's UTC reading until then
+      expect(page.at_css('#pool-tank').text).to include('Next automatic scrub: Sunday, October 11 at 00:24 UTC.')
+      expect(page.at_css('#pool-tank time[data-local="weekday-time"]')['datetime']).to eq('2026-10-11T00:24:00Z')
     end
 
     it 'scrubs a pool and runs the health check through the helper' do

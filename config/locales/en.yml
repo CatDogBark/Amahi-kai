@@ -51,6 +51,8 @@
   log_in: Log In
   logged_in_successfully: "Logged in successfully"
   not_a_valid_user_or_password: "Error: Incorrect username or password"
+  too_many_sign_in_attempts: "Too many sign-in attempts. Wait a minute, then try again."
+  sign_in_turned_away: "Too many wrong passwords from this address: sign-in is closed to it for an hour."
   remember_me: Remember me
 
   # setup panel tabs

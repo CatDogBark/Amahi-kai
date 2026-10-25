@@ -114,9 +114,32 @@ module ApplicationHelper
                 data: { relative: future ? 'in' : 'ago', capitalize: (true if capitalize), clock: (true if clock) })
   end
 
+  # The server's clock runs in UTC on most NASes, so its own reading of a date or a time of day
+  # would be hours off for the viewer (the dashboard's date turned over at 2 pm in Hawaii):
+  # time_ago.js writes these in the browser's time zone, in one of these shapes. The server's
+  # reading, in UTC, is the text until then.
+  LOCAL_TIME_FORMATS = {
+    'weekday-date' => '%A, %B %-d, %Y', 'date' => '%B %-d, %Y', 'month-day' => '%B %-d',
+    'date-time' => '%b %-d, %Y · %H:%M UTC', 'short' => '%-d %b %H:%M UTC', 'long' => '%B %-d, %Y %H:%M UTC',
+    'weekday-time' => '%A, %B %-d at %H:%M UTC'
+  }.freeze
+
+  def local_time_tag(time, style)
+    utc = time.getutc
+    content_tag(:time, utc.strftime(LOCAL_TIME_FORMATS.fetch(style)), datetime: utc.iso8601, data: { local: style })
+  end
+
+  # A tooltip (data-tip) giving +time+ in the viewer's time zone, +before+ it: attributes for a
+  # tag (tag.attributes, or Slim's *).
+  def local_time_tip(time, style, before: '')
+    utc = time.getutc
+    { 'data-tip' => "#{before}#{utc.strftime(LOCAL_TIME_FORMATS.fetch(style))}", 'data-tip-time' => utc.iso8601,
+      'data-tip-local' => style, 'data-tip-before' => before.presence }.compact
+  end
+
+  # When a record was made or last used: the time in the viewer's zone, and how long ago.
   def formatted_date(date)
-    date = date.localtime
-    "#{date.to_formatted_s(:short)} (#{time_ago_in_words(date)})"
+    safe_join([local_time_tag(date, 'short'), " (#{time_ago_in_words(date)})"])
   rescue NoMethodError, ArgumentError, RangeError
     '-'
   end
@@ -125,8 +148,10 @@ module ApplicationHelper
     @netbios_name ||= Share.server_name.downcase
   end
 
+  # A link to a share, or a file or folder in one ("Photos/2026/beach day.jpg"): each part of
+  # the path encoded on its own, so a space is %20 (not a form's +) and the slashes stay.
   def path2uri(name)
-    name = URI.encode_www_form_component(name)
+    name = name.to_s.split('/').map { |part| ERB::Util.url_encode(part) }.join('/')
     is_a_mac? ? "smb://#{netbios_name}/#{name}" : "file://///#{netbios_name}/#{name}"
   end
 

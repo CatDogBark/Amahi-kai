@@ -1,6 +1,7 @@
 require 'rails_helper'
 
-# Rack::Attack is off in the test environment, so these check the address it throttles by.
+# Rack::Attack is off in the test environment, so these check the address it throttles by
+# (UserSessionsController counts sign-in attempts by it too).
 RSpec.describe Rack::Attack do
   def request(env)
     Rack::Attack::Request.new(Rack::MockRequest.env_for('/user_sessions', { method: 'POST' }.merge(env)))
@@ -10,7 +11,11 @@ RSpec.describe Rack::Attack do
     req = request('REMOTE_ADDR' => '192.168.1.50', 'HTTP_X_FORWARDED_FOR' => '10.9.9.9',
                   'HTTP_CF_CONNECTING_IP' => '1.2.3.4')
     expect(described_class.client_ip(req)).to eq('192.168.1.50')
-    expect(described_class.throttles['logins/ip'].block.call(req)).to eq('192.168.1.50')
+    expect(described_class.throttles['api/ip'].block.call(Rack::Attack::Request.new(req.env.merge('HTTP_X_REQUESTED_WITH' => 'XMLHttpRequest'))))
+      .to eq('192.168.1.50')
+    # Sign-ins are the controller's to count now, at the action, whatever the path: none here
+    expect(described_class.throttles.keys).to eq(['api/ip'])
+    expect(described_class.blocklists).to be_empty
   end
 
   it "throttles a visitor through the Cloudflare Tunnel by Cloudflare's address for them" do

@@ -239,18 +239,34 @@ RSpec.describe "SharesController extended", type: :request do
   describe "PUT /shares/:id/update_size" do
     let!(:share) { create(:share) }
 
-    it "returns size info, counted by du run as an argument list (no shell)" do
-      allow(Open3).to receive(:capture2e).with('du', '-sbL', '--', share.path).and_return(["1048576 /path", double(success?: true)])
+    def du(argv, out, exitstatus)
+      allow(Open3).to receive(:capture3).with('/usr/bin/timeout', '30', '/usr/bin/du', *argv, '--', share.path)
+                                        .and_return([out, '', double(success?: exitstatus.zero?, exitstatus: exitstatus)])
+    end
+
+    it "counts it with du from its own path, on the share's filesystem only, within a time limit (no shell)" do
+      du(['-sbx'], "1048576\t/path\n", 0)
       put update_size_share_path(share), as: :json
       body = response.parsed_body
       expect(body['status']).to eq('ok')
       expect(body['size']).to eq('1 MB')
     end
 
-    it "handles errors gracefully" do
-      allow(Open3).to receive(:capture2e).and_raise(Errno::ENOENT.new("no such file"))
+    it "follows a pooled share's links, Greyhole's to the pool drives, and says when it couldn't count it all" do
+      share.update_columns(disk_pool_copies: 2)
+      du(['-sbx', '-L'], "2097152\t/path\n", 1)
+      put update_size_share_path(share), as: :json
+      expect(response.parsed_body['size']).to eq('2 MB (some folders couldn’t be read)')
+      du(['-sbx', '-L'], '', 124)
+      put update_size_share_path(share), as: :json
+      expect(response.parsed_body['size']).to eq('too many files to count in 30 seconds')
+    end
+
+    it "handles errors gracefully, without du's own words" do
+      allow(Open3).to receive(:capture3).and_raise(Errno::ENOENT.new("no such file"))
       put update_size_share_path(share), as: :json
       expect(response).to have_http_status(:ok)
+      expect(response.parsed_body['size']).to eq("couldn't be counted")
     end
   end
 end

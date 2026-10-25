@@ -125,7 +125,9 @@
       panel.appendChild(el('div', 'fb-details-kind', d.kindName));
 
       var facts = el('dl', 'fb-details-facts');
-      [['Size', d.size], ['Modified', d.modified]].forEach(function(pair) {
+      // Modified comes as the instant; it's written in the viewer's time zone (time_ago.js)
+      var modified = d.modified ? localTimeText(new Date(d.modified), 'date-time') : null;
+      [['Size', d.size], ['Modified', modified]].forEach(function(pair) {
         if (!pair[1]) return;
         facts.appendChild(el('dt', null, pair[0]));
         facts.appendChild(el('dd', null, pair[1]));

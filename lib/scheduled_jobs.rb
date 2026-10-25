@@ -33,7 +33,7 @@ class ScheduledJobs
       about: "Ubuntu's unattended-upgrades installs security fixes, when the security audit has turned it on" }
   ].freeze
 
-  # result: :ok, :failed, :running, or nil when it hasn't run yet.
+  # result: :ok, :failed, :running, :off (switched off), or nil when it hasn't run yet.
   Job = Struct.new(:key, :name, :about, :schedule, :last_run, :next_run, :result, keyword_init: true)
 
   class << self
@@ -46,13 +46,23 @@ class ScheduledJobs
         state = services["#{entry[:timer]}.service"]
         next unless state && state['LoadState'] == 'loaded'
         last, upcoming = times.fetch("#{entry[:timer]}.timer", [])
-        Job.new(**entry.slice(:key, :name, :about, :schedule), last_run: last, next_run: upcoming,
-                result: result(state, last))
+        job = Job.new(**entry.slice(:key, :name, :about, :schedule), last_run: last, next_run: upcoming,
+                      result: result(state, last))
+        entry[:key] == 'security-updates' && !SystemDependencies.automatic? ? switched_off(job) : job
       end
       [*jobs, scrub_job(health)].compact
     end
 
     private
+
+    # Ubuntu's timer runs every day whatever the switch says, and its run installs nothing while
+    # automatic security updates are off: then the job is off, not daily and OK.
+    def switched_off(job)
+      job.schedule = 'Off'
+      job.next_run = nil
+      job.result = :off
+      job
+    end
 
     # { 'x.timer' => [last run, next run] } from list-timers' JSON; {} if it can't be read.
     def timer_times(timers)

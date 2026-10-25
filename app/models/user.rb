@@ -40,6 +40,10 @@ class User < ApplicationRecord
 
   validates :role, inclusion: { in: ROLES }
 
+  # The shares the user may read and write (Shares → Permissions) go with the user.
+  has_many :cap_accesses, dependent: :destroy
+  has_many :cap_writers, dependent: :destroy
+
   scope :admins, -> { where(role: 'admin') }
   scope :non_guests, -> { where.not(role: 'guest') }
 
@@ -100,6 +104,18 @@ class User < ApplicationRecord
         admin.authenticate(SEED_ADMIN_PASSWORD).present?
     end
 
+    # Whether +password+ is the seeded admin's first one, the installer's (by its kept hash) or
+    # the public one: set again as the new password, it would get a new hash, and the check
+    # above would take it as changed.
+    def first_password?(password)
+      return true if password == SEED_ADMIN_PASSWORD
+
+      first = Setting.get(FIRST_PASSWORD_SETTING).to_s
+      first.present? && BCrypt::Password.new(first).is_password?(password)
+    rescue BCrypt::Errors::InvalidHash
+      false
+    end
+
     # [full name, uid, login] of the Linux account for +username+, or nil.
     # Logins are lowercased when users are created, so look up the lowercase name.
     def system_find_name_by_username(username)
@@ -145,6 +161,12 @@ class User < ApplicationRecord
 
   def rotate_session_token
     self.session_token = SecureRandom.hex(20)
+  end
+
+  # Ends every session of the user (UserSession.find compares their tokens), without touching
+  # the password: signing out does it.
+  def end_sessions!
+    update_column(:session_token, SecureRandom.hex(20))
   end
 
   def needs_auth?

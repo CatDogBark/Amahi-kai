@@ -90,7 +90,7 @@
         <p class="small text-muted mt-2 mb-0">
           Mounted at <code><%= pool.mountpoint %></code>.
           <% if pool.scan.blank? || pool.scan == 'none requested' %>No scrub has run yet.<% else %><%= pool.scan.upcase_first %>.<% end %>
-          <% if @next_scrub %>Next automatic scrub: <%= @next_scrub.strftime('%A, %B %-d at %H:%M') %>.<% end %>
+          <% if @next_scrub %>Next automatic scrub: <%= local_time_tag(@next_scrub, 'weekday-time') %>.<% end %>
         </p>
         <% if pool.managed? %>
         <% shares_here = Array(@pool_shares[pool.name]) %>
@@ -148,7 +148,7 @@
                   <% snaps.reverse_each.with_index do |snap, newer| %>
                     <tr>
                       <td><%= snapshot_kind(snap) %> <span class="text-muted ms-1"><%= snap['name'] %></span></td>
-                      <td class="text-nowrap"><span class="tip-text" tabindex="0" data-tip="<%= l(snap['created'], format: :long) %>"><%= relative_time_tag(snap['created']) %></span></td>
+                      <td class="text-nowrap"><span class="tip-text" tabindex="0" <%= tag.attributes(local_time_tip(snap['created'], 'long')) %>><%= relative_time_tag(snap['created']) %></span></td>
                       <td class="text-end"><%= number_to_human_size(snap['used'].to_i) %></td>
                       <td class="text-end text-nowrap">
                         <% if snap['kind'] %>

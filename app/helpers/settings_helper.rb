@@ -1,6 +1,7 @@
 module SettingsHelper
   UPDATE_REPO = 'https://github.com/CatDogBark/Amahi-kai'.freeze
-  JOB_RESULTS = { ok: %w[OK bg-success], failed: %w[Failed bg-danger], running: ['Running', 'bg-info text-dark'] }.freeze
+  JOB_RESULTS = { ok: %w[OK bg-success], failed: %w[Failed bg-danger], running: ['Running', 'bg-info text-dark'],
+                  off: %w[Off bg-secondary] }.freeze
 
   # How a scheduled job's last run went (ScheduledJobs::Job#result).
   def job_result_badge(job)

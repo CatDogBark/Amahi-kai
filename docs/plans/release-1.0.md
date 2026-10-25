@@ -228,7 +228,8 @@ review doc's "1.0 review" tab (unfixed details stay there). The batches go out o
 order, the first being the router's rules during a save, MariaDB's update and the web page, and
 This NAS over the tunnel. Already on its list before the read:
 
-- **Times are the server's clock, in UTC** (roadmap, Open): show them in the browser's zone.
+- **Times are the server's clock, in UTC** (roadmap, Open): show them in the browser's zone. Done in
+  the web app's batch: the browser writes dates and times of day in its own zone (time_ago.js).
 - The remaining low items on the review doc's security audit tab.
 - The anonymous `nobody` share leftover; the roadmap's `nosuid,nodev` entry is done and stale.
 - The four specs that need root (`pending` in CI) and whether the island or a container can run

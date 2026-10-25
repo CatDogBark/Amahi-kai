@@ -14,7 +14,7 @@ div.share[id="whole_share_#{share.id}"]
     .share-manage.collapsed-div-style.share-card
       .share-card-title
         span.fw-semibold= share.name
-        span.small.text-muted.ms-2= "#{t('created')} #{formatted_date(share.created_at)}"
+        span.small.text-muted.ms-2 = safe_join([t('created'), formatted_date(share.created_at)], ' ')
 
       section.share-section id="share-section-access-#{share.id}"
         h6.share-section-title Access

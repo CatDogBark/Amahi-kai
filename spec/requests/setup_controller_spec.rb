@@ -100,6 +100,17 @@ describe "Setup Controller", type: :request do
         post setup_update_admin_path, params: { password: "newpassword1", password_confirmation: "newpassword1" }
         expect(response).to redirect_to(setup_network_path)
       end
+
+      # Set again, it gets a new hash, which the security audit and the wizard would take as changed.
+      it "refuses the first password back: the installer's printed one, or the public one" do
+        Setting.set(User::FIRST_PASSWORD_SETTING, BCrypt::Password.create('printed-by-installer'))
+        post setup_update_admin_path, params: { password: "printed-by-installer", password_confirmation: "printed-by-installer" }
+        expect(response).to have_http_status(:ok)
+        expect(response.body).to include("the password the installer printed. Choose one of your own")
+        post setup_update_admin_path, params: { password: User::SEED_ADMIN_PASSWORD, password_confirmation: User::SEED_ADMIN_PASSWORD }
+        expect(response.body).to include("the password the installer printed. Choose one of your own")
+        expect(User.seed_admin_password_in_use?).to be true
+      end
     end
 
     describe "GET /setup/network" do
@@ -242,7 +253,7 @@ describe "Setup Controller", type: :request do
         expect(response.body).to include("Name has already been taken")
         post setup_create_share_path, params: { share_name: "M" }
         expect(response).to have_http_status(:ok)
-        expect(response.body).to include("Name is invalid")
+        expect(response.body).to include("Name needs two or more letters, digits, spaces, hyphens or underscores")
         expect(Share.count).to eq(1)
       end
 

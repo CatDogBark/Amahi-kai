@@ -6,7 +6,7 @@
       = t 'jobs'
   .card-body
     p.text-muted.small.mb-3
-      | Live from systemd. Times are the server's; each job's result is how its last run ended.
+      | Live from systemd, with times in your time zone. Each job's result is how its last run ended.
     - if @jobs.empty?
       p.mb-0.text-muted No scheduled jobs are installed.
     - else
@@ -28,11 +28,11 @@
                 td.text-nowrap = job.schedule
                 td.text-nowrap
                   - if job.last_run
-                    span.tip-text tabindex="0" data-tip=l(job.last_run, format: :long) = job_last_run(job, capitalize: true)
+                    span.tip-text tabindex="0" *local_time_tip(job.last_run, 'long') = job_last_run(job, capitalize: true)
                   - else
                     = job_last_run(job, capitalize: true)
                 td = job_result_badge(job)
                 td.text-nowrap
-                  = job.next_run ? l(job.next_run, format: :short) : '—'
+                  = job.next_run ? local_time_tag(job.next_run, 'short') : '—'
                   - if job.next_run
                     .small.text-muted = job_next_run(job)

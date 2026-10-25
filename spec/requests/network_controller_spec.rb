@@ -352,7 +352,7 @@ describe "Network Controller", type: :request do
 
     describe "POST /network/security/fix" do
       it "fixes a specific security check" do
-        allow(SecurityAudit).to receive(:fix!).with("ufw_firewall").and_return(true)
+        allow(SecurityAudit).to receive(:fix!).with("ufw_firewall").and_return(fixed: true)
         post "/network/security/fix", params: { check_name: "ufw_firewall" }, as: :json
         body = JSON.parse(response.body)
         expect(body["status"]).to eq("ok")
@@ -360,7 +360,7 @@ describe "Network Controller", type: :request do
       end
 
       it "returns error when fix fails" do
-        allow(SecurityAudit).to receive(:fix!).with("unknown_check").and_return(false)
+        allow(SecurityAudit).to receive(:fix!).with("unknown_check").and_return(fixed: false, error: "unknown_check has no fix")
         post "/network/security/fix", params: { check_name: "unknown_check" }, as: :json
         body = JSON.parse(response.body)
         expect(body["status"]).to eq("error")

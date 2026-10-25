@@ -113,22 +113,12 @@ class SharesController < ApplicationController
     end
   end
 
+  # Advanced → Samba settings. Saved only once Samba takes them (save_extras_if_samba_takes_them).
   def update_extras
-    if params[:value].present?
-      @share.extras = params[:value]
-      if @share.save
-        @share.reload
-        extras = @share.extras.blank? ? t('add_extra_parameters') : @share.extras
-        render plain: extras
-      else
-        render plain: @share.errors.full_messages.join(", "), status: :unprocessable_entity
-      end
-    else
-      params[:share] = sanitize_text(params_update_extras)
-      @share.assign_attributes(params_update_extras)
-      refused = @share.valid? ? save_extras_if_samba_takes_them : @share.errors.full_messages.join(', ')
-      render json: { status: refused ? :not_acceptable : :ok, message: refused }
-    end
+    params[:share] = sanitize_text(params_update_extras)
+    @share.assign_attributes(params_update_extras)
+    refused = @share.valid? ? save_extras_if_samba_takes_them : @share.errors.full_messages.join(', ')
+    render json: { status: refused ? :not_acceptable : :ok, message: refused }
   end
 
   def update_workgroup
@@ -157,19 +147,22 @@ class SharesController < ApplicationController
 
   # --- Size ---
 
+  # How much the share holds: du from its absolute path, on the share's own filesystem (-x) and
+  # for at most SIZE_TIMEOUT seconds. A pooled share's files are Greyhole's links to the pool
+  # drives, so for one du follows links (-L) to count them; a plain share's links aren't followed.
+  SIZE_TIMEOUT = 30
+
   def update_size
-    std_out, status = Open3.capture2e('du', '-sbL', '--', @share.path)
-    size = std_out.split(' ').first
-    is_integer = Integer(size) rescue false
-    if is_integer && status.success?
-      helper = Object.new.extend(ActionView::Helpers::NumberHelper)
-      size = helper.number_to_human_size(size)
-    else
-      size = std_out
-    end
+    links = @share.disk_pool_copies.to_i.positive? ? ['-L'] : []
+    out, _err, status = Open3.capture3('/usr/bin/timeout', SIZE_TIMEOUT.to_s, '/usr/bin/du', '-sbx', *links, '--', @share.path)
+    bytes = out[/\A\d+/]
+    size = if status.exitstatus == 124 then "too many files to count in #{SIZE_TIMEOUT} seconds"
+           elsif bytes then "#{helpers.number_to_human_size(bytes.to_i)}#{' (some folders couldn’t be read)' unless status.success?}"
+           else "couldn't be counted"
+           end
     render json: { status: :ok, size: size, id: @share.id }
-  rescue Errno::ENOENT, Errno::EACCES, IOError => e
-    render json: { status: :ok, size: e.to_s, id: @share&.id }
+  rescue SystemCallError, IOError
+    render json: { status: :ok, size: "couldn't be counted", id: @share&.id }
   end
 
   private

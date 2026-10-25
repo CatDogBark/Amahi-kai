@@ -356,7 +356,10 @@ describe "Docker Apps", type: :request do
       allow(AppCatalog).to receive(:backup).and_return(nil)
       allow(AppCatalog).to receive(:backup).with('gitea').and_return(from: old, taken_at: Time.utc(2026, 10, 5, 12), until: Time.utc(2026, 11, 4, 12))
       get "/apps/installed_apps"
-      expect(response.body).to include('Undo update', 'data-url="/apps/docker/undo_update_stream/gitea"', '(until November 4)')
+      # The date in the viewer's time zone (time_ago.js), the copy's age in the confirm (no time zone there)
+      expect(response.body).to include('Undo update', 'data-url="/apps/docker/undo_update_stream/gitea"',
+                                       '(until <time datetime="2026-11-04T12:00:00Z" data-local="month-day">November 4</time>)',
+                                       "with its data from #{ApplicationController.helpers.time_ago_in_words(Time.utc(2026, 10, 5, 12))} ago.")
       expect(response.body).not_to include("ZFS pool's own snapshots")
       # Its data on a ZFS pool: the roll-back takes the pool's later snapshots of it with it
       allow(AppCatalog).to receive(:backup).with('gitea').and_return(from: old, taken_at: Time.utc(2026, 10, 5, 12), until: Time.utc(2026, 11, 4, 12), snapshot: true)

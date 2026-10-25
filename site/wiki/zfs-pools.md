@@ -136,7 +136,7 @@ only for what changes after it.
   to confirm.
 
 The page only rolls back or deletes Amahi-kai's own snapshots. Their names give when they were
-taken in UTC (the list shows the time here).
+taken in UTC (the list shows the time in your time zone).
 
 ---
 

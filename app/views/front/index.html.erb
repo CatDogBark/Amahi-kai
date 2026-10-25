@@ -25,7 +25,7 @@
             <%# Security updates waiting NOTICE_DAYS or more; they install from Settings → System Dependencies %>
             <div class="mt-1" id="security-updates-notice">
               <a href="/settings/dependencies" class="update-notice">
-                <span class="update-dot"></span><%= pluralize(@security_overdue.size, 'security update') %> waiting since <%= @security_overdue.first[:since].strftime('%B %-d, %Y') %> — install on System Dependencies
+                <span class="update-dot"></span><%= pluralize(@security_overdue.size, 'security update') %> waiting since <%= local_time_tag(@security_overdue.first[:since], 'date') %> — install on System Dependencies
               </a>
             </div>
           <% end %>
@@ -39,7 +39,8 @@
           <% end %>
         </div>
         <div class="d-none d-md-block text-muted" style="font-size: 12px;">
-          <%= Time.current.strftime('%A, %B %-d, %Y') %>
+          <%# Today in the viewer's time zone: the server's clock is UTC %>
+          <%= local_time_tag(Time.current, 'weekday-date') %>
         </div>
       </div>
     </div>

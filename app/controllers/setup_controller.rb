@@ -61,6 +61,10 @@ class SetupController < ApplicationController
       flash.now[:error] = "Password must be at least 8 characters."
       render :admin; return
     end
+    if User.first_password?(params[:password])
+      flash.now[:error] = "That's the password the installer printed. Choose one of your own."
+      render :admin; return
+    end
     user.password = params[:password]
     user.password_confirmation = params[:password_confirmation]
     if user.save
