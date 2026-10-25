@@ -6,9 +6,10 @@ over plain HTTP, through a Cloudflare Tunnel, and through Tailscale. CatDogBark 
 (`CatDogBark/Amahi-kai`, **public**) and the NAS.
 
 Current work (CatDogBark, 2026-10-24): the road to 1.0 is **`docs/plans/release-1.0.md`**, in order:
-networking's Tailscale check, the real pool and apps on it, a Backups tab (backup and restore),
-the code review, the docs review, a release candidate, 1.0. Signed updates are deferred until
-other people run Amahi-kai. 1.0 is for other people to install. CatDogBark's NAS is the house's
+the real pool and apps on it, the code review, the docs review, a release candidate, 1.0
+(networking, Tailscale included, is done). Signed updates and backups are deferred until after
+1.0: no users yet, and CatDogBark's NAS has Proxmox's backups; the backups plan, for bare metal,
+is `docs/plans/backups.md`. 1.0 is for other people to install. CatDogBark's NAS is the house's
 router now and follows releases; the test VM takes `dev` first. bitShare (its own project)
 doesn't hold 1.0. The paragraph below is from before and stays for its links.
 

@@ -179,13 +179,14 @@ firewall and NAT. Still behind, to consider after 1.0 unless listed earlier:
 
 ## Release 1.0
 
-What's left for 1.0, in order, is [`release-1.0.md`](release-1.0.md) (2026-10-23): networking's
-Tailscale check, the real pool and apps on it, a Backups tab (backup and restore of the NAS's own
-state), a full code review, a docs review, then a release candidate and 1.0. 1.0 is for other
-people to install. bitShare is its own project and doesn't hold 1.0. Networking (§1–2f there)
-shipped in 0.10.0, and the house runs on router mode since 2026-10-24; what's left of it before
-1.0 is the Tailscale check. **Signed updates** are deferred until other people run Amahi-kai
-(CatDogBark, 2026-10-24: one user doesn't justify a key to keep); the design waits in §3.
+What's left for 1.0, in order, is [`release-1.0.md`](release-1.0.md): the real pool and apps on
+it, a full code review, a docs review, then a release candidate and 1.0. 1.0 is for other people
+to install. bitShare is its own project and doesn't hold 1.0. Networking (§1–2f there) is done: it
+shipped in 0.10.0 to 0.10.2, the house runs on router mode since 2026-10-24, and the Tailscale
+check passed the same day. **Signed updates** are deferred until other people run Amahi-kai
+(CatDogBark, 2026-10-24: one user doesn't justify a key to keep); the design waits in §3 there.
+**Backups** are deferred too (CatDogBark, 2026-10-24: no users yet, and his NAS has Proxmox's
+backups); the plan is [`backups.md`](backups.md).
 
 ## Open, not yet scheduled
 
@@ -272,8 +273,9 @@ folder, and deleting a user removes one an older version made. To decide:
 
 ### Backups after 1.0
 
-1.0's Backups tab ([`release-1.0.md`](release-1.0.md) §4) brings a NAS's own state back onto a
-fresh install. Left for after (CatDogBark, 2026-10-24):
+All of it is after 1.0 (CatDogBark, 2026-10-24). [`backups.md`](backups.md) plans the Backups tab
+for bare metal: a backup of Amahi-kai's own state and a restore onto a fresh install. Beyond that
+plan:
 
 - **Copies of the files in shares**, to a USB drive and off-site (a cloud bucket, another NAS).
   Terabytes that change a little each day want an incremental, encrypted tool: restic is the likely
