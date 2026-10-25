@@ -36,6 +36,10 @@ RSpec.describe 'AmahiHelper' do
     allow(helper).to receive(:group_id).and_call_original
     allow(helper).to receive(:group_id).with('users').and_return(users_gid)
     allow(helper).to receive(:passwd).and_return(nil)
+    # The app firewall follows the network's changes (refresh_app_firewall, spec'd with the apps):
+    # here it's left alone, as on a NAS without Docker, whatever the machine running this has (a
+    # CI runner has Docker)
+    allow(helper).to receive(:refresh_app_firewall).and_return(nil)
   end
 
   describe 'the command line' do
@@ -1372,9 +1376,6 @@ RSpec.describe 'AmahiHelper' do
       allow(File).to receive(:executable?).and_call_original
       allow(File).to receive(:executable?).with(AmahiHelper::UFW).and_return(true)
       allow(File).to receive(:executable?).with(AmahiHelper::TAILSCALE).and_return(false)
-      # The app firewall follows the network's changes (refresh_app_firewall, spec'd with the apps);
-      # here, as on a NAS without Docker, it's left alone, whatever the machine running this has
-      allow(AmahiHelper).to receive(:refresh_app_firewall).and_return(nil)
       # iptables finds no jump to take out, as on a NAS that hasn't reloaded UFW yet
       allow(helper).to receive(:run_command) do |argv|
         ran << argv.reject { |a| a.is_a?(Hash) }.join(' ')
