@@ -511,8 +511,37 @@ module AmahiHelper
   APP_IMAGE = %r{\A[a-z0-9]+(?:[._/-][a-z0-9]+)*:[A-Za-z0-9._-]{1,64}@sha256:[0-9a-f]{64}\z}
   APP_FOLDER = /\A[a-z][a-z0-9_-]{0,31}\z/
   APP_ENV_NAME = /\A[A-Z][A-Z0-9_]{0,63}\z/
+  # Environment names that have an image download and run more code as it starts (linuxserver.io's
+  # mods): no manifest sets them.
+  APP_REFUSED_ENV = %w[DOCKER_MODS].freeze
+  # Each part of a folder's path in an app's container: a plain name, with nothing Docker's mount
+  # options read as a separator (, : =).
+  APP_PATH_PART = /\A[A-Za-z0-9._-]{1,64}\z/
   APP_MEMORY = /\A[1-9][0-9]{0,4}[mg]\z/
   APP_DEFAULT_MEMORY = '1g'
+  # What each app's container may do beyond its memory: a ceiling on its processes, a cap on its
+  # logs (Docker keeps them on the system disk), and none of raw sockets (forging traffic to the
+  # other containers) or device nodes. Ping works without raw sockets: Docker lets containers use
+  # ICMP datagram sockets.
+  APP_PIDS_LIMIT = 2048
+  APP_LOG_OPTIONS = %w[--log-opt max-size=10m --log-opt max-file=3].freeze
+  APP_CAP_DROP = %w[NET_RAW MKNOD].freeze
+  # The definition each app's container was made from: its manifest as it was then, with the
+  # image the container runs (root:amahi 0640, one file an app). A reinstall that keeps the
+  # version, an undo and a roll-back make the container again from it, not from the catalog's
+  # newer manifest; an app the catalog dropped is still started, stopped and uninstalled by it.
+  APP_DEFINITIONS = '/var/lib/amahi-kai/app-definitions'
+  # The apps' jobs that can run for minutes (an image's download, an update's wait for health)
+  # each run as a unit of their own, APP_JOB_UNIT with the app's id (relay_app_job): the helper
+  # runs inside the unit that called it, the web app's, and a restart of the web app took a job
+  # down partway. The unit's name also keeps one job at a time for an app.
+  APP_JOBS = %w[apps.install apps.update apps.undo_update apps.uninstall].freeze
+  APP_JOB_UNIT = 'amahi-kai-appjob-%s'
+  HELPER_PATH = '/usr/local/sbin/amahi-helper'
+  SYSTEMCTL = '/usr/bin/systemctl'
+  # Changes to the records all apps share (APP_PORTS, APP_STORAGE) take this lock, so two apps'
+  # jobs at once don't lose each other's writes, nor take the same free port.
+  APP_RECORDS_LOCK = '/run/amahi-kai-app-records.lock'
   # The catalog has a repo of its own (docs/plans/apps.md), so app versions don't wait for an
   # Amahi-kai update. The update check (system.check_update, every 6 hours and on Check now)
   # fetches its main branch too, over https only, into CATALOG_SRC (a bare repo, root's), and keeps
@@ -562,6 +591,9 @@ module AmahiHelper
   # forward on the router, and a future internet-facing port (router mode). Traffic from the
   # NAS itself (cloudflared) doesn't pass through it. Apps are published on IPv4 only.
   IPTABLES = '/usr/sbin/iptables'
+  # APP_CHAIN's rules are swapped in whole, in one step: rebuilt rule by rule, the chain was
+  # empty for a moment, and an empty chain lets everything through.
+  IPTABLES_RESTORE = '/usr/sbin/iptables-restore'
   IP = '/usr/sbin/ip'
   # A port's light, to find it on the NAS (Network → Devices, This NAS).
   ETHTOOL = '/usr/sbin/ethtool'
@@ -1007,12 +1039,13 @@ module AmahiHelper
     },
     # Data drives and the share root mounted nosuid,nodev (see MOUNT_OPTIONS): the fstab lines
     # Amahi-kai wrote before get the options (the new file is checked first, and the old one
-    # kept as /etc/fstab.amahi-backup), and what's mounted now is remounted with them. System
-    # Update runs it every time, and the installer once; it changes nothing that's in place.
+    # kept as /etc/fstab.amahi-backup), and what's mounted now is remounted with them; the share
+    # root is made root's (do_secure_share_root). System Update runs it every time, and the
+    # installer once; it changes nothing that's in place.
     'disks.secure_mounts' => {
       params: [],
       validate: ->(_a) { {} },
-      plan: ->(_v) { [[:secure_fstab], [:secure_mounts]] }
+      plan: ->(_v) { [[:secure_fstab], [:secure_mounts], [:secure_share_root]] }
     },
     # Lists the top level of an unmounted data drive, mounted read-only for the moment.
     'disks.preview' => {
@@ -1460,31 +1493,33 @@ module AmahiHelper
     # Installs or reinstalls an app from its manifest: its user and folders (kept from an
     # earlier install), its secrets (likewise), the pinned image, pulled with progress, and
     # its container, started, with the shares chosen ([{ "name": "Movies", "write": false }]).
-    # Changing an app's shares is a reinstall, which keeps the version it runs: only
-    # apps.update moves it to the manifest's. An app with dataset folders (P4.6) takes the ZFS
-    # pool they go on (pool), the first time; after that they stay on theirs (APP_STORAGE).
+    # Changing an app's shares is a reinstall, which keeps the version it runs and its settings
+    # (APP_DEFINITIONS): only apps.update moves it to the manifest's. An app with dataset folders
+    # (P4.6) takes the ZFS pool they go on (pool), the first time; after that they stay on theirs
+    # (APP_STORAGE). A job of its own (APP_JOBS).
     'apps.install' => {
       params: %w[app shares pool],
       validate: lambda { |a|
-        installed!(DOCKER) && app_request(a['app']).then do |v|
+        installed!(DOCKER) && app_install_request(a['app']).then do |v|
           v.merge(shares: app_share_choices(a['shares'], v[:id], v[:manifest]), pool: app_pool_choice(v[:id], v[:manifest], a['pool']))
         end
       },
       plan: ->(v) { [[:install_app, v[:id], v[:manifest], v[:shares], true, v[:pool]], [:announce_apps]] }
     },
+    # Start, stop and restart go by the app's container, whatever the catalog says now.
     'apps.start' => {
       params: %w[app],
-      validate: ->(a) { installed!(DOCKER) && app_request(a['app']) },
+      validate: ->(a) { installed!(DOCKER) && installed_app_request(a['app']) },
       plan: ->(v) { [[DOCKER, 'start', app_container(v[:id])]] }
     },
     'apps.stop' => {
       params: %w[app],
-      validate: ->(a) { installed!(DOCKER) && app_request(a['app']) },
+      validate: ->(a) { installed!(DOCKER) && installed_app_request(a['app']) },
       plan: ->(v) { [[DOCKER, 'stop', '--time', '30', app_container(v[:id])]] }
     },
     'apps.restart' => {
       params: %w[app],
-      validate: ->(a) { installed!(DOCKER) && app_request(a['app']) },
+      validate: ->(a) { installed!(DOCKER) && installed_app_request(a['app']) },
       plan: ->(v) { [[DOCKER, 'restart', '--time', '30', app_container(v[:id])]] }
     },
     # Updates an installed app to its manifest's version: a copy of its data first, the new
@@ -1496,11 +1531,12 @@ module AmahiHelper
       },
       plan: ->(v) { [[:update_app, v[:id], v[:manifest], v[:shares]]] }
     },
-    # Puts back the version and data from before the app's last update (within APP_BACKUP_DAYS).
+    # Puts back the version and data from before the app's last update (within APP_BACKUP_DAYS),
+    # with the definition it ran then.
     'apps.undo_update' => {
       params: %w[app shares],
       validate: lambda { |a|
-        installed!(DOCKER) && app_request(a['app']).then { |v| v.merge(shares: app_share_choices(a['shares'], v[:id], v[:manifest])) }
+        installed!(DOCKER) && app_undo_request(a['app']).then { |v| v.merge(shares: app_share_choices(a['shares'], v[:id], v[:manifest])) }
       },
       plan: ->(v) { [[:undo_app_update, v[:id], v[:manifest], v[:shares]]] }
     },
@@ -1510,14 +1546,16 @@ module AmahiHelper
       validate: ->(_a) { {} },
       plan: ->(_v) { [[:prune_app_backups]] }
     },
-    # Removes an app's container and image. Its folders, secrets and user stay (a reinstall uses
-    # them again) unless delete_data is true. Works when the container is already gone.
+    # Removes an app's container and image. Its folders, secrets, user and definition stay (a
+    # reinstall uses them again, on the version it ran) unless delete_data is true. Works when
+    # the container is already gone, and for an app the catalog dropped; refused while Docker
+    # doesn't answer.
     'apps.uninstall' => {
       params: %w[app delete_data],
       validate: lambda { |a|
-        installed!(DOCKER) && app_request(a['app']).merge(delete_data: a.key?('delete_data') ? boolean(a, 'delete_data') : false)
+        installed!(DOCKER) && docker_running! && { id: app_id(a['app']), delete_data: a.key?('delete_data') ? boolean(a, 'delete_data') : false }
       },
-      plan: ->(v) { [[:uninstall_app, v[:id], v[:manifest][:image], v[:delete_data]], [:announce_apps]] }
+      plan: ->(v) { [[:uninstall_app, v[:id], v[:delete_data]], [:announce_apps]] }
     },
     # Announces the installed apps on the LAN (see AVAHI_SERVICES). Run at every install and
     # uninstall, and by amahi-kai-app-firewall.service each time Docker starts.
@@ -1682,6 +1720,7 @@ module AmahiHelper
         1
       in ['--dry-run', String => op] then respond(output) { dry_run(op, read_args(input)) }
       in ['--check-catalog', String => dir] then check_catalog(dir, output)
+      in [String => op] if APP_JOBS.include?(op) && !ENV.key?('AMAHI_APP_JOB') then relay_app_job(op, input, output)
       in [String => op] unless op.start_with?('-') then respond(output) { execute(op, input) }
       else
         warn 'usage: amahi-helper OPERATION < args.json | --dry-run OPERATION | --check-catalog DIR | --list | --self-test'
@@ -1709,6 +1748,41 @@ module AmahiHelper
       raise
     ensure
       log(op, args, result, error, started)
+    end
+
+    # A job that can run for minutes (APP_JOBS) runs again as a unit of its own, APP_JOB_UNIT with
+    # the app's id, on the same arguments: the helper runs inside the unit that called it, the
+    # web app's, and a restart of the web app took the job down partway, leaving the app half
+    # installed. systemd-run --pipe passes the job's progress and reply through, --wait its exit
+    # status; while one job of an app runs, another is refused. Arguments that name no app are
+    # refused here, as they would be there.
+    def relay_app_job(op, input, output)
+      raw = input.read(MAX_INPUT + 1).to_s
+      return respond(output) { raise Refused, 'arguments are too large' } if raw.bytesize > MAX_INPUT
+
+      args = begin
+        JSON.parse(raw)
+      rescue JSON::ParserError
+        nil
+      end
+      id = args.is_a?(Hash) ? args['app'] : nil
+      return respond(output) { execute(op, args) } unless id.is_a?(String) && id.match?(APP_ID)
+      return respond(output) { not_in_a_job!(id) } if app_job_running?(id)
+
+      job_input = File.open(File.join(RUN_DIR, "amahi-app-job-#{SecureRandom.hex(8)}"), File::RDWR | File::CREAT | File::EXCL, 0o600)
+      job_input.write(raw)
+      job_input.rewind
+      File.unlink(job_input.path)
+      replace_process(ENV_MIN, [SYSTEMD_RUN, "--unit=#{format(APP_JOB_UNIT, id)}", '--wait', '--pipe', '--collect', '--quiet',
+                                "--setenv=AMAHI_APP_JOB=#{id}", "--setenv=AMAHI_APP_CALLER=#{ENV.fetch('SUDO_USER', '')}",
+                                HELPER_PATH, op], in: job_input)
+    rescue SystemCallError => e
+      respond(output) { raise Failed, "#{id}'s job couldn't be started (#{e.message})" }
+    end
+
+    # exec, as a method a spec can stand in for.
+    def replace_process(env, argv, **options)
+      exec(env, [argv[0], argv[0]], *argv.drop(1), unsetenv_others: true, chdir: '/', **options)
     end
 
     def dry_run(op, args)
@@ -2791,9 +2865,62 @@ module AmahiHelper
     # --- Apps ---
 
     def app_request(value)
+      id = app_id(value)
+      { id: id, manifest: app_manifest(id) }
+    end
+
+    def app_id(value)
       id = string(value, 'app', max: 24)
       raise Refused, "app #{id.inspect} isn't one Amahi-kai knows" unless id.match?(APP_ID)
-      { id: id, manifest: app_manifest(id) }
+      id
+    end
+
+    # An app to install: the definition its container runs, or ran (a reinstall keeps its version
+    # and its settings), else the catalog's manifest.
+    def app_install_request(value)
+      id = app_id(value)
+      { id: id, manifest: app_definition(id) || app_manifest(id) }
+    end
+
+    # An update to undo: the definition the app ran before it, as its copy recorded it (else, for
+    # a copy from before definitions were kept, the one it runs, or the catalog's).
+    def app_undo_request(value)
+      id = app_id(value)
+      before = definition_from(id, Hash(app_backup_info(id))['definition'])
+      { id: id, manifest: before || app_definition(id) || app_manifest(id) }
+    end
+
+    # An installed app, for start, stop and restart: its container is what counts, not the
+    # catalog, which may have moved on or dropped it. Refused while a job changes it.
+    def installed_app_request(value)
+      id = app_id(value)
+      not_in_a_job!(id)
+      raise Refused, "#{id} has no container: install it again" unless docker_output('inspect', '--format', '{{.Id}}', app_container(id))
+      { id: id }
+    end
+
+    # Refused while a job of the app's runs (APP_JOBS): an install, update, undo or uninstall.
+    def not_in_a_job!(id)
+      raise Refused, "#{id} is being changed (an install, update or uninstall runs): try again when it's done" if app_job_running?(id)
+    end
+
+    # Whether the app's job unit runs now; never the job itself, which runs inside it.
+    def app_job_running?(id)
+      return false if ENV['AMAHI_APP_JOB'] == id
+
+      _out, _err, status = Open3.capture3(ENV_MIN, SYSTEMCTL, 'is-active', '--quiet', "#{format(APP_JOB_UNIT, id)}.service",
+                                         unsetenv_others: true, chdir: '/')
+      status.success?
+    rescue SystemCallError
+      false
+    end
+
+    # Docker answers: an uninstall while it's stopped left the container, which came back when it
+    # started, unlisted.
+    def docker_running!
+      raise Refused, "Docker isn't running: start it (Apps), then try again" unless docker_output('info', '--format', '{{.ServerVersion}}')
+
+      true
     end
 
     def app_container(id)
@@ -2813,9 +2940,41 @@ module AmahiHelper
       data = YAML.safe_load(File.read(path))
       raise Failed, "#{path} isn't an app manifest" unless data.is_a?(Hash)
       raise Refused, "#{id} needs a newer Amahi-kai: run System Update first" if manifest_requires(id, data) > CATALOG_FORMAT
-      check_manifest(id, data)
+      check_manifest(id, data).merge(source: data)
     rescue Psych::Exception => e
       raise Failed, "#{id}'s manifest can't be read: #{e.message}"
+    end
+
+    # The definition the app's container was made from (APP_DEFINITIONS): its manifest as it was,
+    # checked again, with the image the container runs; nil for a container made before these
+    # were kept, or one that no longer passes.
+    def app_definition(id)
+      definition_from(id, read_json("#{APP_DEFINITIONS}/#{id}.json"))
+    end
+
+    # A definition (a manifest's source, with its image) checked again; nil when it isn't one, or
+    # no longer passes.
+    def definition_from(id, source)
+      return nil unless source.is_a?(Hash)
+
+      check_manifest(id, source).merge(source: source)
+    rescue Failed
+      nil
+    end
+
+    def app_record_definition(id, manifest)
+      return unless manifest[:source].is_a?(Hash)
+
+      unless File.directory?(APP_DEFINITIONS)
+        Dir.mkdir(APP_DEFINITIONS, 0o750)
+        File.chown(0, group_id(APP_USER), APP_DEFINITIONS)
+      end
+      source = manifest[:source].merge('image' => manifest[:image])
+      do_install("#{APP_DEFINITIONS}/#{id}.json", "#{JSON.pretty_generate(source)}\n", nil, '0640', APP_USER)
+    end
+
+    def app_forget_definition(id)
+      FileUtils.rm_f("#{APP_DEFINITIONS}/#{id}.json")
     end
 
     # The catalog format a manifest needs (`requires`, 1 when it doesn't say).
@@ -2938,6 +3097,8 @@ module AmahiHelper
         path = folder['path'].to_s
         bad.call("folder name #{name.inspect} must be lowercase letters, digits, _ or -") unless name.match?(APP_FOLDER)
         bad.call("folder path #{path.inspect} must be an absolute, normalized path") unless normalized_path?(path)
+        bad.call("folder path #{path} must be plain names (letters, digits, . _ -)") unless path.split('/').drop(1).all? { |part| part.match?(APP_PATH_PART) }
+        bad.call("folder path #{path} is where the shares go") if path == APP_SHARE_TARGET || path.start_with?("#{APP_SHARE_TARGET}/")
         backup = folder.fetch('backup', true)
         bad.call("folder #{name}'s backup must be true or false") unless [true, false].include?(backup)
         kind = folder.fetch('kind', 'state').to_s
@@ -2948,6 +3109,7 @@ module AmahiHelper
         { name: name, path: path, backup: backup, kind: kind.to_sym, required: kind == 'dataset' && required }
       end
       bad.call('a folder is listed twice') if folders.map { |f| f[:name] }.uniq.size != folders.size
+      bad.call('two folders have the same path') if folders.map { |f| f[:path] }.uniq.size != folders.size
       folders
     end
 
@@ -2965,6 +3127,7 @@ module AmahiHelper
       bad.call('environment must be a mapping') unless environment.is_a?(Hash)
       environment.to_h do |key, value|
         bad.call("environment name #{key.inspect} isn't valid") unless key.to_s.match?(APP_ENV_NAME)
+        bad.call("#{key} would have the image download more code as it starts") if APP_REFUSED_ENV.include?(key.to_s)
         bad.call("#{key} must be one line of text") unless value.is_a?(String) && value.length <= 1000 && !value.match?(/[\r\n\0]/)
         [key.to_s, value]
       end
@@ -2974,6 +3137,7 @@ module AmahiHelper
       Array(list).map do |secret|
         name = secret.is_a?(Hash) ? secret['env'].to_s : ''
         bad.call("secret #{name.inspect} isn't a valid environment name") unless name.match?(APP_ENV_NAME)
+        bad.call("#{name} would have the image download more code as it starts") if APP_REFUSED_ENV.include?(name)
         bad.call("secret #{name} is set in environment too") if environment.key?(name)
         name
       end
@@ -2993,6 +3157,7 @@ module AmahiHelper
         unless normalized_path?(path) && !path.include?(',') && (share_root_of(path) || drive_mount_point?(path))
           raise Refused, "share #{share[:name]}'s folder #{path} isn't in the share root or on a mounted data drive"
         end
+        raise Refused, "share #{share[:name]}'s folder #{path} isn't a real folder (a link, or missing)" unless real_folder?(path)
         write = item.key?('write') ? boolean(item, 'write') : false
         raise Refused, "#{id} only reads shares" if write && !manifest[:writes_shares]
         raise Refused, "share #{share[:name]} is pooled by Greyhole, so apps can only read it" if write && share[:pooled]
@@ -3000,6 +3165,14 @@ module AmahiHelper
       end
       raise Refused, 'a share is listed twice' if chosen.map { |share| share[:name] }.uniq.size != chosen.size
       chosen
+    end
+
+    # A real folder at its own path, no link anywhere on the way: Docker follows links in a mount's
+    # source, so a link there would give an app whatever it points to.
+    def real_folder?(path)
+      File.realpath(path) == path && File.lstat(path).directory?
+    rescue SystemCallError
+      false
     end
 
     # { 'movies' => { name: 'Movies', path: '/var/lib/amahi-kai/files/movies', pooled: false } }:
@@ -3813,7 +3986,7 @@ module AmahiHelper
                    'rules' => ROUTER_RULES_VERSION)
       state_dir!(ROUTER_STATE)
       do_install(ROUTER_STATE, "#{JSON.generate(state)}\n", nil, '0644')
-      nil
+      refresh_app_firewall
     end
 
     # Router mode off. The internet interface goes first (its file, then its address), so
@@ -3841,7 +4014,19 @@ module AmahiHelper
       end
       do_remove_files(ROUTER_SYSCTL, ROUTER_STATE)
       run_command(['/usr/sbin/sysctl', '-q', '-w', "net.ipv4.ip_forward=#{forwarding_before(state)}", *sysctl_restore(state), { allow_failure: true }])
-      notes
+      [notes, refresh_app_firewall].compact.join('; ').then { |text| text.empty? ? nil : text }
+    end
+
+    # The app firewall lets in the LAN's subnets (lan_subnets), which router mode and This NAS
+    # change: it's rebuilt after them, where Docker runs. Left as it was, devices on a new subnet
+    # couldn't reach the apps, and an old one stayed let in. A failure is a note, not the change's.
+    def refresh_app_firewall
+      return nil unless File.executable?(DOCKER) && File.executable?(IPTABLES) && docker_output('info', '--format', '{{.ServerVersion}}')
+
+      do_app_firewall
+      nil
+    rescue Failed => e
+      "the app firewall wasn't rebuilt for the network's change: #{e.message}"
     end
 
     # Forwarding as it was before router mode: Docker turns it on for its apps, and turning it
@@ -4076,7 +4261,7 @@ module AmahiHelper
         raise
       end
       do_keep_address unless state['guard']
-      nil
+      refresh_app_firewall
     end
 
     # The change waiting is kept: the revert timer goes, and the copies from before.
@@ -4106,6 +4291,7 @@ module AmahiHelper
         if state['mode'] == 'fixed' && !Array(state['before']).include?(address.split('/').first)
           run_command([IP, '-4', 'addr', 'del', address, 'dev', state['interface'], { allow_failure: true }])
         end
+        refresh_app_firewall
       end
       write_address_state(state.merge('state' => 'reverted', 'until' => nil))
       nil
@@ -4876,6 +5062,22 @@ module AmahiHelper
       (MOUNT_OPTIONS - mount_options(path)).empty?
     end
 
+    # The share root is root's, 0755: the web app's account owned it, so it could have put a link
+    # in place of a share's folder there, and an app given that share would get whatever it
+    # pointed to. The share folders in it stay the app's (shares.create_dir).
+    def do_secure_share_root
+      return nil unless File.directory?(SHARE_ROOT) && !File.symlink?(SHARE_ROOT)
+
+      stat = File.lstat(SHARE_ROOT)
+      return nil if stat.uid.zero? && stat.gid.zero? && (stat.mode & 0o7777) == 0o755
+
+      with_dir(SHARE_ROOT) do |dir|
+        dir.chown(0, 0)
+        dir.chmod(0o755)
+      end
+      { 'share_root' => 'root:root 0755' }
+    end
+
     # The options of the mount at +path+ (the newest, when several), from /proc/self/mounts;
     # empty when nothing is mounted there. (mount_point? can't see a folder bound onto itself.)
     def mount_options(path, mounts_file = '/proc/self/mounts')
@@ -5380,47 +5582,106 @@ module AmahiHelper
       manifest[:folders].each { |folder| app_folder("#{dir}/#{folder[:name]}", uid, gid) if folder[:kind] == :state }
       storage = app_storage(id, manifest, pool, uid, gid)
       secrets = app_secrets(id, manifest[:secrets])
-      if docker_output('image', 'inspect', '--format', '{{.Id}}', manifest[:image].sub(%r{:[^:@/]+@}, '@'))
+      if image_present?(manifest[:image])
         say("Using #{manifest[:image].sub(/@.*/, '')}, downloaded already")
       else
         say("Pulling #{manifest[:image].sub(/@.*/, '')}...")
         run_command([DOCKER, 'pull', manifest[:image], { stream: true }])
       end
       container = app_container(id)
-      run_command([DOCKER, 'rm', '--force', container, { allow_failure: true }])
-      ports = app_assign_ports(id, manifest[:ports])
-      ports.reject { |p| p[:host] == p[:preferred] }.uniq { |p| p[:host] }.each do |p|
-        say("Port #{p[:preferred]} is in use, so it gets port #{p[:host]}")
-      end
-      say('Creating the container...')
-      with_env_file(app_environment(manifest, uid, gid, secrets)) do |env_file|
-        run_command([DOCKER, 'create', '--name', container, '--restart', 'unless-stopped',
-                     '--security-opt', 'no-new-privileges', # nothing in it gains privileges, setuid files included
-                     '--memory', manifest[:memory], '--label', "amahi.app=#{id}", '--env-file', env_file,
-                     *(manifest[:run_as] == 'app' ? ['--user', "#{uid}:#{gid}"] : []),
-                     *ports.flat_map { |p| ['--publish', "0.0.0.0:#{p[:host]}:#{p[:container]}/#{p[:protocol]}"] },
-                     *app_folder_mounts(manifest, dir, storage), *app_share_mounts(shares), manifest[:image]])
-      end
+      ports = app_create_container(id, manifest, shares, uid, gid, dir, storage, secrets)
       shares.select { |share| share[:write] }.each { |share| app_share_writable(share[:path]) }
-      app_record_ports(id, ports)
       do_app_firewall
       say('Starting it...')
       run_command([DOCKER, 'start', container])
       { 'app' => id, 'container' => container, 'image' => manifest[:image], 'ports' => ports.map { |p| p.transform_keys(&:to_s) } }
     end
 
+    # Makes the app's new container under a name of its own (<container>-next) while the one it
+    # has is only stopped (its ports free for the new one), then swaps it in: a create that fails
+    # leaves the app its container, started again if it ran, instead of none. The definition it's
+    # made from is recorded (APP_DEFINITIONS). Returns its ports.
+    def app_create_container(id, manifest, shares, uid, gid, dir, storage, secrets)
+      container = app_container(id)
+      fresh = "#{container}-next"
+      run_command([DOCKER, 'rm', '--force', fresh, { allow_failure: true }]) # one a job cut off left
+      running = Hash(app_state(id))['Running'] == true
+      run_command([DOCKER, 'stop', '--time', '30', container, { allow_failure: true }]) if running
+      begin
+        ports = with_records_lock { app_assign_ports(id, manifest[:ports]).tap { |given| app_record_ports(id, given) } }
+        ports.reject { |p| p[:host] == p[:preferred] }.uniq { |p| p[:host] }.each do |p|
+          say("Port #{p[:preferred]} is in use, so it gets port #{p[:host]}")
+        end
+        share_mounts = app_share_mounts(shares)
+        app_share_sources!(shares)
+        say('Creating the container...')
+        with_env_file(app_environment(manifest, uid, gid, secrets)) do |env_file|
+          run_command([DOCKER, 'create', '--name', fresh, '--restart', 'unless-stopped',
+                       '--security-opt', 'no-new-privileges', # nothing in it gains privileges, setuid files included
+                       *APP_CAP_DROP.flat_map { |cap| ['--cap-drop', cap] }, '--pids-limit', APP_PIDS_LIMIT.to_s, *APP_LOG_OPTIONS,
+                       '--memory', manifest[:memory], '--label', "amahi.app=#{id}", '--env-file', env_file,
+                       *(manifest[:run_as] == 'app' ? ['--user', "#{uid}:#{gid}"] : []),
+                       *ports.flat_map { |p| ['--publish', "0.0.0.0:#{p[:host]}:#{p[:container]}/#{p[:protocol]}"] },
+                       *app_folder_mounts(manifest, dir, storage), *share_mounts, manifest[:image]])
+        end
+      rescue Failed, Refused
+        run_command([DOCKER, 'rm', '--force', fresh, { allow_failure: true }])
+        if running
+          say('Starting the container it had again...')
+          run_command([DOCKER, 'start', container, { allow_failure: true }])
+        end
+        raise
+      end
+      run_command([DOCKER, 'rm', '--force', container, { allow_failure: true }])
+      run_command([DOCKER, 'rename', fresh, container])
+      app_record_definition(id, manifest)
+      ports
+    end
+
+    # Each share's folder and its copy folders, checked again just before the container is made
+    # (apps.follow_pool makes containers too): real folders, reached through no link.
+    def app_share_sources!(shares)
+      shares.each do |share|
+        bad = [share[:path], *(share[:pooled] ? greyhole_copies(share[:name]) : [])].find { |path| !real_folder?(path) }
+        raise Failed, "share #{share[:name]}'s folder #{bad} isn't a real folder (a link, or missing)" if bad
+      end
+    end
+
+    def image_present?(image)
+      !docker_output('image', 'inspect', '--format', '{{.Id}}', image.sub(%r{:[^:@/]+@}, '@')).nil?
+    end
+
+    # Runs the block holding APP_RECORDS_LOCK, waiting for it; inside a block that holds it
+    # already, the block just runs.
+    def with_records_lock
+      return yield if @records_locked
+
+      File.open(APP_RECORDS_LOCK, File::RDWR | File::CREAT, 0o600) do |lock|
+        lock.flock(File::LOCK_EX)
+        @records_locked = true
+        yield
+      ensure
+        @records_locked = false
+      end
+    end
+
     # An app given a pooled share sees its copies through one mount per pool drive, made with
     # its container. Each app container whose drive mounts aren't the ones its shares have now
     # (a drive joined, left, is missing or back; a share pooled or turned Off), or that couldn't
-    # start over a mount, is made again (do_install_app, keeping its version, shares and data),
-    # with the drives mounted now. One the owner stopped stays stopped. One app's failure is
-    # its own: { 'apps' => { id => 'remade' | 'remade, stopped' | its reason } }.
+    # start over a mount, is made again (do_install_app, from the definition it was made from,
+    # its shares checked as apps.install checks them), with the drives mounted now. One the owner
+    # stopped stays stopped; one a job is changing is left to it. One app's failure is its own:
+    # { 'apps' => { id => 'remade' | 'remade, stopped' | its reason }, 'shares' => { id => the
+    # shares it has now, [{ 'name', 'write' }] } }.
     def do_follow_pool_apps
       out = docker_output('ps', '--all', '--filter', 'label=amahi.app', '--format', '{{.Label "amahi.app"}}')
-      return { 'apps' => {} } unless out
+      return { 'apps' => {}, 'shares' => {} } unless out
 
       shares = samba_shares
+      given = {}
       done = out.lines.map(&:strip).grep(APP_ID).uniq.filter_map do |id|
+        next if app_job_running?(id) # the job makes its container with the pool as it is
+
         info = JSON.parse(docker_output('inspect', app_container(id)) || '[]').first or next
         mounts = Array(info['Mounts'])
         chosen = mounts.filter_map do |mount|
@@ -5437,8 +5698,13 @@ module AmahiHelper
         stopped = !info.dig('State', 'Running') && !failed
         say("#{id}: making its container again with the pool drives mounted now")
         begin
-          do_install_app(id, app_manifest(id), chosen, true)
+          manifest = app_definition(id) || app_manifest(id)
+          # Its shares as its container has them, written to only where its definition writes shares
+          wanted = chosen.map { |share| { 'name' => share[:name], 'write' => share[:write] && manifest[:writes_shares] == true } }
+          checked = app_share_choices(wanted, id, manifest)
+          do_install_app(id, manifest, checked, true)
           run_command([DOCKER, 'stop', '--time', '30', app_container(id)]) if stopped
+          given[id] = checked.map { |share| { 'name' => share[:name], 'write' => share[:write] } }
           [id, stopped ? 'remade, stopped' : 'remade']
         rescue Failed, Refused => e
           [id, e.message]
@@ -5447,7 +5713,7 @@ module AmahiHelper
         nil
       end
       do_app_firewall if done.any?
-      { 'apps' => done.to_h }
+      { 'apps' => done.to_h, 'shares' => given }
     end
 
     # The image an app's container runs (name:tag@sha256:...), or nil without a container.
@@ -5465,16 +5731,28 @@ module AmahiHelper
     def do_update_app(id, manifest, shares)
       from = app_image(id) or raise Failed, "#{id} isn't installed"
       raise Failed, "#{id} runs #{image_tag(from)}, the catalog's version, already" if from == manifest[:image]
+      if version_below?(image_tag(manifest[:image]), image_tag(from))
+        raise Failed, "the catalog's #{id} (#{image_tag(manifest[:image])}) is older than the one it runs (#{image_tag(from)}), so there's nothing to update to"
+      end
 
-      app_backup_room!(id, manifest)
-      unless docker_output('image', 'inspect', '--format', '{{.Id}}', manifest[:image].sub(%r{:[^:@/]+@}, '@'))
+      # What it runs now, for the copy and a way back: the definition its container was made from
+      # (one made before these were kept: the catalog's, on the image it runs)
+      before = app_definition(id) || manifest.merge(image: from)
+      app_backup_room!(id, before)
+      unless image_present?(manifest[:image])
         say("Pulling #{manifest[:image].sub(/@.*/, '')}...")
         run_command([DOCKER, 'pull', manifest[:image], { stream: true }])
       end
       say("Stopping it (#{image_tag(from)})...")
       run_command([DOCKER, 'stop', '--time', '30', app_container(id)])
       say('Copying its data first, so the update can be undone...')
-      app_backup(id, manifest, from)
+      begin
+        app_backup(id, before, from, manifest[:image])
+      rescue Failed, SystemCallError => e
+        say("The copy didn't work, so it starts again on #{image_tag(from)}")
+        run_command([DOCKER, 'start', app_container(id), { allow_failure: true }])
+        raise Failed, "#{id}'s data couldn't be copied before the update (#{e.message}); it runs #{image_tag(from)} as before"
+      end
       say("Starting #{image_tag(manifest[:image])}...")
       reply = nil
       problem = begin
@@ -5487,7 +5765,7 @@ module AmahiHelper
       if problem
         say("It didn't come up healthy: #{problem}")
         say("Going back to #{image_tag(from)}, with its data from before the update...")
-        app_restore(id, manifest, from, shares)
+        app_restore(id, before, from, shares)
         app_forget_backup(id)
         return { 'app' => id, 'updated' => false, 'image' => from, 'problem' => problem }
       end
@@ -5501,6 +5779,11 @@ module AmahiHelper
       from = backup['from'].to_s
       raise Failed, "the copy from before #{id}'s update doesn't say which version it was" unless from.match?(APP_IMAGE)
 
+      # The old version's image first (an update removes it): nothing changes if it can't be had
+      unless image_present?(from)
+        say("Downloading #{image_tag(from)} again...")
+        run_command([DOCKER, 'pull', from, { stream: true }])
+      end
       say("Stopping it (#{image_tag(app_image(id) || manifest[:image])})...")
       run_command([DOCKER, 'stop', '--time', '30', app_container(id), { allow_failure: true }])
       say("Going back to #{image_tag(from)}, with its data from before the update...")
@@ -5554,7 +5837,9 @@ module AmahiHelper
     end
 
     # Replaces the app's copy: the description goes first, so a copy cut short is never offered.
-    def app_backup(id, manifest, from)
+    # +manifest+: the definition the app runs (its folders are the ones copied, and it's what an
+    # undo makes the container from again); +to+: the version it's updated to.
+    def app_backup(id, manifest, from, to = manifest[:image])
       unless File.directory?(APP_BACKUPS)
         Dir.mkdir(APP_BACKUPS, 0o750)
         File.chown(0, group_id(APP_USER), APP_BACKUPS)
@@ -5565,8 +5850,9 @@ module AmahiHelper
       folders = app_backup_folders(id, manifest)
       folders.each { |folder| run_command(['/usr/bin/cp', '-a', '--', folder, "#{data}/#{File.basename(folder)}"]) }
       snapshot = app_update_snapshot(id, manifest)
-      info = { 'taken_at' => Time.now.utc.iso8601, 'from' => from, 'to' => manifest[:image],
-               'folders' => folders.map { |folder| File.basename(folder) }, 'snapshot' => snapshot }.compact
+      info = { 'taken_at' => Time.now.utc.iso8601, 'from' => from, 'to' => to,
+               'folders' => folders.map { |folder| File.basename(folder) }, 'snapshot' => snapshot,
+               'definition' => manifest[:source].is_a?(Hash) ? manifest[:source].merge('image' => from) : nil }.compact
       do_install("#{APP_BACKUPS}/#{id}.json", "#{JSON.pretty_generate(info)}\n", nil, '0640', APP_USER)
     end
 
@@ -5667,17 +5953,51 @@ module AmahiHelper
       docker_output('inspect', '--format', '{{.RestartCount}}', app_container(id)).to_i
     end
 
-    # The app's web page answers on its port (the one it was given, P4.2), with any HTTP reply.
+    # The app's web page answers on its port (the one it was given, P4.2), with any HTTP reply;
+    # an HTTPS page (web_tls), which doesn't answer plain HTTP, with a TLS handshake (its
+    # certificate is its own, so it isn't checked).
     def app_answers?(id, manifest)
       return true unless manifest[:web_port]
       given = Array((read_json(APP_PORTS) || {})[id]).grep(Hash).find { |p| p['preferred'] == manifest[:web_port] }
       port = given ? given['host'] : manifest[:web_port]
       Socket.tcp('127.0.0.1', port, connect_timeout: 3) do |socket|
+        next tls_answers?(socket) if manifest[:web_tls]
+
         socket.write("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n")
         socket.wait_readable(5) && socket.readpartial(16).start_with?('HTTP/')
       end
     rescue SystemCallError, IOError
       false
+    end
+
+    # A TLS handshake completes within 5 seconds.
+    def tls_answers?(socket)
+      require 'openssl'
+      context = OpenSSL::SSL::SSLContext.new
+      context.verify_mode = OpenSSL::SSL::VERIFY_NONE
+      tls = OpenSSL::SSL::SSLSocket.new(socket, context)
+      tls.hostname = 'localhost'
+      deadline = monotonic_now + 5
+      loop do
+        left = [deadline - monotonic_now, 0].max
+        case tls.connect_nonblock(exception: false)
+        when :wait_readable then return false unless socket.wait_readable(left)
+        when :wait_writable then return false unless socket.wait_writable(left)
+        else return true
+        end
+      end
+    rescue OpenSSL::SSL::SSLError
+      false
+    end
+
+    # Whether version tag +a+ is below +b+, by their numbers in order ("4.0.16-ls253" <
+    # "4.0.17-ls254"); false when either has none, or they're the same numbers.
+    def version_below?(a, b)
+      left = a.to_s.scan(/\d+/).map(&:to_i)
+      right = b.to_s.scan(/\d+/).map(&:to_i)
+      return false if left.empty? || right.empty?
+
+      (left <=> right) == -1
     end
 
     def monotonic_now
@@ -5761,26 +6081,34 @@ module AmahiHelper
     end
 
     def app_record_ports(id, ports)
-      records = read_json(APP_PORTS) || {}
-      records = records.merge(id => ports.map { |p| p.transform_keys(&:to_s) }).sort.to_h
-      do_install(APP_PORTS, "#{JSON.pretty_generate(records)}\n", nil, '0640', APP_USER)
+      with_records_lock do
+        records = read_json(APP_PORTS) || {}
+        records = records.merge(id => ports.map { |p| p.transform_keys(&:to_s) }).sort.to_h
+        do_install(APP_PORTS, "#{JSON.pretty_generate(records)}\n", nil, '0640', APP_USER)
+      end
     end
 
     def app_forget_ports(id)
-      records = read_json(APP_PORTS) or return
-      return unless records.key?(id)
-      do_install(APP_PORTS, "#{JSON.pretty_generate(records.except(id))}\n", nil, '0640', APP_USER)
+      with_records_lock do
+        records = read_json(APP_PORTS)
+        next unless records&.key?(id)
+
+        do_install(APP_PORTS, "#{JSON.pretty_generate(records.except(id))}\n", nil, '0640', APP_USER)
+      end
     end
 
     # Rebuilds APP_CHAIN, jumped to from DOCKER-USER: established connections, traffic not going
     # into a container, and containers' own traffic pass; new connections into a container pass
     # only from Tailscale or the NAS's private subnets.
+    # Its rules go in whole, in one iptables-restore (--noflush: the chain named is emptied and
+    # filled in one step, the rest left as it is). Run before Docker starts too
+    # (amahi-kai-app-firewall-early.service), so the apps' ports are never open in between.
     def do_app_firewall
       subnets = lan_subnets
       run_command([IPTABLES, '-w', '-N', 'DOCKER-USER', { allow_failure: true }])
       run_command([IPTABLES, '-w', '-N', APP_CHAIN, { allow_failure: true }])
-      run_command([IPTABLES, '-w', '-F', APP_CHAIN])
-      app_chain_rules(subnets).each { |rule| run_command([IPTABLES, '-w', '-A', APP_CHAIN, *rule]) }
+      rules = app_chain_rules(subnets).map { |rule| "-A #{APP_CHAIN} #{rule.join(' ')}" }
+      run_command([IPTABLES_RESTORE, '-w', '--noflush', { stdin: "*filter\n:#{APP_CHAIN} - [0:0]\n#{rules.join("\n")}\nCOMMIT\n" }])
       unless run_command([IPTABLES, '-w', '-C', 'DOCKER-USER', '-j', APP_CHAIN, { allow_failure: true }]).nil?
         run_command([IPTABLES, '-w', '-I', 'DOCKER-USER', '1', '-j', APP_CHAIN])
       end
@@ -5847,14 +6175,14 @@ module AmahiHelper
       File.chmod(0o750, path)
     end
 
-    # The container's mounts for the app's folders: the system disk's (state) as before, and its
-    # dataset's, bound with --mount (never --volume, which would make a missing folder: on a pool
-    # that isn't mounted, that would be the system disk's). A dataset folder is left out when the
-    # app has no pool (an optional one not chosen).
+    # The container's mounts for the app's folders: the system disk's (state) and its dataset's,
+    # bound with --mount (never --volume, which would make a missing folder: on a pool that isn't
+    # mounted, that would be the system disk's, and whose colons split a path that has one). A
+    # dataset folder is left out when the app has no pool (an optional one not chosen).
     def app_folder_mounts(manifest, dir, storage)
       manifest[:folders].flat_map do |folder|
         if folder[:kind] == :state
-          ['--volume', "#{dir}/#{folder[:name]}:#{folder[:path]}"]
+          ['--mount', "type=bind,source=#{dir}/#{folder[:name]},target=#{folder[:path]}"]
         elsif storage
           ['--mount', "type=bind,source=#{storage}/#{folder[:name]},target=#{folder[:path]}"]
         else
@@ -5938,18 +6266,22 @@ module AmahiHelper
     end
 
     def app_record_storage(id, pool)
-      records = app_storage_records
-      return if records[id] == pool
+      with_records_lock do
+        records = app_storage_records
+        next if records[id] == pool
 
-      records[id] = pool
-      do_install(APP_STORAGE, "#{JSON.pretty_generate(records)}\n", nil, '0640', APP_USER)
+        records[id] = pool
+        do_install(APP_STORAGE, "#{JSON.pretty_generate(records)}\n", nil, '0640', APP_USER)
+      end
     end
 
     def app_forget_storage(id)
-      records = app_storage_records
-      return unless records.delete(id)
+      with_records_lock do
+        records = app_storage_records
+        next unless records.delete(id)
 
-      do_install(APP_STORAGE, "#{JSON.pretty_generate(records)}\n", nil, '0640', APP_USER)
+        do_install(APP_STORAGE, "#{JSON.pretty_generate(records)}\n", nil, '0640', APP_USER)
+      end
     end
 
     # The apps whose storage is on the pool +name+: [[id, installed?]] (installed: it has a
@@ -5997,14 +6329,19 @@ module AmahiHelper
       File.unlink(path) if path && File.exist?(path)
     end
 
-    def do_uninstall_app(id, image, delete_data)
+    # The container goes (checked: Docker may not have removed it), then its image: the one the
+    # container ran, else its definition's. Data kept keeps the definition too, so a reinstall
+    # runs the version the data is from.
+    def do_uninstall_app(id, delete_data)
       pool = app_storage_pool(id)
       if delete_data && pool && !pool_names.include?(pool)
         raise Failed, "#{id}'s data is on the pool #{pool}, which isn't online: bring it online to delete it"
       end
-      image = app_image(id) || image
-      run_command([DOCKER, 'rm', '--force', app_container(id), { allow_failure: true }])
-      run_command([DOCKER, 'image', 'rm', image, { allow_failure: true }])
+      image = app_image(id) || app_definition(id)&.dig(:image)
+      container = app_container(id)
+      run_command([DOCKER, 'rm', '--force', container, { allow_failure: true }])
+      raise Failed, "Docker didn't remove #{container}; nothing else of #{id} was touched" if docker_output('inspect', '--format', '{{.Id}}', container)
+      run_command([DOCKER, 'image', 'rm', image, { allow_failure: true }]) if image
       return { 'app' => id, 'data_kept' => true } unless delete_data
 
       dir = "#{APPS_ROOT}/#{id}"
@@ -6013,6 +6350,7 @@ module AmahiHelper
       FileUtils.rm_f("#{APP_SECRETS}/#{id}.json")
       app_forget_ports(id)
       app_forget_backup(id)
+      app_forget_definition(id)
       if pool
         dataset = "#{pool}/#{APP_DATASETS}/#{id}"
         run_command([ZFS, 'destroy', '-r', dataset]) if zfs_dataset?(dataset)
@@ -6023,9 +6361,11 @@ module AmahiHelper
     end
 
     # { 'docker' => running?, 'apps' => { 'jellyfin' => { 'state' => 'running', ... } } }
+    # 'jobs': the apps whose job runs now (their APP_JOB_UNIT): the Apps page leaves their rows
+    # to the job.
     def do_apps_status
       out = docker_output('ps', '--all', '--filter', 'label=amahi.app', '--format', '{{json .}}')
-      return { 'docker' => false, 'apps' => {} } unless out
+      return { 'docker' => false, 'apps' => {}, 'jobs' => app_jobs_running } unless out
 
       apps = out.lines.filter_map do |line|
         row = JSON.parse(line)
@@ -6034,7 +6374,18 @@ module AmahiHelper
       rescue JSON::ParserError
         nil
       end
-      { 'docker' => true, 'apps' => apps.to_h }
+      { 'docker' => true, 'apps' => apps.to_h, 'jobs' => app_jobs_running }
+    end
+
+    def app_jobs_running
+      out, _err, status = Open3.capture3(ENV_MIN, SYSTEMCTL, 'list-units', '--plain', '--no-legend', '--state=active,activating',
+                                         "#{format(APP_JOB_UNIT, '*')}.service", unsetenv_others: true, chdir: '/')
+      return [] unless status.success?
+
+      prefix = format(APP_JOB_UNIT, '')
+      out.lines.map { |line| line.split.first.to_s.delete_prefix(prefix).delete_suffix('.service') }.grep(APP_ID)
+    rescue SystemCallError
+      []
     end
 
     # { 'ports' => ["amahi-jellyfin\t0.0.0.0:8096->8096/tcp", ...], 'limited' => true } for every
@@ -6712,12 +7063,18 @@ module AmahiHelper
     def log(op, args, result, error, started)
       entry = {
         'time' => Time.now.utc.iso8601(3), 'op' => op, 'args' => filtered(args),
-        'caller' => ENV['SUDO_USER'] || Etc.getpwuid(Process.uid)&.name,
+        'caller' => ENV['SUDO_USER'] || app_job_caller || Etc.getpwuid(Process.uid)&.name,
         'result' => result, 'error' => error, 'ms' => ((Time.now - started) * 1000).round
       }.compact
       write_log(JSON.generate(entry))
     rescue StandardError => e
       warn "amahi-helper: couldn't write #{LOG_FILE}: #{e.message}"
+    end
+
+    # Who asked for the app job this runs (relay_app_job), or nil.
+    def app_job_caller
+      caller = ENV['AMAHI_APP_CALLER'].to_s
+      caller.empty? ? nil : caller
     end
 
     # The log is root:amahi 0640 in a root:amahi 0750 folder, so the app can show it.

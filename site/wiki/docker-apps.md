@@ -63,6 +63,10 @@ make an app of your own, see [Making Apps](making-apps).
    - creates and starts its container
 4. The last line says where to open it, for example `http://192.168.1.111:8096/`
 
+An install, update or uninstall runs as a job of its own on the server, so it finishes even if the
+page is closed or Amahi-kai's web page restarts meanwhile; the app's row catches up when you
+open the Apps page again. While one runs for an app, its other buttons wait for it.
+
 Once it's installed, **Open** on the Apps page and on the dashboard goes straight to the app, on
 its port.
 
@@ -94,7 +98,10 @@ them to create the admin account, so open the app and do that as soon as it's in
 **Install** first asks which shares to give the app (none by default). They appear inside the app
 at `/shares/<name>`: in Jellyfin, for example, add `/shares/Movies` as a library. To change them
 later, click **Change** next to **Shares** on the app's row: the app restarts with the new ones,
-keeping its data.
+keeping its data and the version it runs. The new container is made before the old one goes, so a
+change that fails leaves the app as it was, running.
+
+A share whose folder is a link (to somewhere else on the server) isn't given to an app.
 
 - Shares are **read only** unless you choose **Read and write**, which only apps that save files
   into shares offer (Transmission, for downloads).
@@ -127,29 +134,34 @@ values.
 
 Use the buttons on the app's row. The page shows what Docker reports, so an app that stopped on
 its own shows as stopped, and one whose container was removed outside Amahi-kai shows an error
-with **Install again**.
+with **Install again**. They work for an app the catalog no longer lists too.
 
 **Uninstall keeps the app's data.** It removes the container and its image; the app's folder,
-passwords and user stay, and installing the app again picks them up. To delete the data too,
-uninstall the app, then click **Delete it** on its row (it says its data from an earlier install
-is kept).
+passwords and user stay, and installing the app again picks them up, on the version it ran (Update
+then moves it on, with a copy first). To delete the data too, uninstall the app, then click
+**Delete it** on its row (it says its data from an earlier install is kept). Uninstall waits for
+Docker to be running.
 
 ### Updating an app
 
 Each installed app's row says which version it runs. When the update check (every 6 hours, or
 **Check now**) finds a newer version of an app in the catalog, the dashboard says so, the update
 button in the header gets its dot, and the app's row offers **Update to <version>**, next to
-**What's new** (the release notes). Nothing updates on its own.
+**What's new** (the release notes). Nothing updates on its own, and a catalog version older than
+the one an app runs isn't offered.
 
 **Update**:
 
 1. Copies the app's data. Caches and Transmission's downloads are left out, and data on a ZFS pool
-   is snapshotted instead of copied. It stops first if there isn't room for the copy.
+   is snapshotted instead of copied. It stops first if there isn't room for the copy, and a copy
+   that fails starts the app again on the version it ran.
 2. Starts the new version, and waits up to 5 minutes for it to come up healthy.
 3. If it doesn't come up, puts the old version and its data back by itself, and says why.
 
 The copy is kept for **30 days**. During that time **Undo update** on the row puts the old
-version back, with the app's data as it was before the update; anything changed since is lost.
+version back, as it ran, with the app's data as it was before the update; anything changed since is
+lost, and for data on a ZFS pool, so are the pool's own snapshots of it taken since. If the old
+version's image is gone, it's downloaded again first; nothing changes if it can't be.
 A later update replaces the copy, and it's deleted after 30 days (Settings → Jobs: **App update
 copies**).
 
@@ -221,8 +233,9 @@ Then start it again.
 ### App ports and the firewall
 
 Docker writes its own firewall rules for the ports apps publish, ahead of UFW's, so UFW doesn't
-filter them. Amahi-kai adds its own rules in Docker's chain each time Docker starts: connections
-into an app from anywhere but the server's private networks and Tailscale are dropped. The
+filter them. Amahi-kai adds its own rules in Docker's chain before Docker starts, and again each time
+it starts and whenever router mode or the server's address changes: connections into an app from
+anywhere but the server's private networks and Tailscale are dropped. The
 [security audit](security)'s **Docker ports** check says whether they're in place. To see them:
 
 ```bash
@@ -252,4 +265,6 @@ sudo tail -n 40 /var/log/amahi-kai/helper.log
 ### An app that ran out of memory
 
 Each app has a memory limit (1 GB unless its definition sets another: Jellyfin has 2 GB). An app
-that goes over it is restarted by Docker; its log says so.
+that goes over it is restarted by Docker; its log says so. Each app can also run at most 2,048
+processes, keeps at most 30 MB of logs (three files of 10 MB), and can't use raw sockets or make
+device files.

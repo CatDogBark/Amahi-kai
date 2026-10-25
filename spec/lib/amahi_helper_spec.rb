@@ -1372,6 +1372,9 @@ RSpec.describe 'AmahiHelper' do
       allow(File).to receive(:executable?).and_call_original
       allow(File).to receive(:executable?).with(AmahiHelper::UFW).and_return(true)
       allow(File).to receive(:executable?).with(AmahiHelper::TAILSCALE).and_return(false)
+      # The app firewall follows the network's changes (refresh_app_firewall, spec'd with the apps);
+      # here, as on a NAS without Docker, it's left alone, whatever the machine running this has
+      allow(AmahiHelper).to receive(:refresh_app_firewall).and_return(nil)
       # iptables finds no jump to take out, as on a NAS that hasn't reloaded UFW yet
       allow(helper).to receive(:run_command) do |argv|
         ran << argv.reject { |a| a.is_a?(Hash) }.join(' ')
@@ -2179,8 +2182,24 @@ RSpec.describe 'AmahiHelper' do
         File.chmod(0o644, fstab)
       end
 
-      it 'plans the fstab change, then the remounts' do
-        expect(steps('disks.secure_mounts', {})).to eq([[:secure_fstab], [:secure_mounts]])
+      it "plans the fstab change, then the remounts, then the share root's owner" do
+        expect(steps('disks.secure_mounts', {})).to eq([[:secure_fstab], [:secure_mounts], [:secure_share_root]])
+      end
+
+      # The web app's account owned the share root, so it could have put a link there in place of a
+      # share's folder, and an app given that share would have got whatever it pointed to.
+      it "makes the share root root's, 0755, through a handle on it, and leaves one that is" do
+        File.chmod(0o2775, files)
+        handle = double('share root', chown: nil, chmod: nil)
+        allow(helper).to receive(:with_dir).with(files).and_yield(handle)
+        expect(helper.do_secure_share_root).to eq('share_root' => 'root:root 0755')
+        expect(handle).to have_received(:chown).with(0, 0)
+        expect(handle).to have_received(:chmod).with(0o755)
+        allow(File).to receive(:lstat).and_call_original
+        allow(File).to receive(:lstat).with(files).and_return(instance_double(File::Stat, uid: 0, gid: 0, mode: 0o40755))
+        expect(helper.do_secure_share_root).to be_nil
+        allow(File).to receive(:lstat).and_call_original
+        expect(File.read(Rails.root.join('bin/amahi-install'))).to include('chown root:root "$SHARE_ROOT"', 'chmod 0755 "$SHARE_ROOT"')
       end
 
       it "gives the lines it wrote nosuid,nodev once, leaves others alone, binds the share root, and keeps a backup" do

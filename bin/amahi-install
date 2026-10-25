@@ -247,8 +247,10 @@ cd "$APP_DIR"
 # ---------------------------------------------------------------------------
 echo "==> Creating data directories..."
 mkdir -p "$SHARE_ROOT"
-chown "$APP_USER:users" "$SHARE_ROOT"
-chmod 2775 "$SHARE_ROOT"
+# Root's: the share folders in it are made by the root helper (shares.create_dir), the app's
+# user owning each; owning the root itself, that user could put a link there in place of one.
+chown root:root "$SHARE_ROOT"
+chmod 0755 "$SHARE_ROOT"
 mkdir -p "$CONFIG_DIR"
 mkdir -p /var/lib/amahi-kai/tmp
 chown "$APP_USER:$APP_GROUP" /var/lib/amahi-kai/tmp

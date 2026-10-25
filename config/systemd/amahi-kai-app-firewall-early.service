@@ -1,0 +1,19 @@
+# The app ports' chain (the root helper's apps.firewall) in place before Docker starts: Docker
+# starts the apps' containers, publishing their ports, and until amahi-kai-app-firewall.service
+# ran after it, anything could reach them. Docker leaves DOCKER-USER, which jumps to the chain,
+# as it finds it. Installed and enabled by bin/amahi-install-helper.
+[Unit]
+Description=Amahi-kai: keep app ports to the LAN and Tailscale from before Docker starts
+After=network-online.target
+Wants=network-online.target
+Before=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/amahi-helper apps.firewall
+StandardInput=null
+TimeoutStartSec=2min
+
+[Install]
+WantedBy=docker.service

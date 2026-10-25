@@ -145,6 +145,11 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
   `StoragePools`) turns it back into the kernel name with `DiskManager.resolve` just before acting.
   Only pools that mount at `/srv/pools/<name>` are Amahi-kai's (`managed_pool` in the helper,
   `Pool#managed?`): the others are shown, never changed.
+- **App jobs run as units of their own.** `apps.install/update/undo_update/uninstall` re-run
+  themselves under `systemd-run` as `amahi-kai-appjob-<id>` (the helper's `relay_app_job`), so a
+  restart of the web app can't cut one off; the unit name keeps one job per app, and Start/Stop
+  and `apps.follow_pool` wait for it. Containers are rebuilt from the definition they were made
+  from (`APP_DEFINITIONS`), never from a newer catalog manifest with the old image.
 - Build commands from names as argument lists (`Shell.output('systemctl', 'show', unit)`), never
   backticks or strings through a shell. Read what Ruby or `/proc` can give directly
   (`SystemInfo`).

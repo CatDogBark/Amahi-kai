@@ -66,6 +66,7 @@ RSpec.describe 'AmahiHelper ZFS pools' do
     allow(helper).to receive(:stable_path) { |disk| "/dev/disk/by-id/ata-SSD_#{File.basename(disk)}" }
     allow(helper).to receive(:ssd?).and_return(true)
     allow(helper).to receive(:other_mount_views).and_return([])
+    stub_const('AmahiHelper::APP_RECORDS_LOCK', "#{dir}/app-records.lock")
     # No pool on the drives that isn't imported; every pool here mounts at POOL_ROOT/<name> (Amahi-kai's)
     allow(helper).to receive(:importable_pools).and_return([])
     allow(helper).to receive(:pool_mountpoint) { |name| "#{dir}/pools/#{name}" }

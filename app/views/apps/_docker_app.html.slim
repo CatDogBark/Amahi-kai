@@ -50,7 +50,7 @@
               - if releases
                 a.ms-2 href=releases target="_blank" rel="noopener" What's new
             - if backup
-              button.btn.btn-link.p-0.ms-2.align-baseline type="button" style="font-size: inherit" data-app-stream=identifier data-url=apps_docker_undo_update_stream_path(identifier) data-title="Undoing #{name}'s update..." data-confirm="Undo the update? #{name} goes back to #{AppCatalog.tag(backup[:from])} with its data from #{l(backup[:taken_at], format: :short)}. Anything changed in #{name} since then is lost." Undo update
+              button.btn.btn-link.p-0.ms-2.align-baseline type="button" style="font-size: inherit" data-app-stream=identifier data-url=apps_docker_undo_update_stream_path(identifier) data-title="Undoing #{name}'s update..." data-confirm="Undo the update? #{name} goes back to #{AppCatalog.tag(backup[:from])} with its data from #{l(backup[:taken_at], format: :short)}. Anything changed in #{name} since then is lost#{backup[:snapshot] ? ", and so are the ZFS pool's own snapshots of its data taken since" : ''}." Undo update
               span.text-secondary.ms-1 = "(until #{backup[:until].localtime.strftime('%B %-d')})"
           .small.mt-1
             = app.shares.any? ? "Shares #{app.share_summary}" : 'No shares'
