@@ -66,6 +66,9 @@ RSpec.describe 'AmahiHelper ZFS pools' do
     allow(helper).to receive(:stable_path) { |disk| "/dev/disk/by-id/ata-SSD_#{File.basename(disk)}" }
     allow(helper).to receive(:ssd?).and_return(true)
     allow(helper).to receive(:other_mount_views).and_return([])
+    # No pool on the drives that isn't imported; every pool here mounts at POOL_ROOT/<name> (Amahi-kai's)
+    allow(helper).to receive(:importable_pools).and_return([])
+    allow(helper).to receive(:pool_mountpoint) { |name| "#{dir}/pools/#{name}" }
   end
 
   after { FileUtils.rm_rf(dir) }
@@ -141,6 +144,22 @@ RSpec.describe 'AmahiHelper ZFS pools' do
       expect(refusal('pools.create', create('mirror', %w[/dev/sdd /dev/sde]))).to include('is in the way')
     end
 
+    # A pool given an offline pool's name took its place: the offline one vanished from the page,
+    # and its drives were offered for Erase. A pool found on the drives (this server's before it
+    # was installed again) the same.
+    it "refuses the name of a pool offline here or found on the drives, and a found pool's drives" do
+      stub_const('AmahiHelper::OFFLINE_POOLS', "#{dir}/offline-pools.json")
+      File.write("#{dir}/offline-pools.json", { 'away' => '1234' }.to_json)
+      expect(refusal('pools.create', create('mirror', %w[/dev/sdd /dev/sde], name: 'away')))
+        .to eq('a pool named away is offline here; bring it online, or delete it, first')
+      found = [{ 'name' => 'tank', 'id' => '5678', 'state' => 'ONLINE', 'force' => true, 'status' => nil, 'devices' => ['/dev/sdc1'] }]
+      allow(helper).to receive(:importable_pools).and_return(found)
+      expect(refusal('pools.create', create('mirror', %w[/dev/sdd /dev/sde], name: 'tank')))
+        .to eq('a pool named tank is on drives connected here, not imported; import it, or erase its drives, first')
+      expect(refusal('pools.create', create('mirror', %w[/dev/sdc /dev/sdd], name: 'new')))
+        .to eq("/dev/sdc holds the pool tank, which isn't imported; import it on Disks → ZFS Pools, or erase the drive there")
+    end
+
     it "refuses when ZFS isn't installed" do
       allow(File).to receive(:executable?).with('/usr/sbin/zpool').and_return(false)
       expect(refusal('pools.create', create('mirror', %w[/dev/sdd /dev/sde]))).to eq("zpool isn't installed")
@@ -184,13 +203,26 @@ RSpec.describe 'AmahiHelper ZFS pools' do
       expect(steps('zfs.setup', {}).last).to eq([:set_arc_max, 3_900_000 * 1024 / 2])
     end
 
-    it 'sets the running value when the module is loaded' do
+    # ZFS keeps at least a 32nd of the memory cached and ignores a cap that isn't above it: on
+    # 128 GiB that's 4 GiB, so a 2 GiB cap did nothing.
+    it "caps it just above ZFS's own least on a server with more than 64 GiB" do
+      meminfo = "#{dir}/meminfo"
+      stub_const('AmahiHelper::MEMINFO', meminfo)
+      File.write(meminfo, "MemTotal:       131000000 kB\n")
+      expect(steps('zfs.setup', {}).last).to eq([:set_arc_max, (131_000_000 * 1024 / 32) + (64 * 1024**2)])
+    end
+
+    it 'sets the running value when the module is loaded, and replies with the cap ZFS uses' do
       stub_const('AmahiHelper::ZFS_ARC_MAX', "#{dir}/zfs_arc_max")
-      expect(helper.do_set_arc_max(5)).to eq('arc_max' => 5)
+      stub_const('AmahiHelper::ARCSTATS', "#{dir}/arcstats")
+      expect(helper.do_set_arc_max(5)).to eq('arc_max' => 5) # no module loaded: no figures of its own
       expect(File.exist?("#{dir}/zfs_arc_max")).to be(false)
       File.write("#{dir}/zfs_arc_max", '0')
-      helper.do_set_arc_max(2_147_483_648)
+      File.write("#{dir}/arcstats", "13 1 0x01 123 33456 1 2\nname type data\nc_min 4 1052590080\nc_max 4 2147483648\nsize 4 1024\n")
+      expect(helper.do_set_arc_max(2_147_483_648)).to eq('arc_max' => 2_147_483_648)
       expect(File.read("#{dir}/zfs_arc_max")).to eq('2147483648')
+      File.write("#{dir}/arcstats", "c_max 4 16842752000\n") # it kept its own
+      expect(helper.do_set_arc_max(2_147_483_648)).to eq('arc_max' => 16_842_752_000)
     end
   end
 
@@ -271,11 +303,16 @@ RSpec.describe 'AmahiHelper ZFS pools' do
       expect(third).to include('device' => '/dev/sde1', 'cksum' => '3')
     end
 
-    it 'lists the pools with their sizes, mount points and status' do
+    it 'lists the pools with their sizes, mount points and status, and which are Amahi-kai\'s' do
       allow(helper).to receive(:capture) do |argv|
         case argv
-        when %w[/usr/sbin/zpool list -H -p -o name,size,allocated,free,health] then "tank\t2980000000000\t1000\t2979999999000\tONLINE\n"
-        when %w[/usr/sbin/zfs list -H -p -o used,available,mountpoint,usedbysnapshots tank] then "1000\t2000000000000\t/srv/pools/tank\t300\n"
+        when %w[/usr/sbin/zpool list -H -p -o name,size,allocated,free,health]
+          "tank\t2980000000000\t1000\t2979999999000\tONLINE\nrpool\t1000\t10\t990\tONLINE\n"
+        when %w[/usr/sbin/zfs list -H -p -o used,available,mountpoint,usedbysnapshots tank] then "1000\t2000000000000\t#{dir}/pools/tank\t300\n"
+        when %w[/usr/sbin/zfs list -H -p -o used,available,mountpoint,usedbysnapshots rpool] then "10\t990\t/\t0\n"
+        when %w[/usr/sbin/zfs list -H -p -t snapshot -d 1 -s creation -o name,creation,used rpool] then ''
+        when %w[/usr/sbin/zfs get -H -p -o property,value amahi:snapshot-hourly,amahi:snapshot-daily rpool] then ''
+        when %w[/usr/sbin/zpool status -P rpool] then healthy.gsub('tank', 'rpool')
         when %w[/usr/sbin/zfs list -H -p -t snapshot -d 1 -s creation -o name,creation,used tank]
           "tank@amahi-daily-2026-10-04-0010\t1791000000\t300\n"
         when %w[/usr/sbin/zfs get -H -p -o property,value amahi:snapshot-hourly,amahi:snapshot-daily tank]
@@ -284,13 +321,27 @@ RSpec.describe 'AmahiHelper ZFS pools' do
         else raise "unexpected #{argv}"
         end
       end
-      pool = helper.do_pool_status['pools'].sole
+      pool, rpool = helper.do_pool_status['pools']
       expect(pool).to include('name' => 'tank', 'size' => 2_980_000_000_000, 'allocated' => 1000, 'free' => 2_979_999_999_000,
                               'health' => 'ONLINE', 'used' => 1000, 'available' => 2_000_000_000_000,
-                              'mountpoint' => '/srv/pools/tank', 'state' => 'ONLINE', 'snapshot_space' => 300,
+                              'mountpoint' => "#{dir}/pools/tank", 'managed' => true, 'state' => 'ONLINE', 'snapshot_space' => 300,
                               'snapshot_policy' => { 'hourly' => 12, 'daily' => 30 },
                               'snapshots' => [{ 'name' => 'amahi-daily-2026-10-04-0010', 'kind' => 'daily', 'created' => 1_791_000_000, 'used' => 300 }])
       expect(pool['vdevs'].sole['children'].size).to eq(3)
+      expect(rpool).to include('name' => 'rpool', 'mountpoint' => '/', 'managed' => false) # a system's own: shown, never changed
+    end
+
+    # The scan of the drives for pools that aren't imported reads every drive, waking any that
+    # sleep: the ZFS Pools page asks for it, the health check every 15 minutes doesn't.
+    it 'scans the drives for the pools that are not imported only when asked' do
+      allow(helper).to receive(:capture).with(%w[/usr/sbin/zpool list -H -p -o name,size,allocated,free,health]).and_return('')
+      found = [{ 'name' => 'tank', 'id' => '5678', 'state' => 'ONLINE', 'force' => false, 'status' => nil, 'devices' => ['/dev/sdc1'] }]
+      allow(helper).to receive(:importable_pools).and_return(found)
+      expect(helper.do_pool_status).to eq('zfs' => true, 'pools' => [], 'offline' => [], 'found' => found)
+      expect(helper.do_pool_status(false)).to eq('zfs' => true, 'pools' => [])
+      expect(helper).to have_received(:importable_pools).once
+      expect(steps('pools.status', {})).to eq([[:pool_status, false]])
+      expect(steps('pools.status', { 'scan' => true })).to eq([[:pool_status, true]])
     end
 
     it "says ZFS isn't installed, and passes on a zpool failure" do
@@ -298,7 +349,8 @@ RSpec.describe 'AmahiHelper ZFS pools' do
       expect(helper.do_pool_status).to eq('zfs' => false, 'pools' => [])
       allow(File).to receive(:executable?).with('/usr/sbin/zpool').and_return(true)
       allow(helper).to receive(:capture).and_raise(AmahiHelper::Failed, 'zpool exited 1: The ZFS modules are not loaded.')
-      expect(helper.do_pool_status).to eq('zfs' => true, 'pools' => [], 'offline' => [], 'error' => 'zpool exited 1: The ZFS modules are not loaded.')
+      expect(helper.do_pool_status).to eq('zfs' => true, 'pools' => [], 'offline' => [], 'found' => [],
+                                          'error' => 'zpool exited 1: The ZFS modules are not loaded.')
     end
 
     it 'maps every device in an imported pool to its pool' do
@@ -443,6 +495,15 @@ RSpec.describe 'AmahiHelper ZFS pools' do
       expect(refusal('pools.import', { 'name' => 'away' })).to eq('a pool named away is already online')
     end
 
+    it 'refuses to take a pool offline over the record of another one by its name' do
+      allow(helper).to receive(:capture).with(%w[/usr/sbin/zpool get -H -o value guid old]).and_return("987654321\n")
+      File.write(offline_file, { 'old' => '1111' }.to_json)
+      expect(refusal('pools.export', { 'name' => 'old' }))
+        .to eq('another pool named old is offline here already; rename one of them from the command line first')
+      File.write(offline_file, { 'old' => '987654321' }.to_json) # its own record, left by a run that stopped
+      expect(steps('pools.export', { 'name' => 'old' })).to eq([[:export_pool, 'old', '987654321'], [:pool_status]])
+    end
+
     it 'records the pool after exporting it, and forgets it once imported' do
       allow(helper).to receive(:capture).with(%w[/usr/sbin/zpool export old]).and_return('')
       helper.do_export_pool('old', '987654321')
@@ -477,12 +538,119 @@ RSpec.describe 'AmahiHelper ZFS pools' do
         \t    scsi-0QEMU_QEMU_HARDDISK_drive-scsi4-part1  ONLINE
         \t    scsi-0QEMU_QEMU_HARDDISK_drive-scsi9-part1  UNAVAIL
       SCAN
-      expect(helper.parse_importable(scan)).to eq([{ 'name' => 'away', 'id' => '1234', 'state' => 'ONLINE', 'devices' => %w[/dev/null /dev/zero] }])
+      expect(helper.parse_importable(scan)).to eq([{ 'name' => 'away', 'id' => '1234', 'state' => 'ONLINE', 'force' => false, 'status' => nil,
+                                                     'devices' => %w[/dev/null /dev/zero] }])
       File.write(offline_file, { 'away' => '1234', 'gone' => '99' }.to_json)
       allow(helper).to receive(:pool_names).and_return([])
       allow(helper).to receive(:importable_pools).and_return(helper.parse_importable(scan))
       expect(helper.offline_pools).to eq([{ 'name' => 'away', 'state' => 'ONLINE', 'devices' => %w[/dev/null /dev/zero] },
                                           { 'name' => 'gone', 'state' => 'MISSING', 'devices' => [] }])
+    end
+
+    it 'reads a pool last used by another system, which ZFS imports only with -f' do
+      scan = <<~SCAN
+           pool: tank
+             id: 5678
+          state: ONLINE
+         status: The pool was last accessed by another system.
+         action: The pool can be imported using its name or numeric identifier and
+        	the '-f' flag.
+            see: https://openzfs.github.io/openzfs-docs/msg/ZFS-8000-EY
+         config:
+
+        	tank        ONLINE
+        	  mirror-0  ONLINE
+      SCAN
+      expect(helper.parse_importable(scan).sole).to include('name' => 'tank', 'id' => '5678', 'force' => true,
+                                                            'status' => 'The pool was last accessed by another system.')
+    end
+
+    describe 'a pool found on the drives' do
+      # tank: this server's from before it was installed again (ZFS asks for -f), on sdi; away: taken
+      # offline here (its record), so not "found"; part: too few of its drives connected.
+      let(:scan) do
+        [{ 'name' => 'tank', 'id' => '5678', 'state' => 'ONLINE', 'force' => true, 'status' => 'The pool was last accessed by another system.',
+           'devices' => ['/dev/sdi1'] },
+         { 'name' => 'away', 'id' => '1234', 'state' => 'ONLINE', 'force' => false, 'status' => nil, 'devices' => ['/dev/sdd'] },
+         { 'name' => 'part', 'id' => '42', 'state' => 'UNAVAIL', 'force' => false, 'status' => nil, 'devices' => ['/dev/sde1'] }]
+      end
+      let(:ran) { [] }
+
+      before do
+        File.write(offline_file, { 'away' => '1234' }.to_json)
+        allow(helper).to receive(:importable_pools).and_return(scan)
+        allow(helper).to receive(:run_command) { |argv| ran << argv }
+        sdi = { 'path' => '/dev/sdi', 'type' => 'disk', 'mountpoints' => [nil],
+                'children' => [{ 'path' => '/dev/sdi1', 'type' => 'part', 'fstype' => 'zfs_member', 'label' => 'tank', 'mountpoints' => [nil] },
+                               { 'path' => '/dev/sdi9', 'type' => 'part', 'mountpoints' => [nil] }] }
+        allow(helper).to receive(:block_tree).and_return(tree + [sdi])
+      end
+
+      it 'is listed apart from the ones taken offline here' do
+        expect(helper.found_pools.map { |pool| pool['name'] }).to eq(%w[tank part])
+        expect(helper.found_devices).to eq('/dev/sdi1' => 'tank', '/dev/sde1' => 'part')
+        expect(helper.offline_devices).to eq('/dev/sdd' => 'away')
+      end
+
+      it 'is imported by its id, under its own name, only while ZFS finds enough of its drives' do
+        expect(steps('pools.import_found', { 'id' => '5678' })).to eq(
+          [[:make_dir, "#{dir}/pools", '0755'], [:import_found_pool, 'tank', '5678', true], [:pool_status]]
+        )
+        found = ->(id) { refusal('pools.import_found', { 'id' => id }) }
+        expect(found.call('42')).to eq('ZFS finds part UNAVAIL: connect its missing drives first')
+        expect(found.call('1234')).to eq('no pool with the id 1234 is on the drives, not imported') # offline: Bring online
+        expect(found.call('99')).to eq('no pool with the id 99 is on the drives, not imported')
+        expect(found.call('5678; reboot')).to include("isn't a pool's id")
+        allow(helper).to receive(:pool_names).and_return(%w[old tank])
+        expect(found.call('5678')).to eq('a pool named tank is already imported here')
+        allow(helper).to receive(:pool_names).and_return(['old'])
+        FileUtils.mkdir_p("#{dir}/pools/tank/stuff")
+        expect(found.call('5678')).to include('is in the way')
+        scan.first['name'] = 'Tank'
+        expect(found.call('5678')).to include("isn't one Amahi-kai gives pools")
+      end
+
+      def datasets(lines)
+        allow(helper).to receive(:capture).with(%w[/usr/sbin/zfs list -H -o name,mountpoint,canmount,setuid,devices -r -t filesystem tank])
+                                          .and_return(lines.map { |fields| "#{fields.join("\t")}\n" }.join)
+      end
+
+      it "imports it with nothing mounted, then mounts it if everything of it mounts in its own folder" do
+        allow(helper).to receive(:capture).with(['/usr/sbin/zpool', 'import', '-N', '-f', '-d', '/dev/disk/by-id', '5678']).and_return('')
+        datasets([['tank', "#{dir}/pools/tank", 'on', 'off', 'off'], ['tank/shares', "#{dir}/pools/tank/shares", 'on', 'on', 'off'],
+                  ['tank/apps', 'none', 'on', 'off', 'off']])
+        helper.do_import_found_pool('tank', '5678', true)
+        expect(ran).to eq([%w[/usr/sbin/zfs set setuid=off devices=off tank/shares], %w[/usr/sbin/zfs mount -a]])
+      end
+
+      it "exports it again, as it was, when it isn't Amahi-kai's" do
+        allow(helper).to receive(:capture).with(['/usr/sbin/zpool', 'import', '-N', '-d', '/dev/disk/by-id', '5678']).and_return('')
+        datasets([['tank', "#{dir}/pools/tank", 'on', 'off', 'off'], ['tank/root', '/', 'on', 'off', 'off']])
+        expect { helper.do_import_found_pool('tank', '5678', false) }.to raise_error(
+          AmahiHelper::Failed, "tank isn't one of Amahi-kai's pools (tank/root mounts at /), so it's left on its drives, not imported: import it from the command line"
+        )
+        expect(ran).to eq([['/usr/sbin/zpool', 'export', 'tank', { allow_failure: true }]])
+        ran.clear
+        datasets([['tank', '/data', 'on', 'off', 'off']])
+        expect { helper.do_import_found_pool('tank', '5678', false) }.to raise_error(AmahiHelper::Failed, /tank mounts at \/data/)
+        ran.clear
+        datasets([['tank', "#{dir}/pools/tank", 'off', 'off', 'off'], ['tank/x', '/x', 'noauto', 'off', 'off']]) # noauto can still be mounted
+        expect { helper.do_import_found_pool('tank', '5678', false) }.to raise_error(AmahiHelper::Failed, %r{tank/x mounts at /x})
+        ran.clear
+        datasets([['tank', '/', 'off', 'off', 'off']]) # not mounted itself, but not in its own folder: not Amahi-kai's
+        expect { helper.do_import_found_pool('tank', '5678', false) }.to raise_error(AmahiHelper::Failed, %r{tank mounts at /\)})
+        datasets([['tank', "#{dir}/pools/tank", 'on', 'off', 'off'], ['tank/old', 'legacy', 'on', 'off', 'off'],
+                  ['tank/off', '/elsewhere', 'off', 'off', 'off']]) # neither is mounted by ZFS
+        expect { helper.do_import_found_pool('tank', '5678', false) }.not_to raise_error
+      end
+
+      it "keeps its drives for it: Erase needs the pool's name typed" do
+        expect(refusal('pools.erase_drive', { 'device' => '/dev/sdi' })).to eq("type the pool's name (tank) to erase /dev/sdi")
+        expect(refusal('pools.erase_drive', { 'device' => '/dev/sdi', 'confirm' => 'TANK' })).to eq("type the pool's name (tank) to erase /dev/sdi")
+        expect(steps('pools.erase_drive', { 'device' => '/dev/sdi', 'confirm' => 'tank' }).first)
+          .to eq(['/usr/sbin/zpool', 'labelclear', '-f', '/dev/sdi1', { allow_failure: true }])
+        expect(refusal('pools.erase_drive', { 'device' => '/dev/sdd', 'confirm' => 'away' })).to include('which is offline')
+      end
     end
 
     it 'uninstalls ZFS only when no pool is left, online or offline' do
@@ -651,6 +819,39 @@ RSpec.describe 'AmahiHelper ZFS pools' do
       expect(helper.pool_mount_holders('ol')).to eq([])
     end
 
+    it "changes only Amahi-kai's pools: one mounted elsewhere (a system's rpool) is refused" do
+      allow(helper).to receive(:pool_mountpoint).with('old').and_return('/')
+      why = "old isn't one of Amahi-kai's pools (it mounts at /); manage it from the command line"
+      expect(refusal('pools.export', { 'name' => 'old' })).to eq(why)
+      expect(refusal('pools.destroy', { 'name' => 'old', 'confirm' => 'old' })).to eq(why)
+      expect(refusal('pools.scrub', { 'name' => 'old' })).to eq(why)
+      expect(refusal('pools.snapshot', { 'name' => 'old' })).to eq(why)
+      expect(refusal('pools.snapshot_policy', { 'name' => 'old', 'hourly' => 1, 'daily' => 1 })).to eq(why)
+      expect(refusal('pools.rollback', { 'name' => 'old', 'snapshot' => 'amahi-daily-2026-10-04-0010', 'confirm' => 'old' })).to eq(why)
+      expect(refusal('pools.replace', { 'name' => 'old', 'old' => '1234567890123456789', 'new' => '/dev/sdd' })).to eq(why)
+      expect(refusal('pools.add_group', { 'name' => 'old', 'devices' => %w[/dev/sdc /dev/sdd /dev/sde] })).to eq(why)
+      allow(File).to receive(:executable?).with('/usr/sbin/zfs').and_return(true)
+      expect(refusal('pools.shares_root', { 'name' => 'old' })).to eq(why)
+    end
+
+    # A pool whose drives are failing may not tell ZFS where it mounts: its folder in POOL_ROOT
+    # says it's Amahi-kai's, so Replace and Delete still work on it.
+    it "takes a pool whose mount point ZFS can't read as Amahi-kai's when its folder is in the pools' folder" do
+      allow(helper).to receive(:pool_mountpoint).and_call_original
+      allow(helper).to receive(:capture).with(%w[/usr/sbin/zfs get -H -o value mountpoint old]).and_raise(AmahiHelper::Failed, 'zfs exited 1: I/O error')
+      expect(refusal('pools.scrub', { 'name' => 'old' }))
+        .to eq("old isn't one of Amahi-kai's pools (ZFS can't say where it mounts); manage it from the command line")
+      FileUtils.mkdir_p("#{dir}/pools/old")
+      expect(steps('pools.scrub', { 'name' => 'old' })).to eq([%w[/usr/sbin/zpool scrub old]])
+    end
+
+    it "keeps a pool found on the drives out of a new group, and out of Replace" do
+      allow(helper).to receive(:importable_pools).and_return([{ 'name' => 'tank', 'id' => '5678', 'state' => 'ONLINE', 'force' => false,
+                                                                 'status' => nil, 'devices' => ['/dev/sdd'] }])
+      expect(refusal('pools.add_group', { 'name' => 'old', 'devices' => %w[/dev/sdc /dev/sdd /dev/sde] })).to include('/dev/sdd holds the pool tank')
+      expect(refusal('pools.replace', { 'name' => 'old', 'old' => '1234567890123456789', 'new' => '/dev/sdd' })).to include('/dev/sdd holds the pool tank')
+    end
+
     it 'destroys a pool only when its name is typed again, then frees its drives' do
       expect(refusal('pools.destroy', { 'name' => 'old', 'confirm' => 'OLD' })).to eq("type the pool's name (old) to destroy it")
       expect(steps('pools.destroy', { 'name' => 'old', 'confirm' => 'old' })).to eq(
@@ -666,6 +867,17 @@ RSpec.describe 'AmahiHelper ZFS pools' do
       )
     end
 
+    # A pool on a partition beside others (a system's bpool, beside its EFI partition and rpool)
+    # took the whole disk with it.
+    it 'wipes a whole disk with the pool only when all of it was the pool\'s' do
+      shared = { 'path' => '/dev/sdh', 'type' => 'disk', 'mountpoints' => [nil],
+                 'children' => [{ 'path' => '/dev/sdh1', 'type' => 'part', 'fstype' => 'zfs_member', 'mountpoints' => [nil] },
+                                { 'path' => '/dev/sdh2', 'type' => 'part', 'fstype' => 'vfat', 'mountpoints' => [nil] }] }
+      allow(helper).to receive(:block_tree).and_return(tree.reject { |disk| disk['path'] == '/dev/sdh' } + [shared])
+      wiped = steps('pools.destroy', { 'name' => 'old', 'confirm' => 'old' }).select { |step| step[0] == '/usr/sbin/wipefs' }.map { |step| step[2] }
+      expect(wiped).to eq(['/dev/sdh1']) # the EFI partition beside it stays
+    end
+
     it "removes the pool's mount point only when it's an empty folder" do
       Dir.mkdir("#{dir}/pools")
       Dir.mkdir("#{dir}/pools/old")
@@ -678,7 +890,7 @@ RSpec.describe 'AmahiHelper ZFS pools' do
   end
 
   describe 'snapshots' do
-    let(:now) { Time.local(2026, 10, 5, 14, 5) }
+    let(:now) { Time.utc(2026, 10, 5, 14, 5) } # names are in UTC
     let(:list_cmd) { %w[/usr/sbin/zfs list -H -p -t snapshot -d 1 -s creation -o name,creation,used old] }
     let(:get_cmd) { %w[/usr/sbin/zfs get -H -p -o property,value amahi:snapshot-hourly,amahi:snapshot-daily old] }
     let(:snapshots) do
@@ -706,9 +918,25 @@ RSpec.describe 'AmahiHelper ZFS pools' do
       expect(helper.snapshot_policy('old')).to eq('hourly' => 168, 'daily' => 30)
     end
 
-    it 'takes a snapshot now, kept until deleted' do
-      allow(Time).to receive(:now).and_return(Time.local(2026, 10, 5, 14, 32, 1))
+    it 'takes a snapshot now, kept until deleted, named in UTC' do
+      allow(Time).to receive(:now).and_return(Time.new(2026, 10, 5, 4, 32, 1, '-10:00'))
       expect(steps('pools.snapshot', { 'name' => 'old' })).to eq([%w[/usr/sbin/zfs snapshot -r old@amahi-manual-2026-10-05-143201], [:pool_status]])
+    end
+
+    # Where the clocks go back, an hour's local times come twice: in the server's time, the
+    # second hourly snapshot was named like the first, and zfs refused it.
+    it 'names the hourly snapshots in UTC, so the hour the clocks go back gets names of its own' do
+      snapshots.replace([])
+      first = Time.new(2026, 11, 1, 1, 30, 0, '-04:00') # 01:30 summer time
+      helper.do_run_snapshots(first)
+      helper.do_run_snapshots(Time.new(2026, 11, 1, 1, 30, 0, '-05:00')) # 01:30 again, an hour later
+      expect(ran.map(&:last).grep(/hourly/)).to eq(%w[old@amahi-hourly-2026-11-01-0530 old@amahi-hourly-2026-11-01-0630])
+    end
+
+    it "takes no snapshots of a pool that isn't Amahi-kai's (a system's rpool)" do
+      allow(helper).to receive(:pool_mountpoint).with('old').and_return('/')
+      expect(helper.do_run_snapshots(now)).to eq('pools' => [])
+      expect(ran).to eq([])
     end
 
     it 'sets how many snapshots a pool keeps, and prunes at once' do
@@ -883,6 +1111,7 @@ RSpec.describe 'AmahiHelper ZFS pools' do
         .with(AmahiHelper::ENV_MIN, ['/usr/bin/timeout', '/usr/bin/timeout'], '10', '/usr/sbin/smartctl', '--json',
               '-n', 'standby,9', '-i', '-H', '-A', '/dev/sdc', unsetenv_others: true, chdir: '/')
       expect(helper).to have_received(:do_install).with(health_file, anything, nil, '0640', 'amahi')
+      expect(helper).to have_received(:do_pool_status).with(false) # no scan of the drives, which would wake them
     end
 
     it 'records no SMART data without smartctl' do

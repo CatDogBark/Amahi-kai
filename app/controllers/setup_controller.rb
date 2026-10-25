@@ -112,7 +112,8 @@ class SetupController < ApplicationController
     device = params[:device]
     begin
       preview = DiskManager.preview(device)
-      render json: { status: 'ok', device: device, entries: preview[:entries], total_used: preview[:total_used], file_count: preview[:file_count] }
+      render json: { status: 'ok', device: device, entries: preview[:entries], total_used: preview[:total_used], file_count: preview[:file_count],
+                     partial: preview[:partial] == true }
     rescue DiskManager::DiskError => e
       render json: { status: 'error', message: e.message }, status: :unprocessable_entity
     end

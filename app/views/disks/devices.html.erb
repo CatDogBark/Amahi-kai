@@ -51,10 +51,15 @@
                     <span class="badge bg-secondary">Unformatted</span>
                   <% end %>
                 </td>
+                <%# A drive that came back unmounted: its fstab line says where it goes, and Mount puts it there %>
+                <% home = part[:home] if part[:status] == :unmounted %>
+                <% pool_drive = home && @pool_paths.include?(home) %>
                 <td>
                   <%= part[:mountpoint] || '—' %>
+                  <% if home %>
+                    <span class="small text-muted ms-2" id="home-<%= File.basename(part[:path]) %>">Belongs at <code><%= home %></code><%= pool_drive ? ", one of the Greyhole pool's drives" : '' %>: Mount puts it back there</span>
                   <%# Mounting (or Initialize) makes the drive share storage, which a ZFS pool can't take %>
-                  <% if @zfs_installed && !part[:mountpoint] && !device[:os_disk] && !device[:zfs_pool] && %i[unmounted unformatted].include?(part[:status]) %>
+                  <% elsif @zfs_installed && !part[:mountpoint] && !device[:os_disk] && !device[:zfs_pool] && %i[unmounted unformatted].include?(part[:status]) %>
                     <span class="small text-muted ms-2">For a <a href="<%= disks_pools_path %>">ZFS pool</a>, <%= part[:status] == :unformatted ? "don't initialize it" : 'leave it unmounted' %></span>
                   <% end %>
                 </td>
@@ -64,7 +69,7 @@
                     <% when :unformatted %>
                       <%= button_to "Initialize",
                             disks_format_disk_path,
-                            params: { device: part[:path] },
+                            params: { device: part[:ref] },
                             method: :post,
                             class: "btn btn-sm btn-outline-danger",
                             data: { confirm: "⚠️ This will ERASE ALL DATA on #{part[:path]}. Are you sure?", disable_with: "Formatting..." } %>
@@ -73,38 +78,39 @@
                       <div class="d-flex gap-1 justify-content-end">
                         <%= button_to "Preview",
                               disks_preview_disk_path,
-                              params: { device: part[:path] },
+                              params: { device: part[:ref] },
                               method: :post,
                               class: "btn btn-sm btn-outline-info",
                               data: { disable_with: "Loading..." } %>
                         <% if supported_fs.include?(part[:fstype].to_s.downcase) %>
                           <%= button_to "Mount",
                                 disks_mount_disk_path,
-                                params: { device: part[:path] },
+                                params: { device: part[:ref] },
                                 method: :post,
                                 class: "btn btn-sm btn-outline-primary",
                                 data: { disable_with: "Mounting..." } %>
                         <% else %>
                           <%= button_to "Mount as Share",
                                 disks_mount_as_share_path,
-                                params: { device: part[:path] },
+                                params: { device: part[:ref] },
                                 method: :post,
                                 class: "btn btn-sm btn-outline-success",
                                 data: { tip: "Mount and create a network share (#{part[:fstype]} — not pooled)", disable_with: "Mounting..." } %>
                         <% end %>
                         <%= button_to "Format",
                               disks_format_disk_path,
-                              params: { device: part[:path] },
+                              params: { device: part[:ref] },
                               method: :post,
                               class: "btn btn-sm btn-outline-danger",
-                              data: { confirm: "Format #{part[:path]}? This erases everything on it: its #{part[:fstype] || 'filesystem'} and every file on it, for good. It gets a new, empty ext4 filesystem across all #{part[:size]}.",
+                              data: { confirm: "Format #{part[:path]}? This erases everything on it: its #{part[:fstype] || 'filesystem'} and every file on it, for good. It gets a new, empty ext4 filesystem across all #{part[:size]}." +
+                                               (home ? " It's the drive that belongs at #{home}#{pool_drive ? ", one of the Greyhole pool's drives: Greyhole's copies on it go too" : ''}." : ''),
                                       disable_with: "Formatting..." } %>
                       </div>
                     <% when :mounted %>
                       <% unless ['/', '/boot', '/boot/efi'].include?(part[:mountpoint]) %>
                         <%= button_to "Unmount",
                               disks_unmount_disk_path,
-                              params: { device: part[:path] },
+                              params: { device: part[:ref] },
                               method: :post,
                               class: "btn btn-sm btn-outline-warning",
                               data: { confirm: "Unmount #{part[:path]} from #{part[:mountpoint]}?", disable_with: "Unmounting..." } %>

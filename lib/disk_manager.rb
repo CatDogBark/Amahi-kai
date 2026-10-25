@@ -10,6 +10,13 @@ require 'shell'
 class DiskManager
   VALID_DEVICE_PATTERN = %r{\A/dev/[svx]d[a-z]+\d*\z}
   VALID_NVME_PATTERN = %r{\A/dev/nvme\d+n\d+(p\d+)?\z}
+  # udev's links for each drive and partition, named for its model and serial (or WWN), which stay
+  # with it whatever name the kernel gives it at boot or when it's plugged in. The pages name a
+  # drive by one (its :ref), so a page left open acts on that drive, or on none, never on whichever
+  # drive has its old kernel name now (resolve).
+  BY_ID = '/dev/disk/by-id'.freeze
+  BY_ID_NAME = /\A[\w.:@+=-]{1,200}\z/
+  BY_ID_PREFERENCE = %w[ata- nvme- scsi- usb- wwn- virtio-].freeze
 
   class DiskError < StandardError; end
 
@@ -34,21 +41,27 @@ class DiskManager
     end
 
     devices = []
+    refs = by_id_refs
+    homes = fstab_sources
     (data["blockdevices"] || []).each do |dev|
       next unless dev["type"] == "disk"
 
       device_path = "/dev/#{dev['name']}"
       children = dev["children"] || []
 
+      # home: where the drive's fstab line mounts it (a drive that was mounted before, missing or
+      # not), or nil
       partitions = children.map do |part|
         part_path = "/dev/#{part['name']}"
         {
           name: part["name"],
           path: part_path,
+          ref: refs[part_path] || part_path,
           size: part["size"],
           fstype: part["fstype"],
           mountpoint: part["mountpoint"],
           uuid: part["uuid"],
+          home: part["uuid"] && homes["UUID=#{part['uuid']}"],
           status: partition_status(part)
         }
       end
@@ -58,10 +71,12 @@ class DiskManager
         partitions = [{
           name: dev["name"],
           path: device_path,
+          ref: refs[device_path] || device_path,
           size: dev["size"],
           fstype: dev["fstype"],
           mountpoint: dev["mountpoint"],
           uuid: dev["uuid"],
+          home: dev["uuid"] && homes["UUID=#{dev['uuid']}"],
           status: partition_status(dev)
         }]
       end
@@ -69,6 +84,7 @@ class DiskManager
       devices << {
         name: dev["name"],
         path: device_path,
+        ref: refs[device_path] || device_path,
         model: dev["model"] || "Unknown",
         size: dev["size"],
         serial: dev["serial"],
@@ -81,27 +97,68 @@ class DiskManager
     devices
   end
 
+  # The kernel name of the drive a page named (its :ref): a /dev/disk/by-id link is followed to
+  # the drive it names now; a kernel name stays as it is (a drive with no link, such as a virtual
+  # disk without a serial number).
+  def self.resolve(ref)
+    ref = ref.to_s
+    return ref unless ref.start_with?("#{BY_ID}/")
+
+    name = ref.delete_prefix("#{BY_ID}/")
+    raise DiskError, "Invalid device path: #{ref}" unless name.match?(BY_ID_NAME)
+    File.realpath(ref)
+  rescue Errno::ENOENT
+    raise DiskError, "#{name} isn't connected any more: reload the page"
+  rescue SystemCallError => e
+    raise DiskError, "#{name} can't be found: #{e.message}"
+  end
+
+  # { '/dev/sdb' => '/dev/disk/by-id/ata-Samsung_SSD_870_S6P...', '/dev/sdb1' => '...-part1' }: a
+  # link for each drive and partition that has one, a model-and-serial name before a WWN.
+  def self.by_id_refs
+    names = Dir.children(BY_ID).select { |name| name.match?(BY_ID_NAME) }
+    names.sort_by { |name| [BY_ID_PREFERENCE.index { |prefix| name.start_with?(prefix) } || BY_ID_PREFERENCE.size, name] }
+         .each_with_object({}) do |name, refs|
+      link = File.join(BY_ID, name)
+      refs[File.realpath(link)] ||= link
+    rescue SystemCallError
+      next # gone meanwhile
+    end
+  rescue SystemCallError
+    {}
+  end
+
+  # { 'UUID=...' => '/mnt/storage-2', ... }: each fstab line's source and mount point.
+  def self.fstab_sources
+    fstab = File.read("/etc/fstab") rescue ""
+    fstab.lines.map(&:split).reject { |f| f.size < 2 || f[0].start_with?("#") }.to_h { |f| f.first(2) }
+  end
+
   # Format a device as ext4.
   def self.format_disk!(device)
+    device = resolve(device)
     validate_device!(device)
     raise DiskError, "Cannot format OS disk!" if os_disk?(device)
     privileged('disks.format', device: device)
     true
   end
 
-  # Mount a partition at +mount_point+ (default: the next free /mnt/storage-N) and add it
-  # to fstab. Returns the mount point.
+  # Mount a partition at +mount_point+ and add it to fstab. Returns the mount point. By default
+  # a drive mounted before goes back where its fstab line says (Greyhole, and the shares on it,
+  # look for it there), and any other at the next free /mnt/storage-N.
   def self.mount!(device, mount_point = nil)
+    device = resolve(device)
     validate_device!(device)
     raise DiskError, "Cannot mount OS disk partition this way!" if os_disk?(device)
 
-    mount_point ||= auto_mount_point
+    mount_point ||= devices.flat_map { |d| d[:partitions] }.find { |p| p[:path] == device }&.dig(:home) || auto_mount_point
     reply = privileged('disks.mount', device: device, mount_point: mount_point)
     reply['mount_point'] || mount_point
   end
 
   # Unmount a partition and remove its fstab line.
   def self.unmount!(device)
+    device = resolve(device)
     validate_device!(device)
     raise DiskError, "Cannot unmount OS disk!" if os_disk?(device)
     privileged('disks.unmount', device: device)
@@ -110,8 +167,10 @@ class DiskManager
 
   # Preview contents of an unmounted partition.
   # The helper mounts it read-only for a moment and lists the top level with sizes.
-  # Returns hash with :entries (array), :total_used, :file_count
+  # Returns hash with :entries (array), :total_used, :file_count, and :partial when the helper
+  # stopped counting (PREVIEW_LIMIT: the totals are at least that)
   def self.preview(device)
+    device = resolve(device)
     validate_device!(device)
     raise DiskError, "Cannot preview OS disk!" if os_disk?(device)
 
@@ -131,7 +190,7 @@ class DiskManager
     entries = Array(reply['entries']).map do |e|
       { name: e['name'], type: e['type'] == 'directory' ? :directory : :file, size: e['size'].to_i, file_count: e['file_count'].to_i }
     end
-    { entries: entries, total_used: reply['total_used'].to_i, file_count: reply['file_count'].to_i }
+    { entries: entries, total_used: reply['total_used'].to_i, file_count: reply['file_count'].to_i, partial: reply['partial'] == true }
   end
 
   # Check if a device is the OS disk
@@ -145,10 +204,11 @@ class DiskManager
     dev[:os_disk]
   end
 
-  # The drives with their temperatures in °F, for Disks' overview (nil: the drive doesn't say).
-  # The colour follows the drive's own °C: warm from 40, hot from 50.
+  # The drives with their temperatures in °F, for Disks' overview (nil: the drive doesn't say, or
+  # it's asleep, spun down, and isn't woken for it). The colour follows the drive's own °C: warm
+  # from 40, hot from 50.
   def self.stats
-    temperatures = drive_temperatures
+    temperatures, asleep = drive_temperatures
     devices.map do |disk|
       temp = temperatures[disk[:path]].to_i
       {
@@ -156,7 +216,8 @@ class DiskManager
         model: disk[:model],
         size: disk[:size],
         temp_f: temp > 0 ? ((temp * 1.8) + 32).round : nil,
-        tempcolor: temp_color(temp)
+        tempcolor: temp_color(temp),
+        asleep: asleep.include?(disk[:path])
       }
     end
   end
@@ -278,12 +339,14 @@ class DiskManager
     Shell.output('lsblk', '-J', '-o', 'NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT,MODEL,SERIAL,UUID,LABEL')
   end
 
-  # SMART data needs root, so the helper reads it: { '/dev/sda' => 34, '/dev/vda' => nil }.
+  # SMART data needs root, so the helper reads it: [{ '/dev/sda' => 34, '/dev/vda' => nil }, the
+  # drives asleep].
   def self.drive_temperatures
-    Privileged.call('disks.temperatures')['temperatures'] || {}
+    reply = Privileged.call('disks.temperatures')
+    [reply['temperatures'] || {}, Array(reply['asleep'])]
   rescue Privileged::Error => e
     Rails.logger.warn("DiskManager: #{e.message}") if defined?(Rails)
-    {}
+    [{}, []]
   end
 
   def self.temp_color(temp)
@@ -373,7 +436,7 @@ class DiskManager
           { name: "sdc", path: "/dev/sdc", size: "200G", fstype: nil, mountpoint: nil, uuid: nil, status: :unformatted }
         ]
       }
-    ]
+    ].each { |disk| [disk, *disk[:partitions]].each { |node| node[:ref] = node[:path] } }
   end
 
   private_class_method :mountpoints_in, :zfs_pool_in, :partition_status, :validate_device!,

@@ -30,11 +30,12 @@ describe "Disks Controller", type: :request do
       it "shows each drive's temperature in °F, coloured once it's warm" do
         allow(DiskManager).to receive(:stats).and_return([
           { device: '/dev/sda', model: 'QEMU HARDDISK', size: '1T', temp_f: 113, tempcolor: 'warm' },
-          { device: '/dev/sdb', model: 'QEMU HARDDISK', size: '1T', temp_f: nil, tempcolor: 'cool' }
+          { device: '/dev/sdb', model: 'QEMU HARDDISK', size: '1T', temp_f: nil, tempcolor: 'cool' },
+          { device: '/dev/sdc', model: 'WDC WD40EFZX', size: '4T', temp_f: nil, tempcolor: 'cool', asleep: true } # not woken for it
         ])
         get "/disks/"
         temps = Nokogiri::HTML(response.body).css('#disks-table td.disk-temp')
-        expect(temps.map { |td| td.text.strip }).to eq(['113 °F', '–'])
+        expect(temps.map { |td| td.text.strip }).to eq(['113 °F', '–', 'Asleep'])
         expect(temps.first['class']).to include('warm')
         expect(response.body).not_to include('°C')
       end
@@ -46,6 +47,52 @@ describe "Disks Controller", type: :request do
         get "/disks/devices"
         expect(response).to have_http_status(:ok)
         expect(response.body).to include("list the drives (lsblk gave no answer)")
+      end
+
+      # A drive that came back unmounted went to the next free slot, and Format said nothing.
+      it "names each drive by its ref, and says where a drive that came back unmounted belongs" do
+        DiskPoolPartition.create!(path: '/mnt/storage-2', minimum_free: 10)
+        allow(DiskManager).to receive(:devices).and_return([
+          { name: 'sdb', path: '/dev/sdb', ref: '/dev/disk/by-id/ata-SSD_S1', model: 'SSD', size: '1T', os_disk: false, zfs_pool: nil,
+            partitions: [{ path: '/dev/sdb1', ref: '/dev/disk/by-id/ata-SSD_S1-part1', size: '1T', fstype: 'ext4', status: :unmounted,
+                           mountpoint: nil, home: '/mnt/storage-2' }] }
+        ])
+        get "/disks/devices"
+        page = Nokogiri::HTML(response.body)
+        expect(page.css('form input[name="device"]').map { |i| i['value'] }.uniq).to eq(['/dev/disk/by-id/ata-SSD_S1-part1'])
+        expect(page.at_css('#home-sdb1').text.squish).to eq("Belongs at /mnt/storage-2, one of the Greyhole pool's drives: Mount puts it back there")
+        format = page.css('form').find { |f| f['action'] == '/disks/format_disk' }
+        expect(format.at_css('button')['data-confirm'])
+          .to end_with("It's the drive that belongs at /mnt/storage-2, one of the Greyhole pool's drives: Greyhole's copies on it go too.")
+      end
+    end
+
+    describe "drive actions" do
+      it "take the drive by its ref, and name it by its kernel name" do
+        allow(DiskManager).to receive(:resolve).and_call_original
+        allow(DiskManager).to receive(:resolve).with('/dev/disk/by-id/ata-SSD_S1-part1').and_return('/dev/sdc1')
+        allow(DiskManager).to receive(:format_disk!)
+        post "/disks/format_disk", params: { device: '/dev/disk/by-id/ata-SSD_S1-part1' }
+        expect(DiskManager).to have_received(:format_disk!).with('/dev/sdc1')
+        expect(flash[:notice]).to eq('Successfully formatted /dev/sdc1 as ext4')
+        post "/disks/format_disk", params: { device: '/dev/disk/by-id/ata-Gone_1' } # unplugged since the page was loaded
+        expect(flash[:error]).to eq("Format failed: ata-Gone_1 isn't connected any more: reload the page")
+      end
+
+      # Mount as Share gave a 500 when the share wasn't saved, and said nothing of Samba refusing it.
+      it "Mount as Share says when Samba didn't take the share, and why a share wasn't made" do
+        allow(DiskService).to receive(:create_share_from_mount).with('/dev/sdc1')
+          .and_return(mount_point: '/mnt/storage-3', share_name: 'storage-3', refused: 'smb.conf refused: [storage-3] path')
+        post "/disks/mount_as_share", params: { device: '/dev/sdc1' }
+        expect(flash[:notice]).to eq("Mounted /dev/sdc1 at /mnt/storage-3 and created share 'storage-3'")
+        expect(flash[:error]).to eq("Samba didn't take the new settings, so the share isn't on the network yet: smb.conf refused: [storage-3] path")
+
+        share = Share.new(name: 'storage-3')
+        share.errors.add(:path, "couldn't be created")
+        allow(DiskService).to receive(:create_share_from_mount).and_raise(ActiveRecord::RecordNotSaved.new('Failed to save the record', share))
+        post "/disks/mount_as_share", params: { device: '/dev/sdc1' }
+        expect(response).to redirect_to('/disks/devices')
+        expect(flash[:error]).to eq("/dev/sdc1 is mounted, but its share wasn't made: Path couldn't be created")
       end
     end
 
@@ -68,6 +115,14 @@ describe "Disks Controller", type: :request do
         expect(page.at_css('#disk-preview code').text).to eq('/dev/sdb1')
         expect(page.css('#disk-preview tbody td strong').map(&:text)).to eq(['Movies'])
         expect(response.body).to include('notes.txt')
+      end
+
+      it "says when it stopped counting before the end" do
+        allow(DiskManager).to receive(:preview).and_return(entries: [], total_used: 6000, file_count: 2, partial: true)
+        post "/disks/preview_disk", params: { device: '/dev/sdb1' }
+        page = Nokogiri::HTML(response.body)
+        expect(page.at_css('#disk-preview .card-header').text.squish).to start_with('Summary: At least 5.86 KB used across 2 files')
+        expect(page.at_css('#preview-partial').text).to include('counting stopped before the end')
       end
 
       it "notices a pool removal Greyhole has finished first, so the apps let go of the drive" do

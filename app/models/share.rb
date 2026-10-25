@@ -101,6 +101,14 @@ class Share < ApplicationRecord
     zfs_pool.present?
   end
 
+  # A data drive's mount point itself, /mnt/<name>: a drive shared as it is (Disks → Devices'
+  # Mount as Share, and the setup wizard's FAT, exFAT and NTFS drives), its files where they were.
+  # The folder is the drive's, so nothing makes, changes or removes it (ShareFileSystem): who may
+  # write there is the drive's mount's to say.
+  def drive_root?
+    path.to_s.match?(%r{\A/mnt/[^/]+\z})
+  end
+
   # Where its files are kept, for the Shares page: "ZFS · tank", "Greyhole · 2 copies" or
   # "System disk".
   def storage_label

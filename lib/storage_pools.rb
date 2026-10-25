@@ -16,7 +16,7 @@ module StoragePools
   # Ubuntu's ZFS package scrubs every healthy pool from here, on the second Sunday of each
   # month at 00:24.
   SCRUB_CRON = '/etc/cron.d/zfsutils-linux'.freeze
-  LSBLK_COLUMNS = 'NAME,PATH,TYPE,SIZE,MODEL,SERIAL,FSTYPE,LABEL,MOUNTPOINTS,ROTA'.freeze
+  LSBLK_COLUMNS = 'NAME,PATH,TYPE,SIZE,MODEL,SERIAL,FSTYPE,LABEL,UUID,PARTUUID,MOUNTPOINTS,ROTA'.freeze
 
   class Error < StandardError; end
 
@@ -33,11 +33,17 @@ module StoragePools
     { key: 'raidz3', name: 'RAIDZ3', like: nil, min: 5, parity: 3 }
   ].freeze
 
-  # One pool, as pools.status reports it.
-  Pool = Struct.new(:name, :health, :used, :available, :mountpoint, :state, :status, :action, :scan,
+  # One pool, as pools.status reports it. managed: one of Amahi-kai's (it made or imported it, and
+  # it mounts at /srv/pools/<name>); the page only shows the others (a system that runs from ZFS
+  # has bpool and rpool), and the root helper refuses to change them.
+  Pool = Struct.new(:name, :health, :used, :available, :mountpoint, :managed, :state, :status, :action, :scan,
                     :errors, :vdevs, :error, :snapshots, :snapshot_policy, :snapshot_space, keyword_init: true) do
     def healthy?
       health == 'ONLINE'
+    end
+
+    def managed?
+      managed == true
     end
 
     # The states ZFS puts a drive in when it's out of its pool (the root helper's OUT_OF_POOL).
@@ -142,18 +148,40 @@ module StoragePools
     end
   end
 
+  # A pool on the drives that isn't imported and wasn't taken offline here: this server's from
+  # before it was installed again, one whose drives came too late at boot, or another server's.
+  # Its drives are kept for it until it's imported or they're erased. id: its GUID, which Import
+  # takes; foreign: last used by another system (an earlier install of this one, say); note: what
+  # ZFS says about it.
+  FoundPool = Struct.new(:name, :id, :state, :devices, :foreign, :note, keyword_init: true) do
+    # ZFS finds all its drives, or enough of them (the helper's IMPORTABLE_STATES).
+    def importable?
+      %w[ONLINE DEGRADED].include?(state)
+    end
+  end
+
   class << self
-    # { installed: true/false, pools: [Pool], offline: [OfflinePool], error: nil or why the
-    # pools couldn't be read }.
-    def status
-      reply = Privileged.call('pools.status')
+    # { installed: true/false, pools: [Pool], offline: [OfflinePool], found: [FoundPool], error:
+    # nil or why the pools couldn't be read }. Only with +scan+ (Disks → ZFS Pools) are the drives
+    # read for the pools that aren't imported, offline and found: that wakes the drives asleep.
+    def status(scan: false)
+      reply = scan ? Privileged.call('pools.status', scan: true) : Privileged.call('pools.status')
       offline = Array(reply['offline']).map do |pool|
         OfflinePool.new(name: pool['name'].to_s, state: pool['state'].to_s, devices: Array(pool['devices']))
       end
+      found = Array(reply['found']).map do |pool|
+        FoundPool.new(name: pool['name'].to_s, id: pool['id'].to_s, state: pool['state'].to_s, devices: Array(pool['devices']),
+                      foreign: pool['force'] == true, note: pool['status'])
+      end
       { installed: reply['zfs'] == true, pools: Array(reply['pools']).map { |pool| pool(pool) }, offline: offline,
-        error: reply['error'] }
+        found: found, error: reply['error'] }
     rescue Privileged::Error => e
-      { installed: false, pools: [], offline: [], error: e.message }
+      { installed: false, pools: [], offline: [], found: [], error: e.message }
+    end
+
+    # The pools Amahi-kai manages: where shares and apps' data may go.
+    def managed_pools
+      status[:pools].select(&:managed?)
     end
 
     # A Pool from one entry of the helper's 'pools' list.
@@ -194,28 +222,42 @@ module StoragePools
     # Every whole disk, with what it's used for (:role) and whether a new pool may take it
     # (:free). Roles: :os (the system runs from it), :share (mounted as share storage),
     # :in_use (mounted elsewhere, or LVM, RAID or encryption on it), :pool (in an imported
-    # pool), :offline (in a pool taken offline here), :left_pool (replaced out of a pool here,
-    # its old ZFS label still on it), :old_zfs (a ZFS label from a pool that isn't on this
-    # server), :free. A new pool, or Erase, clears an old label.
-    def drives(pools = [], offline = [])
+    # pool), :offline (in a pool taken offline here), :found (in a pool found on the drives, not
+    # imported), :listed (share storage in fstab, :fstab, that isn't mounted now: its drive came
+    # back unmounted), :left_pool (replaced out of a pool here, its old ZFS label still on it),
+    # :old_zfs (a ZFS label from a pool that isn't on this server), :free. A new pool, or Erase,
+    # clears an old label. :contents: the filesystems on it, which a new pool erases; :ref: the
+    # name the page gives it (DiskManager.by_id_refs).
+    def drives(pools = [], offline = [], found = [])
+      refs = DiskManager.by_id_refs
+      sources = DiskManager.fstab_sources
       lsblk.select { |d| d['type'] == 'disk' }.map do |disk|
         nodes = subtree(disk)
         mounts = nodes.flat_map { |n| Array(n['mountpoints']).compact }
         label = nodes.find { |n| n['fstype'] == 'zfs_member' }&.dig('label')
-        pool = pools.find { |p| p.drives.any? { |d| nodes.any? { |n| n['path'] == d['device'] } } }&.name
-        pool ||= (away = offline.find { |p| p.devices.any? { |d| nodes.any? { |n| n['path'] == d } } || p.name == label })&.name
+        on = ->(devices) { devices.any? { |d| nodes.any? { |n| n['path'] == d } } }
+        pool = pools.find { |p| on.call(p.drives.map { |d| d['device'] }) }&.name
+        pool ||= (away = offline.find { |p| on.call(p.devices) || p.name == label })&.name
+        pool ||= (kept = found.find { |p| on.call(p.devices) })&.name
+        fstab = nodes.filter_map do |n|
+          sources[n['path']] || (n['uuid'] && sources["UUID=#{n['uuid']}"]) || (n['partuuid'] && sources["PARTUUID=#{n['partuuid']}"])
+        end.first
         role = if mounts.any? { |m| !m.start_with?('/mnt/') } then :os
                elsif mounts.any? then :share
                elsif nodes.any? { |n| !%w[disk part].include?(n['type']) } then :in_use
                elsif away then :offline
+               elsif kept then :found
                elsif pool then :pool
+               elsif fstab then :listed
                elsif label && pools.any? { |p| p.name == label } then :left_pool
                elsif label then :old_zfs
                else :free
                end
-        { path: disk['path'], model: disk['model'].to_s.strip.presence, serial: disk['serial'], size: disk['size'].to_i,
-          ssd: [false, '0', 0].include?(disk['rota']), role: role, pool: pool || label, mounts: mounts,
-          free: OLD_LABEL.include?(role) || role == :free }
+        contents = nodes.select { |n| n['fstype'].present? && n['fstype'] != 'zfs_member' }
+                        .map { |n| { path: n['path'], fstype: n['fstype'], label: n['label'].presence } }
+        { path: disk['path'], ref: refs[disk['path']] || disk['path'], model: disk['model'].to_s.strip.presence,
+          serial: disk['serial'], size: disk['size'].to_i, ssd: [false, '0', 0].include?(disk['rota']), role: role,
+          pool: pool || label, mounts: mounts, fstab: fstab, contents: contents, free: OLD_LABEL.include?(role) || role == :free }
       end
     end
 
@@ -271,11 +313,17 @@ module StoragePools
       changed { privileged('pools.import', name: name.to_s) }
     end
 
+    # Imports a pool found on the drives (FoundPool), by its id. The helper mounts it only if it's
+    # one of Amahi-kai's.
+    def import_found!(id)
+      changed { privileged('pools.import_found', id: id.to_s) }
+    end
+
     # Creates a pool. The helper checks the name, the layout and every drive, and wipes them.
     def create!(name:, layout:, devices:)
       raise Error, 'Choose a layout' unless LAYOUTS.any? { |l| l[:key] == layout }
       raise Error, 'Choose the drives for the pool' if devices.blank?
-      changed { privileged('pools.create', name: name.to_s.strip, layout: layout, devices: devices.map(&:to_s)) }
+      changed { privileged('pools.create', name: name.to_s.strip, layout: layout, devices: devices.map { |d| resolve!(d) }) }
     end
 
     # Brings back a pool's drive ZFS took out (+drive+: its name in the pool's status) once its
@@ -284,9 +332,10 @@ module StoragePools
       changed { privileged('pools.online_drive', name: name.to_s, drive: drive.to_s) }
     end
 
-    # Erases the old ZFS label on a free disk (+device+: /dev/sdg), so share storage can use it too.
-    def erase_drive!(device)
-      changed { privileged('pools.erase_drive', device: device.to_s) }
+    # Erases the old ZFS label on a free disk (+device+: its ref), so share storage can use it too.
+    # A drive of a pool found on the drives needs that pool's name typed (+confirm+).
+    def erase_drive!(device, confirm: nil)
+      changed { privileged('pools.erase_drive', device: resolve!(device), confirm: confirm.to_s) }
     end
 
     # Why a drive in share storage can't be freed for a pool, or nil: a share's folder or the
@@ -308,7 +357,8 @@ module StoragePools
     # Frees a drive in share storage that nothing uses and nothing is on, so a new pool may take
     # it: unmounted, and out of fstab (Disks → Devices' Unmount). The pool then erases it.
     def free_share_drive!(device)
-      drive = drives.find { |d| d[:path] == device.to_s && d[:role] == :share } or raise Error, "#{device} isn't share storage"
+      device = resolve!(device)
+      drive = drives.find { |d| d[:path] == device && d[:role] == :share } or raise Error, "#{device} isn't share storage"
       if (blocker = share_drive_blocker(drive))
         raise Error, "#{device} can't be freed: #{blocker}"
       end
@@ -320,13 +370,13 @@ module StoragePools
     # Replaces a pool's drive (+old+: its name in the pool's status) with a free disk.
     def replace!(name:, old:, new:)
       raise Error, 'Choose the new drive' if new.blank?
-      changed { privileged('pools.replace', name: name.to_s, old: old.to_s, new: new.to_s) }
+      changed { privileged('pools.replace', name: name.to_s, old: old.to_s, new: resolve!(new)) }
     end
 
     # Grows a pool by one group shaped like its others.
     def add_group!(name:, devices:)
       raise Error, 'Choose the drives to add' if devices.blank?
-      changed { privileged('pools.add_group', name: name.to_s, devices: devices.map(&:to_s)) }
+      changed { privileged('pools.add_group', name: name.to_s, devices: devices.map { |d| resolve!(d) }) }
     end
 
     def snapshot!(name)
@@ -384,6 +434,13 @@ module StoragePools
     def privileged(operation, **args, &block)
       Privileged.call(operation, **args, &block)
     rescue Privileged::Error => e
+      raise Error, e.message
+    end
+
+    # The kernel name of the drive the page named (DiskManager.resolve).
+    def resolve!(ref)
+      DiskManager.resolve(ref.to_s)
+    rescue DiskManager::DiskError => e
       raise Error, e.message
     end
 

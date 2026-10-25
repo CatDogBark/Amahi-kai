@@ -460,6 +460,7 @@ RSpec.describe 'AmahiHelper apps' do
         FileUtils.mkdir_p("#{dir}/pools/tank/apps")
         allow(File).to receive(:executable?).with('/usr/sbin/zpool').and_return(true)
         allow(helper).to receive(:pool_names).and_return(['tank'])
+        allow(helper).to receive(:pool_mountpoint) { |name| "#{dir}/pools/#{name}" } # Amahi-kai's own
         allow(helper).to receive(:zfs_dataset?) { |name| datasets.include?(name) }
         allow(helper).to receive(:capture).and_call_original
         allow(helper).to receive(:capture).with(%w[/usr/sbin/zfs get -H -o value mounted tank/apps/store]).and_return("yes\n")
@@ -486,6 +487,11 @@ RSpec.describe 'AmahiHelper apps' do
         expect(helper.validate('apps.install', { 'app' => 'store', 'pool' => 'tank' })).to include(pool: 'tank')
         expect(refusal('apps.install', { 'app' => 'store' })).to eq('store keeps its data on a ZFS pool: choose one (make one on Disks → ZFS Pools first)')
         expect(refusal('apps.install', { 'app' => 'store', 'pool' => 'nope' })).to eq(%(there's no pool named "nope"))
+        allow(helper).to receive(:pool_names).and_return(%w[tank rpool])
+        allow(helper).to receive(:pool_mountpoint).with('rpool').and_return('/') # a system's own pool
+        expect(refusal('apps.install', { 'app' => 'store', 'pool' => 'rpool' }))
+          .to eq("rpool isn't one of Amahi-kai's pools (it mounts at /); manage it from the command line")
+        allow(helper).to receive(:pool_names).and_return(['tank'])
         expect(steps('apps.install', { 'app' => 'store', 'pool' => 'tank' }).first.last).to eq('tank')
         expect(helper.validate('apps.install', { 'app' => 'vaultwarden', 'pool' => 'tank' })).to include(pool: nil)
 
@@ -864,6 +870,16 @@ RSpec.describe 'AmahiHelper apps' do
       expect(refused(transmission, [{ 'name' => 'Downloads', 'path' => '/etc' }])).to include('each share must be')
       expect(refused(transmission, [{ 'name' => 'Downloads' }, { 'name' => 'downloads' }])).to eq('a share is listed twice')
       expect(refused(transmission, 'Downloads')).to include('must be a list')
+    end
+
+    # Mount as Share, and the setup wizard's FAT, exFAT and NTFS drives, share a drive as it is.
+    it "takes a share at a mounted drive's own mount point, and not one at an unmounted drive's" do
+      File.write("#{dir}/smb.conf", "#{smb_conf}[USB]\n\tpath = #{drives}/storage-2\n")
+      allow(helper).to receive(:real_root?).and_call_original
+      allow(helper).to receive(:real_root?).with("#{drives}/storage-2").and_return(true) # the drive mounted there
+      expect(choose(transmission, [{ 'name' => 'USB' }])).to eq([{ name: 'USB', path: "#{drives}/storage-2", pooled: false, write: false }])
+      allow(helper).to receive(:real_root?).with("#{drives}/storage-2").and_return(false) # an empty folder on the system disk
+      expect(refused(transmission, [{ 'name' => 'USB' }])).to include("isn't in the share root or on a mounted data drive")
     end
 
     it "mounts shares at /shares/<name>, a pooled share with its copy folders, and lets a writer join the users group" do

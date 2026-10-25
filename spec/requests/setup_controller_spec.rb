@@ -167,13 +167,13 @@ describe "Setup Controller", type: :request do
       it "doesn't offer drives that hold a ZFS pool" do
         allow(DiskManager).to receive(:devices).and_return([
           { name: "sdc", path: "/dev/sdc", model: "SSD", size: "1T", os_disk: false, zfs_pool: "tank",
-            partitions: [{ path: "/dev/sdc1", status: :unmounted, fstype: "zfs_member", size: "1T" }] },
+            partitions: [{ path: "/dev/sdc1", ref: "/dev/sdc1", status: :unmounted, fstype: "zfs_member", size: "1T" }] },
           { name: "sdd", path: "/dev/sdd", model: "SSD", size: "1T", os_disk: false, zfs_pool: nil,
-            partitions: [{ path: "/dev/sdd", status: :unformatted, size: "1T" }] }
+            partitions: [{ path: "/dev/sdd", ref: "/dev/disk/by-id/ata-SSD_S1", status: :unformatted, size: "1T" }] }
         ])
         get setup_storage_path
         values = Nokogiri::HTML(response.body).css('input[name="drives[]"]').map { |i| i['value'] }
-        expect(values).to eq(["/dev/sdd"])
+        expect(values).to eq(["/dev/disk/by-id/ata-SSD_S1"]) # by its ref: a page left open acts on that drive or none
       end
     end
 

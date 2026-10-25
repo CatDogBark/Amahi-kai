@@ -9,8 +9,13 @@
   <div class="card mb-3">
     <div class="card-header">
       <strong>Summary:</strong>
+      <%= 'At least' if @preview[:partial] %>
       <%= number_to_human_size(@preview[:total_used]) %> used across
       <%= number_with_delimiter(@preview[:file_count]) %> file<%= @preview[:file_count] == 1 ? '' : 's' %>
+      <%# The helper stops counting after a while (its PREVIEW_LIMIT) %>
+      <% if @preview[:partial] %>
+        <div class="small text-muted" id="preview-partial">The drive holds more than this: counting stopped before the end.</div>
+      <% end %>
     </div>
     <div class="card-body p-0">
       <% if @preview[:entries].empty? %>

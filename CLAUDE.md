@@ -140,6 +140,11 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
   column**; with PATH first it lists every device flat, and a disk looks empty (#45: the helper's
   system-disk check didn't hold). Ask for `NAME,PATH,...`; the helper refuses a flat list, and
   specs run the real `lsblk`. Check fixtures against a real command's output.
+- **Pages name drives by their `/dev/disk/by-id` link** (`:ref`, `DiskManager.by_id_refs`), never
+  the kernel name, which can belong to another drive after a restart or a swap; the controller (or
+  `StoragePools`) turns it back into the kernel name with `DiskManager.resolve` just before acting.
+  Only pools that mount at `/srv/pools/<name>` are Amahi-kai's (`managed_pool` in the helper,
+  `Pool#managed?`): the others are shown, never changed.
 - Build commands from names as argument lists (`Shell.output('systemctl', 'show', unit)`), never
   backticks or strings through a shell. Read what Ruby or `/proc` can give directly
   (`SystemInfo`).

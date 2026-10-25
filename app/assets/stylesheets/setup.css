@@ -376,6 +376,7 @@ body.setup-page {
 .preview-size { flex: none; color: var(--kai-muted); font-size: 13px; font-variant-numeric: tabular-nums; }
 .preview-empty, .preview-loading { padding: 16px 0; text-align: center; color: var(--kai-muted); }
 .preview-error { padding: 10px 0; color: var(--kai-alert-danger-text); }
+.preview-partial { padding: 0 0 8px; color: var(--kai-muted); font-size: 13px; }
 .preview-spinner {
   display: inline-block;
   width: 14px;

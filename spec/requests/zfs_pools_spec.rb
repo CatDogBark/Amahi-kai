@@ -5,7 +5,7 @@ RSpec.describe 'ZFS pools', type: :request do
   let(:pool) do
     StoragePools::Pool.new(
       name: 'tank', health: 'DEGRADED', used: 500_000_000_000, available: 2_000_000_000_000,
-      mountpoint: '/srv/pools/tank', state: 'DEGRADED', status: 'One or more devices could not be used.',
+      mountpoint: '/srv/pools/tank', managed: true, state: 'DEGRADED', status: 'One or more devices could not be used.',
       action: "Replace the device using 'zpool replace'.", scan: 'none requested', errors: 'No known data errors',
       vdevs: [{ 'name' => 'raidz1-0', 'state' => 'DEGRADED', 'children' => [
         { 'name' => '/dev/disk/by-id/ata-Samsung_SSD_870_S1-part1', 'device' => '/dev/sdc1', 'state' => 'ONLINE',
@@ -16,9 +16,11 @@ RSpec.describe 'ZFS pools', type: :request do
     )
   end
 
+  # Each drive goes by its ref, its /dev/disk/by-id link (DiskManager.by_id_refs)
   def drive(path, role, **extra)
-    { path: path, model: 'Samsung SSD 870 EVO 1TB', serial: "S#{path[-1]}", size: 1_000_204_886_016, ssd: true, role: role,
-      pool: nil, mounts: [], free: %i[free left_pool old_zfs].include?(role) }.merge(extra)
+    { path: path, ref: "/dev/disk/by-id/ata-Samsung_SSD_870_S#{path[-1]}", model: 'Samsung SSD 870 EVO 1TB', serial: "S#{path[-1]}",
+      size: 1_000_204_886_016, ssd: true, role: role, pool: nil, mounts: [], contents: [],
+      free: %i[free left_pool old_zfs].include?(role) }.merge(extra)
   end
 
   let(:drives) do
@@ -26,8 +28,8 @@ RSpec.describe 'ZFS pools', type: :request do
      drive('/dev/sdc', :pool, pool: 'tank'), drive('/dev/sdd', :free), drive('/dev/sde', :free), drive('/dev/sdf', :old_zfs, pool: 'old')]
   end
 
-  def stub_pools(installed:, pools: [], offline: [], drives: self.drives, error: nil)
-    allow(StoragePools).to receive(:status).and_return(installed: installed, pools: pools, offline: offline, error: error)
+  def stub_pools(installed:, pools: [], offline: [], found: [], drives: self.drives, error: nil)
+    allow(StoragePools).to receive(:status).and_return(installed: installed, pools: pools, offline: offline, found: found, error: error)
     allow(StoragePools).to receive(:drives).and_return(drives)
   end
 
@@ -96,8 +98,10 @@ RSpec.describe 'ZFS pools', type: :request do
       get '/disks/pools'
       form = page.at_css('#pool-form')
       expect(form['action']).to eq('/disks/create_pool')
-      expect(form.css('input[name="devices[]"]').map { |i| i['value'] }).to eq(%w[/dev/sdd /dev/sde /dev/sdf])
-      expect(form.at_css('input[value="/dev/sdd"]')['data-size']).to eq('1000204886016')
+      # by their refs, so a page left open can't act on whichever drive has the kernel name now
+      expect(form.css('input[name="devices[]"]').map { |i| i['value'] }).to eq(%w[d e f].map { |x| "/dev/disk/by-id/ata-Samsung_SSD_870_S#{x}" })
+      sdd = form.at_css('input[value="/dev/disk/by-id/ata-Samsung_SSD_870_Sd"]')
+      expect(sdd.to_h.slice('data-size', 'data-label')).to eq('data-size' => '1000204886016', 'data-label' => '/dev/sdd')
       expect(JSON.parse(form['data-layouts']).map { |l| l['key'] }).to eq(%w[mirror striped_mirrors raidz1 raidz2 raidz3])
       expect(form.css('input[name="layout"]').size).to eq(5)
       expect(form.at_css('#pool-name')['value']).to eq('pool1')
@@ -158,14 +162,14 @@ RSpec.describe 'ZFS pools', type: :request do
       stub_pools(installed: true, pools: [pool], drives: drives + [drive('/dev/sdg', :left_pool, pool: 'tank')])
       get '/disks/pools'
       buttons = page.css('[data-storage-post="/disks/erase_pool_drive"]')
-      expect(buttons.map { |b| b['data-drive'] }).to eq(%w[/dev/sdf /dev/sdg]) # not free, in a pool or empty drives
+      expect(buttons.map { |b| b['data-drive'] }).to eq(%w[f g].map { |x| "/dev/disk/by-id/ata-Samsung_SSD_870_S#{x}" }) # not free, in a pool or empty drives
       expect(buttons.last['data-confirm']).to include('Erase /dev/sdg?', '(pool tank)')
       row = page.css('#pool-drives tbody tr').find { |tr| tr.text.include?('/dev/sdg') }
       expect(row.css('td')[4].text.squish).to eq('Free: replaced out of the pool tank, with its old ZFS label still on it Erase')
 
       post '/disks/erase_pool_drive', params: { drive: '/dev/sdg' }, as: :json
       expect(response.parsed_body).to eq('status' => 'ok')
-      expect(Privileged.calls).to include(['pools.erase_drive', { device: '/dev/sdg' }])
+      expect(Privileged.calls).to include(['pools.erase_drive', { device: '/dev/sdg', confirm: '' }])
     end
 
     it "offers Free this drive for an empty drive in share storage, says why not for one in use, and frees it" do
@@ -173,7 +177,7 @@ RSpec.describe 'ZFS pools', type: :request do
       allow(StoragePools).to receive(:share_drive_blocker) { |d| d[:path] == '/dev/sdb' ? 'it has files on it (photos)' : nil }
       get '/disks/pools'
       buttons = page.css('[data-storage-post="/disks/free_pool_drive"]')
-      expect(buttons.map { |b| b['data-drive'] }).to eq(['/dev/sdg'])
+      expect(buttons.map { |b| b['data-drive'] }).to eq(['/dev/disk/by-id/ata-Samsung_SSD_870_Sg'])
       expect(buttons.first['data-confirm']).to include('Free /dev/sdg for a pool?', 'unmounted from /mnt/storage-7')
       row = page.css('#pool-drives tbody tr').find { |tr| tr.text.include?('/dev/sdb') }
       expect(row.at_css('.tip-text')['data-tip']).to eq('Not free for a pool: it has files on it (photos). Move that off first, then it can be freed here.')
@@ -245,6 +249,65 @@ RSpec.describe 'ZFS pools', type: :request do
       expect(page.at_css('#zfs-software').text).to include('To uninstall it: Delete the pool tank first.')
     end
 
+    # A pool this server had before it was installed again, or whose drives came late at boot,
+    # vanished from the page, its drives offered as free, with Erase.
+    it "shows the pools found on the drives with Import, keeps their drives, and erases one only with the pool's name typed" do
+      found = [StoragePools::FoundPool.new(name: 'old', id: '5678', state: 'ONLINE', devices: ['/dev/sdg1'], foreign: true),
+               StoragePools::FoundPool.new(name: 'part', id: '42', state: 'UNAVAIL', devices: [], foreign: false)]
+      stub_pools(installed: true, pools: [pool], found: found, drives: drives + [drive('/dev/sdg', :found, pool: 'old')])
+      get '/disks/pools'
+      card = page.at_css('#found-5678')
+      expect(card.text).to include('On the drives, not imported', '/dev/sdg', 'last used by another system')
+      import = card.at_css('[data-storage-post="/disks/pool_import_found"]')
+      expect(import['data-pool-id']).to eq('5678')
+      expect(import['disabled']).to be_nil
+      expect(import['data-confirm']).to include('Import the pool old from /dev/sdg?')
+      expect(page.at_css('#found-42 [data-storage-post="/disks/pool_import_found"]')['disabled']).not_to be_nil
+      expect(page.at_css('#found-42').text).to include('too many of its drives are missing')
+      expect(page.css('input[name="devices[]"]').map { |i| i['data-label'] }).not_to include('/dev/sdg') # not offered for a new pool
+      row = page.css('#pool-drives tbody tr').find { |tr| tr.text.include?('/dev/sdg') }
+      expect(row.css('td')[4].text.squish).to eq('ZFS pool old, on the drive but not imported Erase…')
+      erase = row.at_css('[data-pool-dialog="erase"]')
+      expect(erase.to_h.slice('data-name', 'data-drive', 'data-drive-label'))
+        .to eq('data-name' => 'old', 'data-drive' => '/dev/disk/by-id/ata-Samsung_SSD_870_Sg', 'data-drive-label' => '/dev/sdg')
+      expect(page.at_css('#erase-dialog')['data-url']).to eq('/disks/erase_pool_drive')
+
+      post '/disks/pool_import_found', params: { id: '5678' }, as: :json
+      expect(response.parsed_body).to eq('status' => 'ok')
+      post '/disks/erase_pool_drive', params: { drive: '/dev/sdg', confirm: 'old' }, as: :json
+      expect(Privileged.calls).to include(['pools.import_found', { id: '5678' }], ['pools.erase_drive', { device: '/dev/sdg', confirm: 'old' }])
+    end
+
+    it "suggests a name no pool has here, offline or found on the drives" do
+      stub_pools(installed: true, offline: [StoragePools::OfflinePool.new(name: 'pool1', state: 'ONLINE', devices: [])],
+                 found: [StoragePools::FoundPool.new(name: 'pool2', id: '7', state: 'ONLINE', devices: [])])
+      get '/disks/pools'
+      expect(page.at_css('#pool-name')['value']).to eq('pool3')
+    end
+
+    # A system that runs from ZFS has its own pools (bpool, rpool): they could be taken offline,
+    # deleted or rolled back from here.
+    it "shows a pool Amahi-kai didn't make, and offers nothing that changes it" do
+      rpool = StoragePools::Pool.new(**pool.to_h.merge(name: 'rpool', mountpoint: '/', managed: false))
+      stub_pools(installed: true, pools: [rpool])
+      get '/disks/pools'
+      card = page.at_css('#pool-rpool')
+      expect(card.text).to include("Not Amahi-kai's", 'managed from the command line')
+      expect(card.css('[data-storage-post], [data-pool-dialog], [data-snapshot-policy]')).to be_empty
+      expect(card.text).not_to include('What to do')
+    end
+
+    it "says what's on a free drive, and that share storage that isn't mounted now isn't free" do
+      stub_pools(installed: true, drives: drives + [drive('/dev/sdg', :free, contents: [{ path: '/dev/sdg1', fstype: 'ntfs', label: 'Backup' }]),
+                                                   drive('/dev/sdh', :listed, fstab: '/mnt/storage-2')])
+      get '/disks/pools'
+      roles = page.css('#pool-drives tbody tr').to_h { |tr| [tr.css('td')[1].text.strip, tr.css('td')[4].text.squish] }
+      expect(roles['/dev/sdg']).to eq('Free, but not empty: ntfs on /dev/sdg1 (Backup). A new pool erases it')
+      expect(roles['/dev/sdh']).to eq('Share storage at /mnt/storage-2, not mounted now: mount it on Devices')
+      expect(page.css('input[name="devices[]"]').map { |i| i['data-label'] }).to include('/dev/sdg')
+      expect(page.css('input[name="devices[]"]').map { |i| i['data-label'] }).not_to include('/dev/sdh')
+    end
+
     it 'offers Uninstall ZFS once no pool is left, and streams it' do
       stub_pools(installed: true)
       get '/disks/pools'
@@ -270,8 +333,9 @@ RSpec.describe 'ZFS pools', type: :request do
       expect(card.at_css('[data-pool-dialog="destroy"]')['data-name']).to eq('tank')
       dialogs = %w[replace-dialog add-dialog destroy-dialog].map { |id| page.at_css("##{id}") }
       expect(dialogs.map { |d| d['data-url'] }).to eq(%w[/disks/replace_pool_drive /disks/add_pool_group /disks/destroy_pool])
-      expect(page.css('#replace-dialog input[name="new"]').map { |i| i['value'] }).to eq(%w[/dev/sdd /dev/sde /dev/sdf])
-      expect(page.css('#add-dialog input[name="devices[]"]').map { |i| i['value'] }).to eq(%w[/dev/sdd /dev/sde /dev/sdf])
+      refs = %w[d e f].map { |x| "/dev/disk/by-id/ata-Samsung_SSD_870_S#{x}" }
+      expect(page.css('#replace-dialog input[name="new"]').map { |i| i['value'] }).to eq(refs)
+      expect(page.css('#add-dialog input[name="devices[]"]').map { |i| i['value'] }).to eq(refs)
       expect(card.at_css('[data-pool-scanning]')).to be_nil
     end
 

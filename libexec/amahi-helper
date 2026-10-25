@@ -306,6 +306,12 @@ module AmahiHelper
     /^Current Drive Temperature:\s+(\d+)/
   ].freeze
   MOUNTABLE_FS = %w[ext2 ext3 ext4 xfs btrfs ntfs vfat exfat].freeze
+  # FAT and exFAT keep no owners or permissions: everything on a drive like that belongs to the
+  # mount, root's by default, so only root could write there. They're mounted for the users group
+  # (the share folders' group), which may write: folders 0775, files 0664. (ntfs-3g lets everyone
+  # write unless told otherwise.)
+  OWNERLESS_FS = %w[vfat exfat].freeze
+  OWNERLESS_MASKS = %w[dmask=0002 fmask=0113].freeze
   # Data drives mount nosuid,nodev: nothing on a drive (one brought from elsewhere, or written
   # by an app) can run with privileges or stand in for a device. The share root, on the OS
   # disk, gets the same by a bind mount of itself (SHARE_ROOT_FSTAB). disks.secure_mounts
@@ -341,11 +347,17 @@ module AmahiHelper
   # failed drive can be found), so it doesn't depend on the order drives appear at boot.
   BY_ID = '/dev/disk/by-id'
   BY_ID_PREFERENCE = %w[ata- nvme- scsi- wwn- virtio-].freeze
-  # ZFS's memory cache (ARC): at most 2 GiB, and at most half the memory.
+  # ZFS's memory cache (ARC): at most 2 GiB, and at most half the memory. ZFS keeps at least a
+  # 32nd of the memory cached and ignores a cap that isn't above that (at boot without a word,
+  # and a running module refuses it), so on a server with more than 64 GiB the cap is just above
+  # it: ARC_MARGIN more.
   ARC_LIMIT = 2 * 1024**3
+  ARC_MARGIN = 64 * 1024**2
   MEMINFO = '/proc/meminfo'
   ZFS_MODPROBE = '/etc/modprobe.d/zfs-amahi.conf'
   ZFS_ARC_MAX = '/sys/module/zfs/parameters/zfs_arc_max'
+  # The cache's own figures; c_max is the cap ZFS uses.
+  ARCSTATS = '/proc/spl/kstat/zfs/arcstats'
   # Ubuntu's smartmontools unit has ConditionVirtualization=no, so smartd never starts in a
   # virtual machine, even one given real drives (a drive controller passed through to it; the
   # unit's own comment says to override it then). An empty assignment resets the unit's
@@ -364,6 +376,8 @@ module AmahiHelper
   SNAPSHOT_KINDS = { 'hourly' => 50 * 60, 'daily' => 23 * 3600 }.freeze # kind => seconds before the next is due
   SNAPSHOT_KEEP = { 'hourly' => 24, 'daily' => 30 }.freeze
   SNAPSHOT_LIMITS = { 'hourly' => 0..168, 'daily' => 0..366 }.freeze
+  # Named for when they were taken, in UTC (earlier ones in the server's time, whose hour after
+  # the clocks go back repeats the one before).
   SNAPSHOT_NAME = /\Aamahi-(hourly|daily|manual)-\d{4}-\d\d-\d\d-\d{4}(?:\d\d)?\z/
   # The health check (storage.check_health) writes the pools and every drive's SMART data
   # here for the app's alerts. It keeps these ATA attributes: reallocated (5), pending (197)
@@ -1026,9 +1040,9 @@ module AmahiHelper
          ['/usr/bin/systemctl', 'start', 'smartmontools.service', { allow_failure: true }]]
       }
     },
-    # Loads ZFS and caps its memory cache (ARC_LIMIT or half the memory), now and at every
-    # boot. Run once zfsutils-linux is installed, and at every System Update, so the cap follows
-    # memory added since.
+    # Loads ZFS and caps its memory cache (see ARC_LIMIT), now and at every boot, replying with
+    # the cap ZFS uses. Run once zfsutils-linux is installed, and at every System Update, so the
+    # cap follows memory added since.
     'zfs.setup' => {
       params: [],
       validate: ->(_a) { installed!(ZPOOL) && { arc_max: arc_limit } },
@@ -1049,11 +1063,14 @@ module AmahiHelper
          ['/usr/sbin/modprobe', '-r', 'zfs', { allow_failure: true }]]
       }
     },
-    # The pools, with their drives, health and last scrub (Disks → ZFS Pools). Read-only.
+    # The pools, with their drives, health and last scrub (Disks → ZFS Pools). Read-only. With
+    # scan (the ZFS Pools page) it also lists the pools on the drives that aren't imported, taken
+    # offline here or found there: the scan reads every drive, waking any asleep, so the other
+    # pages and the health check leave it out.
     'pools.status' => {
-      params: [],
-      validate: ->(_a) { {} },
-      plan: ->(_v) { [[:pool_status]] }
+      params: %w[scan],
+      validate: ->(a) { { scan: a['scan'] == true } },
+      plan: ->(v) { [[:pool_status, v[:scan]]] }
     },
     # A new pool on whole data disks, which are wiped first, in the layout the user chose:
     # ashift=12, lz4 compression, autotrim when every drive is an SSD, autoexpand (replacing
@@ -1126,9 +1143,10 @@ module AmahiHelper
     # leaves a label from no pool on it), or one from a pool on another server. Share storage never
     # takes a disk with a ZFS label, so this frees it for that too. Only a disk a new pool could
     # take: not the system's, nothing on it mounted or in use, not in a pool here, online or offline.
+    # A drive of a pool found on the drives (not imported) needs that pool's name in confirm.
     'pools.erase_drive' => {
-      params: %w[device],
-      validate: ->(a) { erase_drive_request(a['device']) },
+      params: %w[device confirm],
+      validate: ->(a) { erase_drive_request(a['device'], a['confirm']) },
       plan: lambda { |v|
         [*v[:labels].map { |part| [ZPOOL, 'labelclear', '-f', part, { allow_failure: true }] },
          *v[:wipe].map { |device| [WIPEFS, '-a', device] },
@@ -1150,7 +1168,7 @@ module AmahiHelper
     # setuid=off and devices=off, and is in its snapshots.
     'pools.shares_root' => {
       params: %w[name],
-      validate: ->(a) { installed!(ZFS) && { name: existing_pool(a['name']) } },
+      validate: ->(a) { installed!(ZFS) && { name: managed_pool(a['name']) } },
       plan: ->(v) { [[:pool_shares_root, v[:name]]] }
     },
     # Brings back a pool taken offline here, by the GUID recorded then, at its own mount point.
@@ -1159,17 +1177,27 @@ module AmahiHelper
       validate: ->(a) { installed!(ZPOOL) && import_request(a['name']) },
       plan: ->(v) { [[:make_dir, POOL_ROOT, '0755'], [:import_pool, v[:name], v[:guid]], [:pool_status]] }
     },
+    # Imports a pool found on the drives (pools.status's 'found'), by its id: this server's from
+    # before it was installed again, or one whose drives came too late at boot. It's imported
+    # without mounting anything, then mounted only if it's one of Amahi-kai's (everything of it
+    # mounts under POOL_ROOT/<name>); otherwise it's exported again, left as it was. Its folders
+    # get setuid=off and devices=off, as pools.create makes them.
+    'pools.import_found' => {
+      params: %w[id],
+      validate: ->(a) { installed!(ZPOOL) && found_import_request(a['id']) },
+      plan: ->(v) { [[:make_dir, POOL_ROOT, '0755'], [:import_found_pool, v[:name], v[:id], v[:force]], [:pool_status]] }
+    },
     # Takes a snapshot of a pool now (all its datasets), kept until it's deleted.
     'pools.snapshot' => {
       params: %w[name],
-      validate: ->(a) { installed!(ZPOOL) && { name: existing_pool(a['name']), stamp: Time.now.strftime('%Y-%m-%d-%H%M%S') } },
+      validate: ->(a) { installed!(ZPOOL) && { name: managed_pool(a['name']), stamp: Time.now.utc.strftime('%Y-%m-%d-%H%M%S') } },
       plan: ->(v) { [[ZFS, 'snapshot', '-r', "#{v[:name]}@amahi-manual-#{v[:stamp]}"], [:pool_status]] }
     },
     # How many hourly and daily snapshots a pool keeps (0 turns that kind off and removes them).
     'pools.snapshot_policy' => {
       params: %w[name hourly daily],
       validate: lambda { |a|
-        installed!(ZPOOL) && { name: existing_pool(a['name']), hourly: integer(a, 'hourly', SNAPSHOT_LIMITS['hourly']),
+        installed!(ZPOOL) && { name: managed_pool(a['name']), hourly: integer(a, 'hourly', SNAPSHOT_LIMITS['hourly']),
                                daily: integer(a, 'daily', SNAPSHOT_LIMITS['daily']) }
       },
       plan: lambda { |v|
@@ -1206,7 +1234,7 @@ module AmahiHelper
     # Sunday of each month (/etc/cron.d/zfsutils-linux).
     'pools.scrub' => {
       params: %w[name],
-      validate: ->(a) { installed!(ZPOOL) && { name: existing_pool(a['name']) } },
+      validate: ->(a) { installed!(ZPOOL) && { name: managed_pool(a['name']) } },
       plan: ->(v) { [[ZPOOL, 'scrub', v[:name]]] }
     },
     # The pools and every whole disk's SMART health, written to STORAGE_HEALTH for the
@@ -2073,6 +2101,10 @@ module AmahiHelper
       mount_point = new_mount_point(mount_point)
       owner = fstab_entries.find { |fields| fields[1] == mount_point && fields[0] != "UUID=#{info['UUID']}" }
       raise Refused, "#{mount_point} belongs to another drive in /etc/fstab (#{owner[0]})" if owner
+      # A drive that comes back goes where its fstab line says: Greyhole and the shares on it
+      # look for it there, and the line would mount it there at the next boot anyway.
+      home = info['UUID'] && fstab_entries.find { |fields| fields[0] == "UUID=#{info['UUID']}" && fields[1] != mount_point }
+      raise Refused, "#{device} belongs at #{home[1]} (its line in /etc/fstab); mount it there" if home
       { device: device, mount_point: mount_point, fstype: fstype, uuid: info['UUID'] }
     end
 
@@ -2084,8 +2116,21 @@ module AmahiHelper
       # drive formatted and mounted back is a stranger to it.
       pooled = (mounted & greyhole_drives).first
       raise Refused, "#{pooled} is one of Greyhole's drives; remove it from the pool on Disks → Greyhole Pool first" if pooled
+      no_shares_on_drive!(mounted)
       not_held!(device, 'unmount it')
       { device: device, mount_points: mounted, uuid: probe(device)['UUID'] }
+    end
+
+    # A drive with a share's folder on it isn't unmounted: Samba would serve the empty folder
+    # left on the system disk, and the next drive mounted there would take the share's place.
+    def no_shares_on_drive!(mount_points)
+      on = samba_shares.values.select do |share|
+        mount_points.any? { |mp| share[:path] == mp || share[:path].to_s.start_with?("#{mp}/") }
+      end.map { |share| share[:name] }.sort
+      return if on.empty?
+
+      raise Refused, "#{on.size == 1 ? 'the share' : 'the shares'} #{on.join(', ')} #{on.size == 1 ? 'is' : 'are'} on this drive: " \
+                     "delete #{on.size == 1 ? 'it' : 'them'} on Shares first"
     end
 
     def preview_request(device)
@@ -2224,7 +2269,8 @@ module AmahiHelper
 
     def pool_request(name, layout, devices)
       installed!(ZPOOL)
-      name = new_pool_name(name)
+      scan = importable_pools
+      name = new_pool_name(name, scan)
       layout = listed(layout, 'layout', POOL_LAYOUTS.keys)
       raise Refused, 'devices must be a list of disks' unless devices.is_a?(Array) && devices.size <= POOL_MAX_DRIVES
       rule = POOL_LAYOUTS.fetch(layout)
@@ -2232,33 +2278,46 @@ module AmahiHelper
       raise Refused, "#{layout} needs an even number of drives" if rule[:pairs] && devices.size.odd?
       tree = block_tree
       pooled = pooled_devices
-      offline = offline_devices
-      disks = devices.map { |device| pool_disk(device, tree, pooled, offline) }
+      offline = offline_devices(scan)
+      found = found_devices(scan)
+      disks = devices.map { |device| pool_disk(device, tree, pooled, offline, found) }
       paths = disks.map(&:first)
       raise Refused, "#{paths.find { |p| paths.count(p) > 1 }} is listed twice" if paths.uniq.size != paths.size
       { name: name, wipe: disks.flat_map { |_path, node| wipe_targets(node) },
         vdevs: vdev_args(layout, paths.map { |path| stable_path(path) }), ssd: paths.all? { |path| ssd?(path) } }
     end
 
-    def new_pool_name(value)
+    # A name no pool here has: not an imported pool's, an offline one's (it would be lost from the
+    # page, its drives offered as free), or one's found on the drives (+scan+, importable_pools).
+    def new_pool_name(value, scan)
       value = string(value, 'name', max: 32)
       raise Refused, "pool name #{value.inspect} must be 1-32 lowercase letters, digits, _ or -, starting with a letter" unless value.match?(POOL_NAME)
       raise Refused, "#{value} is a word ZFS keeps for itself" if value.match?(RESERVED_POOL_NAMES)
       raise Refused, "a pool named #{value} already exists" if pool_names.include?(value)
-      if File.exist?(POOL_ROOT) || File.symlink?(POOL_ROOT)
-        raise Refused, "#{POOL_ROOT} must be a real folder" unless File.realpath(POOL_ROOT) == POOL_ROOT
+      raise Refused, "a pool named #{value} is offline here; bring it online, or delete it, first" if offline_records.key?(value)
+      if scan.any? { |pool| pool['name'] == value }
+        raise Refused, "a pool named #{value} is on drives connected here, not imported; import it, or erase its drives, first"
       end
-      target = "#{POOL_ROOT}/#{value}"
-      if File.exist?(target) || File.symlink?(target)
-        raise Refused, "#{target} is in the way (not an empty folder)" unless File.lstat(target).directory? && Dir.empty?(target) && !mount_point?(target)
-      end
+      free_pool_dir!(value)
       value
     end
 
+    # The pool's mount point, POOL_ROOT/<name>, is free: missing, or an empty folder.
+    def free_pool_dir!(name)
+      if File.exist?(POOL_ROOT) || File.symlink?(POOL_ROOT)
+        raise Refused, "#{POOL_ROOT} must be a real folder" unless File.realpath(POOL_ROOT) == POOL_ROOT
+      end
+      target = "#{POOL_ROOT}/#{name}"
+      if File.exist?(target) || File.symlink?(target)
+        raise Refused, "#{target} is in the way (not an empty folder)" unless File.lstat(target).directory? && Dir.empty?(target) && !mount_point?(target)
+      end
+    end
+
     # A whole data disk with nothing on it in use: not the system's, nothing mounted, no
-    # LVM, RAID or encryption on it, nothing of it in fstab, and not in a pool.
-    # Returns [path, its lsblk node].
-    def pool_disk(value, tree, pooled, offline_drives = offline_devices)
+    # LVM, RAID or encryption on it, nothing of it in fstab, and not in a pool: imported, taken
+    # offline here, or found on the drives (+found_drives+), unless that pool's name is +confirm+
+    # (Erase). Returns [path, its lsblk node].
+    def pool_disk(value, tree, pooled, offline_drives, found_drives, confirm: nil)
       value = string(value, 'device', max: 64)
       raise Refused, "#{value.inspect} is not a whole disk" unless value.match?(WHOLE_DISK)
       raise Refused, "#{value} doesn't exist" unless File.blockdev?(value)
@@ -2274,6 +2333,11 @@ module AmahiHelper
       raise Refused, "#{value} is in the pool #{pool}" if pool
       offline = nodes.map { |n| offline_drives[n['path']] }.compact.first
       raise Refused, "#{value} is in the pool #{offline}, which is offline; bring it online on Disks → ZFS Pools, or delete it there" if offline
+      found = nodes.map { |n| found_drives[n['path']] }.compact.first
+      if found && confirm.nil?
+        raise Refused, "#{value} holds the pool #{found}, which isn't imported; import it on Disks → ZFS Pools, or erase the drive there"
+      end
+      raise Refused, "type the pool's name (#{found}) to erase #{value}" if found && confirm != found
       sources = fstab_entries.map(&:first)
       nodes.each do |n|
         info = probe(n['path'])
@@ -2286,11 +2350,12 @@ module AmahiHelper
 
     def replace_request(name, old, new)
       installed!(ZPOOL)
-      name = existing_pool(name)
+      name = managed_pool(name)
       old = string(old, 'old', max: 256)
       leaves = pool_leaves(pool_vdevs(name))
       raise Refused, "#{old.inspect} isn't a drive in the pool #{name}" unless leaves.any? { |leaf| leaf['name'] == old }
-      path, node = pool_disk(new, block_tree, pooled_devices)
+      scan = importable_pools
+      path, node = pool_disk(new, block_tree, pooled_devices, offline_devices(scan), found_devices(scan))
       { name: name, old: old, new: stable_path(path), wipe: wipe_targets(node) }
     end
 
@@ -2299,7 +2364,7 @@ module AmahiHelper
 
     def online_drive_request(name, drive)
       installed!(ZPOOL)
-      name = existing_pool(name)
+      name = managed_pool(name)
       drive = string(drive, 'drive', max: 256)
       leaf = pool_leaves(pool_vdevs(name)).find { |row| row['name'] == drive }
       raise Refused, "#{drive.inspect} isn't a drive in the pool #{name}" unless leaf
@@ -2322,7 +2387,7 @@ module AmahiHelper
 
     def add_group_request(name, devices)
       installed!(ZPOOL)
-      name = existing_pool(name)
+      name = managed_pool(name)
       groups = pool_vdevs(name).map { |vdev| [vdev['name'].to_s[/\A(mirror|raidz[123])-\d+\z/, 1], vdev['children'].size] }
       layout, width = groups.first
       unless layout && groups.uniq.size == 1
@@ -2332,17 +2397,21 @@ module AmahiHelper
       raise Refused, "a new #{layout} group in #{name} needs #{width} drives, like the others" unless devices.size == width
       tree = block_tree
       pooled = pooled_devices
-      offline = offline_devices
-      disks = devices.map { |device| pool_disk(device, tree, pooled, offline) }
+      scan = importable_pools
+      offline = offline_devices(scan)
+      found = found_devices(scan)
+      disks = devices.map { |device| pool_disk(device, tree, pooled, offline, found) }
       paths = disks.map(&:first)
       raise Refused, "#{paths.find { |p| paths.count(p) > 1 }} is listed twice" if paths.uniq.size != paths.size
       { name: name, wipe: disks.flat_map { |_path, node| wipe_targets(node) },
         vdevs: [layout, *paths.map { |path| stable_path(path) }] }
     end
 
-    def erase_drive_request(value)
+    def erase_drive_request(value, confirm)
       installed!(ZPOOL)
-      path, node = pool_disk(value, block_tree, pooled_devices)
+      confirm = confirm.nil? || confirm == '' ? nil : string(confirm, 'confirm', max: 32)
+      scan = importable_pools
+      path, node = pool_disk(value, block_tree, pooled_devices, offline_devices(scan), found_devices(scan), confirm: confirm || '')
       labels = subtree(node).select { |n| n['fstype'] == 'zfs_member' }.map { |n| n['path'] }
       raise Refused, "#{path} has no ZFS label to erase" if labels.empty?
 
@@ -2351,7 +2420,7 @@ module AmahiHelper
 
     def destroy_request(name, confirm)
       installed!(ZPOOL)
-      name = existing_pool(name)
+      name = managed_pool(name)
       raise Refused, "type the pool's name (#{name}) to destroy it" unless confirm == name
       no_shares_on!(name)
       no_apps_on!(name, 'deleted')
@@ -2359,8 +2428,18 @@ module AmahiHelper
       members = pool_leaves(pool_vdevs(name)).filter_map { |leaf| leaf['device'] }
       tree = block_tree
       disks = members.filter_map { |part| tree.find { |disk| subtree(disk).any? { |n| n['path'] == part } } }.uniq
-      { name: name, members: members, wipe: disks.flat_map { |disk| wipe_targets(disk) },
+      { name: name, members: members, wipe: disks.flat_map { |disk| pool_wipe_targets(disk, members) },
         kept: apps_on_pool(name).map(&:first) }
+    end
+
+    # What of +disk+ goes with a deleted pool: the whole disk when all of it was the pool's (its
+    # members, and the small partition ZFS keeps beside each, which has no filesystem), else only
+    # the members on it, so a disk shared with anything else (a system's boot partition) keeps that.
+    def pool_wipe_targets(disk, members)
+      others = subtree(disk).drop(1).reject { |n| members.include?(n['path']) }
+      return wipe_targets(disk) if others.all? { |n| n['fstype'].nil? && (n['children'] || []).empty? && mountpoints(n).empty? }
+
+      subtree(disk).select { |n| members.include?(n['path']) }.flat_map { |n| wipe_targets(n) }
     end
 
     # A pool an installed app keeps its data on isn't taken offline or deleted: the app would lose
@@ -2441,11 +2520,16 @@ module AmahiHelper
     end
 
     def export_request(name)
-      name = existing_pool(name)
+      name = managed_pool(name)
       no_shares_on!(name)
       no_apps_on!(name, 'taken offline')
       pool_not_held!(name, 'take it offline')
-      { name: name, guid: capture([ZPOOL, 'get', '-H', '-o', 'value', 'guid', name]).strip }
+      guid = capture([ZPOOL, 'get', '-H', '-o', 'value', 'guid', name]).strip
+      recorded = offline_records[name]
+      if recorded && recorded.to_s != guid
+        raise Refused, "another pool named #{name} is offline here already; rename one of them from the command line first"
+      end
+      { name: name, guid: guid }
     end
 
     # A pool with SMB shares on it isn't taken offline or destroyed: Samba (and any app given
@@ -2464,6 +2548,27 @@ module AmahiHelper
       raise Refused, "#{value.inspect} isn't a pool taken offline here" unless value.match?(POOL_NAME) && guid
       raise Refused, "a pool named #{value} is already online" if pool_names.include?(value)
       { name: value, guid: guid.to_s }
+    end
+
+    # The states `zpool import` gives a pool that can be imported: all its drives found, or
+    # enough of them.
+    IMPORTABLE_STATES = %w[ONLINE DEGRADED].freeze
+
+    # A pool found on the drives (found_pools), by its id (GUID): imported under its own name,
+    # which must be one no pool here has, and only while ZFS finds enough of its drives.
+    def found_import_request(value)
+      id = string(value, 'id', max: 20)
+      raise Refused, "#{id.inspect} isn't a pool's id" unless id.match?(/\A\d{1,20}\z/)
+      pool = found_pools.find { |p| p['id'] == id } or raise Refused, "no pool with the id #{id} is on the drives, not imported"
+      name = pool['name'].to_s
+      unless name.match?(POOL_NAME) && !name.match?(RESERVED_POOL_NAMES)
+        raise Refused, "the pool's name #{name.inspect} isn't one Amahi-kai gives pools; import it from the command line"
+      end
+      raise Refused, "a pool named #{name} is already imported here" if pool_names.include?(name)
+      raise Refused, "a pool named #{name} is offline here; bring that one online, or delete it, first" if offline_records.key?(name)
+      raise Refused, "ZFS finds #{name} #{pool['state']}: connect its missing drives first" unless IMPORTABLE_STATES.include?(pool['state'])
+      free_pool_dir!(name)
+      { name: name, id: id, force: pool['force'] == true }
     end
 
     def zfs_removable!
@@ -2491,27 +2596,44 @@ module AmahiHelper
       records.is_a?(Hash) ? records.select { |name, guid| name.is_a?(String) && guid.to_s.match?(/\A\d+\z/) } : {}
     end
 
-    # The pools taken offline here and not back yet, as a scan of the drives finds them:
-    # [{ 'name', 'state' (ZFS's, or 'MISSING' when none of its drives is found), 'devices' =>
-    # the partitions of it found, by kernel name }].
-    def offline_pools
+    # The pools taken offline here and not back yet, as a scan of the drives (+scan+,
+    # importable_pools; made only when there's a record) finds them: [{ 'name', 'state' (ZFS's, or
+    # 'MISSING' when none of its drives is found), 'devices' => the partitions of it found, by
+    # kernel name }].
+    def offline_pools(scan = nil)
       records = offline_records
       return [] if records.empty?
       imported = pool_names
-      found = importable_pools
+      scan ||= importable_pools
       records.reject { |name, _guid| imported.include?(name) }.map do |name, guid|
-        pool = found.find { |p| p['id'] == guid.to_s }
+        pool = scan.find { |p| p['id'] == guid.to_s }
         { 'name' => name, 'state' => pool ? pool['state'] : 'MISSING', 'devices' => pool ? pool['devices'] : [] }
       end
     end
 
-    # { '/dev/sdc1' => 'test', ... }: every partition of a pool taken offline here.
-    def offline_devices
-      offline_pools.each_with_object({}) { |pool, found| pool['devices'].each { |device| found[device] = pool['name'] } }
+    # The other pools on the drives that aren't imported: this server's from before it was
+    # installed again, one whose drives came too late at boot, or another server's. They're
+    # offered for import by id (pools.import_found), and their drives are kept for them.
+    # [{ 'name', 'id', 'state', 'force', 'status', 'devices' }], as importable_pools has them.
+    def found_pools(scan = importable_pools)
+      recorded = offline_records.values.map(&:to_s)
+      scan.reject { |pool| recorded.include?(pool['id']) }
     end
 
-    # What `zpool import` finds on the drives: [{ 'name', 'id', 'state', 'devices' }]. It lists
-    # each pool that could be imported, its config naming the drives as in BY_ID.
+    # { '/dev/sdc1' => 'test', ... }: every partition of a pool taken offline here.
+    def offline_devices(scan = nil)
+      offline_pools(scan).each_with_object({}) { |pool, found| pool['devices'].each { |device| found[device] = pool['name'] } }
+    end
+
+    # The same for the pools found on the drives.
+    def found_devices(scan = importable_pools)
+      found_pools(scan).each_with_object({}) { |pool, found| pool['devices'].each { |device| found[device] = pool['name'] } }
+    end
+
+    # What `zpool import` finds on the drives: [{ 'name', 'id', 'state', 'force', 'status',
+    # 'devices' }]. It lists each pool that could be imported, its config naming the drives as in
+    # BY_ID. force: ZFS asks for -f, the pool having been last used by another system (this server
+    # before it was installed again, or another one); status: its note on the pool, if any.
     def importable_pools
       out, _err, status = Open3.capture3(ENV_MIN, ZPOOL, 'import', '-d', BY_ID, unsetenv_others: true, chdir: '/')
       return [] unless status.success?
@@ -2523,7 +2645,8 @@ module AmahiHelper
     def parse_importable(text)
       text.split(/^\s*pool: /).drop(1).map do |block|
         name = block.lines.first.strip
-        config = block.split(/^\s*config:\s*$/, 2)[1].to_s
+        header, config = block.split(/^\s*config:\s*$/, 2)
+        config = config.to_s
         devices = config.lines.filter_map do |line|
           token = line.strip.split(/\s+/).first.to_s
           path = token.start_with?('/') ? token : File.join(BY_ID, token)
@@ -2531,13 +2654,14 @@ module AmahiHelper
         rescue SystemCallError
           nil
         end
-        { 'name' => name, 'id' => block[/^\s*id: (\d+)/, 1], 'state' => block[/^\s*state: (\S+)/, 1], 'devices' => devices.uniq }
+        { 'name' => name, 'id' => block[/^\s*id: (\d+)/, 1], 'state' => block[/^\s*state: (\S+)/, 1],
+          'force' => header.include?("'-f'"), 'status' => parse_pool_status(header)['status'], 'devices' => devices.uniq }
       end
     end
 
     def snapshot_request(name, snapshot)
       installed!(ZPOOL)
-      name = existing_pool(name)
+      name = managed_pool(name)
       snapshot = string(snapshot, 'snapshot', max: 128)
       raise Refused, "#{snapshot.inspect} isn't one of Amahi-kai's snapshots" unless snapshot.match?(SNAPSHOT_NAME)
       raise Refused, "the pool #{name} has no snapshot #{snapshot}" unless pool_snapshots(name).any? { |snap| snap['name'] == snapshot }
@@ -2581,6 +2705,32 @@ module AmahiHelper
       value
     end
 
+    # One of Amahi-kai's own pools, the only ones it changes: one it made or imported, mounted at
+    # POOL_ROOT/<name>. Others are only shown (a system that runs from ZFS has bpool and rpool).
+    def managed_pool(value)
+      name = existing_pool(value)
+      mountpoint = pool_mountpoint(name)
+      unless managed?(name, mountpoint)
+        where = mountpoint ? "it mounts at #{mountpoint}" : "ZFS can't say where it mounts"
+        raise Refused, "#{name} isn't one of Amahi-kai's pools (#{where}); manage it from the command line"
+      end
+      name
+    end
+
+    # When ZFS can't read the mount point (a pool whose drives are failing), the pool's folder in
+    # POOL_ROOT says it's Amahi-kai's: one it made or imported was mounted there.
+    def managed?(name, mountpoint = pool_mountpoint(name))
+      mountpoint ? mountpoint == "#{POOL_ROOT}/#{name}" : File.directory?("#{POOL_ROOT}/#{name}")
+    end
+
+    # The mountpoint property of a pool's root dataset ('none' or 'legacy' when ZFS doesn't mount
+    # it), or nil when ZFS can't read it.
+    def pool_mountpoint(name)
+      capture([ZFS, 'get', '-H', '-o', 'value', 'mountpoint', name]).strip
+    rescue Failed
+      nil
+    end
+
     def subtree(node)
       [node, *(node['children'] || []).flat_map { |child| subtree(child) }]
     end
@@ -2616,7 +2766,7 @@ module AmahiHelper
     def arc_limit
       memory = File.read(MEMINFO)[/^MemTotal:\s+(\d+) kB/, 1].to_i * 1024
       raise Failed, "couldn't read the memory size from #{MEMINFO}" unless memory.positive?
-      [ARC_LIMIT, memory / 2].min
+      [[ARC_LIMIT, memory / 32 + ARC_MARGIN].max, memory / 2].min
     end
 
     def pool_names
@@ -2840,7 +2990,7 @@ module AmahiHelper
         share = shares[name.downcase] or raise Refused, "#{name.inspect} isn't one of the NAS's shares"
         raise Refused, "share #{share[:name]}'s name can't be a folder in an app" unless share[:name].match?(APP_SHARE_NAME)
         path = share[:path]
-        unless normalized_path?(path) && !path.include?(',') && share_root_of(path)
+        unless normalized_path?(path) && !path.include?(',') && (share_root_of(path) || drive_mount_point?(path))
           raise Refused, "share #{share[:name]}'s folder #{path} isn't in the share root or on a mounted data drive"
         end
         write = item.key?('write') ? boolean(item, 'write') : false
@@ -2951,9 +3101,9 @@ module AmahiHelper
       path = string(path_value, 'path', max: 4096)
       raise Refused, 'path must be relative, without . or .. or //' unless normalized_path?("/#{path}") && !path.start_with?('/')
       copies = greyhole_drives.filter_map do |drive|
-        trash = "#{drive}/#{GREYHOLE_TRASH}"
-        copy = "#{trash}/#{share}/#{path}"
-        copy if File.file?(copy) && !File.symlink?(copy) && File.realpath(copy) == "#{File.realpath(trash)}/#{share}/#{path}"
+        copy = "#{drive}/#{GREYHOLE_TRASH}/#{share}/#{path}"
+        # its own real path: no link anywhere on the way, the drive's trash folder included
+        copy if File.file?(copy) && !File.symlink?(copy) && File.realpath(copy) == copy
       rescue SystemCallError
         nil
       end
@@ -3259,11 +3409,19 @@ module AmahiHelper
     end
 
     # Share paths in a config are text, so only their form is checked here; folders
-    # themselves are created with shares.create_dir.
+    # themselves are created with shares.create_dir. A data drive's mount point itself is a share
+    # too when the drive is shared as it is (Disks → Devices' Mount as Share, and the setup
+    # wizard's FAT, exFAT and NTFS drives), its files where they were.
     def config_share_path?(value)
       normalized_path?(value) && !value.include?('%') &&
-        (value.start_with?("#{share_root}/") || value.match?(%r{\A#{Regexp.escape(drives_root)}/[^/]+/}) ||
+        (value.start_with?("#{share_root}/") || value.match?(%r{\A#{Regexp.escape(drives_root)}/[^/]+(?:/|\z)}) ||
          value.match?(%r{\A#{Regexp.escape(pool_root)}/[a-z][a-z0-9_-]{0,31}/shares/[^/]+}))
+    end
+
+    # A data drive's mount point with the drive mounted there: /mnt/<name>, a real folder.
+    def drive_mount_point?(path)
+      name = path.delete_prefix("#{drives_root}/")
+      path.start_with?("#{drives_root}/") && !name.empty? && !name.include?('/') && real_root?(path)
     end
 
     # [section, name, value] for each parameter. Samba joins a line ending in a
@@ -4536,15 +4694,35 @@ module AmahiHelper
 
     def add_swap_to_fstab(path)
       return if File.foreach(FSTAB).any? { |line| line.split.first == path }
-      File.open(FSTAB, 'a') { |f| f.puts "#{path} none swap sw 0 0" }
+      add_fstab_line("#{path} none swap sw 0 0")
     end
 
+    def add_fstab_line(line)
+      replace_fstab(*fstab_with(line))
+    end
+
+    # [old, new]: fstab with +line+ after its last one, even when the file doesn't end in a line
+    # break. The new file is checked as the others are (fstab_check!).
+    def fstab_with(line)
+      old = File.read(FSTAB)
+      new = old.empty? || old.end_with?("\n") ? "#{old}#{line}\n" : "#{old}\n#{line}\n"
+      fstab_check!(old, new)
+      [old, new]
+    end
+
+    # Mounts the drive, then adds its fstab line, which is checked before anything is mounted.
     def do_mount_drive(device, mount_point, fstype, uuid)
       created = !File.exist?(mount_point)
       Dir.mkdir(mount_point, 0o755) if created
       protect_mount_point(mount_point)
       begin
-        run_command(['/usr/bin/mount', *(fstype == 'ntfs' ? %w[-t ntfs-3g] : []), '-o', MOUNT_OPTIONS.join(','), device, mount_point])
+        ownerless = OWNERLESS_FS.include?(fstype) ? ownerless_options : []
+        if uuid && fstab_entries.none? { |fields| fields[0] == "UUID=#{uuid}" }
+          type = fstype == 'ntfs' ? 'ntfs-3g' : fstype
+          fstab = fstab_with("UUID=#{uuid} #{mount_point} #{type} #{[FSTAB_OPTIONS, *ownerless].join(',')} 0 2")
+        end
+        run_command(['/usr/bin/mount', *(fstype == 'ntfs' ? %w[-t ntfs-3g] : []), '-o', (MOUNT_OPTIONS + ownerless).join(','),
+                     device, mount_point])
         raise Failed, "#{device} didn't mount at #{mount_point}" unless mount_point?(mount_point)
       rescue Failed
         if created && !mount_point?(mount_point)
@@ -4553,11 +4731,14 @@ module AmahiHelper
         end
         raise
       end
-      fstab_type = fstype == 'ntfs' ? 'ntfs-3g' : fstype
-      if uuid && fstab_entries.none? { |fields| fields[0] == "UUID=#{uuid}" }
-        File.open(FSTAB, 'a') { |f| f.puts "UUID=#{uuid} #{mount_point} #{fstab_type} #{FSTAB_OPTIONS} 0 2" }
-      end
+      replace_fstab(*fstab) if fstab
       { 'mount_point' => mount_point }
+    end
+
+    # The users group owns everything on a FAT or exFAT drive (see OWNERLESS_FS).
+    def ownerless_options
+      gid = group_id(USERS_GROUP) or raise Failed, "the #{USERS_GROUP} group doesn't exist"
+      ["gid=#{gid}", *OWNERLESS_MASKS]
     end
 
     def do_unmount_drive(mount_points, uuid)
@@ -4709,6 +4890,7 @@ module AmahiHelper
       options = %w[ro nosuid nodev noexec]
       options << 'noload' if %w[ext3 ext4].include?(fstype) # don't replay the journal
       options << 'norecovery' if fstype == 'xfs'
+      options << 'rescue=nologreplay' if fstype == 'btrfs' # ro alone still replays its log
       run_command(['/usr/bin/mount', *(fstype == 'ntfs' ? %w[-t ntfs-3g] : []), '-o', options.join(','), device, dir])
       begin
         directory_summary(dir)
@@ -4721,18 +4903,21 @@ module AmahiHelper
 
     # --- ZFS pools ---
 
-    # Takes each pool's due hourly and daily snapshots, then prunes. A pool that fails doesn't
-    # stop the others; the step fails at the end, so the timer shows it.
+    # Takes each of Amahi-kai's pools' due hourly and daily snapshots, then prunes; other pools
+    # are left alone. A pool that fails doesn't stop the others; the step fails at the end, so the
+    # timer shows it.
     def do_run_snapshots(now = Time.now)
       return { 'pools' => [] } unless File.executable?(ZPOOL)
-      results = pool_names.map do |pool|
+      results = pool_names.filter_map do |pool|
+        next unless managed?(pool)
+
         policy = snapshot_policy(pool)
         snaps = pool_snapshots(pool)
         taken = SNAPSHOT_KINDS.filter_map do |kind, interval|
           next unless policy[kind].positive?
           last = snaps.select { |snap| snap['kind'] == kind }.map { |snap| snap['created'] }.max
           next if last && now.to_i - last < interval
-          name = "amahi-#{kind}-#{now.strftime('%Y-%m-%d-%H%M')}"
+          name = "amahi-#{kind}-#{now.utc.strftime('%Y-%m-%d-%H%M')}"
           run_command([ZFS, 'snapshot', '-r', "#{pool}@#{name}"])
           name
         end
@@ -4887,6 +5072,32 @@ module AmahiHelper
       nil
     end
 
+    # -N imports it with nothing mounted, so a pool that isn't Amahi-kai's never covers a folder of
+    # the system: its datasets' mount points are checked first. (force: ZFS asks for -f, the pool
+    # last used by another system, such as this one before it was installed again.)
+    def do_import_found_pool(name, id, force)
+      capture([ZPOOL, 'import', '-N', *(force ? ['-f'] : []), '-d', BY_ID, id])
+      root = "#{POOL_ROOT}/#{name}"
+      datasets = capture([ZFS, 'list', '-H', '-o', 'name,mountpoint,canmount,setuid,devices', '-r', '-t', 'filesystem', name])
+                 .lines(chomp: true).map { |line| line.split("\t") }
+      # The pool's own folder at POOL_ROOT/<name> (managed?), and everything that can mount inside it
+      stray = datasets.find do |dataset, mountpoint, canmount|
+        if dataset == name then mountpoint != root
+        else canmount != 'off' && !%w[none legacy].include?(mountpoint) && !on_path?(mountpoint, root)
+        end
+      end
+      if stray || datasets.empty?
+        run_command([ZPOOL, 'export', name, { allow_failure: true }])
+        where = stray ? "#{stray[0]} mounts at #{stray[1]}" : 'ZFS lists nothing in it'
+        raise Failed, "#{name} isn't one of Amahi-kai's pools (#{where}), so it's left on its drives, not imported: import it from the command line"
+      end
+      datasets.each do |dataset, _mountpoint, _canmount, setuid, devices|
+        run_command([ZFS, 'set', 'setuid=off', 'devices=off', dataset]) if setuid == 'on' || devices == 'on'
+      end
+      run_command([ZFS, 'mount', '-a'])
+      nil
+    end
+
     # The security updates waiting, each with when it was first seen (kept from the last check
     # while it's still the same version), for the dashboard's notice.
     def do_check_security_updates(now = Time.now)
@@ -4997,18 +5208,28 @@ module AmahiHelper
       raise Failed, "couldn't remove #{e.message}"
     end
 
+    # Sets the running module's cap, and replies with the one ZFS uses (its c_max), or the cap
+    # asked for when the module doesn't say.
     def do_set_arc_max(bytes)
       File.write(ZFS_ARC_MAX, bytes.to_s) if File.exist?(ZFS_ARC_MAX)
-      { 'arc_max' => bytes }
+      { 'arc_max' => arc_in_use || bytes }
     rescue SystemCallError => e
       raise Failed, "couldn't set ZFS's cache size: #{e.message}"
     end
 
+    def arc_in_use
+      File.read(ARCSTATS)[/^c_max\s+\d+\s+(\d+)$/, 1]&.to_i
+    rescue SystemCallError
+      nil
+    end
+
     # { 'zfs' => installed?, 'pools' => [...] }, each pool with its health, its raw size
     # (zpool's, parity included), the space its files use and have left (zfs's, after
-    # parity), its mount point and what `zpool status` says (see parse_pool_status). A pool
-    # that can't be read comes with an 'error' instead.
-    def do_pool_status
+    # parity), its mount point, whether it's one of Amahi-kai's ('managed', managed?) and what
+    # `zpool status` says (see parse_pool_status). A pool that can't be read comes with an
+    # 'error' instead. With +scan+, the pools on the drives that aren't imported too: 'offline'
+    # and 'found' (offline_pools, found_pools).
+    def do_pool_status(scan = true)
       return { 'zfs' => false, 'pools' => [] } unless File.executable?(ZPOOL)
 
       rows = capture([ZPOOL, 'list', '-H', '-p', '-o', 'name,size,allocated,free,health']).lines(chomp: true)
@@ -5019,16 +5240,19 @@ module AmahiHelper
         begin
           used, available, mountpoint, snapshot_space = capture([ZFS, 'list', '-H', '-p', '-o', 'used,available,mountpoint,usedbysnapshots', name]).chomp.split("\t")
           pool.merge!('used' => used.to_i, 'available' => available.to_i, 'mountpoint' => mountpoint,
-                      'snapshot_space' => snapshot_space.to_i, 'snapshots' => pool_snapshots(name),
-                      'snapshot_policy' => snapshot_policy(name))
+                      'managed' => managed?(name, mountpoint), 'snapshot_space' => snapshot_space.to_i,
+                      'snapshots' => pool_snapshots(name), 'snapshot_policy' => snapshot_policy(name))
           pool.merge(parse_pool_status(capture([ZPOOL, 'status', '-P', name])))
         rescue Failed => e
-          pool.merge('error' => e.message)
+          pool.merge('error' => e.message, 'managed' => managed?(name, pool['mountpoint']))
         end
       end
-      { 'zfs' => true, 'pools' => pools, 'offline' => offline_pools }
+      return { 'zfs' => true, 'pools' => pools } unless scan
+
+      found = importable_pools
+      { 'zfs' => true, 'pools' => pools, 'offline' => offline_pools(found), 'found' => found_pools(found) }
     rescue Failed => e
-      { 'zfs' => true, 'pools' => [], 'offline' => [], 'error' => e.message } # e.g. the ZFS module isn't loaded
+      { 'zfs' => true, 'pools' => [], 'offline' => [], 'found' => [], 'error' => e.message } # e.g. the ZFS module isn't loaded
     end
 
     # { 'checked_at', 'smartctl' (installed?), 'drives' => { '/dev/sda' => SMART summary or
@@ -5038,7 +5262,7 @@ module AmahiHelper
       disks = block_tree.select { |d| d['type'] == 'disk' }.map { |d| d['path'] }.grep(WHOLE_DISK)
       health = { 'checked_at' => Time.now.utc.iso8601, 'smartctl' => File.executable?(SMARTCTL),
                  'drives' => disks.to_h { |disk| [disk, drive_health(disk, previous.dig('drives', disk))] } }
-      health.merge!(do_pool_status)
+      health.merge!(do_pool_status(false)) # every 15 minutes: no scan of the drives, which would wake them
       do_install(STORAGE_HEALTH, "#{JSON.pretty_generate(health)}\n", nil, '0640', APP_USER)
       { 'health' => health }
     end
@@ -5650,7 +5874,7 @@ module AmahiHelper
         raise Refused, "#{id}'s data is on the pool #{have}: uninstall it with its data to move it to #{chosen}" if chosen && chosen != have
         return have
       end
-      return existing_pool(chosen) if chosen
+      return managed_pool(chosen) if chosen
       raise Refused, "#{id} keeps its data on a ZFS pool: choose one (make one on Disks → ZFS Pools first)" if manifest[:storage] == :required
 
       nil
@@ -6230,17 +6454,23 @@ module AmahiHelper
       git_output(*args).to_s.lines(chomp: true)
     end
 
-    # { 'temperatures' => { '/dev/sda' => 34, '/dev/vda' => nil } } for the whole disks lsblk lists.
+    # { 'temperatures' => { '/dev/sda' => 34, '/dev/vda' => nil }, 'asleep' => ['/dev/sdc'] } for
+    # the whole disks lsblk lists. A spun-down drive isn't woken for it: it has no temperature
+    # and is listed as asleep.
     def do_drive_temperatures
       disks = block_tree.select { |d| d['type'] == 'disk' }.map { |d| d['path'] }.grep(WHOLE_DISK)
-      { 'temperatures' => disks.to_h { |disk| [disk, drive_temperature(disk)] } }
+      readings = disks.to_h { |disk| [disk, drive_temperature(disk)] }
+      { 'temperatures' => readings.transform_values { |value| value == :asleep ? nil : value },
+        'asleep' => readings.select { |_disk, value| value == :asleep }.keys }
     end
 
     # smartctl's exit status is a bit mask that is often non-zero on healthy drives, so its
-    # output is read whatever the status. At most 5 seconds per disk.
+    # output is read whatever the status, unless it's the one for a sleeping drive (:asleep).
+    # At most 5 seconds per disk.
     def drive_temperature(disk)
-      out, _err, _status = Open3.capture3(ENV_MIN, ['/usr/bin/timeout', '/usr/bin/timeout'], '5', SMARTCTL, '-A', disk,
-                                          unsetenv_others: true, chdir: '/')
+      out, _err, status = Open3.capture3(ENV_MIN, ['/usr/bin/timeout', '/usr/bin/timeout'], '5', SMARTCTL,
+                                         '-n', "standby,#{SMART_ASLEEP}", '-A', disk, unsetenv_others: true, chdir: '/')
+      return :asleep if status.exitstatus == SMART_ASLEEP
       TEMPERATURE_PATTERNS.each do |pattern|
         value = out[pattern, 1]
         return value.to_i if value

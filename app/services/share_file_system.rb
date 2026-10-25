@@ -16,10 +16,11 @@ class ShareFileSystem
     @share = share
   end
 
-  # Called before save when path changes — create new dir, remove old empty one
+  # Called before save when path changes — create new dir, remove old empty one. A drive's
+  # mount point (Share#drive_root?) is the drive's own folder.
   def setup_directory
     return unless share.path_changed?
-    return if share.path.blank?
+    return if share.path.blank? || share.drive_root?
 
     # Remove the old folder only if it's empty. This used to be the first step of
     # one command chain, so an old folder with files in it stopped the new one
@@ -47,6 +48,7 @@ class ShareFileSystem
   # guest-writeable share gets a new folder (created without guest write access).
   def update_guest_permissions
     return unless share.guest_writeable_changed? || (share.path_changed? && share.guest_writeable)
+    return if share.drive_root?
 
     if share.guest_writeable
       make_guest_writeable
@@ -55,9 +57,9 @@ class ShareFileSystem
     end
   end
 
-  # Called before destroy — remove empty share directory
+  # Called before destroy — remove empty share directory (never a drive's mount point)
   def cleanup_directory
-    remove_empty_directory(share.path)
+    remove_empty_directory(share.path) unless share.drive_root?
   end
 
   # o+w on the share folder

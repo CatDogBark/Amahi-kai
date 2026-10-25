@@ -136,6 +136,23 @@ RSpec.describe ShareFileSystem do
     end
   end
 
+  # A drive shared as it is (Mount as Share, the setup wizard's FAT, exFAT and NTFS drives): its
+  # folder is the drive's mount point, which the root helper won't make, change or remove.
+  describe 'a share at a drive mount point' do
+    it 'makes, changes and removes no folder' do
+      share = Share.new(name: 'usb', path: '/mnt/storage-3', guest_writeable: true)
+      expect(share).to be_drive_root
+      path_change(share, from: nil, to: '/mnt/storage-3')
+      file_system = described_class.new(share)
+      file_system.setup_directory
+      file_system.update_guest_permissions
+      file_system.cleanup_directory
+      expect(Privileged.calls).to eq([])
+      expect(Share.new(path: '/mnt/storage-3/movies')).not_to be_drive_root
+      expect(Share.new(path: '/var/lib/amahi-kai/files/mnt')).not_to be_drive_root
+    end
+  end
+
   describe 'callback order' do
     it 'creates the folder before setting guest write access on it' do
       share = Share.new(name: 'Guests', path: '/var/lib/amahi-kai/files/guests', guest_writeable: true,

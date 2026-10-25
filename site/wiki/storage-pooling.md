@@ -58,10 +58,17 @@ Drives are prepared on **Disks → Devices** (or in the setup wizard's storage s
   `nosuid,nodev`, so nothing on a drive can run with privileges. The share folder on the system
   disk (`/var/lib/amahi-kai/files`) is mounted the same way. A drive's mount point is an empty
   folder made immutable while nothing is mounted on it, so while the drive is missing nothing
-  can put files there on the system disk.
+  can put files there on the system disk. A drive that comes back unmounted says where it
+  belongs (**Belongs at /mnt/storage-2**), and **Mount** puts it back there, so Greyhole and the
+  shares on it find it again.
+- **Mount as Share**, for a drive Greyhole can't pool (NTFS, FAT, exFAT): mounts it and shares it as
+  it is, its files where they were. FAT and exFAT keep no owners, so they're mounted for the users
+  group, which may write to them.
 - **Preview** a drive before mounting it: Amahi-kai mounts it read-only for a moment and lists
-  its top-level folders, so you can see what's on it.
-- **Unmount** it before removing it.
+  its top-level folders, so you can see what's on it. On a drive with very many files it stops
+  counting after a while and says so: the totals are then at least that much.
+- **Unmount** it before removing it. A drive with a share's folder on it isn't unmounted: delete
+  the share on **Shares** first.
 
 The drive the system runs from (including NVMe and LVM setups) is never offered for formatting or
 mounting.

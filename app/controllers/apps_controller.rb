@@ -285,12 +285,12 @@ class AppsController < ApplicationController
     render json: { status: 'error', message: e.message }, status: :unprocessable_content
   end
 
-  # The ZFS pools that are online, for the install dialog's Storage, when an app in the catalog
-  # keeps data on one (P4.6); [] otherwise, without asking the helper.
+  # Amahi-kai's ZFS pools that are online, for the install dialog's Storage, when an app in the
+  # catalog keeps data on one (P4.6); [] otherwise, without asking the helper.
   def storage_pools
     return [] unless AppCatalog.all.any? { |entry| entry[:storage] } && StoragePools.zfs_installed?
 
-    StoragePools.status[:pools].map { |pool| { name: pool.name, layout: pool.layout } }
+    StoragePools.managed_pools.map { |pool| { name: pool.name, layout: pool.layout } }
   rescue StandardError => e
     Rails.logger.warn("AppsController: couldn't read the ZFS pools: #{e.message}")
     []

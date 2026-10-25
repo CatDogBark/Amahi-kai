@@ -47,6 +47,9 @@ module DiskService
       end
     end
 
+    # Mounts a drive and shares it as it is: the share is its mount point, its files where they
+    # were (Share#drive_root?). { mount_point:, share_name:, refused: why Samba didn't take the
+    # new settings (SambaService.refusal), or nil }.
     def create_share_from_mount(device)
       mp = DiskManager.mount!(device)
       share_name = File.basename(mp).gsub(/[^a-zA-Z0-9\-]/, '')
@@ -65,7 +68,7 @@ module DiskService
         share.save!
       end
 
-      { mount_point: mp, share_name: share_name }
+      { mount_point: mp, share_name: share_name, refused: SambaService.refusal }
     end
 
     def partition_list

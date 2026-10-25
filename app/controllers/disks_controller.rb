@@ -27,19 +27,22 @@ class DisksController < ApplicationController
 
   def devices
     @page_title = t('disks')
-    # The disk the system runs from first, then the others in the kernel's order.
-    @devices = DiskManager.devices.each_with_index.sort_by { |device, i| [device[:os_disk] ? 0 : 1, i] }.map(&:first)
     # With ZFS installed, an unmounted drive says a pool wants it left so
     @zfs_installed = StoragePools.zfs_installed?
+    # A drive of the Greyhole pool that came back unmounted says so
+    @pool_paths = DiskPoolPartition.pluck(:path)
+    # The disk the system runs from first, then the others in the kernel's order.
+    @devices = DiskManager.devices.each_with_index.sort_by { |device, i| [device[:os_disk] ? 0 : 1, i] }.map(&:first)
   rescue DiskManager::DiskError => e
     @devices = []
-    @zfs_installed = StoragePools.zfs_installed?
     flash.now[:alert] = e.message
   end
 
+  # The drive buttons send the drive's ref (DiskManager.resolve); the messages give its kernel name.
   def format_disk
     device = params[:device]
     begin
+      device = DiskManager.resolve(device)
       DiskManager.format_disk!(device)
       flash[:notice] = "Successfully formatted #{device} as ext4"
     rescue DiskManager::DiskError => e
@@ -54,6 +57,7 @@ class DisksController < ApplicationController
     device = params[:device]
     mount_point = params[:mount_point].presence
     begin
+      device = DiskManager.resolve(device)
       mp = DiskManager.mount!(device, mount_point)
       flash[:notice] = "Mounted #{device} at #{mp}"
       # A pool drive back: the apps given pooled shares get it again
@@ -69,6 +73,7 @@ class DisksController < ApplicationController
   def preview_disk
     device = params[:device]
     begin
+      device = DiskManager.resolve(device)
       @preview = DiskManager.preview(device)
       @device = device
       render :preview
@@ -81,15 +86,19 @@ class DisksController < ApplicationController
     end
   end
 
+  # A drive shared as it is: the share is its mount point, its files where they were.
   def mount_as_share
     device = params[:device]
     begin
+      device = DiskManager.resolve(device)
       result = DiskService.create_share_from_mount(device)
       flash[:notice] = "Mounted #{device} at #{result[:mount_point]} and created share '#{result[:share_name]}'"
+      flash[:error] = "Samba didn't take the new settings, so the share isn't on the network yet: #{result[:refused]}" if result[:refused]
     rescue DiskManager::DiskError => e
       flash[:error] = "Mount failed: #{e.message}"
-    rescue ActiveRecord::RecordInvalid => e
-      flash[:error] = "Error: #{e.message}"
+    rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotSaved => e
+      reason = e.record&.errors&.full_messages&.to_sentence.presence || e.message
+      flash[:error] = "#{device} is mounted, but its share wasn't made: #{reason}"
     end
     redirect_to disks_devices_path
   end
@@ -97,6 +106,7 @@ class DisksController < ApplicationController
   def unmount_disk
     device = params[:device]
     begin
+      device = DiskManager.resolve(device)
       DiskManager.unmount!(device)
       flash[:notice] = "Unmounted #{device}"
     rescue DiskManager::DiskError => e
@@ -179,14 +189,15 @@ class DisksController < ApplicationController
   # ZFS pools (docs/plans/storage.md): bitShare's storage, on drives of their own.
   def pools
     @page_title = t('disks')
-    @status = StoragePools.status
-    @drives = StoragePools.drives(@status[:pools], Array(@status[:offline]))
+    @status = StoragePools.status(scan: true)
+    @drives = StoragePools.drives(@status[:pools], Array(@status[:offline]), Array(@status[:found]))
                           .each_with_index.sort_by { |drive, i| [drive[:role] == :os ? 0 : 1, i] }.map(&:first)
     @zfs_removal_blocker = StoragePools.removal_blocker(@status) if @status[:installed]
     # Drives in share storage a pool could take once freed: nil, or why not
     @share_drive_blockers = (@status[:installed] ? @drives.select { |drive| drive[:role] == :share } : [])
                             .to_h { |drive| [drive[:path], StoragePools.share_drive_blocker(drive)] }
-    names = @status[:pools].map(&:name)
+    # Not a name a pool has here: imported, offline or found on the drives
+    names = [*@status[:pools], *Array(@status[:offline]), *Array(@status[:found])].map(&:name)
     @new_pool_name = (1..).lazy.map { |n| "pool#{n}" }.find { |name| names.exclude?(name) }
     @smart_installed = StoragePools.smart_installed?
     @next_scrub = StoragePools.next_scrub
@@ -211,8 +222,9 @@ class DisksController < ApplicationController
     pool_change { StoragePools.online_drive!(name: params[:name], drive: params[:drive]) }
   end
 
+  # A drive of a pool found on the drives needs that pool's name typed (confirm).
   def erase_pool_drive
-    pool_change { StoragePools.erase_drive!(params[:drive]) }
+    pool_change { StoragePools.erase_drive!(params[:drive], confirm: params[:confirm]) }
   end
 
   # A drive in share storage that's empty and unused, unmounted so a new pool may take it.
@@ -234,6 +246,11 @@ class DisksController < ApplicationController
 
   def pool_online
     pool_change { StoragePools.bring_online!(params[:name]) }
+  end
+
+  # A pool found on the drives, not imported: by its id (GUID).
+  def pool_import_found
+    pool_change { StoragePools.import_found!(params[:id]) }
   end
 
   def scrub_pool

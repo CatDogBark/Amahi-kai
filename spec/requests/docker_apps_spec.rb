@@ -160,7 +160,8 @@ describe "Docker Apps", type: :request do
       allow(StoragePools).to receive(:zfs_installed?).and_return(true)
       allow(StoragePools).to receive(:status).and_return(
         installed: true, offline: [], error: nil,
-        pools: [StoragePools::Pool.new(name: 'tank', vdevs: [{ 'name' => 'mirror-0', 'children' => [] }])]
+        pools: [StoragePools::Pool.new(name: 'tank', managed: true, vdevs: [{ 'name' => 'mirror-0', 'children' => [] }]),
+                StoragePools::Pool.new(name: 'rpool', managed: false, vdevs: [])] # a system's own: not offered
       )
     end
 

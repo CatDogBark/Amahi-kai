@@ -1,4 +1,8 @@
 #shares-table
+  / The root helper refused Samba's last config (SambaService.refusal): it runs on the one before
+  - if (refused = SambaService.refusal)
+    .alert.alert-warning#samba-refused
+      | Samba didn't take the last change to its settings, so it runs on the ones from before: #{refused}
   .settings-table
     - if @shares.any?
       table.settings

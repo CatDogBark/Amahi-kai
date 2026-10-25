@@ -60,6 +60,19 @@ RSpec.describe "SharesController extended", type: :request do
       end
     end
 
+    # Refused and only logged, every later Samba config was refused too, and the page said nothing.
+    describe "Samba refusing its settings" do
+      it "says so on the Shares page, with why, until a config is taken" do
+        get shares_path
+        expect(Nokogiri::HTML(response.body).at_css('#samba-refused')).to be_nil
+        Setting.set(SambaService::REFUSAL, 'smb.conf refused: [USB] path /mnt/x/../y is outside the share folders')
+        get shares_path
+        expect(Nokogiri::HTML(response.body).at_css('#samba-refused').text.squish)
+          .to eq("Samba didn't take the last change to its settings, so it runs on the ones from before: " \
+                 'smb.conf refused: [USB] path /mnt/x/../y is outside the share folders')
+      end
+    end
+
     describe "a share turning off" do
       it "says Greyhole is moving its files back, with no copies buttons, and updates itself" do
         share.update_columns(disk_pool_copies: 2, pool_removing: true)

@@ -8,6 +8,11 @@
 # checks smb.conf with testparm and refuses parameters that would run commands as root.
 
 class SambaService
+  # Why the root helper refused the last smb.conf, kept until one is installed, for the Shares
+  # page: Samba runs on the config before it meanwhile, and every write after it is refused too
+  # until what it refused is changed.
+  REFUSAL = 'samba_refusal'.freeze
+
   # Generate and deploy Samba configuration, then reload services.
   # Returns whether a new smb.conf was installed. With raise_refusal, a config the root helper
   # refuses raises Privileged::Error (its message says which line) instead of being logged.
@@ -22,14 +27,22 @@ class SambaService
     written
   end
 
-  # Installs smb.conf if Samba can load it; otherwise the current one stays.
+  # Installs smb.conf if Samba can load it; otherwise the current one stays, and the reason is
+  # kept (REFUSAL).
   def self.write_smb_conf(content, raise_refusal: false)
     Privileged.call('samba.write_config', content: content)
+    Setting.where(name: REFUSAL).delete_all
     true
   rescue Privileged::Error => e
     raise if raise_refusal
     Rails.logger.error("SambaService: smb.conf not installed; keeping the current one: #{e.message}")
+    Setting.set(REFUSAL, e.message.truncate(250))
     false
+  end
+
+  # Why the last smb.conf was refused (REFUSAL), or nil.
+  def self.refusal
+    Setting.get(REFUSAL).presence
   end
 
   def self.write_lmhosts(content)

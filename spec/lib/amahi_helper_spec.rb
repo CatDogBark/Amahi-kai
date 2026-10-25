@@ -340,6 +340,15 @@ RSpec.describe 'AmahiHelper' do
       end
     end
 
+    # Mount as Share, and the setup wizard's FAT, exFAT and NTFS drives, share a drive as it is: a
+    # config naming its mount point was refused, and every config after it with it.
+    it "takes a data drive's own mount point as a share's path, and nothing else of /mnt" do
+      expect(helper.samba_problems(share_with('path = /mnt/storage-1'))).to eq([])
+      expect(helper.samba_problems(share_with('path = /mnt')).join).to include('outside the share folders')
+      expect(helper.samba_problems(share_with('path = /mnt/')).join).to include('outside the share folders')
+      expect(helper.samba_problems(share_with('path = /mnt/storage-1/../../etc')).join).to include('outside the share folders')
+    end
+
     it "allows ordinary share options and data drives" do
       ok = ['vfs objects = recycle fruit streams_xattr', 'acl allow execute always = yes', 'veto files = /.DS_Store/',
             'path = /mnt/storage-1/movies', 'hide dot files = yes', 'fruit:time machine = yes', 'recycle:keeptree = yes']
@@ -775,6 +784,9 @@ RSpec.describe 'AmahiHelper' do
         stub_const('AmahiHelper::FSTAB', fstab)
         File.write(fstab, "UUID=abc / ext4 defaults 0 1\n")
         allow(helper).to receive(:run_command) { |argv| ran << argv.first.split('/').last }
+        # Its fstab line is checked like any other (fstab_check!)
+        stub_const('AmahiHelper::RUN_DIR', dir)
+        allow(helper).to receive(:fstab_errors).and_return([])
       end
 
       after { FileUtils.rm_rf(dir) }
@@ -1972,6 +1984,7 @@ RSpec.describe 'AmahiHelper' do
       allow(File).to receive(:blockdev?).and_call_original
       allow(File).to receive(:blockdev?).with(a_string_starting_with('/dev/')).and_return(true)
       allow(helper).to receive(:probe).and_return('TYPE' => 'ext4', 'UUID' => 'u-1')
+      allow(helper).to receive(:samba_shares).and_return({})
     end
 
     after { FileUtils.rm_rf(dir) }
@@ -2011,7 +2024,7 @@ RSpec.describe 'AmahiHelper' do
 
       before do
         allow(Open3).to receive(:capture3) do |_env, _cmd, *args, **_opts|
-          [outputs.fetch(args.last), '', instance_double(Process::Status, success?: false)]
+          [outputs.fetch(args.last), '', instance_double(Process::Status, success?: false, exitstatus: 4)]
         end
       end
 
@@ -2024,9 +2037,20 @@ RSpec.describe 'AmahiHelper' do
         reply = helper.do_drive_temperatures
         expect(reply['temperatures']).to eq('/dev/sda' => 36, '/dev/sdb' => 41, '/dev/sdc' => 30,
                                             '/dev/sdd' => nil, '/dev/nvme0n1' => 44)
+        expect(reply['asleep']).to eq([])
         expect(Open3).to have_received(:capture3)
-          .with(AmahiHelper::ENV_MIN, ['/usr/bin/timeout', '/usr/bin/timeout'], '5', '/usr/sbin/smartctl', '-A', '/dev/sda',
-                unsetenv_others: true, chdir: '/')
+          .with(AmahiHelper::ENV_MIN, ['/usr/bin/timeout', '/usr/bin/timeout'], '5', '/usr/sbin/smartctl', '-n', 'standby,9',
+                '-A', '/dev/sda', unsetenv_others: true, chdir: '/')
+      end
+
+      it "doesn't wake a spun-down drive: it has no temperature, and is listed as asleep" do
+        allow(Open3).to receive(:capture3) do |_env, _cmd, *args, **_opts|
+          asleep = args.last == '/dev/sdb'
+          [asleep ? "Device is in STANDBY mode, exit(9)\n" : outputs.fetch(args.last), '', instance_double(Process::Status, exitstatus: asleep ? 9 : 0)]
+        end
+        reply = helper.do_drive_temperatures
+        expect(reply['temperatures']).to include('/dev/sda' => 36, '/dev/sdb' => nil)
+        expect(reply['asleep']).to eq(['/dev/sdb'])
       end
 
       it 'reports nil when smartctl is missing' do
@@ -2078,10 +2102,32 @@ RSpec.describe 'AmahiHelper' do
       expect(refusal('disks.mount', { 'device' => '/dev/sdd1', 'mount_point' => "#{mnt}/storage-3" })).to be_nil
     end
 
+    # A drive that came back unmounted went to the next free slot: Greyhole, and the shares on it,
+    # still looked for it where it was.
+    it 'mounts a drive that has an fstab line only where that line says' do
+      File.write(fstab, "UUID=os / ext4 defaults 0 1\nUUID=u-1 #{mnt}/storage-2 ext4 defaults,nofail 0 2\n")
+      expect(refusal('disks.mount', { 'device' => '/dev/sdd1', 'mount_point' => "#{mnt}/storage-3" }))
+        .to eq("/dev/sdd1 belongs at #{mnt}/storage-2 (its line in /etc/fstab); mount it there")
+      expect(steps('disks.mount', { 'device' => '/dev/sdd1', 'mount_point' => "#{mnt}/storage-2" }))
+        .to eq([[:mount_drive, '/dev/sdd1', "#{mnt}/storage-2", 'ext4', 'u-1']])
+    end
+
     it 'unmounts a mounted data drive' do
       expect(steps('disks.unmount', { 'device' => '/dev/sdb1' })).to eq([[:unmount_drive, ["#{mnt}/storage-1"], 'u-1']])
       expect(refusal('disks.unmount', { 'device' => '/dev/sdd1' })).to eq("/dev/sdd1 isn't mounted")
       expect(refusal('disks.unmount', { 'device' => '/dev/sda1' })).to include('on a disk the system uses')
+    end
+
+    # Unmounted under its shares, the drive left Samba serving the empty folder on the system
+    # disk, and the next drive mounted there took the shares' place.
+    it "won't unmount a drive with a share's folder on it, or a share at its mount point" do
+      allow(helper).to receive(:samba_shares).and_return(
+        'movies' => { name: 'Movies', path: "#{mnt}/storage-1/movies", pooled: false },
+        'storage-1' => { name: 'storage-1', path: "#{mnt}/storage-1", pooled: false },
+        'other' => { name: 'Other', path: "#{mnt}/storage-10/x", pooled: false }
+      )
+      expect(refusal('disks.unmount', { 'device' => '/dev/sdb1' }))
+        .to eq('the shares Movies, storage-1 are on this drive: delete them on Shares first')
     end
 
     it 'previews an unmounted data drive' do
@@ -2236,6 +2282,10 @@ RSpec.describe 'AmahiHelper' do
           nil
         end
         allow(helper).to receive(:mount_point?) { |path| mounted.include?(path) }
+        # The new fstab is checked (fstab_check!): findmnt here would find none of these drives
+        stub_const('AmahiHelper::RUN_DIR', dir)
+        allow(helper).to receive(:fstab_errors).and_return([])
+        allow(helper).to receive(:group_id).with('users').and_return(100)
       end
 
       it 'mounts, and adds the PR #13 fstab line (nofail, short timeout) once' do
@@ -2254,6 +2304,33 @@ RSpec.describe 'AmahiHelper' do
         helper.do_mount_drive('/dev/sdd1', "#{mnt}/win", 'ntfs', 'A1B2')
         expect(ran.last).to eq(['/usr/bin/mount', '-t', 'ntfs-3g', '-o', 'nosuid,nodev', '/dev/sdd1', "#{mnt}/win"])
         expect(File.read(fstab)).to include("UUID=A1B2 #{mnt}/win ntfs-3g defaults,nofail")
+      end
+
+      # FAT and exFAT keep no owners: mounted as root's, only root could write to them.
+      it 'mounts FAT and exFAT for the users group, which may write' do
+        helper.do_mount_drive('/dev/sdd1', "#{mnt}/usb", 'vfat', 'A1B2-C3D4')
+        expect(ran.last).to eq(['/usr/bin/mount', '-o', 'nosuid,nodev,gid=100,dmask=0002,fmask=0113', '/dev/sdd1', "#{mnt}/usb"])
+        expect(File.read(fstab).lines.last)
+          .to eq("UUID=A1B2-C3D4 #{mnt}/usb vfat defaults,nofail,nosuid,nodev,x-systemd.device-timeout=10s,gid=100,dmask=0002,fmask=0113 0 2\n")
+        helper.do_mount_drive('/dev/nvme0n1p1', "#{mnt}/card", 'exfat', '1234-ABCD')
+        expect(ran.last[2]).to eq('nosuid,nodev,gid=100,dmask=0002,fmask=0113')
+      end
+
+      it 'adds its fstab line after the last one, on a line of its own, keeping a backup' do
+        File.write(fstab, 'UUID=os / ext4 defaults 0 1') # no line break at the end
+        helper.do_mount_drive('/dev/sdd1', "#{mnt}/storage-2", 'ext4', 'u-1')
+        expect(File.read(fstab).lines.map(&:chomp))
+          .to eq(['UUID=os / ext4 defaults 0 1', "UUID=u-1 #{mnt}/storage-2 ext4 defaults,nofail,nosuid,nodev,x-systemd.device-timeout=10s 0 2"])
+        expect(File.read("#{fstab}.amahi-backup")).to eq('UUID=os / ext4 defaults 0 1')
+      end
+
+      it "doesn't mount a drive whose fstab line the check refuses" do
+        allow(helper).to receive(:fstab_errors) { |text| text.include?('u-1') ? ["#{mnt}/storage-2: [E] something new"] : [] }
+        expect { helper.do_mount_drive('/dev/sdd1', "#{mnt}/storage-2", 'ext4', 'u-1') }
+          .to raise_error(AmahiHelper::Failed, /errors the old one didn't/)
+        expect(ran.map(&:first)).not_to include('/usr/bin/mount')
+        expect(File.exist?("#{mnt}/storage-2")).to be false
+        expect(File.read(fstab)).to eq("UUID=os / ext4 defaults 0 1\n")
       end
 
       it 'removes the folder it made and leaves fstab alone when the mount fails' do
@@ -2284,8 +2361,12 @@ RSpec.describe 'AmahiHelper' do
         expect(File.directory?("#{mnt}/media")).to be true
       end
 
+      it 'previews btrfs read-only without replaying its log' do
+        helper.do_preview_drive('/dev/sdd1', 'btrfs')
+        expect(ran.first.first(3)).to eq(['/usr/bin/mount', '-o', 'ro,nosuid,nodev,noexec,rescue=nologreplay'])
+      end
+
       it 'previews read-only without replaying the journal, then unmounts and cleans up' do
-        stub_const('AmahiHelper::RUN_DIR', dir)
         reply = helper.do_preview_drive('/dev/sdd1', 'ext4')
         mount, umount = ran
         expect(mount.first(3)).to eq(['/usr/bin/mount', '-o', 'ro,nosuid,nodev,noexec,noload'])
@@ -2496,6 +2577,13 @@ RSpec.describe 'AmahiHelper' do
           expect(refusal('greyhole.trash_delete', { 'share' => 'Photos', 'path' => path })).not_to be_nil, path
         end
         expect(refusal('greyhole.trash_delete', { 'share' => '../Photos', 'path' => '2026/beach [1].jpg' })).to include("isn't a share name")
+
+        # A drive's trash folder itself a link: its files are elsewhere
+        FileUtils.mkdir_p("#{dir}/away/Photos")
+        File.write("#{dir}/away/Photos/notes.txt", 'x')
+        FileUtils.rm_rf("#{drives[0]}/.gh_trash")
+        File.symlink("#{dir}/away", "#{drives[0]}/.gh_trash")
+        expect(refusal('greyhole.trash_delete', { 'share' => 'Photos', 'path' => 'notes.txt' })).to eq("Photos/notes.txt isn't in the pool's trash")
         # Would read as an option on greyhole's command line
         expect(refusal('greyhole.trash_delete', { 'share' => '--empty-trash', 'path' => 'x' })).to include("isn't a share name")
       end

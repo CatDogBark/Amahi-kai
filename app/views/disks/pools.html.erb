@@ -19,7 +19,7 @@
         <h5>ZFS isn't installed</h5>
         <p class="text-muted mb-3">
           Install it to create pools. It's Ubuntu's own ZFS package; Amahi-kai limits its memory cache to 2 GB
-          (half the memory on a smaller server)<%= ', and installs smartmontools to watch the drives\' health' unless @smart_installed %>.
+          (half the memory on a smaller server, and a 32nd of it, ZFS's own least, on one with more than 64 GB)<%= ', and installs smartmontools to watch the drives\' health' unless @smart_installed %>.
         </p>
         <button type="button" class="btn btn-primary" id="install-zfs-btn" data-storage-install="<%= disks_install_storage_tools_stream_path %>">Install ZFS</button>
       </div>
@@ -41,6 +41,8 @@
           <span class="text-muted ms-2"><%= pool.layout %> · <%= pluralize(pool.drives.size, 'drive') %></span>
         </div>
         <div class="d-flex flex-wrap align-items-center gap-2 pool-actions">
+          <%# A pool Amahi-kai didn't make (a system's own bpool or rpool) is only shown %>
+          <% if pool.managed? %>
           <% scrubbing = pool.scan.to_s.start_with?('scrub in progress') %>
           <button type="button" class="btn btn-sm btn-outline-secondary" data-storage-post="<%= disks_scrub_pool_path %>" data-name="<%= pool.name %>"
                   data-tip="Read every block and repair what can be repaired" <%= 'disabled' if pool.scanning? %>><%= scrubbing ? 'Scrubbing…' : 'Scrub now' %></button>
@@ -54,6 +56,9 @@
                   data-confirm="Take the pool <%= pool.name %> offline? Its files at <%= pool.mountpoint %> are out of reach until you bring it back online, and it stays offline after a restart. Its drives stay its own. Computers with its files open over the network are disconnected first."
                   data-tip="Unmount it and stop using it, keeping everything on its drives">Take offline</button>
           <button type="button" class="btn btn-sm btn-outline-danger" data-pool-dialog="destroy" data-name="<%= pool.name %>">Delete pool</button>
+          <% else %>
+          <span class="badge bg-secondary" data-tip="Amahi-kai didn't make this pool, so it only shows it">Not Amahi-kai's</span>
+          <% end %>
           <%= pool_state_badge(pool.health) %>
         </div>
       </div>
@@ -61,10 +66,17 @@
         <% if pool.error %>
           <div class="alert alert-warning small">Couldn't read this pool: <%= pool.error %></div>
         <% end %>
+        <% unless pool.managed? %>
+          <p class="small text-muted" id="pool-not-ours-<%= pool.name %>">
+            Amahi-kai didn't make this pool (it mounts at <code><%= pool.mountpoint %></code>, not under /srv/pools): it's
+            shown here, and managed from the command line. Shares and apps can't go on it.
+          </p>
+        <% end %>
         <% if pool.status %>
           <div class="alert alert-warning small">
             <%= pool.status %>
-            <% if (advice = pool.what_to_do) %><br><strong>What to do:</strong> <%= advice %><% end %>
+            <%# The advice names this page's buttons, which only Amahi-kai's pools have %>
+            <% if pool.managed? && (advice = pool.what_to_do) %><br><strong>What to do:</strong> <%= advice %><% end %>
           </div>
         <% end %>
         <% total = pool.used.to_i + pool.available.to_i %>
@@ -80,6 +92,7 @@
           <% if pool.scan.blank? || pool.scan == 'none requested' %>No scrub has run yet.<% else %><%= pool.scan.upcase_first %>.<% end %>
           <% if @next_scrub %>Next automatic scrub: <%= @next_scrub.strftime('%A, %B %-d at %H:%M') %>.<% end %>
         </p>
+        <% if pool.managed? %>
         <% shares_here = Array(@pool_shares[pool.name]) %>
         <p class="small mt-2 mb-0" id="pool-shares-<%= pool.name %>">
           <% if shares_here.any? %>
@@ -96,6 +109,7 @@
             <span class="text-muted">While they're installed, it can't be taken offline or deleted; a roll-back stops them while it runs, then starts them again.</span>
           </p>
         <% end %>
+        <% end %>
         <% if pool.scanning? %>
           <p class="small text-info mb-0 mt-1" data-pool-scanning="">This page updates every 30 seconds until it's done.</p>
         <% end %>
@@ -105,6 +119,7 @@
 
         <%# Snapshots: kept by the hourly job (amahi-kai-snapshots.timer), or taken now %>
         <% snaps = pool.snapshot_list %>
+        <% if pool.managed? %>
         <div class="pool-snapshots mt-3 pt-3 border-top" id="snapshots-<%= pool.name %>">
           <div class="d-flex flex-wrap align-items-center gap-2 small">
             <strong>Snapshots</strong>
@@ -151,6 +166,7 @@
             </details>
           <% end %>
         </div>
+        <% end %>
       </div>
       <table class="table table-sm mb-0 small">
         <thead>
@@ -166,6 +182,7 @@
               <td><%= disk ? drive_health(@health, disk, model: @drives.find { |d| d[:path] == disk }&.dig(:model)) : '—' %></td>
               <td class="text-end"><%= [drive['read'], drive['write'], drive['cksum']].map { |n| n || '—' }.join(' / ') %></td>
               <td class="text-end">
+                <% if pool.managed? %>
                 <% label = disk ? "#{disk} (#{pool_drive_id(drive['name'])})" : "the missing drive (#{drive['note'] || drive['name']})" %>
                 <%# Out of the pool but connected again (a reseated cable): it can come back as it is %>
                 <% back = pool.connected_again?(drive) %>
@@ -176,6 +193,7 @@
                 <% end %>
                 <button type="button" class="btn btn-sm <%= drive['state'] == 'ONLINE' || back ? 'btn-outline-secondary' : 'btn-warning' %>"
                         data-pool-dialog="replace" data-name="<%= pool.name %>" data-old="<%= drive['name'] %>" data-old-label="<%= label %>">Replace</button>
+                <% end %>
               </td>
             </tr>
           <% end %>
@@ -216,6 +234,41 @@
     </div>
   <% end %>
 
+  <%# Pools on the drives that aren't imported: this server's before it was installed again, one
+      whose drives came too late at boot, or another server's. Their drives are kept for them. %>
+  <% Array(@status[:found]).each do |pool| %>
+    <% disks = @drives.select { |d| d[:role] == :found && d[:pool] == pool.name }.map { |d| d[:path] } %>
+    <div class="card mb-3 pool-card" id="found-<%= pool.id %>">
+      <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+          <strong><%= lucide_icon('database', size: 16) %> <%= pool.name %></strong>
+          <span class="text-muted ms-2">On the drives, not imported</span>
+        </div>
+        <div class="d-flex flex-wrap align-items-center gap-2 pool-actions">
+          <button type="button" class="btn btn-sm btn-outline-success" data-storage-post="<%= disks_pool_import_found_path %>" data-pool-id="<%= pool.id %>"
+                  data-confirm="Import the pool <%= pool.name %> from <%= disks.any? ? disks.join(', ') : 'its drives' %>? It's mounted at /srv/pools/<%= pool.name %> if it's one Amahi-kai made; any other is left on its drives as it is."
+                  <%= 'disabled' unless pool.importable? %>>Import</button>
+          <%= pool_state_badge(pool.state) %>
+        </div>
+      </div>
+      <div class="card-body small">
+        <p class="mb-1">
+          This pool is on drives connected here (<%= disks.any? ? disks.join(', ') : pluralize(pool.devices.size, 'partition') %>), but not
+          imported: this server's from before it was installed again, say, or one whose drives came too late when it started.
+          Its drives are kept for it: nothing can format them or put them in another pool.
+        </p>
+        <% if pool.foreign %>
+          <p class="mb-1 text-muted">ZFS says it was last used by another system (it may be this one, before it was installed again).</p>
+        <% end %>
+        <% if pool.importable? %>
+          <p class="mb-0 text-muted">Import it to use it again. Or, to use its drives for something else, Erase each of them in the list of drives below, typing the pool's name.</p>
+        <% else %>
+          <p class="mb-0 text-warning">ZFS finds it <%= pool.state %>: too many of its drives are missing to import it. Connect them, or Erase its drives below (typing the pool's name).</p>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+
   <% free = @drives.select { |d| d[:free] } %>
   <div class="card mb-3">
     <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
@@ -240,7 +293,7 @@
               <tr class="<%= 'text-muted' unless drive[:free] %>">
                 <td>
                   <% if @status[:installed] && free.size >= 2 && drive[:free] %>
-                    <input type="checkbox" class="form-check-input" name="devices[]" value="<%= drive[:path] %>" data-size="<%= drive[:size] %>" id="pool-drive-<%= File.basename(drive[:path]) %>">
+                    <input type="checkbox" class="form-check-input" name="devices[]" value="<%= drive[:ref] %>" data-label="<%= drive[:path] %>" data-size="<%= drive[:size] %>" id="pool-drive-<%= File.basename(drive[:path]) %>">
                   <% end %>
                 </td>
                 <td class="text-nowrap"><label for="pool-drive-<%= File.basename(drive[:path]) %>"><code><%= drive[:path] %></code></label></td>
@@ -256,15 +309,19 @@
                   <%# A drive in share storage that's empty and unused: unmounted, it's free for a pool %>
                   <% if @status[:installed] && drive[:role] == :share && !blocker %>
                     <button type="button" class="btn btn-sm btn-outline-secondary ms-2" data-storage-post="<%= disks_free_pool_drive_path %>"
-                            data-drive="<%= drive[:path] %>" id="free-<%= File.basename(drive[:path]) %>"
+                            data-drive="<%= drive[:ref] %>" id="free-<%= File.basename(drive[:path]) %>"
                             data-confirm="Free <%= drive[:path] %> for a pool? It's unmounted from <%= drive[:mounts].join(', ') %> and stops being share storage. Nothing is on it, and a pool made with it erases it.">Free this drive</button>
                   <% end %>
                   <%# Share storage won't take a disk with a ZFS label; a new pool erases it itself %>
                   <% if @status[:installed] && StoragePools::OLD_LABEL.include?(drive[:role]) %>
                     <button type="button" class="btn btn-sm btn-outline-warning ms-2" data-storage-post="<%= disks_erase_pool_drive_path %>"
-                            data-drive="<%= drive[:path] %>" id="erase-<%= File.basename(drive[:path]) %>"
+                            data-drive="<%= drive[:ref] %>" id="erase-<%= File.basename(drive[:path]) %>"
                             data-confirm="Erase <%= drive[:path] %>? This clears its old ZFS label (pool <%= drive[:pool] %>) and everything else on the drive, so it shows as Free and share storage can use it too."
                             data-tip="Clears the old ZFS label, so Disks → Devices can use it for share storage">Erase</button>
+                  <% end %>
+                  <% if @status[:installed] && drive[:role] == :found %>
+                    <button type="button" class="btn btn-sm btn-outline-danger ms-2" data-pool-dialog="erase" data-name="<%= drive[:pool] %>"
+                            data-drive="<%= drive[:ref] %>" data-drive-label="<%= drive[:path] %>" id="erase-<%= File.basename(drive[:path]) %>">Erase…</button>
                   <% end %>
                 </td>
                 <td class="small"><%= drive_health(@health, drive[:path], model: drive[:model]) %></td>
