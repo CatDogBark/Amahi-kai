@@ -179,8 +179,9 @@ firewall and NAT. Still behind, to consider after 1.0 unless listed earlier:
 
 ## Release 1.0
 
-What's left for 1.0, in order, is [`release-1.0.md`](release-1.0.md): the real pool and apps on
-it, a full code review, a docs review, then a release candidate and 1.0. 1.0 is for other people
+What's left for 1.0, in order, is [`release-1.0.md`](release-1.0.md): a full code review, a docs
+review, then a release candidate and 1.0. The real pool's checks with bitShare (§2 there) are
+after 1.0 (CatDogBark, 2026-10-24: bitShare's work in tandem with Amahi-kai). 1.0 is for other people
 to install. bitShare is its own project and doesn't hold 1.0. Networking (§1–2f there) is done: it
 shipped in 0.10.0 to 0.10.2, the house runs on router mode since 2026-10-24, and the Tailscale
 check passed the same day. **Signed updates** are deferred until other people run Amahi-kai

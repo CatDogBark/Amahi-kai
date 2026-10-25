@@ -1,8 +1,8 @@
 # Amahi-kai 1.0: what's left, in order
 
-Status 2026-10-24: 0.10.2 is out; networking (§1, §2b–2f) is done, Tailscale included; §2's pool
-is built, with its other checks still open. Signed updates (§3) and backups (§4) are deferred to
-after 1.0. Next: the rest of §2, then the code review (§5).
+Status 2026-10-24: 0.10.2 is out; networking (§1, §2b–2f) is done, Tailscale included. The real
+pool's checks with bitShare (§2), signed updates (§3) and backups (§4) are after 1.0. Next: the
+code review (§5) and the docs review (§6).
 
 **What 1.0 means** (CatDogBark, 2026-10-23): a release for other people to install and trust:
 updates can't be faked, the NAS's own state is backed up and restorable, and the code and the
@@ -10,7 +10,7 @@ docs have had a full pass (signed updates and backups were both deferred on 2026
 His own NAS isn't the point: it's a development machine that switches between the `development`
 and `releases` channels to try features before they reach `main`. bitShare is its own project with
 its own roadmap and doesn't hold 1.0; Amahi-kai only has to install, store, update and roll back
-apps correctly, and bitShare is the app that proves the storage part.
+apps correctly. bitShare is the app that proves the storage part, after 1.0 (§2).
 
 ## 1. Networking's last check
 
@@ -35,7 +35,10 @@ router (the test VM's own Unbound) can't use DNS over TLS, because the router ke
 every LAN device (§2c, by design). A per-device exemption is on the roadmap, not in 1.0
 (CatDogBark: not needed).
 
-## 2. The real pool, and apps on it
+## 2. The real pool, and apps on it (after 1.0)
+
+**After 1.0** (CatDogBark, 2026-10-24): this is bitShare's work in tandem with Amahi-kai, so it
+doesn't hold 1.0. It stays here as written for when it's picked up.
 
 The four SSDs are in and healthy (SMART and long self-tests passed 2026-10-21). The pool was made
 on 2026-10-24, all four in one RAIDZ1 as the checklist planned, and holds real data since: the old
@@ -51,9 +54,9 @@ NAS's files, copied into the share Vault. From
   bitShare's business.
 
 **The drive layout** was CatDogBark's decision: all four SSDs in one RAIDZ1 pool (about 2.7 TB,
-one drive may fail), with shares on the pool, made on 2026-10-24. The failure tests above were
-meant to come before any real data; whether they run on the real pool now or on the test VM's
-virtual disks is his call.
+one drive may fail), with shares on the pool, made on 2026-10-24. The failure tests above run on
+the real pool with its data in place (CatDogBark, 2026-10-24: his files are backed up elsewhere,
+so nothing can be lost).
 
 ## 2b. Router mode
 
@@ -217,8 +220,8 @@ settings aren't backed up (§6).
 ## 5. The code review
 
 A full pass, the way the 2026-10-02 review was done, over everything since: the helper (108
-operations now), storage, apps, networking, the release machinery. Not now; its own session, with
-the private review doc. Already on its list:
+operations now), storage, apps, networking, the release machinery. Next (CatDogBark, 2026-10-24),
+with the private review doc. Already on its list:
 
 - **Times are the server's clock, in UTC** (roadmap, Open): show them in the browser's zone.
 - The remaining low items on the review doc's security audit tab.
@@ -254,11 +257,16 @@ system disk means installing again, importing the pool and setting the NAS up ag
 
 So it doesn't creep in: HTTPS on the LAN, the debug pages as a Settings tab, quotas, the phone
 layout, private folders per user, P4.6b (Greyhole shares through Samba, which is bitTube's need),
-one sign-in for apps (the capability API), and backups: the NAS's own state
-([`backups.md`](backups.md)) and copies of the files in shares. All on the roadmap for after.
+one sign-in for apps (the capability API), the real pool's checks with bitShare (§2), and backups:
+the NAS's own state ([`backups.md`](backups.md)) and copies of the files in shares. All on the
+roadmap for after.
 
 **Router mode**, listed here until 2026-10-23, came into 1.0 after all and shipped in 0.10.0
 (§2b–2f); the house runs on it since 2026-10-24.
+
+**The real pool and apps on it (§2)** are out of 1.0 (CatDogBark, 2026-10-24): it's bitShare's
+work alongside Amahi-kai. The pool is built and in use, and its failure tests run on it later,
+data in place.
 
 **Signed updates (§3)** are out of 1.0 too (CatDogBark, 2026-10-24): with one user, the key to
 keep and back up outweighs the risk it covers. They come back when other people run
