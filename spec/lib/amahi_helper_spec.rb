@@ -866,6 +866,11 @@ RSpec.describe 'AmahiHelper' do
       end
     end
 
+    it 'refuses a dnsmasq config that would answer DNS: Unbound does' do
+      expect(refusal('network.write_dnsmasq_config', { 'content' => "bind-interfaces\nexcept-interface=lo\n" })).to include('must answer no DNS (port=0)')
+      expect(refusal('network.write_dnsmasq_config', { 'content' => "port=0\nbind-interfaces\nexcept-interface=lo\n" })).to be_nil
+    end
+
 
     it 'creates the dnsmasq folder if dnsmasq is not installed yet' do
       Dir.mktmpdir do |dir|
@@ -943,6 +948,15 @@ RSpec.describe 'AmahiHelper' do
        "server:\nverbosity: 5"].each do |line|
         expect(refusal('dns.write_config', { 'content' => "#{line}\n" })).to include('not one Amahi-kai writes'), line
       end
+    end
+
+    it 'refuses access-control lines that add up to too much of the internet, however they are spaced' do
+      allow(helper).to receive(:installed!).with(AmahiHelper::UNBOUND).and_return(true)
+      lines = ->(networks) { "server:\n#{networks.map { |network| "  access-control: #{network}\n" }.join}" }
+      expect(refusal('dns.write_config', { 'content' => lines.call(['10.0.0.0/8 allow', '100.64.0.0/10 allow', 'fe80::/10 allow', 'fd7a:115c:a1e0::/48 allow']) })).to be_nil
+      expect(refusal('dns.write_config', { 'content' => lines.call(['10.0.0.0/8 allow'] * 3) })).to be_nil # one network, counted once
+      expect(refusal('dns.write_config', { 'content' => lines.call(['1.0.0.0/8 allow', ' 2.0.0.0/8  allow', "3.0.0.0/8\tallow"]) })).to include('too much of the internet')
+      expect(refusal('dns.write_config', { 'content' => lines.call(['2000::/10 allow']) })).to include('too much of the internet')
     end
 
     it "removes the config and its firewall rules when DNS is turned off" do
@@ -1028,7 +1042,8 @@ RSpec.describe 'AmahiHelper' do
 
     it 'checks the interface it will look for DHCP servers on' do
       expect(steps('dhcp.check_servers', { 'interface' => 'lo' })).to eq([[:dhcp_servers, 'lo']])
-      ['eth99nothere', 'ens 18', '../x', ''].each do |name|
+      # . and .. are folders in /sys/class/net, no interfaces
+      ['eth99nothere', 'ens 18', '../x', '', '.', '..', '-lo'].each do |name|
         expect(refusal('dhcp.check_servers', { 'interface' => name })).not_to be_nil, name.inspect
       end
       expect(steps('dns.sync_leases', {})).to eq([[:sync_leases]])
@@ -1068,15 +1083,19 @@ RSpec.describe 'AmahiHelper' do
           1792700003 aa:bb:cc:dd:ee:03 10.99.0.153 bad.name *
           1792700004 aa:bb:cc:dd:ee:04 10.99.0.154 Phone *
           1792700005 aa:bb:cc:dd:ee:05 10.99.0.155 phone *
+          1792700006 aa:bb:cc:dd:ee:06 10.99.0.156 WPAD *
+          1792700007 aa:bb:cc:dd:ee:07 10.99.0.157 isatap *
+          1792700008 aa:bb:cc:dd:ee:08 10.99.0.158 localhost *
         LEASES
       end
 
-      it "answer as name.<domain> and name, unless they're taken or not one label" do
+      it "answer as name.<domain> and name, unless they're taken, reserved or not one label" do
         helper.do_sync_leases
         content = File.read(AmahiHelper::UNBOUND_LEASES)
         expect(content).to include('local-data: "client.home.arpa. IN A 10.99.0.150"', 'local-data: "client. IN A 10.99.0.150"',
                                    'local-data-ptr: "10.99.0.150 client.home.arpa."', 'local-data: "phone.home.arpa. IN A 10.99.0.154"')
-        expect(content).not_to include('10.99.0.151', '10.99.0.152', '10.99.0.153', '10.99.0.155')
+        # A device named wpad would hand out every browser's proxy settings; isatap, Windows' IPv6 tunnel
+        expect(content).not_to include('10.99.0.151', '10.99.0.152', '10.99.0.153', '10.99.0.155', 'wpad', 'isatap', 'localhost')
         expect { helper.unbound_conf(content) }.not_to raise_error
         expect(ran).to eq(['/usr/bin/systemctl is-active --quiet unbound', "#{AmahiHelper::UNBOUND_CONTROL} reload_keep_cache"])
       end
@@ -1311,9 +1330,15 @@ RSpec.describe 'AmahiHelper' do
       conf = DnsService.radvd_config
       expect(steps('dns.write_radvd_config', { 'content' => conf })).to eq([[:install, AmahiHelper::RADVD_CONF, conf, :radvd]])
       ['AdvDefaultLifetime 1800;', 'AdvSendAdvert off;', 'prefix 2600:1700:abcd::/64 {', 'prefix fd00::/48 {', 'RDNSS 2606:4700:4700::1111 {',
-       'RDNSS 9.9.9.9 {', 'DNSSL not a domain {', 'AdvManagedFlag on;', 'interface ens19 { AdvSendAdvert on; };'].each do |line|
+       'RDNSS 9.9.9.9 {', 'DNSSL not a domain {', 'AdvManagedFlag on;', 'interface ens19 { AdvSendAdvert on; };', 'interface .. {'].each do |line|
         expect(refusal('dns.write_radvd_config', { 'content' => "#{line}\n" })).to include('not one Amahi-kai writes'), line
       end
+      # radvd announces a router unless told it isn't one, in each interface's block
+      expect(refusal('dns.write_radvd_config', { 'content' => conf.sub("  AdvDefaultLifetime 0;\n", '') })).to include('the NAS is no router')
+      second = conf.lines.grep_v(/^#/).join.sub('ens19', 'ens18').sub("  AdvDefaultLifetime 0;\n", '')
+      expect(refusal('dns.write_radvd_config', { 'content' => conf + second })).to include('the NAS is no router')
+      expect(refusal('dns.write_radvd_config', { 'content' => conf.sub(/};\n\z/, '') })).to include('leaves a block open')
+      expect(refusal('dns.write_radvd_config', { 'content' => conf + conf.lines.grep_v(/^#/).join.sub('ens19', 'ens18') })).to be_nil
     end
 
     it 'puts only a unique local address on a real interface' do
@@ -1362,17 +1387,22 @@ RSpec.describe 'AmahiHelper' do
     let(:ran) { [] }
     let(:forwards) { [{ protocol: 'tcp', port: 8080, address: '10.99.0.60', to_port: 80 }] }
     let(:before_rules) { "# rules.before\n*filter\n:ufw-before-input - [0:0]\n-A ufw-before-input -i lo -j ACCEPT\nCOMMIT\n" }
+    let(:before6_rules) { "# rules.before\n*filter\n:ufw6-before-input - [0:0]\n-A ufw6-before-input -p udp -d ff02::fb --dport 5353 -j ACCEPT\nCOMMIT\n" }
 
     before do
       stub_const('AmahiHelper::NETPLAN_DIR', "#{dir}/netplan")
       stub_const('AmahiHelper::WAN_NETPLAN', "#{dir}/netplan/70-amahi-kai-wan.yaml")
+      stub_const('AmahiHelper::NETPLAN_APPLIED', "#{dir}/netplan-applied")
+      stub_const('AmahiHelper::ULA_UNIT', "#{dir}/amahi-kai-ula.service")
       stub_const('AmahiHelper::ROUTER_SYSCTL', "#{dir}/90-amahi-kai-router.conf")
       Dir.mkdir("#{dir}/netplan")
       stub_const('AmahiHelper::ROUTER_STATE', "#{dir}/router.json")
       stub_const('AmahiHelper::UFW_CONF', "#{dir}/ufw.conf")
       stub_const('AmahiHelper::UFW_BEFORE_RULES', "#{dir}/before.rules")
+      stub_const('AmahiHelper::UFW_BEFORE6_RULES', "#{dir}/before6.rules")
       File.write("#{dir}/ufw.conf", "ENABLED=yes\n")
       File.write("#{dir}/before.rules", before_rules)
+      File.write("#{dir}/before6.rules", before6_rules)
       allow(File).to receive(:executable?).and_call_original
       allow(File).to receive(:executable?).with(AmahiHelper::UFW).and_return(true)
       allow(File).to receive(:executable?).with(AmahiHelper::TAILSCALE).and_return(false)
@@ -1430,9 +1460,17 @@ RSpec.describe 'AmahiHelper' do
                                '-A amahi-kai-prerouting -i ens20 -p tcp --dport 8080 -j DNAT --to-destination 10.99.0.60:80',
                                "-A amahi-kai-postrouting -o ens20 -j MASQUERADE\n-A PREROUTING -j amahi-kai-prerouting\n-A POSTROUTING -j amahi-kai-postrouting\n",
                                "COMMIT\n# END amahi-kai router\n*filter\n")
-      # UFW's own rules stay, and the filter part sits in front of its ICMP accepts, before the table's COMMIT
+      # UFW's own rules stay, and the filter part sits in front of its ICMP and discovery accepts, before the table's COMMIT
       expect(rules).to end_with("-A ufw-before-input -i lo -j ACCEPT\n# BEGIN amahi-kai router filter\n" \
-                                "-I ufw-before-input 1 -i ens20 -p icmp --icmp-type echo-request -j DROP\n# END amahi-kai router filter\nCOMMIT\n")
+                                "-I ufw-before-input 1 -i ens20 -p icmp --icmp-type echo-request -j DROP\n" \
+                                "-I ufw-before-input 1 -i ens20 -p udp --dport 5353 -j DROP\n-I ufw-before-input 1 -i ens20 -p udp --dport 1900 -j DROP\n" \
+                                "# END amahi-kai router filter\nCOMMIT\n")
+      # IPv6's discovery too: Avahi would answer whoever shares the provider's network
+      expect(File.read(AmahiHelper::UFW_BEFORE6_RULES)).to eq(before6_rules.sub("COMMIT\n", "# BEGIN amahi-kai router filter\n" \
+                                                                                 "-I ufw6-before-input 1 -i ens20 -p udp --dport 5353 -j DROP\n" \
+                                                                                 "-I ufw6-before-input 1 -i ens20 -p udp --dport 1900 -j DROP\n" \
+                                                                                 "# END amahi-kai router filter\nCOMMIT\n"))
+      expect(File.read(AmahiHelper::NETPLAN_APPLIED)).to eq("#{helper.netplan_digest}\n")
       # Nothing in on the internet side comes first, before the interface gets its address
       expect(ran).to eq(['/usr/sbin/ufw insert 1 deny in on ens20', "#{AmahiHelper::NETPLAN} generate", "#{AmahiHelper::NETPLAN} apply",
                          '/usr/sbin/sysctl -q -w net.ipv4.ip_forward=1 net.ipv4.conf.all.rp_filter=1 net.ipv4.conf.all.accept_redirects=0 ' \
@@ -1593,6 +1631,7 @@ RSpec.describe 'AmahiHelper' do
                          'net.ipv4.conf.all.send_redirects=1 net.ipv4.conf.ens20.rp_filter=2 net.ipv4.conf.ens20.accept_redirects=1 ' \
                          'net.ipv4.conf.ens20.send_redirects=1 net.ipv4.conf.ens20.log_martians=0'])
       expect(File.read(AmahiHelper::UFW_BEFORE_RULES)).to eq(before_rules)
+      expect(File.read(AmahiHelper::UFW_BEFORE6_RULES)).to eq(before6_rules)
       expect(%w[WAN_NETPLAN ROUTER_SYSCTL ROUTER_STATE].map { |c| File.exist?(AmahiHelper.const_get(c)) }).to all(be false)
       ran.clear
       helper.do_router_off # nothing in place: nothing to do
@@ -1606,6 +1645,34 @@ RSpec.describe 'AmahiHelper' do
       expect(ran.first).to eq('/usr/sbin/ufw insert 1 deny in on ens20') # before netplan and every other rule
       expect(ran).to include('/usr/sbin/ufw route delete allow in on ens20 out on ens19 to 10.99.0.60 port 80 proto tcp')
       expect(ran).not_to include('/usr/sbin/ufw delete deny in on ens20', '/usr/sbin/ufw route delete allow in on ens19 out on ens20')
+    end
+
+    # An apply has networkd set up every interface it manages again: the internet side asks the
+    # provider for its lease again, and the NAS's own IPv6 address for DNS (made by its unit, not
+    # networkd) goes.
+    it "applies netplan only when a netplan file changed, and puts the NAS's own IPv6 address back after an apply" do
+      helper.do_router_on('ens19', 'ens20', [])
+      ran.clear
+      helper.do_router_on('ens19', 'ens20', forwards) # a forward added: nothing of netplan's changed
+      expect(ran.grep(/netplan/)).to be_empty
+      expect(ran).to include('/usr/sbin/ufw route allow in on ens20 out on ens19 to 10.99.0.60 port 80 proto tcp')
+
+      File.write(AmahiHelper::ULA_UNIT, "[Service]\n")
+      File.write("#{dir}/netplan/60-island.yaml", "network:\n  version: 2\n  ethernets:\n    ens19:\n      addresses: [fd99::1/64]\n")
+      ran.clear
+      helper.do_router_on('ens19', 'ens20', forwards) # a file changed meanwhile
+      expect(ran.first(4)).to eq(['/usr/sbin/ufw insert 1 deny in on ens20', "#{AmahiHelper::NETPLAN} generate", "#{AmahiHelper::NETPLAN} apply",
+                                  '/usr/bin/systemctl try-restart amahi-kai-ula.service'])
+
+      # An apply that failed isn't taken as applied: the next save tries again
+      File.write("#{dir}/netplan/60-island.yaml", "network:\n  version: 2\n  ethernets:\n    ens19:\n      addresses: [fd99::2/64]\n")
+      allow(helper).to receive(:run_command) do |argv|
+        ran << argv.reject { |a| a.is_a?(Hash) }.join(' ')
+        raise AmahiHelper::Failed, 'netplan exited 1' if argv[1] == 'apply'
+      end
+      expect { helper.do_router_on('ens19', 'ens20', forwards) }.to raise_error(AmahiHelper::Failed, /netplan exited 1/)
+      expect(ran.last).to eq('/usr/bin/systemctl try-restart amahi-kai-ula.service') # put back all the same
+      expect(helper.netplan_applied?).to be false
     end
 
     it "keeps a save's working file for the internet interface when netplan won't take the new one, shut all along" do
@@ -1710,7 +1777,21 @@ RSpec.describe 'AmahiHelper' do
         File.write(installer_file, "#{File.read(installer_file)}# edited by hand\n")
         expect(helper.do_router_off).to include('was changed since router mode set it up')
         expect(File.read(installer_file)).to include('edited by hand')
-        expect(File.exist?("#{installer_file}.amahi-kai-before-router")).to be true
+        # Its copy from before goes: a later session put back would undo the edit
+        expect(File.exist?("#{installer_file}.amahi-kai-before-router")).to be false
+      end
+
+      it "makes its copy again over one an earlier session left, and keeps the first copy of this one" do
+        File.write("#{installer_file}.amahi-kai-before-router", "network:\n  version: 2\n# from long ago\n")
+        helper.do_router_on('ens19', 'ens20', [])
+        expect(File.read("#{installer_file}.amahi-kai-before-router")).to eq(installer_yaml)
+        # The file changed by hand while the NAS is the router, its pin undone
+        File.write(installer_file, installer_yaml.sub('via: "192.168.1.1"', 'via: "192.168.1.254"'))
+        helper.do_router_on('ens19', 'ens20', [])
+        expect(File.read(installer_file)).to include('192.168.1.254', 'metric: 200') # pinned again
+        expect(File.read("#{installer_file}.amahi-kai-before-router")).to eq(installer_yaml) # this session's first copy, kept
+        helper.do_router_off
+        expect(File.read(installer_file)).to eq(installer_yaml)
       end
 
       it 'stays fixed when router mode goes off with DHCP still on, without its copy from before' do
@@ -1751,6 +1832,8 @@ RSpec.describe 'AmahiHelper' do
 
     before do
       stub_const('AmahiHelper::NETPLAN_DIR', "#{dir}/netplan")
+      stub_const('AmahiHelper::NETPLAN_APPLIED', "#{dir}/netplan-applied")
+      stub_const('AmahiHelper::ULA_UNIT', "#{dir}/amahi-kai-ula.service")
       stub_const('AmahiHelper::ROUTER_STATE', "#{dir}/router.json")
       stub_const('AmahiHelper::ADDRESS_STATE', "#{dir}/address.json")
       Dir.mkdir("#{dir}/netplan")
@@ -1900,7 +1983,7 @@ RSpec.describe 'AmahiHelper' do
         expect { helper.do_set_address('ens19', 'fixed', '10.99.0.5/24', nil, [], false) }.to raise_error(AmahiHelper::Failed, /netplan exited 1/)
         expect(File.read(installer_file)).to eq(installer_yaml)
         expect(File.exist?(AmahiHelper::ADDRESS_STATE)).to be false
-        allow(helper).to receive(:run_command) { |argv| raise AmahiHelper::Failed, 'netplan exited 2' if argv[1] == 'apply' && !argv.last.is_a?(Hash) }
+        allow(helper).to receive(:run_command) { |argv| raise AmahiHelper::Failed, 'netplan exited 2' if argv[1] == 'apply' && !argv.last[:allow_failure] }
         expect { helper.do_set_address('ens19', 'fixed', '10.99.0.5/24', nil, [], false) }.to raise_error(AmahiHelper::Failed, /netplan exited 2/)
         expect(File.read(installer_file)).to eq(installer_yaml)
         expect(state).to include('state' => 'reverted')
@@ -3200,6 +3283,35 @@ RSpec.describe 'AmahiHelper' do
 
     it "carries the steps' data and notes" do
       expect(helper.execute('system.reboot', {})).to eq('ok' => true, 'mount_point' => '/mnt/a', 'notes' => ['ignored: udevadm'])
+    end
+  end
+
+  # A keep and a revert of the NAS's address, or two saves rewriting the router's rules, would
+  # interleave their steps.
+  describe 'the DNS and network operations that change what is in place' do
+    let(:dir) { Dir.mktmpdir }
+
+    before do
+      stub_const('AmahiHelper::NETWORK_LOCK', "#{dir}/network.lock")
+      stub_const('AmahiHelper::NETWORK_LOCK_WAIT', 0.3)
+      allow(helper).to receive(:check_environment!)
+      allow(helper).to receive(:log)
+      allow(Process).to receive(:euid).and_return(0)
+      allow(helper).to receive(:perform).and_return(nil)
+    end
+
+    after { FileUtils.rm_rf(dir) }
+
+    it 'run one at a time: the next waits its turn, and is refused when it waits too long' do
+      expect(AmahiHelper::NETWORK_LOCKED - AmahiHelper::OPERATIONS.keys).to be_empty
+      File.open(AmahiHelper::NETWORK_LOCK, File::RDWR | File::CREAT) do |held|
+        held.flock(File::LOCK_EX) # another operation's
+        expect { helper.execute('network.revert_address', {}) }.to raise_error(AmahiHelper::Refused, /another network change/)
+        expect(helper).not_to have_received(:perform)
+        expect(helper.execute('dns.stats', {})).to eq('ok' => true) # changes nothing: no wait
+      end
+      expect(helper.execute('network.revert_address', {})).to eq('ok' => true)
+      expect(helper).to have_received(:perform).with([:revert_address])
     end
   end
 

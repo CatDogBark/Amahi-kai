@@ -403,6 +403,18 @@ RSpec.describe DnsService do
       expect(Privileged.calls.map(&:first)).to eq(%w[network.router_on])
     end
 
+    it "says why the rules didn't follow a change, for the page to tell the admin" do
+      expect(described_class.rewrite_router_problem).to be_nil # not the router: nothing to follow
+      Setting.set('dns_mode', 'router')
+      Setting.set('dns_wan_interface', 'ens19')
+      expect(described_class.rewrite_router_problem).to be_nil
+      expect(Privileged.calls.map(&:first)).to eq(%w[network.router_on])
+      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('network.router_on', 'ufw: no'))
+      expect(described_class.rewrite_router_problem).to eq('ufw: no')
+      Setting.set('dns_wan_interface', 'eth9') # a USB adapter that reset
+      expect(described_class.rewrite_router_problem).to eq("the router's internet port eth9 isn't here")
+    end
+
     it "counts what the internet side dropped, since the later of boot and the rules' load, only while the NAS is the router" do
       expect(described_class.wan_drops).to be_nil
       Setting.set('dns_mode', 'router')

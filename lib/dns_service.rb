@@ -188,6 +188,18 @@ module DnsService
       true
     end
 
+    # rewrite_router! for a change the page reports (a port forward, LAN only): nil once the
+    # rules follow it, or while the NAS isn't the router; else why they don't.
+    def rewrite_router_problem
+      return nil unless on? && router? && installed?
+      return "the router's internet port #{Setting.get('dns_wan_interface')} isn't here" unless wan_interface
+
+      rewrite_router!
+      nil
+    rescue Privileged::Error => e
+      e.message
+    end
+
     def router_args
       { lan: interface, wan: wan_interface, forwards: PortForward.for_helper(lan_prefix),
         dns: (force_dns? ? server_addresses.first : nil), lan_only: Host.lan_only_addresses(lan_prefix) }

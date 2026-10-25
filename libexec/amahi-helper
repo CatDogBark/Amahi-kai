@@ -69,6 +69,10 @@ module AmahiHelper
   # the devices dnsmasq gave addresses to (do_sync_leases).
   UNBOUND_CONF = '/etc/unbound/unbound.conf.d/amahi-kai.conf'
   UNBOUND_LEASES = '/etc/unbound/unbound.conf.d/amahi-kai-leases.conf'
+  # Names a device can't take in the NAS's DNS by asking DHCP for them: browsers look for their
+  # proxy settings at wpad and Windows for an IPv6 tunnel at isatap (the two Windows' own DNS
+  # server blocks), and localhost is every machine's own.
+  RESERVED_LEASE_NAMES = %w[localhost wpad isatap].freeze
   CA_CERTS = '/etc/ssl/certs/ca-certificates.crt'
   # While dnsmasq hands out addresses, systemd runs dns.sync_leases each time its lease file
   # changes, so the devices' names answer in DNS. PathModified, not PathChanged: dnsmasq keeps
@@ -189,6 +193,11 @@ module AmahiHelper
   NETPLAN = '/usr/sbin/netplan'
   NETPLAN_DIR = '/etc/netplan'
   WAN_NETPLAN = "#{NETPLAN_DIR}/70-amahi-kai-wan.yaml".freeze
+  # The netplan files as the helper last applied them (a digest): a save that changes none of
+  # them doesn't apply them again. An apply has networkd set up every interface it manages
+  # again, so the internet side asks its provider for its lease again and addresses networkd
+  # didn't make (the NAS's own IPv6 one for DNS, ULA_UNIT) go.
+  NETPLAN_APPLIED = "#{BLOCKLIST_DIR}/netplan-applied".freeze
   # The LAN interface's own default route (to the router the NAS replaces) goes behind the
   # internet interface's (50). Its netplan file is kept as it was, for the way back.
   LAN_ROUTE_METRIC = 200
@@ -197,6 +206,7 @@ module AmahiHelper
   ROUTER_STATE = "#{BLOCKLIST_DIR}/router.json".freeze
   UFW_CONF = '/etc/ufw/ufw.conf'
   UFW_BEFORE_RULES = '/etc/ufw/before.rules'
+  UFW_BEFORE6_RULES = '/etc/ufw/before6.rules'
   ROUTER_BEGIN = '# BEGIN amahi-kai router'
   ROUTER_END = '# END amahi-kai router'
   # The NAT block's rules live in chains of the NAS's own, which the block flushes before
@@ -210,9 +220,13 @@ module AmahiHelper
   # the NAS answered pings from the internet.
   ROUTER_FILTER_BEGIN = '# BEGIN amahi-kai router filter'
   ROUTER_FILTER_END = '# END amahi-kai router filter'
+  # Service discovery (mDNS, SSDP), which UFW's before rules accept in from anywhere, for IPv4
+  # and IPv6 (before6.rules gets a filter part of its own): dropped in on the internet side,
+  # where Avahi would answer whoever shares the provider's network.
+  DISCOVERY_PORTS = %w[5353 1900].freeze
   # The shape of the router's rules, kept in ROUTER_STATE: bumped whenever it changes, so the
   # app's resync after an update (DnsService.resync!) puts the new shape in place.
-  ROUTER_RULES_VERSION = 3
+  ROUTER_RULES_VERSION = 4
   # The router's kernel settings besides forwarding, for all interfaces and for the internet
   # side: strict reverse-path filtering there (Ubuntu sets every interface loose, 2, and the
   # kernel takes the stricter of all and the interface's own, so all goes to 1 and only the
@@ -244,6 +258,16 @@ module AmahiHelper
   # A change left waiting this long (the NAS rebooted meanwhile, and its timers with it) is
   # taken as kept: whoever asks for the next one reached the NAS as it is.
   ADDRESS_STALE = 600
+  # The DNS and network operations that change what's in place run one at a time, the next
+  # waiting its turn for up to NETWORK_LOCK_WAIT seconds: a keep and a revert of the NAS's
+  # address, or two saves rewriting the router's rules, would otherwise interleave their steps.
+  NETWORK_LOCK = '/run/amahi-kai-network.lock'
+  NETWORK_LOCK_WAIT = 120
+  NETWORK_LOCKED = %w[
+    dns.write_config dns.remove_config dns.sync_leases dns.set_blocklists dns.blocking_off dns.write_radvd_config
+    dns.remove_radvd_config dns.set_own_address dns.remove_own_address network.write_dnsmasq_config network.router_on
+    network.router_off network.set_address network.apply_address network.keep_address network.revert_address
+  ].freeze
   # Addresses an interface can't have.
   UNUSABLE_NETS = %w[0.0.0.0/8 127.0.0.0/8 224.0.0.0/3].map { |net| IPAddr.new(net) }.freeze
 
@@ -1664,6 +1688,11 @@ module AmahiHelper
   # (greyhole-dfree reads greyhole.conf, which the people connected can't).
   GREYHOLE_DFREE = "#{APP_DIR}/libexec/amahi-dfree"
 
+  # A network interface's name, as the checks below take it: at most 15 characters, starting
+  # with a letter or digit, so neither . nor .. (both are folders in /sys/class/net) passes,
+  # nor a name a command would read as an option.
+  IFNAME = '[A-Za-z0-9][A-Za-z0-9_.-]{0,14}'
+
   # --- dnsmasq config checks ---------------------------------------------------------
 
   # dnsmasq can run scripts as root and read any file from its config, and the app
@@ -1682,7 +1711,7 @@ module AmahiHelper
     /\Aexcept-interface=lo\z/,
     /\Aport=0\z/,
     /\Adhcp-option=option:dns-server,#{IPV4}\z/,
-    /\Ainterface=[A-Za-z0-9_.-]{1,15}\z/
+    /\Ainterface=#{IFNAME}\z/
   ].freeze
   # Greyhole runs as root and some of its settings run commands, so its config may only
   # hold the lines the app generates. Pool drives must be data drives under /mnt.
@@ -1704,6 +1733,11 @@ module AmahiHelper
   # A name with its final dot ("nas.home.arpa."), and a TLS name ("dns.quad9.net").
   UNBOUND_NAME = '(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+'
   TLS_NAME = '[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?'
+  # Never the whole internet, line by line or added up: the networks Unbound answers come to at
+  # most this many addresses of each family (a /7's worth of IPv4, room for a /8 LAN beside
+  # Tailscale's range; a /32's worth of IPv6, the link-local range aside).
+  ACCESS_CONTROL_MAX = { 4 => 2**25, 6 => 2**96 }.freeze
+  LINK_LOCAL6 = IPAddr.new('fe80::/10')
 
   class << self
     # --- Entry points --------------------------------------------------------------
@@ -1737,7 +1771,7 @@ module AmahiHelper
       check_environment!
       raise Refused, 'the helper must run as root' unless Process.euid.zero?
       values = validate(op, args)
-      results = plan(op, values).filter_map { |step| perform(step) }
+      results = one_at_a_time(op) { plan(op, values).filter_map { |step| perform(step) } }
       reply = { 'ok' => true }
       results.grep(Hash).each { |data| reply.merge!(data) }
       notes = results.grep(String)
@@ -1748,6 +1782,20 @@ module AmahiHelper
       raise
     ensure
       log(op, args, result, error, started)
+    end
+
+    # The operation's steps, holding NETWORK_LOCK when it's one of NETWORK_LOCKED.
+    def one_at_a_time(op)
+      return yield unless NETWORK_LOCKED.include?(op)
+
+      File.open(NETWORK_LOCK, File::RDWR | File::CREAT, 0o600) do |lock|
+        deadline = monotonic_now + NETWORK_LOCK_WAIT
+        until lock.flock(File::LOCK_EX | File::LOCK_NB)
+          raise Refused, 'another network change is still being made; try again in a minute' if monotonic_now > deadline
+          pause(0.5)
+        end
+        yield
+      end
     end
 
     # A job that can run for minutes (APP_JOBS) runs again as a unit of its own, APP_JOB_UNIT with
@@ -1959,20 +2007,28 @@ module AmahiHelper
       IPAddr.new(value).to_s
     end
 
-    # radvd's config: only what Amahi-kai writes, with unique local addresses.
+    # radvd's config: only what Amahi-kai writes, with unique local addresses, and every
+    # interface's block saying the NAS is no router (radvd announces one by default).
     def radvd_conf(value)
       value = string(value, 'content', max: 4096)
+      depth = 0
+      no_router = false
       value.each_line do |line|
         line = line.strip
         next if line.empty? || line.start_with?('#')
         raise Refused, "radvd line #{line.inspect} is not one Amahi-kai writes" unless radvd_line?(line)
+        no_router = false if depth.zero?
+        no_router = true if depth == 1 && line == 'AdvDefaultLifetime 0;'
+        depth += line == '};' ? -1 : (line.end_with?('{') ? 1 : 0)
+        raise Refused, "radvd's config must say for each interface that the NAS is no router (AdvDefaultLifetime 0)" if depth.zero? && !no_router
       end
+      raise Refused, "radvd's config leaves a block open" unless depth.zero?
       value
     end
 
     def radvd_line?(line)
       return true if ['AdvSendAdvert on;', 'AdvDefaultLifetime 0;', 'AdvOnLink on;', 'AdvAutonomous on;', '};'].include?(line)
-      return true if line.match?(/\Ainterface [A-Za-z0-9_.-]{1,15} \{\z/)
+      return true if line.match?(/\Ainterface #{IFNAME} \{\z/o)
       return true if line.match?(/\ADNSSL #{UNBOUND_NAME.delete_suffix('+')}*[a-z0-9-]+ \{\z/o)
       if (match = line.match(%r{\Aprefix ([0-9a-f:]+)/64 \{\z}))
         return ip_address?(match[1], :ipv6?) && ULA.include?(IPAddr.new(match[1]))
@@ -2064,11 +2120,13 @@ module AmahiHelper
     # A network interface this machine has, by name ("ens18").
     def network_interface(value)
       value = string(value, 'interface', max: 15)
-      raise Refused, "#{value.inspect} isn't a network interface here" unless value.match?(/\A[A-Za-z0-9_.-]{1,15}\z/) &&
+      raise Refused, "#{value.inspect} isn't a network interface here" unless value.match?(/\A#{IFNAME}\z/o) &&
                                                                           File.exist?("/sys/class/net/#{value}")
       value
     end
 
+    # dnsmasq hands out addresses and answers no DNS (port=0): Unbound does, and without the
+    # line dnsmasq would answer on port 53 too.
     def dnsmasq_conf(value, allowed)
       value = string(value, 'content', max: 64 * 1024)
       value.each_line do |line|
@@ -2076,17 +2134,35 @@ module AmahiHelper
         next if line.empty? || line.start_with?('#')
         raise Refused, "dnsmasq line #{line.inspect} is not one Amahi-kai writes" unless allowed.any? { |re| line.match?(re) }
       end
+      raise Refused, "dnsmasq's config must answer no DNS (port=0)" unless value.each_line.any? { |line| line.strip == 'port=0' }
       value
     end
 
     def unbound_conf(value)
       value = string(value, 'content', max: 256 * 1024)
+      allowed = []
       value.each_line do |line|
         line = line.strip
         next if line.empty? || line.start_with?('#')
         raise Refused, "Unbound line #{line.inspect} is not one Amahi-kai writes" unless unbound_line?(line)
+        key, rest = line.split(/:\s+/, 2)
+        allowed << rest.split(' ', 2).first if key == 'access-control'
       end
+      access_control_total!(allowed)
       value
+    end
+
+    # The networks the access-control lines let in ("10.99.0.0/24"), each counted once and added
+    # up per family, the link-local range aside (ACCESS_CONTROL_MAX).
+    def access_control_total!(networks)
+      totals = Hash.new(0)
+      networks.map { |network| IPAddr.new(network) }.uniq { |ip| [ip.to_s, ip.prefix] }.each do |ip|
+        next if LINK_LOCAL6.include?(ip)
+        family = ip.ipv4? ? 4 : 6
+        totals[family] += 2**((family == 4 ? 32 : 128) - ip.prefix)
+      end
+      return unless totals.any? { |family, total| total > ACCESS_CONTROL_MAX[family] }
+      raise Refused, "Unbound's access-control lines add up to too much of the internet: it would answer far more than your networks"
     end
 
     def unbound_line?(line)
@@ -3939,27 +4015,30 @@ module AmahiHelper
     # Router mode on. The internet side is shut first, before its interface gets an address and
     # before any rule from a previous state goes, so a save never leaves it open, not for a
     # moment and not after a failure partway. Then the internet interface's address (checked
-    # by netplan generate before it's applied), forwarding, the NAT block, and UFW's other rules:
-    # the LAN out, each forward in, the denies in front of the LAN's way out. Only the rules a
-    # previous state had and this one doesn't are deleted; the rest stay where they are (UFW
-    # skips adding a rule it has).
+    # by netplan generate before it's applied, and applied only when a netplan file changed),
+    # forwarding, the NAT block, and UFW's other rules: the LAN out, each forward in, the denies
+    # in front of the LAN's way out. Only the rules a previous state had and this one doesn't are
+    # deleted; the rest stay where they are (UFW skips adding a rule it has).
     def do_router_on(lan, wan, forwards, dns = nil, lan_only = [])
       previous = read_json(ROUTER_STATE)
       tailscale = File.executable?(TAILSCALE)
       shield_router(wan, tailscale)
-      pinned = pin_lan_netplan(lan, wan)
+      previous_pinned = previous && previous['pinned'].is_a?(Hash) ? previous['pinned'] : {}
+      pinned = pin_lan_netplan(lan, wan, previous_pinned.keys)
       working = File.exist?(WAN_NETPLAN) ? File.read(WAN_NETPLAN) : nil
-      do_install(WAN_NETPLAN, wan_netplan(wan), nil, '0600')
-      begin
-        run_command([NETPLAN, 'generate'])
-      rescue Failed
-        # A save keeps the file that worked; a first try leaves nothing behind.
-        working ? do_install(WAN_NETPLAN, working, nil, '0600') : do_remove_files(WAN_NETPLAN)
-        restore_lan_netplan(pinned)
-        unshield_router(wan, tailscale) unless previous
-        raise
+      do_install(WAN_NETPLAN, wan_netplan(wan), nil, '0600') unless working == wan_netplan(wan)
+      unless netplan_applied?
+        begin
+          run_command([NETPLAN, 'generate'])
+        rescue Failed
+          # A save keeps the file that worked; a first try leaves nothing behind.
+          working ? do_install(WAN_NETPLAN, working, nil, '0600') : do_remove_files(WAN_NETPLAN)
+          restore_lan_netplan(pinned)
+          unshield_router(wan, tailscale) unless previous
+          raise
+        end
+        netplan_apply
       end
-      run_command([NETPLAN, 'apply'])
       # The kernel settings from before router mode, kept across its saves, for the way back.
       sysctl_before = sysctl_before(previous, wan)
       do_install(ROUTER_SYSCTL, router_sysctl(wan), nil)
@@ -3968,6 +4047,7 @@ module AmahiHelper
                 'dns' => dns, 'tailscale' => tailscale, 'lan_only' => lan_only }
       (router_rules(previous || {}) - router_rules(state)).each { |words| ufw_delete(words) }
       write_router_nat(wan, forwards, lan, dns, lan_only)
+      write_router_filter6(wan)
       run_command([UFW, 'route', 'allow', 'in', 'on', lan, 'out', 'on', wan])
       forwards.each do |f|
         run_command([UFW, 'route', 'allow', 'in', 'on', wan, 'out', 'on', lan, 'to', f[:address], 'port', f[:to_port].to_s, 'proto', f[:protocol]])
@@ -3981,8 +4061,7 @@ module AmahiHelper
       lan_only.each { |address| run_command([UFW, 'route', 'insert', '1', 'deny', 'in', 'on', lan, 'out', 'on', wan, 'from', address]) }
       run_command([UFW, 'reload'])
       settle_router_nat(lan, wan)
-      previous_pinned = previous ? previous['pinned'] : nil
-      state.merge!('pinned' => (previous_pinned || {}).merge(pinned), 'sysctl' => sysctl_before, 'since' => Time.now.to_i,
+      state.merge!('pinned' => previous_pinned.merge(pinned), 'sysctl' => sysctl_before, 'since' => Time.now.to_i,
                    'rules' => ROUTER_RULES_VERSION)
       state_dir!(ROUTER_STATE)
       do_install(ROUTER_STATE, "#{JSON.generate(state)}\n", nil, '0644')
@@ -4000,15 +4079,16 @@ module AmahiHelper
       pinned = state && state['pinned']
       notes = keep_lan ? forget_lan_backups(pinned) : restore_lan_netplan(pinned)
       if File.exist?(WAN_NETPLAN)
-        wan = File.read(WAN_NETPLAN)[/^    ([A-Za-z0-9_.-]{1,15}):$/, 1]
+        wan = File.read(WAN_NETPLAN)[/^    (#{IFNAME}):$/o, 1]
         do_remove_files(WAN_NETPLAN)
-        run_command([NETPLAN, 'apply', { allow_failure: true }])
+        netplan_apply(allow_failure: true)
         # netplan apply leaves an interface it no longer knows as it was; its address goes too.
         run_command([IP, '-4', 'addr', 'flush', 'dev', wan, { allow_failure: true }]) if wan
       end
       if File.executable?(UFW)
         ufw_router_rules_off(state) if state
         write_router_nat(nil, [])
+        write_router_filter6(nil)
         run_command([UFW, 'reload', { allow_failure: true }]) if ufw_enabled?
         clear_router_nat(state)
       end
@@ -4093,11 +4173,13 @@ module AmahiHelper
     # router the NAS replaces would run out), and every interface but the internet's has its
     # default route, if it has one, put behind the internet's (a third interface, a management
     # one say, would otherwise take the devices' traffic). A file changed is kept as it was
-    # beside it (NETPLAN_BACKUP_SUFFIX), once. Comments in it don't survive (it's read and written
-    # as YAML); the installer's file has none. Returns { path => sha256 of what was written }, for
-    # the way back.
-    def pin_lan_netplan(lan, wan, dir = NETPLAN_DIR)
-      Dir.glob(File.join(dir, '*.yaml')).sort.each_with_object({}) do |path, pinned|
+    # beside it (NETPLAN_BACKUP_SUFFIX), once: a copy is kept from one save to the next only for
+    # the files +kept+ lists (those this router session changed), and one an earlier session left
+    # behind is out of date, so it's made again. Comments in it don't survive (it's read and
+    # written as YAML); the installer's file has none. Returns { path => sha256 of what was
+    # written }, for the way back.
+    def pin_lan_netplan(lan, wan, kept = [])
+      Dir.glob(File.join(NETPLAN_DIR, '*.yaml')).sort.each_with_object({}) do |path, pinned|
         data = netplan_yaml(path) or next
         before = File.read(path)
         original = Marshal.load(Marshal.dump(data))
@@ -4111,7 +4193,7 @@ module AmahiHelper
         next if data == original # nothing to change: the file stays as it is, comments and all
         content = YAML.dump(data)
         backup = path + NETPLAN_BACKUP_SUFFIX
-        do_install(backup, before, nil, '0600') unless File.exist?(backup)
+        do_install(backup, before, nil, '0600') unless File.exist?(backup) && kept.include?(path)
         do_install(path, content, nil, '0600')
         pinned[path] = Digest::SHA256.hexdigest(content)
       end
@@ -4143,26 +4225,52 @@ module AmahiHelper
       nil
     end
 
+    # netplan apply, recorded in NETPLAN_APPLIED, and the NAS's own IPv6 address for DNS put back
+    # on its interface after it, whatever came of it (networkd takes it off). Raises, or with
+    # +allow_failure+ returns the note.
+    def netplan_apply(allow_failure: false)
+      note = run_command([NETPLAN, 'apply', { allow_failure: allow_failure }])
+      unless note
+        state_dir!(NETPLAN_APPLIED)
+        do_install(NETPLAN_APPLIED, "#{netplan_digest}\n", nil, '0644')
+      end
+      note
+    ensure
+      run_command(['/usr/bin/systemctl', 'try-restart', File.basename(ULA_UNIT), { allow_failure: true }]) if File.exist?(ULA_UNIT)
+    end
+
+    # The netplan files are as the helper last applied them.
+    def netplan_applied?
+      File.exist?(NETPLAN_APPLIED) && File.read(NETPLAN_APPLIED).strip == netplan_digest
+    end
+
+    def netplan_digest
+      Digest::SHA256.hexdigest(Dir.glob(File.join(NETPLAN_DIR, '*.yaml')).sort.map { |path| "#{path}\n#{File.read(path)}\n" }.join)
+    end
+
     # Puts back the files pin_lan_netplan changed, each only while it's still what the helper
-    # wrote (one changed since is left, and said so). Returns the notes, or nil.
+    # wrote: one changed since is left, and said so, and its copy from before goes (put back
+    # later, it would undo that change too). Returns the notes, or nil.
     def restore_lan_netplan(pinned)
       notes = []
       (pinned || {}).each do |path, sha|
         backup = path + NETPLAN_BACKUP_SUFFIX
         next unless File.exist?(backup)
         if File.exist?(path) && Digest::SHA256.hexdigest(File.read(path)) != sha
-          notes << "#{path} was changed since router mode set it up, so it's left as it is (its copy from before is #{backup})"
-          next
+          notes << "#{path} was changed since router mode set it up, so it's left as it is"
+        else
+          do_install(path, File.read(backup), nil, '0600')
         end
-        do_install(path, File.read(backup), nil, '0600')
         do_remove_files(backup)
       end
       notes.empty? ? nil : notes.join('; ')
     end
 
+    # Any of router mode's files, or its block in UFW's rules (before6.rules has only the filter
+    # part, whose marker begins with ROUTER_BEGIN too).
     def router_in_place?
       [ROUTER_STATE, WAN_NETPLAN, ROUTER_SYSCTL].any? { |path| File.exist?(path) } ||
-        (File.exist?(UFW_BEFORE_RULES) && File.read(UFW_BEFORE_RULES).include?(ROUTER_BEGIN))
+        [UFW_BEFORE_RULES, UFW_BEFORE6_RULES].any? { |path| File.exist?(path) && File.read(path).include?(ROUTER_BEGIN) }
     end
 
     def ufw_router_rules_off(state)
@@ -4255,7 +4363,7 @@ module AmahiHelper
       arm_timer(ADDRESS_REVERT_UNIT, ADDRESS_KEEP_WAIT, 'network.revert_address') if state['guard']
       write_address_state(state.merge('applied' => true, 'until' => state['guard'] ? Time.now.to_i + ADDRESS_KEEP_WAIT : nil))
       begin
-        run_command([NETPLAN, 'apply'])
+        netplan_apply
       rescue Failed
         do_revert_address
         raise
@@ -4286,7 +4394,7 @@ module AmahiHelper
       stop_timer(ADDRESS_REVERT_UNIT)
       restore_address_files(state['files'], state['created'])
       if state['applied']
-        run_command([NETPLAN, 'apply', { allow_failure: true }])
+        netplan_apply(allow_failure: true)
         address = state['address'].to_s
         if state['mode'] == 'fixed' && !Array(state['before']).include?(address.split('/').first)
           run_command([IP, '-4', 'addr', 'del', address, 'dev', state['interface'], { allow_failure: true }])
@@ -4400,13 +4508,14 @@ module AmahiHelper
       content = content.sub(/#{Regexp.escape(ROUTER_BEGIN)}\n.*?#{Regexp.escape(ROUTER_END)}\n/m, '')
       content = content.sub(/#{Regexp.escape(ROUTER_FILTER_BEGIN)}\n.*?#{Regexp.escape(ROUTER_FILTER_END)}\n/m, '')
       if wan
-        # In front of UFW's own ICMP accepts (inserted first, before the filter table's COMMIT):
-        # the NAS doesn't answer pings from the internet, and a kept-off device can't ping out.
-        filter = [ROUTER_FILTER_BEGIN, "-I ufw-before-input 1 -i #{wan} -p icmp --icmp-type echo-request -j DROP"]
+        # In front of UFW's own ICMP and discovery accepts (inserted first, before the filter
+        # table's COMMIT): the NAS doesn't answer pings or service discovery from the internet,
+        # and a kept-off device can't ping out.
+        filter = [ROUTER_FILTER_BEGIN, "-I ufw-before-input 1 -i #{wan} -p icmp --icmp-type echo-request -j DROP",
+                  *discovery_drops('ufw-before-input', wan)]
         lan_only.each { |address| filter << "-I ufw-before-forward 1 -i #{lan} -o #{wan} -s #{address} -j DROP" } if lan
         filter << ROUTER_FILTER_END
-        commit = content.rindex("COMMIT\n") or raise Failed, "#{UFW_BEFORE_RULES} has no COMMIT to put the filter rules before"
-        content = "#{content[0...commit]}#{filter.join("\n")}\n#{content[commit..]}"
+        content = before_commit(content, filter, UFW_BEFORE_RULES)
         lines = [ROUTER_BEGIN, '*nat', ':PREROUTING ACCEPT [0:0]', ':POSTROUTING ACCEPT [0:0]',
                  ":#{NAT_PREROUTING} - [0:0]", ":#{NAT_POSTROUTING} - [0:0]", "-F #{NAT_PREROUTING}", "-F #{NAT_POSTROUTING}"]
         if dns && lan
@@ -4423,6 +4532,27 @@ module AmahiHelper
       do_install(UFW_BEFORE_RULES, content, nil, '0640')
     rescue SystemCallError => e
       raise Failed, "couldn't read #{UFW_BEFORE_RULES}: #{e.message}"
+    end
+
+    # UFW's before6.rules with the block's IPv6 filter part (service discovery in on the internet
+    # side dropped), or without it, given nil. Nothing to do where UFW has no IPv6 rules.
+    def write_router_filter6(wan)
+      return unless File.exist?(UFW_BEFORE6_RULES)
+      content = File.read(UFW_BEFORE6_RULES).sub(/#{Regexp.escape(ROUTER_FILTER_BEGIN)}\n.*?#{Regexp.escape(ROUTER_FILTER_END)}\n/m, '')
+      content = before_commit(content, [ROUTER_FILTER_BEGIN, *discovery_drops('ufw6-before-input', wan), ROUTER_FILTER_END], UFW_BEFORE6_RULES) if wan
+      do_install(UFW_BEFORE6_RULES, content, nil, '0640')
+    rescue SystemCallError => e
+      raise Failed, "couldn't read #{UFW_BEFORE6_RULES}: #{e.message}"
+    end
+
+    def discovery_drops(chain, wan)
+      DISCOVERY_PORTS.map { |port| "-I #{chain} 1 -i #{wan} -p udp --dport #{port} -j DROP" }
+    end
+
+    # +lines+ put in a UFW rules file just before its last COMMIT: the filter table's end.
+    def before_commit(content, lines, path)
+      commit = content.rindex("COMMIT\n") or raise Failed, "#{path} has no COMMIT to put the filter rules before"
+      "#{content[0...commit]}#{lines.join("\n")}\n#{content[commit..]}"
     end
 
     # The router's kernel settings (ROUTER_SYSCTL_ALL, ROUTER_SYSCTL_WAN), forwarding first, as
@@ -4466,7 +4596,7 @@ module AmahiHelper
     # The sysctl arguments that put the settings back.
     def sysctl_restore(state)
       Hash(state && state['sysctl']).filter_map do |key, value|
-        "#{key}=#{value}" if key.to_s.match?(%r{\Anet[./]ipv4[./]conf[./][A-Za-z0-9_.-]{1,15}[./][a-z_]+\z}) && value.to_s.match?(/\A[0-9]\z/)
+        "#{key}=#{value}" if key.to_s.match?(%r{\Anet[./]ipv4[./]conf[./]#{IFNAME}[./][a-z_]+\z}o) && value.to_s.match?(/\A[0-9]\z/)
       end
     end
 
@@ -4568,7 +4698,7 @@ module AmahiHelper
     # The interface a dnsmasq config hands out addresses on, or nil when it hands out none.
     def dhcp_interface(content)
       return unless content.match?(/^dhcp-range=/)
-      content[/^interface=([A-Za-z0-9_.-]{1,15})$/, 1]
+      content[/^interface=(#{IFNAME})$/o, 1]
     end
 
     def dhcp_names_on
@@ -4590,14 +4720,14 @@ module AmahiHelper
 
     # The names of the devices dnsmasq gave addresses to, as Unbound's local data
     # (UNBOUND_LEASES): name.<domain> and name, with reverse lookups. Only names that are one
-    # label (devices choose their own), on IPv4 addresses, and not one Amahi-kai's config
-    # already gives (the NAS, fixed hosts, DNS aliases). Written, and Unbound reloaded, only
-    # when they change.
+    # label (devices choose their own), on IPv4 addresses, and neither reserved
+    # (RESERVED_LEASE_NAMES) nor one Amahi-kai's config already gives (the NAS, fixed hosts, DNS
+    # aliases). Written, and Unbound reloaded, only when they change.
     def do_sync_leases
       return 'DNS is off' unless File.exist?(UNBOUND_CONF)
       config = File.read(UNBOUND_CONF)
       domain = config[/^\s*local-zone: "(#{UNBOUND_NAME})" static$/o, 1] or return 'DNS has no local domain'
-      taken = config.scan(/^\s*local-data: "([a-z0-9-]+)\./).flatten
+      taken = config.scan(/^\s*local-data: "([a-z0-9-]+)\./).flatten + RESERVED_LEASE_NAMES
       lines = ['# Names of the devices DHCP gave addresses to: written by Amahi-kai, changes here are lost', 'server:']
       dhcp_leases.each do |address, name|
         next if taken.include?(name)

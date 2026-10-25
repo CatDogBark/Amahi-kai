@@ -330,10 +330,16 @@ describe 'Network → DNS & DHCP', type: :request do
         expect(Privileged.calls).to be_empty
       end
 
-      it "refuses to make the interface you're connected through the internet side" do
+      it "refuses to make the port you're connected through the internet side, by the port the request came in on" do
         Setting.set('dns_interface', 'ens19')
-        put '/network/internet', params: router.merge(wan_interface: 'ens18'), headers: { 'REMOTE_ADDR' => '192.168.1.74' }
+        allow(NetworkAddress).to receive(:arrival_interface).and_return('ens18')
+        put '/network/internet', params: router.merge(wan_interface: 'ens18')
         expect(flash[:alert]).to include("You're connected through ens18")
+        expect(Privileged.calls).to be_empty
+        # A browser on ens18's network that came in through the LAN port isn't cut off
+        allow(NetworkAddress).to receive(:arrival_interface).and_return('ens19')
+        put '/network/internet', params: router.merge(wan_interface: 'ens18'), headers: { 'REMOTE_ADDR' => '192.168.1.74' }
+        expect(flash[:notice]).to include('The NAS is the router')
       end
 
       it "saves, and puts the router's rules in before DHCP hands out the NAS as the way out" do
@@ -398,6 +404,27 @@ describe 'Network → DNS & DHCP', type: :request do
         delete "/network/dns/forwards/#{PortForward.last.id}"
         expect(flash[:notice]).to eq('No longer forwarding tcp 8080 → 80.')
         expect(Privileged.calls.last.last[:forwards]).to eq([])
+      end
+
+      it "says when the router's rules couldn't follow a forward, and the page shows them behind until a save" do
+        Setting.set('dns_mode', 'router')
+        Setting.set('dns_wan_interface', 'ens19')
+        allow(Privileged).to receive(:call).and_call_original
+        allow(Privileged).to receive(:call).with('network.router_on', any_args).and_raise(Privileged::Error.new('network.router_on', 'ufw: no'))
+        post '/network/dns/forwards', params: { port_forward: { port: '8080', protocol: 'tcp', address: '60' } }
+        expect(flash[:alert]).to eq("Forwarding tcp 8080 to 192.168.1.60, but the router's rules weren't rewritten (ufw: no), so the port " \
+                                    "isn't let in until a save on this page puts them in place.")
+        expect(PortForward.count).to eq(1) # saved all the same
+        delete "/network/dns/forwards/#{PortForward.last.id}"
+        expect(flash[:alert]).to include('No longer forwarding tcp 8080, but', 'so the port is still let in until a save')
+
+        allow(DnsService).to receive_messages(router_state: { 'lan' => 'ens18', 'wan' => 'ens19', 'forwards' => [] }, running?: true, check: nil,
+                                              router_stale?: true)
+        get '/network/internet'
+        expect(response.body).to include('Rules behind', "The router's rules are behind the settings here")
+        allow(DnsService).to receive(:router_stale?).and_return(false)
+        get '/network/internet'
+        expect(response.body).not_to include('Rules behind')
       end
     end
 

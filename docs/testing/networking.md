@@ -151,6 +151,10 @@ forge; in the end forge, the Linksys and the modem sit side by side.
 - [ ] A port forward to a device works from outside (a phone on cellular, the NAS's internet
   address and the port). Nothing else answers from outside: the web UI and SSH on the internet
   address time out.
+- [ ] **A save leaves the connection alone:** adding or removing a port forward changes no network
+  file, so the internet port keeps its lease (`journalctl -u systemd-networkd --since -5min` on
+  the NAS shows nothing for it) and, while the NAS announces itself over IPv6, its `fd…::53`
+  address stays on the LAN port (`ip -6 addr`).
 - **The way back:** turn the switch off on Network → Internet, move the cable back to the Linksys's
   internet port, take the Linksys out of Bridge Mode, power-cycle the modem.
 

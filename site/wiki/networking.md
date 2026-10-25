@@ -102,7 +102,9 @@ empty, your devices on its LAN ports and Wi-Fi as before).
 
 The NAS's own network settings for the LAN interface are adjusted for you: an address it got
 from the old router is kept as a fixed one, and a route it had through the old router steps
-behind the internet's. The file is put back when you leave router mode.
+behind the internet's. The file is put back when you leave router mode, unless you changed it by
+hand meanwhile: then it stays as you made it, and the page says so. A save that changes none of
+the network files leaves them alone, so saving these pages doesn't renew the internet connection.
 
 **Every device uses the NAS's DNS** (on unless you untick it): some devices ask a DNS server of
 their own choosing (Roku, Google's, some TVs), skipping yours and its blocking. In router mode
@@ -114,10 +116,11 @@ the internet side so its connections stay direct; the Cloudflare Tunnel needs no
 Nothing from the internet reaches the NAS or your devices except the **ports you let in**, on
 the card that appears: a port, a protocol, the device (give it a fixed address on Network → Devices
 first) and its port. The NAS's own services (SSH, the web UI, Samba, DNS) never answer the
-internet side.
+internet side. A change to the ports that can't be put in the router's rules is saved, and the
+page says so; the card then shows the rules as behind until a save of the page puts them in place.
 
-The NAS doesn't answer pings from the internet either, nor takes or sends route changes
-(ICMP redirects) there. A NAS that is the router faces the internet, so the page also says
+The NAS doesn't answer pings or service discovery (mDNS, SSDP) from the internet either, nor
+takes or sends route changes (ICMP redirects) there. A NAS that is the router faces the internet, so the page also says
 whether Ubuntu's security updates install by themselves; the switch is on Settings → System
 Dependencies (security fixes only, from Ubuntu's security channel, never new versions of
 anything; the installer leaves it off, and the security audit warns while the NAS is the router
@@ -229,7 +232,8 @@ computer on your LAN.
 
 While the NAS is the router (Network → Internet), the internet side's address comes from the
 provider and is managed there, and the LAN port has no router of its own (the NAS is it). The
-port the NAS hands out addresses on (Network → DHCP) needs a fixed address.
+port the NAS hands out addresses on (Network → DHCP) needs a fixed address on a `/24` network:
+DHCP's range and the fixed devices' addresses are the last part of an address there.
 
 Afterwards, bookmarks and devices that used the old address need the new one; DNS, DHCP, the
 router and the shares follow it by themselves.
@@ -260,7 +264,8 @@ Internet): it still reaches the shares, DNS, the NAS and every other device on t
 nothing beyond. For a TV, a camera or a toy that has no business out there. *Internet again*
 undoes it. The device needs a fixed address because the rule is by address. While the NAS
 isn't the router yet, the setting waits for when it is. Network → Internet lists the devices
-kept off.
+kept off. If the router's rules can't follow a change, the page says the device is still as it
+was, until a save of Network → Internet puts them in place.
 
 ---
 
@@ -283,8 +288,10 @@ it puts the NAS in charge of the network, and gives every device a name in DNS.
 
 Devices pick up an address from the NAS the next time they connect or renew; turning a device's
 Wi-Fi off and on hurries it along. Each one is given the NAS as its DNS server and `home.arpa` as
-its domain, and answers by the name it gives (`laptop.home.arpa`, and `laptop`). Fixed addresses
-for chosen devices are on **Network → Devices**.
+its domain, and answers by the name it gives (`laptop.home.arpa`, and `laptop`), except `wpad`,
+`isatap` and `localhost`: browsers look for their proxy settings at the first and Windows for an
+IPv6 tunnel at the second, so no device takes those. Fixed addresses for chosen devices are on
+**Network → Devices**.
 
 DHCP serves the interface DNS answers on, and nowhere else, and the firewall lets DHCP in on that
 interface only.
