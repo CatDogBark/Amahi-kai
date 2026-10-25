@@ -68,7 +68,7 @@ class NetworkController < ApplicationController
     if %w[lo tailscale0].include?(arrival) && NetworkInterfaces.default_routes.any? { |name, _gateway, _metric| name == interface }
       over = arrival == 'lo' ? 'the Cloudflare Tunnel' : 'Tailscale'
       return refuse("You're connected through #{over}, which runs over #{interface}: a wrong address there would cut you off " \
-                    'with nothing to put it back. Change it from a computer on your LAN, where the NAS can check that you still reach it.')
+                    'with nothing to put it back. Change it from a computer on your LAN, where the NAS can check that you still reach it')
     end
     guard = arrival == interface
     NetworkAddress.change!(interface: interface, mode: mode, guard: guard, address: address, gateway: gateway, dns: dns)

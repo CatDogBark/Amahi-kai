@@ -189,6 +189,7 @@ describe "Network Controller", type: :request do
         allow(NetworkAddress).to receive(:arrival_interface).and_return('tailscale0')
         put "/network/address", params: { interface: 'ens18', mode: 'fixed', address: '192.168.1.111', prefix: '24' }
         expect(flash[:alert]).to include("You're connected through Tailscale, which runs over ens18", 'from a computer on your LAN')
+        expect(flash[:alert]).to end_with('that you still reach it.') # one full stop: refuse adds it
         allow(NetworkAddress).to receive(:arrival_interface).and_return('lo')
         put "/network/address", params: { interface: 'ens18', mode: 'automatic' }
         expect(flash[:alert]).to include("You're connected through the Cloudflare Tunnel")
