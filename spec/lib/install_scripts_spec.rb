@@ -92,8 +92,11 @@ RSpec.describe 'install and update scripts' do
       expect(helper).to include('for unit in amahi-kai.service amahi-kai-indexer.service amahi-kai-indexer.timer')
       expect(helper).to include('systemctl enable amahi-kai.service', 'systemctl enable amahi-kai-indexer.timer')
       expect(helper).not_to include('enable --now amahi-kai.service')
-      expect(File.read(Rails.root.join('config/systemd/amahi-kai.service')))
-        .to include('ExecStart=/usr/bin/bundle exec puma -C config/puma.rb', 'EnvironmentFile=/etc/amahi-kai/amahi.env')
+      unit = File.read(Rails.root.join('config/systemd/amahi-kai.service'))
+      expect(unit).to include('ExecStart=/usr/bin/bundle exec puma -C config/puma.rb', 'EnvironmentFile=/etc/amahi-kai/amahi.env')
+      # MariaDB's package update stops it: with Requires= the web UI would stop for good with it
+      expect(unit).to include('Wants=mariadb.service', 'After=network.target mariadb.service')
+      expect(unit).not_to match(/^Requires=/)
       expect(File.read(Rails.root.join('config/systemd/amahi-kai-indexer.timer'))).to include('OnUnitActiveSec=10min')
     end
 

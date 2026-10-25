@@ -452,6 +452,10 @@ module AmahiHelper
     dnsmasq unbound dns-root-data radvd fail2ban unattended-upgrades zfsutils-linux smartmontools avahi-daemon
   ].freeze
   APT_ENV = ENV_MIN.merge('DEBIAN_FRONTEND' => 'noninteractive').freeze
+  # apt runs as a unit of its own (run_command), outside whichever unit called the helper.
+  APT_GET = '/usr/bin/apt-get'
+  APT_UNIT = 'amahi-kai-apt'
+  SYSTEMD_RUN = '/usr/bin/systemd-run'
 
   # Cloudflare Tunnel: the token sits in a file only root can read, and cloudflared reads
   # it with --token-file, so it is in no unit file or command line.
@@ -905,10 +909,11 @@ module AmahiHelper
       validate: ->(_a) { {} },
       plan: ->(_v) { [[:wan_drops]] }
     },
+    # +keep_lan+: DHCP stays on, so the LAN keeps the fixed address router mode gave it.
     'network.router_off' => {
-      params: [],
-      validate: ->(_a) { {} },
-      plan: ->(_v) { [[:router_off]] }
+      params: %w[keep_lan],
+      validate: ->(a) { { keep_lan: a.key?('keep_lan') ? boolean(a, 'keep_lan') : false } },
+      plan: ->(v) { [[:router_off, v[:keep_lan]]] }
     },
     # The NAS's own IPv4 address on an interface (Network → Devices, This NAS). +guard+: the
     # admin is connected through this interface, so the change is applied after the reply and
@@ -3234,6 +3239,8 @@ module AmahiHelper
       argv = step.dup
       opts = argv.last.is_a?(Hash) ? argv.pop : {}
       env = opts[:env] || ENV_MIN
+      name = File.basename(argv[0])
+      argv, env = in_own_unit(argv, env) if argv[0] == APT_GET
       if opts[:stream]
         err, status = stream_command(env, argv)
       else
@@ -3241,12 +3248,22 @@ module AmahiHelper
                                            stdin_data: opts[:stdin].to_s, unsetenv_others: true, chdir: '/')
       end
       return nil if status.success?
-      message = "#{File.basename(argv[0])} exited #{status.exitstatus}: #{last_lines(err, 3)}"
+      message = "#{name} exited #{status.exitstatus}: #{last_lines(err, 3)}"
       return "ignored: #{message}" if opts[:allow_failure]
       raise Failed, message
     rescue SystemCallError => e
       return "ignored: #{argv[0]}: #{e.message}" if opts&.dig(:allow_failure)
       raise Failed, "#{argv[0]}: #{e.message}"
+    end
+
+    # apt, as a unit of its own: the helper runs inside the unit that called it (the web app's,
+    # for System Dependencies), and a MariaDB update stops MariaDB, which stops the app, and
+    # needrestart can restart the app; neither may take dpkg down with it partway. --pipe
+    # streams apt's output here, --wait hands back its exit status, and the one unit name keeps
+    # package jobs one at a time (a second is refused while the first runs).
+    def in_own_unit(argv, env)
+      [[SYSTEMD_RUN, "--unit=#{APT_UNIT}", '--wait', '--pipe', '--collect', '--quiet',
+        *env.map { |key, value| "--setenv=#{key}=#{value}" }, *argv], ENV_MIN]
     end
 
     def stream_command(env, argv)
@@ -3529,28 +3546,37 @@ module AmahiHelper
       names
     end
 
-    # Router mode on. Order: the internet interface's address (checked by netplan generate before
-    # it's applied), forwarding, the NAT block, then UFW's rules: the LAN out, each forward in,
-    # and, first of all the rules, nothing else in on the internet side (inserted once another
-    # rule exists, which the route rule makes sure of). Rules from a previous state go first, so
-    # a changed interface or forward leaves nothing behind.
+    # Router mode on. The internet side is shut first, before its interface gets an address and
+    # before any rule from a previous state goes, so a save never leaves it open, not for a
+    # moment and not after a failure partway. Then the internet interface's address (checked
+    # by netplan generate before it's applied), forwarding, the NAT block, and UFW's other rules:
+    # the LAN out, each forward in, the denies in front of the LAN's way out. Only the rules a
+    # previous state had and this one doesn't are deleted; the rest stay where they are (UFW
+    # skips adding a rule it has).
     def do_router_on(lan, wan, forwards, dns = nil, lan_only = [])
+      previous = read_json(ROUTER_STATE)
+      tailscale = File.executable?(TAILSCALE)
+      shield_router(wan, tailscale)
       pinned = pin_lan_netplan(lan, wan)
+      working = File.exist?(WAN_NETPLAN) ? File.read(WAN_NETPLAN) : nil
       do_install(WAN_NETPLAN, wan_netplan(wan), nil, '0600')
       begin
         run_command([NETPLAN, 'generate'])
       rescue Failed
-        do_remove_files(WAN_NETPLAN)
+        # A save keeps the file that worked; a first try leaves nothing behind.
+        working ? do_install(WAN_NETPLAN, working, nil, '0600') : do_remove_files(WAN_NETPLAN)
         restore_lan_netplan(pinned)
+        unshield_router(wan, tailscale) unless previous
         raise
       end
       run_command([NETPLAN, 'apply'])
-      previous = read_json(ROUTER_STATE)
       # The kernel settings from before router mode, kept across its saves, for the way back.
       sysctl_before = sysctl_before(previous, wan)
       do_install(ROUTER_SYSCTL, router_sysctl(wan), nil)
       run_command(['/usr/sbin/sysctl', '-q', '-w', *router_sysctl_settings(wan).map { |key, value| "#{key}=#{value}" }])
-      ufw_router_rules_off(previous) if previous
+      state = { 'lan' => lan, 'wan' => wan, 'forwards' => forwards.map { |f| f.transform_keys(&:to_s) },
+                'dns' => dns, 'tailscale' => tailscale, 'lan_only' => lan_only }
+      (router_rules(previous || {}) - router_rules(state)).each { |words| ufw_delete(words) }
       write_router_nat(wan, forwards, lan, dns, lan_only)
       run_command([UFW, 'route', 'allow', 'in', 'on', lan, 'out', 'on', wan])
       forwards.each do |f|
@@ -3561,27 +3587,35 @@ module AmahiHelper
         # lookups aren't forwarded traffic, so they do.
         %w[tcp udp].each { |proto| run_command([UFW, 'route', 'insert', '1', 'deny', 'in', 'on', lan, 'out', 'on', wan, 'to', 'any', 'port', '853', 'proto', proto]) }
       end
-      run_command([UFW, 'insert', '1', 'deny', 'in', 'on', wan])
       # Devices kept off the internet: no forwarding out for them, ahead of the LAN's allow.
       lan_only.each { |address| run_command([UFW, 'route', 'insert', '1', 'deny', 'in', 'on', lan, 'out', 'on', wan, 'from', address]) }
-      tailscale = File.executable?(TAILSCALE)
-      run_command([UFW, 'insert', '1', 'allow', 'in', 'on', wan, 'to', 'any', 'port', TAILSCALE_PORT, 'proto', 'udp']) if tailscale
       run_command([UFW, 'reload'])
       settle_router_nat(lan, wan)
       previous_pinned = previous ? previous['pinned'] : nil
-      state = { 'lan' => lan, 'wan' => wan, 'forwards' => forwards.map { |f| f.transform_keys(&:to_s) },
-                'pinned' => (previous_pinned || {}).merge(pinned), 'dns' => dns, 'tailscale' => tailscale,
-                'lan_only' => lan_only, 'sysctl' => sysctl_before, 'since' => Time.now.to_i, 'rules' => ROUTER_RULES_VERSION }
+      state.merge!('pinned' => (previous_pinned || {}).merge(pinned), 'sysctl' => sysctl_before, 'since' => Time.now.to_i,
+                   'rules' => ROUTER_RULES_VERSION)
       state_dir!(ROUTER_STATE)
       do_install(ROUTER_STATE, "#{JSON.generate(state)}\n", nil, '0644')
       nil
     end
 
-    # Router mode off: the rules, the NAT block, forwarding and the internet interface's address
-    # go, in that order, each on its own so one failing doesn't keep the rest.
-    def do_router_off
+    # Router mode off. The internet interface goes first (its file, then its address), so
+    # nothing reaches the NAS from that side once its deny is gone; then the rules, the NAT
+    # block and forwarding (as it was before router mode), each on its own so one failing
+    # doesn't keep the rest. +keep_lan+: DHCP stays on, so the LAN keeps the fixed address
+    # router mode gave it (a NAS handing out addresses can't take its own from DHCP).
+    def do_router_off(keep_lan = false)
       return nil unless router_in_place?
       state = read_json(ROUTER_STATE)
+      pinned = state && state['pinned']
+      notes = keep_lan ? forget_lan_backups(pinned) : restore_lan_netplan(pinned)
+      if File.exist?(WAN_NETPLAN)
+        wan = File.read(WAN_NETPLAN)[/^    ([A-Za-z0-9_.-]{1,15}):$/, 1]
+        do_remove_files(WAN_NETPLAN)
+        run_command([NETPLAN, 'apply', { allow_failure: true }])
+        # netplan apply leaves an interface it no longer knows as it was; its address goes too.
+        run_command([IP, '-4', 'addr', 'flush', 'dev', wan, { allow_failure: true }]) if wan
+      end
       if File.executable?(UFW)
         ufw_router_rules_off(state) if state
         write_router_nat(nil, [])
@@ -3589,15 +3623,68 @@ module AmahiHelper
         clear_router_nat(state)
       end
       do_remove_files(ROUTER_SYSCTL, ROUTER_STATE)
-      run_command(['/usr/sbin/sysctl', '-q', '-w', 'net.ipv4.ip_forward=0', *sysctl_restore(state), { allow_failure: true }])
-      notes = restore_lan_netplan(state && state['pinned'])
-      return notes unless File.exist?(WAN_NETPLAN)
-      wan = File.read(WAN_NETPLAN)[/^    ([A-Za-z0-9_.-]{1,15}):$/, 1]
-      do_remove_files(WAN_NETPLAN)
-      run_command([NETPLAN, 'apply', { allow_failure: true }])
-      # netplan apply leaves an interface it no longer knows as it was; its address goes too.
-      run_command([IP, '-4', 'addr', 'flush', 'dev', wan, { allow_failure: true }]) if wan
+      run_command(['/usr/sbin/sysctl', '-q', '-w', "net.ipv4.ip_forward=#{forwarding_before(state)}", *sysctl_restore(state), { allow_failure: true }])
       notes
+    end
+
+    # Forwarding as it was before router mode: Docker turns it on for its apps, and turning it
+    # off would cut them off. A state from before this was kept says nothing: off.
+    def forwarding_before(state)
+      value = Hash(state && state['sysctl'])['net.ipv4.ip_forward'].to_s
+      value.match?(/\A[01]\z/) ? value : '0'
+    end
+
+    # Router mode's UFW rules, each as the words that name it (what ufw delete takes): the
+    # internet side's deny and Tailscale's port, the LAN's way out, each forward in, devices'
+    # own encrypted DNS kept in, and devices kept off the internet.
+    def router_rules(state)
+      lan, wan = state.values_at('lan', 'wan')
+      return [] unless lan && wan
+      rules = [['deny', 'in', 'on', wan]]
+      rules << ['allow', 'in', 'on', wan, 'to', 'any', 'port', TAILSCALE_PORT, 'proto', 'udp'] if state['tailscale']
+      rules << ['route', 'allow', 'in', 'on', lan, 'out', 'on', wan]
+      Array(state['forwards']).each do |f|
+        rules << ['route', 'allow', 'in', 'on', wan, 'out', 'on', lan, 'to', f['address'].to_s, 'port', f['to_port'].to_s, 'proto', f['protocol'].to_s]
+      end
+      %w[tcp udp].each { |proto| rules << ['route', 'deny', 'in', 'on', lan, 'out', 'on', wan, 'to', 'any', 'port', '853', 'proto', proto] } if state['dns']
+      Array(state['lan_only']).each { |address| rules << ['route', 'deny', 'in', 'on', lan, 'out', 'on', wan, 'from', address.to_s] }
+      rules
+    end
+
+    def ufw_delete(words)
+      command = words.first == 'route' ? ['route', 'delete', *words.drop(1)] : ['delete', *words]
+      run_command([UFW, *command, { allow_failure: true }])
+    end
+
+    # A rule at the top of UFW's list (insert 1), or appended when the list is empty (insert
+    # refuses position 1 then). A copy UFW has already is skipped where it stands.
+    def ufw_insert_first(words)
+      result = run_command([UFW, 'insert', '1', *words, { allow_failure: true }])
+      return unless result
+      raise Failed, result.delete_prefix('ignored: ') unless result.include?('Invalid position')
+      run_command([UFW, *words])
+    end
+
+    # Nothing in on the internet side, except Tailscale's port, which goes back on top of the
+    # deny so the deny never stands in front of it.
+    def shield_router(wan, tailscale)
+      ufw_insert_first(['deny', 'in', 'on', wan])
+      return unless tailscale
+      allow = ['allow', 'in', 'on', wan, 'to', 'any', 'port', TAILSCALE_PORT, 'proto', 'udp']
+      ufw_delete(allow)
+      ufw_insert_first(allow)
+    end
+
+    def unshield_router(wan, tailscale)
+      ufw_delete(['allow', 'in', 'on', wan, 'to', 'any', 'port', TAILSCALE_PORT, 'proto', 'udp']) if tailscale
+      ufw_delete(['deny', 'in', 'on', wan])
+    end
+
+    # The LAN files router mode pinned stay as they are; their copies from before go, so a
+    # later router session doesn't bring back an address from before this one.
+    def forget_lan_backups(pinned)
+      (pinned.is_a?(Hash) ? pinned.keys : []).each { |path| do_remove_files(path + NETPLAN_BACKUP_SUFFIX) }
+      nil
     end
 
     # The netplan files made to fit router mode: the LAN interface keeps an address (one from the
@@ -3961,7 +4048,7 @@ module AmahiHelper
       kept = (previous && previous['sysctl']).is_a?(Hash) ? previous['sysctl'].dup : {}
       Hash(previous && previous['rp_filter']).each { |scope, value| kept[sysctl_key(scope.to_s, 'rp_filter')] ||= value }
       router_sysctl_settings(wan).each_key do |key|
-        next if key == 'net.ipv4.ip_forward' || kept.key?(key)
+        next if kept.key?(key)
         value = read_sysctl(key) and kept[key] = value
       end
       kept

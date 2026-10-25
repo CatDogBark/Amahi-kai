@@ -40,6 +40,15 @@ describe "Disks Controller", type: :request do
       end
     end
 
+    describe "GET /disks/devices" do
+      it "says why when the drives can't be listed, rather than offering drives that aren't there" do
+        allow(DiskManager).to receive(:devices).and_raise(DiskManager::DiskError, "Couldn't list the drives (lsblk gave no answer)")
+        get "/disks/devices"
+        expect(response).to have_http_status(:ok)
+        expect(response.body).to include("list the drives (lsblk gave no answer)")
+      end
+    end
+
     describe "GET /disks/mounts" do
       it "shows the mounts page" do
         get "/disks/mounts"

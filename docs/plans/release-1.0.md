@@ -221,7 +221,12 @@ settings aren't backed up (§6).
 
 A full pass, the way the 2026-10-02 review was done, over everything since: the helper (108
 operations now), storage, apps, networking, the release machinery. Next (CatDogBark, 2026-10-24),
-with the private review doc. Already on its list:
+with the private review doc.
+
+Read 2026-10-24, area by area; the findings and the order of the fix batches are in the private
+review doc's "1.0 review" tab (unfixed details stay there). The batches go out on `dev` in that
+order, the first being the router's rules during a save, MariaDB's update and the web page, and
+This NAS over the tunnel. Already on its list before the read:
 
 - **Times are the server's clock, in UTC** (roadmap, Open): show them in the browser's zone.
 - The remaining low items on the review doc's security audit tab.

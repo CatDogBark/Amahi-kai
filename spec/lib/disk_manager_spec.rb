@@ -297,6 +297,16 @@ RSpec.describe DiskManager do
     end
   end
 
+  describe '.devices without an answer from lsblk' do
+    it "gives the sample drives outside production, and an error in production: they'd be drives that aren't there" do
+      expect(DiskManager.devices.map { |d| d[:path] }).to eq(DiskManager.send(:sample_devices).map { |d| d[:path] })
+      allow(DiskManager).to receive(:production?).and_return(true)
+      expect { DiskManager.devices }.to raise_error(DiskManager::DiskError, /Couldn't list the drives/)
+      allow(DiskManager).to receive(:lsblk_json).and_return('not json')
+      expect { DiskManager.devices }.to raise_error(DiskManager::DiskError, /Couldn't read lsblk's list/)
+    end
+  end
+
   describe '.sample_devices' do
     it 'returns three sample devices' do
       samples = DiskManager.send(:sample_devices)

@@ -184,6 +184,21 @@ describe "Network Controller", type: :request do
         expect(response.body).to include('Moving the NAS to nas.local', 'asks the network for an address')
       end
 
+      it "refuses a change to the port the way in runs over, when the request came through the tunnel or Tailscale" do
+        allow(NetworkInterfaces).to receive(:default_routes).and_return([['ens18', '192.168.1.1', 100]])
+        allow(NetworkAddress).to receive(:arrival_interface).and_return('tailscale0')
+        put "/network/address", params: { interface: 'ens18', mode: 'fixed', address: '192.168.1.111', prefix: '24' }
+        expect(flash[:alert]).to include("You're connected through Tailscale, which runs over ens18", 'from a computer on your LAN')
+        allow(NetworkAddress).to receive(:arrival_interface).and_return('lo')
+        put "/network/address", params: { interface: 'ens18', mode: 'automatic' }
+        expect(flash[:alert]).to include("You're connected through the Cloudflare Tunnel")
+        expect(Privileged.calls).to be_empty
+        # Behind the NAS router the LAN port carries no way out, so it can change from anywhere
+        allow(NetworkInterfaces).to receive(:default_routes).and_return([['ens20', '10.77.0.1', 50]])
+        put "/network/address", params: { interface: 'ens18', mode: 'fixed', address: '192.168.1.111', prefix: '24' }
+        expect(Privileged.calls.last.first).to eq('network.set_address')
+      end
+
       it "refuses the internet side, a port that isn't there, automatic on the port the NAS hands out addresses on, and what the helper refuses" do
         put "/network/address", params: { interface: 'ens20', mode: 'automatic' }
         expect(flash[:alert]).to include('internet side')

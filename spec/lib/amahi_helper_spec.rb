@@ -1377,7 +1377,9 @@ RSpec.describe 'AmahiHelper' do
        { 'protocol' => 'tcp', 'port' => 80, 'address' => 'nas', 'to_port' => 80 }].each do |bad|
         expect(refusal('network.router_on', args.merge('forwards' => [bad]))).not_to be_nil, bad.inspect
       end
-      expect(steps('network.router_off', {})).to eq([[:router_off]])
+      expect(steps('network.router_off', {})).to eq([[:router_off, false]])
+      expect(steps('network.router_off', { 'keep_lan' => true })).to eq([[:router_off, true]])
+      expect(refusal('network.router_off', { 'keep_lan' => 'yes' })).not_to be_nil
     end
 
     it "puts the internet interface's address, forwarding, the NAT block and the rules in place" do
@@ -1396,13 +1398,14 @@ RSpec.describe 'AmahiHelper' do
       # UFW's own rules stay, and the filter part sits in front of its ICMP accepts, before the table's COMMIT
       expect(rules).to end_with("-A ufw-before-input -i lo -j ACCEPT\n# BEGIN amahi-kai router filter\n" \
                                 "-I ufw-before-input 1 -i ens20 -p icmp --icmp-type echo-request -j DROP\n# END amahi-kai router filter\nCOMMIT\n")
-      expect(ran).to eq(["#{AmahiHelper::NETPLAN} generate", "#{AmahiHelper::NETPLAN} apply",
+      # Nothing in on the internet side comes first, before the interface gets its address
+      expect(ran).to eq(['/usr/sbin/ufw insert 1 deny in on ens20', "#{AmahiHelper::NETPLAN} generate", "#{AmahiHelper::NETPLAN} apply",
                          '/usr/sbin/sysctl -q -w net.ipv4.ip_forward=1 net.ipv4.conf.all.rp_filter=1 net.ipv4.conf.all.accept_redirects=0 ' \
                          'net.ipv4.conf.all.send_redirects=0 net.ipv4.conf.ens20.rp_filter=1 net.ipv4.conf.ens20.accept_redirects=0 ' \
                          'net.ipv4.conf.ens20.send_redirects=0 net.ipv4.conf.ens20.log_martians=1',
                          '/usr/sbin/ufw route allow in on ens19 out on ens20',
                          '/usr/sbin/ufw route allow in on ens20 out on ens19 to 10.99.0.60 port 80 proto tcp',
-                         '/usr/sbin/ufw insert 1 deny in on ens20', '/usr/sbin/ufw reload',
+                         '/usr/sbin/ufw reload',
                          '/usr/sbin/iptables -w -t nat -D PREROUTING -j amahi-kai-prerouting', '/usr/sbin/iptables -w -t nat -A PREROUTING -j amahi-kai-prerouting',
                          '/usr/sbin/iptables -w -t nat -D POSTROUTING -j amahi-kai-postrouting', '/usr/sbin/iptables -w -t nat -A POSTROUTING -j amahi-kai-postrouting'])
       state = JSON.parse(File.read(AmahiHelper::ROUTER_STATE))
@@ -1445,11 +1448,12 @@ RSpec.describe 'AmahiHelper' do
       expect(helper.do_wan_drops['since']).to be_within(5).of(Time.now.to_i)
 
       ran.clear
-      helper.do_router_on('ens19', 'ens20', [], nil, ['10.99.0.61']) # one device let out again: the old rules go first
+      helper.do_router_on('ens19', 'ens20', [], nil, ['10.99.0.61']) # one device let out again: only its rule goes
       expect(ran).to include('/usr/sbin/ufw route delete deny in on ens19 out on ens20 from 10.99.0.60',
-                             '/usr/sbin/ufw route delete deny in on ens19 out on ens20 from 10.99.0.61',
                              '/usr/sbin/ufw route insert 1 deny in on ens19 out on ens20 from 10.99.0.61')
-      expect(ran).not_to include('/usr/sbin/ufw route insert 1 deny in on ens19 out on ens20 from 10.99.0.60')
+      expect(ran).not_to include('/usr/sbin/ufw route delete deny in on ens19 out on ens20 from 10.99.0.61', # still kept off: its rule stays
+                                 '/usr/sbin/ufw route insert 1 deny in on ens19 out on ens20 from 10.99.0.60',
+                                 '/usr/sbin/ufw delete deny in on ens20') # the internet side stays shut throughout
       expect(JSON.parse(File.read(AmahiHelper::ROUTER_STATE))['sysctl']).to include('net.ipv4.conf.all.rp_filter' => '2') # as before router mode, kept across saves
 
       ran.clear
@@ -1468,10 +1472,11 @@ RSpec.describe 'AmahiHelper' do
       expect(rules).to include('-A amahi-kai-prerouting -i ens19 ! -d 10.99.0.1 -p udp --dport 53 -j DNAT --to-destination 10.99.0.1:53',
                                '-A amahi-kai-prerouting -i ens19 ! -d 10.99.0.1 -p tcp --dport 53 -j DNAT --to-destination 10.99.0.1:53')
       ufw = ran.grep(/ufw/).map { |c| c.delete_prefix('/usr/sbin/ufw ') }
-      expect(ufw).to eq(['route allow in on ens19 out on ens20',
+      # Tailscale's port goes back on top of the deny, so the deny never stands in front of it
+      expect(ufw).to eq(['insert 1 deny in on ens20', 'delete allow in on ens20 to any port 41641 proto udp',
+                         'insert 1 allow in on ens20 to any port 41641 proto udp', 'route allow in on ens19 out on ens20',
                          'route insert 1 deny in on ens19 out on ens20 to any port 853 proto tcp',
-                         'route insert 1 deny in on ens19 out on ens20 to any port 853 proto udp',
-                         'insert 1 deny in on ens20', 'insert 1 allow in on ens20 to any port 41641 proto udp', 'reload'])
+                         'route insert 1 deny in on ens19 out on ens20 to any port 853 proto udp', 'reload'])
       expect(JSON.parse(File.read(AmahiHelper::ROUTER_STATE))).to include('dns' => '10.99.0.1', 'tailscale' => true)
       ran.clear
       helper.do_router_off
@@ -1537,11 +1542,13 @@ RSpec.describe 'AmahiHelper' do
       expect(File.exist?(AmahiHelper::ROUTER_STATE)).to be false
     end
 
-    it 'takes everything out again, the interface address included' do
+    it 'takes everything out again, the interface address first' do
       helper.do_router_on('ens19', 'ens20', forwards)
       ran.clear
       helper.do_router_off
-      expect(ran).to eq(['/usr/sbin/ufw delete deny in on ens20', '/usr/sbin/ufw route delete allow in on ens19 out on ens20',
+      # The internet interface is off the network before its deny goes
+      expect(ran).to eq(["#{AmahiHelper::NETPLAN} apply", "#{AmahiHelper::IP} -4 addr flush dev ens20",
+                         '/usr/sbin/ufw delete deny in on ens20', '/usr/sbin/ufw route delete allow in on ens19 out on ens20',
                          '/usr/sbin/ufw route delete allow in on ens20 out on ens19 to 10.99.0.60 port 80 proto tcp', '/usr/sbin/ufw reload',
                          '/usr/sbin/iptables -w -t nat -D PREROUTING -j amahi-kai-prerouting', '/usr/sbin/iptables -w -t nat -F amahi-kai-prerouting',
                          '/usr/sbin/iptables -w -t nat -X amahi-kai-prerouting',
@@ -1549,13 +1556,66 @@ RSpec.describe 'AmahiHelper' do
                          '/usr/sbin/iptables -w -t nat -X amahi-kai-postrouting',
                          '/usr/sbin/sysctl -q -w net.ipv4.ip_forward=0 net.ipv4.conf.all.rp_filter=2 net.ipv4.conf.all.accept_redirects=1 ' \
                          'net.ipv4.conf.all.send_redirects=1 net.ipv4.conf.ens20.rp_filter=2 net.ipv4.conf.ens20.accept_redirects=1 ' \
-                         'net.ipv4.conf.ens20.send_redirects=1 net.ipv4.conf.ens20.log_martians=0',
-                         "#{AmahiHelper::NETPLAN} apply", "#{AmahiHelper::IP} -4 addr flush dev ens20"])
+                         'net.ipv4.conf.ens20.send_redirects=1 net.ipv4.conf.ens20.log_martians=0'])
       expect(File.read(AmahiHelper::UFW_BEFORE_RULES)).to eq(before_rules)
       expect(%w[WAN_NETPLAN ROUTER_SYSCTL ROUTER_STATE].map { |c| File.exist?(AmahiHelper.const_get(c)) }).to all(be false)
       ran.clear
       helper.do_router_off # nothing in place: nothing to do
       expect(ran).to be_empty
+    end
+
+    it 'keeps the internet side shut while a save rewrites the rules, and takes out only what changed' do
+      helper.do_router_on('ens19', 'ens20', forwards)
+      ran.clear
+      helper.do_router_on('ens19', 'ens20', []) # the forward removed
+      expect(ran.first).to eq('/usr/sbin/ufw insert 1 deny in on ens20') # before netplan and every other rule
+      expect(ran).to include('/usr/sbin/ufw route delete allow in on ens20 out on ens19 to 10.99.0.60 port 80 proto tcp')
+      expect(ran).not_to include('/usr/sbin/ufw delete deny in on ens20', '/usr/sbin/ufw route delete allow in on ens19 out on ens20')
+    end
+
+    it "keeps a save's working file for the internet interface when netplan won't take the new one, shut all along" do
+      helper.do_router_on('ens19', 'ens20', [])
+      working = File.read(AmahiHelper::WAN_NETPLAN)
+      allow(helper).to receive(:wan_netplan).and_return("network: [\n")
+      ran.clear
+      allow(helper).to receive(:run_command) do |argv|
+        ran << argv.reject { |a| a.is_a?(Hash) }.join(' ')
+        raise AmahiHelper::Failed, 'netplan exited 1' if argv[1] == 'generate'
+      end
+      expect { helper.do_router_on('ens19', 'ens20', []) }.to raise_error(AmahiHelper::Failed, /netplan exited 1/)
+      expect(File.read(AmahiHelper::WAN_NETPLAN)).to eq(working)
+      expect(ran).not_to include('/usr/sbin/ufw delete deny in on ens20')
+    end
+
+    it "takes the internet side's deny out again when a first try fails at netplan" do
+      allow(helper).to receive(:run_command) do |argv|
+        ran << argv.reject { |a| a.is_a?(Hash) }.join(' ')
+        raise AmahiHelper::Failed, 'netplan exited 1' if argv[1] == 'generate'
+      end
+      expect { helper.do_router_on('ens19', 'ens20', []) }.to raise_error(AmahiHelper::Failed)
+      expect(ran).to eq(['/usr/sbin/ufw insert 1 deny in on ens20', "#{AmahiHelper::NETPLAN} generate", '/usr/sbin/ufw delete deny in on ens20'])
+    end
+
+    it 'puts forwarding back as it was before router mode: Docker turns it on for its apps' do
+      allow(helper).to receive(:read_sysctl) { |key| key == 'net.ipv4.ip_forward' ? '1' : '2' }
+      helper.do_router_on('ens19', 'ens20', [])
+      expect(JSON.parse(File.read(AmahiHelper::ROUTER_STATE))['sysctl']).to include('net.ipv4.ip_forward' => '1')
+      ran.clear
+      helper.do_router_off
+      expect(ran.grep(/sysctl/).first).to start_with('/usr/sbin/sysctl -q -w net.ipv4.ip_forward=1 ')
+      expect(helper.forwarding_before('sysctl' => { 'net.ipv4.ip_forward' => '1; rm' })).to eq('0')
+      expect(helper.forwarding_before(nil)).to eq('0')
+    end
+
+    it 'appends the first rule when UFW has none to insert it in front of' do
+      allow(helper).to receive(:run_command) do |argv|
+        ran << argv.reject { |a| a.is_a?(Hash) }.join(' ')
+        "ignored: ufw exited 1: ERROR: Invalid position '1'" if argv[1] == 'insert'
+      end
+      helper.ufw_insert_first(%w[deny in on ens20])
+      expect(ran).to eq(['/usr/sbin/ufw insert 1 deny in on ens20', '/usr/sbin/ufw deny in on ens20'])
+      allow(helper).to receive(:run_command).and_return('ignored: ufw exited 1: ERROR: Bad port')
+      expect { helper.ufw_insert_first(%w[deny in on ens20]) }.to raise_error(AmahiHelper::Failed, /Bad port/)
     end
 
     describe "the LAN interface's netplan" do
@@ -1616,6 +1676,14 @@ RSpec.describe 'AmahiHelper' do
         expect(helper.do_router_off).to include('was changed since router mode set it up')
         expect(File.read(installer_file)).to include('edited by hand')
         expect(File.exist?("#{installer_file}.amahi-kai-before-router")).to be true
+      end
+
+      it 'stays fixed when router mode goes off with DHCP still on, without its copy from before' do
+        helper.do_router_on('ens19', 'ens20', [])
+        pinned = File.read(installer_file)
+        expect(helper.do_router_off(true)).to be_nil
+        expect(File.read(installer_file)).to eq(pinned) # a NAS handing out addresses keeps a fixed one
+        expect(File.exist?("#{installer_file}.amahi-kai-before-router")).to be false
       end
 
       it 'is put back when netplan refuses the result' do
@@ -2933,6 +3001,20 @@ RSpec.describe 'AmahiHelper' do
       expect { helper.run_command(['/bin/sh', '-c', script, { env: env, stream: true }]) }.to output("one\ntwo\n").to_stderr
       expect { helper.run_command(['/bin/sh', '-c', 'echo E: no space; exit 100', { stream: true }]) }
         .to raise_error(AmahiHelper::Failed, 'sh exited 100: E: no space').and output.to_stderr
+    end
+
+    it "runs apt-get as a unit of its own, its environment passed in, and names apt-get when it fails" do
+      Dir.mktmpdir do |dir|
+        # A stand-in for systemd-run that says what it was asked and fails the way apt would
+        File.write("#{dir}/systemd-run", "#!/bin/sh\necho \"$@\"\necho 'E: broken' >&2\nexit 100\n")
+        File.chmod(0o755, "#{dir}/systemd-run")
+        stub_const('AmahiHelper::SYSTEMD_RUN', "#{dir}/systemd-run")
+        expected = 'apt-get exited 100: --unit=amahi-kai-apt --wait --pipe --collect --quiet ' \
+                   '--setenv=PATH=/usr/sbin:/usr/bin:/sbin:/bin --setenv=LANG=C.UTF-8 --setenv=DEBIAN_FRONTEND=noninteractive ' \
+                   '/usr/bin/apt-get update E: broken'
+        expect { helper.run_command(['/usr/bin/apt-get', 'update', { env: AmahiHelper::APT_ENV, stream: true }]) }
+          .to raise_error(AmahiHelper::Failed, expected).and output(/--unit=amahi-kai-apt/).to_stderr
+      end
     end
   end
 

@@ -166,11 +166,16 @@ module DnsService
     end
 
     # The helper's router rules follow the LAN and internet interfaces and the port forwards.
+    # While the NAS is the router and its internet port has gone missing (a USB adapter reset, a
+    # renamed port), the rules stay as they are: taking them out would drop the house's NAT and
+    # put the LAN's old address back. Off with DHCP still on, the LAN keeps its fixed address.
     def apply_router!
-      if on? && router? && wan_interface
-        Privileged.call('network.router_on', **router_args)
+      if on? && router?
+        return Privileged.call('network.router_on', **router_args) if wan_interface
+
+        Rails.logger.warn("DnsService: the router's internet port #{Setting.get('dns_wan_interface').inspect} isn't here; its rules stay as they are")
       elsif router_state
-        Privileged.call('network.router_off')
+        Privileged.call('network.router_off', keep_lan: dhcp?)
       end
     end
 
@@ -444,9 +449,11 @@ module DnsService
     end
 
     # Writes the config and starts (or restarts) Unbound with blocking as chosen, or stops it and
-    # removes the config (blocking too); then dnsmasq starts handing out addresses, or stops; then
-    # the router's rules go in, or out. Raises Privileged::Error with the
-    # reason if the helper refuses or fails.
+    # removes the config (blocking too); then dnsmasq and the router's rules. While the NAS is
+    # the router, its rules go in before dnsmasq hands out the NAS as the way out (a failure
+    # leaves devices with the router they had); otherwise dnsmasq stops doing so first and the
+    # rules come out after. Raises Privileged::Error with the reason if the helper refuses or
+    # fails.
     def apply!
       if on?
         Privileged.call('dns.set_own_address', interface: interface, address: own_ipv6_address) if ipv6_advertise?
@@ -458,8 +465,13 @@ module DnsService
         Privileged.call('dns.remove_config')
       end
       apply_ipv6_advertising!
-      DnsmasqService.apply!
-      apply_router!
+      if router?
+        apply_router!
+        DnsmasqService.apply!
+      else
+        DnsmasqService.apply!
+        apply_router!
+      end
       # Router mode moves the LAN off the default route's interface, and Samba follows the LAN
       SambaService.follow_interfaces!
     end

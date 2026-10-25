@@ -138,8 +138,17 @@ describe 'Network → DNS & DHCP', type: :request do
         before do
           allow(DnsmasqService).to receive(:installed?).and_return(true)
           allow(DnsmasqService).to receive(:other_servers).with('ens18').and_return([])
+          allow(NetworkAddress).to receive(:automatic?).with('ens18').and_return(false) # a fixed address, as This NAS sets
           Setting.set('dns_mode', 'dns')
           Setting.set('dns_interface', 'ens18')
+        end
+
+        it "refuses while the NAS's own address there comes from DHCP: its lease would run out" do
+          allow(NetworkAddress).to receive(:automatic?).with('ens18').and_return(true)
+          put '/network/dhcp', params: dhcp
+          expect(flash[:alert]).to include('ens18 takes its own address from DHCP', 'This NAS')
+          expect(Setting.get('dns_mode')).to eq('dns')
+          expect(Privileged.calls).to be_empty
         end
 
         it 'needs DNS on first' do
@@ -327,14 +336,31 @@ describe 'Network → DNS & DHCP', type: :request do
         expect(flash[:alert]).to include("You're connected through ens18")
       end
 
-      it 'saves, and puts the router in place after DNS and DHCP' do
+      it "saves, and puts the router's rules in before DHCP hands out the NAS as the way out" do
         put '/network/internet', params: router
         expect(flash[:notice]).to include('The NAS is the router')
         expect([Setting.get('dns_mode'), Setting.get('dns_wan_interface')]).to eq(%w[router ens19])
-        expect(Privileged.calls.map(&:first)).to eq(%w[dns.write_config services.enable dns.blocking_off network.write_dnsmasq_config services.enable network.router_on])
-        expect(Privileged.calls.last.last).to eq(lan: 'ens18', wan: 'ens19', forwards: [], dns: '192.168.1.10', lan_only: [])
-        expect(Privileged.calls[3].last[:content]).to include('dhcp-option=option:router,192.168.1.10')
+        expect(Privileged.calls.map(&:first)).to eq(%w[dns.write_config services.enable dns.blocking_off network.router_on network.write_dnsmasq_config services.enable])
+        expect(Privileged.calls[3].last).to eq(lan: 'ens18', wan: 'ens19', forwards: [], dns: '192.168.1.10', lan_only: [])
+        expect(Privileged.calls[4].last[:content]).to include('dhcp-option=option:router,192.168.1.10')
         expect(Setting.get('dns_force_nas')).to eq('1')
+      end
+
+      it "doesn't save router mode as on when its rules can't go in, and leaves DHCP's router as it was" do
+        allow(Privileged).to receive(:call).and_call_original
+        allow(Privileged).to receive(:call).with('network.router_on', any_args).and_raise(Privileged::Error.new('network.router_on', 'ufw: no'))
+        put '/network/internet', params: router
+        expect(flash[:alert]).to include('ufw: no')
+        expect([Setting.get('dns_mode'), Setting.get('dns_wan_interface')]).to eq(['dns_dhcp', ''])
+        expect(Privileged.calls.map(&:first)).not_to include('network.write_dnsmasq_config')
+      end
+
+      it "won't move DNS onto the router's internet side" do
+        Setting.set('dns_mode', 'router')
+        Setting.set('dns_wan_interface', 'ens19')
+        put '/network/dns', params: { dns_on: '1', provider: 'quad9', interface: 'ens19' }
+        expect(flash[:alert]).to include("ens19 is the router's internet side")
+        expect(Privileged.calls).to be_empty
       end
 
       it "leaves devices' DNS alone when that's unticked, and adds the encrypted-DNS list to blocking when it's on" do

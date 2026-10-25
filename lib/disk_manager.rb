@@ -14,13 +14,22 @@ class DiskManager
   class DiskError < StandardError; end
 
   # Detect all block devices with partition info
+  # Outside production, a machine without lsblk's answer gets the sample drives. In production
+  # that would offer drives that aren't there, and a request for one acts on whatever real drive
+  # has its name, so it's an error.
   def self.devices
     raw = lsblk_json
-    return sample_devices if raw.blank?
+    if raw.blank?
+      raise DiskError, "Couldn't list the drives (lsblk gave no answer)" if production?
+
+      return sample_devices
+    end
 
     begin
       data = JSON.parse(raw)
     rescue JSON::ParserError
+      raise DiskError, "Couldn't read lsblk's list of the drives" if production?
+
       return sample_devices
     end
 

@@ -31,6 +31,10 @@ class DisksController < ApplicationController
     @devices = DiskManager.devices.each_with_index.sort_by { |device, i| [device[:os_disk] ? 0 : 1, i] }.map(&:first)
     # With ZFS installed, an unmounted drive says a pool wants it left so
     @zfs_installed = StoragePools.zfs_installed?
+  rescue DiskManager::DiskError => e
+    @devices = []
+    @zfs_installed = StoragePools.zfs_installed?
+    flash.now[:alert] = e.message
   end
 
   def format_disk
