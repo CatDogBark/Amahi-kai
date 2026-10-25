@@ -143,8 +143,9 @@ jobs:
           echo "::endgroup::"
 
   # The few specs that need root (chown to root, the ownership script on files root and nobody
-  # own) skip themselves everywhere else; here they run, through sudo. --fail-if-no-examples
-  # keeps a renamed example from passing by matching nothing.
+  # own) skip themselves everywhere else; here they run, through sudo. The summary must show at
+  # least one example and none pending, so a renamed example can't pass by matching nothing,
+  # and none skipped for want of root.
   root:
     name: Root Specs
     runs-on: ubuntu-latest
@@ -165,10 +166,12 @@ jobs:
           mkdir -p tmp/cache/tmpfiles tmp/pids log
           bundle exec rails db:schema:load
       - name: Specs that need root
-        run: >-
-          sudo -E env "PATH=$PATH" bundle exec rspec spec/lib/install_scripts_spec.rb spec/lib/amahi_helper_spec.rb
-          -e 'bin/amahi-set-ownership' -e 'installs files with the mode and group asked for'
-          --fail-if-no-examples --format documentation
+        shell: bash
+        run: |
+          sudo -E env "PATH=$PATH" bundle exec rspec spec/lib/install_scripts_spec.rb spec/lib/amahi_helper_spec.rb \
+            -e 'bin/amahi-set-ownership' -e 'installs files with the mode and group asked for' --format documentation \
+            | tee tmp/root-specs.log
+          grep -qE '^[1-9][0-9]* examples?, 0 failures$' tmp/root-specs.log
 
   coverage:
     name: Coverage Report
