@@ -598,7 +598,9 @@ module AmahiHelper
   # Updates run with needrestart only listing what to restart (it would otherwise restart
   # services, Amahi-kai's own among them, in the middle of the update's window).
   UPGRADE_ENV = APT_ENV.merge('NEEDRESTART_MODE' => 'l').freeze
-  UPGRADE_OPTIONS = ['-o', 'Dpkg::Options::=--force-confold', '-o', 'DPkg::Lock::Timeout=300'].freeze
+  # --no-remove: apt stops rather than remove a package to make an update fit (the page offers
+  # updates, nothing else).
+  UPGRADE_OPTIONS = ['-o', 'Dpkg::Options::=--force-confold', '-o', 'DPkg::Lock::Timeout=300', '--no-remove'].freeze
 
   LOGIN = /\A[a-z][a-z0-9]{2,31}\z/
   RESERVED_LOGINS = %w[root amahi nobody].freeze
@@ -752,8 +754,9 @@ module AmahiHelper
         steps << %w[/usr/bin/systemctl start amahi-kai-update.service]
       end
     },
-    # Whether an update is waiting, for Amahi-kai and its apps: fetches main, as System Update
-    # pulls it, and writes what's new (the merged changes and the changelog entries added) to
+    # Whether an update is waiting, for Amahi-kai and its apps: fetches the update channel's
+    # newest version (update_target: a release tag, or the dev branch), the one System Update
+    # would install, and writes what's new (the merged changes and the changelog entries added) to
     # UPDATE_STATUS (skipped while an update runs); then fetches the app catalog's repo, keeping
     # the manifests that pass every check (see CATALOG_REPO). It never installs anything.
     # amahi-kai-update-check.timer runs it every 6 hours; System Update's and the Apps page's
@@ -1531,15 +1534,17 @@ module AmahiHelper
       validate: ->(_a) { {} },
       plan: ->(_v) { [[:security_report]] }
     },
+    # SSH is let in on the ports sshd listens on too (sshd -T), so one moved off 22 isn't shut out.
     'security.enable_firewall' => {
       params: [],
-      validate: ->(_a) { installed!(UFW) && {} },
-      plan: lambda { |_v|
-        [[UFW, 'default', 'deny', 'incoming'], *FIREWALL_PORTS.map { |port| [UFW, 'allow', port] }, [UFW, '--force', 'enable']]
+      validate: ->(_a) { installed!(UFW) && { ssh_ports: ssh_ports } },
+      plan: lambda { |v|
+        ports = (FIREWALL_PORTS + v[:ssh_ports].map { |port| "#{port}/tcp" }).uniq
+        [[UFW, 'default', 'deny', 'incoming'], *ports.map { |port| [UFW, 'allow', port] }, [UFW, '--force', 'enable']]
       }
     },
-    # Turns off SSH root login, or password login (only while an account that can log in
-    # has an SSH key, so nobody is locked out).
+    # Turns off SSH root login (only while another account can log in over SSH), or password
+    # login (only while an account that can log in has an SSH key), so nobody is locked out.
     'security.harden_ssh' => {
       params: %w[setting],
       validate: ->(a) { ssh_hardening(a['setting']) },
@@ -3020,15 +3025,29 @@ module AmahiHelper
         raise Refused, 'no account that can log in has an SSH key (~/.ssh/authorized_keys); ' \
                        'turning off password login would lock everyone out of SSH'
       end
+      if setting == 'root_login' && ssh_login_accounts.empty?
+        raise Refused, 'no account but root can log in over SSH (with a key, or a password while SSH takes them); ' \
+                       "turning off root's login would lock everyone out of SSH"
+      end
       { settings: SSH_HARDENING.fetch(setting) }
+    end
+
+    # The ports sshd listens on, from its effective settings; none when it isn't there or can't say.
+    def ssh_ports
+      return [] unless File.executable?(SSHD)
+
+      Dir.mkdir('/run/sshd', 0o755) unless File.directory?('/run/sshd')
+      capture([SSHD, '-T']).lines.filter_map { |line| line[/\Aport (\d{1,5})\s*\z/, 1] }.uniq
+    rescue Failed, SystemCallError
+      []
     end
 
     # Accounts with a login shell (root aside) whose authorized_keys holds a key.
     def ssh_key_holders
-      shells = File.readlines('/etc/shells', chomp: true).reject { |s| s.empty? || s.start_with?('#') }
+      shells = login_shells
       holders = []
       Etc.passwd do |pw|
-        next if pw.uid < UID_MIN || !shells.include?(pw.shell) || pw.shell.end_with?('nologin', 'false')
+        next unless login_account?(pw, shells)
         keys = File.join(pw.dir, '.ssh', 'authorized_keys')
         next unless File.file?(keys)
         holders << pw.name if File.foreach(keys).any? { |line| line.match?(/\A[^#]*\b(?:ssh-|ecdsa-|sk-)\S+ \S/) }
@@ -3036,6 +3055,46 @@ module AmahiHelper
         next
       end
       holders
+    end
+
+    # Accounts besides root that can log in over SSH: those with a key, and, while SSH takes
+    # passwords, those with a password that isn't locked.
+    def ssh_login_accounts
+      holders = ssh_key_holders
+      ssh_passwords_on? ? holders | password_accounts : holders
+    end
+
+    # Whether sshd takes passwords; no when it can't say, so a doubt never counts toward a login.
+    def ssh_passwords_on?
+      Dir.mkdir('/run/sshd', 0o755) unless File.directory?('/run/sshd')
+      capture([SSHD, '-T']).lines.any? { |line| line.strip == 'passwordauthentication yes' }
+    rescue Failed, SystemCallError
+      false
+    end
+
+    # Accounts with a login shell (root aside) and a password that isn't locked.
+    def password_accounts
+      shells = login_shells
+      File.foreach('/etc/shadow').filter_map do |line|
+        name, hash = line.split(':', 3)
+        next if hash.to_s.empty? || hash.start_with?('!', '*')
+        pw = begin
+          Etc.getpwnam(name)
+        rescue ArgumentError
+          nil
+        end
+        name if pw && login_account?(pw, shells)
+      end
+    rescue SystemCallError
+      []
+    end
+
+    def login_shells
+      File.readlines('/etc/shells', chomp: true).reject { |s| s.empty? || s.start_with?('#') }
+    end
+
+    def login_account?(pw, shells)
+      pw.uid >= UID_MIN && shells.include?(pw.shell) && !pw.shell.end_with?('nologin', 'false')
     end
 
     def package_list(value)
@@ -6066,7 +6125,7 @@ module AmahiHelper
                                         '--proto', '=https', '--tlsv1.2', '--max-time', '25',
                                         '-H', 'Accept: application/vnd.github+json', RELEASES_URL,
                                         unsetenv_others: true, chdir: '/')
-      return [nil, "couldn't read the releases from GitHub: #{last_lines(err, 1)}"] unless status.success?
+      return newest_tag(prereleases, "couldn't read the releases from GitHub: #{last_lines(err, 1)}") unless status.success?
 
       releases = JSON.parse(out)
       return [nil, "GitHub's releases list wasn't a list"] unless releases.is_a?(Array)
@@ -6078,9 +6137,30 @@ module AmahiHelper
       end
       [picks.max_by { |r| release_key(r[:version]) }, nil]
     rescue JSON::ParserError
-      [nil, "GitHub's releases list wasn't JSON"]
+      newest_tag(prereleases, "GitHub's releases list wasn't JSON")
     rescue SystemCallError => e
-      [nil, "couldn't run curl: #{e.message}"]
+      newest_tag(prereleases, "couldn't run curl: #{e.message}")
+    end
+
+    # When GitHub's releases list doesn't answer (it allows 60 lookups an hour from one address,
+    # which other homes behind a provider's shared address use too): the repository's tags. A
+    # release is published from its tag, and release candidates are the ones with rc. [pick, nil],
+    # or [nil, why the list didn't answer].
+    def newest_tag(prereleases, why)
+      out, _err, status = Open3.capture3(ENV_MIN.merge('GIT_TERMINAL_PROMPT' => '0'), ['/usr/bin/timeout', '/usr/bin/timeout'],
+                                         '60', GIT, *GIT_OPTIONS, 'ls-remote', '--tags', '--refs', 'origin', 'v*',
+                                         unsetenv_others: true, chdir: '/')
+      return [nil, why] unless status.success?
+
+      picks = out.lines(chomp: true).filter_map do |line|
+        tag = line.split("\t", 2)[1].to_s.delete_prefix('refs/tags/')
+        match = tag.match(RELEASE_TAG) or next
+        { tag: tag, version: tag.delete_prefix('v') } if prereleases || match[4].nil?
+      end
+      best = picks.max_by { |r| release_key(r[:version]) }
+      best ? [best, nil] : [nil, why]
+    rescue SystemCallError
+      [nil, why]
     end
 
     # Orders versions: 1.0.0rc1 < 1.0.0rc2 < 1.0.0 < 1.0.1.

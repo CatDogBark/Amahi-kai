@@ -51,8 +51,9 @@ sudo bin/amahi-install
 
 ### What the installer does
 
-Running it again is safe: it keeps your users, shares, settings and the version installed, and
-restarts Amahi-kai. New versions come through System Update ([Updating](updating)).
+Running it again is safe, the one-line command included: it keeps your users, shares, settings
+and the version installed, and restarts Amahi-kai. New versions come through System Update
+([Updating](updating)), which backs the database up first and goes back if a step fails.
 
 1. **Swap**: creates a swap file if the machine has none.
 2. **System packages**: build tools, Ruby 3.2 (Ubuntu's), MariaDB, Samba, Avahi, smartmontools and

@@ -154,7 +154,8 @@ class SettingsController < ApplicationController
   UPDATE_JOB = 'amahi-kai-update.service'
   UPDATE_STREAM_LIMIT = 70.minutes
 
-  # "Check now" on System Status: the helper fetches main and rewrites the update status.
+  # "Check now" on System Status: the helper fetches the update channel's newest version and
+  # rewrites the update status.
   # The System Update dialog's content as it stands now, with the header button's label: the
   # page asks when the dialog opens or the tab comes back into view (system_update.js), so a
   # page left open overnight shows the checks made since it loaded.

@@ -101,9 +101,16 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
 - **Migrations must work with the previous version's code**: rollback puts the code back but not
   the database (it's dumped to `/var/lib/amahi-kai/backups` first). Add columns and tables;
   don't rename or drop in the same PR that stops using them.
+- **A new install loads `db/schema.rb`; an old NAS ran the migrations.** Rails 8.1's `db:migrate`
+  loads the schema file into an empty database instead of running the migrations, so the two
+  paths must make the same tables: CI runs the migrations from nothing and diffs the schema they
+  write against `db/schema.rb` (keep the two in step; never edit one alone).
 - **The update that deploys a change runs the old code.** `bin/amahi-update` re-execs itself after
   `git pull` (bash would otherwise keep running the old copy) and passes the commit to roll back
-  to. The web UI starts it as its own job (`amahi-kai-update.service`, via the helper's
+  to; the new copy keeps the update lock and doesn't look the version up again. Any stop after
+  the checkout rolls back (an EXIT trap), and `/var/lib/amahi-kai/deployed-commit` names the
+  commit fully in place, so an update cut off even before that is finished by the next one
+  instead of reading as up to date. The web UI starts it as its own job (`amahi-kai-update.service`, via the helper's
   `system.update`) and follows `/var/log/amahi-kai/update.log`, reconnecting through the app's
   restart. Run inside `amahi-kai.service` (the web UI before O), it can't check the restarted app.
   Puma finishes open requests before it stops, so a stream that waits on the update must end

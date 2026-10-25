@@ -10,12 +10,36 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # The releases channel installs what's published here, so only main's code that passed CI
+      # is: the tag must be on main, and CI's run for that commit (the push to main) must have
+      # passed. A tag pushed while CI still runs waits for it, up to 30 minutes.
+      - name: The tag is on main, and CI passed for it
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main \
+            || { echo "$GITHUB_REF_NAME ($GITHUB_SHA) isn't on main"; exit 1; }
+          for i in $(seq 1 60); do
+            run=$(gh run list --workflow ci.yml --commit "$GITHUB_SHA" --event push --limit 1 --json status,conclusion \
+                    --jq '.[0] | "\(.status) \(.conclusion)"' 2>/dev/null || true)
+            case "$run" in
+              "completed success") echo "CI passed for $GITHUB_SHA"; exit 0 ;;
+              completed*) echo "CI didn't pass for $GITHUB_SHA ($run)"; exit 1 ;;
+            esac
+            sleep 30
+          done
+          echo "CI hasn't finished for $GITHUB_SHA after 30 minutes${run:+ ($run)}"
+          exit 1
 
       - name: The tag names the version in VERSION
         run: |

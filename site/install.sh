@@ -36,19 +36,24 @@ if ! command -v git &>/dev/null; then
   apt-get update -qq && apt-get install -y -qq git
 fi
 
-# Clone or update (git as root, without hooks from the checkout)
+# Installed already: its own installer runs on the version installed. New versions come through
+# System Update (Settings → System Status), which follows the update channel, backs the
+# database up first and goes back if a step fails; fetching here would skip all three.
 if [ -d "$INSTALL_DIR/.git" ]; then
-  echo "  Updating existing installation..."
+  echo "  Amahi-kai is installed already: running its installer on the version installed."
+  echo "  New versions come through System Update (Settings → System Status)."
+  [ "$BRANCH" = main ] || echo "  (AMAHI_BRANCH is for a new install; an installed one picks its channel there, under Follows.)"
   git config --global --get-all safe.directory 2>/dev/null | grep -qxF "$INSTALL_DIR" \
     || git config --global --add safe.directory "$INSTALL_DIR"
+  echo ""
   cd "$INSTALL_DIR"
-  git -c core.hooksPath=/dev/null fetch origin "$BRANCH"
-  git -c core.hooksPath=/dev/null checkout -q -f -B "$BRANCH" "origin/$BRANCH"
-else
-  echo "  Cloning Amahi-kai..."
-  git clone --branch "$BRANCH" "$REPO" "$INSTALL_DIR"
-  cd "$INSTALL_DIR"
+  exec bin/amahi-install "$@"
 fi
+
+# Clone (git as root, without hooks from the checkout)
+echo "  Cloning Amahi-kai..."
+git clone --branch "$BRANCH" "$REPO" "$INSTALL_DIR"
+cd "$INSTALL_DIR"
 
 echo ""
 echo "  Running installer..."

@@ -43,8 +43,9 @@ Status shows it, and System Update reads it so it never goes back to an older ve
    ```
 
    The tag starts `.github/workflows/release.yml`, which refuses a tag that doesn't match
-   `VERSION`, then publishes the GitHub Release with the changelog section as its notes (a
-   pre-release for an `rc` tag).
+   `VERSION` or isn't on `main`, waits for CI's run on that commit to pass (up to 30 minutes,
+   and refuses if it failed), then publishes the GitHub Release with the changelog section as
+   its notes (a pre-release for an `rc` tag).
 
 Servers on the `releases` channel offer the new version at their next check (every 6 hours, or
 **Check now**); `candidates` servers offer release candidates too.

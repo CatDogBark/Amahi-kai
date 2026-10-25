@@ -18,6 +18,9 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      # The site serves the one-line installer: one bash won't read never goes up.
+      - name: install.sh is valid bash
+        run: bash -n site/install.sh
       - uses: actions/configure-pages@v4
       - uses: actions/jekyll-build-pages@v1
         with:

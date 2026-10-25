@@ -713,6 +713,25 @@ RSpec.describe 'AmahiHelper' do
         expect(helper.newest_release(true)).to eq([{ tag: 'v0.9.3rc1', version: '0.9.3rc1' }, nil])
       end
 
+      it "falls back on the repository's tags when GitHub's releases list doesn't answer (its hourly limit)" do
+        failed = instance_double(Process::Status, success?: false)
+        allow(helper).to receive(:newest_release).and_call_original
+        allow(Open3).to receive(:capture3).and_call_original
+        allow(Open3).to receive(:capture3).with(anything, %w[/usr/bin/timeout /usr/bin/timeout], '30', '/usr/bin/curl', any_args)
+                                          .and_return(['', 'curl: (22) The requested URL returned error: 403', failed])
+        tags = "aaa\trefs/tags/v0.10.1\nbbb\trefs/tags/v0.10.2\nccc\trefs/tags/v0.11.0rc1\nddd\trefs/tags/nightly\n"
+        ls_remote = ->(*args) { args.include?('ls-remote') }
+        allow(Open3).to receive(:capture3).with(anything, %w[/usr/bin/timeout /usr/bin/timeout], '60', AmahiHelper::GIT, any_args) do |*args|
+          ls_remote.call(*args) ? [tags, '', instance_double(Process::Status, success?: true)] : ['', '', failed]
+        end
+        expect(helper.newest_release(false)).to eq([{ tag: 'v0.10.2', version: '0.10.2' }, nil])
+        expect(helper.newest_release(true)).to eq([{ tag: 'v0.11.0rc1', version: '0.11.0rc1' }, nil])
+        # Neither answers: why GitHub's list didn't
+        allow(Open3).to receive(:capture3).with(anything, %w[/usr/bin/timeout /usr/bin/timeout], '60', AmahiHelper::GIT, any_args)
+                                          .and_return(['', 'fatal: unable to access', failed])
+        expect(helper.newest_release(false)).to eq([nil, "couldn't read the releases from GitHub: curl: (22) The requested URL returned error: 403"])
+      end
+
       it 'writes the status for the app, and skips while an update holds the lock' do
         dir = Dir.mktmpdir
         stub_const('AmahiHelper::UPDATE_LOCK', "#{dir}/lock")
@@ -2632,7 +2651,7 @@ RSpec.describe 'AmahiHelper' do
       it 'updates installed packages with an update waiting, only those, with needrestart just listing restarts' do
         expect(AmahiHelper::UPGRADE_ENV).to include('NEEDRESTART_MODE' => 'l', 'DEBIAN_FRONTEND' => 'noninteractive')
         expect(steps('packages.upgrade', { 'packages' => %w[samba apparmor samba] })).to eq(
-          [['/usr/bin/apt-get', '-y', '-o', 'Dpkg::Options::=--force-confold', '-o', 'DPkg::Lock::Timeout=300',
+          [['/usr/bin/apt-get', '-y', '-o', 'Dpkg::Options::=--force-confold', '-o', 'DPkg::Lock::Timeout=300', '--no-remove',
             'install', '--only-upgrade', 'samba', 'apparmor', opts],
            [:check_security_updates]]
         )
@@ -2651,7 +2670,7 @@ RSpec.describe 'AmahiHelper' do
 
       it 'updates everything but held packages, adding the new packages an update needs, removing none' do
         expect(steps('packages.upgrade_all', {})).to eq(
-          [['/usr/bin/apt-get', '-y', '-o', 'Dpkg::Options::=--force-confold', '-o', 'DPkg::Lock::Timeout=300',
+          [['/usr/bin/apt-get', '-y', '-o', 'Dpkg::Options::=--force-confold', '-o', 'DPkg::Lock::Timeout=300', '--no-remove',
             '--with-new-pkgs', 'upgrade', opts],
            [:check_security_updates]]
         )
@@ -2889,14 +2908,58 @@ RSpec.describe 'AmahiHelper' do
       base = [[ufw, 'default', 'deny', 'incoming'], [ufw, 'allow', '22/tcp'], [ufw, 'allow', '3000/tcp'],
               [ufw, 'allow', '443/tcp'], [ufw, 'allow', '445/tcp'], [ufw, 'allow', '139/tcp'], [ufw, 'allow', '137:138/udp'],
               [ufw, 'allow', '5353/udp']]
+      allow(helper).to receive(:ssh_ports).and_return(['22'])
       expect(steps('security.enable_firewall', {})).to eq([*base, [ufw, '--force', 'enable']])
       File.write("#{dir}/amahi.conf", "dhcp-range=192.168.1.100,192.168.1.254,14400s\n")
       expect(steps('security.enable_firewall', {})).to eq([*base, [ufw, '--force', 'enable']])
+      # SSH moved off 22 is let in where it listens, so turning UFW on doesn't shut it out
+      allow(helper).to receive(:ssh_ports).and_return(%w[22 2222])
+      expect(steps('security.enable_firewall', {})).to eq([*base, [ufw, 'allow', '2222/tcp'], [ufw, '--force', 'enable']])
     end
 
-    it 'turns off SSH root login' do
+    it "reads the ports sshd listens on, and none when it can't say" do
+      allow(File).to receive(:executable?).and_call_original
+      allow(File).to receive(:executable?).with(AmahiHelper::SSHD).and_return(true)
+      allow(File).to receive(:directory?).and_call_original
+      allow(File).to receive(:directory?).with('/run/sshd').and_return(true)
+      allow(helper).to receive(:capture).with([AmahiHelper::SSHD, '-T']).and_return("port 22\nport 2222\naddressfamily any\nport 22\n")
+      expect(helper.ssh_ports).to eq(%w[22 2222])
+      allow(helper).to receive(:capture).with([AmahiHelper::SSHD, '-T']).and_raise(AmahiHelper::Failed, 'sshd exited 255')
+      expect(helper.ssh_ports).to eq([])
+    end
+
+    it 'turns off SSH root login only while another account can log in over SSH' do
+      allow(helper).to receive(:ssh_login_accounts).and_return(['casey'])
       expect(steps('security.harden_ssh', { 'setting' => 'root_login' })).to eq([[:harden_ssh, { 'PermitRootLogin' => 'no' }]])
       expect(refusal('security.harden_ssh', { 'setting' => 'PermitRootLogin yes' })).to include("isn't one Amahi-kai uses")
+      allow(helper).to receive(:ssh_login_accounts).and_return([])
+      expect(refusal('security.harden_ssh', { 'setting' => 'root_login' })).to include('no account but root', 'would lock everyone out of SSH')
+    end
+
+    it 'counts an account with a password toward logging in only while SSH takes passwords' do
+      allow(helper).to receive(:ssh_key_holders).and_return(['casey'])
+      allow(helper).to receive(:password_accounts).and_return(%w[ann casey])
+      allow(helper).to receive(:ssh_passwords_on?).and_return(true)
+      expect(helper.ssh_login_accounts).to eq(%w[casey ann])
+      allow(helper).to receive(:ssh_passwords_on?).and_return(false)
+      expect(helper.ssh_login_accounts).to eq(['casey'])
+    end
+
+    it "finds accounts with a login shell and a password that isn't locked" do
+      allow(File).to receive(:readlines).and_call_original
+      allow(File).to receive(:readlines).with('/etc/shells', chomp: true).and_return(['/bin/bash'])
+      allow(File).to receive(:foreach).and_call_original
+      allow(File).to receive(:foreach).with('/etc/shadow').and_return(
+        ["root:$y$j9T$root:19000::::::\n", "casey:$y$j9T$abc:19000::::::\n", "ann:!$y$j9T$locked:19000::::::\n",
+         "svc:*:19000::::::\n", "web:$y$j9T$web:19000::::::\n", "gone:$y$j9T$x:19000::::::\n"].each
+      )
+      accounts = { 'root' => [0, '/bin/bash'], 'casey' => [1000, '/bin/bash'], 'ann' => [1001, '/bin/bash'],
+                   'svc' => [999, '/bin/bash'], 'web' => [1002, '/usr/sbin/nologin'] }
+      allow(Etc).to receive(:getpwnam) do |name|
+        uid, shell = accounts.fetch(name) { raise ArgumentError, "can't find user for #{name}" }
+        Etc::Passwd.new(name, 'x', uid, 100, '', "/home/#{name}", shell)
+      end
+      expect(helper.password_accounts).to eq(['casey'])
     end
 
     it 'turns off SSH password login only while an account that can log in has a key' do
