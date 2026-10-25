@@ -29,8 +29,10 @@ class DisksController < ApplicationController
     @page_title = t('disks')
     # With ZFS installed, an unmounted drive says a pool wants it left so
     @zfs_installed = StoragePools.zfs_installed?
-    # A drive of the Greyhole pool that came back unmounted says so
+    # A drive of the Greyhole pool that came back unmounted says so, and one that's mounted says
+    # it leaves the pool before it's unmounted; one with a share on it, that the share goes first
     @pool_paths = DiskPoolPartition.pluck(:path)
+    @share_paths = Share.pluck(:name, :path)
     # The disk the system runs from first, then the others in the kernel's order.
     @devices = DiskManager.devices.each_with_index.sort_by { |device, i| [device[:os_disk] ? 0 : 1, i] }.map(&:first)
   rescue DiskManager::DiskError => e

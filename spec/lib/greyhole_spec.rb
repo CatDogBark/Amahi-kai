@@ -314,6 +314,12 @@ RSpec.describe Greyhole do
       expect(Privileged.calls.last).to eq(['services.restart', { service: 'greyhole' }])
     end
 
+    # Restarted with no drive, Greyhole failed ("no storage_pool_drive defined") and showed failed.
+    it "stops Greyhole when the pool's last drive is gone, instead of restarting it" do
+      expect(Greyhole.configure!).to be true
+      expect(Privileged.calls.last).to eq(['services.stop', { service: 'greyhole' }])
+    end
+
     it 'writes only lines the root helper accepts' do
       create(:disk_pool_partition, path: '/mnt/storage-1', minimum_free: 10)
       share = create(:share, name: 'Movies')

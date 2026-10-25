@@ -108,12 +108,21 @@
                       </div>
                     <% when :mounted %>
                       <% unless ['/', '/boot', '/boot/efi'].include?(part[:mountpoint]) %>
-                        <%= button_to "Unmount",
-                              disks_unmount_disk_path,
-                              params: { device: part[:ref] },
-                              method: :post,
-                              class: "btn btn-sm btn-outline-warning",
-                              data: { confirm: "Unmount #{part[:path]} from #{part[:mountpoint]}?", disable_with: "Unmounting..." } %>
+                        <%# The root helper won't unmount one of Greyhole's drives, or a drive with a share's folder on it: say what comes first %>
+                        <% mp = part[:mountpoint] %>
+                        <% shares_on = @share_paths.select { |_name, path| path == mp || path.to_s.start_with?("#{mp}/") }.map(&:first).sort %>
+                        <% if @pool_paths.include?(mp) %>
+                          <span class="small text-muted" id="unmount-why-<%= File.basename(part[:path]) %>">In the Greyhole pool: remove it on <a href="<%= disks_storage_pool_path %>">Greyhole Pool</a> to unmount it</span>
+                        <% elsif shares_on.any? %>
+                          <span class="small text-muted" id="unmount-why-<%= File.basename(part[:path]) %>"><%= shares_on.to_sentence %> <%= shares_on.one? ? 'is' : 'are' %> on it: delete <%= shares_on.one? ? 'that share' : 'those shares' %> on <a href="<%= shares_path %>">Shares</a> to unmount it</span>
+                        <% else %>
+                          <%= button_to "Unmount",
+                                disks_unmount_disk_path,
+                                params: { device: part[:ref] },
+                                method: :post,
+                                class: "btn btn-sm btn-outline-warning",
+                                data: { confirm: "Unmount #{part[:path]} from #{part[:mountpoint]}?", disable_with: "Unmounting..." } %>
+                        <% end %>
                       <% end %>
                     <% end %>
                   <% end %>

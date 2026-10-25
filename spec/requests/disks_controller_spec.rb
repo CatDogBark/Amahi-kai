@@ -67,6 +67,26 @@ describe "Disks Controller", type: :request do
       end
     end
 
+    # Unmount was offered on Greyhole's drives and on drives with a share on them, asked to be
+    # confirmed, then refused, the reason in a toast gone in 5 seconds.
+    it "says what comes before unmounting a Greyhole drive or a drive with a share, instead of offering Unmount" do
+      DiskPoolPartition.create!(path: '/mnt/storage-1', minimum_free: 10)
+      create(:share, name: 'USB', path: '/mnt/storage-3')
+      mounted = lambda do |name, mountpoint|
+        { name: name, path: "/dev/#{name}", ref: "/dev/#{name}", model: 'SSD', size: '8G', os_disk: false, zfs_pool: nil,
+          partitions: [{ path: "/dev/#{name}", ref: "/dev/#{name}", size: '8G', fstype: 'ext4', status: :mounted, mountpoint: mountpoint }] }
+      end
+      allow(DiskManager).to receive(:devices).and_return([mounted.call('sdb', '/mnt/storage-1'), mounted.call('sdc', '/mnt/storage-2'),
+                                                          mounted.call('sdd', '/mnt/storage-3')])
+      get "/disks/devices"
+      page = Nokogiri::HTML(response.body)
+      unmounts = page.css('form').select { |f| f['action'] == '/disks/unmount_disk' }.map { |f| f.at_css('input[name="device"]')['value'] }
+      expect(unmounts).to eq(['/dev/sdc'])
+      expect(page.at_css('#unmount-why-sdb').text.squish).to eq('In the Greyhole pool: remove it on Greyhole Pool to unmount it')
+      expect(page.at_css('#unmount-why-sdb a')['href']).to eq('/disks/storage_pool')
+      expect(page.at_css('#unmount-why-sdd').text.squish).to eq('USB is on it: delete that share on Shares to unmount it')
+    end
+
     describe "drive actions" do
       it "take the drive by its ref, and name it by its kernel name" do
         allow(DiskManager).to receive(:resolve).and_call_original
