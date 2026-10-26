@@ -19,14 +19,53 @@
 
 class ApplicationController < ActionController::Base
   protect_from_forgery with: :exception
+  rescue_from ActionController::InvalidAuthenticityToken, with: :page_out_of_date
 
   before_action :session_cookie_options
   before_action :set_user_session_controller
   before_action :check_setup_completed
 
-  helper_method :current_user, :advanced?
+  helper_method :current_user, :advanced?, :session_ends_in
 
   private
+
+  # A request the page makes by itself (fetch, asking for JSON), not the page loading.
+  def background_request?
+    request.xhr? || request.format.json?
+  end
+
+  # Tells a page that its sign-in ended ('signed-out') or that it's from an earlier one
+  # ('out-of-date'), in the header its script acts on (session_watch.js: it reloads, which
+  # leads to the sign-in page when signed out) and in the error its handlers show.
+  def tell_page(state, message, status)
+    response.set_header('X-Amahi-Session', state)
+    render json: { status: 'error', error: message }, status: status
+  end
+
+  # A form or a page's request with a token this session never gave it: the page is from
+  # before its sign-in ended or changed (the idle limit, a sign-out elsewhere, a reinstall).
+  # Nothing is done, and the page is told so, instead of getting Rails' bare 422.
+  def page_out_of_date
+    set_user_session_controller # the token's check runs before the filter that does it
+    signed_in = current_user.present?
+    if background_request?
+      return tell_page('out-of-date', t('page_out_of_date'), :unprocessable_entity) if signed_in
+
+      tell_page('signed-out', t('signed_out'), :unauthorized)
+    elsif signed_in || controller_name == 'user_sessions'
+      flash[:info] = t('page_out_of_date')
+      redirect_back_or_to(signed_in ? root_path : new_user_session_path)
+    else
+      flash[:info] = t('signed_out')
+      redirect_to new_user_session_path
+    end
+  end
+
+  # Seconds until this login ends unless it's used (UserSession.ends_at), for the page's
+  # amahi-session meta tag.
+  def session_ends_in
+    (UserSession.ends_at - Time.current).ceil
+  end
 
   # Advanced mode (the header's toggle), read once per request, and only when a page asks.
   def advanced?
@@ -95,13 +134,19 @@ class ApplicationController < ActionController::Base
     session[:session_token] = user.session_token if user == current_user
   end
 
+  # A page load goes to the sign-in page and comes back after it; a page's own request is told
+  # the sign-in ended (it was redirected to the sign-in page, which no handler could read).
   def login_required
-    unless current_user
+    return if current_user
+
+    if background_request?
+      tell_page('signed-out', t('signed_out'), :unauthorized)
+    else
       store_location
       flash[:info] = I18n.t('must_be_logged_in')
       redirect_to new_user_session_path
-      return false
     end
+    false
   end
 
   # Someone signed in who isn't an admin is turned away to the dashboard (they're signed in

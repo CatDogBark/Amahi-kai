@@ -6,7 +6,7 @@ describe "Admin access", type: :request do
       login_as_admin
       get root_path
       expect(response.body).to include("Setup")
-      expect(response.body).to include("Logout")
+      expect(response.body).to include("Sign out")
     end
   end
 

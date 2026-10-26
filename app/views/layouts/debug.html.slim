@@ -15,6 +15,10 @@ html[lang="en" data-theme="dark" data-bs-theme="dark"]
     link rel="shortcut icon" href="/favicon.ico" type="image/x-icon"
 
     = csrf_meta_tags
+    / When this page's sign-in ends unless it's used: the page goes to the sign-in page then
+    / (session_watch.js), asking this address, which doesn't count as use.
+    - if current_user
+      meta name="amahi-session" content=session_status_path data-ends-in=session_ends_in
 
   body.basic
 

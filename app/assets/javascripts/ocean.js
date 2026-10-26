@@ -75,7 +75,9 @@
     frontLayer.append(frontCanvas);
     document.body.append(frontLayer);
 
-    const sceneMs = now => S.anchorScene + (now - S.anchorReal) * S.cycle;
+    // At real time the scene is the clock itself: a faster speed turned off (or an offset saved
+    // from before this rule) leaves the sun where the clock has it, not where the fast run got to.
+    const sceneMs = now => (S.cycle === 1 ? now : S.anchorScene + (now - S.anchorReal) * S.cycle);
 
     // Viewing time: how long the water has been on screen in this tab, in ms. Weather, lightning
     // and sea life run on it, so they move on while someone is looking and wait while nobody is;

@@ -4,6 +4,14 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.0.3] — 2026-10-25
+
+### 🔒 Security & Fixes
+
+- **A page whose sign-in ended takes you to the sign-in page** — A page left open after its sign-in ended (12 hours unused without Remember me, a sign-out in another browser, the NAS installed again) answered every button with "no answer from Amahi-kai", which read as the NAS being down. Its buttons take you to the sign-in page now, and so does the page by itself once its sign-in runs out, or when you come back to it after being away; after signing in you're back on the page you were on. A page from an earlier sign-in reloads and says so, and a form sent from one says nothing was done, instead of a bare error page. The page's check of its sign-in doesn't count as use, so an open page can't keep you signed in.
+- **Sign out is in the header** — It was only in the footer, as Logout, at the bottom of the page. The header has it now (in the menu on a phone), and it's called Sign out.
+- **The water background's clock stays on the real one** — After a faster speed (1 hour/min, Day in 2 min) was set back to Real time, the sun stayed where the fast run had left it, minutes or hours off the clock, and Follow clock went on from there for good (on amahi-kai.com as on the NAS). Real time is the clock itself now, which also puts right a background that's already off.
+
 ## [1.0.2] — 2026-10-25
 
 ### 🔒 Security & Fixes

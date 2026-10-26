@@ -116,6 +116,8 @@ itself is still root-level software, so only install apps you trust.
 - Passwords are stored with bcrypt.
 - With **Remember me** ticked, a sign-in lasts until 7 days without use; without it, until the
   browser closes or 12 hours without use. Either way it ends 30 days after it was made.
+- When a sign-in ends, a page left open goes to the sign-in page by itself, and you're back on it
+  after signing in. A page only open in a tab doesn't count as use, so it can't keep you signed in.
 - **Signing out** signs that account out on every browser. Changing your password signs you out
   everywhere else.
 - Sign-in attempts are limited: 5 in 20 seconds from one address, 10 a minute for one login name.

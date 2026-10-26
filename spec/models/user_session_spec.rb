@@ -207,6 +207,28 @@ RSpec.describe UserSession, type: :model do
       expect(store[:seen_at]).to be_within(5).of(Time.current.to_i)
     end
 
+    # The page's own check of its sign-in: an open page can't keep itself signed in
+    it 'reads the session without counting as use when told to' do
+      log_in
+      store[:seen_at] = 10.minutes.ago.to_i
+      user.update_column(:last_request_at, 10.minutes.ago)
+      expect(UserSession.find(touch: false)&.record).to eq(user)
+      expect(store[:seen_at]).to be_within(5).of(10.minutes.ago.to_i)
+      expect(user.reload.last_request_at).to be_within(5).of(10.minutes.ago)
+      store[:seen_at] = 13.hours.ago.to_i
+      expect(UserSession.find(touch: false)).to be_nil # it still ends
+    end
+
+    it 'ends its idle limit after it was last seen, and never later than 30 days from the sign-in' do
+      log_in
+      store[:seen_at] = 1.hour.ago.to_i
+      expect(UserSession.ends_at).to be_within(5).of(11.hours.from_now)
+      store[:remember] = true
+      expect(UserSession.ends_at).to be_within(5).of(7.days.from_now - 1.hour)
+      store[:signed_in_at] = 27.days.ago.to_i
+      expect(UserSession.ends_at).to be_within(5).of(3.days.from_now) # the 30 days come first
+    end
+
     it 'keeps a session from before tokens existed for a user who has none' do
       user.update_column(:session_token, nil)
       store[:user_id] = user.id

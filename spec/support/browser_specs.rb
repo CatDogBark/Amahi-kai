@@ -48,7 +48,15 @@ module BrowserSpec
     end
 
     def browser_errors
+      expected = @expected_browser_errors || []
       (@browser_log || []).select { |entry| BrowserSpec.noise?(entry) }
+                          .reject { |entry| expected.any? { |pattern| entry[:text].to_s.match?(pattern) } }
+    end
+
+    # An example that has the browser log an error on purpose (a request it makes Amahi-kai
+    # refuse, say) names it, and only it is let through.
+    def expect_browser_error(pattern)
+      (@expected_browser_errors ||= []) << pattern
     end
 
     # Signs in through the real form, as the seeded admin (db/seeds.rb runs before each example).

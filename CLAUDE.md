@@ -11,7 +11,7 @@ missing there. CatDogBark owns the repo (`CatDogBark/Amahi-kai`, **public**) and
 Current work (CatDogBark, 2026-10-25): 1.0 is out. The road there was
 **`docs/plans/release-1.0.md`**: the code review and the docs review (seven fix batches on `dev`,
 each checked on the test VM), 1.0.0rc1 and its fresh install on the test VM, then 1.0.0 to
-1.0.2 on 2026-10-25. Networking, Tailscale included, is done. After 1.0: the real pool's checks with bitShare (bitShare's work in tandem), signed
+1.0.3 on 2026-10-25. Networking, Tailscale included, is done. After 1.0: the real pool's checks with bitShare (bitShare's work in tandem), signed
 updates, and backups (no users yet, and CatDogBark's NAS has Proxmox's backups; the backups plan,
 for bare metal, is `docs/plans/backups.md`). 1.0 is for other people to install. CatDogBark's NAS is the house's
 router now and follows releases; the test VM takes `dev` first. bitShare (its own project)

@@ -1025,6 +1025,10 @@ a:hover { color: #b5f7df; }
   gap: 4px;
   padding: 10px 0 4px;
 }
+/* Sign out is a form's button (it's a DELETE): it sits and looks like the icons and links beside it */
+.kai-signout { margin: 0; }
+.kai-mobilenav .kai-signout .kai-navlink { width: 100%; border: 0; background: transparent; text-align: left; }
+.kai-mobilenav .kai-signout .kai-navlink:hover { background: rgba(255, 255, 255, 0.07); }
 
 /* The page's title, with its section above it */
 .kai-pagehead { padding-top: 36px; padding-bottom: 6px; }

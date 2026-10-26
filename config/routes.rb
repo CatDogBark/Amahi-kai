@@ -154,6 +154,7 @@ Rails.application.routes.draw do
   end
 
   match 'login' => 'user_sessions#new', :as => :login, via: [:get]
+  get 'session/status' => 'user_sessions#status', :as => :session_status
   delete 'logout' => 'user_sessions#destroy', :as => :logout
 
   get '/tab/debug'=>'debug#index'
