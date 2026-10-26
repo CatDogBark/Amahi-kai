@@ -380,6 +380,21 @@ RSpec.describe 'AmahiHelper apps' do
       expect(failure('environment' => { 'X' => "a\nb" })).to include('one line')
       expect(failure('environment' => { 'TOKEN' => 'fixed' })).to include('set in environment too')
     end
+
+    # Format 4: some apps name their settings with small letters and dashes (PiGallery2's
+    # Users-enforcedUsers), and want a generated password inside one of them
+    it 'takes names as the app spells them and secrets inside values, only with requires: 4' do
+      spelled = { 'default-Media-folder' => '/shares',
+                  'Users-enforcedUsers' => '[{"name":"admin","role":"Admin","password":"{{secret:TOKEN}}"}]' }
+      expect(failure('requires' => 4, 'environment' => spelled)).to be_nil
+      expect(failure('environment' => { 'default-Media-folder' => '/shares' })).to include('needs requires: 4')
+      expect(failure('environment' => { 'X' => 'a {{secret:TOKEN}}' })).to include('needs requires: 4')
+      expect(failure('requires' => 4, 'environment' => { 'X' => '{{secret:OTHER}}' })).to include("isn't one of its secrets")
+      ['-x', '1x', 'a b', 'a=b', 'a.b', ''].each do |name|
+        expect(failure('requires' => 4, 'environment' => { name => '1' })).to include("isn't valid"), name.inspect
+      end
+      expect(failure('requires' => 4, 'environment' => { 'docker_mods' => 'x' })).to include('download more code')
+    end
   end
 
   describe 'installing' do
@@ -454,6 +469,30 @@ RSpec.describe 'AmahiHelper apps' do
       expect(mode).to eq(0o600)
       expect(File.exist?(path)).to be false
       expect(helper).to have_received(:do_app_firewall)
+    end
+
+    it 'fills in a secret inside a value, under the name the app spells (format 4), and keeps it out of the definition' do
+      stub_const('AmahiHelper::APP_MANIFESTS', "#{dir}/manifests")
+      FileUtils.mkdir_p("#{dir}/manifests")
+      File.write("#{dir}/manifests/gallery.yml", {
+        'name' => 'Gallery', 'description' => 'Photos.', 'category' => 'media', 'requires' => 4,
+        'image' => "example/gallery:1.0@sha256:#{'b' * 64}", 'run_as' => 'app',
+        'ports' => [{ 'host' => 8510, 'container' => 80 }], 'folders' => [{ 'name' => 'config', 'path' => '/app/data/config' }],
+        'secrets' => [{ 'env' => 'ADMIN_PASSWORD', 'label' => 'Admin password' }],
+        'environment' => { 'TZ' => '{{timezone}}', 'default-Media-folder' => '/shares',
+                           'Users-enforcedUsers' => '[{"name":"admin","role":"Admin","password":"{{secret:ADMIN_PASSWORD}}"}]' }
+      }.to_yaml)
+      helper.do_install_app('gallery', helper.app_manifest('gallery'))
+
+      password = JSON.parse(File.read("#{secrets_dir}/gallery.json"))['ADMIN_PASSWORD']
+      expect(password).to match(/\A[A-Za-z0-9]{32}\z/)
+      expect(env_files.sole[1].lines(chomp: true)).to contain_exactly(
+        'TZ=America/Chicago', 'default-Media-folder=/shares',
+        %(Users-enforcedUsers=[{"name":"admin","role":"Admin","password":"#{password}"}]), "ADMIN_PASSWORD=#{password}"
+      )
+      definition = File.read("#{dir}/app-definitions/gallery.json")
+      expect(definition).to include('{{secret:ADMIN_PASSWORD}}')
+      expect(definition).not_to include(password)
     end
 
     it 'reuses the user, folders and secrets of an earlier install' do

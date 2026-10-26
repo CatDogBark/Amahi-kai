@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+### 🔧 Architecture & Code Quality
+
+- **Apps can be set up the way they name their settings** (catalog format 4) — A manifest that says `requires: 4` can spell its environment names as the app does (PiGallery2's `Media-folder`), and put a generated secret inside a setting (`{{secret:NAME}}`), such as an admin password inside a list of users, so the app never starts with a default password. It's what PiGallery2, a photo gallery coming to the catalog, needs. Servers on an older Amahi-kai list such an app as needing a newer one.
+
 ## [1.0.3] — 2026-10-25
 
 ### 🔒 Security & Fixes

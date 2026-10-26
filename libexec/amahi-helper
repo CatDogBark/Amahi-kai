@@ -538,6 +538,10 @@ module AmahiHelper
   APP_IMAGE = %r{\A[a-z0-9]+(?:[._/-][a-z0-9]+)*:[A-Za-z0-9._-]{1,64}@sha256:[0-9a-f]{64}\z}
   APP_FOLDER = /\A[a-z][a-z0-9_-]{0,31}\z/
   APP_ENV_NAME = /\A[A-Z][A-Z0-9_]{0,63}\z/
+  # Format 4: an environment name as the app spells its setting (PiGallery2's Media-folder), and a
+  # generated secret inside a value ({{secret:NAME}}, NAME one of the manifest's secrets).
+  APP_ENV_NAME_SPELLED = /\A[A-Za-z][A-Za-z0-9_-]{0,63}\z/
+  APP_SECRET_PLACEHOLDER = /\{\{secret:([A-Z][A-Z0-9_]{0,63})\}\}/
   # Environment names that have an image download and run more code as it starts (linuxserver.io's
   # mods): no manifest sets them.
   APP_REFUSED_ENV = %w[DOCKER_MODS].freeze
@@ -577,14 +581,15 @@ module AmahiHelper
   # the catalog no longer lists). A manifest's `requires` is the catalog format it needs: one
   # above CATALOG_FORMAT is listed but can't be installed until System Update brings an
   # Amahi-kai that knows it. Format 2 adds `web_tls` (the app's page is HTTPS, its certificate its
-  # own).
+  # own), format 3 folders' `kind` and `required`, format 4 environment names as the app spells
+  # them and secrets inside values (APP_ENV_NAME_SPELLED).
   CATALOG_REPO = 'https://github.com/CatDogBark/amahi-kai-apps.git'
   CATALOG_PROTOCOLS = %w[https].freeze
   CATALOG_SRC = '/var/lib/amahi-kai/catalog-src'
   APP_CATALOG = '/var/lib/amahi-kai/catalog'
   CATALOG_STATUS = '/var/lib/amahi-kai/catalog-status.json'
   CATALOG_LOCK = '/run/amahi-kai-catalog.lock'
-  CATALOG_FORMAT = 3
+  CATALOG_FORMAT = 4
   CATALOG_MAX_APPS = 200
   CATALOG_MAX_BYTES = 64 * 1024
   # Apps on the LAN (mDNS). Avahi announces each installed app with a web page as an HTTP
@@ -3080,7 +3085,7 @@ module AmahiHelper
       bad.call('run_as must be app or image') unless %w[app image].include?(run_as)
       memory = (data['memory'] || APP_DEFAULT_MEMORY).to_s
       bad.call("memory #{memory.inspect} must be like 512m or 2g") unless memory.match?(APP_MEMORY)
-      environment = app_environment_spec(data['environment'], bad)
+      environment = app_environment_spec(data['environment'], bad, manifest_requires(id, data))
       writes_shares = data.fetch('writes_shares', false)
       bad.call('writes_shares must be true or false') unless [true, false].include?(writes_shares)
       # What writes into shares runs as the app's own user: the whole container (run_as: app),
@@ -3097,9 +3102,15 @@ module AmahiHelper
       bad.call('web_tls must be true or false') unless [true, false].include?(web_tls)
       bad.call('web_tls needs a web_port') if web_tls && web_port.nil?
       folders = app_folders(data['folders'], bad)
+      secrets = app_secret_names(data['secrets'], environment, bad)
+      environment.each do |key, value|
+        value.scan(APP_SECRET_PLACEHOLDER).flatten.each do |name|
+          bad.call("#{key} has {{secret:#{name}}}, which isn't one of its secrets") unless secrets.include?(name)
+        end
+      end
       { image: image, run_as: run_as, memory: memory, ports: ports, web_port: web_port, web_tls: web_tls,
         folders: folders, storage: app_storage_need(folders), environment: environment,
-        secrets: app_secret_names(data['secrets'], environment, bad), writes_shares: writes_shares }
+        secrets: secrets, writes_shares: writes_shares }
     end
 
     # What the Apps pages show besides: a name, a description and a category, each one line,
@@ -3209,14 +3220,22 @@ module AmahiHelper
       datasets.any? { |folder| folder[:required] } ? :required : :optional
     end
 
-    def app_environment_spec(environment, bad)
+    # The manifest's environment, checked: names like TZ, or as the app spells them with format 4
+    # (requires: 4), as are secrets inside values (APP_ENV_NAME_SPELLED), so an Amahi-kai that
+    # doesn't know them lists the app as needing a newer one instead of dropping it.
+    def app_environment_spec(environment, bad, format = 1)
       environment ||= {}
       bad.call('environment must be a mapping') unless environment.is_a?(Hash)
       environment.to_h do |key, value|
-        bad.call("environment name #{key.inspect} isn't valid") unless key.to_s.match?(APP_ENV_NAME)
-        bad.call("#{key} would have the image download more code as it starts") if APP_REFUSED_ENV.include?(key.to_s)
-        bad.call("#{key} must be one line of text") unless value.is_a?(String) && value.length <= 1000 && !value.match?(/[\r\n\0]/)
-        [key.to_s, value]
+        name = key.to_s
+        unless name.match?(APP_ENV_NAME)
+          bad.call("environment name #{key.inspect} isn't valid") unless name.match?(APP_ENV_NAME_SPELLED)
+          bad.call("environment name #{name} needs requires: 4 (names as the app spells them)") if format < 4
+        end
+        bad.call("#{name} would have the image download more code as it starts") if APP_REFUSED_ENV.include?(name.upcase)
+        bad.call("#{name} must be one line of text") unless value.is_a?(String) && value.length <= 1000 && !value.match?(/[\r\n\0]/)
+        bad.call("#{name} has a secret in its value, which needs requires: 4") if format < 4 && value.match?(APP_SECRET_PLACEHOLDER)
+        [name, value]
       end
     end
 
@@ -6456,8 +6475,10 @@ module AmahiHelper
 
     def app_environment(manifest, uid, gid, secrets)
       values = { 'uid' => uid.to_s, 'gid' => gid.to_s, 'timezone' => host_timezone }
-      manifest[:environment].transform_values { |value| value.gsub(APP_PLACEHOLDERS) { values.fetch(Regexp.last_match(1)) } }
-                            .merge(secrets)
+      manifest[:environment].transform_values do |value|
+        value.gsub(APP_PLACEHOLDERS) { values.fetch(Regexp.last_match(1)) }
+             .gsub(APP_SECRET_PLACEHOLDER) { secrets.fetch(Regexp.last_match(1)) }
+      end.merge(secrets)
     end
 
     def host_timezone

@@ -106,8 +106,12 @@ environment:
   one of the server's own, and not another catalog app's); `container` is the one your image
   listens on.
 - **`environment`** can use `{{uid}}`, `{{gid}}` and `{{timezone}}`, filled in at install. It
-  can't set `DOCKER_MODS`, which has an image download more code as it starts.
-- **`secrets`** (`{ env: ADMIN_TOKEN, label: Admin page token }`) are generated at install.
+  can't set `DOCKER_MODS`, which has an image download more code as it starts. Its names are like
+  `TZ`; with **`requires: 4`** they can be spelled the way your app spells its settings (letters
+  of either case, digits, `_` and `-`, starting with a letter: PiGallery2's `Media-folder`).
+- **`secrets`** (`{ env: ADMIN_TOKEN, label: Admin page token }`) are generated at install. With
+  `requires: 4` a setting can hold one inside its value as `{{secret:ADMIN_TOKEN}}`, such as a
+  password inside a JSON list of users; secrets are letters and digits, so they fit inside quotes.
 - **`folders`**: each `path` is made of plain names (letters, digits, `.`, `_`, `-`), isn't
   `/shares` or under it (where the app's shares go), and no two folders share one.
 - **`folders`** with `backup: false` (caches, downloads) aren't copied before an update.

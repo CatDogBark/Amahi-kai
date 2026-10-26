@@ -16,8 +16,9 @@ class AppCatalog
   STATUS_PATH = '/var/lib/amahi-kai/catalog-status.json'.freeze
   # The catalog format this Amahi-kai knows (the helper's CATALOG_FORMAT). An app whose
   # `requires` is higher is listed, but installing it waits for System Update. Format 2 adds
-  # `web_tls`; 3, folders kept on a ZFS pool (`kind: dataset`, and `required`).
-  FORMAT = 3
+  # `web_tls`; 3, folders kept on a ZFS pool (`kind: dataset`, and `required`); 4, environment
+  # names as the app spells them, and generated secrets inside values (`{{secret:NAME}}`).
+  FORMAT = 4
   # Where the helper keeps each app's folders and generated secrets (outside production: tmp/).
   APPS_ROOT = '/var/lib/amahi-kai/apps'.freeze
   SECRETS_DIR = '/var/lib/amahi-kai/app-secrets'.freeze
