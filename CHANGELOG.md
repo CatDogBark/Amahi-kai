@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-10-26
+
+PiGallery2, a photo gallery, comes to the app catalog with this release; every app says how to sign in the first time; and the dashboard shows your storage pools.
+
 ### 🔒 Security & Fixes
 
 - **Each app says how to sign in the first time** (Apps) — The Apps page gave no word on how to get into an app once it was installed: the password Amahi-kai made for PiGallery2 sat in a folded list, and nothing said its user is admin, or that Jellyfin, Gitea, Uptime Kuma and bitTube have you make the first account on their own first page. Every app in the catalog now says how, under the installed app on the Apps page (above the passwords Amahi-kai made for it) and when its install finishes.
@@ -12,7 +16,7 @@ All notable changes to Amahi-kai are documented here.
 
 ### 🔧 Architecture & Code Quality
 
-- **Apps can be set up the way they name their settings** (catalog format 4) — A manifest that says `requires: 4` can spell its environment names as the app does (PiGallery2's `Media-folder`), and put a generated secret inside a setting (`{{secret:NAME}}`), such as an admin password inside a list of users, so the app never starts with a default password. It's what PiGallery2, a photo gallery coming to the catalog, needs. Servers on an older Amahi-kai list such an app as needing a newer one.
+- **Apps can be set up the way they name their settings** (catalog format 4) — A manifest that says `requires: 4` can spell its environment names as the app does (PiGallery2's `Media-folder`), and put a generated secret inside a setting (`{{secret:NAME}}`), such as an admin password inside a list of users, so the app never starts with a default password. It's what PiGallery2, the photo gallery now in the catalog, needs. Servers on an older Amahi-kai list such an app as needing a newer one.
 
 ## [1.0.3] — 2026-10-25
 
