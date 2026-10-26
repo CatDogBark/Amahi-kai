@@ -118,9 +118,11 @@ Log in as `admin` and the wizard starts:
 4. **Storage drives**: pick the drives to use. Amahi-kai can format a new drive (ext4), mounts each
    one under `/mnt` with settings that let the server still boot if a drive goes missing, and adds
    it to the storage pool. A drive with a filesystem Greyhole can't pool (NTFS, FAT, exFAT) is shared
-   as it is instead, its files where they were. The drive the system runs from is never offered.
-   Leave unticked any drive you want for a [ZFS pool](zfs-pools) later: a pool takes whole drives
-   with nothing on them.
+   as it is instead, its files where they were. The drive the system runs from is never offered,
+   and neither are drives that already hold a ZFS pool: import the pool afterwards (see
+   [After installing Amahi-kai again](zfs-pools#after-installing-amahi-kai-again)). Leave unticked
+   any drive you want for a [ZFS pool](zfs-pools) later: a pool takes whole drives with nothing on
+   them.
 5. **Greyhole**: install storage pooling and choose how many copies of each file new pooled
    shares keep (see [Storage Pooling](storage-pooling)). Optional.
 6. **First share**: create a share such as "Movies", pooled with those copies once Greyhole is

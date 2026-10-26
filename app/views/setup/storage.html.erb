@@ -5,6 +5,11 @@
   ZFS pool later (Disks → ZFS Pools): a pool takes whole drives with nothing on them.
 </p>
 
+<%# A ZFS pool's drives are never offered (the helper won't format or mount them either): the pool is imported on Disks → ZFS Pools %>
+<% pools = @devices.reject { |d| d[:os_disk] }.filter_map { |d| d[:zfs_pool] }.uniq %>
+<% pools_named = "the ZFS #{'pool'.pluralize(pools.size)} #{pools.to_sentence}" %>
+<% import_hint = "Import #{pools.one? ? 'it' : 'them'} on Disks → ZFS Pools once setup is done." %>
+
 <% if @devices.any? { |d| !d[:os_disk] && !d[:zfs_pool] } %>
   <form id="storage-form" data-call="prepareDrives" data-args='["@event", "<%= setup_greyhole_path %>", "<%= setup_prepare_drives_stream_path %>"]'>
     <div class="drive-list">
@@ -56,6 +61,10 @@
       <% end %>
     </div>
 
+    <% if pools.any? %>
+      <p class="setup-hint">The drives that belong to <%= pools_named %> aren't listed. <%= import_hint %></p>
+    <% end %>
+
     <p class="setup-hint">
       ⚠ Formatting erases everything on a drive. A drive with no filesystem is always formatted; one
       that has a filesystem is formatted only if you tick its Format box.
@@ -68,8 +77,13 @@
   </form>
 <% else %>
   <div class="setup-facts setup-center">
-    <span>No drives found besides the one the system runs from.</span>
-    <span class="setup-hint">You can add drives later on Disks → Devices.</span>
+    <% if pools.any? %>
+      <span>The other drives belong to <%= pools_named %> and are left as they are.</span>
+      <span class="setup-hint"><%= import_hint %></span>
+    <% else %>
+      <span>No drives found besides the one the system runs from.</span>
+      <span class="setup-hint">You can add drives later on Disks → Devices.</span>
+    <% end %>
   </div>
   <div class="setup-actions">
     <a href="<%= setup_greyhole_path %>" class="btn-kai">Continue →</a>

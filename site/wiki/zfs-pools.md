@@ -176,7 +176,8 @@ Amahi-kai's settings don't come back with a new install (see
 [what it doesn't back up](getting-started#what-amahi-kai-doesnt-back-up)), but a pool's data stays
 on its drives:
 
-1. Connect the pool's drives and finish the setup wizard, leaving them unticked in its storage step.
+1. Connect the pool's drives and finish the setup wizard. Its storage step leaves them out and
+   names the pool.
 2. On **Disks → ZFS Pools**, **Install ZFS** if it isn't. The pool shows as **On the drives, not
    imported**.
 3. **Import** it. It opens at `/srv/pools/<name>` again, with its snapshots.

@@ -4,6 +4,8 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-10-25
+
 Amahi-kai 1.0 is a home server for Ubuntu 24.04, run from your browser, and the first release meant for other people to install. On a dedicated machine or virtual machine it gives you:
 
 - **File shares** for every computer in the house (Samba), with per-user access, a Trash, a web file browser and search.
@@ -86,6 +88,7 @@ Coming from 0.10.2, what changes is the 1.0 review's: a full pass over the code 
 - **A share's Samba settings are saved only once Samba takes them** — An older way in to the same action saved them unchecked; it's gone.
 - **A share's size counts the share** — The count followed links anywhere, other filesystems included. It stays on the share's own filesystem now (a pooled share's Greyhole links still count), and stops after 30 seconds.
 - **Times are in your time zone** — The dashboard's date, file dates, Jobs, the pools' next scrub and snapshots, Servers, the apps' Undo, shares' and users' dates and the tunnel's start were the server's clock, which is UTC on most NASes: the dashboard's date turned over at 2 pm in Hawaii. The browser writes them in its own time zone now.
+- **The setup wizard names a ZFS pool's drives** — Its storage step leaves out drives that hold a ZFS pool, so it can't format one, but when they were the only other drives it said there were none besides the system's. It names the pool now, and says to import it on Disks → ZFS Pools once setup is done.
 
 ### 📚 Docs
 
