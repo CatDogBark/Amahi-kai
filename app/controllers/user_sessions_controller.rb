@@ -23,7 +23,8 @@ class UserSessionsController < ApplicationController
   BAN_AFTER = 20
   BAN_FOR = 1.hour
 
-  before_action :login_required, :except => ['new', 'create']
+  before_action :login_required, :except => ['new', 'create', 'status']
+  skip_before_action :check_setup_completed, only: :status
   before_action :turned_away, only: :create
   rate_limit to: 5, within: 20.seconds, by: -> { Rack::Attack.client_ip(request) }, with: :too_many_attempts,
              store: ATTEMPTS, name: 'address', only: :create
@@ -38,16 +39,28 @@ class UserSessionsController < ApplicationController
     @user_session = UserSession.new
   end
 
+  # A signed-in page's own check of its sign-in (session_watch.js), which doesn't count as using
+  # it, so an open page can't keep itself signed in: how long it has left, or that it ended
+  # (200 either way: the answer is the state, not a failure). The cookie is left as it was.
+  def status
+    request.session_options[:skip] = true
+    return tell_page('signed-out', t('signed_out'), :ok) unless UserSession.find(touch: false)
+
+    render json: { status: 'ok', ends_in: session_ends_in }
+  end
+
   def create
     username = params[:username]
     password = params[:password]
     remember_me = params[:remember_me]
     @user_session = UserSession.new(:login => username, :password => password, :remember_me => remember_me)
+    # The page that sent here (login_required kept it), read before the sign-in's fresh session
+    back_to = local_path(session[:return_to])
     if @user_session.save
       # This response's cookie already follows the box (session_cookie_options read the old session).
       request.session_options[:expire_after] = remember_me.present? ? UserSession::IDLE_TIMEOUT : nil
       flash[:success] = t 'logged_in_successfully'
-      redirect_to root_url
+      redirect_to back_to || root_url
     else
       count_failure unless @user_session.guest?
       flash.now[:danger] = @user_session.guest? ? t('guests_use_shares') : t('not_a_valid_user_or_password')
@@ -67,6 +80,11 @@ class UserSessionsController < ApplicationController
   end
 
   private
+
+  # A path on this server, never another site's address: //host and /\host are one to a browser.
+  def local_path(path)
+    path if path.is_a?(String) && path.start_with?('/') && !path.start_with?('//') && !path.include?('\\')
+  end
 
   def client_ip
     Rack::Attack.client_ip(request)

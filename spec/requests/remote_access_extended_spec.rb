@@ -168,10 +168,14 @@ RSpec.describe "RemoteAccess extended", type: :request do
   # --- Auth ---
 
   describe "unauthenticated" do
-    it "redirects all actions to login" do
+    it "turns actions away: a page's own request is told the sign-in ended, a form goes to the sign-in page" do
       reset!
       post '/network/remote_access/start_tailscale', as: :json
+      expect(response).to have_http_status(:unauthorized)
+      expect(response.headers['X-Amahi-Session']).to eq('signed-out')
+      post '/network/remote_access/start_tailscale'
       expect(response).to redirect_to(new_user_session_url)
+      expect(Privileged.calls).to be_empty
     end
   end
 end

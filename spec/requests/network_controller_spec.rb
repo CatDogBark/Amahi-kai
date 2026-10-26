@@ -15,7 +15,8 @@ describe "Network Controller", type: :request do
       expect(response).to have_http_status(:no_content)
       expect(Privileged.calls).to eq([['network.keep_address', {}]])
       get "/network/address", headers: { 'Accept' => 'application/json' }
-      expect(response).to redirect_to(new_user_session_url) # where it stands is the admin's to ask
+      expect(response).to have_http_status(:unauthorized) # where it stands is the admin's to ask
+      expect(response.parsed_body).to eq('status' => 'error', 'error' => I18n.t('signed_out'))
     end
   end
 

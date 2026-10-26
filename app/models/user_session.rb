@@ -71,8 +71,10 @@ class UserSession
     end
   end
 
-  # Find the current session from the Rails session store.
-  def self.find
+  # Find the current session from the Rails session store. With touch: false it reads the
+  # session without counting as use (a page's own check of its sign-in, user_sessions#status):
+  # an open page would otherwise keep itself signed in.
+  def self.find(touch: true)
     store = controller&.session
     return nil unless store&.[](:user_id)
     user = User.find_by(id: store[:user_id])
@@ -94,16 +96,32 @@ class UserSession
     return expire(store) if Time.at(store[:signed_in_at].to_i) < MAX_AGE.ago
 
     seen = store[:seen_at].to_i
-    return expire(store) if seen.positive? && Time.at(seen) < (store[:remember] ? IDLE_TIMEOUT : BROWSER_IDLE_TIMEOUT).ago
-    store[:seen_at] = Time.current.to_i if seen.zero? || Time.at(seen) < 5.minutes.ago
+    return expire(store) if seen.positive? && Time.at(seen) < idle_timeout(store).ago
+    if touch
+      store[:seen_at] = Time.current.to_i if seen.zero? || Time.at(seen) < 5.minutes.ago
 
-    # Update last_request_at for activity tracking
-    user.update_column(:last_request_at, Time.current) if user.last_request_at.nil? || user.last_request_at < 5.minutes.ago
+      # Update last_request_at for activity tracking
+      user.update_column(:last_request_at, Time.current) if user.last_request_at.nil? || user.last_request_at < 5.minutes.ago
+    end
 
     session = new
     session.instance_variable_set(:@record, user)
     session
   end
+
+  # When the current login ends if nothing uses it before then: its idle limit after it was last
+  # seen, and never later than MAX_AGE after the sign-in. The page asks it to go to the sign-in
+  # page then (session_watch.js).
+  def self.ends_at
+    store = controller.session
+    seen = store[:seen_at].to_i.positive? ? Time.at(store[:seen_at].to_i) : Time.current
+    [seen + idle_timeout(store), Time.at(store[:signed_in_at].to_i) + MAX_AGE].min
+  end
+
+  def self.idle_timeout(store)
+    store[:remember] ? IDLE_TIMEOUT : BROWSER_IDLE_TIMEOUT
+  end
+  private_class_method :idle_timeout
 
   def self.expire(_store)
     controller.reset_session
