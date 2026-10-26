@@ -5,6 +5,10 @@
   <div class="setup-fact"><span>Hostname</span><b><%= @hostname %></b></div>
   <div class="setup-fact"><span>IP address</span><b><%= @ip %></b></div>
 </div>
+<p class="setup-muted">
+  To keep that address, give the server a fixed one on Network → Devices (This NAS) once setup is
+  done, or reserve it in your router's DHCP settings.
+</p>
 
 <%= form_tag(setup_update_network_path, method: :post) do %>
   <label for="server_name">Server name</label>

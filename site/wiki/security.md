@@ -25,13 +25,14 @@ Go to **Network → Security** (Advanced mode) and run the audit. Each check is 
 
 | Check | Severity | What it looks at |
 |-------|----------|------------------|
-| Admin password changed | Blocker | The `admin` account no longer accepts the default password |
+| Admin password changed | Blocker | The `admin` account no longer has the first password the installer printed |
 | UFW firewall active | Blocker | UFW is turned on |
 | Samba answers only the LAN | Blocker | Samba lets in only the NAS itself, the LAN and Tailscale, and never sits on the router's internet side |
 | SSH root login disabled | Warning | Root can't log in over SSH |
 | SSH password login disabled | Warning | SSH accepts keys only |
 | Fail2ban | Warning | Repeated failed SSH logins get blocked |
 | Security updates | Warning | No security update has waited more than a week (Settings → System Dependencies installs them) |
+| Automatic security updates | Warning | Ubuntu installs security fixes by itself while the NAS is the router (off is your choice otherwise; the switch is on Settings → System Dependencies) |
 | Docker ports | Warning | Lists Docker app ports reachable from the network (see below) |
 | Open ports | Info | Lists the ports the server listens on |
 
@@ -46,7 +47,9 @@ Click **Fix All**, or a check's own **Fix** button. The progress streams as it r
 
 - **Firewall:** turns on UFW with Amahi-kai's rules: SSH, the web UI (3000), HTTPS and Samba,
   plus DHCP when Amahi-kai runs dnsmasq for your network, and DNS to the NAS's DNS addresses while
-  Network → DNS is on.
+  Network → DNS is on. Nothing on the NAS serves HTTPS yet (it comes after 1.0), so its port is
+  open with nothing behind it; apps' ports are Docker's and limited to the LAN and Tailscale (see
+  below).
 - **SSH:** turns off root login and password login. **Password login is only turned off once an
   account that can log in has an SSH key**, so the fix can't lock you out. Set up a key first
   (below).
@@ -135,4 +138,5 @@ itself is still root-level software, so only install apps you trust.
 3. Use SSH keys instead of passwords.
 4. Install updates when Amahi-kai says one is waiting (see [Updating](updating)).
 5. Keep Samba on the LAN; don't forward its ports on your router.
-6. Back up `/etc/amahi-kai/amahi.env` and your app data (`/var/lib/amahi-kai/apps/`).
+6. Keep copies of what Amahi-kai doesn't back up: its settings, and shares on the system disk
+   ([what to keep](getting-started#what-amahi-kai-doesnt-back-up)).

@@ -272,7 +272,7 @@ describe "Setup Controller", type: :request do
 
       it "asks for a new admin password instead of offering to finish while the seeded one works" do
         get setup_complete_path
-        expect(response.body).to include("still the default")
+        expect(response.body).to include("still has the first password the installer printed")
         expect(response.body).not_to include(setup_finish_path)
       end
     end
@@ -296,7 +296,7 @@ describe "Setup Controller", type: :request do
         change_seeded_admin_password
         get setup_complete_path
         expect(response.body).to include(setup_finish_path)
-        expect(response.body).not_to include("still the default")
+        expect(response.body).not_to include("still has the first password the installer printed")
       end
     end
   end

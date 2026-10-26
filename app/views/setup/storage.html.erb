@@ -1,7 +1,8 @@
 <h2>Choose your storage drives</h2>
 <p>
   Tick the drives to use for your files: Amahi-kai prepares them and adds them to the Greyhole
-  pool. The drive the system runs from is never offered.
+  pool. The drive the system runs from is never offered. Leave unticked any drive you want for a
+  ZFS pool later (Disks → ZFS Pools): a pool takes whole drives with nothing on them.
 </p>
 
 <% if @devices.any? { |d| !d[:os_disk] && !d[:zfs_pool] } %>

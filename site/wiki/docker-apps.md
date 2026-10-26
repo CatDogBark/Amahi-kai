@@ -35,10 +35,11 @@ against a pinned fingerprint), installs Docker and turns the service on.
 |-----|---------------|---------------|
 | **bitTube** | Your YouTube channels and streaming services in one place, YouTube ad-free | `http://<server>:8484` |
 | **Jellyfin** | Your own streaming service for movies, TV and music | `http://<server>:8096` |
-| **Vaultwarden** | A password manager server for the Bitwarden apps | `http://<server>:8880` |
+| **Vaultwarden** | A password manager server for the Bitwarden apps (its web vault needs HTTPS, which comes after 1.0; see below) | `http://<server>:8880` |
 | **Uptime Kuma** | Watches websites and services, and tells you when one goes down | `http://<server>:3001` |
 | **Gitea** | Your own Git server, like a small GitHub | `http://<server>:3300` (Git over SSH on port 2222) |
 | **Transmission** | A BitTorrent client with a web interface | `http://<server>:9091` (peers on port 51413) |
+| **bitShare** (early: version 0.3, a project of its own) | Keeps folders in sync across your computers through the NAS, every version kept; its data goes on a ZFS pool | `https://<server>:8443` (its own certificate: the browser warns once) |
 
 If an app's usual port is already used by something else on the server, it gets the next free one
 at install, and keeps it. The Apps page shows each installed app's ports.

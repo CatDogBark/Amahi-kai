@@ -7,9 +7,10 @@ title: "Amahi-kai Documentation"
 
 Welcome to the Amahi-kai wiki, the documentation for your home server.
 
-Amahi-kai is a self-hosted home server built on Rails 8.1, Ubuntu 24.04, Samba, Docker and
-Greyhole. It gives you file sharing, storage pooling, a Docker app catalog, remote access and a
-web UI to manage it all, from one install command.
+Amahi-kai is a self-hosted home server built on Rails 8.1, Ubuntu 24.04, Samba, Docker, Greyhole
+and ZFS. It gives you file sharing, storage pools, a Docker app catalog, your network's DNS, DHCP
+and router if you like, remote access, and a web UI to manage it all, from one install command.
+It doesn't back itself up yet: see [what to keep copies of](getting-started#what-amahi-kai-doesnt-back-up).
 
 ---
 
@@ -18,7 +19,7 @@ web UI to manage it all, from one install command.
 | Topic | Description |
 |-------|-------------|
 | [Getting Started](getting-started) | Installing, the setup wizard, system requirements |
-| [File Sharing](file-sharing) | Shares, per-user permissions, the web file browser, Samba |
+| [File Sharing](file-sharing) | Shares, users and their roles, per-user permissions, the web file browser, Samba |
 | [Storage Pooling](storage-pooling) | Adding drives safely, Greyhole, copies per share |
 | [ZFS Pools](zfs-pools) | Pools across matched drives, replacing a drive, snapshots, drive health |
 | [Docker Apps](docker-apps) | The app catalog, installing apps, their ports and data |
@@ -42,7 +43,10 @@ Amahi-kai runs as a systemd service (`amahi-kai.service`, Puma on port 3000) as 
 - **Avahi** for announcing the apps on your LAN (mDNS)
 - **Greyhole** (optional) for storage pooling
 - **ZFS** (optional) for pools of matched drives, with snapshots
-- **dnsmasq** (optional) for local DNS and DHCP
+- **Unbound** (optional) for your network's DNS, encrypted to a provider, with blocking
+- **dnsmasq** (optional) for DHCP only
+- **radvd** (optional) for announcing the NAS as the IPv6 DNS server
+- **UFW and netplan** for the firewall, and for router mode's internet side and NAT
 - **Cloudflare Tunnel** and **Tailscale** (optional) for remote access
 
 ### Key paths

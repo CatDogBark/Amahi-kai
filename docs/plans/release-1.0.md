@@ -1,8 +1,9 @@
 # Amahi-kai 1.0: what's left, in order
 
-Status 2026-10-24: 0.10.2 is out; networking (§1, §2b–2f) is done, Tailscale included. The real
-pool's checks with bitShare (§2), signed updates (§3) and backups (§4) are after 1.0. Next: the
-code review (§5) and the docs review (§6).
+Status 2026-10-25: 0.10.2 is out; networking (§1, §2b–2f) is done, Tailscale included. The code
+review (§5) and the docs review (§6) are done: seven fix batches on `dev`, each checked on the test
+VM. The real pool's checks with bitShare (§2), signed updates (§3) and backups (§4) are after 1.0.
+Next: the release candidate (§7).
 
 **What 1.0 means** (CatDogBark, 2026-10-23): a release for other people to install and trust:
 updates can't be faked, the NAS's own state is backed up and restorable, and the code and the
@@ -237,6 +238,11 @@ This NAS over the tunnel. Already on its list before the read:
 - Dependencies: Rails 8.1.4 is current; Ruby is Ubuntu's 3.2, maintained with 24.04 through 2029.
 - What the review finds goes out as fix batches on `dev`, the usual way.
 
+Done 2026-10-24 to 2026-10-25: six fix batches (the router's rules and the NAS's address, the
+updater and installer, storage, apps, the rest of networking, the web app), each pushed to `dev`,
+green in CI and checked on the test VM, several with a before-and-after on the island. What the
+review left for after 1.0 is in the roadmap and the private review doc.
+
 ## 6. The docs review
 
 Everything a new person reads, checked against what 1.0 does: the README, CONTRIBUTING, CLAUDE.md
@@ -246,6 +252,13 @@ the installer's and the setup wizard's own words, and the changelog's 1.0 entry 
 someone who's never seen Amahi-kai. With backups after 1.0 (§4), the wiki also says plainly that a
 NAS's own settings aren't backed up: the files are safe on a pool or Greyhole's drives, but a lost
 system disk means installing again, importing the pool and setting the NAS up again by hand.
+
+Done 2026-10-25, as the seventh batch: the README and the website (networking, ZFS pools, the apps
+with bitShare marked early and Vaultwarden's HTTPS note), one CONTRIBUTING, CLAUDE.md, NOTICE, the
+privilege model (the fetched catalog, the network, unsigned updates and catalog as known gaps),
+the wiki (what Amahi-kai doesn't back up, users and their roles, a pool after installing again,
+today's page names), the wizard's and the installer's words, this plan and the roadmap, and the
+changelog's 1.0 entry.
 
 ## 7. The release
 

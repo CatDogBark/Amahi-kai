@@ -106,19 +106,31 @@ This is also the way in if the web UI itself won't load: SSH to the server and r
 5. **Installs the root helper and the sudo rules** that come with the new version (the rules are
    checked with `visudo` first, so a bad file can't break sudo).
 6. **Regenerates the Samba configuration** and restarts Samba.
-7. **Rebuilds the web UI's styles and scripts.**
-8. **Remounts data drives** (in case one dropped).
-9. **Restarts Amahi-kai** and checks that it answers.
-10. **Refreshes the update status** on System Status.
+7. **Makes the network's settings again** (DNS, its blocklists, DHCP, the IPv6 announcement and
+   the router's rules) and puts in place only what differs from what's there, so a fix to how one
+   is made reaches the NAS without anyone saving its page. Nothing happens while DNS is off; the
+   log says what was applied.
+8. **Checks the user accounts**: web users' Linux accounts get no login shell and no extra groups.
+9. **Rebuilds the web UI's styles and scripts.**
+10. **Remounts data drives** (in case one dropped).
+11. **Restarts Amahi-kai** and checks that it answers.
+12. **Refreshes the update status** on System Status.
+
+An update restarts the web UI and Samba. DNS, DHCP and the router keep running; one is restarted
+only when step 7 changed its settings.
 
 ### If something fails
 
 If a step fails, or the restarted app doesn't answer, the update puts back the version that was
-running: its code, gems, compiled assets, root helper and sudo rules. The last line says so:
+running: its code, gems, compiled assets, root helper and sudo rules, and that version's Samba
+and network settings. The last line says so:
 
 ```
 ✗ Update failed at: Running database migrations. Rolled back to abc1234; Amahi-kai is running the version it was.
 ```
+
+An update stopped partway, where even going back couldn't run (a power cut, say), is finished by
+the next update.
 
 The database isn't rolled back automatically (migrations are written so the previous version
 still works with the new schema). If you ever need the backup taken before the update, it's the

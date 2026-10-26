@@ -93,6 +93,22 @@ can't log in to the server) and a Samba password, kept in step with their web pa
 
 ---
 
+## Users and their roles
+
+Each account on **Setup → Users** has one of three roles, set on its row:
+
+| Role | Web page | Network shares |
+|------|----------|----------------|
+| **Admin** | Everything, Setup included; the file browser opens every share | The shares it may open ([Permissions](#permissions)) |
+| **User** | The dashboard, the file browser and search, for the shares it may open | The shares it may open |
+| **Guest** | None: a guest can't sign in to the web page | The shares it may open |
+
+The same password works for the web page and the network shares. You can't change your own role,
+and an admin can't be deleted until it's made a User. Deleting a user takes its access to the
+shares with it; its files in the shares stay.
+
+---
+
 ## Samba configuration
 
 Amahi-kai writes the whole `smb.conf`; don't edit it by hand, since changes get overwritten. A new
@@ -102,8 +118,10 @@ shares offline.
 The global settings include:
 
 - **Workgroup** (default `WORKGROUP`), changeable on **Setup → Shares → Settings** (Advanced mode)
-- **Who can connect:** the server itself, your LAN and Tailscale only (`hosts allow`), on the LAN
-  interface (and Tailscale's, if it's installed). Docker containers can't reach Samba.
+- **Who can connect:** the server itself, your LAN and Tailscale only (`hosts allow`). Samba
+  listens on every address, because Tailscale's is one it can't be bound to on its own; the list
+  is what keeps others out, and in router mode the firewall drops the internet side first.
+  Docker containers can't reach Samba.
 - **Printer sharing off**
 - **Greyhole settings** when Greyhole is installed (see [Storage Pooling](storage-pooling))
 
@@ -128,8 +146,6 @@ left out.
 smbclient -L //<server-ip>/ -U username
 sudo mount -t cifs //<server-ip>/ShareName /mnt/share -o username=youruser,uid=$(id -u),gid=$(id -g)
 ```
-
-Each user also has a private home share, `\\<server-ip>\username`.
 
 ---
 

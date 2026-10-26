@@ -37,7 +37,7 @@ You can use either or both.
 
 ### Connect Amahi-kai
 
-1. On **Network → Remote Access**, paste the token and click **Setup Tunnel**.
+1. On **Network → Remote Access**, paste the token and click **Save**.
 2. The progress window shows Amahi-kai installing `cloudflared` (if needed), saving the token,
    and starting the tunnel.
 
@@ -66,17 +66,10 @@ sudo systemctl restart cloudflared  # restart it
 journalctl -u cloudflared -f        # follow its log
 ```
 
-### Docker apps through the tunnel
+### Docker apps
 
-Installed apps open under the same hostname through Amahi-kai's links:
-
-```
-https://home.yourdomain.com/app/jellyfin
-```
-
-Apps that don't work under a path (see [Docker Apps](docker-apps)) can get a hostname of their
-own: add another public hostname in the tunnel pointing at the app's port, for example
-`http://localhost:8096`.
+The tunnel carries Amahi-kai's own pages, not the apps': apps open on your LAN and over
+Tailscale (see [Docker Apps](docker-apps)). Through the tunnel, the Apps page says so.
 
 ### Removing the tunnel
 
@@ -92,7 +85,7 @@ sudo systemctl daemon-reload
 ### Troubleshooting
 
 - **Tunnel won't connect:** `journalctl -u cloudflared -n 30 --no-pager` usually says why (an
-  expired or mistyped token, for example). Paste a new token with **Setup Tunnel**.
+  expired or mistyped token, for example). Paste a new token and **Save**.
 - **"Bad gateway":** Amahi-kai isn't answering. Check `systemctl is-active amahi-kai`, and that the
   tunnel's hostname points at `http://localhost:3000`.
 

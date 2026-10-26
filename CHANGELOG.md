@@ -4,6 +4,18 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+Amahi-kai 1.0 is a home server for Ubuntu 24.04, run from your browser, and the first release meant for other people to install. On a dedicated machine or virtual machine it gives you:
+
+- **File shares** for every computer in the house (Samba), with per-user access, a Trash, a web file browser and search.
+- **Storage** on plain drives pooled by Greyhole, with copies of a share's files on different drives, or on **ZFS pools** (mirrors and RAIDZ) with hourly and daily snapshots, roll-back, scrubs and drive health.
+- **Apps** from Amahi-kai's own catalog in a click: Jellyfin, Vaultwarden (its web vault needs HTTPS, which comes later), Gitea, Uptime Kuma, Transmission, bitTube, and bitShare, which is early. Each runs on its own port, reachable from your LAN and Tailscale only, and an update copies the app's data first and goes back by itself if the new version fails.
+- **Your network**, if you want it: the NAS as its DNS server (private, checked with DNSSEC, with ad and tracker blocking), its DHCP server, and its router, letting nothing in from the internet but the ports you choose. The NAS's own address is set from the page, with a guard against locking yourself out.
+- **Remote access** through Tailscale or a Cloudflare Tunnel, a **security audit** that fixes what it finds, and **System Update** from published releases on a channel you pick, going back by itself when a step fails.
+
+Every root action goes through one helper that checks and logs it, and the code it runs belongs to root. 1.0 doesn't yet back up the NAS's own settings ([what to keep copies of](https://amahi-kai.com/wiki/getting-started#what-amahi-kai-doesnt-back-up)), serve HTTPS on the LAN, or sign its updates; those come after 1.0.
+
+Coming from 0.10.2, what changes is the 1.0 review's: a full pass over the code (the router's rules, the updater and installer, storage, apps, the rest of networking and the web app) and over the docs, with these fixes.
+
 ### 🔒 Security & Fixes
 
 - **The internet side stays shut while router mode saves** (Network → Internet) — Every save on the Network pages rewrote router mode's rules by taking them all out and putting them back, the internet side's deny among the last. For a few seconds the NAS's SSH, web page and Samba answered from the internet, and a failure partway left them that way. Now the deny goes in first, before the internet port gets its address, and stays; a save takes out only the rules it no longer needs. Turning router mode off takes the internet port off the network before its deny goes.
@@ -74,6 +86,11 @@ All notable changes to Amahi-kai are documented here.
 - **A share's Samba settings are saved only once Samba takes them** — An older way in to the same action saved them unchecked; it's gone.
 - **A share's size counts the share** — The count followed links anywhere, other filesystems included. It stays on the share's own filesystem now (a pooled share's Greyhole links still count), and stops after 30 seconds.
 - **Times are in your time zone** — The dashboard's date, file dates, Jobs, the pools' next scrub and snapshots, Servers, the apps' Undo, shares' and users' dates and the tunnel's start were the server's clock, which is UTC on most NASes: the dashboard's date turned over at 2 pm in Hawaii. The browser writes them in its own time zone now.
+
+### 📚 Docs
+
+- **The docs describe 1.0 as it is** — The README and the website list networking and ZFS pools, and the apps with bitShare marked early and Vaultwarden's HTTPS note, and ask for a dedicated machine with a system disk of 32 GB or more (the dashboard warns below 10 GB free, so 10 GB set it off on the first day). The wiki says what Amahi-kai doesn't back up, explains the three roles (Admin, User, Guest), gives the steps for a ZFS pool after installing again, says the drive-failure paths were tried on virtual drives, and uses today's page names. It no longer says apps open through the tunnel (they're LAN and Tailscale only), that Samba is bound to the LAN interface (it listens everywhere behind its allow list), or that each user has a private home share. There's one CONTRIBUTING now, NOTICE is current, and the privilege model describes the fetched app catalog and names the unsigned catalog and updates as known gaps.
+- **The setup wizard and the installer say more** — The wizard's storage step says to leave a future ZFS pool's drives unticked, its network step how to keep the server's address (This NAS), and its last page speaks of the installer's first password, not a default one. The installer's last lines say Amahi-kai doesn't back the server up. Settings → Servers, System Status and the dashboard use today's page names; the dashboard's Names button opens Network → DNS.
 
 ### 🔧 Architecture & Code Quality
 
@@ -156,6 +173,8 @@ The first release System Update can install from GitHub's Releases: each server 
 - **Updates come from releases, on a channel you choose** — System Update installs published releases now, not whatever is newest on `main`. A server follows one update channel, set by `AMAHI_UPDATE_CHANNEL` in `/etc/amahi-kai/amahi.env`: `releases` (the default), `candidates` (release candidates too, to try one before it's out) or `development` (the `dev` branch, for testing what's being built). An update never takes a server back to an older version. The update window, the dashboard and System Status name the version on offer and the one running ("Amahi-kai 0.9.2 (you have 0.9.1)"), and say which channel the server follows. Repair runs every step again on the version you have, without looking for a newer one. Releases are tagged on `main` and published on GitHub with their changelog section as notes, checked against a `VERSION` file ([CONTRIBUTING](CONTRIBUTING.md)). Re-running the installer keeps the version installed.
 
 ## [0.9.0] — 2026-10-22
+
+0.9.0 gathered everything from February's 0.2.0 to October. A few lines below were written early in that time and were out of date by the release, the spec counts and coverage among them; 1.0's entry above describes Amahi-kai as it is.
 
 ### 🚀 Major Features
 
@@ -458,6 +477,10 @@ The first release System Update can install from GitHub's Releases: each server 
 - install.sh safe.directory fix for updates
 - All docs updated (README, CONTRIBUTING, NOTICE, wiki, site)
 - Chromium + Selenium added to sandbox
+
+## [0.1.3] — 2026-02-26
+
+No notes were written for this tag at the time: it's the last of the plugins folded into the app (Settings), on the way to 0.2.0.
 
 ## [0.1.2] — 2026-02-26
 

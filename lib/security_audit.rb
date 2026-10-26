@@ -92,7 +92,7 @@ class SecurityAudit
       changed = admin_password_changed?
       Check.new(
         name: 'admin_password',
-        description: 'Admin password changed from default',
+        description: 'Admin password changed from the first one the installer printed',
         status: changed ? :pass : :fail,
         severity: :blocker,
         fix_command: nil # Must be changed manually

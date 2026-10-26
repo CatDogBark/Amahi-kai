@@ -76,6 +76,9 @@ or deleted.
 The pool turns **DEGRADED**, and a warning at the top of the dashboard and the Disks pages names
 the drive and says what to do. The pool keeps working on the drives it has left.
 
+What follows (a drive back online, Replace, a drive missing at boot) has been tried on virtual
+drives in a virtual machine; the same tests on real drives come after 1.0.
+
 - **The drive is connected again** (a loose cable, a drive pulled and put back): ZFS keeps it out
   of the pool until you click **Bring online** on its row. It then copies over what changed while
   the drive was out (a resilver).
@@ -166,6 +169,22 @@ drives came too late when the server started, or a pool from another server.
 - Its drives are kept for it: nothing can format them or put them in another pool. To use one for
   something else, click **Erase…** on its row and type the pool's name. With too many of its drives
   erased, the pool and everything on it are gone.
+
+### After installing Amahi-kai again
+
+Amahi-kai's settings don't come back with a new install (see
+[what it doesn't back up](getting-started#what-amahi-kai-doesnt-back-up)), but a pool's data stays
+on its drives:
+
+1. Connect the pool's drives and finish the setup wizard, leaving them unticked in its storage step.
+2. On **Disks → ZFS Pools**, **Install ZFS** if it isn't. The pool shows as **On the drives, not
+   imported**.
+3. **Import** it. It opens at `/srv/pools/<name>` again, with its snapshots.
+4. Make each share again on **Shares**, with the same name and the pool under **Where**: it opens
+   the folder that's still there, files and all. Then give users their access again.
+5. The apps that kept their data on the pool left it there, in `/srv/pools/<name>/apps/<app>`.
+   An app installed again on the same pool is given that folder back; on a new install its
+   account can get a different number, so check the app finds its old data before you rely on it.
 
 ## Pools Amahi-kai didn't make
 

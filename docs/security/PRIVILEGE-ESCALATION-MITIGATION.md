@@ -1,7 +1,7 @@
 # Privilege model
 
 How Amahi-kai gets root access on a NAS, and what keeps the web app from turning a bug into
-root. Last updated 2026-10-05 (Phase 4 P4.5: app updates). Design and history: [`docs/plans/privileged-helper.md`](../plans/privileged-helper.md).
+root. Last updated 2026-10-25 (the 1.0 review). Design and history: [`docs/plans/privileged-helper.md`](../plans/privileged-helper.md).
 
 ## Summary
 
@@ -36,6 +36,9 @@ updater run everything that loads the app or its gems as `amahi`.
 | `/var/lib/amahi-kai/app-secrets/<app>.json` | root:amahi 0640 | Passwords and keys generated at an app's install; shown to admins |
 | `/var/lib/amahi-kai/app-ports.json` | root:amahi 0640 | The host ports each app was given; the Apps page shows them |
 | `/var/lib/amahi-kai/app-backups/<app>/` | root:root 0700, in a root:amahi 0750 folder | The copy of an app's data from before its last update, kept 30 days; `<app>.json` beside it (root:amahi 0640) describes it for Undo update |
+| `/var/lib/amahi-kai/app-definitions/<app>.json` | root:amahi 0640 | What each installed app's container was made from (its manifest and image), so a reinstall, an Undo and a roll-back rebuild it as it was |
+| `/var/lib/amahi-kai/catalog-src`, `/var/lib/amahi-kai/catalog` | root:root, readable | The app catalog as fetched (a bare git repo), and the manifests from it that passed the helper's checks |
+| `/var/lib/amahi-kai-dns/` | root:root 0755 | The network's state: the router's rules (`router.json`), the NAS's last address change, the blocklists, the netplan files as last applied |
 
 `bin/amahi-set-ownership` sets this up. The installer runs it, and System Update runs it at the
 start of every update, so the first update after PR N takes the checkout back from the `amahi`
@@ -55,16 +58,26 @@ so passwords never appear on a command line. Each operation:
   and a hash.
 
 The areas it covers: Linux and Samba accounts, Samba's config, share folders, system services,
-reboot and power off, the hostname, dnsmasq, swap, data drives and fstab, ZFS pools (created
-only on whole data disks with nothing in use on them; pools mount under `/srv/pools`, where no
-share folder may be made), Greyhole, package
-installs (from pinned apt repositories and a fixed package list), the Cloudflare Tunnel,
-Tailscale, the security audit's fixes, drive temperatures, the storage health check (pools and
-SMART, every 15 minutes from `amahi-kai-storage-check.timer`, written to
-`/var/lib/amahi-kai/storage-health.json`), and System Update (starting it, or
-checking for an update: `git fetch` as root, written to `/var/lib/amahi-kai/update-status.json`,
-every 6 hours from `amahi-kai-update-check.timer`). `amahi-helper --list` prints the operations, and
-`--dry-run OPERATION` shows what a request would do without doing it.
+reboot and power off, the hostname, swap, data drives and fstab, ZFS pools (created only on
+whole data disks with nothing in use on them, imported only when Amahi-kai made them; pools
+mount under `/srv/pools`, where no share folder may be made), Greyhole, package installs (from
+pinned apt repositories and a fixed package list), the Cloudflare Tunnel, Tailscale, the
+security audit's fixes, drive temperatures, the storage health check (pools and SMART, every 15
+minutes from `amahi-kai-storage-check.timer`, written to `/var/lib/amahi-kai/storage-health.json`),
+Docker apps (below), and System Update (starting it, or checking for an update: `git fetch` as
+root, written to `/var/lib/amahi-kai/update-status.json`, every 6 hours from
+`amahi-kai-update-check.timer`, which fetches the app catalog too).
+
+The network is the helper's as well: Unbound's config (only lines Amahi-kai writes, checked
+with `unbound-checkconf`, never answering more than the NAS's networks) and its blocklists,
+dnsmasq (DHCP only, never DNS), radvd and the NAS's own IPv6 address, the NAS's IPv4 address on
+a port (netplan, applied after the reply and put back unless the NAS is reached at the new
+address), and router mode: the internet port's netplan file, forwarding and the kernel's
+settings, UFW's rules and the NAT block in `before.rules`, with the internet side shut first.
+These operations run one at a time (a lock), so two network changes can't interleave.
+
+`amahi-helper --list` prints the operations, and `--dry-run OPERATION` shows what a request
+would do without doing it.
 
 In Rails, `Privileged.call('users.create', login: 'ann', name: 'Ann')` runs an operation through
 `sudo -n`. In tests it records the call instead.
@@ -83,13 +96,23 @@ P4.1 put it in.
 ## Docker apps
 
 The web app only names an app (`apps.install`, `app: "jellyfin"`). The helper reads the app's
-manifest from the root-owned code (`config/apps/<app>.yml`) and checks every field: an image
-pinned by tag and digest, published ports from 1024 up and none of the NAS's own, folders only
-under the app's own folder, environment values on one line. There is no field for privileged
+manifest from the app catalog, [CatDogBark/amahi-kai-apps](https://github.com/CatDogBark/amahi-kai-apps):
+the update check fetches it as root over HTTPS into a bare repository (`/var/lib/amahi-kai/catalog-src`),
+and keeps only the manifests that pass every check below (`/var/lib/amahi-kai/catalog`); the copy
+in the code (`config/apps`) is the fallback. It checks every field: an image pinned by tag and
+digest, published ports from 1024 up and none of the NAS's own, folders only under the app's own
+folder (plain names, never where shares go), environment values on one line, and no
+`DOCKER_MODS` (it makes an image download more code at start). There is no field for privileged
 mode, devices, capabilities, host networking, host folders or extra Docker arguments, so a
 manifest can't ask for them. Each app gets a system user (`app-<app>`), and the container runs as
-that user unless the image drops to it itself (the manifest says which), with a memory limit.
-Generated secrets reach the container through a root-only `--env-file`, never a command line.
+that user unless the image drops to it itself (the manifest says which), with a memory limit, at
+most 2,048 processes, 30 MB of logs, and without raw sockets or device files. Generated secrets
+reach the container through a root-only `--env-file`, never a command line.
+
+An install, update, undo or uninstall runs as a systemd unit of its own
+(`amahi-kai-appjob-<app>`), so a restart of the web app can't cut it off, one job per app at a
+time. A new container is made beside the stopped old one and swapped in, and what it was made
+from is kept (`app-definitions`), so a failure starts the old one again.
 
 Each app gets its catalog ports when they're free (checked by binding them), otherwise the next
 free ones, and keeps them. Ports are published on IPv4. Docker's own rules for published ports
@@ -107,15 +130,21 @@ copy folder on each Greyhole drive, read only. For a share an app writes into, t
 `users` group in its container, and the share's folders get a default ACL (`setfacl -d`, applied to
 folders only, through `find`, which doesn't follow links) so what the app makes stays group-writable.
 
-Updates (`apps.update`) run the version the catalog pins, which only a change to the root-owned
-code can move; the web app names the app. The helper copies the app's folders (`cp -a`) into a
-root-only folder first, and puts them back (`apps.undo_update`, or by itself when the new version
-isn't healthy) only from that copy, by folder names it checks against the manifest's pattern.
+Updates (`apps.update`) run the version the catalog pins; the web app names the app. The helper
+copies the app's folders (`cp -a`) into a root-only folder first, and puts them back
+(`apps.undo_update`, or by itself when the new version isn't healthy) only from that copy, by
+folder names it checks against the manifest's pattern. A version older than the one an app runs
+is refused.
 
 ## Known gaps
 
-- **Docker itself** runs as root: an app's container is as contained as Docker makes it. The
-  catalog decides what runs, and it is reviewed with the code.
+- **Docker itself** runs as root: an app's container is as contained as Docker makes it.
+- **The app catalog isn't signed.** It's fetched from GitHub over HTTPS, and its manifests are
+  checked as above, but whoever can change the catalog's repository decides which image an
+  install or an update runs, within what those checks allow.
+- **System Update isn't signed either.** It installs a release tag from GitHub over HTTPS and
+  checks the tag's `VERSION`, not a signature: whoever controls the repository controls what a
+  NAS installs. Signed tags, checked against a key pinned on the NAS, come after 1.0.
 - **The database isn't rolled back** with the code: migrations must keep working with the
   previous version's code. System Update dumps the database first (`/var/lib/amahi-kai/backups`,
   root-only, the last 3); restoring one is a manual step.

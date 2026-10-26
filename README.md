@@ -29,16 +29,24 @@ network, drives, storage pool and a first share. More in [docs/NATIVE-INSTALL.md
 
 - **Updates:** Amahi-kai checks every 6 hours; Settings → System Status shows what's new, with
   Update now (or Repair). A failed update rolls back.
+- **Backups:** Amahi-kai doesn't back the server up yet: its own settings, and shares on the
+  system disk, need copies of your own ([what to keep](https://amahi-kai.com/wiki/getting-started#what-amahi-kai-doesnt-back-up)).
 - **Logs:** `journalctl -u amahi-kai -f`
 - **Config:** `/etc/amahi-kai/amahi.env`
 
 ## Features
 
-- **File sharing:** Samba shares with per-user access, a web file browser, and Greyhole storage
-  pooling across drives
+- **File sharing:** Samba shares with per-user access, a Trash, a web file browser and search
+- **Storage:** Greyhole pooling across plain drives, or ZFS pools (mirrors and RAIDZ) with hourly
+  and daily snapshots, roll-back, scrubs and drive health
 - **Docker apps:** one-click installs from a catalog of its own, [amahi-kai-apps](https://github.com/CatDogBark/amahi-kai-apps)
-  (Jellyfin, Vaultwarden, Gitea, Uptime Kuma, Transmission, bitTube), with updates that copy the
-  app's data first and roll back by themselves; [make your own](https://amahi-kai.com/wiki/making-apps)
+  (Jellyfin, Vaultwarden, Gitea, Uptime Kuma, Transmission, bitTube, and bitShare, which is
+  early), with updates that copy the app's data first and roll back by themselves;
+  [make your own](https://amahi-kai.com/wiki/making-apps). Vaultwarden's web vault needs HTTPS,
+  which comes after 1.0.
+- **Networking:** the NAS as your network's DNS server (encrypted lookups, DNSSEC, ad and
+  tracker blocking), its DHCP server, and if you like its router, with nothing from the internet
+  let in but the ports you choose; the NAS's own address set from the page
 - **Remote access:** Cloudflare Tunnel (no port forwarding) and Tailscale
 - **Dashboard:** CPU, memory, per-drive storage and services; Settings → Servers for each service's
   version, uptime and controls
@@ -49,9 +57,10 @@ network, drives, storage pool and a first share. More in [docs/NATIVE-INSTALL.md
 
 - Root actions go through one root helper (`libexec/amahi-helper`) that validates every request
   and logs it; sudo allows only the helper. Root owns the installed code.
-- bcrypt passwords; per-request sessions that expire after 7 idle days; a password change signs
-  out other browsers
-- CSRF protection, with system actions on POST only; login rate limiting; a host allowlist
+- bcrypt passwords; sign-ins that end with the browser, or after 7 idle days with Remember me,
+  and 30 days after they're made either way; signing out, or a password change, signs out the
+  other browsers
+- CSRF protection, with system actions on POST only; sign-in limits; a host allowlist
 - Secrets stay off command lines and out of logs
 - Details: [docs/security/PRIVILEGE-ESCALATION-MITIGATION.md](docs/security/PRIVILEGE-ESCALATION-MITIGATION.md)
 
@@ -68,7 +77,7 @@ bundle exec rspec spec/lib/
 bundle exec rspec spec/requests/
 ```
 
-See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for how changes are made, and
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how changes are made and released, and
 [docs/plans/roadmap.md](docs/plans/roadmap.md) for what's done and what's next.
 
 | Folder | What's there |
@@ -77,7 +86,7 @@ See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for how changes are made, and
 | `lib/` | System integration: disks, Samba, Greyhole, Docker, tunnel, services, update status |
 | `libexec/amahi-helper` | The root helper |
 | `bin/` | `amahi-install`, `amahi-update` and the scripts they run |
-| `config/` | Rails config, the Docker app catalog, sudoers rules, systemd units |
+| `config/` | Rails config, the app catalog's built-in copy, sudoers rules, systemd units |
 | `docs/` | Install guide, security model, plans |
 | `site/` | The amahi-kai.com website and wiki |
 

@@ -13,7 +13,9 @@ RSpec.describe 'Toasts', type: :system do
         .map(function(t) { return t._timer !== undefined; })
     JS
     expect(timers).to eq([false, true]) # no timer to dismiss the error; the notice has one
-    find('.amahi-toast', text: 'It was refused').find('.amahi-toast-close').click
+    # Clicked in the page, not at the button's place on screen: the toast slides in from the
+    # side, and a click aimed while it moves can land beside the button.
+    page.execute_script('arguments[0].click()', find('.amahi-toast', text: 'It was refused').find('.amahi-toast-close'))
     expect(page).to have_no_css('.amahi-toast', text: 'It was refused')
   end
 end
