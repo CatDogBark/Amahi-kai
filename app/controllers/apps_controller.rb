@@ -197,6 +197,27 @@ class AppsController < ApplicationController
     render json: { status: 'error', message: e.message }, status: :unprocessable_content
   end
 
+  # The folders in a share, for the share dialog's folder browser: ?share=Vault&path=media (path: a
+  # folder in the share; none for its top). Folders only: not links, files or hidden ones (Samba's
+  # .recycle, say), by name, at most 500.
+  def share_folders
+    share = Share.by_name.find { |s| s.name.casecmp?(params[:share].to_s) }
+    return render json: { error: "There's no share #{params[:share]}" }, status: :not_found unless share
+
+    path = params[:path].to_s.delete_prefix('/').delete_suffix('/')
+    parts = path.split('/')
+    return render json: { error: "#{path} isn't a folder in #{share.name}" }, status: :unprocessable_content if parts.any? { |part| %w[. ..].include?(part) || part.empty? }
+
+    dir = File.join(share.path, *parts)
+    # Within the share, reached through no link (the root helper gives an app none either)
+    return render json: { error: "#{path} isn't a folder in #{share.name}" }, status: :unprocessable_content unless File.realpath(dir) == dir && File.lstat(dir).directory?
+
+    folders = Dir.children(dir).reject { |name| name.start_with?('.') }.select { |name| File.lstat(File.join(dir, name)).directory? }
+    render json: { share: share.name, path: path, folders: folders.sort_by(&:downcase).first(500) }
+  rescue SystemCallError
+    render json: { error: "#{path} isn't a folder in #{share&.name} that can be read" }, status: :unprocessable_content
+  end
+
   def docker_start
     app_action(&:start!)
   end
@@ -240,16 +261,19 @@ class AppsController < ApplicationController
     sse.done('error')
   end
 
-  # [{ name:, write: }] from the share dialog (share[]=Movies&write[]=Downloads): only shares that
-  # exist, and write only where the app writes shares and Greyhole doesn't pool the share. The
-  # helper checks the same against smb.conf.
+  # [{ name:, folder:, write: }] from the share dialog: share[]=Movies for a whole share,
+  # share[]=Vault/media/Pictures for a folder of one, and write[] naming the same way what the app
+  # may write in. Only shares that exist, and write only where the app writes shares and Greyhole
+  # doesn't pool the share. The helper checks the same against smb.conf, and the folders.
   def chosen_shares(entry)
-    names = Array(params[:share]).map(&:to_s)
     writes = Array(params[:write]).map(&:to_s)
-    Share.by_name.where(name: names).map do |share|
-      write = entry[:writes_shares] && writes.include?(share.name) && share.disk_pool_copies.to_i.zero?
-      { name: share.name, write: write }
-    end
+    shares = Share.by_name.index_by { |share| share.name.downcase }
+    Array(params[:share]).map(&:to_s).uniq.filter_map do |given|
+      name, folder = given.split('/', 2)
+      share = shares[name.to_s.downcase] or next
+      write = entry[:writes_shares] && writes.include?(given) && share.disk_pool_copies.to_i.zero?
+      { name: share.name, folder: folder.to_s.delete_suffix('/').presence, write: write }.compact
+    end.sort_by { |share| [share[:name].downcase, share[:folder].to_s] }
   end
 
   # Runs +operation+ on an installed app with its shares, streaming the helper's progress, then

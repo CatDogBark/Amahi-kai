@@ -2,8 +2,10 @@
     and the ZFS pool for an app that keeps its data on one (P4.6), the first time.
     The Install, Install again and Change buttons carry the app's details (data-app-shares, ...);
     apps.js fills this in and sends the choice to the install stream
-    (share[]=Movies&write[]=Downloads&pool=tank). pools: the online ZFS pools. %>
-<div class="modal fade" id="app-shares-dialog" tabindex="-1" aria-labelledby="app-shares-title" aria-hidden="true">
+    (share[]=Movies&share[]=Vault/media/Pictures&write[]=Downloads&pool=tank). A share is given
+    whole, or only some of its folders, picked in a browser of its folders
+    (apps/share_folders). pools: the online ZFS pools. %>
+<div class="modal fade" id="app-shares-dialog" tabindex="-1" aria-labelledby="app-shares-title" aria-hidden="true" data-folders-url="<%= apps_share_folders_path %>">
   <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header"><h5 class="modal-title" id="app-shares-title">Shares for <span data-fill="name"></span></h5></div>
@@ -31,7 +33,9 @@
           </p>
         </div>
         <p class="small">
-          Shares you give <span data-fill="name"></span> appear in it at <code>/shares/&lt;name&gt;</code>.
+          Shares you give <span data-fill="name"></span> appear in it at <code>/shares/&lt;name&gt;</code>, and
+          a folder you give of one at <code>/shares/&lt;name&gt;/&lt;folder&gt;</code>, as in the share; the rest
+          of that share stays out of its reach.
           <strong>Everyone with an account in <span data-fill="name"></span> can see them</strong>, whatever the
           share's own user list says.
         </p>
@@ -52,6 +56,26 @@
                     <option value="write">Read and write</option>
                   </select>
                   <span class="small text-secondary" data-role="pooled-note">Read only: Greyhole pools it</span>
+                </td>
+              </tr>
+              <%# All of the share, or only some of its folders (apps.js fills the list and the browser) %>
+              <tr data-share-folders="<%= share.name %>" hidden>
+                <td colspan="2" class="pt-0 ps-4">
+                  <div class="small d-flex flex-wrap gap-3 mb-1">
+                    <label class="form-check mb-0"><input class="form-check-input" type="radio" name="app-share-scope-<%= share.id %>" value="all" data-role="scope"><span class="form-check-label">All of <%= share.name %></span></label>
+                    <label class="form-check mb-0"><input class="form-check-input" type="radio" name="app-share-scope-<%= share.id %>" value="folders" data-role="scope"><span class="form-check-label">Only some folders</span></label>
+                  </div>
+                  <div data-role="folders" hidden>
+                    <ul class="list-unstyled small mb-1" data-role="folder-list"></ul>
+                    <div class="border rounded p-2 mb-1 small" data-role="browser" hidden>
+                      <div class="text-secondary mb-1" data-role="crumbs"></div>
+                      <div class="d-flex flex-wrap gap-1 mb-2" data-role="entries"></div>
+                      <button type="button" class="btn btn-sm btn-outline-primary" data-role="choose-here"></button>
+                      <button type="button" class="btn btn-sm btn-link" data-role="browser-cancel">Cancel</button>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-link p-0" data-role="add-folder">+ Add a folder</button>
+                    <span class="small text-warning ms-2" data-role="folders-needed" hidden>Choose a folder, or All of <%= share.name %></span>
+                  </div>
                 </td>
               </tr>
             <% end %>

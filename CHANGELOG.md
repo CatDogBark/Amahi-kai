@@ -6,6 +6,7 @@ All notable changes to Amahi-kai are documented here.
 
 ### 🔒 Security & Fixes
 
+- **Apps can be given only some folders of a share** (Apps → Shares) — An app was given whole shares: Jellyfin given Vault for its movies could read everything else in Vault too, and Transmission given it to download into could change all of it. A share can give only some of its folders now, picked in a browser of the share's folders, each read only or read and write; they appear in the app where they are in the share (`/shares/Vault/media/Pictures`), and the rest of the share is out of the app's reach. Amahi-kai mounts each folder itself, checked to be a real folder reached through no link, and again before Docker starts the apps after a restart, so an app that writes in a share can't swap a folder for a link to elsewhere on the server. A folder renamed or deleted keeps its app from starting until it's given its folders again, and the app's row says which.
 - **Uninstalling Greyhole leaves no failed service behind** (Disks → Greyhole Pool) — Greyhole installed with no drives can't start, so it failed at every boot, and after Uninstall systemd went on listing `greyhole.service` as failed until the next restart. Uninstall clears it now.
 
 ## [1.1.0] — 2026-10-26

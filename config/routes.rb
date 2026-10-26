@@ -108,6 +108,7 @@ Rails.application.routes.draw do
     get 'docker_apps', action: 'docker_apps'
     get 'installed_apps', action: 'installed_apps'
     post 'refresh_catalog', action: 'refresh_catalog'
+    get 'share_folders', action: 'share_folders'
     get 'docker/install_stream/:id', action: 'docker_install_stream', as: 'docker_install_stream'
     get 'docker/update_stream/:id', action: 'docker_update_stream', as: 'docker_update_stream'
     get 'docker/undo_update_stream/:id', action: 'docker_undo_update_stream', as: 'docker_undo_update_stream'
