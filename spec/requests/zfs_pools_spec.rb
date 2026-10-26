@@ -202,11 +202,12 @@ RSpec.describe 'ZFS pools', type: :request do
       allow(StoragePools).to receive(:zfs_installed?).and_return(true)
       get '/disks/devices'
       cells = page.css('#disks-table tbody tr').map { |tr| tr.css('td')[4].text.squish }
-      expect(cells).to eq(['— For a ZFS pool, leave it unmounted', "— For a ZFS pool, don't initialize it"])
+      expect(cells).to eq(["— Mount it for shares or Greyhole's pool; for a ZFS pool, leave it unmounted",
+                           "— Initialize it for shares or Greyhole's pool; for a ZFS pool, leave it as it is"])
       expect(page.css('#disks-table tbody tr td a').first['href']).to eq('/disks/pools')
       allow(StoragePools).to receive(:zfs_installed?).and_return(false)
       get '/disks/devices'
-      expect(response.body).not_to include('For a ZFS pool')
+      expect(response.body).not_to include('for a ZFS pool')
     end
 
     it 'replaces a drive, adds drives and deletes a pool through the helper' do

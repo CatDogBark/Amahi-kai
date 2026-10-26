@@ -94,7 +94,7 @@ describe "Disks Controller", type: :request do
         allow(DiskManager).to receive(:format_disk!)
         post "/disks/format_disk", params: { device: '/dev/disk/by-id/ata-SSD_S1-part1' }
         expect(DiskManager).to have_received(:format_disk!).with('/dev/sdc1')
-        expect(flash[:notice]).to eq('Successfully formatted /dev/sdc1 as ext4')
+        expect(flash[:notice]).to eq("Formatted /dev/sdc1 as ext4. Mount it to use it for shares or Greyhole's pool.")
         post "/disks/format_disk", params: { device: '/dev/disk/by-id/ata-Gone_1' } # unplugged since the page was loaded
         expect(flash[:error]).to eq("Format failed: ata-Gone_1 isn't connected any more: reload the page")
       end

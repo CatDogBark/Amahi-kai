@@ -58,9 +58,10 @@
                   <%= part[:mountpoint] || '—' %>
                   <% if home %>
                     <span class="small text-muted ms-2" id="home-<%= File.basename(part[:path]) %>">Belongs at <code><%= home %></code><%= pool_drive ? ", one of the Greyhole pool's drives" : '' %>: Mount puts it back there</span>
-                  <%# Mounting (or Initialize) makes the drive share storage, which a ZFS pool can't take %>
+                  <%# Mounting (or Initialize) makes the drive share storage, which a ZFS pool can't take: both ways named %>
                   <% elsif @zfs_installed && !part[:mountpoint] && !device[:os_disk] && !device[:zfs_pool] && %i[unmounted unformatted].include?(part[:status]) %>
-                    <span class="small text-muted ms-2">For a <a href="<%= disks_pools_path %>">ZFS pool</a>, <%= part[:status] == :unformatted ? "don't initialize it" : 'leave it unmounted' %></span>
+                    <% blank = part[:status] == :unformatted %>
+                    <span class="small text-muted ms-2"><%= blank ? 'Initialize it' : 'Mount it' %> for shares or Greyhole's pool; for a <a href="<%= disks_pools_path %>">ZFS pool</a>, leave it <%= blank ? 'as it is' : 'unmounted' %></span>
                   <% end %>
                 </td>
                 <td class="text-end">
