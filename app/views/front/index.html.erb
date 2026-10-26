@@ -127,7 +127,7 @@
     </div>
   <% end %>
 
-  <%# ── System (CPU, memory, drives) + Services + Jobs (admins) ── %>
+  <%# ── System (CPU, memory, the drives outside a pool) + Services + Jobs (admins) ── %>
   <% column = @jobs ? 'col-lg-4' : 'col-md-6' %>
   <div class="row mb-4 g-3">
     <div class="<%= column %>">
@@ -244,37 +244,51 @@
     <% end %>
   </div>
 
-  <%# ── Greyhole Pool (only when Greyhole active) ── %>
-  <% pool = @stats[:pool] %>
-  <% if pool[:active] %>
+  <%# ── Storage: a row for each pool, Amahi-kai's ZFS pools then Greyhole's (while it runs) ── %>
+  <% greyhole = @stats[:pool] %>
+  <% if @stats[:pools].any? || greyhole[:active] %>
     <div class="row mb-4">
       <div class="col-12">
-        <div class="card">
-          <div class="card-header d-flex justify-content-between align-items-center" style="background: var(--kai-dark); color: white;">
-            <strong><%= lucide_icon('database', size: 16) %> Greyhole Pool</strong>
-            <% if current_user_is_admin? %>
-            <a href="/disks/storage_pool" class="text-muted text-decoration-none" style="font-size: 0.8rem;">Manage →</a>
-            <% end %>
+        <div class="card" id="storage-card">
+          <div class="card-header" style="background: var(--kai-dark); color: white;">
+            <strong><%= lucide_icon('database', size: 16) %> Storage</strong>
           </div>
-          <div class="card-body">
-            <%
-              bar_color = pool[:percent] > 90 ? '#dc3545' : pool[:percent] > 70 ? '#ffc107' : '#0d8aa8'
-            %>
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <span>
-                <strong><%= number_to_human_size(pool[:used]) %></strong> used of
-                <strong><%= number_to_human_size(pool[:total]) %></strong>
-                <span class="text-muted ms-2">(<%= number_to_human_size(pool[:free]) %> free)</span>
-              </span>
-              <span style="font-size: 1.1em; font-weight: 600; color: <%= bar_color %>"><%= pool[:percent] %>%</span>
-            </div>
-            <div style="height: 10px; background: var(--kai-card-bg, #1a1a2e); border-radius: 5px; overflow: hidden;">
-              <div style="height: 100%; width: <%= pool[:percent] %>%; background: <%= bar_color %>; border-radius: 5px; transition: width 0.3s;"></div>
-            </div>
-            <div class="d-flex justify-content-between mt-2 text-muted" style="font-size: 0.82em;">
-              <span><%= pluralize(pool[:drives], 'drive') %> · up to <%= pluralize(pool[:copies], 'copy') %> · ~<%= number_to_human_size(pool[:effective_capacity]) %> effective</span>
-              <span><%= pool[:pending] %> pending operations</span>
-            </div>
+          <div class="card-body d-flex flex-column gap-3">
+            <% @stats[:pools].each do |pool| %>
+              <div class="storage-pool" id="storage-pool-zfs-<%= pool[:name] %>">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <span>
+                    <strong><%= pool[:name] %></strong>
+                    <span class="text-muted ms-1" style="font-size: 0.8rem;">ZFS<% if pool[:drives].positive? %> <%= pool[:layout] %> · <%= pluralize(pool[:drives], 'drive') %><% end %></span>
+                  </span>
+                  <span class="d-flex align-items-center gap-2">
+                    <%= pool_state_badge(pool[:health]) %>
+                    <% if current_user_is_admin? %><a href="/disks/pools" class="text-muted text-decoration-none" style="font-size: 0.8rem;">Manage →</a><% end %>
+                  </span>
+                </div>
+                <% if pool[:total].positive? %>
+                  <%= render 'storage_space', space: pool %>
+                <% else %>
+                  <div class="text-muted small">Its space couldn't be read at the last check.</div>
+                <% end %>
+              </div>
+            <% end %>
+            <% if greyhole[:active] %>
+              <div class="storage-pool" id="storage-pool-greyhole">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <span>
+                    <strong>Greyhole</strong>
+                    <span class="text-muted ms-1" style="font-size: 0.8rem;"><%= pluralize(greyhole[:drives], 'drive') %> · up to <%= pluralize(greyhole[:copies], 'copy') %></span>
+                  </span>
+                  <% if current_user_is_admin? %><a href="/disks/storage_pool" class="text-muted text-decoration-none" style="font-size: 0.8rem;">Manage →</a><% end %>
+                </div>
+                <%= render 'storage_space', space: greyhole %>
+                <div class="d-flex justify-content-between mt-1 text-muted" style="font-size: 0.8rem;">
+                  <span>~<%= number_to_human_size(greyhole[:effective_capacity]) %> effective</span>
+                  <span><%= pluralize(greyhole[:pending], 'pending operation') %></span>
+                </div>
+              </div>
+            <% end %>
           </div>
         </div>
       </div>

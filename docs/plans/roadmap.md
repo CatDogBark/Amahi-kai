@@ -189,6 +189,33 @@ and the file browser's list drops its dates. It hasn't been designed for a phone
 A size limit on an app's ZFS dataset (P4.6). Left out for now (CatDogBark, 2026-10-11): people manage
 their own files, and the disk warnings cover running low.
 
+### Apps given folders, not whole shares
+
+Apps get whole shares today, at `/shares/<share>`, read only unless the app writes. CatDogBark,
+2026-10-26: any app, read only or not, may be given only some folders of a share; on the roadmap
+for now, about two days' work. It matters most for apps that write (Transmission, bitTube), whose
+write access is to the whole share, and bitShare's plan for a library kept in a share's folder
+needs it. As discussed:
+
+- **The Shares dialog** (at install, and Change on the app's row): a share that's ticked is all of
+  it, or only some folders, picked with a small folder browser. Several shares, several folders
+  each; for apps that write, each folder is read only or read and write. The row lists them:
+  `Shares Vault/media/Pictures, Vault/media/Home Videos (read only)`.
+- **The same paths in the app:** a folder is at `/shares/<share>/<folder>`, as in the share, so
+  narrowing an app's access never breaks its settings (PiGallery2's Images folder, Jellyfin's
+  libraries).
+- **Safety:** unlike the share's own folder, a folder inside it can be swapped for a link by an app
+  that writes there, and Docker follows a link in a mount's source each time it starts a
+  container, at boot too. So the root helper checks each folder (a real folder, no link on the way)
+  and bind-mounts it itself, in a place only root can write, before Docker starts the apps at boot
+  and before each container is made; the app mounts that.
+- **Greyhole shares:** each folder also gets the pool drives' copies of that folder (made on the
+  drives that don't have it yet), rather than the share's whole copy folders.
+- **Rules and effects:** a folder can't be inside another one chosen from the same share. Moving a
+  file between two chosen folders inside an app copies it (they're separate mounts). A chosen
+  folder renamed or deleted keeps the app from starting until it's changed, and the app's row says
+  which. Apps installed before keep their whole shares, and the catalog doesn't change.
+
 ### Greyhole shares' folders on the pool drives
 
 So nothing a Greyhole share receives passes through the system disk (a file bigger than its free

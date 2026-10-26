@@ -8,14 +8,19 @@ RSpec.describe 'db/seeds.rb' do
 
   before { User.delete_all }
 
-  after { ENV.delete('AMAHI_FIRST_PASSWORD_FILE') }
+  after do
+    ENV.delete('AMAHI_FIRST_PASSWORD_FILE')
+    @file&.close!
+  end
 
+  # The file is kept in @file until the example ends: a Tempfile the garbage collector takes
+  # deletes its file, maybe before the seeds read it.
   def password_file(text)
-    file = Tempfile.new('first-password')
-    file.write(text)
-    file.close
-    ENV['AMAHI_FIRST_PASSWORD_FILE'] = file.path
-    file.path
+    @file = Tempfile.new('first-password')
+    @file.write(text)
+    @file.close
+    ENV['AMAHI_FIRST_PASSWORD_FILE'] = @file.path
+    @file.path
   end
 
   it "gives the admin the installer's random password, deletes its file, and keeps only its hash" do

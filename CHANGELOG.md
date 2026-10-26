@@ -4,6 +4,20 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-10-26
+
+PiGallery2, a photo gallery, comes to the app catalog with this release; every app says how to sign in the first time; and the dashboard shows your storage pools.
+
+### 🔒 Security & Fixes
+
+- **Each app says how to sign in the first time** (Apps) — The Apps page gave no word on how to get into an app once it was installed: the password Amahi-kai made for PiGallery2 sat in a folded list, and nothing said its user is admin, or that Jellyfin, Gitea, Uptime Kuma and bitTube have you make the first account on their own first page. Every app in the catalog now says how, under the installed app on the Apps page (above the passwords Amahi-kai made for it) and when its install finishes.
+- **The dashboard shows your storage pools** — The System card listed the drives `df` lists, which leaves out a ZFS pool: a NAS whose storage is a ZFS pool showed none of it, while a Greyhole pool's drives were listed one by one as well as on the pool's own card. A Storage card has a row for each pool now: a ZFS pool's layout, drives, health and usable space after parity, as Disks → ZFS Pools gives them (from the storage check, every 15 minutes and after any change to a pool), and the Greyhole pool's space, copies and pending work. The System card keeps the system disk and the drives that are storage on their own.
+- **Disks → Devices says what comes after formatting** — A drive formatted there (Initialize or Format) is left unmounted, and Greyhole's pool and shares only take mounted drives, but the page said only "Successfully formatted", and beside the drive, when ZFS was installed, only how to keep it for a ZFS pool. It says to mount it for shares or Greyhole's pool now, and the hint beside the drive gives both ways.
+
+### 🔧 Architecture & Code Quality
+
+- **Apps can be set up the way they name their settings** (catalog format 4) — A manifest that says `requires: 4` can spell its environment names as the app does (PiGallery2's `Media-folder`), and put a generated secret inside a setting (`{{secret:NAME}}`), such as an admin password inside a list of users, so the app never starts with a default password. It's what PiGallery2, the photo gallery now in the catalog, needs. Servers on an older Amahi-kai list such an app as needing a newer one.
+
 ## [1.0.3] — 2026-10-25
 
 ### 🔒 Security & Fixes

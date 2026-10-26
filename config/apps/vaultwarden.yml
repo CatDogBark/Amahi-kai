@@ -1,5 +1,6 @@
 name: Vaultwarden
 description: A password manager server for the Bitwarden apps and browser extensions.
+sign_in: "Its web vault needs HTTPS, which Amahi-kai doesn't serve yet; the token Amahi-kai made for it opens its admin page (/admin)."
 category: security
 logo: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/vaultwarden.png
 releases: https://github.com/dani-garcia/vaultwarden/releases/tag/{version}

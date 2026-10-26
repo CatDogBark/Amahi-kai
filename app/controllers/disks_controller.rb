@@ -46,7 +46,7 @@ class DisksController < ApplicationController
     begin
       device = DiskManager.resolve(device)
       DiskManager.format_disk!(device)
-      flash[:notice] = "Successfully formatted #{device} as ext4"
+      flash[:notice] = "Formatted #{device} as ext4. Mount it to use it for shares or Greyhole's pool."
     rescue DiskManager::DiskError => e
       flash[:error] = "Format failed: #{e.message}"
     rescue Errno::ENOENT => e

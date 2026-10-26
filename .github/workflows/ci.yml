@@ -391,6 +391,9 @@ jobs:
         if: failure()
         with:
           name: browser-failures
-          path: tmp/capybara/
+          # The test log has the server's side of each request (a browser error names only its URL)
+          path: |
+            tmp/capybara/
+            log/test.log
           retention-days: 7
           if-no-files-found: ignore

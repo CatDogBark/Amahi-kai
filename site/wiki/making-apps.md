@@ -84,6 +84,7 @@ The file is `apps/<id>.yml`, where `<id>` is the app's name in lowercase letters
 ```yaml
 name: bitTube
 description: Your YouTube channels and streaming services in one place, with YouTube ad-free.
+sign_in: "Its first page asks you to make an account, its admin; the admin adds everyone else in Settings → People."
 category: media
 logo: https://cdn.jsdelivr.net/gh/CatDogBark/amahi-kai-apps@main/logos/bittube.svg
 releases: https://github.com/CatDogBark/bitTube/releases/tag/v{version}
@@ -100,14 +101,22 @@ environment:
   TZ: "{{timezone}}"
 ```
 
+- **`sign_in`** says how to sign in the first time, in one sentence: who to sign in as and with
+  what ("the password Amahi-kai made for it", for one of your `secrets`), or what your app's first
+  page asks for. The Apps page shows it under the installed app, and the install window as the
+  install finishes. The catalog wants one for every app.
 - **`image`** is pinned twice, by tag and by digest (`name:tag@sha256:...`), so every server gets
   exactly the build you tested.
 - **`ports`**: `host` is the port the app gets on the server when it's free (1024 or above, not
   one of the server's own, and not another catalog app's); `container` is the one your image
   listens on.
 - **`environment`** can use `{{uid}}`, `{{gid}}` and `{{timezone}}`, filled in at install. It
-  can't set `DOCKER_MODS`, which has an image download more code as it starts.
-- **`secrets`** (`{ env: ADMIN_TOKEN, label: Admin page token }`) are generated at install.
+  can't set `DOCKER_MODS`, which has an image download more code as it starts. Its names are like
+  `TZ`; with **`requires: 4`** they can be spelled the way your app spells its settings (letters
+  of either case, digits, `_` and `-`, starting with a letter: PiGallery2's `Media-folder`).
+- **`secrets`** (`{ env: ADMIN_TOKEN, label: Admin page token }`) are generated at install. With
+  `requires: 4` a setting can hold one inside its value as `{{secret:ADMIN_TOKEN}}`, such as a
+  password inside a JSON list of users; secrets are letters and digits, so they fit inside quotes.
 - **`folders`**: each `path` is made of plain names (letters, digits, `.`, `_`, `-`), isn't
   `/shares` or under it (where the app's shares go), and no two folders share one.
 - **`folders`** with `backup: false` (caches, downloads) aren't copied before an update.

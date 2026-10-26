@@ -99,6 +99,25 @@ describe "Docker Apps", type: :request do
       expect(response.body).to include("Its data stays in #{AppCatalog.apps_root}/gitea")
     end
 
+    # How to sign in the first time, open, above the passwords Amahi-kai made (kept folded away)
+    it "says how to sign in on an installed app's row, above the passwords Amahi-kai made for it" do
+      secrets = File.join(AppCatalog.secrets_dir, 'transmission.json')
+      FileUtils.mkdir_p(File.dirname(secrets))
+      File.write(secrets, { 'PASS' => 'Gener4ted' }.to_json)
+      DockerApp.create!(identifier: 'transmission', name: 'Transmission', image: AppCatalog.find('transmission')[:image],
+                        status: 'running', host_port: 9091)
+      gitea
+      get "/apps/installed_apps"
+      page = Nokogiri::HTML(response.body)
+      expect(page.at_css('#app-sign-in-transmission').text.squish)
+        .to eq('First sign-in: Sign in as admin with the password Amahi-kai made for it.')
+      expect(page.at_css('#docker_app_transmission details.app-secrets code').text).to eq('Gener4ted')
+      expect(page.at_css('#app-sign-in-gitea').text.squish).to start_with('First sign-in: Its first page sets it up')
+      expect(page.at_css('#docker_app_gitea details.app-secrets')).to be_nil # nothing made for it
+    ensure
+      FileUtils.rm_f(secrets)
+    end
+
     it "shows each installed app's ports" do
       gitea(port_mappings: [{ host: 3300, protocol: 'tcp', label: 'web' }, { host: 2222, protocol: 'tcp', label: 'Git over SSH' }].to_json)
       get "/apps/installed_apps"
@@ -215,8 +234,16 @@ describe "Docker Apps", type: :request do
       expect(Privileged.calls).to include(['apps.install', { app: 'uptimekuma', shares: [] }])
       expect(response.body).to include('✓ Uptime Kuma is installed and running')
       expect(response.body).to include('Open it at http://192.168.1.111:3001/ (on your LAN or Tailscale)')
+      expect(response.body).to include('First sign-in: Its first page asks you to make the admin account.')
+      expect(response.body).not_to include('Passwords and keys') # Amahi-kai made none for it
       expect(DockerApp.find_by(identifier: 'uptimekuma')).to have_attributes(status: 'running', host_port: 3001,
                                                                              container_name: 'amahi-uptimekuma')
+    end
+
+    it "says where the password it made is, after how to sign in" do
+      get "/apps/docker/install_stream/transmission", headers: same_origin
+      expect(response.body).to include('First sign-in: Sign in as admin with the password Amahi-kai made for it.')
+      expect(response.body).to include('Passwords and keys Amahi-kai made for it are on the Apps page, under Transmission')
     end
 
     it "keeps the ports the helper gave when the catalog's were taken" do

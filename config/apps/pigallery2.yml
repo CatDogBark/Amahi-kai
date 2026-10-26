@@ -1,0 +1,26 @@
+name: PiGallery2
+description: Your photos and home videos as a gallery, folder by folder, as they are on the NAS.
+sign_in: "Sign in as admin with the password Amahi-kai made for it."
+category: media
+logo: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/pigallery2.png
+releases: https://github.com/bpatrik/pigallery2/releases/tag/{version}
+image: bpatrik/pigallery2:3.5.2@sha256:d7a61b6daa410537064d4f661122545bc4d9b16cd91a3862d654c3555cb63992
+# Its settings are named as PiGallery2 spells them, and the admin's password is generated
+# inside one of them (format 4). The photo folder is a default: the gallery's own Settings can
+# narrow it to one folder of the shares it was given (Media → folder, under /shares).
+requires: 4
+run_as: app
+web_port: 8098
+memory: 1g
+ports:
+  - { host: 8098, container: 80 }
+folders:
+  - { name: config, path: /app/data/config }
+  - { name: db, path: /app/data/db }
+  - { name: thumbnails, path: /app/data/tmp, backup: false }
+secrets:
+  - { env: PIGALLERY_ADMIN_PASSWORD, label: Sign in as admin with this password }
+environment:
+  TZ: "{{timezone}}"
+  default-Media-folder: /shares
+  Users-enforcedUsers: '[{"name":"admin","role":"Admin","password":"{{secret:PIGALLERY_ADMIN_PASSWORD}}"}]'

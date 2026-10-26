@@ -1,9 +1,10 @@
 name: bitTube
 description: Your YouTube channels and streaming services in one place, with YouTube ad-free.
+sign_in: "Its first page asks you to make an account, its admin; the admin adds everyone else in Settings → People."
 category: media
 logo: https://cdn.jsdelivr.net/gh/CatDogBark/amahi-kai-apps@main/logos/bittube.svg
 releases: https://github.com/CatDogBark/bitTube/releases/tag/v{version}
-image: ghcr.io/catdogbark/bittube:0.1.7@sha256:524305963fed2b0a6e6c3f09a1c68ecf2d3b50d72aa1697d8973c3bc2bc8941d
+image: ghcr.io/catdogbark/bittube:0.1.12@sha256:d9f640835dd2fb0b18d2050ca2f5598f3f8852d0610e582073027b7ed9b5fc6d
 run_as: app
 web_port: 8484
 memory: 1g
