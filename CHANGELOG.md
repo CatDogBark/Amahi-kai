@@ -4,6 +4,8 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-10-25
+
 Amahi-kai 1.0 is a home server for Ubuntu 24.04, run from your browser, and the first release meant for other people to install. On a dedicated machine or virtual machine it gives you:
 
 - **File shares** for every computer in the house (Samba), with per-user access, a Trash, a web file browser and search.
