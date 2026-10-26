@@ -272,7 +272,8 @@ changelog's 1.0 entry.
    Done 2026-10-25: 1.0.0 from #173. The test VM's update to it found fwupd's refresh timer
    failing (the installer masked fwupd but left the timer on): 1.0.1, the same day. The NAS's
    update then showed DHCP's device names stopped (a burst of leases hit systemd's start
-   limit for their job): 1.0.2.
+   limit for their job): 1.0.2. Then 1.0.3: pages whose sign-in ended take you to the sign-in
+   page, sign out in the header, and the water background's clock on the real one.
 3. The NAS and the test VM are development machines and switch channels as the work needs.
    One caution for switching back from `development` to `releases`: an update never goes to a
    lower version, so the switch takes effect at the next release, and if `dev` ran a migration
