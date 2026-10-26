@@ -53,7 +53,7 @@
     var meta = document.querySelector('meta[name="amahi-session"]');
     if (!meta) return;
     var timer = null;
-    var lastCheck = 0;
+    var lastCheck = Date.now(); // the page came with its sign-in's end: no need to ask again yet
 
     function schedule(seconds) {
       clearTimeout(timer);
