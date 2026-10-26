@@ -4,6 +4,12 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.0.1] — 2026-10-25
+
+### 🔒 Security & Fixes
+
+- **fwupd's refresh no longer fails twice a day** — The installer turns off fwupd, Ubuntu's firmware updater, which a NAS doesn't need, but left its refresh timer on: without fwupd the refresh failed each time, and systemd listed `fwupd-refresh.service` as failed. The timer goes off with fwupd now, on new installs and with this update.
+
 ## [1.0.0] — 2026-10-25
 
 Amahi-kai 1.0 is a home server for Ubuntu 24.04, run from your browser, and the first release meant for other people to install. On a dedicated machine or virtual machine it gives you:

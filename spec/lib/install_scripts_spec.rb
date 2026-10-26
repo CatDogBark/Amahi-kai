@@ -222,6 +222,14 @@ RSpec.describe 'install and update scripts' do
     expect(File.read(Rails.root.join('bin/amahi-install'))).to include('/usr/local/sbin/amahi-helper smart.setup </dev/null')
   end
 
+  it "turns fwupd's refresh timer off with fwupd, at install and every update" do
+    %w[bin/amahi-install bin/amahi-update].each do |script|
+      text = File.read(Rails.root.join(script))
+      expect(text).to include('systemctl mask fwupd-refresh.timer')
+      expect(text).to include('systemctl reset-failed fwupd-refresh.service')
+    end
+  end
+
   describe 'update channels' do
     let(:update) { File.read(Rails.root.join('bin/amahi-update')) }
     let(:install) { File.read(Rails.root.join('bin/amahi-install')) }
