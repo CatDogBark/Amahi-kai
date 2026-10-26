@@ -269,12 +269,15 @@ changelog's 1.0 entry.
    log. Found: the wizard's storage step said there were no drives when the others held a ZFS
    pool, and the wiki said to leave them unticked there (it doesn't list them). Both fixed.
 2. Whatever that finds, fixed; `1.0.0`.
+   Done 2026-10-25: 1.0.0 from #173. The test VM's update to it found fwupd's refresh timer
+   failing (the installer masked fwupd but left the timer on): 1.0.1, the same day.
 3. The NAS and the test VM are development machines and switch channels as the work needs.
    One caution for switching back from `development` to `releases`: an update never goes to a
    lower version, so the switch takes effect at the next release, and if `dev` ran a migration
    the release doesn't have, the database is ahead of the code (migrations are written to work
    with the previous version's code, so this is survivable, but a backup first is the habit).
-4. The five v0.1–v0.2 pre-releases on the Releases page: keep or delete, his call.
+4. The five v0.1–v0.2 pre-releases on the Releases page: kept as history (CatDogBark,
+   2026-10-25).
 
 ## Not in 1.0
 

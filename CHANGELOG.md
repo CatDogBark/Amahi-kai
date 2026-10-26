@@ -4,6 +4,8 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.0.1] — 2026-10-25
+
 ### 🔒 Security & Fixes
 
 - **fwupd's refresh no longer fails twice a day** — The installer turns off fwupd, Ubuntu's firmware updater, which a NAS doesn't need, but left its refresh timer on: without fwupd the refresh failed each time, and systemd listed `fwupd-refresh.service` as failed. The timer goes off with fwupd now, on new installs and with this update.
