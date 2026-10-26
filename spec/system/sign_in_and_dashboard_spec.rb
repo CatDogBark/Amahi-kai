@@ -28,6 +28,23 @@ RSpec.describe 'Sign in and the dashboard', type: :system do
     expect(Setting.get('advanced')).to eq(before == 'true' ? '0' : '1')
   end
 
+  # Real time is the clock itself: a faster speed tried and turned off leaves no offset behind
+  it "keeps the water's clock on the real one after a faster speed is turned off" do
+    sign_in_as_admin
+    find('.ocean-toggle').click
+    within('.ocean-panel') do
+      click_button 'Day in 2 min'
+      sleep 2 # 24 minutes of the scene's day
+      click_button 'Real time'
+    end
+    minutes = ->(hhmm) { h, m = hhmm.split(':').map(&:to_i); (h * 60) + m }
+    shown = minutes.call(find('[data-ocean-time]').text[/\d\d:\d\d/])
+    clock = minutes.call(page.evaluate_script(
+                           "(() => { const d = new Date(); return d.getHours() + ':' + d.getMinutes(); })()"
+                         ))
+    expect([(shown - clock) % 1440, (clock - shown) % 1440].min).to be <= 1
+  end
+
   it 'signs out from the header, and from its menu on a phone' do
     sign_in_as_admin
     find("button[aria-label='Sign out #{User::SEED_ADMIN_LOGIN}']").click
