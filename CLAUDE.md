@@ -8,7 +8,8 @@ takes `dev` first. CatDogBark owns the repo (`CatDogBark/Amahi-kai`, **public**)
 
 Current work (CatDogBark, 2026-10-25): the road to 1.0 is **`docs/plans/release-1.0.md`**. The
 code review and the docs review are done (seven fix batches on `dev`, each checked on the test
-VM); a release candidate is next, then 1.0. Networking, Tailscale included, is done. After 1.0: the real pool's checks with bitShare (bitShare's work in tandem), signed
+VM); 1.0.0rc1 is out (a pre-release, 2026-10-25) and passed a fresh install on the test VM; with
+its findings fixed on `dev`, 1.0.0 is next. Networking, Tailscale included, is done. After 1.0: the real pool's checks with bitShare (bitShare's work in tandem), signed
 updates, and backups (no users yet, and CatDogBark's NAS has Proxmox's backups; the backups plan,
 for bare metal, is `docs/plans/backups.md`). 1.0 is for other people to install. CatDogBark's NAS is the house's
 router now and follows releases; the test VM takes `dev` first. bitShare (its own project)

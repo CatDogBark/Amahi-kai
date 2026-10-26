@@ -264,6 +264,10 @@ changelog's 1.0 entry.
 
 1. `1.0.0rc1` on `main`, published as a pre-release. A fresh install of it on the test VM from
    its Initial snapshot through the website's installer, the public path.
+   Done 2026-10-25: published from #172; the website's installer, the setup wizard and the old
+   pool's import (Disks → ZFS Pools, its snapshots with it) passed, with no errors in the app's
+   log. Found: the wizard's storage step said there were no drives when the others held a ZFS
+   pool, and the wiki said to leave them unticked there (it doesn't list them). Both fixed.
 2. Whatever that finds, fixed; `1.0.0`.
 3. The NAS and the test VM are development machines and switch channels as the work needs.
    One caution for switching back from `development` to `releases`: an update never goes to a

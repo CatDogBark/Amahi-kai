@@ -183,8 +183,38 @@ describe "Setup Controller", type: :request do
             partitions: [{ path: "/dev/sdd", ref: "/dev/disk/by-id/ata-SSD_S1", status: :unformatted, size: "1T" }] }
         ])
         get setup_storage_path
-        values = Nokogiri::HTML(response.body).css('input[name="drives[]"]').map { |i| i['value'] }
+        page = Nokogiri::HTML(response.body)
+        values = page.css('input[name="drives[]"]').map { |i| i['value'] }
         expect(values).to eq(["/dev/disk/by-id/ata-SSD_S1"]) # by its ref: a page left open acts on that drive or none
+        expect(page.text).to include("The drives that belong to the ZFS pool tank aren't listed. " \
+                                     "Import it on Disks → ZFS Pools once setup is done.")
+      end
+
+      # After installing again, with the old pool's drives connected: there are drives, they're the pool's
+      it "names the pools when their drives are the only others" do
+        allow(DiskManager).to receive(:devices).and_return([
+          { name: "sda", path: "/dev/sda", model: "QEMU", size: "32G", os_disk: true, zfs_pool: nil, partitions: [] },
+          { name: "sdb", path: "/dev/sdb", model: "QEMU", size: "8G", os_disk: false, zfs_pool: "tank",
+            partitions: [{ path: "/dev/sdb1", ref: "/dev/sdb1", status: :unmounted, fstype: "zfs_member", size: "8G" }] },
+          { name: "sdc", path: "/dev/sdc", model: "QEMU", size: "8G", os_disk: false, zfs_pool: "tank",
+            partitions: [{ path: "/dev/sdc1", ref: "/dev/sdc1", status: :unmounted, fstype: "zfs_member", size: "8G" }] },
+          { name: "sdd", path: "/dev/sdd", model: "QEMU", size: "8G", os_disk: false, zfs_pool: "media",
+            partitions: [{ path: "/dev/sdd1", ref: "/dev/sdd1", status: :unmounted, fstype: "zfs_member", size: "8G" }] }
+        ])
+        get setup_storage_path
+        page = Nokogiri::HTML(response.body)
+        expect(page.css('input[name="drives[]"]')).to be_empty
+        expect(page.text).to include("The other drives belong to the ZFS pools tank and media and are left as they are.")
+        expect(page.text).to include("Import them on Disks → ZFS Pools once setup is done.")
+        expect(page.text).not_to include("No drives found")
+      end
+
+      it "says there are no other drives when there are none" do
+        allow(DiskManager).to receive(:devices).and_return([
+          { name: "sda", path: "/dev/sda", model: "QEMU", size: "32G", os_disk: true, zfs_pool: nil, partitions: [] }
+        ])
+        get setup_storage_path
+        expect(Nokogiri::HTML(response.body).text).to include("No drives found besides the one the system runs from.")
       end
     end
 
