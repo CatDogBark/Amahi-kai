@@ -96,7 +96,7 @@ RSpec.configure do |config|
     next unless @browser_log
     errors = browser_errors
     if errors.any?
-      report = errors.map { |e| "[#{e[:source]}] #{e[:text]}" }.join("\n")
+      report = errors.map { |e| "[#{e[:source]}] #{e[:text]}#{" (#{e[:url]})" if e[:url].present?}" }.join("\n")
       if example.exception
         example.exception.message << "\n\nThe browser also reported:\n#{report}"
       else
