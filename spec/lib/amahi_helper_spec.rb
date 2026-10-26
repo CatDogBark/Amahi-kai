@@ -1053,10 +1053,12 @@ RSpec.describe 'AmahiHelper' do
       allow(helper).to receive(:do_sync_leases)
       helper.do_dnsmasq_config(dhcp_on('ens19'))
       expect(ran).to eq(['/usr/sbin/ufw allow in on ens19 to any port 67 proto udp', '/usr/bin/systemctl daemon-reload',
+                         '/usr/bin/systemctl reset-failed dhcp_names_service dhcp_names_path',
                          '/usr/bin/systemctl enable --now dhcp_names_path'])
       expect(File.read(AmahiHelper::DHCP_NAMES_PATH)).to include('PathModified=/var/lib/misc/dnsmasq.leases')
+      # A burst of leases can't stop the job: no start limit
       expect(File.read(AmahiHelper::DHCP_NAMES_SERVICE)).to include('ExecStart=/usr/local/sbin/amahi-helper dns.sync_leases',
-                                                                     'StandardInputText={}')
+                                                                     'StandardInputText={}', "\nStartLimitIntervalSec=0\n")
       expect(helper).to have_received(:do_sync_leases)
 
       ran.clear
@@ -1071,6 +1073,24 @@ RSpec.describe 'AmahiHelper' do
                          '/usr/bin/systemctl disable --now dhcp_names_path', '/usr/bin/systemctl is-active --quiet unbound',
                          "#{AmahiHelper::UNBOUND_CONTROL} reload_keep_cache"])
       expect(File.exist?(AmahiHelper::UNBOUND_LEASES)).to be false
+    end
+
+    # Every System Update: the watch as this version writes it, started again if systemd stopped it
+    it 'keeps the watch on the leases current and running, only while DHCP hands out addresses' do
+      File.write(AmahiHelper::DNSMASQ_CONF, dhcp_on('ens18'))
+      expect(steps('dns.names_setup', {})).to eq([[:dhcp_names]])
+      File.write(AmahiHelper::DNSMASQ_CONF, "port=0\nbind-interfaces\nexcept-interface=lo\n") # DHCP off: the units stay
+      expect(steps('dns.names_setup', {})).to eq([])
+      FileUtils.rm_f(AmahiHelper::DNSMASQ_CONF)
+      expect(steps('dns.names_setup', {})).to eq([])
+      expect(AmahiHelper::NETWORK_LOCKED).to include('dns.names_setup')
+
+      allow(helper).to receive(:do_sync_leases)
+      helper.do_dhcp_names
+      expect(ran).to eq(['/usr/bin/systemctl daemon-reload', '/usr/bin/systemctl reset-failed dhcp_names_service dhcp_names_path',
+                         '/usr/bin/systemctl enable --now dhcp_names_path'])
+      expect(File.read(AmahiHelper::DHCP_NAMES_SERVICE)).to eq(AmahiHelper::DHCP_NAMES_SERVICE_CONTENT)
+      expect(helper).to have_received(:do_sync_leases)
     end
 
     describe "the leases' names" do

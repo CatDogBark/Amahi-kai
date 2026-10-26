@@ -3,8 +3,10 @@
 Amahi-kai is a Rails 8.1 NAS web app, modernized from the 2013 Amahi platform, released as 1.0
 on 2026-10-25, for other people to install. Two installs run it today: CatDogBark's NAS, an
 Ubuntu 24.04 VM on Proxmox that is also the house's router (it follows releases), reached on the
-LAN by IP over plain HTTP, through a Cloudflare Tunnel and through Tailscale; and a test VM that
-takes `dev` first. CatDogBark owns the repo (`CatDogBark/Amahi-kai`, **public**) and both.
+LAN by IP over plain HTTP and through a Cloudflare Tunnel (no Tailscale, and no Greyhole in use:
+its storage is a ZFS pool); and a test VM that takes `dev` first, where Tailscale and Greyhole
+are tried. The two are set up differently: check what the NAS runs before calling something
+missing there. CatDogBark owns the repo (`CatDogBark/Amahi-kai`, **public**) and both.
 
 Current work (CatDogBark, 2026-10-25): 1.0 is out. The road there was
 **`docs/plans/release-1.0.md`**: the code review and the docs review (seven fix batches on `dev`,

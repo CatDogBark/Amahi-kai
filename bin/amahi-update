@@ -479,6 +479,10 @@ fi
 # passed through to it.
 reply=$(/usr/local/sbin/amahi-helper smart.setup </dev/null 2>/dev/null) \
   || log "⚠ Couldn't set up SMART monitoring: $reply"
+# The watch that gives DHCP's devices their names in DNS, as this version writes it, and running
+# again if systemd stopped it (before 1.0.2 a burst of leases could). Nothing while DHCP is off.
+reply=$(/usr/local/sbin/amahi-helper dns.names_setup </dev/null 2>/dev/null) \
+  || log "⚠ Couldn't check the watch that names DHCP's devices: $reply"
 
 # 6. Restart the app and check that it answers. Inside amahi-kai.service the restart ends
 #    this script, so it's the last thing it does there.

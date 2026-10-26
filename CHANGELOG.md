@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+### 🔒 Security & Fixes
+
+- **DHCP's devices keep their names in DNS** (Network → DHCP) — Devices joining at once (an access point restarting, say) rewrite DHCP's leases several times a second, and once the job that gives them names in DNS had run more than five times in ten seconds, systemd stopped it for good, and the watch on the leases with it: devices that got an address after that had no name in DNS. The job has no such limit now, a DHCP save starts a stopped watch again, and so does this update, with the names brought up to date.
+
 ## [1.0.1] — 2026-10-25
 
 ### 🔒 Security & Fixes
