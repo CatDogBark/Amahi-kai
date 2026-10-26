@@ -24,7 +24,7 @@ describe "Front page", type: :request do
 
     it "shows logout link" do
       get root_path
-      expect(response.body).to include("Logout")
+      expect(response.body).to include("Sign out")
     end
   end
 

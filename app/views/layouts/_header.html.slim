@@ -37,6 +37,9 @@ nav.navbar.navbar-expand-md.kai-header
         a.kai-iconbtn#advanced-toggle href="#" class=("active" if advanced?) data-tip=t('advanced_settings') data-tip-placement="bottom" aria-label=t('advanced_settings') aria-pressed=(advanced? ? 'true' : 'false') data-call="toggleAdvanced" data-args='["#{toggle_advanced_path}"]'
           = lucide_icon('wrench', size: 17)
       - if current_user
+        /! Sign out: every browser of this account (UserSession#destroy)
+        = button_to logout_path, method: :delete, class: 'kai-iconbtn', form: { class: 'kai-signout d-none d-md-inline-flex' }, data: { tip: "#{t('logout')} #{current_user.login}", tip_placement: 'bottom' }, aria: { label: "#{t('logout')} #{current_user.login}" } do
+          = lucide_icon('log-out', size: 17)
         button.navbar-toggler.kai-iconbtn.d-md-none type="button" data-bs-target="#amahi-nav" data-bs-toggle="collapse" aria-controls="amahi-nav" aria-expanded="false" aria-label="Menu"
           span.navbar-toggler-icon
 
@@ -50,3 +53,4 @@ nav.navbar.navbar-expand-md.kai-header
             a.kai-navlink href=apps_index_path aria-current=("page" if section == :apps) = t('apps')
             a.kai-navlink href=users_path aria-current=("page" if section == :setup) = t('setup')
           a.kai-navlink href="https://amahi-kai.com/wiki/" target="_blank" rel="noopener" = t('help')
+          = button_to "#{t('logout')} #{current_user.login}", logout_path, method: :delete, class: 'kai-navlink', form: { class: 'kai-signout' }

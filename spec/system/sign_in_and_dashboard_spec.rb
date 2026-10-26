@@ -28,6 +28,20 @@ RSpec.describe 'Sign in and the dashboard', type: :system do
     expect(Setting.get('advanced')).to eq(before == 'true' ? '0' : '1')
   end
 
+  it 'signs out from the header, and from its menu on a phone' do
+    sign_in_as_admin
+    find("button[aria-label='Sign out #{User::SEED_ADMIN_LOGIN}']").click
+    expect(page).to have_field('username')
+
+    sign_in_as_admin
+    page.driver.resize(400, 800)
+    find('.navbar-toggler').click
+    within('#amahi-nav') { click_button "Sign out #{User::SEED_ADMIN_LOGIN}" }
+    expect(page).to have_field('username')
+  ensure
+    page.driver.resize(1280, 800)
+  end
+
   it "fits the header in a medium-width window: the name on one line, the tools inside it" do
     sign_in_as_admin
     page.driver.resize(860, 800)
