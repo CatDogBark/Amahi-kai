@@ -1,0 +1,15 @@
+<%# A pool's space on the dashboard's Storage card: how much is used of how much, and a bar.
+    space: { used:, free:, total: } in bytes, and percent (used of total). %>
+<% level = space[:percent] > 90 ? 'danger' : space[:percent] > 70 ? 'warning' : 'info' %>
+<%# The figure in its bar's colour (the theme's, for bars: bg-info is mint) %>
+<% color = { 'danger' => 'var(--kai-danger)', 'warning' => 'var(--kai-warning)', 'info' => 'var(--kai-mint)' }[level] %>
+<div class="d-flex justify-content-between align-items-center mb-1" style="font-size: 0.85rem;">
+  <span>
+    <strong><%= number_to_human_size(space[:used]) %></strong> used of <strong><%= number_to_human_size(space[:total]) %></strong>
+    <span class="text-muted ms-1">(<%= number_to_human_size(space[:free]) %> free)</span>
+  </span>
+  <span class="fw-semibold" style="color: <%= color %>;"><%= space[:percent] %>%</span>
+</div>
+<div class="progress" style="height: 8px;">
+  <div class="progress-bar bg-<%= level %>" style="width: <%= space[:percent] %>%"></div>
+</div>

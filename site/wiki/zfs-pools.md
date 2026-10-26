@@ -120,6 +120,10 @@ asleep). A drive that says it's failing, has bad sectors or errors, or is worn o
 at the top of the dashboard and the Disks pages. **Check now** checks at once. Virtual disks (a
 server in a virtual machine) have no SMART data.
 
+The dashboard's **Storage** card shows each pool's layout, health and space as that check found
+them, so it can be up to 15 minutes behind this page (a change made here, such as a new pool,
+checks at once).
+
 ---
 
 ## Snapshots

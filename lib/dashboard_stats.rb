@@ -3,7 +3,8 @@
 
 class DashboardStats
   class << self
-    def summary
+    # +health+: the last storage health check (StorageHealth), which has the ZFS pools.
+    def summary(health = StorageHealth.load)
       {
         system: system_info,
         resources: resource_usage,
@@ -11,6 +12,7 @@ class DashboardStats
         storage: storage_summary,
         counts: entity_counts,
         drives: drive_usage,
+        pools: zfs_pools(health),
         pool: pool_status
       }
     end
@@ -88,6 +90,20 @@ class DashboardStats
       }
     end
 
+    # Amahi-kai's ZFS pools for the Storage card, as the last health check read them (every 15
+    # minutes, and after every change on Disks → ZFS Pools): [{ name:, layout:, drives:, health:,
+    # used:, free:, total:, percent: }]. Space is ZFS's own: what's usable after parity, which
+    # df can't say. total is 0 when the check couldn't read the pool.
+    def zfs_pools(health)
+      health.pools.select(&:managed?).map do |pool|
+        used = pool.used.to_i
+        free = pool.available.to_i
+        total = used + free
+        { name: pool.name, layout: pool.layout, drives: pool.drives.size, health: pool.health,
+          used: used, free: free, total: total, percent: total.positive? ? (100.0 * used / total).round(1) : 0 }
+      end
+    end
+
     def entity_counts
       {
         users: (User.all_users.count rescue 0),
@@ -111,9 +127,13 @@ class DashboardStats
       { percent: memory[:percent], detail: "#{(memory[:used] / 1048576.0).round(1)} / #{(memory[:total] / 1048576.0).round(1)} GB" }
     end
 
+    # The drives that are storage on their own: the system disk, and data drives outside a pool.
+    # A ZFS pool's drives aren't in df's list, and a Greyhole pool's are left out: their space is
+    # the pool's, on the Storage card.
     def drive_usage
       # Get all mounted filesystems, excluding virtual/system ones
       lines = Shell.output('df', '-BG').lines.drop(1)
+      pooled = DiskPoolPartition.pool_paths
       drives = []
       lines.each do |line|
         parts = line.split
@@ -122,6 +142,7 @@ class DashboardStats
         # Only real block devices; the share root is a bind mount of the system disk, not a drive
         next unless device.start_with?('/dev/')
         next if mount == Share::DEFAULT_SHARES_ROOT
+        next if mount != '/' && pooled.any? { |path| path == mount || path.start_with?("#{mount}/") }
         # Skip tiny partitions (boot, EFI)
         total_gb = total.to_f
         next if total_gb < 1

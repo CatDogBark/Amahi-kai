@@ -24,11 +24,13 @@ class FrontController < ApplicationController
     @apps = DockerApp.dashboard.running
     # Apps the catalog has a newer version of, for the admins who can update them.
     @app_updates = helpers.app_updates
-    @stats = DashboardStats.summary
+    # The last storage health check: its pools are on the Storage card, its alerts for admins.
+    health = StorageHealth.load
+    @stats = DashboardStats.summary(health)
     if current_user.admin?
       # Security updates that have waited a couple of days (nothing installs them by itself).
       @security_overdue = SystemDependencies.overdue_security_updates
-      @storage_health = StorageHealth.load
+      @storage_health = health
       @jobs = ScheduledJobs.all(health: @storage_health)
     end
     @shares = if current_user.admin?

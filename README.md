@@ -48,8 +48,8 @@ network, drives, storage pool and a first share. More in [docs/NATIVE-INSTALL.md
   tracker blocking), its DHCP server, and if you like its router, with nothing from the internet
   let in but the ports you choose; the NAS's own address set from the page
 - **Remote access:** Cloudflare Tunnel (no port forwarding) and Tailscale
-- **Dashboard:** CPU, memory, per-drive storage and services; Settings → Servers for each service's
-  version, uptime and controls
+- **Dashboard:** CPU, memory, the system disk, each storage pool's space and health, and services;
+  Settings → Servers for each service's version, uptime and controls
 - **Security audit:** checks SSH, the firewall and updates, with fixes
 - **Ocean UI:** animated underwater background behind dark glass panels
 
