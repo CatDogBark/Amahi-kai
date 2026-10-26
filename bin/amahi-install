@@ -176,6 +176,14 @@ for svc in fwupd.service multipathd.service; do
     systemctl mask "$svc" 2>/dev/null || true
   fi
 done
+# fwupd's refresh timer goes with fwupd: without the daemon, the refresh fails twice a day.
+if [ "$(systemctl is-enabled fwupd.service 2>/dev/null)" = masked ] \
+  && [ "$(systemctl is-enabled fwupd-refresh.timer 2>/dev/null)" != masked ]; then
+  echo "==> Disabling fwupd-refresh.timer (fwupd is off)..."
+  systemctl disable --now fwupd-refresh.timer 2>/dev/null || true
+  systemctl mask fwupd-refresh.timer 2>/dev/null || true
+  systemctl reset-failed fwupd-refresh.service 2>/dev/null || true
+fi
 
 # ---------------------------------------------------------------------------
 # 3. Create system user

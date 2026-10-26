@@ -443,6 +443,17 @@ if [[ -f /etc/greyhole.conf ]]; then
   chmod 640 /etc/greyhole.conf
 fi
 
+# 3f. The installer masks fwupd (a NAS doesn't need it, and it saves memory); installers before
+#     1.0.1 left its refresh timer on, which then failed twice a day. It goes off with fwupd. A
+#     fwupd turned back on is left alone, and this never fails the update.
+if [[ "$(systemctl is-enabled fwupd.service 2>/dev/null || true)" == masked \
+      && "$(systemctl is-enabled fwupd-refresh.timer 2>/dev/null || true)" != masked ]]; then
+  log "Turning off fwupd's refresh timer (fwupd is off)..."
+  { systemctl disable --now fwupd-refresh.timer && systemctl mask fwupd-refresh.timer; } >/dev/null 2>&1 \
+    || log "⚠ fwupd's refresh timer wasn't turned off"
+  systemctl reset-failed fwupd-refresh.service >/dev/null 2>&1 || true
+fi
+
 # 4. Clear cache and precompile assets (in the app user's own folders)
 log "Clearing caches..."
 ASSETS_CLEARED=true
