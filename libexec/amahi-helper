@@ -92,6 +92,9 @@ module AmahiHelper
   DHCP_NAMES_SERVICE_CONTENT = <<~UNIT
     [Unit]
     Description=Amahi-kai: DNS names for the devices DHCP gives addresses to
+    # Devices joining at once rewrite the leases several times a second: with systemd's default
+    # limit (5 starts in 10 s), a burst stopped this job for good, and the watch with it.
+    StartLimitIntervalSec=0
 
     [Service]
     Type=oneshot
@@ -264,7 +267,7 @@ module AmahiHelper
   NETWORK_LOCK = '/run/amahi-kai-network.lock'
   NETWORK_LOCK_WAIT = 120
   NETWORK_LOCKED = %w[
-    dns.write_config dns.remove_config dns.sync_leases dns.set_blocklists dns.blocking_off dns.write_radvd_config
+    dns.write_config dns.remove_config dns.sync_leases dns.names_setup dns.set_blocklists dns.blocking_off dns.write_radvd_config
     dns.remove_radvd_config dns.set_own_address dns.remove_own_address network.write_dnsmasq_config network.router_on
     network.router_off network.set_address network.apply_address network.keep_address network.revert_address
   ].freeze
@@ -899,6 +902,14 @@ module AmahiHelper
       params: [],
       validate: ->(_a) { {} },
       plan: ->(_v) { [[:sync_leases]] }
+    },
+    # The watch on the leases (DHCP_NAMES_PATH) as this version writes it, and running: one
+    # systemd stopped (before 1.0.2, a burst of leases could) starts again, with the names
+    # brought up to date. Run at every System Update; with DHCP off there's no watch to keep.
+    'dns.names_setup' => {
+      params: [],
+      validate: ->(_a) { { on: File.exist?(DNSMASQ_CONF) && !dhcp_interface(File.read(DNSMASQ_CONF)).nil? } },
+      plan: ->(v) { v[:on] ? [[:dhcp_names]] : [] }
     },
     # Blocking on, with these lists (keys of BLOCKLISTS) and this allowlist: saved for the daily
     # refresh (BLOCKLIST_TIMER), which also runs now, in the background.
@@ -4701,12 +4712,21 @@ module AmahiHelper
       content[/^interface=(#{IFNAME})$/o, 1]
     end
 
+    # The watch on the leases, and their names now. A watch systemd stopped stays stopped until
+    # it's reset, so a DHCP save (or dns.names_setup) starts it again.
     def dhcp_names_on
       do_install(DHCP_NAMES_SERVICE, DHCP_NAMES_SERVICE_CONTENT, nil)
       do_install(DHCP_NAMES_PATH, DHCP_NAMES_PATH_CONTENT, nil)
       run_command(%w[/usr/bin/systemctl daemon-reload])
+      run_command(['/usr/bin/systemctl', 'reset-failed', File.basename(DHCP_NAMES_SERVICE), File.basename(DHCP_NAMES_PATH),
+                   { allow_failure: true }])
       run_command(['/usr/bin/systemctl', 'enable', '--now', File.basename(DHCP_NAMES_PATH)])
       do_sync_leases
+    end
+
+    # dns.names_setup's one step.
+    def do_dhcp_names
+      dhcp_names_on
     end
 
     def dhcp_names_off

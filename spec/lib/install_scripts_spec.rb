@@ -222,6 +222,10 @@ RSpec.describe 'install and update scripts' do
     expect(File.read(Rails.root.join('bin/amahi-install'))).to include('/usr/local/sbin/amahi-helper smart.setup </dev/null')
   end
 
+  it "keeps the watch that names DHCP's devices current, and running, at every update" do
+    expect(File.read(Rails.root.join('bin/amahi-update'))).to include("reply=$(/usr/local/sbin/amahi-helper dns.names_setup </dev/null 2>/dev/null)")
+  end
+
   it "turns fwupd's refresh timer off with fwupd, at install and every update" do
     %w[bin/amahi-install bin/amahi-update].each do |script|
       text = File.read(Rails.root.join(script))
