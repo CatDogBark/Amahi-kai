@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+### 🔒 Security & Fixes
+
+- **Uninstalling Greyhole leaves no failed service behind** (Disks → Greyhole Pool) — Greyhole installed with no drives can't start, so it failed at every boot, and after Uninstall systemd went on listing `greyhole.service` as failed until the next restart. Uninstall clears it now.
+
 ## [1.1.0] — 2026-10-26
 
 PiGallery2, a photo gallery, comes to the app catalog with this release; every app says how to sign in the first time; and the dashboard shows your storage pools.

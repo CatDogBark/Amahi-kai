@@ -2795,7 +2795,9 @@ RSpec.describe 'AmahiHelper' do
         [['/usr/bin/systemctl', 'disable', '--now', 'greyhole.service', { allow_failure: true }],
          ['/usr/bin/apt-get', '-y', '-o', 'DPkg::Lock::Timeout=300', 'purge', 'greyhole', { env: AmahiHelper::APT_ENV, stream: true }],
          [:remove_files, conf.path, '/etc/amahi-kai/greyhole-pool.conf', '/etc/apt/sources.list.d/greyhole.list',
-          '/usr/share/keyrings/greyhole-archive-keyring.asc']]
+          '/usr/share/keyrings/greyhole-archive-keyring.asc'],
+         ['/usr/bin/systemctl', 'daemon-reload', { allow_failure: true }],
+         ['/usr/bin/systemctl', 'reset-failed', 'greyhole.service', { allow_failure: true }]]
       )
     ensure
       conf&.close!

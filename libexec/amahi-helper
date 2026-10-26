@@ -1420,7 +1420,11 @@ module AmahiHelper
         repository = APT_REPOSITORIES.fetch('greyhole')
         [['/usr/bin/systemctl', 'disable', '--now', 'greyhole.service', { allow_failure: true }],
          ['/usr/bin/apt-get', '-y', '-o', 'DPkg::Lock::Timeout=300', 'purge', *GREYHOLE_PACKAGES, { env: APT_ENV, stream: true }],
-         [:remove_files, GREYHOLE_CONF, GREYHOLE_POOL_CONF, repository[:list], repository[:keyring]]]
+         [:remove_files, GREYHOLE_CONF, GREYHOLE_POOL_CONF, repository[:list], repository[:keyring]],
+         # The package leaves systemd's unit for its init script loaded until a reload, and listed
+         # as failed if Greyhole couldn't start (with no drives, it fails at every boot).
+         ['/usr/bin/systemctl', 'daemon-reload', { allow_failure: true }],
+         ['/usr/bin/systemctl', 'reset-failed', 'greyhole.service', { allow_failure: true }]]
       }
     },
     'packages.add_repository' => {
