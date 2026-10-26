@@ -292,12 +292,14 @@ class Greyhole
     end
 
     # Writes /etc/greyhole.conf (root:amahi 0640: it holds the database password) and
-    # restarts Greyhole if it's running. Returns false, with the reason logged, on failure.
+    # restarts Greyhole if it's running; with the pool's last drive gone it's stopped instead,
+    # since it can't run without one (restarted, it failed). Returns false, with the reason
+    # logged, on failure.
     def configure!
       return true unless production?
       sync_removals!
       privileged('greyhole.write_config', content: generate_config)
-      restart! if running?
+      DiskPoolPartition.exists? ? restart! : stop! if running?
       true
     rescue GreyholeError => e
       Rails.logger.error("Greyhole configure error: #{e.message}")

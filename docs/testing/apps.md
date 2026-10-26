@@ -6,7 +6,7 @@ the NAS yet. This is the list to run when there's
 time. Tick each box as it passes; if one doesn't, stop there and send Claude what the page shows
 plus the output of the [commands at the end](#if-something-fails).
 
-Run each command on its own. `192.168.1.111` is the NAS's LAN address.
+Run each command on its own. `192.168.1.1` is the NAS's LAN address.
 
 ---
 
@@ -41,7 +41,7 @@ Run each command on its own. `192.168.1.111` is the NAS's LAN address.
 ## 2. Install each app
 
 For each app: click **Install**. The window ends with "✓ … is installed and running" and "Open it
-at http://192.168.1.111:<port>/". The app's row then says **Port …** (or **Ports …**) and has
+at http://192.168.1.1:<port>/". The app's row then says **Port …** (or **Ports …**) and has
 **Open**. Click it.
 
 Jellyfin, Uptime Kuma and Gitea give the admin account to whoever opens them first, so set each
@@ -51,7 +51,7 @@ one up as soon as it's installed.
   `https://www.google.com`), and it goes green.
 - [ ] **Jellyfin** (port 8096): the setup wizard runs. Skip adding media: shares come with P4.4.
 - [ ] **Gitea** (ports 3300 and 2222): its first page is the installer. Keep SQLite, set the
-  **Gitea Base URL** to `http://192.168.1.111:3300/`, create the admin account, then create a
+  **Gitea Base URL** to `http://192.168.1.1:3300/`, create the admin account, then create a
   test repository.
 - [ ] **Transmission** (ports 9091 and 51413): it asks for a login. The user is `admin`; the
   password is under **Passwords and keys Amahi-kai made for Transmission** on its row (**Copy**
@@ -63,7 +63,7 @@ one up as soon as it's installed.
   (Change next to its shares), set its download folder to `/shares/<name>`, and download a video:
   it appears in the share as an MP4.
 - [ ] **Vaultwarden** (port 8880): it installs and runs. Its `/admin` page
-  (`http://192.168.1.111:8880/admin`) takes the token under **Passwords and keys**. The web vault
+  (`http://192.168.1.1:8880/admin`) takes the token under **Passwords and keys**. The web vault
   itself needs HTTPS, which comes later through Tailscale, so creating an account there is
   expected to fail for now.
 
@@ -91,7 +91,7 @@ Each folder belongs to a different number below 1000.
   `http://<the NAS's Tailscale name or 100.x address>:3001`. Uptime Kuma opens.
 - [ ] **Through the Cloudflare Tunnel** (Amahi-kai's public address): the Apps page says "Open it
   on your LAN or Tailscale" instead of **Open**, and the dashboard's app tiles go to the Apps page.
-- [ ] `http://192.168.1.111:3000/app/uptimekuma` is a Not Found page (the old proxy is gone).
+- [ ] `http://192.168.1.1:3000/app/uptimekuma` is a Not Found page (the old proxy is gone).
 
 ## 4. Shares
 

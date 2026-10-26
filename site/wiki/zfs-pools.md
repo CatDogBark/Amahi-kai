@@ -20,7 +20,8 @@ belongs either to a pool or to share storage (**Devices** and the Greyhole pool,
 
 ZFS isn't installed until you need it. **Install ZFS** on the ZFS Pools page installs Ubuntu's own
 ZFS package, and smartmontools to watch the drives' health. ZFS uses spare memory as a cache;
-Amahi-kai limits that cache to 2 GB (half the memory on a server with less than 4 GB).
+Amahi-kai limits that cache to 2 GB (half the memory on a server with less than 4 GB). ZFS always
+keeps a 32nd of the memory for it, so on a server with more than 64 GB the limit is just above that.
 
 **Uninstall ZFS**, at the bottom of the page, is offered once there's no pool left, online or
 offline.
@@ -30,8 +31,10 @@ offline.
 ## Creating a pool
 
 1. Under **Create a pool**, tick the drives. Only free drives can be ticked: never the system disk,
-   share storage or another pool's drives. A drive mounted for share storage on **Disks → Devices**
-   isn't free; leave the drives for a pool unmounted there. If one is mounted and nothing is on it,
+   share storage or another pool's drives. A free drive that still has files on it says what's
+   there, since the pool erases it. A drive mounted for share storage on **Disks → Devices**
+   isn't free, nor is one in share storage that isn't mounted just now (it came back unmounted:
+   mount it again on Devices); leave the drives for a pool unmounted there. If one is mounted and nothing is on it,
    **Free this drive** in its row here unmounts it (a pool made with it erases it). A drive in
    share storage that holds files, a share's folder or the Greyhole pool says why it can't be freed.
 2. Choose a **Layout**. The page suggests one for the drives you ticked, and shows the space each
@@ -73,6 +76,9 @@ or deleted.
 The pool turns **DEGRADED**, and a warning at the top of the dashboard and the Disks pages names
 the drive and says what to do. The pool keeps working on the drives it has left.
 
+What follows (a drive back online, Replace, a drive missing at boot) has been tried on virtual
+drives in a virtual machine; the same tests on real drives come after 1.0.
+
 - **The drive is connected again** (a loose cable, a drive pulled and put back): ZFS keeps it out
   of the pool until you click **Bring online** on its row. It then copies over what changed while
   the drive was out (a resilver).
@@ -90,7 +96,8 @@ it's done. The page updates every 30 seconds while it runs.
 The old drive then leaves the pool and shows under **Create a pool** as **Free: replaced out of the
 pool**. It still has an old ZFS label, which share storage won't touch: **Erase** next to it clears
 the label, and the drive can go on **Devices** like any other. (A new pool erases the label itself.)
-**Erase** also clears a drive with a label from a pool on another server.
+**Erase** also clears a leftover label from a pool that isn't on this server. A drive whose pool ZFS
+can still find is kept for that pool instead (see [Pools found on the drives](#pools-found-on-the-drives)).
 
 Replacing every drive with a bigger one, one at a time, grows the pool.
 
@@ -131,7 +138,8 @@ only for what changes after it.
   their data on the pool are stopped while it rolls back, then started again. Type the pool's name
   to confirm.
 
-The page only rolls back or deletes Amahi-kai's own snapshots.
+The page only rolls back or deletes Amahi-kai's own snapshots. Their names give when they were
+taken in UTC (the list shows the time in your time zone).
 
 ---
 
@@ -146,6 +154,43 @@ The page only rolls back or deletes Amahi-kai's own snapshots.
 
 Neither works while shares are on the pool, or an installed app keeps its data there: delete the
 shares on **Shares**, or uninstall the app on **Apps**, first.
+
+---
+
+## Pools found on the drives
+
+A pool on drives connected to the server that isn't open (imported) gets a card of its own, **On
+the drives, not imported**: the server's own pool after Amahi-kai was installed again, one whose
+drives came too late when the server started, or a pool from another server.
+
+- **Import** opens it again at `/srv/pools/<name>`, if it's a pool Amahi-kai made. Any other is
+  left on its drives as it was: import it from the command line. ZFS can't import a pool with too
+  many of its drives missing; connect them first.
+- Its drives are kept for it: nothing can format them or put them in another pool. To use one for
+  something else, click **Erase…** on its row and type the pool's name. With too many of its drives
+  erased, the pool and everything on it are gone.
+
+### After installing Amahi-kai again
+
+Amahi-kai's settings don't come back with a new install (see
+[what it doesn't back up](getting-started#what-amahi-kai-doesnt-back-up)), but a pool's data stays
+on its drives:
+
+1. Connect the pool's drives and finish the setup wizard, leaving them unticked in its storage step.
+2. On **Disks → ZFS Pools**, **Install ZFS** if it isn't. The pool shows as **On the drives, not
+   imported**.
+3. **Import** it. It opens at `/srv/pools/<name>` again, with its snapshots.
+4. Make each share again on **Shares**, with the same name and the pool under **Where**: it opens
+   the folder that's still there, files and all. Then give users their access again.
+5. The apps that kept their data on the pool left it there, in `/srv/pools/<name>/apps/<app>`.
+   An app installed again on the same pool is given that folder back; on a new install its
+   account can get a different number, so check the app finds its old data before you rely on it.
+
+## Pools Amahi-kai didn't make
+
+A server that runs from ZFS has pools of its own (bpool and rpool). The page shows them, marked
+**Not Amahi-kai's**, with nothing that changes them: manage them from the command line. Shares
+and apps can't go on them, and Amahi-kai takes no snapshots of them.
 
 ---
 

@@ -113,6 +113,16 @@ class AppCatalog
       image.to_s.sub(/@.*/, '').split(':', 2)[1]
     end
 
+    # Whether version tag +a+ is below +b+, by their numbers in order ("4.0.16-ls253" < "4.0.17-ls254");
+    # false when either has none, or they're the same numbers (the root helper's version_below?).
+    def version_below?(a, b)
+      left = a.to_s.scan(/\d+/).map(&:to_i)
+      right = b.to_s.scan(/\d+/).map(&:to_i)
+      return false if left.empty? || right.empty?
+
+      (left <=> right) == -1
+    end
+
     # The release notes for the version +image+ runs (the manifest's releases, {version} being
     # the tag's leading number), or nil.
     def releases_url(id, image)
@@ -127,7 +137,10 @@ class AppCatalog
       info = JSON.parse(File.read(File.join(backups_dir, "#{id}.json")))
       taken = Time.iso8601(info['taken_at'].to_s)
       expires = taken + BACKUP_DAYS.days
-      { from: info['from'].to_s, taken_at: taken, until: expires } if expires > Time.current && info['from'].present?
+      return unless expires > Time.current && info['from'].present?
+
+      # snapshot: its data on a ZFS pool goes back to the snapshot taken then
+      { from: info['from'].to_s, taken_at: taken, until: expires, snapshot: info['snapshot'].present? }
     rescue SystemCallError, JSON::ParserError, ArgumentError, TypeError
       nil
     end

@@ -44,12 +44,13 @@ class CloudflareService
       output[/https?:\/\/\S+/]
     end
 
+    # When the tunnel's service started, as a Time (the page writes it in the viewer's time zone),
+    # or nil.
     def connected_since
       return nil unless production?
       return nil unless running?
-      output = Shell.output('systemctl', 'show', 'cloudflared', '--property=ActiveEnterTimestamp').strip
-      timestamp = output.sub('ActiveEnterTimestamp=', '').strip
-      timestamp.empty? ? nil : timestamp
+      output = Shell.output('systemctl', 'show', 'cloudflared', '--timestamp=unix', '--property=ActiveEnterTimestamp').strip
+      SystemServices.parse_timestamp(output.delete_prefix('ActiveEnterTimestamp='))
     end
 
     # Installs cloudflared from Cloudflare's apt repository; apt's output goes to the block.

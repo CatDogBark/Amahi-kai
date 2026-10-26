@@ -18,7 +18,7 @@ RSpec.describe 'Apps', type: :system do
   # P4.6: an app that keeps data on a ZFS pool asks for the pool before it installs.
   describe 'storage on a ZFS pool' do
     let(:fetched) { Rails.root.join('tmp', 'catalog', 'apps').to_s }
-    let(:tank) { StoragePools::Pool.new(name: 'tank', vdevs: [{ 'name' => 'mirror-0', 'children' => [] }]) }
+    let(:tank) { StoragePools::Pool.new(name: 'tank', managed: true, vdevs: [{ 'name' => 'mirror-0', 'children' => [] }]) }
 
     before do
       FileUtils.rm_rf(File.dirname(fetched))

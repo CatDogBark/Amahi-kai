@@ -5,8 +5,8 @@ require 'rails_helper'
 # isn't taken offline or deleted under it.
 RSpec.describe 'Shares on ZFS pools', type: :request do
   let(:pool) do
-    StoragePools::Pool.new(name: 'tank', health: 'ONLINE', used: 1, available: 100, mountpoint: '/srv/pools/tank', state: 'ONLINE',
-                           scan: 'none requested', vdevs: [{ 'name' => 'mirror-0', 'state' => 'ONLINE', 'children' => [] }])
+    StoragePools::Pool.new(name: 'tank', health: 'ONLINE', used: 1, available: 100, mountpoint: '/srv/pools/tank', managed: true,
+                           state: 'ONLINE', scan: 'none requested', vdevs: [{ 'name' => 'mirror-0', 'state' => 'ONLINE', 'children' => [] }])
   end
 
   before do

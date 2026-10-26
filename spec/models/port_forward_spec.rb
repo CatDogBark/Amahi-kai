@@ -1,14 +1,12 @@
 require 'rails_helper'
 
 RSpec.describe PortForward do
-  before { allow(DnsService).to receive(:rewrite_router!) }
-
   it 'takes a port, a protocol and a device, the same port on the device unless told otherwise' do
     forward = described_class.create!(protocol: 'tcp', port: 8080, address: '60')
     expect(forward.to_port).to eq(8080)
     expect(forward.label).to eq('tcp 8080')
     expect(described_class.create!(protocol: 'udp', port: 8080, address: '60', to_port: 80).label).to eq('udp 8080 → 80')
-    expect(DnsService).to have_received(:rewrite_router!).twice
+    expect(Privileged.calls).to be_empty # the router's rules are the controller's to rewrite, and report
   end
 
   it 'refuses what the helper would, and the same port twice for one protocol' do

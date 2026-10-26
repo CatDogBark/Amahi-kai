@@ -58,10 +58,10 @@ RSpec.describe ApplicationHelper, type: :helper do
       expect(helper.path2uri("Movies")).to include("file://///amahi-kai/")
     end
 
-    it "encodes special characters" do
+    it "encodes each part of the path on its own: a space as %20, the slashes kept" do
       allow(helper).to receive(:is_a_mac?).and_return(true)
-      result = helper.path2uri("My Movies")
-      expect(result).to include("My+Movies")
+      expect(helper.path2uri("My Movies")).to eq("smb://amahi-kai/My%20Movies")
+      expect(helper.path2uri("Photos/2026/beach day+#1.jpg")).to eq("smb://amahi-kai/Photos/2026/beach%20day%2B%231.jpg")
     end
   end
 

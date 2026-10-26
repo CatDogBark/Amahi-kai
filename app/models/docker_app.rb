@@ -21,10 +21,11 @@ class DockerApp < ApplicationRecord
     AppCatalog.tag(image)
   end
 
-  # The catalog has another version of it (P4.5): System Update brought a newer manifest.
+  # The catalog has a newer version of it (P4.5): System Update brought a newer manifest. One
+  # with a lower version number isn't an update (the root helper refuses it too).
   def update_available?
     entry = AppCatalog.find(identifier)
-    entry.present? && image.present? && entry[:image] != image
+    entry.present? && image.present? && entry[:image] != image && !AppCatalog.version_below?(AppCatalog.tag(entry[:image]), version)
   end
 
   def catalog_version
@@ -142,6 +143,11 @@ class DockerApp < ApplicationRecord
 
       reply = Privileged.call('apps.follow_pool')
       refresh_statuses!
+      # The shares each remade container has now (one gone from Samba is left out of it)
+      (reply['shares'] || {}).each do |identifier, shares|
+        app = find_by(identifier: identifier) or next
+        app.update!(shares: Array(shares).grep(Hash).map { |share| { name: share['name'].to_s, write: share['write'] == true } })
+      end
       (reply['apps'] || {}).each do |identifier, outcome|
         next if outcome.to_s.start_with?('remade')
 
@@ -152,21 +158,26 @@ class DockerApp < ApplicationRecord
     end
 
     # Each installed app's status from Docker, all at once (apps.status). Nothing changes when
-    # Docker can't be asked.
+    # Docker can't be asked. A row an install left on Installing (its page cut off: the web app
+    # restarted while the job ran on) follows its container like the others once no job runs for
+    # it (the reply's jobs) and it's had a minute to settle.
     def refresh_statuses!
       reply = Privileged.call('apps.status')
       return unless reply['docker']
 
       states = reply['apps'] || {}
-      where.not(status: %w[pulling installing]).find_each do |app|
+      jobs = Array(reply['jobs'])
+      busy = where(status: %w[pulling installing]).where(updated_at: 1.minute.ago..).or(where(identifier: jobs))
+      where.not(id: busy.select(:id)).find_each do |app|
         state = states.dig(app.identifier, 'state')
         status = case state
                  when 'running', 'restarting' then 'running'
                  when 'exited', 'created', 'paused', 'dead' then 'stopped'
                  end
         if state.nil?
-          # An install that failed keeps its own reason.
-          app.update!(status: 'error', error_message: 'Its container is gone: install it again') unless app.status == 'error'
+          # An install that failed keeps its own reason; one cut off says so.
+          reason = %w[pulling installing].include?(app.status) ? 'Its install was cut off: install it again' : 'Its container is gone: install it again'
+          app.update!(status: 'error', error_message: reason) unless app.status == 'error'
         elsif status && status != app.status
           app.update!(status: status, error_message: nil)
         end

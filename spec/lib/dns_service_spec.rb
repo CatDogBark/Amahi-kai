@@ -344,7 +344,7 @@ RSpec.describe DnsService do
       expect(described_class.wan_interface).to be_nil
     end
 
-    it "puts the router's rules in last, with the forwards, and takes them out when the mode changes" do
+    it "puts the router's rules in after Unbound, with the forwards, and takes them out when the mode changes" do
       Setting.set('dns_mode', 'router')
       Setting.set('dns_wan_interface', 'ens19')
       Setting.set('net', '192.168.1')
@@ -363,8 +363,22 @@ RSpec.describe DnsService do
       File.write(described_class::ROUTER_STATE, '{"lan":"ens18","wan":"ens19","forwards":[]}')
       Setting.set('dns_mode', 'dns_dhcp')
       described_class.apply!
-      expect(Privileged.calls.map(&:first)).to include('network.router_off')
+      # DHCP stays on, so the LAN keeps the fixed address router mode gave it
+      expect(Privileged.calls.find { |op, _| op == 'network.router_off' }).to eq(['network.router_off', { keep_lan: true }])
       expect(described_class.router_state).to include('wan' => 'ens19')
+      Privileged.calls.clear
+      Setting.set('dns_mode', 'dns')
+      described_class.apply!
+      expect(Privileged.calls.find { |op, _| op == 'network.router_off' }).to eq(['network.router_off', { keep_lan: false }])
+    end
+
+    it "leaves the router's rules as they are while its internet port is missing, instead of taking them down" do
+      Setting.set('dns_mode', 'router')
+      Setting.set('dns_wan_interface', 'eth9') # a USB adapter that reset, a renamed port
+      File.write(described_class::ROUTER_STATE, '{"lan":"ens18","wan":"eth9","forwards":[]}')
+      allow(SambaService).to receive(:follow_interfaces!)
+      described_class.apply!
+      expect(Privileged.calls.map(&:first)).not_to include('network.router_on', 'network.router_off')
     end
 
     it "sends devices' lookups to the NAS unless that's turned off, and adds the encrypted-DNS list to blocking" do
@@ -387,6 +401,18 @@ RSpec.describe DnsService do
       Setting.set('dns_wan_interface', 'ens19')
       expect(described_class.rewrite_router!).to be true
       expect(Privileged.calls.map(&:first)).to eq(%w[network.router_on])
+    end
+
+    it "says why the rules didn't follow a change, for the page to tell the admin" do
+      expect(described_class.rewrite_router_problem).to be_nil # not the router: nothing to follow
+      Setting.set('dns_mode', 'router')
+      Setting.set('dns_wan_interface', 'ens19')
+      expect(described_class.rewrite_router_problem).to be_nil
+      expect(Privileged.calls.map(&:first)).to eq(%w[network.router_on])
+      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('network.router_on', 'ufw: no'))
+      expect(described_class.rewrite_router_problem).to eq('ufw: no')
+      Setting.set('dns_wan_interface', 'eth9') # a USB adapter that reset
+      expect(described_class.rewrite_router_problem).to eq("the router's internet port eth9 isn't here")
     end
 
     it "counts what the internet side dropped, since the later of boot and the rules' load, only while the NAS is the router" do

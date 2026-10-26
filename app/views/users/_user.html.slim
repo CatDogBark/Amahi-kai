@@ -12,7 +12,7 @@ div.user[id="whole_user_#{user.id}" data-controller="user"]
     .user-manage.collapsed-div-style.share-card
       .share-card-title
         span.fw-semibold= user.login
-        span.small.text-muted.ms-2= "#{t('created')} #{formatted_date(user.created_at)}"
+        span.small.text-muted.ms-2 = safe_join([t('created'), formatted_date(user.created_at)], ' ')
 
       section.share-section id="user-section-account-#{user.id}"
         h6.share-section-title Account

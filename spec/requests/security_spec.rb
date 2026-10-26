@@ -31,7 +31,7 @@ describe "Security Controller", type: :request do
     before do
       @admin = login_as_admin
       allow(SecurityAudit).to receive(:run_all).and_return([mock_check])
-      allow(SecurityAudit).to receive(:fix!).and_return(true)
+      allow(SecurityAudit).to receive(:fix!).and_return(fixed: true)
       allow(SecurityAudit).to receive(:fix_all!).and_return([{ name: "ufw", fixed: true }])
     end
 

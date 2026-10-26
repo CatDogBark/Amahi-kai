@@ -138,8 +138,17 @@ describe 'Network → DNS & DHCP', type: :request do
         before do
           allow(DnsmasqService).to receive(:installed?).and_return(true)
           allow(DnsmasqService).to receive(:other_servers).with('ens18').and_return([])
+          allow(NetworkAddress).to receive(:automatic?).with('ens18').and_return(false) # a fixed address, as This NAS sets
           Setting.set('dns_mode', 'dns')
           Setting.set('dns_interface', 'ens18')
+        end
+
+        it "refuses while the NAS's own address there comes from DHCP: its lease would run out" do
+          allow(NetworkAddress).to receive(:automatic?).with('ens18').and_return(true)
+          put '/network/dhcp', params: dhcp
+          expect(flash[:alert]).to include('ens18 takes its own address from DHCP', 'This NAS')
+          expect(Setting.get('dns_mode')).to eq('dns')
+          expect(Privileged.calls).to be_empty
         end
 
         it 'needs DNS on first' do
@@ -321,20 +330,43 @@ describe 'Network → DNS & DHCP', type: :request do
         expect(Privileged.calls).to be_empty
       end
 
-      it "refuses to make the interface you're connected through the internet side" do
+      it "refuses to make the port you're connected through the internet side, by the port the request came in on" do
         Setting.set('dns_interface', 'ens19')
-        put '/network/internet', params: router.merge(wan_interface: 'ens18'), headers: { 'REMOTE_ADDR' => '192.168.1.74' }
+        allow(NetworkAddress).to receive(:arrival_interface).and_return('ens18')
+        put '/network/internet', params: router.merge(wan_interface: 'ens18')
         expect(flash[:alert]).to include("You're connected through ens18")
+        expect(Privileged.calls).to be_empty
+        # A browser on ens18's network that came in through the LAN port isn't cut off
+        allow(NetworkAddress).to receive(:arrival_interface).and_return('ens19')
+        put '/network/internet', params: router.merge(wan_interface: 'ens18'), headers: { 'REMOTE_ADDR' => '192.168.1.74' }
+        expect(flash[:notice]).to include('The NAS is the router')
       end
 
-      it 'saves, and puts the router in place after DNS and DHCP' do
+      it "saves, and puts the router's rules in before DHCP hands out the NAS as the way out" do
         put '/network/internet', params: router
         expect(flash[:notice]).to include('The NAS is the router')
         expect([Setting.get('dns_mode'), Setting.get('dns_wan_interface')]).to eq(%w[router ens19])
-        expect(Privileged.calls.map(&:first)).to eq(%w[dns.write_config services.enable dns.blocking_off network.write_dnsmasq_config services.enable network.router_on])
-        expect(Privileged.calls.last.last).to eq(lan: 'ens18', wan: 'ens19', forwards: [], dns: '192.168.1.10', lan_only: [])
-        expect(Privileged.calls[3].last[:content]).to include('dhcp-option=option:router,192.168.1.10')
+        expect(Privileged.calls.map(&:first)).to eq(%w[dns.write_config services.enable dns.blocking_off network.router_on network.write_dnsmasq_config services.enable])
+        expect(Privileged.calls[3].last).to eq(lan: 'ens18', wan: 'ens19', forwards: [], dns: '192.168.1.10', lan_only: [])
+        expect(Privileged.calls[4].last[:content]).to include('dhcp-option=option:router,192.168.1.10')
         expect(Setting.get('dns_force_nas')).to eq('1')
+      end
+
+      it "doesn't save router mode as on when its rules can't go in, and leaves DHCP's router as it was" do
+        allow(Privileged).to receive(:call).and_call_original
+        allow(Privileged).to receive(:call).with('network.router_on', any_args).and_raise(Privileged::Error.new('network.router_on', 'ufw: no'))
+        put '/network/internet', params: router
+        expect(flash[:alert]).to include('ufw: no')
+        expect([Setting.get('dns_mode'), Setting.get('dns_wan_interface')]).to eq(['dns_dhcp', ''])
+        expect(Privileged.calls.map(&:first)).not_to include('network.write_dnsmasq_config')
+      end
+
+      it "won't move DNS onto the router's internet side" do
+        Setting.set('dns_mode', 'router')
+        Setting.set('dns_wan_interface', 'ens19')
+        put '/network/dns', params: { dns_on: '1', provider: 'quad9', interface: 'ens19' }
+        expect(flash[:alert]).to include("ens19 is the router's internet side")
+        expect(Privileged.calls).to be_empty
       end
 
       it "leaves devices' DNS alone when that's unticked, and adds the encrypted-DNS list to blocking when it's on" do
@@ -372,6 +404,27 @@ describe 'Network → DNS & DHCP', type: :request do
         delete "/network/dns/forwards/#{PortForward.last.id}"
         expect(flash[:notice]).to eq('No longer forwarding tcp 8080 → 80.')
         expect(Privileged.calls.last.last[:forwards]).to eq([])
+      end
+
+      it "says when the router's rules couldn't follow a forward, and the page shows them behind until a save" do
+        Setting.set('dns_mode', 'router')
+        Setting.set('dns_wan_interface', 'ens19')
+        allow(Privileged).to receive(:call).and_call_original
+        allow(Privileged).to receive(:call).with('network.router_on', any_args).and_raise(Privileged::Error.new('network.router_on', 'ufw: no'))
+        post '/network/dns/forwards', params: { port_forward: { port: '8080', protocol: 'tcp', address: '60' } }
+        expect(flash[:alert]).to eq("Forwarding tcp 8080 to 192.168.1.60, but the router's rules weren't rewritten (ufw: no), so the port " \
+                                    "isn't let in until a save on this page puts them in place.")
+        expect(PortForward.count).to eq(1) # saved all the same
+        delete "/network/dns/forwards/#{PortForward.last.id}"
+        expect(flash[:alert]).to include('No longer forwarding tcp 8080, but', 'so the port is still let in until a save')
+
+        allow(DnsService).to receive_messages(router_state: { 'lan' => 'ens18', 'wan' => 'ens19', 'forwards' => [] }, running?: true, check: nil,
+                                              router_stale?: true)
+        get '/network/internet'
+        expect(response.body).to include('Rules behind', "The router's rules are behind the settings here")
+        allow(DnsService).to receive(:router_stale?).and_return(false)
+        get '/network/internet'
+        expect(response.body).not_to include('Rules behind')
       end
     end
 

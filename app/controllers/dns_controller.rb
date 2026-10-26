@@ -26,6 +26,8 @@ class DnsController < ApplicationController
     @refreshing = @blocking && @dns_on && DnsService.blocklists_refreshing?
     @paused_until = DnsService.paused_until if @blocking
     @aliases = DnsAlias.order(:name)
+    # DNS answers the LAN: while the NAS is the router, its internet side isn't a choice here.
+    @dns_interfaces = DnsService.router? ? @interfaces.except(Setting.get('dns_wan_interface').to_s) : @interfaces
   end
 
   def update
@@ -100,6 +102,8 @@ class DnsController < ApplicationController
     @router_on = DnsService.router?
     @wan_interface = DnsService.wan_interface
     @router_state = DnsService.router_state
+    # A change the rules couldn't follow (a forward, LAN only) leaves them behind the settings.
+    @router_behind = @router_on && @router_state && @wan_interface && DnsService.router_stale?
     @wan_addresses = NetworkInterfaces.addresses(@wan_interface.to_s).select(&:ipv4?).map(&:to_s)
     @default_route = NetworkInterfaces.default_route
     @firewall_on = DnsService.firewall_on?
@@ -130,6 +134,7 @@ class DnsController < ApplicationController
     end
     return refuse(problems, dns_internet_path) if problems.any?
 
+    before = { mode: DnsService.mode, wan: Setting.get('dns_wan_interface').to_s }
     Setting.set('dns_ipv6_advertise', advertise ? '1' : '0', KIND)
     if on
       Setting.set('dns_wan_interface', params[:wan_interface].to_s, KIND)
@@ -142,6 +147,12 @@ class DnsController < ApplicationController
     flash[:notice] = on ? 'Saved. The NAS is the router: DNS, addresses, and the way to the internet.' : 'Saved. The NAS is not the router.'
     redirect_to dns_internet_path
   rescue Privileged::Error => e
+    # Router mode that didn't go on isn't saved as on: DHCP would hand out the NAS as the way
+    # to the internet on the next save.
+    if on && before && before[:mode] != 'router'
+      Setting.set('dns_mode', before[:mode], KIND)
+      Setting.set('dns_wan_interface', before[:wan], KIND)
+    end
     not_applied(e, dns_internet_path)
   end
 
@@ -207,11 +218,13 @@ class DnsController < ApplicationController
     redirect_to dns_index_path(anchor: 'dns-aliases')
   end
 
-  # Port forwards (router mode): a port on the internet side let in to a device on the LAN.
+  # Port forwards (router mode): a port on the internet side let in to a device on the LAN. The
+  # router's rules are rewritten after each change; when they can't be, the page says the port
+  # is still as it was.
   def create_forward
     forward = PortForward.new(params.require(:port_forward).permit(:name, :protocol, :port, :address, :to_port))
     if forward.save
-      flash[:notice] = "Forwarding #{forward.label} to #{DnsService.lan_prefix}.#{forward.address}."
+      forward_saved("Forwarding #{forward.label} to #{DnsService.lan_prefix}.#{forward.address}", "the port isn't let in")
     else
       flash[:alert] = "#{forward.errors.full_messages.join('. ')}."
     end
@@ -221,7 +234,7 @@ class DnsController < ApplicationController
   def destroy_forward
     forward = PortForward.find(params[:id])
     forward.destroy
-    flash[:notice] = "No longer forwarding #{forward.label}."
+    forward_saved("No longer forwarding #{forward.label}", 'the port is still let in')
     redirect_to dns_internet_path(anchor: 'dns-forwards')
   end
 
@@ -285,6 +298,16 @@ class DnsController < ApplicationController
     redirect_to path
   end
 
+  # +done+ ("Forwarding tcp 8080 to 192.168.1.60"), and what stays as it was while the router's
+  # rules don't follow (+meanwhile+).
+  def forward_saved(done, meanwhile)
+    if (problem = DnsService.rewrite_router_problem)
+      flash[:alert] = "#{done}, but the router's rules weren't rewritten (#{problem}), so #{meanwhile} until a save on this page puts them in place."
+    else
+      flash[:notice] = "#{done}."
+    end
+  end
+
   # Installs +packages+ through the root helper, then leaves +service+ stopped unless the block
   # says it's needed. Streams the progress to the install window.
   def install(packages, name, service, waits_for, before: nil)
@@ -336,25 +359,28 @@ class DnsController < ApplicationController
     elsif on && interfaces[interface].none?(&:ipv4?)
       problems << "#{interface} has no IPv4 address for devices to use"
     end
+    # Unbound, radvd and DHCP would all move to the internet side before router mode refused it.
+    if DnsService.router? && interface.present? && interface == Setting.get('dns_wan_interface').to_s
+      problems << "#{interface} is the router's internet side; DNS answers the LAN"
+    end
     problems << 'Install Unbound first' if on && !DnsService.installed?
     problems
   end
 
   # The router needs a second interface for the internet, the firewall on, and not to be set up
-  # through the interface that's about to face the internet (that would lock the admin out).
+  # through the interface that's about to face the internet (that would lock the admin out): the
+  # port this request came in on says which, as on This NAS (the browser's address can be on
+  # another network than the port's, routed to it).
   def router_problems(lan, interfaces)
     wan = params[:wan_interface].to_s
     return ['Choose the interface the internet is on'] unless interfaces.key?(wan)
     return ['The internet interface must differ from the one DNS and DHCP serve'] if wan == lan
     return ["Turn the firewall on first (Network → Security, the firewall's Fix): it's what keeps the internet out of the NAS"] unless DnsService.firewall_on?
 
-    from = IPAddr.new(request.remote_ip)
-    if interfaces[wan].any? { |address| address.ipv4? && IPAddr.new(address.network).include?(from) }
+    if NetworkAddress.arrival_interface(request.env) == wan
       return ["You're connected through #{wan}, which would become the internet side and stop answering you. Connect from the LAN side first"]
     end
 
-    []
-  rescue IPAddr::Error
     []
   end
 
@@ -365,6 +391,11 @@ class DnsController < ApplicationController
 
     lan = addresses.find { |address| address.ipv4? && address.prefix == 24 }
     return ["DHCP needs #{interface}'s network to be a /24 (like 192.168.1.x)"] unless lan
+    # Its own lease would run out with nothing to renew it from, and the house's DHCP and DNS with it.
+    if NetworkAddress.automatic?(interface)
+      return ["#{interface} takes its own address from DHCP, which a NAS handing out addresses can't do: " \
+              'give it a fixed one first (Network → Devices, This NAS)']
+    end
 
     own = lan.to_s.split('.').last.to_i
     problems = DnsmasqService.settings_problems(dhcp[:first], dhcp[:last], dhcp[:router], dhcp[:lease_time], own)

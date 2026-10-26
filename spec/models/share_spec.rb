@@ -68,6 +68,25 @@ describe Share do
   end
 
   describe "name validation edge cases" do
+    # Samba, Greyhole and the apps' mounts all take these; [global] holds the server's settings.
+    it "refuses Samba's own sections and anything but letters, digits, spaces, hyphens and underscores" do
+      ['global', 'Homes', 'PRINTERS', 'a/b', 'x%U', 'semi;colon', 'brack]et', '-dash', 'trailing ', 'emoji 🎉', 'dot.ted'].each do |name|
+        expect(build(:share, name: name)).not_to be_valid, name.inspect
+      end
+      ['Movies', 'My Music', 'tv_shows', 'Backups-2026', '4K'].each do |name|
+        expect(build(:share, name: name)).to be_valid, name.inspect
+      end
+    end
+
+    it "keeps a name it was made with before the rule on its other changes" do
+      share = create(:share, name: 'Movies')
+      share.update_column(:name, 'old.share')
+      share.reload.visible = !share.visible
+      expect(share).to be_valid
+      share.name = 'another.one'
+      expect(share).not_to be_valid
+    end
+
     it "should reject names with only spaces" do
       expect { create(:share, name: "   ") }.to raise_error(ActiveRecord::RecordInvalid)
     end

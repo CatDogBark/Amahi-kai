@@ -6,6 +6,8 @@
         <span class="badge bg-secondary">Off</span>
       <% elsif @router_state.nil? %>
         <span class="badge bg-danger">Not in place</span>
+      <% elsif @router_behind %>
+        <span class="badge bg-warning text-dark">Rules behind</span>
       <% elsif @wan_addresses.empty? %>
         <span class="badge bg-warning text-dark">No address yet</span>
       <% elsif @default_route && @default_route.first != @wan_interface %>
@@ -42,6 +44,13 @@
               <% end %>
             <% end %>
           </dd>
+          <% if @router_behind %>
+            <dt>Rules</dt>
+            <dd>
+              <span class="text-warning">✗ The router's rules are behind the settings here: a change (a port forward, a device's LAN only) couldn't be put in place.
+              Save below to put them in place; if it's refused, the message says why.</span>
+            </dd>
+          <% end %>
           <% if @router_state %>
             <dt>From the internet</dt>
             <dd>

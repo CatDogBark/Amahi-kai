@@ -105,8 +105,11 @@ environment:
 - **`ports`**: `host` is the port the app gets on the server when it's free (1024 or above, not
   one of the server's own, and not another catalog app's); `container` is the one your image
   listens on.
-- **`environment`** can use `{{uid}}`, `{{gid}}` and `{{timezone}}`, filled in at install.
+- **`environment`** can use `{{uid}}`, `{{gid}}` and `{{timezone}}`, filled in at install. It
+  can't set `DOCKER_MODS`, which has an image download more code as it starts.
 - **`secrets`** (`{ env: ADMIN_TOKEN, label: Admin page token }`) are generated at install.
+- **`folders`**: each `path` is made of plain names (letters, digits, `.`, `_`, `-`), isn't
+  `/shares` or under it (where the app's shares go), and no two folders share one.
 - **`folders`** with `backup: false` (caches, downloads) aren't copied before an update.
 - **`folders`** with **`kind: dataset`** hold the data that grows (a sync engine's file store, say):
   they go on a ZFS pool, in a dataset of the app's own (`<pool>/apps/<id>`), on the pool the admin

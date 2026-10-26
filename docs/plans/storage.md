@@ -121,8 +121,11 @@ operations with their own validation and logging.
 - **Destroy a pool:** behind a typed confirmation.
 - **Drive ownership:** the Disks page shows which drives are share storage and which belong to a
   pool, and neither side can take the other's drives. A drive with any ZFS label is never
-  formatted or mounted as share storage; one with a label from a pool that isn't imported here
-  can go into a new pool, which erases it.
+  formatted or mounted as share storage. One whose pool `zpool import` finds (not imported, not
+  taken offline here) is kept for it: the page offers **Import** by GUID (only a pool whose every
+  dataset mounts under `/srv/pools/<name>` is mounted; any other is exported again), and Erase
+  only with that pool's name typed. One with a leftover label from no pool it can find can go
+  into a new pool, which erases it.
 
 ### Greyhole: only basic SMB storage
 

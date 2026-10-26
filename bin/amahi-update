@@ -31,19 +31,34 @@ set -euo pipefail
 # write vendor/bundle, so root never runs code the app user could have changed.
 #
 # Rollback puts the code, gems, compiled assets, helper and sudoers rules back as they
-# were. The database isn't rolled back (MariaDB can't undo schema changes reliably):
-# migrations must keep working with the previous version's code, and a backup of the
-# database is taken before they run (/var/lib/amahi-kai/backups, the last 3 kept).
+# were, and has the previous version write Samba's and the network's configs again. It also
+# runs when the script stops any other way once the new code is checked out (a failing
+# command, a signal, the job's time limit); and an update that was cut off where even that
+# couldn't run (a power cut) is finished by the next one, which finds the checkout newer than
+# the commit written down as installed (DEPLOYED_FILE). The database isn't rolled back
+# (MariaDB can't undo schema changes reliably): migrations must keep working with the previous
+# version's code, and a backup of the database is taken before they run
+# (/var/lib/amahi-kai/backups, the last 3 kept).
 
 APP_DIR="${APP_DIR:-/opt/amahi-kai}"
 ENV_FILE="${ENV_FILE:-/etc/amahi-kai/amahi.env}"
 APP_USER="${APP_USER:-amahi}"
 APP_GROUP="${APP_GROUP:-amahi}"
 BACKUP_DIR="${BACKUP_DIR:-/var/lib/amahi-kai/backups}"
+# The commit whose gems, migrations, assets and helper are all in place (written at the end of
+# an update, a rollback and an install). A checkout newer than it is an update that stopped
+# partway, which the next update finishes instead of calling it up to date.
+DEPLOYED_FILE=/var/lib/amahi-kai/deployed-commit
 STREAM=false
 REPAIR=false
 ORIG_ARGS=("$@")
 REPAIR_FLAG=/run/amahi-kai-update.repair
+# The commit to go back to; the copy of this script that pulled passes it to the new copy.
+PREV="${AMAHI_UPDATE_PREV:-}"
+FINISHED=false
+ROLLING_BACK=""
+ASSETS_CLEARED=false
+CONFIGS_REWRITTEN=false
 
 for arg in "$@"; do
   case "$arg" in
@@ -105,7 +120,14 @@ restart_app() {
 # once the new version has been restarted, so the previous one has to be restarted too.
 rollback() {
   local step="$1" restarted="${2:-}"
+  ROLLING_BACK=1
   if [[ -z "${PREV:-}" || "$(root_git -C "$APP_DIR" rev-parse HEAD)" == "$PREV" ]]; then
+    # A repair that failed after clearing the compiled assets puts them back: the app that
+    # runs serves them.
+    if $ASSETS_CLEARED && [[ -d "$APP_DIR/tmp/assets-previous" ]]; then
+      as_app "find public/assets -mindepth 1 -delete && cp -a tmp/assets-previous/. public/assets/" 2>&1 \
+        || log "⚠ Couldn't restore the compiled assets"
+    fi
     if [[ -n "$restarted" ]]; then
       error "$step failed: Amahi-kai didn't answer after the restart, and there's no other version to go back to. Check: journalctl -u amahi-kai -n 100"
     fi
@@ -120,6 +142,18 @@ rollback() {
       || log "⚠ Couldn't restore the compiled assets"
   fi
   "$APP_DIR/bin/amahi-install-helper" >/dev/null 2>&1 || log "⚠ Couldn't reinstall the previous helper and sudoers rules"
+  # The new version rewrote Samba's and the network's configs (steps 3b and 3b2): the previous
+  # one makes its own again, so the router's rules and Samba match the code that runs.
+  if $CONFIGS_REWRITTEN; then
+    if as_app "RAILS_ENV=production bin/rails runner 'exit(SambaService.push_config ? 0 : 1)'" 2>&1; then
+      systemctl restart smbd nmbd 2>&1 || log "⚠ Samba restart failed"
+    else
+      log "⚠ The previous version's Samba config wasn't written; the new one stays"
+    fi
+    as_app "RAILS_ENV=production bin/rails runner 'puts DnsService.resync_report'" 2>&1 \
+      || log "⚠ The previous version's network config wasn't checked; the new one stays"
+  fi
+  record_deployed "$PREV"
   if [[ -n "$restarted" ]]; then
     log "Restarting the previous version..."
     if ! restart_app; then
@@ -148,6 +182,31 @@ backup_database() {
   ls -1t "$BACKUP_DIR/$name"-*.sql.gz 2>/dev/null | tail -n +4 | xargs -r rm -f --
 }
 
+# Writes down the commit that's fully in place (DEPLOYED_FILE).
+record_deployed() {
+  [[ "$1" =~ ^[0-9a-f]{40}$ ]] || return 0
+  { printf '%s\n' "$1" > "$DEPLOYED_FILE.new" && mv -f "$DEPLOYED_FILE.new" "$DEPLOYED_FILE"; } 2>/dev/null \
+    || log "⚠ Couldn't write down the version installed ($DEPLOYED_FILE)"
+}
+
+# Whatever stops this script once new code is checked out (a command failing under set -e, a
+# signal, the job's time limit) rolls back. Without it the new code stays on disk with none of
+# its gems, migrations, assets or helper, and the next update would find nothing to do. A
+# Repair asked for while this ran had no job of its own to start, so its flag goes too.
+on_exit() {
+  local status=$? head
+  rm -f "$REPAIR_FLAG"
+  $FINISHED && return
+  [[ -n "$ROLLING_BACK" || -z "$PREV" ]] && return
+  head=$(root_git -C "$APP_DIR" rev-parse HEAD 2>/dev/null) || return
+  [[ "$head" != "$PREV" ]] || return
+  rollback "The update (it stopped with status $status)"
+}
+trap on_exit EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
 # Must be root
 if [[ $EUID -ne 0 ]]; then
   error "This script must be run as root (or with sudo)."
@@ -159,9 +218,15 @@ fi
 cd "$APP_DIR"
 
 # One update at a time (the web UI's job, or one started from a terminal). The check for
-# updates takes the same lock for its fetch (a minute at most), so wait that long for it.
-exec 9>/run/amahi-kai-update.lock
-flock -w 90 9 || error "Another update is already running."
+# updates takes the same lock for its fetch (a minute at most), so wait that long for it. The
+# copy of this script that pulled keeps the lock through the re-exec below (fd 9 stays open),
+# so nothing starts in between; an older copy let it go first, and then it's taken again.
+if [[ -n "${AMAHI_UPDATE_REEXEC:-}" ]] && { true >&9; } 2>/dev/null; then
+  flock -n 9 || error "Another update is already running."
+else
+  exec 9>/run/amahi-kai-update.lock
+  flock -w 90 9 || error "Another update is already running."
+fi
 
 # Repair from the web UI: the root helper left a flag. It's read once; a re-exec below
 # passes --repair on.
@@ -185,12 +250,22 @@ log "Setting file ownership..."
 
 # The commit to go back to: the one running now. After the re-exec below, the copy of this
 # script that pulled passes it on; an older copy didn't, so it's the commit before the pull.
-if [[ -n "${AMAHI_UPDATE_PREV:-}" ]]; then
-  PREV="$AMAHI_UPDATE_PREV"
+DEPLOYED=""
+[[ -f "$DEPLOYED_FILE" ]] && DEPLOYED=$(head -c 40 "$DEPLOYED_FILE" 2>/dev/null || true)
+[[ "$DEPLOYED" =~ ^[0-9a-f]{40}$ ]] || DEPLOYED=""
+if [[ -n "$PREV" ]]; then
+  :
 elif [[ -n "${AMAHI_UPDATE_REEXEC:-}" ]]; then
   PREV=$(root_git -C "$APP_DIR" rev-parse --verify --quiet 'HEAD@{1}' 2>/dev/null || true)
 else
   PREV=$(root_git -C "$APP_DIR" rev-parse --verify --quiet HEAD 2>/dev/null || true)
+  # An update that stopped partway left newer code checked out than what's installed: this one
+  # starts from what's installed, so it finishes that one (or goes back to it).
+  if [[ -n "$DEPLOYED" && -n "$PREV" && "$DEPLOYED" != "$PREV" ]] \
+     && root_git -C "$APP_DIR" cat-file -e "$DEPLOYED^{commit}" 2>/dev/null; then
+    log "The last update stopped partway: ${PREV:0:7} is checked out, but ${DEPLOYED:0:7} is what's installed. Finishing it now..."
+    PREV="$DEPLOYED"
+  fi
 fi
 BACKUP_FILE=""
 
@@ -213,6 +288,10 @@ update_target() {
 PULL_FAILED=false
 if $REPAIR; then
   log "Repairing the version that runs (not looking for a newer one)..."
+elif [[ -n "${AMAHI_UPDATE_REEXEC:-}" ]]; then
+  # The copy that pulled has checked the new version out. Looking it up again could fail (the
+  # network, GitHub's limit on lookups) with the new code already on disk.
+  :
 elif [[ -d ".git" ]]; then
   log "Finding the version to install..."
   mapfile -t TARGET < <(update_target)
@@ -252,7 +331,7 @@ fi
 # by this update wouldn't run until the next update. Carry on with the new copy instead.
 if [[ -z "${AMAHI_UPDATE_REEXEC:-}" && "$(sha256sum < "$APP_DIR/bin/amahi-update")" != "$SCRIPT_SUM_BEFORE" ]]; then
   log "Update script changed; continuing with the new version..."
-  exec 9>&-
+  # The update lock (fd 9) goes with it.
   exec env AMAHI_UPDATE_REEXEC=1 AMAHI_UPDATE_PREV="$PREV" "$APP_DIR/bin/amahi-update" "${ORIG_ARGS[@]}"
 fi
 
@@ -263,6 +342,8 @@ if $REPAIR; then
 elif $PULL_FAILED; then
   error "Couldn't get the new version's code (the git output is above). Nothing changed; Amahi-kai is still running ${PREV:0:7}."
 elif [[ -n "$PREV" && -n "$NEW" && "$NEW" == "$PREV" ]]; then
+  [[ -n "$DEPLOYED" ]] || record_deployed "$NEW"   # an install from before the record
+  FINISHED=true
   refresh_update_status
   log "✓ Already up to date (${NEW:0:7}). Nothing to install."
   exit 0
@@ -305,12 +386,15 @@ fi
 #     that installs sudoers changes on an existing NAS. The sudoers file is replaced only
 #     if visudo accepts the new one.
 log "Installing the privileged helper and sudoers rules..."
-"$APP_DIR/bin/amahi-install-helper" 2>&1 || log "⚠ Privileged helper not fully installed; user, Samba and share changes may fail"
+# New code calls the new helper's operations, and a helper that doesn't run breaks every change,
+# System Update's included: one that doesn't install sends the update back.
+"$APP_DIR/bin/amahi-install-helper" 2>&1 || rollback "Installing the privileged helper"
 
 # 3b. Regenerate smb.conf from the app's settings so changes to the generated config
 #     (network binding, Greyhole settings) take effect on update, then restart Samba:
 #     a new binding only applies after a restart. An invalid config is never installed.
 log "Updating Samba configuration..."
+CONFIGS_REWRITTEN=true
 if as_app "RAILS_ENV=production bin/rails runner 'exit(SambaService.push_config ? 0 : 1)'" 2>&1; then
   systemctl restart smbd nmbd 2>&1 || log "⚠ Samba restart failed"
 else
@@ -361,6 +445,7 @@ fi
 
 # 4. Clear cache and precompile assets (in the app user's own folders)
 log "Clearing caches..."
+ASSETS_CLEARED=true
 as_app "rm -rf tmp/cache/* public/assets/*" 2>&1
 log "Precompiling assets..."
 # (Without the line Sprockets writes per file, hundreds of them.)
@@ -388,9 +473,13 @@ reply=$(/usr/local/sbin/amahi-helper smart.setup </dev/null 2>/dev/null) \
 #    this script, so it's the last thing it does there.
 log "Restarting Amahi-kai..."
 if in_app_service; then
+  record_deployed "$NEW"
+  FINISHED=true
   systemctl restart amahi-kai 2>&1 || error "Failed to restart service"
   exit 0
 fi
 restart_app || rollback "Starting the new version" restarted
+record_deployed "$NEW"
+FINISHED=true
 refresh_update_status
 log "✓ Amahi-kai updated and running!"

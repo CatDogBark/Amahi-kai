@@ -15,6 +15,12 @@ RSpec.describe StoragePools do
     allow(Privileged).to receive(:call).with('pools.status').and_return({ 'ok' => true }.merge(data))
   end
 
+  # The drives' refs and fstab lines come from this machine otherwise
+  before do
+    allow(DiskManager).to receive(:by_id_refs).and_return({})
+    allow(DiskManager).to receive(:fstab_sources).and_return({})
+  end
+
   describe '.status' do
     it 'turns the helper reply into pools' do
       reply('zfs' => true, 'pools' => [raidz])
@@ -70,9 +76,29 @@ RSpec.describe StoragePools do
 
     it "reports ZFS as not installed, and the helper's error" do
       reply('zfs' => false, 'pools' => [])
-      expect(described_class.status).to eq(installed: false, pools: [], offline: [], error: nil)
+      expect(described_class.status).to eq(installed: false, pools: [], offline: [], found: [], error: nil)
       allow(Privileged).to receive(:call).with('pools.status').and_raise(Privileged::Error.new('pools.status', 'boom'))
-      expect(described_class.status).to eq(installed: false, pools: [], offline: [], error: 'boom')
+      expect(described_class.status).to eq(installed: false, pools: [], offline: [], found: [], error: 'boom')
+    end
+
+    # The scan of the drives for pools that aren't imported wakes the drives asleep: only the ZFS
+    # Pools page asks for it.
+    it "reads the pools on the drives that aren't imported only when asked, and which pools are Amahi-kai's" do
+      found = { 'name' => 'old', 'id' => '5678', 'state' => 'DEGRADED', 'force' => true,
+                'status' => 'The pool was last accessed by another system.', 'devices' => ['/dev/sdd1'] }
+      allow(Privileged).to receive(:call).with('pools.status', scan: true).and_return(
+        'ok' => true, 'zfs' => true, 'pools' => [raidz.merge('managed' => true), raidz.merge('name' => 'rpool', 'managed' => false)],
+        'offline' => [], 'found' => [found]
+      )
+      status = described_class.status(scan: true)
+      expect(status[:found].sole).to have_attributes(name: 'old', id: '5678', state: 'DEGRADED', foreign: true, devices: ['/dev/sdd1'],
+                                                     note: 'The pool was last accessed by another system.')
+      expect(status[:found].sole).to be_importable
+      expect(StoragePools::FoundPool.new(state: 'UNAVAIL')).not_to be_importable
+      expect(status[:pools].map(&:managed?)).to eq([true, false])
+
+      reply('zfs' => true, 'pools' => [raidz.merge('managed' => true), raidz.merge('name' => 'rpool', 'managed' => false)])
+      expect(described_class.managed_pools.map(&:name)).to eq(['tank']) # where shares and apps' data may go
     end
 
     it 'lists the pools taken offline, and says what keeps ZFS from being uninstalled' do
@@ -113,7 +139,7 @@ RSpec.describe StoragePools do
         { 'path' => '/dev/sdc', 'type' => 'disk', 'size' => 1_000, 'mountpoints' => [nil] }
       ] }.to_json
       allow(Open3).to receive(:capture3)
-        .with('lsblk', '-J', '-b', '-o', 'NAME,PATH,TYPE,SIZE,MODEL,SERIAL,FSTYPE,LABEL,MOUNTPOINTS,ROTA')
+        .with('lsblk', '-J', '-b', '-o', 'NAME,PATH,TYPE,SIZE,MODEL,SERIAL,FSTYPE,LABEL,UUID,PARTUUID,MOUNTPOINTS,ROTA')
         .and_return([lsblk, '', instance_double(Process::Status, success?: true)])
       allow(described_class).to receive(:share_drive_blocker).and_return(nil)
       allow(DiskManager).to receive(:unmount!)
@@ -151,7 +177,7 @@ RSpec.describe StoragePools do
 
     before do
       allow(Open3).to receive(:capture3)
-        .with('lsblk', '-J', '-b', '-o', 'NAME,PATH,TYPE,SIZE,MODEL,SERIAL,FSTYPE,LABEL,MOUNTPOINTS,ROTA')
+        .with('lsblk', '-J', '-b', '-o', 'NAME,PATH,TYPE,SIZE,MODEL,SERIAL,FSTYPE,LABEL,UUID,PARTUUID,MOUNTPOINTS,ROTA')
         .and_return([lsblk, '', instance_double(Process::Status, success?: true)])
     end
 
@@ -176,6 +202,28 @@ RSpec.describe StoragePools do
       expect(drives.find { |d| d[:path] == '/dev/sdd' }).to include(role: :offline, pool: 'oldpool', free: false)
       offline = [StoragePools::OfflinePool.new(name: 'away', state: 'ONLINE', devices: ['/dev/sde'])]
       expect(described_class.drives([], offline).find { |d| d[:path] == '/dev/sde' }).to include(role: :offline, pool: 'away', free: false)
+    end
+
+    it "keeps a found pool's drives for it, says which share drive isn't mounted now, what's on a free one, and names each by its ref" do
+      blocks = { 'blockdevices' => [
+        { 'path' => '/dev/sdd', 'type' => 'disk', 'size' => 1_000, 'mountpoints' => [nil],
+          'children' => [{ 'path' => '/dev/sdd1', 'type' => 'part', 'fstype' => 'zfs_member', 'label' => 'old', 'mountpoints' => [nil] }] },
+        { 'path' => '/dev/sdh', 'type' => 'disk', 'size' => 1_000, 'mountpoints' => [nil],
+          'children' => [{ 'path' => '/dev/sdh1', 'type' => 'part', 'fstype' => 'ext4', 'uuid' => 'u-9', 'mountpoints' => [nil] }] },
+        { 'path' => '/dev/sdi', 'type' => 'disk', 'size' => 1_000, 'mountpoints' => [nil],
+          'children' => [{ 'path' => '/dev/sdi1', 'type' => 'part', 'fstype' => 'ntfs', 'label' => 'Backup', 'mountpoints' => [nil] }] }
+      ] }.to_json
+      allow(Open3).to receive(:capture3).and_return([blocks, '', instance_double(Process::Status, success?: true)])
+      allow(DiskManager).to receive(:fstab_sources).and_return('UUID=u-9' => '/mnt/storage-2')
+      allow(DiskManager).to receive(:by_id_refs).and_return('/dev/sdi' => '/dev/disk/by-id/usb-WD_Passport_575833-0:0')
+      found = [StoragePools::FoundPool.new(name: 'old', id: '5678', state: 'ONLINE', devices: ['/dev/sdd1'])]
+      drives = described_class.drives([], [], found)
+      expect(drives.map { |d| [d[:path], d[:role], d[:free]] })
+        .to eq([['/dev/sdd', :found, false], ['/dev/sdh', :listed, false], ['/dev/sdi', :free, true]])
+      expect(drives[0][:pool]).to eq('old')
+      expect(drives[1][:fstab]).to eq('/mnt/storage-2') # the drive came back unmounted: Devices mounts it there again
+      expect(drives[2][:contents]).to eq([{ path: '/dev/sdi1', fstype: 'ntfs', label: 'Backup' }])
+      expect(drives.map { |d| d[:ref] }).to eq(['/dev/sdd', '/dev/sdh', '/dev/disk/by-id/usb-WD_Passport_575833-0:0'])
     end
 
     # lsblk lists every device flat unless NAME is the first column, and then a disk seems
@@ -271,8 +319,25 @@ RSpec.describe StoragePools do
         ['pools.replace', { name: 'tank', old: '1234567890', new: '/dev/sdg' }], ['storage.check_health', {}],
         ['pools.add_group', { name: 'tank', devices: %w[/dev/sdg /dev/sdh /dev/sdi] }], ['storage.check_health', {}],
         ['pools.destroy', { name: 'tank', confirm: 'tank' }], ['storage.check_health', {}],
-        ['pools.erase_drive', { device: '/dev/sdg' }], ['storage.check_health', {}]
+        ['pools.erase_drive', { device: '/dev/sdg', confirm: '' }], ['storage.check_health', {}]
       ])
+    end
+
+    # The page names drives by their /dev/disk/by-id links: a page left open acts on the drive it
+    # showed, by whatever kernel name it has now, or on none
+    it 'passes the helper the kernel name of the drive each ref names now, or refuses a ref that names none' do
+      allow(DiskManager).to receive(:resolve).and_call_original
+      allow(DiskManager).to receive(:resolve).with('/dev/disk/by-id/ata-SSD_S6P').and_return('/dev/sdh')
+      described_class.create!(name: 'tank', layout: 'mirror', devices: %w[/dev/disk/by-id/ata-SSD_S6P /dev/sdi])
+      described_class.erase_drive!('/dev/disk/by-id/ata-SSD_S6P', confirm: 'old')
+      described_class.import_found!(5678)
+      expect(Privileged.calls).to eq([
+        ['pools.create', { name: 'tank', layout: 'mirror', devices: %w[/dev/sdh /dev/sdi] }], ['storage.check_health', {}],
+        ['pools.erase_drive', { device: '/dev/sdh', confirm: 'old' }], ['storage.check_health', {}],
+        ['pools.import_found', { id: '5678' }], ['storage.check_health', {}]
+      ])
+      expect { described_class.replace!(name: 'tank', old: 'x', new: '/dev/disk/by-id/ata-Gone_1') }
+        .to raise_error(StoragePools::Error, "ata-Gone_1 isn't connected any more: reload the page")
     end
 
     it "needs the drives, and doesn't fail a change when the health check after it does" do

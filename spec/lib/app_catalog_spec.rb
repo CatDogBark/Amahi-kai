@@ -160,7 +160,10 @@ RSpec.describe AppCatalog do
       expect(AppCatalog.backup("gitea")).to be_nil
       taken = 3.days.ago.utc.change(usec: 0)
       File.write(File.join(dir, "gitea.json"), { "taken_at" => taken.iso8601, "from" => "gitea/gitea:1.27.2-rootless@sha256:x" }.to_json)
-      expect(AppCatalog.backup("gitea")).to eq(from: "gitea/gitea:1.27.2-rootless@sha256:x", taken_at: taken, until: taken + 30.days)
+      expect(AppCatalog.backup("gitea")).to eq(from: "gitea/gitea:1.27.2-rootless@sha256:x", taken_at: taken, until: taken + 30.days, snapshot: false)
+      # its data on a ZFS pool goes back to the snapshot taken then (Undo's confirm says what that takes with it)
+      File.write(File.join(dir, "gitea.json"), { "taken_at" => taken.iso8601, "from" => "x:1", "snapshot" => "tank/apps/gitea@amahi-update-20261022-050134" }.to_json)
+      expect(AppCatalog.backup("gitea")).to include(snapshot: true)
       File.write(File.join(dir, "gitea.json"), { "taken_at" => 31.days.ago.utc.iso8601, "from" => "x" }.to_json)
       expect(AppCatalog.backup("gitea")).to be_nil
     end

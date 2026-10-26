@@ -1,14 +1,16 @@
 # Amahi-kai: notes for Claude sessions
 
-Amahi-kai is a Rails 8.1 NAS web app, modernized from the 2013 Amahi platform. It is still in
-development: the one install is CatDogBark's NAS, an Ubuntu 24.04 VM on Proxmox, reached on the LAN by IP
-over plain HTTP, through a Cloudflare Tunnel, and through Tailscale. CatDogBark owns the repo
-(`CatDogBark/Amahi-kai`, **public**) and the NAS.
+Amahi-kai is a Rails 8.1 NAS web app, modernized from the 2013 Amahi platform, close to its 1.0
+release, which is for other people to install. Two installs run it today: CatDogBark's NAS, an
+Ubuntu 24.04 VM on Proxmox that is also the house's router (it follows releases), reached on the
+LAN by IP over plain HTTP, through a Cloudflare Tunnel and through Tailscale; and a test VM that
+takes `dev` first. CatDogBark owns the repo (`CatDogBark/Amahi-kai`, **public**) and both.
 
-Current work (CatDogBark, 2026-10-24): the road to 1.0 is **`docs/plans/release-1.0.md`**, in order:
-networking's Tailscale check, the real pool and apps on it, a Backups tab (backup and restore),
-the code review, the docs review, a release candidate, 1.0. Signed updates are deferred until
-other people run Amahi-kai. 1.0 is for other people to install. CatDogBark's NAS is the house's
+Current work (CatDogBark, 2026-10-25): the road to 1.0 is **`docs/plans/release-1.0.md`**. The
+code review and the docs review are done (seven fix batches on `dev`, each checked on the test
+VM); a release candidate is next, then 1.0. Networking, Tailscale included, is done. After 1.0: the real pool's checks with bitShare (bitShare's work in tandem), signed
+updates, and backups (no users yet, and CatDogBark's NAS has Proxmox's backups; the backups plan,
+for bare metal, is `docs/plans/backups.md`). 1.0 is for other people to install. CatDogBark's NAS is the house's
 router now and follows releases; the test VM takes `dev` first. bitShare (its own project)
 doesn't hold 1.0. The paragraph below is from before and stays for its links.
 
@@ -100,9 +102,16 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
 - **Migrations must work with the previous version's code**: rollback puts the code back but not
   the database (it's dumped to `/var/lib/amahi-kai/backups` first). Add columns and tables;
   don't rename or drop in the same PR that stops using them.
+- **A new install loads `db/schema.rb`; an old NAS ran the migrations.** Rails 8.1's `db:migrate`
+  loads the schema file into an empty database instead of running the migrations, so the two
+  paths must make the same tables: CI runs the migrations from nothing and diffs the schema they
+  write against `db/schema.rb` (keep the two in step; never edit one alone).
 - **The update that deploys a change runs the old code.** `bin/amahi-update` re-execs itself after
   `git pull` (bash would otherwise keep running the old copy) and passes the commit to roll back
-  to. The web UI starts it as its own job (`amahi-kai-update.service`, via the helper's
+  to; the new copy keeps the update lock and doesn't look the version up again. Any stop after
+  the checkout rolls back (an EXIT trap), and `/var/lib/amahi-kai/deployed-commit` names the
+  commit fully in place, so an update cut off even before that is finished by the next one
+  instead of reading as up to date. The web UI starts it as its own job (`amahi-kai-update.service`, via the helper's
   `system.update`) and follows `/var/log/amahi-kai/update.log`, reconnecting through the app's
   restart. Run inside `amahi-kai.service` (the web UI before O), it can't check the restarted app.
   Puma finishes open requests before it stops, so a stream that waits on the update must end
@@ -132,6 +141,16 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
   column**; with PATH first it lists every device flat, and a disk looks empty (#45: the helper's
   system-disk check didn't hold). Ask for `NAME,PATH,...`; the helper refuses a flat list, and
   specs run the real `lsblk`. Check fixtures against a real command's output.
+- **Pages name drives by their `/dev/disk/by-id` link** (`:ref`, `DiskManager.by_id_refs`), never
+  the kernel name, which can belong to another drive after a restart or a swap; the controller (or
+  `StoragePools`) turns it back into the kernel name with `DiskManager.resolve` just before acting.
+  Only pools that mount at `/srv/pools/<name>` are Amahi-kai's (`managed_pool` in the helper,
+  `Pool#managed?`): the others are shown, never changed.
+- **App jobs run as units of their own.** `apps.install/update/undo_update/uninstall` re-run
+  themselves under `systemd-run` as `amahi-kai-appjob-<id>` (the helper's `relay_app_job`), so a
+  restart of the web app can't cut one off; the unit name keeps one job per app, and Start/Stop
+  and `apps.follow_pool` wait for it. Containers are rebuilt from the definition they were made
+  from (`APP_DEFINITIONS`), never from a newer catalog manifest with the old image.
 - Build commands from names as argument lists (`Shell.output('systemctl', 'show', unit)`), never
   backticks or strings through a shell. Read what Ruby or `/proc` can give directly
   (`SystemInfo`).

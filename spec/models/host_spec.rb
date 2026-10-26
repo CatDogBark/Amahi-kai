@@ -25,22 +25,13 @@ describe Host do
     expect(host).to be_valid
   end
 
-  it "lists the devices kept off the internet by address, and has the router's rules follow them while the NAS is the router" do
-    camera = Host.create!(name: "camera", mac: "aa:bb:cc:dd:ee:52", address: "52", lan_only: true)
+  it "lists the devices kept off the internet by address, for the router's rules (NetworkController rewrites them, and reports)" do
+    Host.create!(name: "camera", mac: "aa:bb:cc:dd:ee:52", address: "52", lan_only: true)
     Host.create!(name: "printer", mac: "aa:bb:cc:dd:ee:53", address: "53")
     expect(Host.lan_only_addresses("192.168.1")).to eq(["192.168.1.52"])
-    expect(Privileged.calls.map(&:first)).not_to include("network.router_on") # not the router: the flag waits
     allow(DnsService).to receive(:router?).and_return(true)
-    allow(DnsService).to receive(:apply_router!)
-    camera.update!(address: "54") # a kept-off device's address moved: the rule follows
-    expect(DnsService).to have_received(:apply_router!).once
-    camera.update!(lan_only: false)
-    expect(DnsService).to have_received(:apply_router!).twice
-    camera.update!(name: "cam") # nothing of the router's changed
-    expect(DnsService).to have_received(:apply_router!).twice
-    camera.update!(lan_only: true)
-    camera.destroy
-    expect(DnsService).to have_received(:apply_router!).exactly(4).times
+    Host.find_by(name: "camera").update!(lan_only: false)
+    expect(Privileged.calls.map(&:first)).not_to include("network.router_on")
   end
 
   it "should require unique names" do

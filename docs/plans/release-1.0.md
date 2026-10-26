@@ -1,14 +1,17 @@
 # Amahi-kai 1.0: what's left, in order
 
-Status 2026-10-23: planned, nothing started. 0.9.2 is out (DNS and DHCP for the network).
+Status 2026-10-25: 0.10.2 is out; networking (§1, §2b–2f) is done, Tailscale included. The code
+review (§5) and the docs review (§6) are done: seven fix batches on `dev`, each checked on the test
+VM. The real pool's checks with bitShare (§2), signed updates (§3) and backups (§4) are after 1.0.
+Next: the release candidate (§7).
 
 **What 1.0 means** (CatDogBark, 2026-10-23): a release for other people to install and trust:
 updates can't be faked, the NAS's own state is backed up and restorable, and the code and the
-docs have had a full pass. His own NAS isn't the point: it's a development machine that switches
-between the `development` and `releases` channels to try features before they reach `main`.
-bitShare is its own project with its own roadmap and doesn't hold 1.0; Amahi-kai only has to
-install, store, update and roll back apps correctly, and bitShare is the app that proves the
-storage part.
+docs have had a full pass (signed updates and backups were both deferred on 2026-10-24: §3, §4).
+His own NAS isn't the point: it's a development machine that switches between the `development`
+and `releases` channels to try features before they reach `main`. bitShare is its own project with
+its own roadmap and doesn't hold 1.0; Amahi-kai only has to install, store, update and roll back
+apps correctly. bitShare is the app that proves the storage part, after 1.0 (§2).
 
 ## 1. Networking's last check
 
@@ -19,20 +22,29 @@ after) is use, at CatDogBark's pace.
 
 Done 2026-10-24 on the test VM: after a rewrite of Unbound's settings, its DNS answered the laptop
 over Tailscale (`100.100.32.46`): local names and blocked names, from a device on the tailnet. The
-rewrite was the gap: Unbound and Samba listen on the Tailscale address only when their settings
-name it, and it arrives after the sign-in is approved, so nothing set them up. Now
-`amahi-kai-tailscale.path` watches Tailscale's state file and `bin/amahi-follow-tailscale` (as
-the app user) has `TailscaleService.follow!` make both again once the addresses settle and
-differ from the last seen, and smbd restarts (it binds its addresses when it starts, and a reload
-doesn't add one: tried on the test VM). The service also runs once after each boot, with what was
-seen kept in /run, because smbd starts before Tailscale has its address. Found on the way: a second DNS server behind the NAS router (the test
-VM's own Unbound) can't use DNS over TLS, because the router keeps port 853 from every LAN device
-(§2c, by design). A per-device exemption is on the roadmap, not in 1.0 (CatDogBark: not needed).
+rewrite was the gap: Unbound listens on the Tailscale address only when its settings name it, and
+the address arrives after the sign-in is approved, so nothing set it up. Now
+`amahi-kai-tailscale.path` watches Tailscale's state file, and `bin/amahi-follow-tailscale` (as
+the app user) has `TailscaleService.follow!` write DNS's and Samba's settings again once the
+addresses settle and differ from the last seen. Shares needed more: Samba can't be bound to
+Tailscale's IPv4 address at all (it skips an interface with one address and no broadcast), so
+since 0.10.2 it listens on every address and its allow list decides. A reboot of the test VM the
+same day needed nothing from the watch: Tailscale had its address within seconds, and DNS and the
+shares answered over it, because Unbound may listen on an address that isn't up yet
+(`ip-freebind`) and Samba listens everywhere. Found on the way: a second DNS server behind the NAS
+router (the test VM's own Unbound) can't use DNS over TLS, because the router keeps port 853 from
+every LAN device (§2c, by design). A per-device exemption is on the roadmap, not in 1.0
+(CatDogBark: not needed).
 
-## 2. The real pool, and apps on it
+## 2. The real pool, and apps on it (after 1.0)
 
-The four SSDs are in and healthy (SMART and long self-tests passed 2026-10-21); nothing is built on
-them yet. From [`testing/storage-on-real-drives.md`](../testing/storage-on-real-drives.md):
+**After 1.0** (CatDogBark, 2026-10-24): this is bitShare's work in tandem with Amahi-kai, so it
+doesn't hold 1.0. It stays here as written for when it's picked up.
+
+The four SSDs are in and healthy (SMART and long self-tests passed 2026-10-21). The pool was made
+on 2026-10-24, all four in one RAIDZ1 as the checklist planned, and holds real data since: the old
+NAS's files, copied into the share Vault. From
+[`testing/storage-on-real-drives.md`](../testing/storage-on-real-drives.md):
 
 - The failure tests, once, before any real data: a drive missing at boot (§5), snapshots (§8), a
   failing drive (§9). Using the NAS never exercises failure; these are the ones that matter.
@@ -42,9 +54,10 @@ them yet. From [`testing/storage-on-real-drives.md`](../testing/storage-on-real-
   app, a reboot brings it back. That's Amahi-kai's app storage proven; bitShare's own features are
   bitShare's business.
 
-Decision for CatDogBark: **the drive layout.** The checklist ends with all four SSDs in one RAIDZ1
-pool (about 2.7 TB, one drive may fail), with shares on the pool and Greyhole only tried along
-the way. Confirm that's still the plan before §11, since the pool's layout can't be changed after.
+**The drive layout** was CatDogBark's decision: all four SSDs in one RAIDZ1 pool (about 2.7 TB,
+one drive may fail), with shares on the pool, made on 2026-10-24. The failure tests above run on
+the real pool with its data in place (CatDogBark, 2026-10-24: his files are backed up elsewhere,
+so nothing can be lost).
 
 ## 2b. Router mode
 
@@ -197,41 +210,27 @@ Decisions for CatDogBark: the key is made on his laptop (the key ceremony is his
 somewhere safe); what the page says when a release is refused. About a day of work, plus a
 CONTRIBUTING step.
 
-## 4. Backups of the NAS's own state
+## 4. Backups (after 1.0)
 
-The biggest missing piece. Today the only copies are the database dump System Update makes before
-it runs (the last three, on the system disk) and Proxmox's backups of the VM, which someone
-installing on bare metal doesn't have.
-
-- **What:** the database (users, shares, settings, apps), `/etc/amahi-kai`, Samba's password
-  database, and what the helper keeps in `/var/lib/amahi-kai` that can't be rebuilt (the app
-  records, the catalog can). Not the files in shares: those are what the pool's redundancy and
-  snapshots are for, and off-site copies of them are later (the roadmap's Proton Drive app).
-- **When:** daily, by a timer, kept for a set number of days; and a backup before every System
-  Update, in place of the bare database dump.
-- **Where and how:** the archive holds secrets (the session key, the tunnel token), so it's
-  encrypted with a passphrase the owner sets once, and can then sit on a share or a pool dataset
-  where other people can reach it. A dataset of its own (`<pool>/backups`) is the natural home;
-  a share works for a NAS without a pool.
-- **A Backups tab, for admins** (CatDogBark, 2026-10-23: backup and restore both in the UI):
-  on or off, where, how many to keep, the passphrase, Back up now, the list of backups with each
-  one's time and size, and **Restore** from any of them (or from an uploaded archive): the
-  passphrase, a plain warning that it replaces the users, shares and settings there now, then
-  the restore, with the services stopped and started around it. On a fresh install, Restore is
-  the way to bring a NAS back: sign in as the seeded admin, restore, and the wizard is skipped.
-- **Tested once** on the test VM from its Initial snapshot: fresh install, restore, everything
-  back, apps included.
-
-Decisions for CatDogBark (the roadmap has had them since 2026-10-09): the destination and how
-many to keep. Three to four days of work.
+Moved to after 1.0 (CatDogBark, 2026-10-24): there are no users yet, and his own NAS has
+Proxmox's backups of its VM. The plan, made for bare metal the same day, is
+[`backups.md`](backups.md): a backup of Amahi-kai's own state (not the files, which ZFS and
+Greyhole keep) and a restore onto a fresh install. Until then the docs say plainly that a NAS's own
+settings aren't backed up (§6).
 
 ## 5. The code review
 
 A full pass, the way the 2026-10-02 review was done, over everything since: the helper (108
-operations now), storage, apps, networking, the release machinery. Not now; its own session, with
-the private review doc. Already on its list:
+operations now), storage, apps, networking, the release machinery. Next (CatDogBark, 2026-10-24),
+with the private review doc.
 
-- **Times are the server's clock, in UTC** (roadmap, Open): show them in the browser's zone.
+Read 2026-10-24, area by area; the findings and the order of the fix batches are in the private
+review doc's "1.0 review" tab (unfixed details stay there). The batches go out on `dev` in that
+order, the first being the router's rules during a save, MariaDB's update and the web page, and
+This NAS over the tunnel. Already on its list before the read:
+
+- **Times are the server's clock, in UTC** (roadmap, Open): show them in the browser's zone. Done in
+  the web app's batch: the browser writes dates and times of day in its own zone (time_ago.js).
 - The remaining low items on the review doc's security audit tab.
 - The anonymous `nobody` share leftover; the roadmap's `nosuid,nodev` entry is done and stale.
 - The four specs that need root (`pending` in CI) and whether the island or a container can run
@@ -239,19 +238,32 @@ the private review doc. Already on its list:
 - Dependencies: Rails 8.1.4 is current; Ruby is Ubuntu's 3.2, maintained with 24.04 through 2029.
 - What the review finds goes out as fix batches on `dev`, the usual way.
 
+Done 2026-10-24 to 2026-10-25: six fix batches (the router's rules and the NAS's address, the
+updater and installer, storage, apps, the rest of networking, the web app), each pushed to `dev`,
+green in CI and checked on the test VM, several with a before-and-after on the island. What the
+review left for after 1.0 is in the roadmap and the private review doc.
+
 ## 6. The docs review
 
 Everything a new person reads, checked against what 1.0 does: the README, CONTRIBUTING, CLAUDE.md
 (its "current work" is from 2026-10-08), the roadmap (the shelf-stable lists are done; rewrite it
 around what's after 1.0), the website and its wiki (the index still says dnsmasq does local DNS),
 the installer's and the setup wizard's own words, and the changelog's 1.0 entry written for
-someone who's never seen Amahi-kai.
+someone who's never seen Amahi-kai. With backups after 1.0 (§4), the wiki also says plainly that a
+NAS's own settings aren't backed up: the files are safe on a pool or Greyhole's drives, but a lost
+system disk means installing again, importing the pool and setting the NAS up again by hand.
+
+Done 2026-10-25, as the seventh batch: the README and the website (networking, ZFS pools, the apps
+with bitShare marked early and Vaultwarden's HTTPS note), one CONTRIBUTING, CLAUDE.md, NOTICE, the
+privilege model (the fetched catalog, the network, unsigned updates and catalog as known gaps),
+the wiki (what Amahi-kai doesn't back up, users and their roles, a pool after installing again,
+today's page names), the wizard's and the installer's words, this plan and the roadmap, and the
+changelog's 1.0 entry.
 
 ## 7. The release
 
 1. `1.0.0rc1` on `main`, published as a pre-release. A fresh install of it on the test VM from
-   its Initial snapshot through the website's installer, the public path, then a restore of a
-   backup onto it.
+   its Initial snapshot through the website's installer, the public path.
 2. Whatever that finds, fixed; `1.0.0`.
 3. The NAS and the test VM are development machines and switch channels as the work needs.
    One caution for switching back from `development` to `releases`: an update never goes to a
@@ -264,14 +276,22 @@ someone who's never seen Amahi-kai.
 
 So it doesn't creep in: HTTPS on the LAN, the debug pages as a Settings tab, quotas, the phone
 layout, private folders per user, P4.6b (Greyhole shares through Samba, which is bitTube's need),
-one sign-in for apps (the capability API), and off-site backups of the files. All on the roadmap
-for after.
+one sign-in for apps (the capability API), the real pool's checks with bitShare (§2), and backups:
+the NAS's own state ([`backups.md`](backups.md)) and copies of the files in shares. All on the
+roadmap for after.
 
 **Router mode**, listed here until 2026-10-23, came into 1.0 after all and shipped in 0.10.0
 (§2b–2f); the house runs on it since 2026-10-24.
+
+**The real pool and apps on it (§2)** are out of 1.0 (CatDogBark, 2026-10-24): it's bitShare's
+work alongside Amahi-kai. The pool is built and in use, and its failure tests run on it later,
+data in place.
 
 **Signed updates (§3)** are out of 1.0 too (CatDogBark, 2026-10-24): with one user, the key to
 keep and back up outweighs the risk it covers. They come back when other people run
 Amahi-kai; the design in §3 stands for then, with two trusted keys from the start (one on
 the laptop, a spare in Proton Drive). Deferring closes nothing: the release that adds the
 check is installed by whatever updater is out there, as any release is.
+
+**Backups (§4)** are out of 1.0 as well (CatDogBark, 2026-10-24): there are no users yet, and his
+NAS has Proxmox's backups of its VM. The bare-metal plan waits in [`backups.md`](backups.md).

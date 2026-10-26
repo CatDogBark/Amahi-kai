@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_24_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_25_000001) do
   create_table "cap_accesses", force: :cascade do |t|
     t.integer "user_id"
     t.integer "share_id"
@@ -83,7 +83,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_24_000000) do
   end
 
   create_table "share_files", force: :cascade do |t|
-    t.integer "share_id", null: false
+    t.integer "share_id", limit: 4, null: false
     t.string "name", null: false
     t.string "path", null: false
     t.string "relative_path", null: false
@@ -99,7 +99,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_24_000000) do
     t.index ["extension"], name: "index_share_files_on_extension"
     t.index ["name"], name: "index_share_files_on_name"
     t.index ["share_id", "relative_path"], name: "index_share_files_on_share_id_and_relative_path", unique: true
-    t.index ["share_id"], name: "index_share_files_on_share_id"
   end
 
   create_table "shares", force: :cascade do |t|

@@ -1,10 +1,8 @@
-# Fix plan and roadmap
+# Roadmap
 
-Status as of 2026-10-08. Each phase came from a full code review (October 2026; the detailed
-review is a Claude Doc CatDogBark owns, linked from `CLAUDE.md`). Every PR below was deployed with
-System Update and checked on the NAS, with one exception: from #21 to #24 System Update stopped
-at its migration step (json 3 broke Sprockets 4.2, fixed in #25) and the old app kept running,
-so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
+Status as of 2026-10-25: 1.0's code review and docs review are done (seven fix batches on `dev`,
+each checked on the test VM), and a release candidate is next ([`release-1.0.md`](release-1.0.md)).
+This file keeps what was built before the releases began, and what comes after 1.0.
 
 ## Done
 
@@ -64,100 +62,53 @@ so #21–#24 reached the NAS together on 2026-10-04 and were checked then.
 | Fix. Update dialog | System Update's dialog stays current on a page left open | #106 |
 | Docs. The wiki catches up | File Sharing, Storage Pooling and Updating describe the share settings, the file browser, the Trash and System Dependencies as they are | #108 |
 
-## Phase 3
+## Since then
 
-Done. Decisions made: Ruby stays on Ubuntu 24.04's patched 3.2; `main` stays the release until
-shares are tested on real drives, then tagged releases and an updater change; the codebase
-becomes root-owned (in N); Docker app work moves to Phase 4.
+Everything from #113 on (the storage tests on the NAS, the app catalog and app updates, the
+networking build and router mode, the release machinery, and the 1.0 review's fixes) is in
+[`CHANGELOG.md`](../../CHANGELOG.md), release by release.
 
-- [x] **M. Privileged helper, part 2**, in three PRs (CatDogBark, 2026-10-04); design in
-  [`privileged-helper.md`](privileged-helper.md):
-  - [x] **M1.** Settings → Servers, reboot and power off, hostname, dnsmasq and DNS aliases,
-    swap (#26).
-  - [x] **M2.** Data drives and fstab (keeping the PR #13 rules exactly), Greyhole config,
-    database and install (one install path instead of three); 26 sudo rules gone (#27).
-  - [x] **M3.** Package installs from pinned apt repositories and a fixed list, Cloudflare
-    Tunnel, Tailscale (its apt repository instead of a downloaded install script run as root),
-    Docker's install, and the security audit's fixes with P below; 42 sudo rules gone, leaving
-    the helper, the updater and Docker (#28).
-- [x] **N. Root-owned install**: `/opt/amahi-kai` owned by root (`bin/amahi-set-ownership`; the
-  `amahi` user keeps `tmp/`, `log/`, `public/assets/`, `vendor/bundle/`); the installer and
-  `amahi-update` run every Rails and bundle step as `amahi`; root's `git pull` runs without hooks;
-  `production.log` is rotated as `amahi`; `docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`
-  rewritten to describe the helper and this model (#30).
-- [x] **O. Update rollback** (designed with CatDogBark, 2026-10-04: in place, database backups, its own
-  job; #31): System Update runs as `amahi-kai-update.service` (started by the helper's
-  `system.update`; the page follows `/var/log/amahi-kai/update.log` and reconnects through the
-  restart). It remembers the running commit and its compiled assets, dumps the database before
-  migrating (the last 3 kept), and if gems, migrations, the asset build or the restarted app
-  fail, puts the previous commit back and says so. The database isn't rolled back, so
-  migrations must work with the previous version's code. The updater's 4 sudo rules are gone.
-- [x] **P. Security audit fixes** (in M3, #28; `lib/security_audit.rb`): read effective SSH settings with
-  `sshd -T` (drop-ins in `sshd_config.d` win over `sshd_config`); warn that Docker-published ports
-  bypass UFW; make the "tunnel blocked until the audit passes" rule a server-side check, not just
-  a hidden button. The firewall fix also opens DNS and DHCP once dnsmasq is configured, and the
-  SSH password fix needs a key first.
-- [x] **Q. Replace `sassc`** (LibSass is unmaintained; #32). CatDogBark chose plain CSS (2026-10-04): Bootstrap
-  5.3.8's official CSS and JS are vendored (`vendor/assets`), the app's four Sass files are plain
-  CSS, and `sassc`, `sass-rails` and the `bootstrap` gem are gone (`sprockets-rails` is now in
-  the Gemfile itself). Screenshots of 14 pages in light and dark mode match the Sass build
-  pixel for pixel, live numbers aside. (The themes went in #102, and with them their Sass
-  sources.) Sprockets stays; Propshaft can come later.
-- [x] **Content-Security-Policy**: enforced (scripts only from Amahi-kai itself, no inline
-  scripts), once the inline handlers (#121) and the pages' own scripts (#122) had moved into
-  the JavaScript files. Inline styles are still allowed; taking them out is a later pass.
+## 1.0
 
-## Next: shelf-stable
+What's left is the release candidate, tried on a fresh install, then 1.0
+([`release-1.0.md`](release-1.0.md) §7). 1.0 is for other people to install; bitShare is a project
+of its own and doesn't hold it.
 
-CatDogBark (2026-10-08): Amahi-kai's major code work is finished first, then everything is tested, then
-bitShare (P4.6). In this order:
+## After 1.0
 
-1. The security fixes from the 2026-10-08 audit (details in the private review doc that
-   `CLAUDE.md` links), with the Open item on `nosuid,nodev` below.
-2. Share toggles in one place (`SharesController` and `ShareAccessManager` duplicate them).
-3. Fewer `Setting` queries per request (`before_action_hook`).
-4. System Status and the dashboard read the server's details through `SystemInfo` alike.
-5. The inline `onclick` handlers and scripts move into the JavaScript files, then
-   Content-Security-Policy is enforced (Phase 3's last item). Done: #121, #122 and the CSP PR.
+Decided with CatDogBark along the way; when each is built is his call.
 
-## Next: before shelf-stable
+### Signed updates
 
-After the audit's fixes and the inline-script work (2026-10-09), in this order:
+System Update installs a release tag from GitHub, checked by its `VERSION` file but not signed.
+Deferred until other people run Amahi-kai (CatDogBark, 2026-10-24: one user doesn't justify a key
+to keep); the design (SSH-signed tags, verified against keys pinned on the NAS, the catalog's
+commits too) is in [`release-1.0.md`](release-1.0.md) §3.
 
-1. **Browser tests** in CI ([`browser-tests.md`](browser-tests.md)): done (#127, #129); the
-   setup wizard's spec waits for the wizard's redo.
-2. **Backups**, planned when CatDogBark decides where they go (2026-10-09). The shape: a daily dump
-   of the database (users, shares, settings) and `/etc/amahi-kai` (its configuration, minus the
-   secrets that stay root-only) into a folder of CatDogBark's choice, kept for a set number of days.
-   Decisions for later: the destination (a share, so it's reachable over SMB and copied by
-   whatever backs the shares up, or a pool once there is one), how many to keep, and whether
-   restoring is a page or a command.
-3. **Signed updates:** tagged releases, verified by the updater against a key pinned in the
-   installed copy, so control of the GitHub account alone can't put code on a NAS.
+### Backups
 
-HTTPS stays later and optional (see below); Cloudflare Access in front of the tunnel is a
-setting on Cloudflare's side, for when anyone but CatDogBark gets the link.
+Amahi-kai 1.0 makes none (the wiki's Getting Started says what to keep copies of).
+[`backups.md`](backups.md) plans a Backups tab for bare metal: a backup of Amahi-kai's own state
+and a restore onto a fresh install. Beyond that plan:
 
-## Planned from the storage tests
+- **Copies of the files in shares**, to a USB drive and off-site (a cloud bucket, another NAS).
+  Terabytes that change a little each day want an incremental, encrypted tool: restic is the likely
+  one (Ubuntu 24.04 has it), and it reaches Proton Drive through rclone, which
+  [`storage.md`](storage.md) planned as an app.
+- **Matching ports on new hardware:** after a motherboard change, a restore lists the backup's ports
+  that the new machine doesn't have, and the admin sets the network up by hand.
+- **Router mode put back by the restore itself**, in one flow (the standing-in router out of the
+  way, the NAS's address, router mode), instead of the steps its last page lists.
 
-Decided with CatDogBark on 2026-10-10, while testing on the NAS; when they're built is his call.
+### The real pool's checks, with bitShare
 
-- **P4.6. App storage:** apps run from the system disk, and what they keep that grows goes in a
-  share (wherever Amahi-kai keeps it; a Greyhole share reaches the app through Samba) or a ZFS
-  dataset of their own; bitShare's data moves to a dataset, and its tests on the NAS wait for it
-  ([`apps.md`](apps.md#p46-app-storage-and-bitshare)).
+The storage features were tried on virtual drives; the checklist for real ones,
+[`docs/testing/storage-on-real-drives.md`](../testing/storage-on-real-drives.md), runs on the NAS's
+four SSDs with bitShare's data in place (CatDogBark, 2026-10-24: bitShare's work in tandem with
+Amahi-kai; [`release-1.0.md`](release-1.0.md) §2): drive health, a failing and a missing drive,
+Replace, deleting a pool, then the real pool.
 
-## Networking
-
-Planned 2026-10-22, for 1.0 ([`networking.md`](networking.md)): Unbound for DNS (encrypted
-lookups to a provider the owner picks, DNSSEC, local names, blocklists with a switch, IPv6) and
-dnsmasq for DHCP only, off by default, and tested first on an isolated Proxmox bridge so the
-house's internet is never at risk. Built and tried there (all five slices, firewall on, after a
-reboot) for 0.9.2. 0.10.0 (2026-10-24) added router mode, the shield (forced DNS, vendor
-lists, Tailscale's port, LAN only per device, anti-spoofing, the drop counts), This NAS (each
-port's address with the lockout guard, port names, Find port), the Network tab split into
-Devices / DNS / DHCP / Internet, and the network resync on update, all island-verified. The
-NAS, Tailscale and the house are left: [`docs/testing/networking.md`](../testing/networking.md).
+### Networking
 
 Against a household router (CatDogBark, 2026-10-24): ahead on DNS (encrypted, checked,
 blocking, forced), LAN only, no UPnP, anti-spoofing, no WAN ping; level on the stateful
@@ -177,100 +128,7 @@ firewall and NAT. Still behind, to consider after 1.0 unless listed earlier:
   router (a Pi-hole, another Amahi-kai) can't use DNS over TLS, since the router keeps port 853
   from LAN devices. Not needed in the house (2026-10-24); for whoever runs one.
 
-## Release 1.0
-
-What's left for 1.0, in order, is [`release-1.0.md`](release-1.0.md) (2026-10-23): networking's
-Tailscale check, the real pool and apps on it, a Backups tab (backup and restore of the NAS's own
-state), a full code review, a docs review, then a release candidate and 1.0. 1.0 is for other
-people to install. bitShare is its own project and doesn't hold 1.0. Networking (§1–2f there)
-shipped in 0.10.0, and the house runs on router mode since 2026-10-24; what's left of it before
-1.0 is the Tailscale check. **Signed updates** are deferred until other people run Amahi-kai
-(CatDogBark, 2026-10-24: one user doesn't justify a key to keep); the design waits in §3.
-
-## Open, not yet scheduled
-
-Smaller findings from the review that no PR covers yet. Fold them into a nearby PR when it
-touches the same code.
-
-- **Times are the server's clock, in UTC** (found 2026-10-22, on the island): Rails' time zone is
-  left at UTC, and the views print clock times (`strftime`), so the dashboard's date turns over at
-  UTC midnight (2 pm at UTC−10), and the file browser's times and System Dependencies' dates are
-  UTC on a server set to UTC. Show times in the browser's zone (or the NAS's own, set once), or as
-  durations. Network → DNS & DHCP's pause already says how long, not until when.
-
-- Several features staged files at fixed `/tmp` paths before a root copy. Samba (L), dnsmasq
-  (M1), Greyhole (M2), the tunnel and Tailscale (M3) no longer do: the helper writes the files.
-  The Docker app installer did until P4.1 (#58), which replaced it with the helper.
-- Data drives mount with PR #13's `defaults,nofail,...` options. `nosuid,nodev` would be safer for
-  drives brought from another machine; share storage stays ext4 ([`storage.md`](storage.md)), so
-  this can be decided now.
-
-## Long-term (not soon)
-
-CatDogBark (2026-10-08): none of these are coming soon; they wait until Amahi-kai is shelf-stable and
-tested.
-
-### Quotas for apps' storage
-
-A size limit on an app's ZFS dataset (P4.6). Left out for now (CatDogBark, 2026-10-11): people manage
-their own files, and the disk warnings cover running low.
-
-### Greyhole shares' folders on the pool drives
-
-So nothing a Greyhole share receives passes through the system disk (a file bigger than its free
-space can't be written to a Greyhole share today). Put off on 2026-10-11: Greyhole won't run with a
-share's folder inside a pool drive, so it needs a bind mount per drive or pool drives as
-`<mount>/gh`. Worked out in [`storage.md`](storage.md#later-greyhole-shares-folders-on-the-pool-drives).
-
-### The phone layout
-
-CatDogBark will use Amahi-kai on his phone (2026-10-08). The October refresh (dark, mint, Space Grotesk)
-stacks at phone width: the header's sections fold into a menu, cards and panels go one column,
-and the file browser's list drops its dates. It hasn't been designed for a phone yet. To do:
-
-- Mock up the phone screens first (the refresh's mockup is the [UI refresh canvas](https://claude.ai/artifact/1HcudH31cvF9dUzqrGGXQk)):
-  the header and its menu, Setup's tab bar (it wraps), the file browser's folder view (the
-  selected file's panel likely becomes a sheet from the bottom) and the share card.
-- Touch: rows and buttons at least 44 px, the row's download button always shown (no hover).
-- Check the water background's cost on a phone (it has a battery saver setting).
-
-### The debug pages as a Settings tab
-
-The debug pages (`/tab/debug`: App Logs, Logs and System Info) are from the original Amahi. They
-have their own old layout, outside the October look, read logs through shell strings, and their
-"Submit for Debug" button only counts log lines (the report service it sent to is gone). CatDogBark
-wants them rebuilt as a tab in Settings (2026-10-08); until then they stay as they are. To do:
-
-- A tab on Settings in the current look, for admins, replacing `/tab/debug` and
-  `layouts/debug.html.slim`.
-- Amahi-kai's log, the helper's log and the system journal, read without a shell (the Logs page
-  reads `/var/log/syslog`, which a journald-only system doesn't have).
-- System info from System Status's sources rather than raw `/proc/cpuinfo` and `/proc/meminfo`.
-- Drop Submit for Debug, or make it a download of the logs to attach to an issue.
-
-### Long jobs in their own units
-
-Package installs, Docker pulls and Greyhole's install run inside web requests and hold a Puma
-thread while they run. System Update moved to its own job in #31; the others could follow the
-same way (a systemd unit started by the helper, with its log streamed to the page). With one admin
-on the NAS this costs nothing today.
-
-### Private folders per user
-
-Removed (CatDogBark, 2026-10-09): CatDogBark didn't like how they worked and will think about how to do them
-better. They were Samba's `[homes]` share: each user's Linux home folder, `/home/<login>`, made
-with the account and open only to its owner over SMB. They sat on the system disk with the OS,
-with no pool copies, no snapshots and no size limit, weren't in the web UI's Files, and were mode
-0750 with group `users`, so every account on the NAS could read them there. `[homes]` also showed
-a `nobody` folder when browsing anonymously (the guest account's). Now no account gets a home
-folder, and deleting a user removes one an older version made. To decide:
-
-- Where they live: on share storage or a pool rather than the system disk, so they get its space
-  and copies.
-- How big they can get (a quota per user, or none).
-- Whether Files shows your own (and only your own), and so who on the NAS may read them.
-
-## Later: HTTPS on the LAN
+### HTTPS on the LAN
 
 CatDogBark (2026-10-06): the web UI and every app's page are plain HTTP on the LAN, so anyone on the
 network can read or change what passes (bitTube Desktop's updates come from the NAS this way:
@@ -300,35 +158,78 @@ cheap, every address of Amahi-kai or an app is made in one place (`DockerApp#url
 people's networks call for it. A token for the DNS challenge mustn't be able to change
 amahi-kai.com: a separate zone, or a delegated `_acme-challenge` record.
 
-## Test on real drives (when the NAS hardware arrives)
+### The debug pages as a Settings tab
 
-All the hardware tests are in one checklist, to run once the SSDs are in the Jonsbo and passed
-through to the NAS VM: [`docs/testing/storage-on-real-drives.md`](../testing/storage-on-real-drives.md).
-It covers the disk-safety work (PR #13: fstab `nofail`, a drive missing at boot, the OS-disk
-guard), Greyhole, and every storage PR (S1–S5): drive health, pools, scrubs, snapshots, a failing
-drive, deleting a pool, then building the real pool.
+The debug pages (`/tab/debug`: App Logs, Logs and System Info) are from the original Amahi. They
+have their own old layout, outside the October look, read logs through shell strings, and their
+"Submit for Debug" button only counts log lines (the report service it sent to is gone). CatDogBark
+wants them rebuilt as a tab in Settings (2026-10-08); until then they stay as they are. To do:
 
-## Storage (ZFS pools for bitShare)
+- A tab on Settings in the current look, for admins, replacing `/tab/debug` and
+  `layouts/debug.html.slim`.
+- Amahi-kai's log, the helper's log and the system journal, read without a shell (the Logs page
+  reads `/var/log/syslog`, which a journald-only system doesn't have).
+- System info from System Status's sources rather than raw `/proc/cpuinfo` and `/proc/meminfo`.
+- Drop Submit for Debug, or make it a download of the logs to attach to an issue.
 
-Decided 2026-10-04, in [`storage.md`](storage.md): SMB shares stay on simple drives and Greyhole;
-new ZFS pools, with the layout the user chooses, hold bitShare's data, on other drives; Greyhole
-is basic SMB storage, changed only through Samba (the web file browser only views). Built in five
-PRs (S1–S5, listed there; S1 is #44, S2 #46, S3 #50, S4 #51, S5 #53). Greyhole and shares have
-been tested on the NAS's virtual drives (#79–#97); ZFS waits for the physical drives.
+### The phone layout
 
-## Phase 4: Docker apps
+CatDogBark will use Amahi-kai on his phone (2026-10-08). The October refresh (dark, mint, Space Grotesk)
+stacks at phone width: the header's sections fold into a menu, cards and panels go one column,
+and the file browser's list drops its dates. It hasn't been designed for a phone yet. To do:
 
-Planned with CatDogBark (2026-10-05) in [`apps.md`](apps.md): Docker only through the root helper,
-apps defined by our own manifest (one container each), each app on its own port with an optional
-Cloudflare Tunnel hostname (remote use required), one user and folder per app, ZFS datasets for big
-data, shares read-only or read-write as chosen (never a pooled share read-write), uninstall keeps
-data, a curated catalog of five apps, bitShare as an ordinary app. PRs P4.1–P4.6; P4.1 (apps through
-the root helper) and P4.2 (reaching apps) are done (#58, #59), to be tested on the NAS with
-[`docs/testing/apps.md`](../testing/apps.md). Tailscale is the default way to reach apps from outside (CatDogBark,
-2026-10-04), so P4.3 (Cloudflare per app) is optional and later. P4.4 (shares for apps, #60) and P4.5
-(app updates, #62), P4.5b (the catalog's own repo, #70, #73) and P4.5c (apps on the LAN over mDNS,
-#71, #72) are done. P4.6 (bitShare, with ZFS datasets for apps) comes after all of Amahi-kai: first
-its major code work is finished (shelf-stable), then everything is tested (CatDogBark, 2026-10-08).
+- Mock up the phone screens first (the refresh's mockup is the [UI refresh canvas](https://claude.ai/artifact/1HcudH31cvF9dUzqrGGXQk)):
+  the header and its menu, Setup's tab bar (it wraps), the file browser's folder view (the
+  selected file's panel likely becomes a sheet from the bottom) and the share card.
+- Touch: rows and buttons at least 44 px, the row's download button always shown (no hover).
+- Check the water background's cost on a phone (it has a battery saver setting).
+
+### Quotas for apps' storage
+
+A size limit on an app's ZFS dataset (P4.6). Left out for now (CatDogBark, 2026-10-11): people manage
+their own files, and the disk warnings cover running low.
+
+### Greyhole shares' folders on the pool drives
+
+So nothing a Greyhole share receives passes through the system disk (a file bigger than its free
+space can't be written to a Greyhole share today). Put off on 2026-10-11: Greyhole won't run with a
+share's folder inside a pool drive, so it needs a bind mount per drive or pool drives as
+`<mount>/gh`. Worked out in [`storage.md`](storage.md#later-greyhole-shares-folders-on-the-pool-drives).
+
+### Long jobs in their own units
+
+System Update (#31), package installs and the apps' installs, updates and removals run as systemd
+units of their own now, so a restart of the web app can't cut them off. Greyhole's install and a
+few others still run inside a web request, holding a Puma thread while they do; with one admin
+on the NAS this costs nothing today.
+
+### Private folders per user
+
+Removed (CatDogBark, 2026-10-09): CatDogBark didn't like how they worked and will think about how to do them
+better. They were Samba's `[homes]` share: each user's Linux home folder, `/home/<login>`, made
+with the account and open only to its owner over SMB. They sat on the system disk with the OS,
+with no pool copies, no snapshots and no size limit, weren't in the web UI's Files, and were mode
+0750 with group `users`, so every account on the NAS could read them there. `[homes]` also showed
+a `nobody` folder when browsing anonymously (the guest account's). Now no account gets a home
+folder, and deleting a user removes one an older version made. To decide:
+
+- Where they live: on share storage or a pool rather than the system disk, so they get its space
+  and copies.
+- How big they can get (a quota per user, or none).
+- Whether Files shows your own (and only your own), and so who on the NAS may read them.
+
+### Inline styles
+
+The Content-Security-Policy forbids inline scripts and handlers, but still allows inline styles;
+taking them out is a later pass.
+
+## Design records
+
+The plans each part was built from: [`privileged-helper.md`](privileged-helper.md) (the root
+helper and the root-owned install), [`storage.md`](storage.md) (Greyhole and ZFS pools),
+[`apps.md`](apps.md) (Docker apps and the catalog), [`networking.md`](networking.md) (DNS, DHCP,
+IPv6 and router mode), [`browser-tests.md`](browser-tests.md), [`backups.md`](backups.md) and
+[`release-1.0.md`](release-1.0.md).
 
 ## Direction
 
@@ -337,8 +238,7 @@ eventually local AI, with system actions exposed as narrow, audited capabilities
 access. That is why the helper's operations are named like an API (`users.create`,
 `shares.grant`) and log every call. Build the boring, reliable pieces first.
 
-**Router, for those who want it** (CatDogBark, 2026-10-05): Amahi-kai can optionally act as the network's
-router. Part of it exists: Network → Gateway runs DHCP and DNS (dnsmasq). The rest (the internet
-connection on its own port, NAT, the firewall facing the internet) is its own feature, designed
-later. Until then, other work (Phase 4's networking above all) mustn't assume the NAS is only ever a
-host on someone else's LAN.
+**Router, for those who want it** (CatDogBark, 2026-10-05): Amahi-kai can act as the network's
+router. It does since 0.10.0 (Network → Internet), and the house has run on it since 2026-10-24;
+the rest of a household router's features are under After 1.0 above. Other work still mustn't
+assume the NAS is only ever a host on someone else's LAN.

@@ -60,6 +60,50 @@ RSpec.describe AllowedHosts do
     end
   end
 
+  # Checked on each request, so a rename, the NAS's DNS name and its aliases work without a
+  # restart (the list above is read at boot).
+  describe ".current_name?" do
+    before { allow(Socket).to receive(:gethostname).and_return("kai") }
+
+    it "takes the NAS's hostname as it is now, with .local and its DNS domain, with or without a port" do
+      %w[kai kai.local kai.home.arpa KAI.HOME.ARPA:3000 kai.home.arpa.].each do |host|
+        expect(AllowedHosts.current_name?(host)).to be(true), host
+      end
+      Setting.set("domain", "lan")
+      AllowedHosts.forget_names
+      expect(AllowedHosts.current_name?("kai.lan")).to be true
+      expect(AllowedHosts.current_name?("kai.home.arpa")).to be false
+    end
+
+    it "takes the DNS aliases that point at the NAS, not those that point elsewhere" do
+      allow(NetworkInterfaces).to receive(:all).and_return("ens18" => [NetworkInterfaces::Address.new(ip: IPAddr.new("192.168.1.1"), prefix: 24)])
+      allow(DnsService).to receive(:rewrite!)
+      DnsAlias.create!(name: "files", address: "")
+      DnsAlias.create!(name: "nas2", address: "192.168.1.1")
+      DnsAlias.create!(name: "printer", address: "192.168.1.30")
+      expect(%w[files files.home.arpa nas2.home.arpa].map { |host| AllowedHosts.current_name?(host) }).to all(be true)
+      expect(AllowedHosts.current_name?("printer.home.arpa")).to be false
+      expect(AllowedHosts.current_name?("rebind.attacker.example")).to be false
+      expect(AllowedHosts.current_name?("")).to be false
+    end
+
+    it "is the last thing the list checks, so a renamed server works through Rails' own host check" do
+      list = AllowedHosts.list(env: {}, hostname: "amahi-kai", tailscale_name: nil)
+      expect(ActionDispatch::HostAuthorization::Permissions.new(list).allows?("kai.home.arpa:3000")).to be true
+      expect(ActionDispatch::HostAuthorization::Permissions.new(list).allows?("other.home.arpa")).to be false
+    end
+
+    it "reads the names again only every few seconds" do
+      expect(AllowedHosts.current_name?("kai")).to be true
+      allow(Socket).to receive(:gethostname).and_return("renamed")
+      expect(AllowedHosts.current_name?("renamed")).to be false # still the names read a moment ago
+      later = Process.clock_gettime(Process::CLOCK_MONOTONIC) + AllowedHosts::NAMES_TTL + 1
+      allow(Process).to receive(:clock_gettime).and_call_original
+      allow(Process).to receive(:clock_gettime).with(Process::CLOCK_MONOTONIC).and_return(later)
+      expect(AllowedHosts.current_name?("renamed")).to be true
+    end
+  end
+
   describe ".tailscale_dns_name" do
     before { allow(File).to receive(:executable?).and_call_original }
 

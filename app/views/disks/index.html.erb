@@ -15,7 +15,8 @@
           <td><%= disk[:model] %></td>
           <td><%= disk[:device] %></td>
           <td><%= disk[:size] %></td>
-          <td class="disk-temp <%= disk[:tempcolor] %>"><%= disk[:temp_f] ? "#{disk[:temp_f]} °F" : '–' %></td>
+          <%# A drive asleep (spun down) isn't woken to read it %>
+          <td class="disk-temp <%= disk[:tempcolor] %>"><%= disk[:temp_f] ? "#{disk[:temp_f]} °F" : (disk[:asleep] ? 'Asleep' : '–') %></td>
         </tr>
       <% end %>
       <% if @disks.empty? %>

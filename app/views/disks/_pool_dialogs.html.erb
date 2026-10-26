@@ -1,6 +1,6 @@
 <%# The ZFS Pools page's dialogs, opened by data-pool-dialog buttons (storage_pools.js fills
     in the pool and posts the change): replace a drive, add a group of drives, delete a pool,
-    roll a pool back to a snapshot.
+    roll a pool back to a snapshot, erase a drive of a pool found on the drives.
     free: the drives a pool may take (StoragePools.drives). %>
 <div class="modal fade" id="replace-dialog" tabindex="-1" aria-labelledby="replace-dialog-title" aria-hidden="true" data-url="<%= disks_replace_pool_drive_path %>">
   <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
@@ -80,6 +80,26 @@
         <span class="text-danger small me-auto" data-dialog-error=""></span>
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
         <button type="button" class="btn btn-danger" data-dialog-submit="" disabled>Roll back</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="erase-dialog" tabindex="-1" aria-labelledby="erase-dialog-title" aria-hidden="true" data-url="<%= disks_erase_pool_drive_path %>">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title" id="erase-dialog-title">Erase <span data-fill="drive-label"></span></h5></div>
+      <div class="modal-body">
+        <p class="small">This drive holds part of the pool <strong data-fill="name"></strong>, which isn't imported. Erasing it destroys
+          that part, for good: with too many of its drives erased, the pool and everything on it are gone. The drive becomes free
+          for share storage or a new pool.</p>
+        <label class="form-label small" for="erase-confirm">Type <strong data-fill="name"></strong> to erase the drive</label>
+        <input type="text" class="form-control form-control-sm" id="erase-confirm" autocomplete="off" data-confirm-name="">
+      </div>
+      <div class="modal-footer">
+        <span class="text-danger small me-auto" data-dialog-error=""></span>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger" data-dialog-submit="" disabled>Erase</button>
       </div>
     </div>
   </div>

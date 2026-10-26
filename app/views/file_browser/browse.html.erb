@@ -71,12 +71,12 @@
                    data-raw-url="<%= file_browser_raw_path(@share, path: path) %>"
                    data-download-url="<%= file_browser_download_path(@share, path: path) %>"
                    data-size="<%= number_to_human_size(entry[:size]) if entry[:size] %>"
-                   data-modified="<%= entry[:modified]&.strftime('%b %-d, %Y · %H:%M') %>">
+                   data-modified="<%= entry[:modified]&.getutc&.iso8601 %>">
               <% end %>
                 <span class="fb-item-icon fb-kind-<%= kind %>"><%= lucide_icon(FileBrowserService::KIND_ICONS[kind], size: 18) %></span>
                 <span class="fb-item-name"><%= entry[:name] %></span>
                 <span class="fb-item-size"><%= entry[:size] ? number_to_human_size(entry[:size]) : '' %></span>
-                <span class="fb-item-date"><%= entry[:modified]&.strftime('%b %-d, %Y · %H:%M') %></span>
+                <span class="fb-item-date"><%= local_time_tag(entry[:modified], 'date-time') if entry[:modified] %></span>
               </a>
               <a class="fb-item-download" href="<%= file_browser_download_path(@share, path: path) %>"
                  aria-label="<%= entry[:directory] ? "Download #{entry[:name]} as a zip" : "Download #{entry[:name]}" %>"

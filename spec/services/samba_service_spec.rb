@@ -43,6 +43,23 @@ RSpec.describe SambaService do
       refuse('samba.write_config')
       expect(described_class.write_smb_conf('broken')).to be false
     end
+
+    # Refused and only logged, every later config was refused too, and nothing on the pages said so.
+    it 'keeps why it was refused for the Shares page, until a config is installed' do
+      expect(described_class.refusal).to be_nil
+      refuse('samba.write_config')
+      described_class.write_smb_conf('broken')
+      expect(described_class.refusal).to eq('testparm rejected smb.conf')
+      allow(Privileged).to receive(:call).with('samba.write_config', any_args).and_return('ok' => true)
+      described_class.write_smb_conf('fixed')
+      expect(described_class.refusal).to be_nil
+    end
+
+    it "leaves no note when the caller hears the refusal itself (a share's extra settings)" do
+      refuse('samba.write_config')
+      expect { described_class.write_smb_conf('broken', raise_refusal: true) }.to raise_error(Privileged::Error)
+      expect(described_class.refusal).to be_nil
+    end
   end
 
   describe '.reload' do

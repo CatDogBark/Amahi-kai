@@ -28,33 +28,12 @@ This fork was created in **February 2026** to modernize the Amahi Platform for c
 
 ### Key Changes from Original
 
-- **Platform**: Migrated from Fedora to Ubuntu 24.04
-- **Ruby**: Upgraded from 2.4.3 → 3.2.10
-- **Rails**: Upgraded from 3.x → 5.2 → 6.0 → 6.1 → 7.0 → 7.1 → 7.2 → 8.0.4
-- **Bootstrap**: Upgraded from 3/4 → 5.3
-- **Frontend**: Removed jQuery entirely, migrated to Stimulus controllers + Turbo + vanilla JS
-- **Database**: MariaDB (production), native install with systemd service
-- **Authentication**: Migrated to bcrypt password hashing via has_secure_password
-- **Asset Pipeline**: Converted CoffeeScript to JavaScript, replaced uglifier with terser
-- **Security**: SQL injection fixes, shell injection prevention (Shellwords.escape), CSP headers, CSRF protection, AES-256-GCM credential encryption, security audit system with auto-fix
-- **Docker App System**: 14-app catalog with one-click install, built-in reverse proxy, lifecycle management
-- **Storage**: Greyhole integration for drive pooling and file duplication
-- **Remote Access**: Cloudflare Tunnel integration with streaming install UI
-- **Dashboard**: System overview with real-time CPU, memory, disk, network stats
-- **Setup Wizard**: 6-step guided setup + headless installer mode
-- **Dark Mode**: Automatic via `prefers-color-scheme` with CSS variable overrides
-- **Testing**: 603+ specs (model, request, feature, lib), ~57% coverage
-- **Native Install**: Idempotent `bin/amahi-install` handles full stack setup
-- **One-Click Updates**: Update button in header pulls code, installs deps, restarts service
+- **Platform**: Fedora to Ubuntu 24.04, installed natively by one command (`bin/amahi-install`)
+- **Stack**: Ruby 2.4 to Ubuntu's Ruby 3.2, Rails 3 to Rails 8.1, Bootstrap 5.3 with Stimulus and plain JavaScript (no jQuery), MariaDB
+- **Security**: every root action goes through one root helper that checks and logs it; bcrypt passwords; CSRF protection and a Content-Security-Policy; a security audit with fixes
+- **Features since the fork**: Greyhole and ZFS storage, a Docker app catalog of its own ([amahi-kai-apps](https://github.com/CatDogBark/amahi-kai-apps)), the NAS as the network's DNS, DHCP and router, remote access through a Cloudflare Tunnel or Tailscale, and System Update from published releases with rollback
 
-### Docker App Catalog
-
-Built-in reverse proxy for accessing Docker apps through Cloudflare Tunnel:
-- Jellyfin, Nextcloud, FileBrowser, Syncthing, Grafana, Gitea, Transmission
-- Vaultwarden, Home Assistant, Portainer, Uptime Kuma, Audiobookshelf
-- Pi-hole, Paperless-ngx
-
-All changes maintain backward compatibility with Amahi's plugin architecture and user data structures where possible.
+What Amahi-kai does now is in the [README](README.md); what changed, release by release, in the [changelog](CHANGELOG.md).
 
 ## License Compliance
 
@@ -95,4 +74,4 @@ The Amahi team created an excellent home server platform that served thousands o
 
 ---
 
-**Last Updated**: 2026-02-24
+**Last Updated**: 2026-10-25

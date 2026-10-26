@@ -13,6 +13,7 @@
 #   /etc/systemd/system/amahi-kai-storage-check.{service,timer}  the storage health check, every 15 minutes
 #   /etc/systemd/system/amahi-kai-snapshots.{service,timer}      pool snapshots, every hour
 #   /etc/systemd/system/amahi-kai-app-firewall.service   app ports kept to the LAN and Tailscale, with Docker
+#   /etc/systemd/system/amahi-kai-app-firewall-early.service   the same rules in place before Docker starts
 #   /etc/systemd/system/amahi-kai-app-backups.{service,timer}    app update copies deleted after 30 days, daily
 #   /etc/systemd/system/amahi-kai-trash.{service,timer}          files kept in the Trash too long deleted, daily
 #   /etc/systemd/system/amahi-kai-tailscale.{service,path}       DNS and Samba follow Tailscale's address
@@ -33,8 +34,17 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
-install -o root -g root -m 0755 "$APP_DIR/libexec/amahi-helper" /usr/local/sbin/amahi-helper
-/usr/local/sbin/amahi-helper --self-test
+# The new helper runs its self-test beside the one in place, and replaces it only if it passes:
+# a helper that doesn't run breaks every change, System Update's included. (A name with a dot
+# in front is one nothing else runs; mv replaces the file in one step.)
+helper_new=/usr/local/sbin/.amahi-helper.new
+install -o root -g root -m 0755 "$APP_DIR/libexec/amahi-helper" "$helper_new"
+if ! "$helper_new" --self-test; then
+  rm -f "$helper_new"
+  echo "The new privileged helper failed its self-test; kept the one in place" >&2
+  exit 1
+fi
+mv -f "$helper_new" /usr/local/sbin/amahi-helper
 
 install -d -o root -g "$APP_GROUP" -m 0750 /var/log/amahi-kai
 [[ -e /var/log/amahi-kai/helper.log ]] || install -o root -g "$APP_GROUP" -m 0640 /dev/null /var/log/amahi-kai/helper.log
@@ -45,6 +55,7 @@ for unit in amahi-kai.service amahi-kai-indexer.service amahi-kai-indexer.timer 
             amahi-kai-update.service amahi-kai-update-check.service amahi-kai-update-check.timer \
             amahi-kai-storage-check.service amahi-kai-storage-check.timer \
             amahi-kai-snapshots.service amahi-kai-snapshots.timer amahi-kai-app-firewall.service \
+            amahi-kai-app-firewall-early.service \
             amahi-kai-app-backups.service amahi-kai-app-backups.timer \
             amahi-kai-trash.service amahi-kai-trash.timer \
             amahi-kai-tailscale.service amahi-kai-tailscale.path; do
@@ -80,6 +91,9 @@ if [[ -d /run/systemd/system ]]; then
   # Starts with Docker from now on, and now if Docker is running (an update applies the rules).
   systemctl enable amahi-kai-app-firewall.service >/dev/null 2>&1 \
     || echo "Couldn't enable amahi-kai-app-firewall.service; app ports aren't limited to the LAN" >&2
+  # And the same rules before Docker starts, so the apps' ports aren't open until they're in.
+  systemctl enable amahi-kai-app-firewall-early.service >/dev/null 2>&1 \
+    || echo "Couldn't enable amahi-kai-app-firewall-early.service; app ports are open at boot until Docker is up" >&2
   if systemctl is-active --quiet docker.service; then
     systemctl restart amahi-kai-app-firewall.service \
       || echo "Couldn't limit app ports to the LAN and Tailscale (journalctl -u amahi-kai-app-firewall)" >&2

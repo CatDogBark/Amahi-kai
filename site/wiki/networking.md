@@ -60,8 +60,9 @@ All of them are free, need no account, encrypt the connection and check DNSSEC:
 2. Turn on **DNS for my network**, pick a provider and the network interface DNS should answer
    on (the one your LAN is on), then **Save**. The page shows whether it's answering, for local names
    and outside ones.
-3. **Give the NAS a fixed address:** in your router's DHCP settings, reserve the NAS's address so
-   it never changes. Every device will be pointed at it.
+3. **Give the NAS a fixed address** on **Network → Devices** ([This NAS](#this-nas-its-own-address)),
+   or reserve its address in your router's DHCP settings, so it never changes. Every device will
+   be pointed at it.
 4. **Point devices at it.** To try it first, set one computer's or phone's DNS server to the NAS's
    address by hand. For the whole house, set the DNS server in your router's settings to the
    NAS's address (often under Internet, WAN or DHCP).
@@ -101,7 +102,9 @@ empty, your devices on its LAN ports and Wi-Fi as before).
 
 The NAS's own network settings for the LAN interface are adjusted for you: an address it got
 from the old router is kept as a fixed one, and a route it had through the old router steps
-behind the internet's. The file is put back when you leave router mode.
+behind the internet's. The file is put back when you leave router mode, unless you changed it by
+hand meanwhile: then it stays as you made it, and the page says so. A save that changes none of
+the network files leaves them alone, so saving these pages doesn't renew the internet connection.
 
 **Every device uses the NAS's DNS** (on unless you untick it): some devices ask a DNS server of
 their own choosing (Roku, Google's, some TVs), skipping yours and its blocking. In router mode
@@ -113,10 +116,11 @@ the internet side so its connections stay direct; the Cloudflare Tunnel needs no
 Nothing from the internet reaches the NAS or your devices except the **ports you let in**, on
 the card that appears: a port, a protocol, the device (give it a fixed address on Network → Devices
 first) and its port. The NAS's own services (SSH, the web UI, Samba, DNS) never answer the
-internet side.
+internet side. A change to the ports that can't be put in the router's rules is saved, and the
+page says so; the card then shows the rules as behind until a save of the page puts them in place.
 
-The NAS doesn't answer pings from the internet either, nor takes or sends route changes
-(ICMP redirects) there. A NAS that is the router faces the internet, so the page also says
+The NAS doesn't answer pings or service discovery (mDNS, SSDP) from the internet either, nor
+takes or sends route changes (ICMP redirects) there. A NAS that is the router faces the internet, so the page also says
 whether Ubuntu's security updates install by themselves; the switch is on Settings → System
 Dependencies (security fixes only, from Ubuntu's security channel, never new versions of
 anything; the installer leaves it off, and the security audit warns while the NAS is the router
@@ -131,7 +135,8 @@ Devices).
 
 **The way back:** turn the switch off, move the provider's cable back to your router, and turn
 its DHCP on again. While the NAS is off or restarting, the house has no
-internet: a System Update is a minute of that.
+internet. A System Update doesn't do that: it restarts only the web page and Samba, and DNS,
+DHCP and the router keep running.
 
 IPv6 for the house (an address range from the provider), PPPoE and a static address come later.
 
@@ -220,9 +225,15 @@ at the new address within 90 seconds, the NAS goes back to the old address by it
 page follows. A wrong address can't lock you out. Changing another port's address happens at
 once.
 
+Through the Cloudflare Tunnel or Tailscale, the port they run over (the one with the NAS's way
+out to the internet) can't be changed: the NAS can't watch for you coming back that way, so a
+wrong address there would cut you off with nothing to put it back. Change that one from a
+computer on your LAN.
+
 While the NAS is the router (Network → Internet), the internet side's address comes from the
 provider and is managed there, and the LAN port has no router of its own (the NAS is it). The
-port the NAS hands out addresses on (Network → DHCP) needs a fixed address.
+port the NAS hands out addresses on (Network → DHCP) needs a fixed address on a `/24` network:
+DHCP's range and the fixed devices' addresses are the last part of an address there.
 
 Afterwards, bookmarks and devices that used the old address need the new one; DNS, DHCP, the
 router and the shares follow it by themselves.
@@ -253,7 +264,8 @@ Internet): it still reaches the shares, DNS, the NAS and every other device on t
 nothing beyond. For a TV, a camera or a toy that has no business out there. *Internet again*
 undoes it. The device needs a fixed address because the rule is by address. While the NAS
 isn't the router yet, the setting waits for when it is. Network → Internet lists the devices
-kept off.
+kept off. If the router's rules can't follow a change, the page says the device is still as it
+was, until a save of Network → Internet puts them in place.
 
 ---
 
@@ -264,17 +276,22 @@ place of your router's DHCP. Your router almost certainly does this already, so 
 it puts the NAS in charge of the network, and gives every device a name in DNS.
 
 1. On **Network → DHCP**, click **Install dnsmasq** (installing changes nothing on your network).
-2. **Turn your router's DHCP off** in its own settings (often under LAN or DHCP). Leave the
+2. **Give the NAS a fixed address** on **Network → Devices** ([This NAS](#this-nas-its-own-address)).
+   A NAS that hands out addresses can't take its own from DHCP: its lease would run out with
+   nothing to renew it, and the house's DHCP and DNS with it. The switch says so until it has one.
+3. **Turn your router's DHCP off** in its own settings (often under LAN or DHCP). Leave the
    router's own address as it is.
-3. Turn the switch on, set the addresses to hand out (a range on the interface's network, at
+4. Turn the switch on, set the addresses to hand out (a range on the interface's network, at
    least 10 addresses, not taking in the NAS's own), the router's address, and how long devices
    keep an address, then **Save**. The NAS first checks the network for another DHCP server, the way a device would,
    and won't start while one answers.
 
 Devices pick up an address from the NAS the next time they connect or renew; turning a device's
 Wi-Fi off and on hurries it along. Each one is given the NAS as its DNS server and `home.arpa` as
-its domain, and answers by the name it gives (`laptop.home.arpa`, and `laptop`). Fixed addresses
-for chosen devices are on **Network → Hosts**.
+its domain, and answers by the name it gives (`laptop.home.arpa`, and `laptop`), except `wpad`,
+`isatap` and `localhost`: browsers look for their proxy settings at the first and Windows for an
+IPv6 tunnel at the second, so no device takes those. Fixed addresses for chosen devices are on
+**Network → Devices**.
 
 DHCP serves the interface DNS answers on, and nowhere else, and the firewall lets DHCP in on that
 interface only.

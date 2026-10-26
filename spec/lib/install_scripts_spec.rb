@@ -6,7 +6,8 @@ require 'etc'
 # app's code and never runs anything that loads the app or its gems: the app user can
 # write vendor/bundle, so that would hand it root.
 RSpec.describe 'install and update scripts' do
-  scripts = %w[bin/amahi-install bin/amahi-update bin/amahi-install-helper bin/amahi-set-ownership]
+  scripts = %w[bin/amahi-install bin/amahi-update bin/amahi-install-helper bin/amahi-set-ownership
+               bin/amahi-follow-tailscale site/install.sh]
 
   scripts.each do |script|
     it "#{script} is valid bash" do
@@ -39,7 +40,8 @@ RSpec.describe 'install and update scripts' do
     text = File.read(Rails.root.join('bin/amahi-install'))
     expect(text).not_to include(User::SEED_ADMIN_PASSWORD)
     expect(text).to include("AMAHI_FIRST_PASSWORD_FILE='$PW_FILE'")
-    expect(text).to match(/install -o "\$APP_USER" -g "\$APP_GROUP" -m 0600 \/dev\/null "\$PW_FILE"/)
+    # Root's alone while it's written (umask 077), then the app user's, which the seeds read it as
+    expect(text).to include("( umask 077; printf '%s' \"$ADMIN_PASS\" > \"$PW_FILE\" )", 'chown "$APP_USER:$APP_GROUP" "$PW_FILE" "$PW_DIR"')
     used = text.lines.grep(/\$ADMIN_PASS\b/).map(&:strip)
     expect(used.grep(/as_app|bin\/rails|sudo/)).to eq([])
   end
@@ -92,8 +94,11 @@ RSpec.describe 'install and update scripts' do
       expect(helper).to include('for unit in amahi-kai.service amahi-kai-indexer.service amahi-kai-indexer.timer')
       expect(helper).to include('systemctl enable amahi-kai.service', 'systemctl enable amahi-kai-indexer.timer')
       expect(helper).not_to include('enable --now amahi-kai.service')
-      expect(File.read(Rails.root.join('config/systemd/amahi-kai.service')))
-        .to include('ExecStart=/usr/bin/bundle exec puma -C config/puma.rb', 'EnvironmentFile=/etc/amahi-kai/amahi.env')
+      unit = File.read(Rails.root.join('config/systemd/amahi-kai.service'))
+      expect(unit).to include('ExecStart=/usr/bin/bundle exec puma -C config/puma.rb', 'EnvironmentFile=/etc/amahi-kai/amahi.env')
+      # MariaDB's package update stops it: with Requires= the web UI would stop for good with it
+      expect(unit).to include('Wants=mariadb.service', 'After=network.target mariadb.service')
+      expect(unit).not_to match(/^Requires=/)
       expect(File.read(Rails.root.join('config/systemd/amahi-kai-indexer.timer'))).to include('OnUnitActiveSec=10min')
     end
 
@@ -281,6 +286,75 @@ RSpec.describe 'install and update scripts' do
     # A check for updates holds the same lock during its fetch (a minute at most).
     it 'runs one update at a time, waiting briefly for a check to finish its fetch' do
       expect(update).to include('flock -w 90 9')
+    end
+
+    it "keeps the lock through the re-exec, and the new copy doesn't look the version up again" do
+      reexec = update[/^if \[\[ -z "\$\{AMAHI_UPDATE_REEXEC:-\}" && .*?^fi$/m]
+      expect(reexec).to include('exec env AMAHI_UPDATE_REEXEC=1 AMAHI_UPDATE_PREV="$PREV"')
+      expect(reexec).not_to include('exec 9>&-')
+      expect(update).to include("if [[ -n \"${AMAHI_UPDATE_REEXEC:-}\" ]] && { true >&9; } 2>/dev/null; then\n  flock -n 9")
+      # The new copy skips the lookup: the copy that pulled checked the version out
+      expect(update.index("elif [[ -n \"${AMAHI_UPDATE_REEXEC:-}\" ]]; then\n  # The copy that pulled"))
+        .to be < update.index('mapfile -t TARGET < <(update_target)')
+    end
+
+    it 'rolls back when it stops any other way once the new code is checked out' do
+      expect(update).to include('trap on_exit EXIT', "trap 'exit 143' TERM", "trap 'exit 129' HUP")
+      on_exit = update[/^on_exit\(\) \{.*?^\}$/m]
+      expect(on_exit).to include('$FINISHED && return', '[[ "$head" != "$PREV" ]] || return', 'rollback "The update')
+      # Each way out that leaves the new version in place says so first
+      expect(update.scan('FINISHED=true').size).to eq(3)
+    end
+
+    it "writes down the version installed, and finishes an update that stopped partway instead of calling it up to date" do
+      expect(update).to include('DEPLOYED_FILE=/var/lib/amahi-kai/deployed-commit', 'record_deployed "$NEW"', 'record_deployed "$PREV"')
+      expect(update).to include('if [[ -n "$DEPLOYED" && -n "$PREV" && "$DEPLOYED" != "$PREV" ]]', 'PREV="$DEPLOYED"')
+      expect(install).to include('> /var/lib/amahi-kai/deployed-commit')
+    end
+
+    it "sends the update back when the helper won't install, and the previous version rewrites Samba's and the network's configs" do
+      expect(update).to include('"$APP_DIR/bin/amahi-install-helper" 2>&1 || rollback "Installing the privileged helper"')
+      rollback = update[/^rollback\(\) \{.*?^\}$/m]
+      expect(rollback).to include('if $CONFIGS_REWRITTEN; then', "bin/rails runner 'puts DnsService.resync_report'")
+      # A repair that cleared the compiled assets puts them back even with no other version
+      nothing_to_roll_back = rollback[/if \[\[ -z "\$\{PREV:-\}".*?error "\$step failed\. The code didn't change/m]
+      expect(nothing_to_roll_back).to include('if $ASSETS_CLEARED && [[ -d "$APP_DIR/tmp/assets-previous" ]]; then')
+      expect(update.index('ASSETS_CLEARED=true')).to be < update.index('rm -rf tmp/cache/* public/assets/*')
+    end
+
+    let(:install) { File.read(Rails.root.join('bin/amahi-install')) }
+  end
+
+  describe 'installing on a machine' do
+    let(:install) { File.read(Rails.root.join('bin/amahi-install')) }
+
+    it "uses an existing amahi account only if it's a system account, never one people sign in with" do
+      check = install[/^else\n  # The web app runs as this account.*?^fi$/m]
+      expect(check).to include('(( app_uid < 1000 ))', "[[ \"$app_password\" == '!'* || \"$app_password\" == '*'* ]]",
+                               'sudo -n -l -U "$APP_USER"', "isn't a system account Amahi-kai can use", 'exit 1')
+    end
+
+    it 'keeps the configuration root-only until its secrets are in' do
+      expect(install.index('install -o root -g root -m 0600 /dev/null "$ENV_FILE"')).to be < install.index('SECRET_KEY_BASE=$SECRET')
+    end
+
+    it "writes the first password while its folder is still root's" do
+      expect(install.index("( umask 077; printf '%s' \"$ADMIN_PASS\" > \"$PW_FILE\" )"))
+        .to be < install.index('chown "$APP_USER:$APP_GROUP" "$PW_FILE" "$PW_DIR"')
+    end
+
+    it 'has the one-line installer leave an installed NAS on its version, for System Update to move on' do
+      script = File.read(Rails.root.join('site/install.sh'))
+      installed = script[/^if \[ -d "\$INSTALL_DIR\/\.git" \]; then.*?^fi$/m]
+      expect(installed).to include('exec bin/amahi-install "$@"', 'System Update')
+      expect(installed).not_to include('AMAHI_CODE_FETCHED', 'fetch', 'checkout')
+      expect(script.index(installed)).to be < script.index('git clone --branch')
+    end
+
+    it "self-tests the new helper beside the one in place before it replaces it" do
+      helper = File.read(Rails.root.join('bin/amahi-install-helper'))
+      expect(helper.index('"$helper_new" --self-test')).to be < helper.index('mv -f "$helper_new" /usr/local/sbin/amahi-helper')
+      expect(helper).not_to include('install -o root -g root -m 0755 "$APP_DIR/libexec/amahi-helper" /usr/local/sbin/amahi-helper')
     end
   end
 

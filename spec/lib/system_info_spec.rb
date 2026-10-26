@@ -80,7 +80,12 @@ RSpec.describe SystemInfo do
     end
   end
 
-  it 'reads the hostname, the first address, the kernel and the cores' do
+  it 'reads the hostname, the LAN address, the kernel and the cores' do
+    # The router's internet side can come first in hostname -I: the LAN's own address is shown
+    allow(DnsService).to receive(:server_addresses).and_return(['192.168.1.1'])
+    allow(Shell).to receive(:output).with('hostname', '-I').and_return("66.8.144.62 192.168.1.1 \n")
+    expect(described_class.ip_address).to eq('192.168.1.1')
+    allow(DnsService).to receive(:server_addresses).and_return([])
     allow(Shell).to receive(:output).with('hostname', '-I').and_return("192.168.1.111 100.64.0.5 \n")
     expect(described_class.ip_address).to eq('192.168.1.111')
     expect(described_class.hostname).to eq(Socket.gethostname)

@@ -143,6 +143,7 @@ Rails.application.routes.draw do
     post 'destroy_pool', action: 'destroy_pool'
     post 'pool_offline', action: 'pool_offline'
     post 'pool_online', action: 'pool_online'
+    post 'pool_import_found', action: 'pool_import_found'
     post 'snapshot_pool', action: 'snapshot_pool'
     post 'pool_snapshot_policy', action: 'pool_snapshot_policy'
     post 'destroy_pool_snapshot', action: 'destroy_pool_snapshot'

@@ -61,6 +61,10 @@ class SetupController < ApplicationController
       flash.now[:error] = "Password must be at least 8 characters."
       render :admin; return
     end
+    if User.first_password?(params[:password])
+      flash.now[:error] = "That's the password the installer printed. Choose one of your own."
+      render :admin; return
+    end
     user.password = params[:password]
     user.password_confirmation = params[:password_confirmation]
     if user.save
@@ -112,7 +116,8 @@ class SetupController < ApplicationController
     device = params[:device]
     begin
       preview = DiskManager.preview(device)
-      render json: { status: 'ok', device: device, entries: preview[:entries], total_used: preview[:total_used], file_count: preview[:file_count] }
+      render json: { status: 'ok', device: device, entries: preview[:entries], total_used: preview[:total_used], file_count: preview[:file_count],
+                     partial: preview[:partial] == true }
     rescue DiskManager::DiskError => e
       render json: { status: 'error', message: e.message }, status: :unprocessable_entity
     end

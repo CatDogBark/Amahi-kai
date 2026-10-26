@@ -49,7 +49,8 @@ module DisksHelper
     SNAPSHOT_KINDS.fetch(snapshot['kind'], "Not Amahi-kai's")
   end
 
-  # What a whole disk is used for, on Disks → ZFS Pools (StoragePools.drives' roles).
+  # What a whole disk is used for, on Disks → ZFS Pools (StoragePools.drives' roles). A free disk
+  # with filesystems on it says so: a new pool erases them.
   def drive_role(drive)
     case drive[:role]
     when :os then 'System disk'
@@ -57,9 +58,13 @@ module DisksHelper
     when :in_use then 'In use (LVM, RAID or encryption)'
     when :pool then "ZFS pool #{drive[:pool]}"
     when :offline then "ZFS pool #{drive[:pool]} (offline)"
+    when :found then "ZFS pool #{drive[:pool]}, on the drive but not imported"
+    when :listed then "Share storage at #{drive[:fstab]}, not mounted now: mount it on Devices"
     when :left_pool then "Free: replaced out of the pool #{drive[:pool]}, with its old ZFS label still on it"
     when :old_zfs then "Free: has an old ZFS label (pool #{drive[:pool]}, not on this server)"
-    else 'Free'
+    else
+      contents = Array(drive[:contents]).map { |fs| "#{fs[:fstype]} on #{fs[:path]}#{" (#{fs[:label]})" if fs[:label]}" }
+      contents.any? ? "Free, but not empty: #{contents.join(', ')}. A new pool erases it" : 'Free'
     end
   end
 

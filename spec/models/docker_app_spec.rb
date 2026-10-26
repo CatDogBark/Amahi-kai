@@ -90,6 +90,13 @@ describe DockerApp do
       expect(build_app(image: AppCatalog.find('gitea')[:image])).not_to be_update_available
       expect(build_app(identifier: 'portainer')).not_to be_update_available
     end
+
+    # A catalog that went back (a release pulled) offered its older version as an update.
+    it "doesn't offer the catalog's version as an update when it's older than the one it runs" do
+      expect(build_app(image: "gitea/gitea:1.28.0-rootless@sha256:#{'c' * 64}")).not_to be_update_available
+      expect(AppCatalog.version_below?('1.27.3-rootless', '1.28.0-rootless')).to be true
+      expect(AppCatalog.version_below?('latest', '1.0')).to be false
+    end
   end
 
   describe 'logo' do
@@ -154,6 +161,16 @@ describe DockerApp do
       expect(DockerApp.find_by(identifier: 'immich')).to have_attributes(status: 'error', error_message: /Greyhole pool's change: docker exited 125/)
     end
 
+    # The record kept shares a remade container no longer has (one gone from Samba).
+    it 'records the shares each remade app has now' do
+      app_with('jellyfin', %w[Photos Gone])
+      allow(Privileged).to receive(:call).and_call_original
+      allow(Privileged).to receive(:call).with('apps.follow_pool')
+                                         .and_return('apps' => { 'jellyfin' => 'remade' }, 'shares' => { 'jellyfin' => [{ 'name' => 'Photos', 'write' => false }] })
+      DockerApp.follow_pool!
+      expect(DockerApp.find_by(identifier: 'jellyfin').shares).to eq([{ name: 'Photos', write: false }])
+    end
+
     it "doesn't ask when no app has shares, and a helper failure is only logged" do
       app_with('gitea', [])
       DockerApp.follow_pool!
@@ -206,6 +223,26 @@ describe DockerApp do
                              'jellyfin' => ['error', 'Its container is gone: install it again'],
                              'transmission' => ['installing', nil],
                              'uptimekuma' => ['error', 'docker exited 1: pull access denied'])
+    end
+
+    # An install cut off on the page's side (the web app restarted while its job ran on) stayed
+    # Installing, with no buttons.
+    it "settles a row an install left Installing, once no job runs for it, from Docker" do
+      DockerApp.where(identifier: 'transmission').update_all(updated_at: 2.minutes.ago)
+      build_app(identifier: 'jellyfin2', name: 'J2', status: 'installing').save!
+      DockerApp.where(identifier: 'jellyfin2').update_all(updated_at: 2.minutes.ago)
+      build_app(identifier: 'immich', name: 'Immich', status: 'installing').save! # just started: left to its install
+      allow(Privileged).to receive(:call).with('apps.status').and_return(
+        'ok' => true, 'docker' => true, 'jobs' => ['jellyfin2'],
+        'apps' => { 'gitea' => { 'state' => 'running' }, 'jellyfin' => { 'state' => 'running' }, 'transmission' => { 'state' => 'running' } }
+      )
+      DockerApp.refresh_statuses!
+      expect(DockerApp.find_by(identifier: 'transmission').status).to eq('running')
+      expect(DockerApp.find_by(identifier: 'jellyfin2').status).to eq('installing') # its job still runs
+      expect(DockerApp.find_by(identifier: 'immich').status).to eq('installing')
+      DockerApp.where(identifier: 'immich').update_all(updated_at: 2.minutes.ago)
+      DockerApp.refresh_statuses!
+      expect(DockerApp.find_by(identifier: 'immich')).to have_attributes(status: 'error', error_message: 'Its install was cut off: install it again')
     end
 
     it "changes nothing when Docker can't be asked" do

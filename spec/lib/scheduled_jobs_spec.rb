@@ -32,6 +32,7 @@ RSpec.describe ScheduledJobs do
   end
 
   it "lists each installed job with its last and next run (systemd's microseconds) and how the last run ended" do
+    allow(SystemDependencies).to receive(:automatic?).and_return(true)
     jobs = described_class.all(health: health).index_by(&:key)
     expect(jobs.keys).to eq(%w[storage-check indexer update-check security-updates])
     expect(jobs['storage-check']).to have_attributes(name: 'Storage health check', schedule: 'Every 15 minutes',
@@ -39,6 +40,13 @@ RSpec.describe ScheduledJobs do
     expect(jobs['indexer'].result).to eq(:failed)
     expect(jobs['update-check']).to have_attributes(last_run: nil, result: nil)
     expect(jobs['security-updates'].result).to eq(:running)
+  end
+
+  # Ubuntu's timer runs daily either way; with the switch off its run installs nothing.
+  it 'shows the security updates off while automatic security updates are off' do
+    allow(SystemDependencies).to receive(:automatic?).and_return(false)
+    job = described_class.all(health: health).find { |each| each.key == 'security-updates' }
+    expect(job).to have_attributes(schedule: 'Off', next_run: nil, result: :off)
   end
 
   it 'lists the hourly pool snapshots once ZFS is installed' do

@@ -2,8 +2,9 @@
 // allow, with the space they'd give and how many may fail, then asks the server to create
 // the pool. data-storage-install buttons open the install window; data-storage-post buttons
 // (Scrub now, Check now) post to their URL, with their data-name, and reload.
-// data-pool-dialog buttons open the replace, add-drives, delete and roll-back dialogs
+// data-pool-dialog buttons open the replace, add-drives, delete, roll-back and erase dialogs
 // (disks/_pool_dialogs). While a scrub or resilver runs, the page reloads every 30 seconds.
+// Drives go by their refs (DiskManager.resolve); data-label is the kernel name, for messages.
 
 (function() {
   // Sizes as Rails' number_to_human_size writes them (1024-based, "2.73 TB").
@@ -64,12 +65,13 @@
 
   function submit(form) {
     var devices = chosenDrives(form).map(function(d) { return d.value; });
+    var labels = chosenDrives(form).map(function(d) { return d.dataset.label || d.value; });
     var layout = form.querySelector('input[name="layout"]:checked');
     var name = form.querySelector('#pool-name').value.trim();
     var button = form.querySelector('#create-pool-btn');
     var error = form.querySelector('#pool-form-error');
     var layoutName = form.querySelector('label[for="' + layout.id + '"] strong').textContent;
-    if (!confirm('Create the ' + layoutName + ' pool "' + name + '" on ' + devices.join(', ') +
+    if (!confirm('Create the ' + layoutName + ' pool "' + name + '" on ' + labels.join(', ') +
                  '?\n\nEverything on these drives is erased.')) return;
 
     var fail = function(message) {
@@ -148,7 +150,7 @@
         estimate.textContent = drives.length + ' of ' + width + ' drives chosen.';
       }
       ready = drives.length === width && erase.checked;
-    } else if (dialog.id === 'destroy-dialog' || dialog.id === 'rollback-dialog') {
+    } else if (dialog.id === 'destroy-dialog' || dialog.id === 'rollback-dialog' || dialog.id === 'erase-dialog') {
       ready = dialog.querySelector('[data-confirm-name]').value === data.name;
     }
     dialog.querySelector('[data-dialog-submit]').disabled = !ready;
@@ -166,6 +168,7 @@
       body.devices = chosen(dialog).map(function(d) { return d.value; });
     } else {
       if (data.snapshot) body.snapshot = data.snapshot;
+      if (data.drive) body.drive = data.drive;
       body.confirm = dialog.querySelector('[data-confirm-name]').value;
     }
     button.disabled = true;
@@ -211,7 +214,7 @@
     submit(form);
   });
 
-  // data-name, data-snapshot and data-drive go in the body; data-confirm asks first.
+  // data-name, data-snapshot, data-drive and data-pool-id (as id) go in the body; data-confirm asks first.
   function post(button) {
     if (button.dataset.confirm && !confirm(button.dataset.confirm)) return;
     var label = button.textContent;
@@ -219,6 +222,7 @@
     if (button.dataset.name) body.name = button.dataset.name;
     if (button.dataset.snapshot) body.snapshot = button.dataset.snapshot;
     if (button.dataset.drive) body.drive = button.dataset.drive;
+    if (button.dataset.poolId) body.id = button.dataset.poolId;
     button.disabled = true;
     button.textContent = 'Working…';
     postJSON(button.dataset.storagePost, body, function(message) {

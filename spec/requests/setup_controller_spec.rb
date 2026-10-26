@@ -100,6 +100,17 @@ describe "Setup Controller", type: :request do
         post setup_update_admin_path, params: { password: "newpassword1", password_confirmation: "newpassword1" }
         expect(response).to redirect_to(setup_network_path)
       end
+
+      # Set again, it gets a new hash, which the security audit and the wizard would take as changed.
+      it "refuses the first password back: the installer's printed one, or the public one" do
+        Setting.set(User::FIRST_PASSWORD_SETTING, BCrypt::Password.create('printed-by-installer'))
+        post setup_update_admin_path, params: { password: "printed-by-installer", password_confirmation: "printed-by-installer" }
+        expect(response).to have_http_status(:ok)
+        expect(response.body).to include("the password the installer printed. Choose one of your own")
+        post setup_update_admin_path, params: { password: User::SEED_ADMIN_PASSWORD, password_confirmation: User::SEED_ADMIN_PASSWORD }
+        expect(response.body).to include("the password the installer printed. Choose one of your own")
+        expect(User.seed_admin_password_in_use?).to be true
+      end
     end
 
     describe "GET /setup/network" do
@@ -167,13 +178,13 @@ describe "Setup Controller", type: :request do
       it "doesn't offer drives that hold a ZFS pool" do
         allow(DiskManager).to receive(:devices).and_return([
           { name: "sdc", path: "/dev/sdc", model: "SSD", size: "1T", os_disk: false, zfs_pool: "tank",
-            partitions: [{ path: "/dev/sdc1", status: :unmounted, fstype: "zfs_member", size: "1T" }] },
+            partitions: [{ path: "/dev/sdc1", ref: "/dev/sdc1", status: :unmounted, fstype: "zfs_member", size: "1T" }] },
           { name: "sdd", path: "/dev/sdd", model: "SSD", size: "1T", os_disk: false, zfs_pool: nil,
-            partitions: [{ path: "/dev/sdd", status: :unformatted, size: "1T" }] }
+            partitions: [{ path: "/dev/sdd", ref: "/dev/disk/by-id/ata-SSD_S1", status: :unformatted, size: "1T" }] }
         ])
         get setup_storage_path
         values = Nokogiri::HTML(response.body).css('input[name="drives[]"]').map { |i| i['value'] }
-        expect(values).to eq(["/dev/sdd"])
+        expect(values).to eq(["/dev/disk/by-id/ata-SSD_S1"]) # by its ref: a page left open acts on that drive or none
       end
     end
 
@@ -242,7 +253,7 @@ describe "Setup Controller", type: :request do
         expect(response.body).to include("Name has already been taken")
         post setup_create_share_path, params: { share_name: "M" }
         expect(response).to have_http_status(:ok)
-        expect(response.body).to include("Name is invalid")
+        expect(response.body).to include("Name needs two or more letters, digits, spaces, hyphens or underscores")
         expect(Share.count).to eq(1)
       end
 
@@ -261,7 +272,7 @@ describe "Setup Controller", type: :request do
 
       it "asks for a new admin password instead of offering to finish while the seeded one works" do
         get setup_complete_path
-        expect(response.body).to include("still the default")
+        expect(response.body).to include("still has the first password the installer printed")
         expect(response.body).not_to include(setup_finish_path)
       end
     end
@@ -285,7 +296,7 @@ describe "Setup Controller", type: :request do
         change_seeded_admin_password
         get setup_complete_path
         expect(response.body).to include(setup_finish_path)
-        expect(response.body).not_to include("still the default")
+        expect(response.body).not_to include("still has the first password the installer printed")
       end
     end
   end

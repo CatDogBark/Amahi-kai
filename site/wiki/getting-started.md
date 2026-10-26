@@ -13,8 +13,11 @@ This guide covers installing Amahi-kai and the first-run setup wizard.
 
 - **OS**: Ubuntu 24.04 LTS (Server), on a dedicated machine or VM
 - **RAM**: 2 GB minimum (4 GB recommended)
-- **Disk**: 10 GB for the OS and Amahi-kai, plus whatever drives you want to share
-- **Network**: wired Ethernet recommended; a fixed IP address makes it easier to find
+- **Disk**: a system disk of 32 GB or more (64 GB with apps): Ubuntu, Amahi-kai, its database and
+  the apps' images live there, and the dashboard warns once less than 10 GB is free. Your files go
+  on other drives.
+- **Network**: wired Ethernet recommended; a fixed IP address makes it easier to find (Network →
+  Devices sets one, see [This NAS](networking#this-nas-its-own-address))
 - **Architecture**: x86_64 (amd64)
 
 ---
@@ -51,8 +54,9 @@ sudo bin/amahi-install
 
 ### What the installer does
 
-Running it again is safe: it keeps your users, shares, settings and the version installed, and
-restarts Amahi-kai. New versions come through System Update ([Updating](updating)).
+Running it again is safe, the one-line command included: it keeps your users, shares, settings
+and the version installed, and restarts Amahi-kai. New versions come through System Update
+([Updating](updating)), which backs the database up first and goes back if a step fails.
 
 1. **Swap**: creates a swap file if the machine has none.
 2. **System packages**: build tools, Ruby 3.2 (Ubuntu's), MariaDB, Samba, Avahi, smartmontools and
@@ -76,8 +80,8 @@ restarts Amahi-kai. New versions come through System Update ([Updating](updating
     install only; turn them on under Settings → System Dependencies).
 12. **Compiled styles and scripts** for the web UI.
 13. **Firewall**: opens port 3000 if UFW is on.
-14. **Samba**: writes its configuration (answering on your LAN only) and turns on `smbd` and
-    `nmbd`.
+14. **Samba**: writes its configuration (letting in only the server itself, your LAN and
+    Tailscale) and turns on `smbd` and `nmbd`.
 15. **File search index**: builds it.
 16. **Starts Amahi-kai** and checks that it answers.
 
@@ -105,13 +109,18 @@ Log in as `admin` and the wizard starts:
 
 1. **Welcome**: checks memory and swap, and can create a swap file if the server needs one.
 2. **Admin password**: choose a new one (at least 8 characters). The wizard can't be finished
-   until the default password is changed.
-3. **Network**: confirm the IP address and give the server a name if you like. The name becomes
-   the system's hostname and the name your computers see the server by.
+   while the admin account still has the first password the installer printed, and won't take
+   that one back as the new one.
+3. **Network**: see the IP address and give the server a name if you like. The name becomes the
+   system's hostname and the name your computers see the server by. To keep the address, give
+   the server a fixed one afterwards on **Network → Devices** ([This NAS](networking#this-nas-its-own-address)),
+   or reserve it in your router's DHCP settings.
 4. **Storage drives**: pick the drives to use. Amahi-kai can format a new drive (ext4), mounts each
    one under `/mnt` with settings that let the server still boot if a drive goes missing, and adds
-   it to the storage pool. A drive with a filesystem Greyhole can't pool (NTFS, exFAT) becomes a
-   share of its own instead. The drive the system runs from is never offered.
+   it to the storage pool. A drive with a filesystem Greyhole can't pool (NTFS, FAT, exFAT) is shared
+   as it is instead, its files where they were. The drive the system runs from is never offered.
+   Leave unticked any drive you want for a [ZFS pool](zfs-pools) later: a pool takes whole drives
+   with nothing on them.
 5. **Greyhole**: install storage pooling and choose how many copies of each file new pooled
    shares keep (see [Storage Pooling](storage-pooling)). Optional.
 6. **First share**: create a share such as "Movies", pooled with those copies once Greyhole is
@@ -125,11 +134,31 @@ You can skip the drive, Greyhole and share steps and do them later from the **Di
 
 ## Next steps
 
+- [ ] **Give the NAS a fixed address** on Network → Devices ([This NAS](networking#this-nas-its-own-address))
+- [ ] **Plan your backups** ([below](#what-amahi-kai-doesnt-back-up))
 - [ ] **Create shares** for media, documents and backups ([File Sharing](file-sharing))
 - [ ] **Run the security audit** ([Security](security))
 - [ ] **Install apps** from the catalog ([Docker Apps](docker-apps))
 - [ ] **Set up remote access** with Cloudflare Tunnel or Tailscale ([Remote Access](remote-access))
 - [ ] **Add drives to the storage pool** ([Storage Pooling](storage-pooling))
+
+---
+
+## What Amahi-kai doesn't back up
+
+Amahi-kai doesn't make backups yet; a backup of the NAS's own state is planned for after 1.0. Until
+then, keep your own copies of:
+
+- **The NAS's settings**: its users, shares, apps and network settings, in its database and in
+  `/etc/amahi-kai`. Installed again, Amahi-kai starts empty. A ZFS pool on the drives can be
+  imported again ([ZFS Pools](zfs-pools#pools-found-on-the-drives)), and a share made again with
+  the same name and place opens its files again.
+- **Shares on the system disk** (`/var/lib/amahi-kai/files`): one disk, one copy. Greyhole's copies
+  and a ZFS pool's redundancy survive a failed drive, but not a deleted file, a dead server or a
+  fire; a pool's snapshots live on its own drives.
+- **The house's internet, while the NAS is the router**: if the NAS is off or broken, nothing in
+  the house reaches the internet until the old router is plugged back in. Keep it, and keep its
+  settings.
 
 ---
 

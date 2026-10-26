@@ -73,10 +73,17 @@ class Share < ApplicationRecord
   after_save -> { access_manager.sync_everyone_access }
   after_commit :push_samba_config, on: [:create, :update, :destroy]
 
+  # A new name is one Samba, Greyhole and the apps' mounts all take: letters, digits, spaces,
+  # hyphens and underscores, starting with a letter or digit, and none of Samba's own sections
+  # ([global] holds the server's settings). A share named before this keeps its name.
+  NAME = /\A[A-Za-z0-9][A-Za-z0-9 _-]*[A-Za-z0-9_-]\z/
+  SAMBA_SECTIONS = %w[global homes printers].freeze
   validates :name, presence: true,
-    format: { :with => /\A\S[\S ]+\z/ },
     length: 1..32,
     uniqueness: { :case_sensitive => false }
+  validates :name, format: { with: NAME, message: 'needs two or more letters, digits, spaces, hyphens or underscores, starting with a letter or digit' },
+                   if: -> { new_record? || will_save_change_to_name? }
+  validate :not_a_samba_section, if: -> { new_record? || will_save_change_to_name? }
 
   validates :path, presence: true,
     length: 2..64
@@ -86,6 +93,10 @@ class Share < ApplicationRecord
   # against its list of allowed parameters, when the config is installed.
   validate :extras_stay_in_this_share
   validate :zfs_share_has_no_greyhole_copies
+
+  def not_a_samba_section
+    errors.add(:name, "is one of Samba's own sections") if SAMBA_SECTIONS.include?(name.to_s.strip.downcase)
+  end
 
   # Where a share lives is set when it's made: on a ZFS pool, ZFS keeps its data safe, so
   # Greyhole doesn't, and its folder stays in the pool's shares dataset.
@@ -99,6 +110,14 @@ class Share < ApplicationRecord
 
   def zfs?
     zfs_pool.present?
+  end
+
+  # A data drive's mount point itself, /mnt/<name>: a drive shared as it is (Disks → Devices'
+  # Mount as Share, and the setup wizard's FAT, exFAT and NTFS drives), its files where they were.
+  # The folder is the drive's, so nothing makes, changes or removes it (ShareFileSystem): who may
+  # write there is the drive's mount's to say.
+  def drive_root?
+    path.to_s.match?(%r{\A/mnt/[^/]+\z})
   end
 
   # Where its files are kept, for the Shares page: "ZFS · tank", "Greyhole · 2 copies" or

@@ -184,9 +184,11 @@ class AppsController < ApplicationController
     end
   end
 
+  # An installed app is uninstalled even when the catalog dropped it (the helper goes by its
+  # container); data kept from one the catalog dropped can still be deleted.
   def docker_uninstall
-    unless AppCatalog.find(params[:id])
-      return render json: { status: 'error', message: "That app isn't in the catalog" }, status: :not_found
+    unless AppCatalog.find(params[:id]) || DockerApp.exists?(identifier: params[:id].to_s)
+      return render json: { status: 'error', message: "That app isn't installed or in the catalog" }, status: :not_found
     end
 
     DockerApp.uninstall(params[:id], delete_data: ActiveModel::Type::Boolean.new.cast(params[:delete_data]) == true)
@@ -211,17 +213,19 @@ class AppsController < ApplicationController
   def install_app(entry, host, sse, shares, pool = nil)
     sse.emit("Installing #{entry[:name]}...")
     app = DockerApp.find_or_initialize_by(identifier: entry[:identifier])
+    # The shares chosen are saved once the helper has given them: until then the app keeps the
+    # ones its container has (a failed reinstall leaves it those)
     app.update!(name: entry[:name], description: entry[:description], image: app.image.presence || entry[:image],
-                category: entry[:category], logo_url: entry[:logo_url], host_port: entry[:web_port],
-                container_name: "amahi-#{entry[:identifier]}", status: 'installing', error_message: nil,
-                shares: shares)
+                category: entry[:category], logo_url: entry[:logo_url], host_port: app.host_port || entry[:web_port],
+                container_name: "amahi-#{entry[:identifier]}", status: 'installing', error_message: nil)
     args = { app: entry[:identifier], shares: shares }
     args[:pool] = pool if pool
     reply = Privileged.call('apps.install', **args) { |line| sse.emit("  #{line}") }
     ports = DockerApp.assigned_ports(entry, reply['ports'])
     web = ports.find { |port| port[:label] == 'web' }
     # A reinstall keeps the version the app runs (only Update changes it): the reply says which.
-    app.update!(status: 'running', host_port: web&.dig(:host), ports: ports, image: reply['image'].presence || entry[:image])
+    app.update!(status: 'running', host_port: web&.dig(:host), ports: ports, image: reply['image'].presence || entry[:image],
+                shares: shares)
     sse.emit('')
     sse.emit("✓ #{entry[:name]} is installed and running")
     sse.emit("  Open it at #{app.url(host)} (on your LAN or Tailscale)") if web
@@ -285,12 +289,12 @@ class AppsController < ApplicationController
     render json: { status: 'error', message: e.message }, status: :unprocessable_content
   end
 
-  # The ZFS pools that are online, for the install dialog's Storage, when an app in the catalog
-  # keeps data on one (P4.6); [] otherwise, without asking the helper.
+  # Amahi-kai's ZFS pools that are online, for the install dialog's Storage, when an app in the
+  # catalog keeps data on one (P4.6); [] otherwise, without asking the helper.
   def storage_pools
     return [] unless AppCatalog.all.any? { |entry| entry[:storage] } && StoragePools.zfs_installed?
 
-    StoragePools.status[:pools].map { |pool| { name: pool.name, layout: pool.layout } }
+    StoragePools.managed_pools.map { |pool| { name: pool.name, layout: pool.layout } }
   rescue StandardError => e
     Rails.logger.warn("AppsController: couldn't read the ZFS pools: #{e.message}")
     []

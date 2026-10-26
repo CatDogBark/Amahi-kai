@@ -94,7 +94,7 @@
             <div class="col-md-6">
               <div class="p-3 border rounded">
                 <small class="text-muted d-block">Connected Since</small>
-                <strong><%= @tunnel_status[:connected_since] %></strong>
+                <strong><%= local_time_tag(@tunnel_status[:connected_since], 'long') %></strong>
               </div>
             </div>
           <% end %>

@@ -41,11 +41,39 @@ function relativeTimeText(element, now) {
   return text;
 }
 
+// Dates and times of day written in the viewer's time zone (local_time_tag and local_time_tip
+// in ApplicationHelper): the server's clock is UTC on most NASes, so its own reading can be
+// hours off. The shapes match the helper's LOCAL_TIME_FORMATS.
+var LOCAL_TIME_STYLES = {
+  'weekday-date': { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' },
+  'date': { month: 'long', day: 'numeric', year: 'numeric' },
+  'month-day': { month: 'long', day: 'numeric' },
+  'date-time': { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' },
+  'short': { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' },
+  'long': { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' },
+  'weekday-time': { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }
+};
+
+// +at+ (a Date) in +style+, or null when either is unknown.
+function localTimeText(at, style) {
+  var options = LOCAL_TIME_STYLES[style];
+  return options && !isNaN(at) ? at.toLocaleString([], options) : null;
+}
+
 function refreshRelativeTimes() {
   var now = new Date();
   document.querySelectorAll('time[data-relative]').forEach(function(element) {
     if (isNaN(new Date(element.getAttribute('datetime')))) return;
     element.textContent = relativeTimeText(element, now);
+  });
+  document.querySelectorAll('time[data-local]').forEach(function(element) {
+    var text = localTimeText(new Date(element.getAttribute('datetime')), element.dataset.local);
+    if (text) element.textContent = text;
+  });
+  // Before tooltips.js makes the tooltips (it reads data-tip once): this file loads first.
+  document.querySelectorAll('[data-tip-time]').forEach(function(element) {
+    var text = localTimeText(new Date(element.dataset.tipTime), element.dataset.tipLocal);
+    if (text) element.dataset.tip = (element.dataset.tipBefore || '') + text;
   });
 }
 

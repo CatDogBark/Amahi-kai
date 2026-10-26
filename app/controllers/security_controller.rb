@@ -69,7 +69,7 @@ class SecurityController < ApplicationController
   def fix
     check_name = params[:check_name].to_s
     result = SecurityAudit.fix!(check_name)
-    render json: { status: result ? :ok : :error, check: check_name, error: (SecurityAudit.last_error unless result) }.compact
+    render json: { status: result[:fixed] ? :ok : :error, check: check_name, error: result[:error] }.compact
   end
 
   def fix_stream

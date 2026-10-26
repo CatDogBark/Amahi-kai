@@ -131,6 +131,22 @@ RSpec.describe DiskService do
       expect(Share.where(path: mount_point).count).to eq(1)
     end
 
+    # The share was made a folder there through the root helper, which refuses a drive's mount
+    # point: Devices gave a 500, and Samba's config refused it after.
+    it "shares the drive as it is: the share is its mount point, and no folder is made there" do
+      described_class.create_share_from_mount(device)
+      expect(Privileged.calls.map(&:first)).not_to include('shares.create_dir', 'shares.set_guest_write')
+      expect(Privileged.calls.map(&:first)).to include('samba.write_config')
+    end
+
+    it "says why Samba didn't take the new settings" do
+      allow(Privileged).to receive(:call).and_call_original
+      allow(Privileged).to receive(:call).with('samba.write_config', any_args)
+        .and_raise(Privileged::Error.new('samba.write_config', 'smb.conf refused: [sdb1] path /mnt/sdb1 is outside the share folders'))
+      result = described_class.create_share_from_mount(device)
+      expect(result[:refused]).to eq('smb.conf refused: [sdb1] path /mnt/sdb1 is outside the share folders')
+    end
+
     it 'generates fallback name for blank basename' do
       allow(DiskManager).to receive(:mount!).and_return('/mnt/')
       allow(File).to receive(:basename).with('/mnt/').and_return('')

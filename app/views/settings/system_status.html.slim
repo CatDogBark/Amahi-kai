@@ -196,13 +196,13 @@
           small.text-muted
             | Indexed files: #{@indexed_files_count}
 
-    /! ── DNS Aliases ──
+    /! ── Names (Network → DNS) ──
     .col-md-4
       .card.mb-4
         .card-header.bg-dark.text-white
           h5.mb-0
             span.me-2 = lucide_icon('globe', size: 18)
-            | DNS Aliases
+            | Names
             span.badge.bg-secondary.ms-2 = @managed_aliases.count
         .card-body
           - if @managed_aliases.any?

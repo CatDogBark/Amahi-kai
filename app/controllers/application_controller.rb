@@ -20,6 +20,7 @@
 class ApplicationController < ActionController::Base
   protect_from_forgery with: :exception
 
+  before_action :session_cookie_options
   before_action :set_user_session_controller
   before_action :check_setup_completed
 
@@ -66,6 +67,16 @@ class ApplicationController < ActionController::Base
 
   def set_user_session_controller
     UserSession.controller = self
+  end
+
+  # A login with Remember me keeps its cookie past the browser's closing, for UserSession's
+  # IDLE_TIMEOUT from this request; without it the cookie ends with the browser. Through the
+  # Cloudflare Tunnel the browser talks HTTPS (cloudflared says so, X-Forwarded-Proto), so the
+  # cookie is sent over HTTPS only; on the LAN it's plain HTTP, where a Secure cookie would
+  # never come back (Rack doesn't even save a Secure session on a plain request).
+  def session_cookie_options
+    request.session_options[:expire_after] = UserSession::IDLE_TIMEOUT if session[:remember]
+    request.session_options[:secure] = true if request.ssl?
   end
 
   def current_user_session

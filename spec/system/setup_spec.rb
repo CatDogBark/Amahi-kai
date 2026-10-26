@@ -8,10 +8,12 @@ RSpec.describe 'Setup wizard', type: :system do
     [
       { name: 'sda', path: '/dev/sda', model: 'OS DISK', size: '40G', os_disk: true, zfs_pool: nil,
         partitions: [{ name: 'sda1', path: '/dev/sda1', size: '40G', fstype: 'ext4', mountpoint: '/', status: :mounted }] },
+      # Each drive goes by its ref (DiskManager.by_id_refs): its by-id link, or its kernel name without one
       { name: 'sdb', path: '/dev/sdb', model: 'Blank SSD', size: '500G', os_disk: false, zfs_pool: nil,
-        partitions: [{ name: 'sdb', path: '/dev/sdb', size: '500G', fstype: nil, mountpoint: nil, status: :unformatted }] },
+        partitions: [{ name: 'sdb', path: '/dev/sdb', ref: '/dev/disk/by-id/ata-Blank_SSD_S1', size: '500G', fstype: nil,
+                       mountpoint: nil, status: :unformatted }] },
       { name: 'sdd', path: '/dev/sdd', model: 'NTFS USB', size: '2T', os_disk: false, zfs_pool: nil,
-        partitions: [{ name: 'sdd1', path: '/dev/sdd1', size: '2T', fstype: 'ntfs', mountpoint: nil, status: :unmounted }] },
+        partitions: [{ name: 'sdd1', path: '/dev/sdd1', ref: '/dev/sdd1', size: '2T', fstype: 'ntfs', mountpoint: nil, status: :unmounted }] },
       { name: 'sde', path: '/dev/sde', model: 'ZFS member', size: '1T', os_disk: false, zfs_pool: 'tank',
         partitions: [{ name: 'sde1', path: '/dev/sde1', size: '1T', fstype: 'zfs_member', mountpoint: nil, status: :unmounted }] }
     ]
@@ -20,6 +22,8 @@ RSpec.describe 'Setup wizard', type: :system do
   before do
     mounts = %w[/mnt/storage-1 /mnt/storage-2]
     allow(DiskManager).to receive(:devices).and_return(devices)
+    allow(DiskManager).to receive(:resolve).and_call_original
+    allow(DiskManager).to receive(:resolve).with('/dev/disk/by-id/ata-Blank_SSD_S1').and_return('/dev/sdb')
     allow(DiskManager).to receive(:format_disk!)
     allow(DiskManager).to receive(:mount!) { mounts.shift }
     allow(SambaService).to receive(:push_config)
@@ -60,7 +64,7 @@ RSpec.describe 'Setup wizard', type: :system do
 
     # Drives: neither the system's disk nor a ZFS pool's is offered
     expect(page).to have_current_path('/setup/storage')
-    expect(all('input[name="drives[]"]', visible: :all).map(&:value)).to contain_exactly('/dev/sdb', '/dev/sdd1')
+    expect(all('input[name="drives[]"]', visible: :all).map(&:value)).to contain_exactly('/dev/disk/by-id/ata-Blank_SSD_S1', '/dev/sdd1')
     check 'drive__dev_sdb'
     check 'drive__dev_sdd1'
     click_button 'Prepare drives & continue →'

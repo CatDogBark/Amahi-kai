@@ -15,7 +15,20 @@
 # team at http://www.amahi.org/ under "Contact Us."
 
 class UserSessionsController < ApplicationController
+  # Sign-in attempts are counted at the action, however its path is spelt (/user_sessions.json
+  # reaches it too): 5 in 20 seconds from one address, 10 a minute for one login name. An
+  # address that fails BAN_AFTER times within an hour is turned away for the rest of that hour;
+  # successful sign-ins don't count. The counts are this process's (Puma runs one).
+  ATTEMPTS = ActiveSupport::Cache::MemoryStore.new
+  BAN_AFTER = 20
+  BAN_FOR = 1.hour
+
   before_action :login_required, :except => ['new', 'create']
+  before_action :turned_away, only: :create
+  rate_limit to: 5, within: 20.seconds, by: -> { Rack::Attack.client_ip(request) }, with: :too_many_attempts,
+             store: ATTEMPTS, name: 'address', only: :create
+  rate_limit to: 10, within: 1.minute, by: -> { params[:username].to_s.downcase.strip }, with: :too_many_attempts,
+             store: ATTEMPTS, name: 'login', only: :create
   layout 'login'
 
   # The first admin comes from db/seeds.rb and the setup wizard (SetupController).
@@ -31,14 +44,17 @@ class UserSessionsController < ApplicationController
     remember_me = params[:remember_me]
     @user_session = UserSession.new(:login => username, :password => password, :remember_me => remember_me)
     if @user_session.save
+      # This response's cookie already follows the box (session_cookie_options read the old session).
+      request.session_options[:expire_after] = remember_me.present? ? UserSession::IDLE_TIMEOUT : nil
       flash[:success] = t 'logged_in_successfully'
       redirect_to root_url
     else
+      count_failure unless @user_session.guest?
       flash.now[:danger] = @user_session.guest? ? t('guests_use_shares') : t('not_a_valid_user_or_password')
       # The form keeps the name and the Remember me box, so only the password is typed again
       @login = username
       @remember_me = remember_me.present?
-      render :action => 'new'
+      render :action => 'new', formats: [:html]
     end
   end
 
@@ -50,4 +66,33 @@ class UserSessionsController < ApplicationController
     redirect_to root_path
   end
 
+  private
+
+  def client_ip
+    Rack::Attack.client_ip(request)
+  end
+
+  def count_failure
+    failures = ATTEMPTS.increment("failed:#{client_ip}", 1, expires_in: BAN_FOR)
+    ATTEMPTS.write("banned:#{client_ip}", true, expires_in: BAN_FOR) if failures.to_i >= BAN_AFTER
+  end
+
+  def turned_away
+    return unless ATTEMPTS.exist?("banned:#{client_ip}")
+
+    refuse_attempt(t('sign_in_turned_away'), :forbidden)
+  end
+
+  def too_many_attempts
+    refuse_attempt(t('too_many_sign_in_attempts'), :too_many_requests)
+  end
+
+  # The sign-in page again, with why, the name kept.
+  def refuse_attempt(message, status)
+    @user_session = UserSession.new
+    @login = params[:username]
+    @remember_me = params[:remember_me].present?
+    flash.now[:danger] = message
+    render :new, status: status, formats: [:html]
+  end
 end

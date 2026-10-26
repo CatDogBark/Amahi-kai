@@ -83,13 +83,14 @@ function installGreyhole(streamUrl, nextUrl) {
                  /^(Adding|Preparing|Writing|Installing|Loading|Configuring|Enabling)/);
 }
 
-function previewDrive(device, previewUrl) {
+// device: the drive's ref, which the server takes; label: its kernel name, for the title.
+function previewDrive(device, previewUrl, label) {
   var modal = document.getElementById('preview-modal');
   var body = document.getElementById('preview-body');
   var title = document.getElementById('preview-title');
   modal.hidden = false;
   body.innerHTML = '<div class="preview-loading"><span class="preview-spinner"></span>Reading the drive…</div>';
-  title.textContent = 'Preview: ' + device;
+  title.textContent = 'Preview: ' + (label || device);
 
   var token = document.querySelector('meta[name="csrf-token"]');
   fetch(previewUrl, {
@@ -103,8 +104,10 @@ function previewDrive(device, previewUrl) {
       body.innerHTML = '<div class="preview-error">' + escapeHtml(data.message) + '</div>';
       return;
     }
-    var html = '<div class="preview-summary">' +
+    var html = '<div class="preview-summary">' + (data.partial ? 'At least ' : '') +
       formatSize(data.total_used) + ' used · ' + data.file_count + ' file' + (data.file_count === 1 ? '' : 's') + '</div>';
+    // The helper stops counting after a while (PREVIEW_LIMIT): the drive holds more than this
+    if (data.partial) html += '<div class="preview-partial">The drive holds more than this: counting stopped before the end.</div>';
     if (data.entries.length === 0) {
       html += '<div class="preview-empty">The drive is empty.</div>';
     } else {

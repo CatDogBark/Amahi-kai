@@ -31,10 +31,11 @@ class SecurityAudit
       run_all.select { |c| c.status == :fail && c.severity == :blocker }
     end
 
-    # Applies one fix; true if it worked. Why it didn't is logged and kept in last_error
-    # (the helper refuses to turn off SSH password login while no account has a key).
+    # Applies one fix: { fixed: true }, or { fixed: false, error: why } (the helper refuses to
+    # turn off SSH password login while no account has a key). The reason comes with the
+    # result: Puma serves requests on several threads, and one kept on the class could be
+    # another request's.
     def fix!(check_name)
-      @last_error = nil
       return simulated_fix(check_name) unless production?
 
       case check_name.to_s
@@ -49,18 +50,15 @@ class SecurityAudit
       when 'samba_lan_binding'
         fix_samba_lan_binding!
       else
-        false
+        { fixed: false, error: "#{check_name} has no fix" }
       end
     end
-
-    attr_reader :last_error
 
     # Fixes every failing check that has a fix: [{ name:, fixed:, error: }].
     def fix_all!
       run_all.filter_map do |check|
         next if check.status == :pass || check.fix_command.nil?
-        fixed = fix!(check.name)
-        { name: check.name, fixed: fixed, error: (last_error unless fixed) }.compact
+        { name: check.name }.merge(fix!(check.name)).compact
       end
     end
 
@@ -82,11 +80,10 @@ class SecurityAudit
 
     def privileged(operation, **args)
       Privileged.call(operation, **args)
-      true
+      { fixed: true }
     rescue Privileged::Error => e
       Rails.logger.error("SecurityAudit: #{operation} failed: #{e.message}")
-      @last_error = e.message
-      false
+      { fixed: false, error: e.message }
     end
 
     # --- Individual checks ---
@@ -95,7 +92,7 @@ class SecurityAudit
       changed = admin_password_changed?
       Check.new(
         name: 'admin_password',
-        description: 'Admin password changed from default',
+        description: 'Admin password changed from the first one the installer printed',
         status: changed ? :pass : :fail,
         severity: :blocker,
         fix_command: nil # Must be changed manually
@@ -300,13 +297,19 @@ class SecurityAudit
     # smb.conf is generated (Share.samba_network_lines binds Samba to the LAN and
     # Tailscale), so regenerate it rather than editing it: the next share change
     # regenerated the file and undid the old edit.
+    # smb.conf written again (it binds Samba to the LAN), then smbd restarted, since it opens its
+    # sockets only when it starts. A config the helper refuses says which line.
     def fix_samba_lan_binding!
-      SambaService.push_config && SystemServices.find('smbd')&.perform('restart')
+      SambaService.push_config(raise_refusal: true)
+      privileged('services.restart', service: 'smbd')
+    rescue Privileged::Error => e
+      Rails.logger.error("SecurityAudit: smb.conf refused: #{e.message}")
+      { fixed: false, error: "Samba's settings were refused: #{e.message}" }
     end
 
-    def simulated_fix(check_name)
-      # In dev/test, just return true
-      true
+    # In development and tests nothing runs: every fix works.
+    def simulated_fix(_check_name)
+      { fixed: true }
     end
   end
 end

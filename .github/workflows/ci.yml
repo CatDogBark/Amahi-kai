@@ -33,6 +33,15 @@ jobs:
           bundle exec rails db:schema:load
       # spec/services and spec/helpers had no job, so they never ran
       - run: bundle exec rspec spec/models/ spec/services/ spec/helpers/ --format documentation
+      # A new install loads db/schema.rb (db:migrate does, into an empty database); a NAS that
+      # has run every version got its tables from the migrations, one at a time. The two must
+      # make the same database: the migrations, run from nothing, write db/schema.rb again.
+      - name: The migrations make db/schema.rb
+        run: |
+          cp db/schema.rb tmp/schema.rb.committed
+          rm db/schema.rb db/test.sqlite3
+          bundle exec rails db:migrate
+          diff -u tmp/schema.rb.committed db/schema.rb
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -63,7 +72,9 @@ jobs:
           bundle exec rails db:schema:load
       - name: Run request specs
         run: bundle exec rspec spec/requests/ --format documentation --format json --out tmp/rspec-requests.json 2>&1 | tee tmp/rspec-requests.log
-        continue-on-error: true
+        # bash -eo pipefail: rspec's exit status fails the step (tee's alone wouldn't); a spec
+        # file that won't load counts too (rspec exits 1 with "0 examples")
+        shell: bash
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -72,7 +83,7 @@ jobs:
           include-hidden-files: true
           if-no-files-found: warn
       - name: Show failures
-        if: always()
+        if: failure()
         run: |
           echo "::group::RSpec Request Failures"
           grep -B5 "FAILED\|Failure/Error\|expected\|got:\|NoMethodError\|NameError\|undefined method\|uninitialized constant" tmp/rspec-requests.log | head -200 || true
@@ -84,8 +95,6 @@ jobs:
           echo "::group::Exceptions from log/test.log"
           grep -E -A8 "^[A-Z][A-Za-z0-9:]*(Error|Exception) \\(" log/test.log | head -150 || true
           echo "::endgroup::"
-          # Match ", 0 failures" exactly: a bare "0 failures" also matches "10 failures".
-          grep -qE "[0-9]+ examples?, 0 failures" tmp/rspec-requests.log
 
   lib:
     name: Lib Specs
@@ -109,7 +118,9 @@ jobs:
           bundle exec rails db:schema:load
       - name: Run lib specs
         run: bundle exec rspec spec/lib/ --format documentation --format json --out tmp/rspec-lib.json 2>&1 | tee tmp/rspec-lib.log
-        continue-on-error: true
+        # bash -eo pipefail: rspec's exit status fails the step (tee's alone wouldn't); a spec
+        # file that won't load counts too (rspec exits 1 with "0 examples")
+        shell: bash
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -118,7 +129,7 @@ jobs:
           include-hidden-files: true
           if-no-files-found: warn
       - name: Show failures
-        if: always()
+        if: failure()
         run: |
           echo "::group::RSpec Lib Failures"
           grep -B5 "FAILED\|Failure/Error\|expected\|got:\|NoMethodError\|NameError\|undefined method\|uninitialized constant" tmp/rspec-lib.log | head -200 || true
@@ -130,8 +141,37 @@ jobs:
           echo "::group::Exceptions from log/test.log"
           grep -E -A8 "^[A-Z][A-Za-z0-9:]*(Error|Exception) \\(" log/test.log | head -150 || true
           echo "::endgroup::"
-          # Match ", 0 failures" exactly: a bare "0 failures" also matches "10 failures".
-          grep -qE "[0-9]+ examples?, 0 failures" tmp/rspec-lib.log
+
+  # The few specs that need root (chown to root, the ownership script on files root and nobody
+  # own) skip themselves everywhere else; here they run, through sudo. The summary must show at
+  # least one example and none pending, so a renamed example can't pass by matching nothing,
+  # and none skipped for want of root.
+  root:
+    name: Root Specs
+    runs-on: ubuntu-latest
+    env:
+      RAILS_ENV: test
+      BUNDLE_JOBS: 4
+      BUNDLE_WITHOUT: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev libmariadb-dev
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+      - name: Prepare DB
+        run: |
+          mkdir -p tmp/cache/tmpfiles tmp/pids log
+          bundle exec rails db:schema:load
+      - name: Specs that need root
+        shell: bash
+        run: |
+          sudo -E env "PATH=$PATH" bundle exec rspec spec/lib/install_scripts_spec.rb spec/lib/amahi_helper_spec.rb \
+            -e 'bin/amahi-set-ownership' -e 'installs files with the mode and group asked for' --format documentation \
+            | tee tmp/root-specs.log
+          grep -qE '^[1-9][0-9]* examples?, 0 failures$' tmp/root-specs.log
 
   coverage:
     name: Coverage Report
@@ -266,7 +306,7 @@ jobs:
       RAILS_ENV: test
       BUNDLE_JOBS: 4
       BUNDLE_WITHOUT: production
-      DATABASE_URL: mysql2://root:ci-only@127.0.0.1:3306/amahi_test
+      DATABASE_URL: mysql2://root:ci-only@127.0.0.1:3306/amahi_test?encoding=utf8mb4&collation=utf8mb4_general_ci
     steps:
       - uses: actions/checkout@v4
       - name: Install system dependencies
@@ -283,6 +323,15 @@ jobs:
         run: bundle exec rspec spec/models/ spec/services/ spec/helpers/
       - name: Request specs
         run: bundle exec rspec spec/requests/
+      # The migrations from nothing, on MariaDB as a NAS runs them (one at a time over the
+      # versions). Without db/schema.rb in place db:migrate runs them instead of loading it.
+      - name: The migrations run on MariaDB
+        env:
+          DATABASE_URL: mysql2://root:ci-only@127.0.0.1:3306/amahi_migrations?encoding=utf8mb4&collation=utf8mb4_general_ci
+        run: |
+          rm db/schema.rb
+          bundle exec rails db:create db:migrate
+          git checkout -- db/schema.rb
 
   lint:
     name: Lint & Security

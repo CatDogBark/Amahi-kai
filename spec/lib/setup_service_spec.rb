@@ -101,6 +101,31 @@ RSpec.describe SetupService do
         described_class.stream_prepare_drives(['/dev/sdb1'], [], sse)
         expect(DiskPoolPartition.order(:path).pluck(:path)).to eq(['/mnt/data', '/mnt/other'])
       end
+
+      # The page names each drive by its /dev/disk/by-id link: a page left open acts on that drive
+      it 'takes the drives (and the ones to format) by their refs' do
+        allow(DiskManager).to receive(:resolve).and_call_original
+        allow(DiskManager).to receive(:resolve).with('/dev/disk/by-id/ata-SSD_S1-part1').and_return('/dev/sdb1')
+        allow(DiskManager).to receive(:format_disk!)
+        allow(DiskManager).to receive(:mount!).and_return('/mnt/data')
+        devices.first[:partitions].first.merge!(mountpoint: nil, status: :unmounted)
+        described_class.stream_prepare_drives(['/dev/disk/by-id/ata-SSD_S1-part1'], ['/dev/disk/by-id/ata-SSD_S1-part1'], sse)
+        expect(DiskManager).to have_received(:format_disk!).with('/dev/sdb1')
+        expect(DiskManager).to have_received(:mount!).with('/dev/sdb1')
+        described_class.stream_prepare_drives(['/dev/disk/by-id/ata-Gone_1'], [], sse)
+        expect(sse).to have_received(:emit).with("  ✗ Error: ata-Gone_1 isn't connected any more: reload the page")
+      end
+
+      # Greyhole can't pool FAT, exFAT or NTFS: the drive is shared as it is, at its mount point.
+      # Its share was refused by Samba's config, and every config after it with it.
+      it 'shares a drive Greyhole cannot pool as it is, at its mount point' do
+        devices.first[:partitions].first[:fstype] = 'ntfs'
+        described_class.stream_prepare_drives(['/dev/sdb1'], [], sse)
+        share = Share.find_by!(path: '/mnt/data')
+        expect(share).to be_drive_root
+        expect(Privileged.calls.map(&:first)).not_to include('shares.create_dir')
+        expect(sse).to have_received(:emit).with("  ✓ Created standalone share 'data' (ntfs — not pooled)")
+      end
     end
   end
 

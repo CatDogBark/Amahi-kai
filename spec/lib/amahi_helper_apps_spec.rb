@@ -28,8 +28,13 @@ RSpec.describe 'AmahiHelper apps' do
   before do
     stub_const('AmahiHelper::APP_MANIFESTS', catalog)
     stub_const('AmahiHelper::APP_CATALOG', "#{dir}/catalog") # nothing fetched unless a test fetches it
+    stub_const('AmahiHelper::APP_DEFINITIONS', "#{dir}/app-definitions")
+    stub_const('AmahiHelper::APP_RECORDS_LOCK', "#{dir}/app-records.lock")
     allow(File).to receive(:executable?).and_call_original
     allow(File).to receive(:executable?).with('/usr/bin/docker').and_return(true)
+    # No app's job runs (APP_JOBS) unless a test says so
+    allow(helper).to receive(:app_job_running?).and_return(false)
+    allow(helper).to receive(:app_jobs_running).and_return([])
   end
 
   after { FileUtils.rm_rf(dir) }
@@ -261,19 +266,46 @@ RSpec.describe 'AmahiHelper apps' do
     end
 
     it 'starts, stops and restarts only the app container' do
+      allow(helper).to receive(:docker_output).with('inspect', '--format', '{{.Id}}', 'amahi-gitea').and_return("abc\n")
       expect(steps('apps.start', { 'app' => 'gitea' })).to eq([%w[/usr/bin/docker start amahi-gitea]])
       expect(steps('apps.stop', { 'app' => 'gitea' })).to eq([%w[/usr/bin/docker stop --time 30 amahi-gitea]])
       expect(steps('apps.restart', { 'app' => 'gitea' })).to eq([%w[/usr/bin/docker restart --time 30 amahi-gitea]])
     end
 
-    it 'installs from the manifest, and uninstalls keeping the data unless asked' do
+    # The catalog moved on or dropped the app: it was stuck until System Update.
+    it 'starts, stops and uninstalls an app by its container, whatever the catalog says, and not while a job changes it' do
+      allow(helper).to receive(:docker_output).with('inspect', '--format', '{{.Id}}', 'amahi-gone').and_return("abc\n")
+      allow(helper).to receive(:docker_output).with('info', '--format', '{{.ServerVersion}}').and_return("27.3.1\n")
+      expect(steps('apps.stop', { 'app' => 'gone' })).to eq([%w[/usr/bin/docker stop --time 30 amahi-gone]])
+      expect(steps('apps.uninstall', { 'app' => 'gone' })).to eq([[:uninstall_app, 'gone', false], [:announce_apps]])
+      allow(helper).to receive(:docker_output).with('inspect', '--format', '{{.Id}}', 'amahi-gone').and_return(nil)
+      expect(refusal('apps.start', { 'app' => 'gone' })).to eq('gone has no container: install it again')
+      allow(helper).to receive(:app_job_running?).with('gitea').and_return(true)
+      expect(refusal('apps.restart', { 'app' => 'gitea' })).to eq("gitea is being changed (an install, update or uninstall runs): try again when it's done")
+    end
+
+    it 'installs from the manifest, and uninstalls keeping the data unless asked, only while Docker answers' do
       # A reinstall (new shares) keeps the version the app runs: the last argument.
       expect(steps('apps.install', { 'app' => 'vaultwarden' }))
         .to eq([[:install_app, 'vaultwarden', helper.app_manifest('vaultwarden'), [], true, nil], [:announce_apps]])
-      image = helper.app_manifest('gitea')[:image]
-      expect(steps('apps.uninstall', { 'app' => 'gitea' })).to eq([[:uninstall_app, 'gitea', image, false], [:announce_apps]])
-      expect(steps('apps.uninstall', { 'app' => 'gitea', 'delete_data' => true })).to eq([[:uninstall_app, 'gitea', image, true], [:announce_apps]])
+      allow(helper).to receive(:docker_output).with('info', '--format', '{{.ServerVersion}}').and_return("27.3.1\n")
+      expect(steps('apps.uninstall', { 'app' => 'gitea' })).to eq([[:uninstall_app, 'gitea', false], [:announce_apps]])
+      expect(steps('apps.uninstall', { 'app' => 'gitea', 'delete_data' => true })).to eq([[:uninstall_app, 'gitea', true], [:announce_apps]])
       expect(refusal('apps.uninstall', { 'app' => 'gitea', 'delete_data' => 'yes' })).to include('delete_data')
+      # Uninstalled while Docker was stopped, the container came back when it started, unlisted
+      allow(helper).to receive(:docker_output).with('info', '--format', '{{.ServerVersion}}').and_return(nil)
+      expect(refusal('apps.uninstall', { 'app' => 'gitea' })).to eq("Docker isn't running: start it (Apps), then try again")
+    end
+
+    # A reinstall made the container from the catalog's newer manifest with the old image.
+    it 'installs again from the definition the container was made from, when there is one' do
+      kept = helper.app_manifest('vaultwarden')[:source].merge('image' => "vaultwarden/server:1.30.0@sha256:#{'c' * 64}", 'memory' => '256m')
+      FileUtils.mkdir_p("#{dir}/app-definitions")
+      File.write("#{dir}/app-definitions/vaultwarden.json", kept.to_json)
+      manifest = helper.validate('apps.install', { 'app' => 'vaultwarden' })[:manifest]
+      expect(manifest).to include(image: kept['image'], memory: '256m')
+      File.write("#{dir}/app-definitions/vaultwarden.json", kept.merge('run_as' => 'nobody').to_json) # one that no longer passes
+      expect(helper.validate('apps.install', { 'app' => 'vaultwarden' })[:manifest]).to eq(helper.app_manifest('vaultwarden'))
     end
   end
 
@@ -298,6 +330,25 @@ RSpec.describe 'AmahiHelper apps' do
       expect(helper.app_manifest('test')).to include(memory: '1g', run_as: 'app',
                                                      ports: [{ host: 8500, container: 80, protocol: 'tcp' }],
                                                      secrets: ['TOKEN'])
+    end
+
+    # Docker's mount options split on , : and =, so a folder path with one could add options of its
+    # own; two folders at one path failed only after the old container was gone.
+    it 'wants folder paths of plain names, not where the shares go, and no two at one path' do
+      ['/data,readonly=false', '/data:/etc', '/da ta', '/data=x'].each do |path|
+        expect(failure('folders' => [{ 'name' => 'data', 'path' => path }])).to include('must be plain names'), path
+      end
+      expect(failure('folders' => [{ 'name' => 'data', 'path' => '/shares' }])).to include('is where the shares go')
+      expect(failure('folders' => [{ 'name' => 'data', 'path' => '/shares/Movies' }])).to include('is where the shares go')
+      expect(failure('folders' => [{ 'name' => 'data', 'path' => '/data' }, { 'name' => 'more', 'path' => '/data' }]))
+        .to include('two folders have the same path')
+      expect(failure('folders' => [{ 'name' => 'data', 'path' => '/var/lib/app-1.2_x' }])).to be_nil
+    end
+
+    it "refuses environment names that would have the image download more code (linuxserver.io's mods)" do
+      expect(failure('environment' => { 'DOCKER_MODS' => 'linuxserver/mods:universal-package-install' }))
+        .to include('DOCKER_MODS would have the image download more code')
+      expect(failure('secrets' => [{ 'env' => 'DOCKER_MODS' }])).to include('DOCKER_MODS would have the image download more code')
     end
 
     it "wants an app that writes shares to run as the app's user: by --user, or by PUID and PGID set to its own placeholders" do
@@ -382,13 +433,20 @@ RSpec.describe 'AmahiHelper apps' do
 
       docker = ran.drop(1).map(&:first).uniq
       expect(docker).to eq(['/usr/bin/docker'])
-      expect(ran.drop(1).map { |argv| argv[1] }).to eq(%w[pull rm create start])
+      # Made under a name of its own, then swapped in for the old one (none here)
+      expect(ran.drop(1).map { |argv| argv[1..2].join(' ') }).to eq(
+        ["pull #{manifest[:image]}", 'rm --force', 'create --name', 'rm --force', 'rename amahi-vaultwarden-next', 'start amahi-vaultwarden']
+      )
       expect(ran[1]).to eq(['/usr/bin/docker', 'pull', manifest[:image], { stream: true }])
       create = ran.find { |argv| argv[1] == 'create' }
-      expect(create).to eq(['/usr/bin/docker', 'create', '--name', 'amahi-vaultwarden', '--restart', 'unless-stopped',
-                            '--security-opt', 'no-new-privileges', '--memory', '512m', '--label', 'amahi.app=vaultwarden', '--env-file', env_files.sole[0],
+      expect(create).to eq(['/usr/bin/docker', 'create', '--name', 'amahi-vaultwarden-next', '--restart', 'unless-stopped',
+                            '--security-opt', 'no-new-privileges', '--cap-drop', 'NET_RAW', '--cap-drop', 'MKNOD',
+                            '--pids-limit', '2048', '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3',
+                            '--memory', '512m', '--label', 'amahi.app=vaultwarden', '--env-file', env_files.sole[0],
                             '--user', '996:996', '--publish', '0.0.0.0:8880:8080/tcp',
-                            '--volume', "#{apps_root}/vaultwarden/data:/data", manifest[:image]])
+                            '--mount', "type=bind,source=#{apps_root}/vaultwarden/data,target=/data", manifest[:image]])
+      expect(ran[-2]).to eq(%w[/usr/bin/docker rename amahi-vaultwarden-next amahi-vaultwarden])
+      expect(JSON.parse(File.read("#{dir}/app-definitions/vaultwarden.json"))).to eq(manifest[:source].merge('image' => manifest[:image]))
       expect(create.join(' ')).not_to include(token)
 
       path, content, mode = env_files.sole
@@ -460,6 +518,7 @@ RSpec.describe 'AmahiHelper apps' do
         FileUtils.mkdir_p("#{dir}/pools/tank/apps")
         allow(File).to receive(:executable?).with('/usr/sbin/zpool').and_return(true)
         allow(helper).to receive(:pool_names).and_return(['tank'])
+        allow(helper).to receive(:pool_mountpoint) { |name| "#{dir}/pools/#{name}" } # Amahi-kai's own
         allow(helper).to receive(:zfs_dataset?) { |name| datasets.include?(name) }
         allow(helper).to receive(:capture).and_call_original
         allow(helper).to receive(:capture).with(%w[/usr/sbin/zfs get -H -o value mounted tank/apps/store]).and_return("yes\n")
@@ -486,6 +545,11 @@ RSpec.describe 'AmahiHelper apps' do
         expect(helper.validate('apps.install', { 'app' => 'store', 'pool' => 'tank' })).to include(pool: 'tank')
         expect(refusal('apps.install', { 'app' => 'store' })).to eq('store keeps its data on a ZFS pool: choose one (make one on Disks → ZFS Pools first)')
         expect(refusal('apps.install', { 'app' => 'store', 'pool' => 'nope' })).to eq(%(there's no pool named "nope"))
+        allow(helper).to receive(:pool_names).and_return(%w[tank rpool])
+        allow(helper).to receive(:pool_mountpoint).with('rpool').and_return('/') # a system's own pool
+        expect(refusal('apps.install', { 'app' => 'store', 'pool' => 'rpool' }))
+          .to eq("rpool isn't one of Amahi-kai's pools (it mounts at /); manage it from the command line")
+        allow(helper).to receive(:pool_names).and_return(['tank'])
         expect(steps('apps.install', { 'app' => 'store', 'pool' => 'tank' }).first.last).to eq('tank')
         expect(helper.validate('apps.install', { 'app' => 'vaultwarden', 'pool' => 'tank' })).to include(pool: nil)
 
@@ -500,7 +564,7 @@ RSpec.describe 'AmahiHelper apps' do
         expect(ran).to include(%w[/usr/sbin/zfs create -p tank/apps/store])
         create = ran.find { |argv| argv[1] == 'create' && argv.first == '/usr/bin/docker' }
         expect(create.each_cons(2).select { |flag, _| %w[--volume --mount].include?(flag) }).to eq(
-          [['--volume', "#{apps_root}/store/config:/config"],
+          [['--mount', "type=bind,source=#{apps_root}/store/config,target=/config"],
            ['--mount', "type=bind,source=#{root}/data,target=/data"],
            ['--mount', "type=bind,source=#{root}/chunks,target=/chunks"]]
         )
@@ -533,7 +597,7 @@ RSpec.describe 'AmahiHelper apps' do
         expect(helper.validate('apps.install', { 'app' => 'store' })).to include(pool: nil)
         helper.do_install_app('store', manifest)
         create = ran.find { |argv| argv.first == '/usr/bin/docker' && argv[1] == 'create' }
-        expect(create).not_to include('--mount')
+        expect(create.join(' ')).not_to include("#{dir}/pools") # the system disk's own folder only
         expect(ran).not_to include(%w[/usr/sbin/zfs create -p tank/apps/store])
         expect(File.exist?("#{dir}/app-storage.json")).to be false
       end
@@ -567,18 +631,18 @@ RSpec.describe 'AmahiHelper apps' do
       it 'deletes the dataset with the data, only while its pool is online' do
         datasets << 'tank/apps/store'
         File.write("#{dir}/app-storage.json", { 'store' => 'tank', 'other' => 'tank' }.to_json)
-        helper.do_uninstall_app('store', "example/store:1.0@sha256:#{'a' * 64}", false)
+        helper.do_uninstall_app('store', false)
         expect(ran).not_to include(%w[/usr/sbin/zfs destroy -r tank/apps/store])
         expect(JSON.parse(File.read("#{dir}/app-storage.json"))).to include('store' => 'tank') # kept
 
-        helper.do_uninstall_app('store', "example/store:1.0@sha256:#{'a' * 64}", true)
+        helper.do_uninstall_app('store', true)
         expect(ran).to include(%w[/usr/sbin/zfs destroy -r tank/apps/store])
         expect(JSON.parse(File.read("#{dir}/app-storage.json"))).to eq('other' => 'tank')
 
         File.write("#{dir}/app-storage.json", { 'store' => 'tank' }.to_json)
         allow(helper).to receive(:pool_names).and_return([])
         ran.clear
-        expect { helper.do_uninstall_app('store', "example/store:1.0@sha256:#{'a' * 64}", true) }
+        expect { helper.do_uninstall_app('store', true) }
           .to raise_error(AmahiHelper::Failed, "store's data is on the pool tank, which isn't online: bring it online to delete it")
         expect(ran).to be_empty # nothing removed
       end
@@ -592,30 +656,39 @@ RSpec.describe 'AmahiHelper apps' do
 
       let(:image) { helper.app_manifest('gitea')[:image] }
 
-      it 'removes the container and image and keeps the data' do
-        expect(helper.do_uninstall_app('gitea', image, false)).to eq('app' => 'gitea', 'data_kept' => true)
+      it 'removes the container and the image its definition names, and keeps the data and the definition' do
+        expect(helper.do_uninstall_app('gitea', false)).to eq('app' => 'gitea', 'data_kept' => true)
         expect(ran).to eq([['/usr/bin/docker', 'rm', '--force', 'amahi-gitea', { allow_failure: true }],
                            ['/usr/bin/docker', 'image', 'rm', image, { allow_failure: true }]])
         expect(File.directory?("#{apps_root}/gitea/data")).to be true
+        expect(File.exist?("#{dir}/app-definitions/gitea.json")).to be true # installed again, it runs this version
       end
 
-      it 'deletes the folders, secrets file and user when asked' do
+      it 'deletes the folders, secrets file, definition and user when asked' do
         File.write("#{secrets_dir}/gitea.json", '{}')
-        expect(helper.do_uninstall_app('gitea', image, true)).to eq('app' => 'gitea', 'data_kept' => false)
+        expect(helper.do_uninstall_app('gitea', true)).to eq('app' => 'gitea', 'data_kept' => false)
         expect(File.exist?("#{apps_root}/gitea")).to be false
         expect(File.exist?("#{secrets_dir}/gitea.json")).to be false
+        expect(File.exist?("#{dir}/app-definitions/gitea.json")).to be false
         expect(ran.last).to eq(['/usr/sbin/userdel', 'app-gitea', { allow_failure: true }])
       end
 
       it "keeps the app's ports for its next install, unless its data goes too" do
-        helper.do_uninstall_app('gitea', image, false)
+        helper.do_uninstall_app('gitea', false)
         expect(JSON.parse(File.read("#{dir}/app-ports.json")).keys).to eq(['gitea'])
-        helper.do_uninstall_app('gitea', image, true)
+        helper.do_uninstall_app('gitea', true)
         expect(JSON.parse(File.read("#{dir}/app-ports.json"))).to eq({})
+      end
+
+      it "stops when Docker didn't remove the container, before anything else goes" do
+        allow(helper).to receive(:docker_output).with('inspect', '--format', '{{.Id}}', 'amahi-gitea').and_return("abc\n")
+        expect { helper.do_uninstall_app('gitea', true) }.to raise_error(AmahiHelper::Failed, "Docker didn't remove amahi-gitea; nothing else of gitea was touched")
+        expect(File.directory?("#{apps_root}/gitea/data")).to be true
       end
     end
 
     it "lets what an app writes into a share stay editable over SMB, installing acl if needed" do
+      FileUtils.mkdir_p("#{dir}/downloads")
       share = { name: 'Downloads', path: "#{dir}/downloads", pooled: false, write: true }
       allow(helper).to receive(:app_share_mounts).and_return([])
       allow(File).to receive(:executable?).with('/usr/bin/setfacl').and_return(false)
@@ -625,6 +698,23 @@ RSpec.describe 'AmahiHelper apps' do
       expect(ran[acl]).to eq(['/usr/bin/find', "#{dir}/downloads", '-xdev', '-type', 'd', '-exec',
                               '/usr/bin/setfacl', '-P', '-d', '-m', 'u::rwx,g::rwx,o::rx', '{}', '+'])
       expect(ran.index { |argv| argv[1] == 'start' }).to be > acl
+    end
+
+    # The old container went first: a create that failed left the app none, and Install again then
+    # upgraded it with no copy.
+    it 'makes the new container beside the old one, and gives the app its old one back, started, when that fails' do
+      allow(helper).to receive(:docker_output).with('inspect', '--format', '{{json .State}}', 'amahi-gitea').and_return('{"Running":true}')
+      allow(helper).to receive(:run_command) do |argv|
+        ran << argv
+        accounts[argv.last] = account(argv.last, 996) if argv.first == '/usr/sbin/useradd'
+        raise AmahiHelper::Failed, 'docker exited 125: invalid mount config' if argv[1] == 'create'
+        nil
+      end
+      expect { helper.do_install_app('gitea', helper.app_manifest('gitea')) }.to raise_error(AmahiHelper::Failed, /invalid mount config/)
+      docker = ran.select { |argv| argv.first == '/usr/bin/docker' }.map { |argv| argv[1..2].reject { |arg| arg.is_a?(Hash) } }
+      expect(docker.drop(1)).to eq([%w[rm --force], %w[stop --time], %w[create --name], %w[rm --force], %w[start amahi-gitea]])
+      expect(ran.select { |argv| argv[1] == 'rm' }.map { |argv| argv[3] }).to eq(%w[amahi-gitea-next amahi-gitea-next]) # never the old one
+      expect(File.exist?("#{dir}/app-definitions/gitea.json")).to be false
     end
 
     it "doesn't download an image it has already (so changing shares works offline)" do
@@ -747,10 +837,71 @@ RSpec.describe 'AmahiHelper apps' do
 
       it "uninstalls the image the app runs, and drops its copy with its data" do
         helper.do_update_app('vaultwarden', manifest, [])
-        helper.do_uninstall_app('vaultwarden', 'something:else', true)
+        helper.do_uninstall_app('vaultwarden', true)
         expect(ran).to include(['/usr/bin/docker', 'image', 'rm', manifest[:image], { allow_failure: true }])
         expect(File.exist?("#{backups}/vaultwarden.json")).to be false
       end
+
+      # Rollback and Undo ran the old image with the new definition's settings.
+      it 'keeps the definition the app ran in its copy, and goes back to it' do
+        kept = JSON.parse(File.read("#{dir}/app-definitions/vaultwarden.json"))
+        File.write("#{dir}/app-definitions/vaultwarden.json", kept.merge('memory' => '256m').to_json)
+        allow(helper).to receive(:app_health_problem).and_return('it stopped (exit code 1)')
+        helper.do_update_app('vaultwarden', manifest, [])
+        creates = ran.select { |argv| argv[1] == 'create' }
+        expect(creates.map { |argv| argv[argv.index('--memory') + 1] }).to eq(%w[512m 256m]) # the new version, then the old one as it was
+
+        allow(helper).to receive(:app_health_problem).and_return(nil)
+        helper.do_update_app('vaultwarden', manifest, [])
+        expect(backup_info['definition']).to include('image' => old_image, 'memory' => '256m')
+        expect(helper.validate('apps.undo_update', { 'app' => 'vaultwarden' })[:manifest]).to include(image: old_image, memory: '256m')
+      end
+
+      it "starts it again on the version it ran when its data can't be copied" do
+        allow(helper).to receive(:run_command) do |argv|
+          raise AmahiHelper::Failed, 'cp exited 1: No space left on device' if argv.first == '/usr/bin/cp'
+          fake_docker.call(argv)
+        end
+        expect { helper.do_update_app('vaultwarden', manifest, []) }.to raise_error(
+          AmahiHelper::Failed, "vaultwarden's data couldn't be copied before the update (cp exited 1: No space left on device); it runs 1.37.2 as before"
+        )
+        expect(ran.last).to eq(['/usr/bin/docker', 'start', 'amahi-vaultwarden', { allow_failure: true }])
+        expect(ran.map { |argv| argv[1] }).not_to include('create')
+      end
+
+      it "doesn't take an older version from the catalog for an update" do
+        older = manifest.merge(image: "vaultwarden/server:1.36.0@sha256:#{'d' * 64}")
+        expect { helper.do_update_app('vaultwarden', older, []) }.to raise_error(
+          AmahiHelper::Failed, "the catalog's vaultwarden (1.36.0) is older than the one it runs (1.37.2), so there's nothing to update to"
+        )
+        expect(ran).to be_empty
+        expect(helper.version_below?('4.0.16-ls253', '4.0.17-ls254')).to be true
+        expect(helper.version_below?('latest', '1.0')).to be false
+      end
+
+      # Undo changed the data before it found the old image gone (an update removes it).
+      it 'downloads the old version again before Undo changes anything, and stops if it cannot' do
+        helper.do_update_app('vaultwarden', manifest, [])
+        ran.clear
+        allow(helper).to receive(:run_command) do |argv|
+          raise AmahiHelper::Failed, 'docker exited 1: no such image' if argv[1] == 'pull'
+          fake_docker.call(argv)
+        end
+        expect { helper.do_undo_app_update('vaultwarden', manifest, []) }.to raise_error(AmahiHelper::Failed, /no such image/)
+        expect(File.read("#{data}/db.sqlite3")).to eq('upgraded') # untouched
+        expect(ran).to eq([])
+      end
+    end
+
+    # Two apps' jobs at once read the shared records, each wrote back its own: one lost the other's
+    # entry, and both could take the same free port.
+    it "holds the records' lock from choosing the ports to recording them, once, inside or out" do
+      locks = []
+      allow(File).to receive(:open).and_call_original
+      allow(File).to receive(:open).with("#{dir}/app-records.lock", anything, anything) { |*args, &block| locks << args.first && File.open(*args.first(1), File::RDWR | File::CREAT, &block) }
+      helper.do_install_app('gitea', helper.app_manifest('gitea'))
+      expect(locks).to eq(["#{dir}/app-records.lock"]) # the record inside the choice takes no second lock
+      expect(helper.with_records_lock { helper.with_records_lock { :inner } }).to eq(:inner)
     end
 
     describe 'ports' do
@@ -854,6 +1005,22 @@ RSpec.describe 'AmahiHelper apps' do
       expect(choose(transmission, nil)).to eq([])
     end
 
+    # The web app's account owned the share root, so a link there in place of a share's folder would
+    # have given the app whatever it pointed to (Docker follows links in a mount's source).
+    it "refuses a share whose folder is a link, or under one, when the request comes in and again before the container is made" do
+      FileUtils.mkdir_p("#{dir}/elsewhere")
+      FileUtils.rm_rf("#{files}/downloads")
+      File.symlink("#{dir}/elsewhere", "#{files}/downloads")
+      expect(refused(transmission, [{ 'name' => 'Downloads' }])).to eq("share Downloads's folder #{files}/downloads isn't a real folder (a link, or missing)")
+      FileUtils.rm_f("#{files}/downloads")
+      FileUtils.mkdir_p("#{files}/downloads")
+      chosen = choose(transmission, [{ 'name' => 'Downloads' }])
+      expect { helper.app_share_sources!(chosen) }.not_to raise_error
+      FileUtils.rm_rf("#{files}/downloads")
+      File.symlink("#{dir}/elsewhere", "#{files}/downloads") # swapped in since the request
+      expect { helper.app_share_sources!(chosen) }.to raise_error(AmahiHelper::Failed, /isn't a real folder/)
+    end
+
     it 'refuses shares that are not there, writing where the app or Greyhole says no, and odd requests' do
       expect(refused(transmission, [{ 'name' => 'Photos' }])).to eq('"Photos" isn\'t one of the NAS\'s shares')
       expect(refused(transmission, [{ 'name' => 'homes' }])).to eq('"homes" isn\'t one of the NAS\'s shares')
@@ -864,6 +1031,16 @@ RSpec.describe 'AmahiHelper apps' do
       expect(refused(transmission, [{ 'name' => 'Downloads', 'path' => '/etc' }])).to include('each share must be')
       expect(refused(transmission, [{ 'name' => 'Downloads' }, { 'name' => 'downloads' }])).to eq('a share is listed twice')
       expect(refused(transmission, 'Downloads')).to include('must be a list')
+    end
+
+    # Mount as Share, and the setup wizard's FAT, exFAT and NTFS drives, share a drive as it is.
+    it "takes a share at a mounted drive's own mount point, and not one at an unmounted drive's" do
+      File.write("#{dir}/smb.conf", "#{smb_conf}[USB]\n\tpath = #{drives}/storage-2\n")
+      allow(helper).to receive(:real_root?).and_call_original
+      allow(helper).to receive(:real_root?).with("#{drives}/storage-2").and_return(true) # the drive mounted there
+      expect(choose(transmission, [{ 'name' => 'USB' }])).to eq([{ name: 'USB', path: "#{drives}/storage-2", pooled: false, write: false }])
+      allow(helper).to receive(:real_root?).with("#{drives}/storage-2").and_return(false) # an empty folder on the system disk
+      expect(refused(transmission, [{ 'name' => 'USB' }])).to include("isn't in the share root or on a mounted data drive")
     end
 
     it "mounts shares at /shares/<name>, a pooled share with its copy folders, and lets a writer join the users group" do
@@ -925,15 +1102,36 @@ RSpec.describe 'AmahiHelper apps' do
       end
 
       it "makes again, with the drives there are, an app whose mounts don't match the pool, keeping its shares" do
-        containers('jellyfin' => { mounts: jellyfin_mounts, state: { 'Running' => true, 'Error' => '' } })
-        expect(helper.do_follow_pool_apps).to eq('apps' => { 'jellyfin' => 'remade' })
+        containers('transmission' => { mounts: jellyfin_mounts, state: { 'Running' => true, 'Error' => '' } })
+        expect(helper.do_follow_pool_apps).to eq(
+          'apps' => { 'transmission' => 'remade' },
+          'shares' => { 'transmission' => [{ 'name' => 'Movies', 'write' => false }, { 'name' => 'Downloads', 'write' => true }] }
+        )
         expect(helper).to have_received(:do_install_app).with(
-          'jellyfin', anything,
+          'transmission', anything,
           [{ name: 'Movies', path: "#{files}/movies", pooled: true, write: false },
            { name: 'Downloads', path: "#{files}/downloads", pooled: false, write: true }], true
         )
         expect(helper).not_to have_received(:run_command)
         expect(helper).to have_received(:do_app_firewall)
+      end
+
+      # follow_pool remade containers with no check at all: its shares are checked as apps.install
+      # checks them, and an app that only reads shares gets them read only, whatever its mounts say.
+      it "checks the shares as an install does, and writes only where the app writes shares" do
+        containers('jellyfin' => { mounts: jellyfin_mounts, state: { 'Running' => true, 'Error' => '' } })
+        expect(helper.do_follow_pool_apps['shares']).to eq('jellyfin' => [{ 'name' => 'Movies', 'write' => false },
+                                                                           { 'name' => 'Downloads', 'write' => false }])
+        FileUtils.rm_rf("#{files}/downloads")
+        File.symlink('/etc', "#{files}/downloads")
+        expect(helper.do_follow_pool_apps['apps']).to eq('jellyfin' => "share Downloads's folder #{files}/downloads isn't a real folder (a link, or missing)")
+      end
+
+      it 'leaves an app whose job is running to that job' do
+        containers('jellyfin' => { mounts: jellyfin_mounts, state: { 'Running' => true, 'Error' => '' } })
+        allow(helper).to receive(:app_job_running?).with('jellyfin').and_return(true)
+        expect(helper.do_follow_pool_apps).to eq('apps' => {}, 'shares' => {})
+        expect(helper).not_to have_received(:do_install_app)
       end
 
       it "leaves an app whose mounts match alone, remakes one that couldn't start over a mount, and keeps a stopped one stopped" do
@@ -942,19 +1140,19 @@ RSpec.describe 'AmahiHelper apps' do
                    'plex' => { mounts: matching, state: { 'Running' => false, 'Error' => 'failed to fulfil mount request: open /mnt/storage-2/Movies' } },
                    'emby' => { mounts: jellyfin_mounts, state: { 'Running' => false, 'Error' => '' } })
         allow(helper).to receive(:app_manifest).and_return({})
-        expect(helper.do_follow_pool_apps).to eq('apps' => { 'plex' => 'remade', 'emby' => 'remade, stopped' })
+        expect(helper.do_follow_pool_apps['apps']).to eq('plex' => 'remade', 'emby' => 'remade, stopped')
         expect(helper).to have_received(:run_command).with(['/usr/bin/docker', 'stop', '--time', '30', 'amahi-emby']).once
       end
 
       it "goes on past an app it can't make again, giving the reason" do
         containers('jellyfin' => { mounts: jellyfin_mounts, state: { 'Running' => true, 'Error' => '' } })
         allow(helper).to receive(:do_install_app).and_raise(AmahiHelper::Failed, 'docker exited 125: no space')
-        expect(helper.do_follow_pool_apps).to eq('apps' => { 'jellyfin' => 'docker exited 125: no space' })
+        expect(helper.do_follow_pool_apps).to eq('apps' => { 'jellyfin' => 'docker exited 125: no space' }, 'shares' => {})
       end
 
       it 'does nothing without Docker' do
         allow(helper).to receive(:docker_output).and_return(nil)
-        expect(helper.do_follow_pool_apps).to eq('apps' => {})
+        expect(helper.do_follow_pool_apps).to eq('apps' => {}, 'shares' => {})
       end
     end
 
@@ -1049,6 +1247,25 @@ RSpec.describe 'AmahiHelper apps' do
       end
     end
 
+    # Router mode and This NAS change the LAN's subnets: devices on a new one couldn't reach the
+    # apps, and an old one stayed let in.
+    it "is rebuilt after the network changes, where Docker runs, and says so when that fails" do
+      allow(helper).to receive(:docker_output).with('info', '--format', '{{.ServerVersion}}').and_return(nil)
+      allow(helper).to receive(:do_app_firewall)
+      expect(helper.refresh_app_firewall).to be_nil
+      expect(helper).not_to have_received(:do_app_firewall)
+      allow(helper).to receive(:docker_output).with('info', '--format', '{{.ServerVersion}}').and_return("27.3.1\n")
+      expect(helper.refresh_app_firewall).to be_nil
+      expect(helper).to have_received(:do_app_firewall).once
+      allow(helper).to receive(:do_app_firewall).and_raise(AmahiHelper::Failed, 'iptables exited 4')
+      expect(helper.refresh_app_firewall).to eq("the app firewall wasn't rebuilt for the network's change: iptables exited 4")
+      source = File.read(Rails.root.join('libexec/amahi-helper'))
+      %w[do_router_on do_router_off do_apply_address do_revert_address].each do |step|
+        body = source[/    def #{step}\b.*?\n    end\n/m]
+        expect(body).to include('refresh_app_firewall'), step
+      end
+    end
+
     it "is run each time Docker starts" do
       expect(steps('apps.firewall', {})).to eq([[:app_firewall]])
       unit = File.read(Rails.root.join('config/systemd/amahi-kai-app-firewall.service'))
@@ -1056,22 +1273,37 @@ RSpec.describe 'AmahiHelper apps' do
                               'PartOf=docker.service', 'WantedBy=docker.service')
     end
 
-    it "lets in only the NAS's private subnets and Tailscale, and drops the rest" do
+    # Rebuilt rule by rule, the chain was empty for a moment, which let everything through: its
+    # rules go in in one iptables-restore.
+    it "lets in only the NAS's private subnets and Tailscale, and drops the rest, the rules swapped in whole" do
       expect(helper.do_app_firewall).to eq('lan' => ['192.168.1.0/24', '10.20.0.0/16'])
       rules = ran.map { |argv| argv.reject { |arg| arg.is_a?(Hash) } }
       expect(rules).to eq([
                             %w[/usr/sbin/iptables -w -N DOCKER-USER], %w[/usr/sbin/iptables -w -N AMAHI-APPS],
-                            %w[/usr/sbin/iptables -w -F AMAHI-APPS],
-                            %w[/usr/sbin/iptables -w -A AMAHI-APPS -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN],
-                            %w[/usr/sbin/iptables -w -A AMAHI-APPS ! -o docker0 -j RETURN],
-                            %w[/usr/sbin/iptables -w -A AMAHI-APPS -i docker0 -j RETURN],
-                            %w[/usr/sbin/iptables -w -A AMAHI-APPS -i tailscale0 -j RETURN],
-                            %w[/usr/sbin/iptables -w -A AMAHI-APPS -s 192.168.1.0/24 -j RETURN],
-                            %w[/usr/sbin/iptables -w -A AMAHI-APPS -s 10.20.0.0/16 -j RETURN],
-                            %w[/usr/sbin/iptables -w -A AMAHI-APPS -j DROP],
+                            %w[/usr/sbin/iptables-restore -w --noflush],
                             %w[/usr/sbin/iptables -w -C DOCKER-USER -j AMAHI-APPS],
                             %w[/usr/sbin/iptables -w -I DOCKER-USER 1 -j AMAHI-APPS]
                           ])
+      expect(ran[2].last[:stdin]).to eq(<<~RULES)
+        *filter
+        :AMAHI-APPS - [0:0]
+        -A AMAHI-APPS -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
+        -A AMAHI-APPS ! -o docker0 -j RETURN
+        -A AMAHI-APPS -i docker0 -j RETURN
+        -A AMAHI-APPS -i tailscale0 -j RETURN
+        -A AMAHI-APPS -s 192.168.1.0/24 -j RETURN
+        -A AMAHI-APPS -s 10.20.0.0/16 -j RETURN
+        -A AMAHI-APPS -j DROP
+        COMMIT
+      RULES
+    end
+
+    # Docker starts the apps' containers, ports and all, before amahi-kai-app-firewall.service runs.
+    it "is in place before Docker starts too" do
+      unit = File.read(Rails.root.join('config/systemd/amahi-kai-app-firewall-early.service'))
+      expect(unit).to include('ExecStart=/usr/local/sbin/amahi-helper apps.firewall', 'Before=docker.service',
+                              'After=network-online.target', 'WantedBy=docker.service')
+      expect(File.read(Rails.root.join('bin/amahi-install-helper'))).to include('amahi-kai-app-firewall-early.service', 'systemctl enable amahi-kai-app-firewall-early.service')
     end
 
     context 'when Docker already jumps to it' do
@@ -1094,6 +1326,125 @@ RSpec.describe 'AmahiHelper apps' do
     end
   end
 
+  # An install, update, undo or uninstall runs as a unit of its own: a restart of the web app,
+  # whose unit the helper ran in, took the job down partway (an install left on Installing).
+  describe 'jobs' do
+    let(:runs) { [] }
+
+    before do
+      stub_const('AmahiHelper::RUN_DIR', dir)
+      allow(helper).to receive(:replace_process) { |env, argv, **opts| runs << [env, argv, opts[:in].read, File.exist?(opts[:in].path)] }
+    end
+
+    def call(op, args, env = {})
+      out = StringIO.new
+      saved = env.keys.to_h { |key| [key, ENV[key]] }
+      env.each { |key, value| ENV[key] = value }
+      code = helper.main([op], input: StringIO.new(args), output: out)
+      [code, out.string.empty? ? nil : JSON.parse(out.string)]
+    ensure
+      saved&.each { |key, value| value.nil? ? ENV.delete(key) : ENV[key] = value }
+    end
+
+    it "runs each in a unit of its own, named for the app, with the same arguments and who asked" do
+      call('apps.install', '{"app":"gitea","shares":[]}', 'SUDO_USER' => 'amahi')
+      env, argv, input, left = runs.sole
+      expect(env).to eq(AmahiHelper::ENV_MIN)
+      expect(argv).to eq(['/usr/bin/systemd-run', '--unit=amahi-kai-appjob-gitea', '--wait', '--pipe', '--collect', '--quiet',
+                          '--setenv=AMAHI_APP_JOB=gitea', '--setenv=AMAHI_APP_CALLER=amahi', '/usr/local/sbin/amahi-helper', 'apps.install'])
+      expect(input).to eq('{"app":"gitea","shares":[]}')
+      expect(left).to be false # the arguments' file is gone once it's open
+      %w[apps.update apps.undo_update apps.uninstall].each { |op| call(op, '{"app":"gitea"}') }
+      expect(runs.map { |run| run[1].last }).to eq(%w[apps.install apps.update apps.undo_update apps.uninstall])
+    end
+
+    it "refuses a second job for an app while one runs, and names no unit for arguments that don't name an app" do
+      allow(helper).to receive(:app_job_running?).with('gitea').and_return(true)
+      expect(call('apps.update', '{"app":"gitea"}')).to eq([1, { 'ok' => false, 'error' => "gitea is being changed (an install, update or uninstall runs): try again when it's done" }])
+      code, reply = call('apps.install', '{"app":"../etc"}') # refused where it is (here, by the helper's own checks first)
+      expect([code, reply['ok']]).to eq([1, false])
+      expect(runs).to be_empty
+    end
+
+    it 'runs the job itself inside its unit, and logs who asked for it' do
+      allow(helper).to receive(:execute).and_return('ok' => true)
+      expect(call('apps.install', '{"app":"gitea"}', 'AMAHI_APP_JOB' => 'gitea')).to eq([0, { 'ok' => true }])
+      expect(runs).to be_empty
+      ENV['AMAHI_APP_CALLER'] = 'amahi'
+      expect(helper.app_job_caller).to eq('amahi')
+    ensure
+      ENV.delete('AMAHI_APP_CALLER')
+    end
+
+    it "asks systemd whether an app's job runs, and never counts the job itself" do
+      allow(helper).to receive(:app_job_running?).and_call_original
+      allow(Open3).to receive(:capture3).and_return(['', '', instance_double(Process::Status, success?: true)])
+      expect(helper.app_job_running?('gitea')).to be true
+      expect(Open3).to have_received(:capture3).with(AmahiHelper::ENV_MIN, '/usr/bin/systemctl', 'is-active', '--quiet',
+                                                     'amahi-kai-appjob-gitea.service', unsetenv_others: true, chdir: '/')
+      ENV['AMAHI_APP_JOB'] = 'gitea'
+      expect(helper.app_job_running?('gitea')).to be false
+    ensure
+      ENV.delete('AMAHI_APP_JOB')
+    end
+
+    it 'lists the apps whose jobs run, for the Apps page' do
+      allow(helper).to receive(:app_jobs_running).and_call_original
+      allow(Open3).to receive(:capture3).and_return(["amahi-kai-appjob-gitea.service loaded active running x\namahi-kai-appjob-Bad.service x\n", '',
+                                                     instance_double(Process::Status, success?: true)])
+      expect(helper.app_jobs_running).to eq(['gitea'])
+    end
+  end
+
+  # An app whose page is HTTPS only (web_tls) doesn't answer plain HTTP: its update was rolled
+  # back for not coming up.
+  describe 'the health check' do
+    let(:key) { OpenSSL::PKey::RSA.new(2048) }
+    let(:cert) do
+      OpenSSL::X509::Certificate.new.tap do |c|
+        c.version = 2
+        c.serial = 1
+        c.subject = c.issuer = OpenSSL::X509::Name.parse('/CN=localhost')
+        c.public_key = key.public_key
+        c.not_before = Time.now - 60
+        c.not_after = Time.now + 3600
+        c.sign(key, OpenSSL::Digest.new('SHA256'))
+      end
+    end
+
+    def serve(tls:)
+      server = TCPServer.new('127.0.0.1', 0)
+      Thread.new do
+        socket = server.accept
+        if tls
+          context = OpenSSL::SSL::SSLContext.new
+          context.cert = cert
+          context.key = key
+          ssl = OpenSSL::SSL::SSLSocket.new(socket, context)
+          ssl.accept
+          ssl.close
+        else
+          socket.write("HTTP/1.0 200 OK\r\n\r\n")
+          socket.close
+        end
+      rescue StandardError
+        nil
+      end
+      server.addr[1]
+    end
+
+    before { stub_const('AmahiHelper::APP_PORTS', "#{dir}/app-ports.json") }
+
+    it 'takes a TLS handshake from an HTTPS app, and an HTTP reply from the others' do
+      port = serve(tls: true)
+      expect(helper.app_answers?('vaultwarden', { web_port: port, web_tls: true })).to be true
+      port = serve(tls: false)
+      expect(helper.app_answers?('gitea', { web_port: port, web_tls: false })).to be true
+      port = serve(tls: false) # plain HTTP where HTTPS is wanted: no handshake
+      expect(helper.app_answers?('vaultwarden', { web_port: port, web_tls: true })).to be false
+    end
+  end
+
   describe 'status' do
     def docker_says(out, success: true)
       allow(Open3).to receive(:capture3).and_return([out, '', instance_double(Process::Status, success?: success)])
@@ -1105,16 +1456,18 @@ RSpec.describe 'AmahiHelper apps' do
         {"Names":"amahi-jellyfin","State":"exited","Status":"Exited (1) 3 minutes ago","Image":"jellyfin/jellyfin:12.1","Labels":"org.opencontainers.image.title=Jellyfin,amahi.app=jellyfin"}
         not json
       OUT
+      allow(helper).to receive(:app_jobs_running).and_return(['gitea'])
       expect(helper.do_apps_status).to eq(
         'docker' => true,
         'apps' => { 'gitea' => { 'state' => 'running', 'status' => 'Up 2 hours', 'image' => 'gitea/gitea:1.27.3-rootless' },
-                    'jellyfin' => { 'state' => 'exited', 'status' => 'Exited (1) 3 minutes ago', 'image' => 'jellyfin/jellyfin:12.1' } }
+                    'jellyfin' => { 'state' => 'exited', 'status' => 'Exited (1) 3 minutes ago', 'image' => 'jellyfin/jellyfin:12.1' } },
+        'jobs' => ['gitea']
       )
     end
 
     it "says when Docker isn't running" do
       docker_says('', success: false)
-      expect(helper.do_apps_status).to eq('docker' => false, 'apps' => {})
+      expect(helper.do_apps_status).to eq('docker' => false, 'apps' => {}, 'jobs' => [])
       allow(helper).to receive(:app_firewall_active?).and_return(false)
       expect(helper.do_docker_ports).to eq('ports' => [], 'limited' => false)
     end

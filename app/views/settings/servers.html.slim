@@ -38,7 +38,7 @@
                   span.text-muted &mdash;
               td
                 - if svc.uptime
-                  span.tip-text tabindex="0" data-tip="Since #{l(svc.since, format: :long)}" = duration_words(svc.uptime)
+                  span.tip-text tabindex="0" *local_time_tip(svc.since, 'long', before: 'Since ') = duration_words(svc.uptime)
                 - else
                   span.text-muted &mdash;
               td = svc.memory ? number_to_human_size(svc.memory) : content_tag(:span, '—', class: 'text-muted')

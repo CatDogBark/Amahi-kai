@@ -48,8 +48,11 @@ module SetupService
       # Drives join the pool; ones already in it stay (re-running this step used to empty it).
       success = true
 
-      selected_drives.each do |device_path|
+      # Each drive comes by its ref (DiskManager.resolve), the format boxes too
+      selected_drives.each do |ref|
+        device_path = ref
         begin
+          device_path = DiskManager.resolve(ref)
           devices = DiskManager.devices
           part = devices.flat_map { |d| d[:partitions] }.find { |p| p[:path] == device_path }
           unless part
@@ -58,7 +61,7 @@ module SetupService
           end
 
           mount_point = part[:mountpoint]
-          will_format = part[:status] == :unformatted || format_drives.include?(device_path)
+          will_format = part[:status] == :unformatted || format_drives.include?(ref)
 
           if will_format
             sse.emit("Formatting #{device_path} as ext4...")
@@ -155,21 +158,18 @@ module SetupService
       false
     end
 
+    # The drive shared as it is, at its mount point (Share#drive_root?).
     def create_standalone_share(mount_point, fstype, sse)
       share_name = File.basename(mount_point).gsub(/[^a-zA-Z0-9\-]/, '')
       share_name = "drive-#{share_name}" if share_name.blank?
       unless Share.exists?(path: mount_point)
-        share = Share.new(
+        Share.new(
           name: share_name, path: mount_point, visible: true, rdonly: false,
           everyone: true, extras: "", disk_pool_copies: 0
-        )
-        null_fs = ShareFileSystem.new(share)
-        def null_fs.setup_directory; end
-        def null_fs.update_guest_permissions; end
-        share.instance_variable_set(:@file_system, null_fs)
-        share.save!
+        ).save!
       end
       sse.emit("  ✓ Created standalone share '#{share_name}' (#{fstype} — not pooled)")
+      sse.emit("  ⚠ Samba didn't take the new settings, so it isn't on the network yet: #{SambaService.refusal}") if SambaService.refusal
     end
 
     def stream_greyhole_install_dev(default_copies, sse)

@@ -69,6 +69,10 @@ module AmahiHelper
   # the devices dnsmasq gave addresses to (do_sync_leases).
   UNBOUND_CONF = '/etc/unbound/unbound.conf.d/amahi-kai.conf'
   UNBOUND_LEASES = '/etc/unbound/unbound.conf.d/amahi-kai-leases.conf'
+  # Names a device can't take in the NAS's DNS by asking DHCP for them: browsers look for their
+  # proxy settings at wpad and Windows for an IPv6 tunnel at isatap (the two Windows' own DNS
+  # server blocks), and localhost is every machine's own.
+  RESERVED_LEASE_NAMES = %w[localhost wpad isatap].freeze
   CA_CERTS = '/etc/ssl/certs/ca-certificates.crt'
   # While dnsmasq hands out addresses, systemd runs dns.sync_leases each time its lease file
   # changes, so the devices' names answer in DNS. PathModified, not PathChanged: dnsmasq keeps
@@ -189,6 +193,11 @@ module AmahiHelper
   NETPLAN = '/usr/sbin/netplan'
   NETPLAN_DIR = '/etc/netplan'
   WAN_NETPLAN = "#{NETPLAN_DIR}/70-amahi-kai-wan.yaml".freeze
+  # The netplan files as the helper last applied them (a digest): a save that changes none of
+  # them doesn't apply them again. An apply has networkd set up every interface it manages
+  # again, so the internet side asks its provider for its lease again and addresses networkd
+  # didn't make (the NAS's own IPv6 one for DNS, ULA_UNIT) go.
+  NETPLAN_APPLIED = "#{BLOCKLIST_DIR}/netplan-applied".freeze
   # The LAN interface's own default route (to the router the NAS replaces) goes behind the
   # internet interface's (50). Its netplan file is kept as it was, for the way back.
   LAN_ROUTE_METRIC = 200
@@ -197,6 +206,7 @@ module AmahiHelper
   ROUTER_STATE = "#{BLOCKLIST_DIR}/router.json".freeze
   UFW_CONF = '/etc/ufw/ufw.conf'
   UFW_BEFORE_RULES = '/etc/ufw/before.rules'
+  UFW_BEFORE6_RULES = '/etc/ufw/before6.rules'
   ROUTER_BEGIN = '# BEGIN amahi-kai router'
   ROUTER_END = '# END amahi-kai router'
   # The NAT block's rules live in chains of the NAS's own, which the block flushes before
@@ -210,9 +220,13 @@ module AmahiHelper
   # the NAS answered pings from the internet.
   ROUTER_FILTER_BEGIN = '# BEGIN amahi-kai router filter'
   ROUTER_FILTER_END = '# END amahi-kai router filter'
+  # Service discovery (mDNS, SSDP), which UFW's before rules accept in from anywhere, for IPv4
+  # and IPv6 (before6.rules gets a filter part of its own): dropped in on the internet side,
+  # where Avahi would answer whoever shares the provider's network.
+  DISCOVERY_PORTS = %w[5353 1900].freeze
   # The shape of the router's rules, kept in ROUTER_STATE: bumped whenever it changes, so the
   # app's resync after an update (DnsService.resync!) puts the new shape in place.
-  ROUTER_RULES_VERSION = 3
+  ROUTER_RULES_VERSION = 4
   # The router's kernel settings besides forwarding, for all interfaces and for the internet
   # side: strict reverse-path filtering there (Ubuntu sets every interface loose, 2, and the
   # kernel takes the stricter of all and the interface's own, so all goes to 1 and only the
@@ -244,6 +258,16 @@ module AmahiHelper
   # A change left waiting this long (the NAS rebooted meanwhile, and its timers with it) is
   # taken as kept: whoever asks for the next one reached the NAS as it is.
   ADDRESS_STALE = 600
+  # The DNS and network operations that change what's in place run one at a time, the next
+  # waiting its turn for up to NETWORK_LOCK_WAIT seconds: a keep and a revert of the NAS's
+  # address, or two saves rewriting the router's rules, would otherwise interleave their steps.
+  NETWORK_LOCK = '/run/amahi-kai-network.lock'
+  NETWORK_LOCK_WAIT = 120
+  NETWORK_LOCKED = %w[
+    dns.write_config dns.remove_config dns.sync_leases dns.set_blocklists dns.blocking_off dns.write_radvd_config
+    dns.remove_radvd_config dns.set_own_address dns.remove_own_address network.write_dnsmasq_config network.router_on
+    network.router_off network.set_address network.apply_address network.keep_address network.revert_address
+  ].freeze
   # Addresses an interface can't have.
   UNUSABLE_NETS = %w[0.0.0.0/8 127.0.0.0/8 224.0.0.0/3].map { |net| IPAddr.new(net) }.freeze
 
@@ -306,6 +330,12 @@ module AmahiHelper
     /^Current Drive Temperature:\s+(\d+)/
   ].freeze
   MOUNTABLE_FS = %w[ext2 ext3 ext4 xfs btrfs ntfs vfat exfat].freeze
+  # FAT and exFAT keep no owners or permissions: everything on a drive like that belongs to the
+  # mount, root's by default, so only root could write there. They're mounted for the users group
+  # (the share folders' group), which may write: folders 0775, files 0664. (ntfs-3g lets everyone
+  # write unless told otherwise.)
+  OWNERLESS_FS = %w[vfat exfat].freeze
+  OWNERLESS_MASKS = %w[dmask=0002 fmask=0113].freeze
   # Data drives mount nosuid,nodev: nothing on a drive (one brought from elsewhere, or written
   # by an app) can run with privileges or stand in for a device. The share root, on the OS
   # disk, gets the same by a bind mount of itself (SHARE_ROOT_FSTAB). disks.secure_mounts
@@ -341,11 +371,17 @@ module AmahiHelper
   # failed drive can be found), so it doesn't depend on the order drives appear at boot.
   BY_ID = '/dev/disk/by-id'
   BY_ID_PREFERENCE = %w[ata- nvme- scsi- wwn- virtio-].freeze
-  # ZFS's memory cache (ARC): at most 2 GiB, and at most half the memory.
+  # ZFS's memory cache (ARC): at most 2 GiB, and at most half the memory. ZFS keeps at least a
+  # 32nd of the memory cached and ignores a cap that isn't above that (at boot without a word,
+  # and a running module refuses it), so on a server with more than 64 GiB the cap is just above
+  # it: ARC_MARGIN more.
   ARC_LIMIT = 2 * 1024**3
+  ARC_MARGIN = 64 * 1024**2
   MEMINFO = '/proc/meminfo'
   ZFS_MODPROBE = '/etc/modprobe.d/zfs-amahi.conf'
   ZFS_ARC_MAX = '/sys/module/zfs/parameters/zfs_arc_max'
+  # The cache's own figures; c_max is the cap ZFS uses.
+  ARCSTATS = '/proc/spl/kstat/zfs/arcstats'
   # Ubuntu's smartmontools unit has ConditionVirtualization=no, so smartd never starts in a
   # virtual machine, even one given real drives (a drive controller passed through to it; the
   # unit's own comment says to override it then). An empty assignment resets the unit's
@@ -364,6 +400,8 @@ module AmahiHelper
   SNAPSHOT_KINDS = { 'hourly' => 50 * 60, 'daily' => 23 * 3600 }.freeze # kind => seconds before the next is due
   SNAPSHOT_KEEP = { 'hourly' => 24, 'daily' => 30 }.freeze
   SNAPSHOT_LIMITS = { 'hourly' => 0..168, 'daily' => 0..366 }.freeze
+  # Named for when they were taken, in UTC (earlier ones in the server's time, whose hour after
+  # the clocks go back repeats the one before).
   SNAPSHOT_NAME = /\Aamahi-(hourly|daily|manual)-\d{4}-\d\d-\d\d-\d{4}(?:\d\d)?\z/
   # The health check (storage.check_health) writes the pools and every drive's SMART data
   # here for the app's alerts. It keeps these ATA attributes: reallocated (5), pending (197)
@@ -452,6 +490,10 @@ module AmahiHelper
     dnsmasq unbound dns-root-data radvd fail2ban unattended-upgrades zfsutils-linux smartmontools avahi-daemon
   ].freeze
   APT_ENV = ENV_MIN.merge('DEBIAN_FRONTEND' => 'noninteractive').freeze
+  # apt runs as a unit of its own (run_command), outside whichever unit called the helper.
+  APT_GET = '/usr/bin/apt-get'
+  APT_UNIT = 'amahi-kai-apt'
+  SYSTEMD_RUN = '/usr/bin/systemd-run'
 
   # Cloudflare Tunnel: the token sits in a file only root can read, and cloudflared reads
   # it with --token-file, so it is in no unit file or command line.
@@ -493,8 +535,37 @@ module AmahiHelper
   APP_IMAGE = %r{\A[a-z0-9]+(?:[._/-][a-z0-9]+)*:[A-Za-z0-9._-]{1,64}@sha256:[0-9a-f]{64}\z}
   APP_FOLDER = /\A[a-z][a-z0-9_-]{0,31}\z/
   APP_ENV_NAME = /\A[A-Z][A-Z0-9_]{0,63}\z/
+  # Environment names that have an image download and run more code as it starts (linuxserver.io's
+  # mods): no manifest sets them.
+  APP_REFUSED_ENV = %w[DOCKER_MODS].freeze
+  # Each part of a folder's path in an app's container: a plain name, with nothing Docker's mount
+  # options read as a separator (, : =).
+  APP_PATH_PART = /\A[A-Za-z0-9._-]{1,64}\z/
   APP_MEMORY = /\A[1-9][0-9]{0,4}[mg]\z/
   APP_DEFAULT_MEMORY = '1g'
+  # What each app's container may do beyond its memory: a ceiling on its processes, a cap on its
+  # logs (Docker keeps them on the system disk), and none of raw sockets (forging traffic to the
+  # other containers) or device nodes. Ping works without raw sockets: Docker lets containers use
+  # ICMP datagram sockets.
+  APP_PIDS_LIMIT = 2048
+  APP_LOG_OPTIONS = %w[--log-opt max-size=10m --log-opt max-file=3].freeze
+  APP_CAP_DROP = %w[NET_RAW MKNOD].freeze
+  # The definition each app's container was made from: its manifest as it was then, with the
+  # image the container runs (root:amahi 0640, one file an app). A reinstall that keeps the
+  # version, an undo and a roll-back make the container again from it, not from the catalog's
+  # newer manifest; an app the catalog dropped is still started, stopped and uninstalled by it.
+  APP_DEFINITIONS = '/var/lib/amahi-kai/app-definitions'
+  # The apps' jobs that can run for minutes (an image's download, an update's wait for health)
+  # each run as a unit of their own, APP_JOB_UNIT with the app's id (relay_app_job): the helper
+  # runs inside the unit that called it, the web app's, and a restart of the web app took a job
+  # down partway. The unit's name also keeps one job at a time for an app.
+  APP_JOBS = %w[apps.install apps.update apps.undo_update apps.uninstall].freeze
+  APP_JOB_UNIT = 'amahi-kai-appjob-%s'
+  HELPER_PATH = '/usr/local/sbin/amahi-helper'
+  SYSTEMCTL = '/usr/bin/systemctl'
+  # Changes to the records all apps share (APP_PORTS, APP_STORAGE) take this lock, so two apps'
+  # jobs at once don't lose each other's writes, nor take the same free port.
+  APP_RECORDS_LOCK = '/run/amahi-kai-app-records.lock'
   # The catalog has a repo of its own (docs/plans/apps.md), so app versions don't wait for an
   # Amahi-kai update. The update check (system.check_update, every 6 hours and on Check now)
   # fetches its main branch too, over https only, into CATALOG_SRC (a bare repo, root's), and keeps
@@ -544,6 +615,9 @@ module AmahiHelper
   # forward on the router, and a future internet-facing port (router mode). Traffic from the
   # NAS itself (cloudflared) doesn't pass through it. Apps are published on IPv4 only.
   IPTABLES = '/usr/sbin/iptables'
+  # APP_CHAIN's rules are swapped in whole, in one step: rebuilt rule by rule, the chain was
+  # empty for a moment, and an empty chain lets everything through.
+  IPTABLES_RESTORE = '/usr/sbin/iptables-restore'
   IP = '/usr/sbin/ip'
   # A port's light, to find it on the NAS (Network → Devices, This NAS).
   ETHTOOL = '/usr/sbin/ethtool'
@@ -594,7 +668,9 @@ module AmahiHelper
   # Updates run with needrestart only listing what to restart (it would otherwise restart
   # services, Amahi-kai's own among them, in the middle of the update's window).
   UPGRADE_ENV = APT_ENV.merge('NEEDRESTART_MODE' => 'l').freeze
-  UPGRADE_OPTIONS = ['-o', 'Dpkg::Options::=--force-confold', '-o', 'DPkg::Lock::Timeout=300'].freeze
+  # --no-remove: apt stops rather than remove a package to make an update fit (the page offers
+  # updates, nothing else).
+  UPGRADE_OPTIONS = ['-o', 'Dpkg::Options::=--force-confold', '-o', 'DPkg::Lock::Timeout=300', '--no-remove'].freeze
 
   LOGIN = /\A[a-z][a-z0-9]{2,31}\z/
   RESERVED_LOGINS = %w[root amahi nobody].freeze
@@ -748,8 +824,9 @@ module AmahiHelper
         steps << %w[/usr/bin/systemctl start amahi-kai-update.service]
       end
     },
-    # Whether an update is waiting, for Amahi-kai and its apps: fetches main, as System Update
-    # pulls it, and writes what's new (the merged changes and the changelog entries added) to
+    # Whether an update is waiting, for Amahi-kai and its apps: fetches the update channel's
+    # newest version (update_target: a release tag, or the dev branch), the one System Update
+    # would install, and writes what's new (the merged changes and the changelog entries added) to
     # UPDATE_STATUS (skipped while an update runs); then fetches the app catalog's repo, keeping
     # the manifests that pass every check (see CATALOG_REPO). It never installs anything.
     # amahi-kai-update-check.timer runs it every 6 hours; System Update's and the Apps page's
@@ -905,10 +982,11 @@ module AmahiHelper
       validate: ->(_a) { {} },
       plan: ->(_v) { [[:wan_drops]] }
     },
+    # +keep_lan+: DHCP stays on, so the LAN keeps the fixed address router mode gave it.
     'network.router_off' => {
-      params: [],
-      validate: ->(_a) { {} },
-      plan: ->(_v) { [[:router_off]] }
+      params: %w[keep_lan],
+      validate: ->(a) { { keep_lan: a.key?('keep_lan') ? boolean(a, 'keep_lan') : false } },
+      plan: ->(v) { [[:router_off, v[:keep_lan]]] }
     },
     # The NAS's own IPv4 address on an interface (Network → Devices, This NAS). +guard+: the
     # admin is connected through this interface, so the change is applied after the reply and
@@ -985,12 +1063,13 @@ module AmahiHelper
     },
     # Data drives and the share root mounted nosuid,nodev (see MOUNT_OPTIONS): the fstab lines
     # Amahi-kai wrote before get the options (the new file is checked first, and the old one
-    # kept as /etc/fstab.amahi-backup), and what's mounted now is remounted with them. System
-    # Update runs it every time, and the installer once; it changes nothing that's in place.
+    # kept as /etc/fstab.amahi-backup), and what's mounted now is remounted with them; the share
+    # root is made root's (do_secure_share_root). System Update runs it every time, and the
+    # installer once; it changes nothing that's in place.
     'disks.secure_mounts' => {
       params: [],
       validate: ->(_a) { {} },
-      plan: ->(_v) { [[:secure_fstab], [:secure_mounts]] }
+      plan: ->(_v) { [[:secure_fstab], [:secure_mounts], [:secure_share_root]] }
     },
     # Lists the top level of an unmounted data drive, mounted read-only for the moment.
     'disks.preview' => {
@@ -1018,9 +1097,9 @@ module AmahiHelper
          ['/usr/bin/systemctl', 'start', 'smartmontools.service', { allow_failure: true }]]
       }
     },
-    # Loads ZFS and caps its memory cache (ARC_LIMIT or half the memory), now and at every
-    # boot. Run once zfsutils-linux is installed, and at every System Update, so the cap follows
-    # memory added since.
+    # Loads ZFS and caps its memory cache (see ARC_LIMIT), now and at every boot, replying with
+    # the cap ZFS uses. Run once zfsutils-linux is installed, and at every System Update, so the
+    # cap follows memory added since.
     'zfs.setup' => {
       params: [],
       validate: ->(_a) { installed!(ZPOOL) && { arc_max: arc_limit } },
@@ -1041,11 +1120,14 @@ module AmahiHelper
          ['/usr/sbin/modprobe', '-r', 'zfs', { allow_failure: true }]]
       }
     },
-    # The pools, with their drives, health and last scrub (Disks → ZFS Pools). Read-only.
+    # The pools, with their drives, health and last scrub (Disks → ZFS Pools). Read-only. With
+    # scan (the ZFS Pools page) it also lists the pools on the drives that aren't imported, taken
+    # offline here or found there: the scan reads every drive, waking any asleep, so the other
+    # pages and the health check leave it out.
     'pools.status' => {
-      params: [],
-      validate: ->(_a) { {} },
-      plan: ->(_v) { [[:pool_status]] }
+      params: %w[scan],
+      validate: ->(a) { { scan: a['scan'] == true } },
+      plan: ->(v) { [[:pool_status, v[:scan]]] }
     },
     # A new pool on whole data disks, which are wiped first, in the layout the user chose:
     # ashift=12, lz4 compression, autotrim when every drive is an SSD, autoexpand (replacing
@@ -1118,9 +1200,10 @@ module AmahiHelper
     # leaves a label from no pool on it), or one from a pool on another server. Share storage never
     # takes a disk with a ZFS label, so this frees it for that too. Only a disk a new pool could
     # take: not the system's, nothing on it mounted or in use, not in a pool here, online or offline.
+    # A drive of a pool found on the drives (not imported) needs that pool's name in confirm.
     'pools.erase_drive' => {
-      params: %w[device],
-      validate: ->(a) { erase_drive_request(a['device']) },
+      params: %w[device confirm],
+      validate: ->(a) { erase_drive_request(a['device'], a['confirm']) },
       plan: lambda { |v|
         [*v[:labels].map { |part| [ZPOOL, 'labelclear', '-f', part, { allow_failure: true }] },
          *v[:wipe].map { |device| [WIPEFS, '-a', device] },
@@ -1142,7 +1225,7 @@ module AmahiHelper
     # setuid=off and devices=off, and is in its snapshots.
     'pools.shares_root' => {
       params: %w[name],
-      validate: ->(a) { installed!(ZFS) && { name: existing_pool(a['name']) } },
+      validate: ->(a) { installed!(ZFS) && { name: managed_pool(a['name']) } },
       plan: ->(v) { [[:pool_shares_root, v[:name]]] }
     },
     # Brings back a pool taken offline here, by the GUID recorded then, at its own mount point.
@@ -1151,17 +1234,27 @@ module AmahiHelper
       validate: ->(a) { installed!(ZPOOL) && import_request(a['name']) },
       plan: ->(v) { [[:make_dir, POOL_ROOT, '0755'], [:import_pool, v[:name], v[:guid]], [:pool_status]] }
     },
+    # Imports a pool found on the drives (pools.status's 'found'), by its id: this server's from
+    # before it was installed again, or one whose drives came too late at boot. It's imported
+    # without mounting anything, then mounted only if it's one of Amahi-kai's (everything of it
+    # mounts under POOL_ROOT/<name>); otherwise it's exported again, left as it was. Its folders
+    # get setuid=off and devices=off, as pools.create makes them.
+    'pools.import_found' => {
+      params: %w[id],
+      validate: ->(a) { installed!(ZPOOL) && found_import_request(a['id']) },
+      plan: ->(v) { [[:make_dir, POOL_ROOT, '0755'], [:import_found_pool, v[:name], v[:id], v[:force]], [:pool_status]] }
+    },
     # Takes a snapshot of a pool now (all its datasets), kept until it's deleted.
     'pools.snapshot' => {
       params: %w[name],
-      validate: ->(a) { installed!(ZPOOL) && { name: existing_pool(a['name']), stamp: Time.now.strftime('%Y-%m-%d-%H%M%S') } },
+      validate: ->(a) { installed!(ZPOOL) && { name: managed_pool(a['name']), stamp: Time.now.utc.strftime('%Y-%m-%d-%H%M%S') } },
       plan: ->(v) { [[ZFS, 'snapshot', '-r', "#{v[:name]}@amahi-manual-#{v[:stamp]}"], [:pool_status]] }
     },
     # How many hourly and daily snapshots a pool keeps (0 turns that kind off and removes them).
     'pools.snapshot_policy' => {
       params: %w[name hourly daily],
       validate: lambda { |a|
-        installed!(ZPOOL) && { name: existing_pool(a['name']), hourly: integer(a, 'hourly', SNAPSHOT_LIMITS['hourly']),
+        installed!(ZPOOL) && { name: managed_pool(a['name']), hourly: integer(a, 'hourly', SNAPSHOT_LIMITS['hourly']),
                                daily: integer(a, 'daily', SNAPSHOT_LIMITS['daily']) }
       },
       plan: lambda { |v|
@@ -1198,7 +1291,7 @@ module AmahiHelper
     # Sunday of each month (/etc/cron.d/zfsutils-linux).
     'pools.scrub' => {
       params: %w[name],
-      validate: ->(a) { installed!(ZPOOL) && { name: existing_pool(a['name']) } },
+      validate: ->(a) { installed!(ZPOOL) && { name: managed_pool(a['name']) } },
       plan: ->(v) { [[ZPOOL, 'scrub', v[:name]]] }
     },
     # The pools and every whole disk's SMART health, written to STORAGE_HEALTH for the
@@ -1424,31 +1517,33 @@ module AmahiHelper
     # Installs or reinstalls an app from its manifest: its user and folders (kept from an
     # earlier install), its secrets (likewise), the pinned image, pulled with progress, and
     # its container, started, with the shares chosen ([{ "name": "Movies", "write": false }]).
-    # Changing an app's shares is a reinstall, which keeps the version it runs: only
-    # apps.update moves it to the manifest's. An app with dataset folders (P4.6) takes the ZFS
-    # pool they go on (pool), the first time; after that they stay on theirs (APP_STORAGE).
+    # Changing an app's shares is a reinstall, which keeps the version it runs and its settings
+    # (APP_DEFINITIONS): only apps.update moves it to the manifest's. An app with dataset folders
+    # (P4.6) takes the ZFS pool they go on (pool), the first time; after that they stay on theirs
+    # (APP_STORAGE). A job of its own (APP_JOBS).
     'apps.install' => {
       params: %w[app shares pool],
       validate: lambda { |a|
-        installed!(DOCKER) && app_request(a['app']).then do |v|
+        installed!(DOCKER) && app_install_request(a['app']).then do |v|
           v.merge(shares: app_share_choices(a['shares'], v[:id], v[:manifest]), pool: app_pool_choice(v[:id], v[:manifest], a['pool']))
         end
       },
       plan: ->(v) { [[:install_app, v[:id], v[:manifest], v[:shares], true, v[:pool]], [:announce_apps]] }
     },
+    # Start, stop and restart go by the app's container, whatever the catalog says now.
     'apps.start' => {
       params: %w[app],
-      validate: ->(a) { installed!(DOCKER) && app_request(a['app']) },
+      validate: ->(a) { installed!(DOCKER) && installed_app_request(a['app']) },
       plan: ->(v) { [[DOCKER, 'start', app_container(v[:id])]] }
     },
     'apps.stop' => {
       params: %w[app],
-      validate: ->(a) { installed!(DOCKER) && app_request(a['app']) },
+      validate: ->(a) { installed!(DOCKER) && installed_app_request(a['app']) },
       plan: ->(v) { [[DOCKER, 'stop', '--time', '30', app_container(v[:id])]] }
     },
     'apps.restart' => {
       params: %w[app],
-      validate: ->(a) { installed!(DOCKER) && app_request(a['app']) },
+      validate: ->(a) { installed!(DOCKER) && installed_app_request(a['app']) },
       plan: ->(v) { [[DOCKER, 'restart', '--time', '30', app_container(v[:id])]] }
     },
     # Updates an installed app to its manifest's version: a copy of its data first, the new
@@ -1460,11 +1555,12 @@ module AmahiHelper
       },
       plan: ->(v) { [[:update_app, v[:id], v[:manifest], v[:shares]]] }
     },
-    # Puts back the version and data from before the app's last update (within APP_BACKUP_DAYS).
+    # Puts back the version and data from before the app's last update (within APP_BACKUP_DAYS),
+    # with the definition it ran then.
     'apps.undo_update' => {
       params: %w[app shares],
       validate: lambda { |a|
-        installed!(DOCKER) && app_request(a['app']).then { |v| v.merge(shares: app_share_choices(a['shares'], v[:id], v[:manifest])) }
+        installed!(DOCKER) && app_undo_request(a['app']).then { |v| v.merge(shares: app_share_choices(a['shares'], v[:id], v[:manifest])) }
       },
       plan: ->(v) { [[:undo_app_update, v[:id], v[:manifest], v[:shares]]] }
     },
@@ -1474,14 +1570,16 @@ module AmahiHelper
       validate: ->(_a) { {} },
       plan: ->(_v) { [[:prune_app_backups]] }
     },
-    # Removes an app's container and image. Its folders, secrets and user stay (a reinstall uses
-    # them again) unless delete_data is true. Works when the container is already gone.
+    # Removes an app's container and image. Its folders, secrets, user and definition stay (a
+    # reinstall uses them again, on the version it ran) unless delete_data is true. Works when
+    # the container is already gone, and for an app the catalog dropped; refused while Docker
+    # doesn't answer.
     'apps.uninstall' => {
       params: %w[app delete_data],
       validate: lambda { |a|
-        installed!(DOCKER) && app_request(a['app']).merge(delete_data: a.key?('delete_data') ? boolean(a, 'delete_data') : false)
+        installed!(DOCKER) && docker_running! && { id: app_id(a['app']), delete_data: a.key?('delete_data') ? boolean(a, 'delete_data') : false }
       },
-      plan: ->(v) { [[:uninstall_app, v[:id], v[:manifest][:image], v[:delete_data]], [:announce_apps]] }
+      plan: ->(v) { [[:uninstall_app, v[:id], v[:delete_data]], [:announce_apps]] }
     },
     # Announces the installed apps on the LAN (see AVAHI_SERVICES). Run at every install and
     # uninstall, and by amahi-kai-app-firewall.service each time Docker starts.
@@ -1526,15 +1624,17 @@ module AmahiHelper
       validate: ->(_a) { {} },
       plan: ->(_v) { [[:security_report]] }
     },
+    # SSH is let in on the ports sshd listens on too (sshd -T), so one moved off 22 isn't shut out.
     'security.enable_firewall' => {
       params: [],
-      validate: ->(_a) { installed!(UFW) && {} },
-      plan: lambda { |_v|
-        [[UFW, 'default', 'deny', 'incoming'], *FIREWALL_PORTS.map { |port| [UFW, 'allow', port] }, [UFW, '--force', 'enable']]
+      validate: ->(_a) { installed!(UFW) && { ssh_ports: ssh_ports } },
+      plan: lambda { |v|
+        ports = (FIREWALL_PORTS + v[:ssh_ports].map { |port| "#{port}/tcp" }).uniq
+        [[UFW, 'default', 'deny', 'incoming'], *ports.map { |port| [UFW, 'allow', port] }, [UFW, '--force', 'enable']]
       }
     },
-    # Turns off SSH root login, or password login (only while an account that can log in
-    # has an SSH key, so nobody is locked out).
+    # Turns off SSH root login (only while another account can log in over SSH), or password
+    # login (only while an account that can log in has an SSH key), so nobody is locked out.
     'security.harden_ssh' => {
       params: %w[setting],
       validate: ->(a) { ssh_hardening(a['setting']) },
@@ -1588,6 +1688,11 @@ module AmahiHelper
   # (greyhole-dfree reads greyhole.conf, which the people connected can't).
   GREYHOLE_DFREE = "#{APP_DIR}/libexec/amahi-dfree"
 
+  # A network interface's name, as the checks below take it: at most 15 characters, starting
+  # with a letter or digit, so neither . nor .. (both are folders in /sys/class/net) passes,
+  # nor a name a command would read as an option.
+  IFNAME = '[A-Za-z0-9][A-Za-z0-9_.-]{0,14}'
+
   # --- dnsmasq config checks ---------------------------------------------------------
 
   # dnsmasq can run scripts as root and read any file from its config, and the app
@@ -1606,7 +1711,7 @@ module AmahiHelper
     /\Aexcept-interface=lo\z/,
     /\Aport=0\z/,
     /\Adhcp-option=option:dns-server,#{IPV4}\z/,
-    /\Ainterface=[A-Za-z0-9_.-]{1,15}\z/
+    /\Ainterface=#{IFNAME}\z/
   ].freeze
   # Greyhole runs as root and some of its settings run commands, so its config may only
   # hold the lines the app generates. Pool drives must be data drives under /mnt.
@@ -1628,6 +1733,11 @@ module AmahiHelper
   # A name with its final dot ("nas.home.arpa."), and a TLS name ("dns.quad9.net").
   UNBOUND_NAME = '(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+'
   TLS_NAME = '[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?'
+  # Never the whole internet, line by line or added up: the networks Unbound answers come to at
+  # most this many addresses of each family (a /7's worth of IPv4, room for a /8 LAN beside
+  # Tailscale's range; a /32's worth of IPv6, the link-local range aside).
+  ACCESS_CONTROL_MAX = { 4 => 2**25, 6 => 2**96 }.freeze
+  LINK_LOCAL6 = IPAddr.new('fe80::/10')
 
   class << self
     # --- Entry points --------------------------------------------------------------
@@ -1644,6 +1754,7 @@ module AmahiHelper
         1
       in ['--dry-run', String => op] then respond(output) { dry_run(op, read_args(input)) }
       in ['--check-catalog', String => dir] then check_catalog(dir, output)
+      in [String => op] if APP_JOBS.include?(op) && !ENV.key?('AMAHI_APP_JOB') then relay_app_job(op, input, output)
       in [String => op] unless op.start_with?('-') then respond(output) { execute(op, input) }
       else
         warn 'usage: amahi-helper OPERATION < args.json | --dry-run OPERATION | --check-catalog DIR | --list | --self-test'
@@ -1660,7 +1771,7 @@ module AmahiHelper
       check_environment!
       raise Refused, 'the helper must run as root' unless Process.euid.zero?
       values = validate(op, args)
-      results = plan(op, values).filter_map { |step| perform(step) }
+      results = one_at_a_time(op) { plan(op, values).filter_map { |step| perform(step) } }
       reply = { 'ok' => true }
       results.grep(Hash).each { |data| reply.merge!(data) }
       notes = results.grep(String)
@@ -1671,6 +1782,55 @@ module AmahiHelper
       raise
     ensure
       log(op, args, result, error, started)
+    end
+
+    # The operation's steps, holding NETWORK_LOCK when it's one of NETWORK_LOCKED.
+    def one_at_a_time(op)
+      return yield unless NETWORK_LOCKED.include?(op)
+
+      File.open(NETWORK_LOCK, File::RDWR | File::CREAT, 0o600) do |lock|
+        deadline = monotonic_now + NETWORK_LOCK_WAIT
+        until lock.flock(File::LOCK_EX | File::LOCK_NB)
+          raise Refused, 'another network change is still being made; try again in a minute' if monotonic_now > deadline
+          pause(0.5)
+        end
+        yield
+      end
+    end
+
+    # A job that can run for minutes (APP_JOBS) runs again as a unit of its own, APP_JOB_UNIT with
+    # the app's id, on the same arguments: the helper runs inside the unit that called it, the
+    # web app's, and a restart of the web app took the job down partway, leaving the app half
+    # installed. systemd-run --pipe passes the job's progress and reply through, --wait its exit
+    # status; while one job of an app runs, another is refused. Arguments that name no app are
+    # refused here, as they would be there.
+    def relay_app_job(op, input, output)
+      raw = input.read(MAX_INPUT + 1).to_s
+      return respond(output) { raise Refused, 'arguments are too large' } if raw.bytesize > MAX_INPUT
+
+      args = begin
+        JSON.parse(raw)
+      rescue JSON::ParserError
+        nil
+      end
+      id = args.is_a?(Hash) ? args['app'] : nil
+      return respond(output) { execute(op, args) } unless id.is_a?(String) && id.match?(APP_ID)
+      return respond(output) { not_in_a_job!(id) } if app_job_running?(id)
+
+      job_input = File.open(File.join(RUN_DIR, "amahi-app-job-#{SecureRandom.hex(8)}"), File::RDWR | File::CREAT | File::EXCL, 0o600)
+      job_input.write(raw)
+      job_input.rewind
+      File.unlink(job_input.path)
+      replace_process(ENV_MIN, [SYSTEMD_RUN, "--unit=#{format(APP_JOB_UNIT, id)}", '--wait', '--pipe', '--collect', '--quiet',
+                                "--setenv=AMAHI_APP_JOB=#{id}", "--setenv=AMAHI_APP_CALLER=#{ENV.fetch('SUDO_USER', '')}",
+                                HELPER_PATH, op], in: job_input)
+    rescue SystemCallError => e
+      respond(output) { raise Failed, "#{id}'s job couldn't be started (#{e.message})" }
+    end
+
+    # exec, as a method a spec can stand in for.
+    def replace_process(env, argv, **options)
+      exec(env, [argv[0], argv[0]], *argv.drop(1), unsetenv_others: true, chdir: '/', **options)
     end
 
     def dry_run(op, args)
@@ -1847,20 +2007,28 @@ module AmahiHelper
       IPAddr.new(value).to_s
     end
 
-    # radvd's config: only what Amahi-kai writes, with unique local addresses.
+    # radvd's config: only what Amahi-kai writes, with unique local addresses, and every
+    # interface's block saying the NAS is no router (radvd announces one by default).
     def radvd_conf(value)
       value = string(value, 'content', max: 4096)
+      depth = 0
+      no_router = false
       value.each_line do |line|
         line = line.strip
         next if line.empty? || line.start_with?('#')
         raise Refused, "radvd line #{line.inspect} is not one Amahi-kai writes" unless radvd_line?(line)
+        no_router = false if depth.zero?
+        no_router = true if depth == 1 && line == 'AdvDefaultLifetime 0;'
+        depth += line == '};' ? -1 : (line.end_with?('{') ? 1 : 0)
+        raise Refused, "radvd's config must say for each interface that the NAS is no router (AdvDefaultLifetime 0)" if depth.zero? && !no_router
       end
+      raise Refused, "radvd's config leaves a block open" unless depth.zero?
       value
     end
 
     def radvd_line?(line)
       return true if ['AdvSendAdvert on;', 'AdvDefaultLifetime 0;', 'AdvOnLink on;', 'AdvAutonomous on;', '};'].include?(line)
-      return true if line.match?(/\Ainterface [A-Za-z0-9_.-]{1,15} \{\z/)
+      return true if line.match?(/\Ainterface #{IFNAME} \{\z/o)
       return true if line.match?(/\ADNSSL #{UNBOUND_NAME.delete_suffix('+')}*[a-z0-9-]+ \{\z/o)
       if (match = line.match(%r{\Aprefix ([0-9a-f:]+)/64 \{\z}))
         return ip_address?(match[1], :ipv6?) && ULA.include?(IPAddr.new(match[1]))
@@ -1952,11 +2120,13 @@ module AmahiHelper
     # A network interface this machine has, by name ("ens18").
     def network_interface(value)
       value = string(value, 'interface', max: 15)
-      raise Refused, "#{value.inspect} isn't a network interface here" unless value.match?(/\A[A-Za-z0-9_.-]{1,15}\z/) &&
+      raise Refused, "#{value.inspect} isn't a network interface here" unless value.match?(/\A#{IFNAME}\z/o) &&
                                                                           File.exist?("/sys/class/net/#{value}")
       value
     end
 
+    # dnsmasq hands out addresses and answers no DNS (port=0): Unbound does, and without the
+    # line dnsmasq would answer on port 53 too.
     def dnsmasq_conf(value, allowed)
       value = string(value, 'content', max: 64 * 1024)
       value.each_line do |line|
@@ -1964,17 +2134,35 @@ module AmahiHelper
         next if line.empty? || line.start_with?('#')
         raise Refused, "dnsmasq line #{line.inspect} is not one Amahi-kai writes" unless allowed.any? { |re| line.match?(re) }
       end
+      raise Refused, "dnsmasq's config must answer no DNS (port=0)" unless value.each_line.any? { |line| line.strip == 'port=0' }
       value
     end
 
     def unbound_conf(value)
       value = string(value, 'content', max: 256 * 1024)
+      allowed = []
       value.each_line do |line|
         line = line.strip
         next if line.empty? || line.start_with?('#')
         raise Refused, "Unbound line #{line.inspect} is not one Amahi-kai writes" unless unbound_line?(line)
+        key, rest = line.split(/:\s+/, 2)
+        allowed << rest.split(' ', 2).first if key == 'access-control'
       end
+      access_control_total!(allowed)
       value
+    end
+
+    # The networks the access-control lines let in ("10.99.0.0/24"), each counted once and added
+    # up per family, the link-local range aside (ACCESS_CONTROL_MAX).
+    def access_control_total!(networks)
+      totals = Hash.new(0)
+      networks.map { |network| IPAddr.new(network) }.uniq { |ip| [ip.to_s, ip.prefix] }.each do |ip|
+        next if LINK_LOCAL6.include?(ip)
+        family = ip.ipv4? ? 4 : 6
+        totals[family] += 2**((family == 4 ? 32 : 128) - ip.prefix)
+      end
+      return unless totals.any? { |family, total| total > ACCESS_CONTROL_MAX[family] }
+      raise Refused, "Unbound's access-control lines add up to too much of the internet: it would answer far more than your networks"
     end
 
     def unbound_line?(line)
@@ -2063,6 +2251,10 @@ module AmahiHelper
       mount_point = new_mount_point(mount_point)
       owner = fstab_entries.find { |fields| fields[1] == mount_point && fields[0] != "UUID=#{info['UUID']}" }
       raise Refused, "#{mount_point} belongs to another drive in /etc/fstab (#{owner[0]})" if owner
+      # A drive that comes back goes where its fstab line says: Greyhole and the shares on it
+      # look for it there, and the line would mount it there at the next boot anyway.
+      home = info['UUID'] && fstab_entries.find { |fields| fields[0] == "UUID=#{info['UUID']}" && fields[1] != mount_point }
+      raise Refused, "#{device} belongs at #{home[1]} (its line in /etc/fstab); mount it there" if home
       { device: device, mount_point: mount_point, fstype: fstype, uuid: info['UUID'] }
     end
 
@@ -2074,8 +2266,21 @@ module AmahiHelper
       # drive formatted and mounted back is a stranger to it.
       pooled = (mounted & greyhole_drives).first
       raise Refused, "#{pooled} is one of Greyhole's drives; remove it from the pool on Disks → Greyhole Pool first" if pooled
+      no_shares_on_drive!(mounted)
       not_held!(device, 'unmount it')
       { device: device, mount_points: mounted, uuid: probe(device)['UUID'] }
+    end
+
+    # A drive with a share's folder on it isn't unmounted: Samba would serve the empty folder
+    # left on the system disk, and the next drive mounted there would take the share's place.
+    def no_shares_on_drive!(mount_points)
+      on = samba_shares.values.select do |share|
+        mount_points.any? { |mp| share[:path] == mp || share[:path].to_s.start_with?("#{mp}/") }
+      end.map { |share| share[:name] }.sort
+      return if on.empty?
+
+      raise Refused, "#{on.size == 1 ? 'the share' : 'the shares'} #{on.join(', ')} #{on.size == 1 ? 'is' : 'are'} on this drive: " \
+                     "delete #{on.size == 1 ? 'it' : 'them'} on Shares first"
     end
 
     def preview_request(device)
@@ -2214,7 +2419,8 @@ module AmahiHelper
 
     def pool_request(name, layout, devices)
       installed!(ZPOOL)
-      name = new_pool_name(name)
+      scan = importable_pools
+      name = new_pool_name(name, scan)
       layout = listed(layout, 'layout', POOL_LAYOUTS.keys)
       raise Refused, 'devices must be a list of disks' unless devices.is_a?(Array) && devices.size <= POOL_MAX_DRIVES
       rule = POOL_LAYOUTS.fetch(layout)
@@ -2222,33 +2428,46 @@ module AmahiHelper
       raise Refused, "#{layout} needs an even number of drives" if rule[:pairs] && devices.size.odd?
       tree = block_tree
       pooled = pooled_devices
-      offline = offline_devices
-      disks = devices.map { |device| pool_disk(device, tree, pooled, offline) }
+      offline = offline_devices(scan)
+      found = found_devices(scan)
+      disks = devices.map { |device| pool_disk(device, tree, pooled, offline, found) }
       paths = disks.map(&:first)
       raise Refused, "#{paths.find { |p| paths.count(p) > 1 }} is listed twice" if paths.uniq.size != paths.size
       { name: name, wipe: disks.flat_map { |_path, node| wipe_targets(node) },
         vdevs: vdev_args(layout, paths.map { |path| stable_path(path) }), ssd: paths.all? { |path| ssd?(path) } }
     end
 
-    def new_pool_name(value)
+    # A name no pool here has: not an imported pool's, an offline one's (it would be lost from the
+    # page, its drives offered as free), or one's found on the drives (+scan+, importable_pools).
+    def new_pool_name(value, scan)
       value = string(value, 'name', max: 32)
       raise Refused, "pool name #{value.inspect} must be 1-32 lowercase letters, digits, _ or -, starting with a letter" unless value.match?(POOL_NAME)
       raise Refused, "#{value} is a word ZFS keeps for itself" if value.match?(RESERVED_POOL_NAMES)
       raise Refused, "a pool named #{value} already exists" if pool_names.include?(value)
-      if File.exist?(POOL_ROOT) || File.symlink?(POOL_ROOT)
-        raise Refused, "#{POOL_ROOT} must be a real folder" unless File.realpath(POOL_ROOT) == POOL_ROOT
+      raise Refused, "a pool named #{value} is offline here; bring it online, or delete it, first" if offline_records.key?(value)
+      if scan.any? { |pool| pool['name'] == value }
+        raise Refused, "a pool named #{value} is on drives connected here, not imported; import it, or erase its drives, first"
       end
-      target = "#{POOL_ROOT}/#{value}"
-      if File.exist?(target) || File.symlink?(target)
-        raise Refused, "#{target} is in the way (not an empty folder)" unless File.lstat(target).directory? && Dir.empty?(target) && !mount_point?(target)
-      end
+      free_pool_dir!(value)
       value
     end
 
+    # The pool's mount point, POOL_ROOT/<name>, is free: missing, or an empty folder.
+    def free_pool_dir!(name)
+      if File.exist?(POOL_ROOT) || File.symlink?(POOL_ROOT)
+        raise Refused, "#{POOL_ROOT} must be a real folder" unless File.realpath(POOL_ROOT) == POOL_ROOT
+      end
+      target = "#{POOL_ROOT}/#{name}"
+      if File.exist?(target) || File.symlink?(target)
+        raise Refused, "#{target} is in the way (not an empty folder)" unless File.lstat(target).directory? && Dir.empty?(target) && !mount_point?(target)
+      end
+    end
+
     # A whole data disk with nothing on it in use: not the system's, nothing mounted, no
-    # LVM, RAID or encryption on it, nothing of it in fstab, and not in a pool.
-    # Returns [path, its lsblk node].
-    def pool_disk(value, tree, pooled, offline_drives = offline_devices)
+    # LVM, RAID or encryption on it, nothing of it in fstab, and not in a pool: imported, taken
+    # offline here, or found on the drives (+found_drives+), unless that pool's name is +confirm+
+    # (Erase). Returns [path, its lsblk node].
+    def pool_disk(value, tree, pooled, offline_drives, found_drives, confirm: nil)
       value = string(value, 'device', max: 64)
       raise Refused, "#{value.inspect} is not a whole disk" unless value.match?(WHOLE_DISK)
       raise Refused, "#{value} doesn't exist" unless File.blockdev?(value)
@@ -2264,6 +2483,11 @@ module AmahiHelper
       raise Refused, "#{value} is in the pool #{pool}" if pool
       offline = nodes.map { |n| offline_drives[n['path']] }.compact.first
       raise Refused, "#{value} is in the pool #{offline}, which is offline; bring it online on Disks → ZFS Pools, or delete it there" if offline
+      found = nodes.map { |n| found_drives[n['path']] }.compact.first
+      if found && confirm.nil?
+        raise Refused, "#{value} holds the pool #{found}, which isn't imported; import it on Disks → ZFS Pools, or erase the drive there"
+      end
+      raise Refused, "type the pool's name (#{found}) to erase #{value}" if found && confirm != found
       sources = fstab_entries.map(&:first)
       nodes.each do |n|
         info = probe(n['path'])
@@ -2276,11 +2500,12 @@ module AmahiHelper
 
     def replace_request(name, old, new)
       installed!(ZPOOL)
-      name = existing_pool(name)
+      name = managed_pool(name)
       old = string(old, 'old', max: 256)
       leaves = pool_leaves(pool_vdevs(name))
       raise Refused, "#{old.inspect} isn't a drive in the pool #{name}" unless leaves.any? { |leaf| leaf['name'] == old }
-      path, node = pool_disk(new, block_tree, pooled_devices)
+      scan = importable_pools
+      path, node = pool_disk(new, block_tree, pooled_devices, offline_devices(scan), found_devices(scan))
       { name: name, old: old, new: stable_path(path), wipe: wipe_targets(node) }
     end
 
@@ -2289,7 +2514,7 @@ module AmahiHelper
 
     def online_drive_request(name, drive)
       installed!(ZPOOL)
-      name = existing_pool(name)
+      name = managed_pool(name)
       drive = string(drive, 'drive', max: 256)
       leaf = pool_leaves(pool_vdevs(name)).find { |row| row['name'] == drive }
       raise Refused, "#{drive.inspect} isn't a drive in the pool #{name}" unless leaf
@@ -2312,7 +2537,7 @@ module AmahiHelper
 
     def add_group_request(name, devices)
       installed!(ZPOOL)
-      name = existing_pool(name)
+      name = managed_pool(name)
       groups = pool_vdevs(name).map { |vdev| [vdev['name'].to_s[/\A(mirror|raidz[123])-\d+\z/, 1], vdev['children'].size] }
       layout, width = groups.first
       unless layout && groups.uniq.size == 1
@@ -2322,17 +2547,21 @@ module AmahiHelper
       raise Refused, "a new #{layout} group in #{name} needs #{width} drives, like the others" unless devices.size == width
       tree = block_tree
       pooled = pooled_devices
-      offline = offline_devices
-      disks = devices.map { |device| pool_disk(device, tree, pooled, offline) }
+      scan = importable_pools
+      offline = offline_devices(scan)
+      found = found_devices(scan)
+      disks = devices.map { |device| pool_disk(device, tree, pooled, offline, found) }
       paths = disks.map(&:first)
       raise Refused, "#{paths.find { |p| paths.count(p) > 1 }} is listed twice" if paths.uniq.size != paths.size
       { name: name, wipe: disks.flat_map { |_path, node| wipe_targets(node) },
         vdevs: [layout, *paths.map { |path| stable_path(path) }] }
     end
 
-    def erase_drive_request(value)
+    def erase_drive_request(value, confirm)
       installed!(ZPOOL)
-      path, node = pool_disk(value, block_tree, pooled_devices)
+      confirm = confirm.nil? || confirm == '' ? nil : string(confirm, 'confirm', max: 32)
+      scan = importable_pools
+      path, node = pool_disk(value, block_tree, pooled_devices, offline_devices(scan), found_devices(scan), confirm: confirm || '')
       labels = subtree(node).select { |n| n['fstype'] == 'zfs_member' }.map { |n| n['path'] }
       raise Refused, "#{path} has no ZFS label to erase" if labels.empty?
 
@@ -2341,7 +2570,7 @@ module AmahiHelper
 
     def destroy_request(name, confirm)
       installed!(ZPOOL)
-      name = existing_pool(name)
+      name = managed_pool(name)
       raise Refused, "type the pool's name (#{name}) to destroy it" unless confirm == name
       no_shares_on!(name)
       no_apps_on!(name, 'deleted')
@@ -2349,8 +2578,18 @@ module AmahiHelper
       members = pool_leaves(pool_vdevs(name)).filter_map { |leaf| leaf['device'] }
       tree = block_tree
       disks = members.filter_map { |part| tree.find { |disk| subtree(disk).any? { |n| n['path'] == part } } }.uniq
-      { name: name, members: members, wipe: disks.flat_map { |disk| wipe_targets(disk) },
+      { name: name, members: members, wipe: disks.flat_map { |disk| pool_wipe_targets(disk, members) },
         kept: apps_on_pool(name).map(&:first) }
+    end
+
+    # What of +disk+ goes with a deleted pool: the whole disk when all of it was the pool's (its
+    # members, and the small partition ZFS keeps beside each, which has no filesystem), else only
+    # the members on it, so a disk shared with anything else (a system's boot partition) keeps that.
+    def pool_wipe_targets(disk, members)
+      others = subtree(disk).drop(1).reject { |n| members.include?(n['path']) }
+      return wipe_targets(disk) if others.all? { |n| n['fstype'].nil? && (n['children'] || []).empty? && mountpoints(n).empty? }
+
+      subtree(disk).select { |n| members.include?(n['path']) }.flat_map { |n| wipe_targets(n) }
     end
 
     # A pool an installed app keeps its data on isn't taken offline or deleted: the app would lose
@@ -2431,11 +2670,16 @@ module AmahiHelper
     end
 
     def export_request(name)
-      name = existing_pool(name)
+      name = managed_pool(name)
       no_shares_on!(name)
       no_apps_on!(name, 'taken offline')
       pool_not_held!(name, 'take it offline')
-      { name: name, guid: capture([ZPOOL, 'get', '-H', '-o', 'value', 'guid', name]).strip }
+      guid = capture([ZPOOL, 'get', '-H', '-o', 'value', 'guid', name]).strip
+      recorded = offline_records[name]
+      if recorded && recorded.to_s != guid
+        raise Refused, "another pool named #{name} is offline here already; rename one of them from the command line first"
+      end
+      { name: name, guid: guid }
     end
 
     # A pool with SMB shares on it isn't taken offline or destroyed: Samba (and any app given
@@ -2454,6 +2698,27 @@ module AmahiHelper
       raise Refused, "#{value.inspect} isn't a pool taken offline here" unless value.match?(POOL_NAME) && guid
       raise Refused, "a pool named #{value} is already online" if pool_names.include?(value)
       { name: value, guid: guid.to_s }
+    end
+
+    # The states `zpool import` gives a pool that can be imported: all its drives found, or
+    # enough of them.
+    IMPORTABLE_STATES = %w[ONLINE DEGRADED].freeze
+
+    # A pool found on the drives (found_pools), by its id (GUID): imported under its own name,
+    # which must be one no pool here has, and only while ZFS finds enough of its drives.
+    def found_import_request(value)
+      id = string(value, 'id', max: 20)
+      raise Refused, "#{id.inspect} isn't a pool's id" unless id.match?(/\A\d{1,20}\z/)
+      pool = found_pools.find { |p| p['id'] == id } or raise Refused, "no pool with the id #{id} is on the drives, not imported"
+      name = pool['name'].to_s
+      unless name.match?(POOL_NAME) && !name.match?(RESERVED_POOL_NAMES)
+        raise Refused, "the pool's name #{name.inspect} isn't one Amahi-kai gives pools; import it from the command line"
+      end
+      raise Refused, "a pool named #{name} is already imported here" if pool_names.include?(name)
+      raise Refused, "a pool named #{name} is offline here; bring that one online, or delete it, first" if offline_records.key?(name)
+      raise Refused, "ZFS finds #{name} #{pool['state']}: connect its missing drives first" unless IMPORTABLE_STATES.include?(pool['state'])
+      free_pool_dir!(name)
+      { name: name, id: id, force: pool['force'] == true }
     end
 
     def zfs_removable!
@@ -2481,27 +2746,44 @@ module AmahiHelper
       records.is_a?(Hash) ? records.select { |name, guid| name.is_a?(String) && guid.to_s.match?(/\A\d+\z/) } : {}
     end
 
-    # The pools taken offline here and not back yet, as a scan of the drives finds them:
-    # [{ 'name', 'state' (ZFS's, or 'MISSING' when none of its drives is found), 'devices' =>
-    # the partitions of it found, by kernel name }].
-    def offline_pools
+    # The pools taken offline here and not back yet, as a scan of the drives (+scan+,
+    # importable_pools; made only when there's a record) finds them: [{ 'name', 'state' (ZFS's, or
+    # 'MISSING' when none of its drives is found), 'devices' => the partitions of it found, by
+    # kernel name }].
+    def offline_pools(scan = nil)
       records = offline_records
       return [] if records.empty?
       imported = pool_names
-      found = importable_pools
+      scan ||= importable_pools
       records.reject { |name, _guid| imported.include?(name) }.map do |name, guid|
-        pool = found.find { |p| p['id'] == guid.to_s }
+        pool = scan.find { |p| p['id'] == guid.to_s }
         { 'name' => name, 'state' => pool ? pool['state'] : 'MISSING', 'devices' => pool ? pool['devices'] : [] }
       end
     end
 
-    # { '/dev/sdc1' => 'test', ... }: every partition of a pool taken offline here.
-    def offline_devices
-      offline_pools.each_with_object({}) { |pool, found| pool['devices'].each { |device| found[device] = pool['name'] } }
+    # The other pools on the drives that aren't imported: this server's from before it was
+    # installed again, one whose drives came too late at boot, or another server's. They're
+    # offered for import by id (pools.import_found), and their drives are kept for them.
+    # [{ 'name', 'id', 'state', 'force', 'status', 'devices' }], as importable_pools has them.
+    def found_pools(scan = importable_pools)
+      recorded = offline_records.values.map(&:to_s)
+      scan.reject { |pool| recorded.include?(pool['id']) }
     end
 
-    # What `zpool import` finds on the drives: [{ 'name', 'id', 'state', 'devices' }]. It lists
-    # each pool that could be imported, its config naming the drives as in BY_ID.
+    # { '/dev/sdc1' => 'test', ... }: every partition of a pool taken offline here.
+    def offline_devices(scan = nil)
+      offline_pools(scan).each_with_object({}) { |pool, found| pool['devices'].each { |device| found[device] = pool['name'] } }
+    end
+
+    # The same for the pools found on the drives.
+    def found_devices(scan = importable_pools)
+      found_pools(scan).each_with_object({}) { |pool, found| pool['devices'].each { |device| found[device] = pool['name'] } }
+    end
+
+    # What `zpool import` finds on the drives: [{ 'name', 'id', 'state', 'force', 'status',
+    # 'devices' }]. It lists each pool that could be imported, its config naming the drives as in
+    # BY_ID. force: ZFS asks for -f, the pool having been last used by another system (this server
+    # before it was installed again, or another one); status: its note on the pool, if any.
     def importable_pools
       out, _err, status = Open3.capture3(ENV_MIN, ZPOOL, 'import', '-d', BY_ID, unsetenv_others: true, chdir: '/')
       return [] unless status.success?
@@ -2513,7 +2795,8 @@ module AmahiHelper
     def parse_importable(text)
       text.split(/^\s*pool: /).drop(1).map do |block|
         name = block.lines.first.strip
-        config = block.split(/^\s*config:\s*$/, 2)[1].to_s
+        header, config = block.split(/^\s*config:\s*$/, 2)
+        config = config.to_s
         devices = config.lines.filter_map do |line|
           token = line.strip.split(/\s+/).first.to_s
           path = token.start_with?('/') ? token : File.join(BY_ID, token)
@@ -2521,13 +2804,14 @@ module AmahiHelper
         rescue SystemCallError
           nil
         end
-        { 'name' => name, 'id' => block[/^\s*id: (\d+)/, 1], 'state' => block[/^\s*state: (\S+)/, 1], 'devices' => devices.uniq }
+        { 'name' => name, 'id' => block[/^\s*id: (\d+)/, 1], 'state' => block[/^\s*state: (\S+)/, 1],
+          'force' => header.include?("'-f'"), 'status' => parse_pool_status(header)['status'], 'devices' => devices.uniq }
       end
     end
 
     def snapshot_request(name, snapshot)
       installed!(ZPOOL)
-      name = existing_pool(name)
+      name = managed_pool(name)
       snapshot = string(snapshot, 'snapshot', max: 128)
       raise Refused, "#{snapshot.inspect} isn't one of Amahi-kai's snapshots" unless snapshot.match?(SNAPSHOT_NAME)
       raise Refused, "the pool #{name} has no snapshot #{snapshot}" unless pool_snapshots(name).any? { |snap| snap['name'] == snapshot }
@@ -2571,6 +2855,32 @@ module AmahiHelper
       value
     end
 
+    # One of Amahi-kai's own pools, the only ones it changes: one it made or imported, mounted at
+    # POOL_ROOT/<name>. Others are only shown (a system that runs from ZFS has bpool and rpool).
+    def managed_pool(value)
+      name = existing_pool(value)
+      mountpoint = pool_mountpoint(name)
+      unless managed?(name, mountpoint)
+        where = mountpoint ? "it mounts at #{mountpoint}" : "ZFS can't say where it mounts"
+        raise Refused, "#{name} isn't one of Amahi-kai's pools (#{where}); manage it from the command line"
+      end
+      name
+    end
+
+    # When ZFS can't read the mount point (a pool whose drives are failing), the pool's folder in
+    # POOL_ROOT says it's Amahi-kai's: one it made or imported was mounted there.
+    def managed?(name, mountpoint = pool_mountpoint(name))
+      mountpoint ? mountpoint == "#{POOL_ROOT}/#{name}" : File.directory?("#{POOL_ROOT}/#{name}")
+    end
+
+    # The mountpoint property of a pool's root dataset ('none' or 'legacy' when ZFS doesn't mount
+    # it), or nil when ZFS can't read it.
+    def pool_mountpoint(name)
+      capture([ZFS, 'get', '-H', '-o', 'value', 'mountpoint', name]).strip
+    rescue Failed
+      nil
+    end
+
     def subtree(node)
       [node, *(node['children'] || []).flat_map { |child| subtree(child) }]
     end
@@ -2606,7 +2916,7 @@ module AmahiHelper
     def arc_limit
       memory = File.read(MEMINFO)[/^MemTotal:\s+(\d+) kB/, 1].to_i * 1024
       raise Failed, "couldn't read the memory size from #{MEMINFO}" unless memory.positive?
-      [ARC_LIMIT, memory / 2].min
+      [[ARC_LIMIT, memory / 32 + ARC_MARGIN].max, memory / 2].min
     end
 
     def pool_names
@@ -2631,9 +2941,62 @@ module AmahiHelper
     # --- Apps ---
 
     def app_request(value)
+      id = app_id(value)
+      { id: id, manifest: app_manifest(id) }
+    end
+
+    def app_id(value)
       id = string(value, 'app', max: 24)
       raise Refused, "app #{id.inspect} isn't one Amahi-kai knows" unless id.match?(APP_ID)
-      { id: id, manifest: app_manifest(id) }
+      id
+    end
+
+    # An app to install: the definition its container runs, or ran (a reinstall keeps its version
+    # and its settings), else the catalog's manifest.
+    def app_install_request(value)
+      id = app_id(value)
+      { id: id, manifest: app_definition(id) || app_manifest(id) }
+    end
+
+    # An update to undo: the definition the app ran before it, as its copy recorded it (else, for
+    # a copy from before definitions were kept, the one it runs, or the catalog's).
+    def app_undo_request(value)
+      id = app_id(value)
+      before = definition_from(id, Hash(app_backup_info(id))['definition'])
+      { id: id, manifest: before || app_definition(id) || app_manifest(id) }
+    end
+
+    # An installed app, for start, stop and restart: its container is what counts, not the
+    # catalog, which may have moved on or dropped it. Refused while a job changes it.
+    def installed_app_request(value)
+      id = app_id(value)
+      not_in_a_job!(id)
+      raise Refused, "#{id} has no container: install it again" unless docker_output('inspect', '--format', '{{.Id}}', app_container(id))
+      { id: id }
+    end
+
+    # Refused while a job of the app's runs (APP_JOBS): an install, update, undo or uninstall.
+    def not_in_a_job!(id)
+      raise Refused, "#{id} is being changed (an install, update or uninstall runs): try again when it's done" if app_job_running?(id)
+    end
+
+    # Whether the app's job unit runs now; never the job itself, which runs inside it.
+    def app_job_running?(id)
+      return false if ENV['AMAHI_APP_JOB'] == id
+
+      _out, _err, status = Open3.capture3(ENV_MIN, SYSTEMCTL, 'is-active', '--quiet', "#{format(APP_JOB_UNIT, id)}.service",
+                                         unsetenv_others: true, chdir: '/')
+      status.success?
+    rescue SystemCallError
+      false
+    end
+
+    # Docker answers: an uninstall while it's stopped left the container, which came back when it
+    # started, unlisted.
+    def docker_running!
+      raise Refused, "Docker isn't running: start it (Apps), then try again" unless docker_output('info', '--format', '{{.ServerVersion}}')
+
+      true
     end
 
     def app_container(id)
@@ -2653,9 +3016,41 @@ module AmahiHelper
       data = YAML.safe_load(File.read(path))
       raise Failed, "#{path} isn't an app manifest" unless data.is_a?(Hash)
       raise Refused, "#{id} needs a newer Amahi-kai: run System Update first" if manifest_requires(id, data) > CATALOG_FORMAT
-      check_manifest(id, data)
+      check_manifest(id, data).merge(source: data)
     rescue Psych::Exception => e
       raise Failed, "#{id}'s manifest can't be read: #{e.message}"
+    end
+
+    # The definition the app's container was made from (APP_DEFINITIONS): its manifest as it was,
+    # checked again, with the image the container runs; nil for a container made before these
+    # were kept, or one that no longer passes.
+    def app_definition(id)
+      definition_from(id, read_json("#{APP_DEFINITIONS}/#{id}.json"))
+    end
+
+    # A definition (a manifest's source, with its image) checked again; nil when it isn't one, or
+    # no longer passes.
+    def definition_from(id, source)
+      return nil unless source.is_a?(Hash)
+
+      check_manifest(id, source).merge(source: source)
+    rescue Failed
+      nil
+    end
+
+    def app_record_definition(id, manifest)
+      return unless manifest[:source].is_a?(Hash)
+
+      unless File.directory?(APP_DEFINITIONS)
+        Dir.mkdir(APP_DEFINITIONS, 0o750)
+        File.chown(0, group_id(APP_USER), APP_DEFINITIONS)
+      end
+      source = manifest[:source].merge('image' => manifest[:image])
+      do_install("#{APP_DEFINITIONS}/#{id}.json", "#{JSON.pretty_generate(source)}\n", nil, '0640', APP_USER)
+    end
+
+    def app_forget_definition(id)
+      FileUtils.rm_f("#{APP_DEFINITIONS}/#{id}.json")
     end
 
     # The catalog format a manifest needs (`requires`, 1 when it doesn't say).
@@ -2778,6 +3173,8 @@ module AmahiHelper
         path = folder['path'].to_s
         bad.call("folder name #{name.inspect} must be lowercase letters, digits, _ or -") unless name.match?(APP_FOLDER)
         bad.call("folder path #{path.inspect} must be an absolute, normalized path") unless normalized_path?(path)
+        bad.call("folder path #{path} must be plain names (letters, digits, . _ -)") unless path.split('/').drop(1).all? { |part| part.match?(APP_PATH_PART) }
+        bad.call("folder path #{path} is where the shares go") if path == APP_SHARE_TARGET || path.start_with?("#{APP_SHARE_TARGET}/")
         backup = folder.fetch('backup', true)
         bad.call("folder #{name}'s backup must be true or false") unless [true, false].include?(backup)
         kind = folder.fetch('kind', 'state').to_s
@@ -2788,6 +3185,7 @@ module AmahiHelper
         { name: name, path: path, backup: backup, kind: kind.to_sym, required: kind == 'dataset' && required }
       end
       bad.call('a folder is listed twice') if folders.map { |f| f[:name] }.uniq.size != folders.size
+      bad.call('two folders have the same path') if folders.map { |f| f[:path] }.uniq.size != folders.size
       folders
     end
 
@@ -2805,6 +3203,7 @@ module AmahiHelper
       bad.call('environment must be a mapping') unless environment.is_a?(Hash)
       environment.to_h do |key, value|
         bad.call("environment name #{key.inspect} isn't valid") unless key.to_s.match?(APP_ENV_NAME)
+        bad.call("#{key} would have the image download more code as it starts") if APP_REFUSED_ENV.include?(key.to_s)
         bad.call("#{key} must be one line of text") unless value.is_a?(String) && value.length <= 1000 && !value.match?(/[\r\n\0]/)
         [key.to_s, value]
       end
@@ -2814,6 +3213,7 @@ module AmahiHelper
       Array(list).map do |secret|
         name = secret.is_a?(Hash) ? secret['env'].to_s : ''
         bad.call("secret #{name.inspect} isn't a valid environment name") unless name.match?(APP_ENV_NAME)
+        bad.call("#{name} would have the image download more code as it starts") if APP_REFUSED_ENV.include?(name)
         bad.call("secret #{name} is set in environment too") if environment.key?(name)
         name
       end
@@ -2830,9 +3230,10 @@ module AmahiHelper
         share = shares[name.downcase] or raise Refused, "#{name.inspect} isn't one of the NAS's shares"
         raise Refused, "share #{share[:name]}'s name can't be a folder in an app" unless share[:name].match?(APP_SHARE_NAME)
         path = share[:path]
-        unless normalized_path?(path) && !path.include?(',') && share_root_of(path)
+        unless normalized_path?(path) && !path.include?(',') && (share_root_of(path) || drive_mount_point?(path))
           raise Refused, "share #{share[:name]}'s folder #{path} isn't in the share root or on a mounted data drive"
         end
+        raise Refused, "share #{share[:name]}'s folder #{path} isn't a real folder (a link, or missing)" unless real_folder?(path)
         write = item.key?('write') ? boolean(item, 'write') : false
         raise Refused, "#{id} only reads shares" if write && !manifest[:writes_shares]
         raise Refused, "share #{share[:name]} is pooled by Greyhole, so apps can only read it" if write && share[:pooled]
@@ -2840,6 +3241,14 @@ module AmahiHelper
       end
       raise Refused, 'a share is listed twice' if chosen.map { |share| share[:name] }.uniq.size != chosen.size
       chosen
+    end
+
+    # A real folder at its own path, no link anywhere on the way: Docker follows links in a mount's
+    # source, so a link there would give an app whatever it points to.
+    def real_folder?(path)
+      File.realpath(path) == path && File.lstat(path).directory?
+    rescue SystemCallError
+      false
     end
 
     # { 'movies' => { name: 'Movies', path: '/var/lib/amahi-kai/files/movies', pooled: false } }:
@@ -2941,9 +3350,9 @@ module AmahiHelper
       path = string(path_value, 'path', max: 4096)
       raise Refused, 'path must be relative, without . or .. or //' unless normalized_path?("/#{path}") && !path.start_with?('/')
       copies = greyhole_drives.filter_map do |drive|
-        trash = "#{drive}/#{GREYHOLE_TRASH}"
-        copy = "#{trash}/#{share}/#{path}"
-        copy if File.file?(copy) && !File.symlink?(copy) && File.realpath(copy) == "#{File.realpath(trash)}/#{share}/#{path}"
+        copy = "#{drive}/#{GREYHOLE_TRASH}/#{share}/#{path}"
+        # its own real path: no link anywhere on the way, the drive's trash folder included
+        copy if File.file?(copy) && !File.symlink?(copy) && File.realpath(copy) == copy
       rescue SystemCallError
         nil
       end
@@ -3015,15 +3424,29 @@ module AmahiHelper
         raise Refused, 'no account that can log in has an SSH key (~/.ssh/authorized_keys); ' \
                        'turning off password login would lock everyone out of SSH'
       end
+      if setting == 'root_login' && ssh_login_accounts.empty?
+        raise Refused, 'no account but root can log in over SSH (with a key, or a password while SSH takes them); ' \
+                       "turning off root's login would lock everyone out of SSH"
+      end
       { settings: SSH_HARDENING.fetch(setting) }
+    end
+
+    # The ports sshd listens on, from its effective settings; none when it isn't there or can't say.
+    def ssh_ports
+      return [] unless File.executable?(SSHD)
+
+      Dir.mkdir('/run/sshd', 0o755) unless File.directory?('/run/sshd')
+      capture([SSHD, '-T']).lines.filter_map { |line| line[/\Aport (\d{1,5})\s*\z/, 1] }.uniq
+    rescue Failed, SystemCallError
+      []
     end
 
     # Accounts with a login shell (root aside) whose authorized_keys holds a key.
     def ssh_key_holders
-      shells = File.readlines('/etc/shells', chomp: true).reject { |s| s.empty? || s.start_with?('#') }
+      shells = login_shells
       holders = []
       Etc.passwd do |pw|
-        next if pw.uid < UID_MIN || !shells.include?(pw.shell) || pw.shell.end_with?('nologin', 'false')
+        next unless login_account?(pw, shells)
         keys = File.join(pw.dir, '.ssh', 'authorized_keys')
         next unless File.file?(keys)
         holders << pw.name if File.foreach(keys).any? { |line| line.match?(/\A[^#]*\b(?:ssh-|ecdsa-|sk-)\S+ \S/) }
@@ -3031,6 +3454,46 @@ module AmahiHelper
         next
       end
       holders
+    end
+
+    # Accounts besides root that can log in over SSH: those with a key, and, while SSH takes
+    # passwords, those with a password that isn't locked.
+    def ssh_login_accounts
+      holders = ssh_key_holders
+      ssh_passwords_on? ? holders | password_accounts : holders
+    end
+
+    # Whether sshd takes passwords; no when it can't say, so a doubt never counts toward a login.
+    def ssh_passwords_on?
+      Dir.mkdir('/run/sshd', 0o755) unless File.directory?('/run/sshd')
+      capture([SSHD, '-T']).lines.any? { |line| line.strip == 'passwordauthentication yes' }
+    rescue Failed, SystemCallError
+      false
+    end
+
+    # Accounts with a login shell (root aside) and a password that isn't locked.
+    def password_accounts
+      shells = login_shells
+      File.foreach('/etc/shadow').filter_map do |line|
+        name, hash = line.split(':', 3)
+        next if hash.to_s.empty? || hash.start_with?('!', '*')
+        pw = begin
+          Etc.getpwnam(name)
+        rescue ArgumentError
+          nil
+        end
+        name if pw && login_account?(pw, shells)
+      end
+    rescue SystemCallError
+      []
+    end
+
+    def login_shells
+      File.readlines('/etc/shells', chomp: true).reject { |s| s.empty? || s.start_with?('#') }
+    end
+
+    def login_account?(pw, shells)
+      pw.uid >= UID_MIN && shells.include?(pw.shell) && !pw.shell.end_with?('nologin', 'false')
     end
 
     def package_list(value)
@@ -3195,11 +3658,19 @@ module AmahiHelper
     end
 
     # Share paths in a config are text, so only their form is checked here; folders
-    # themselves are created with shares.create_dir.
+    # themselves are created with shares.create_dir. A data drive's mount point itself is a share
+    # too when the drive is shared as it is (Disks → Devices' Mount as Share, and the setup
+    # wizard's FAT, exFAT and NTFS drives), its files where they were.
     def config_share_path?(value)
       normalized_path?(value) && !value.include?('%') &&
-        (value.start_with?("#{share_root}/") || value.match?(%r{\A#{Regexp.escape(drives_root)}/[^/]+/}) ||
+        (value.start_with?("#{share_root}/") || value.match?(%r{\A#{Regexp.escape(drives_root)}/[^/]+(?:/|\z)}) ||
          value.match?(%r{\A#{Regexp.escape(pool_root)}/[a-z][a-z0-9_-]{0,31}/shares/[^/]+}))
+    end
+
+    # A data drive's mount point with the drive mounted there: /mnt/<name>, a real folder.
+    def drive_mount_point?(path)
+      name = path.delete_prefix("#{drives_root}/")
+      path.start_with?("#{drives_root}/") && !name.empty? && !name.include?('/') && real_root?(path)
     end
 
     # [section, name, value] for each parameter. Samba joins a line ending in a
@@ -3234,6 +3705,8 @@ module AmahiHelper
       argv = step.dup
       opts = argv.last.is_a?(Hash) ? argv.pop : {}
       env = opts[:env] || ENV_MIN
+      name = File.basename(argv[0])
+      argv, env = in_own_unit(argv, env) if argv[0] == APT_GET
       if opts[:stream]
         err, status = stream_command(env, argv)
       else
@@ -3241,12 +3714,22 @@ module AmahiHelper
                                            stdin_data: opts[:stdin].to_s, unsetenv_others: true, chdir: '/')
       end
       return nil if status.success?
-      message = "#{File.basename(argv[0])} exited #{status.exitstatus}: #{last_lines(err, 3)}"
+      message = "#{name} exited #{status.exitstatus}: #{last_lines(err, 3)}"
       return "ignored: #{message}" if opts[:allow_failure]
       raise Failed, message
     rescue SystemCallError => e
       return "ignored: #{argv[0]}: #{e.message}" if opts&.dig(:allow_failure)
       raise Failed, "#{argv[0]}: #{e.message}"
+    end
+
+    # apt, as a unit of its own: the helper runs inside the unit that called it (the web app's,
+    # for System Dependencies), and a MariaDB update stops MariaDB, which stops the app, and
+    # needrestart can restart the app; neither may take dpkg down with it partway. --pipe
+    # streams apt's output here, --wait hands back its exit status, and the one unit name keeps
+    # package jobs one at a time (a second is refused while the first runs).
+    def in_own_unit(argv, env)
+      [[SYSTEMD_RUN, "--unit=#{APT_UNIT}", '--wait', '--pipe', '--collect', '--quiet',
+        *env.map { |key, value| "--setenv=#{key}=#{value}" }, *argv], ENV_MIN]
     end
 
     def stream_command(env, argv)
@@ -3529,29 +4012,42 @@ module AmahiHelper
       names
     end
 
-    # Router mode on. Order: the internet interface's address (checked by netplan generate before
-    # it's applied), forwarding, the NAT block, then UFW's rules: the LAN out, each forward in,
-    # and, first of all the rules, nothing else in on the internet side (inserted once another
-    # rule exists, which the route rule makes sure of). Rules from a previous state go first, so
-    # a changed interface or forward leaves nothing behind.
+    # Router mode on. The internet side is shut first, before its interface gets an address and
+    # before any rule from a previous state goes, so a save never leaves it open, not for a
+    # moment and not after a failure partway. Then the internet interface's address (checked
+    # by netplan generate before it's applied, and applied only when a netplan file changed),
+    # forwarding, the NAT block, and UFW's other rules: the LAN out, each forward in, the denies
+    # in front of the LAN's way out. Only the rules a previous state had and this one doesn't are
+    # deleted; the rest stay where they are (UFW skips adding a rule it has).
     def do_router_on(lan, wan, forwards, dns = nil, lan_only = [])
-      pinned = pin_lan_netplan(lan, wan)
-      do_install(WAN_NETPLAN, wan_netplan(wan), nil, '0600')
-      begin
-        run_command([NETPLAN, 'generate'])
-      rescue Failed
-        do_remove_files(WAN_NETPLAN)
-        restore_lan_netplan(pinned)
-        raise
-      end
-      run_command([NETPLAN, 'apply'])
       previous = read_json(ROUTER_STATE)
+      tailscale = File.executable?(TAILSCALE)
+      shield_router(wan, tailscale)
+      previous_pinned = previous && previous['pinned'].is_a?(Hash) ? previous['pinned'] : {}
+      pinned = pin_lan_netplan(lan, wan, previous_pinned.keys)
+      working = File.exist?(WAN_NETPLAN) ? File.read(WAN_NETPLAN) : nil
+      do_install(WAN_NETPLAN, wan_netplan(wan), nil, '0600') unless working == wan_netplan(wan)
+      unless netplan_applied?
+        begin
+          run_command([NETPLAN, 'generate'])
+        rescue Failed
+          # A save keeps the file that worked; a first try leaves nothing behind.
+          working ? do_install(WAN_NETPLAN, working, nil, '0600') : do_remove_files(WAN_NETPLAN)
+          restore_lan_netplan(pinned)
+          unshield_router(wan, tailscale) unless previous
+          raise
+        end
+        netplan_apply
+      end
       # The kernel settings from before router mode, kept across its saves, for the way back.
       sysctl_before = sysctl_before(previous, wan)
       do_install(ROUTER_SYSCTL, router_sysctl(wan), nil)
       run_command(['/usr/sbin/sysctl', '-q', '-w', *router_sysctl_settings(wan).map { |key, value| "#{key}=#{value}" }])
-      ufw_router_rules_off(previous) if previous
+      state = { 'lan' => lan, 'wan' => wan, 'forwards' => forwards.map { |f| f.transform_keys(&:to_s) },
+                'dns' => dns, 'tailscale' => tailscale, 'lan_only' => lan_only }
+      (router_rules(previous || {}) - router_rules(state)).each { |words| ufw_delete(words) }
       write_router_nat(wan, forwards, lan, dns, lan_only)
+      write_router_filter6(wan)
       run_command([UFW, 'route', 'allow', 'in', 'on', lan, 'out', 'on', wan])
       forwards.each do |f|
         run_command([UFW, 'route', 'allow', 'in', 'on', wan, 'out', 'on', lan, 'to', f[:address], 'port', f[:to_port].to_s, 'proto', f[:protocol]])
@@ -3561,54 +4057,129 @@ module AmahiHelper
         # lookups aren't forwarded traffic, so they do.
         %w[tcp udp].each { |proto| run_command([UFW, 'route', 'insert', '1', 'deny', 'in', 'on', lan, 'out', 'on', wan, 'to', 'any', 'port', '853', 'proto', proto]) }
       end
-      run_command([UFW, 'insert', '1', 'deny', 'in', 'on', wan])
       # Devices kept off the internet: no forwarding out for them, ahead of the LAN's allow.
       lan_only.each { |address| run_command([UFW, 'route', 'insert', '1', 'deny', 'in', 'on', lan, 'out', 'on', wan, 'from', address]) }
-      tailscale = File.executable?(TAILSCALE)
-      run_command([UFW, 'insert', '1', 'allow', 'in', 'on', wan, 'to', 'any', 'port', TAILSCALE_PORT, 'proto', 'udp']) if tailscale
       run_command([UFW, 'reload'])
       settle_router_nat(lan, wan)
-      previous_pinned = previous ? previous['pinned'] : nil
-      state = { 'lan' => lan, 'wan' => wan, 'forwards' => forwards.map { |f| f.transform_keys(&:to_s) },
-                'pinned' => (previous_pinned || {}).merge(pinned), 'dns' => dns, 'tailscale' => tailscale,
-                'lan_only' => lan_only, 'sysctl' => sysctl_before, 'since' => Time.now.to_i, 'rules' => ROUTER_RULES_VERSION }
+      state.merge!('pinned' => previous_pinned.merge(pinned), 'sysctl' => sysctl_before, 'since' => Time.now.to_i,
+                   'rules' => ROUTER_RULES_VERSION)
       state_dir!(ROUTER_STATE)
       do_install(ROUTER_STATE, "#{JSON.generate(state)}\n", nil, '0644')
-      nil
+      refresh_app_firewall
     end
 
-    # Router mode off: the rules, the NAT block, forwarding and the internet interface's address
-    # go, in that order, each on its own so one failing doesn't keep the rest.
-    def do_router_off
+    # Router mode off. The internet interface goes first (its file, then its address), so
+    # nothing reaches the NAS from that side once its deny is gone; then the rules, the NAT
+    # block and forwarding (as it was before router mode), each on its own so one failing
+    # doesn't keep the rest. +keep_lan+: DHCP stays on, so the LAN keeps the fixed address
+    # router mode gave it (a NAS handing out addresses can't take its own from DHCP).
+    def do_router_off(keep_lan = false)
       return nil unless router_in_place?
       state = read_json(ROUTER_STATE)
+      pinned = state && state['pinned']
+      notes = keep_lan ? forget_lan_backups(pinned) : restore_lan_netplan(pinned)
+      if File.exist?(WAN_NETPLAN)
+        wan = File.read(WAN_NETPLAN)[/^    (#{IFNAME}):$/o, 1]
+        do_remove_files(WAN_NETPLAN)
+        netplan_apply(allow_failure: true)
+        # netplan apply leaves an interface it no longer knows as it was; its address goes too.
+        run_command([IP, '-4', 'addr', 'flush', 'dev', wan, { allow_failure: true }]) if wan
+      end
       if File.executable?(UFW)
         ufw_router_rules_off(state) if state
         write_router_nat(nil, [])
+        write_router_filter6(nil)
         run_command([UFW, 'reload', { allow_failure: true }]) if ufw_enabled?
         clear_router_nat(state)
       end
       do_remove_files(ROUTER_SYSCTL, ROUTER_STATE)
-      run_command(['/usr/sbin/sysctl', '-q', '-w', 'net.ipv4.ip_forward=0', *sysctl_restore(state), { allow_failure: true }])
-      notes = restore_lan_netplan(state && state['pinned'])
-      return notes unless File.exist?(WAN_NETPLAN)
-      wan = File.read(WAN_NETPLAN)[/^    ([A-Za-z0-9_.-]{1,15}):$/, 1]
-      do_remove_files(WAN_NETPLAN)
-      run_command([NETPLAN, 'apply', { allow_failure: true }])
-      # netplan apply leaves an interface it no longer knows as it was; its address goes too.
-      run_command([IP, '-4', 'addr', 'flush', 'dev', wan, { allow_failure: true }]) if wan
-      notes
+      run_command(['/usr/sbin/sysctl', '-q', '-w', "net.ipv4.ip_forward=#{forwarding_before(state)}", *sysctl_restore(state), { allow_failure: true }])
+      [notes, refresh_app_firewall].compact.join('; ').then { |text| text.empty? ? nil : text }
+    end
+
+    # The app firewall lets in the LAN's subnets (lan_subnets), which router mode and This NAS
+    # change: it's rebuilt after them, where Docker runs. Left as it was, devices on a new subnet
+    # couldn't reach the apps, and an old one stayed let in. A failure is a note, not the change's.
+    def refresh_app_firewall
+      return nil unless File.executable?(DOCKER) && File.executable?(IPTABLES) && docker_output('info', '--format', '{{.ServerVersion}}')
+
+      do_app_firewall
+      nil
+    rescue Failed => e
+      "the app firewall wasn't rebuilt for the network's change: #{e.message}"
+    end
+
+    # Forwarding as it was before router mode: Docker turns it on for its apps, and turning it
+    # off would cut them off. A state from before this was kept says nothing: off.
+    def forwarding_before(state)
+      value = Hash(state && state['sysctl'])['net.ipv4.ip_forward'].to_s
+      value.match?(/\A[01]\z/) ? value : '0'
+    end
+
+    # Router mode's UFW rules, each as the words that name it (what ufw delete takes): the
+    # internet side's deny and Tailscale's port, the LAN's way out, each forward in, devices'
+    # own encrypted DNS kept in, and devices kept off the internet.
+    def router_rules(state)
+      lan, wan = state.values_at('lan', 'wan')
+      return [] unless lan && wan
+      rules = [['deny', 'in', 'on', wan]]
+      rules << ['allow', 'in', 'on', wan, 'to', 'any', 'port', TAILSCALE_PORT, 'proto', 'udp'] if state['tailscale']
+      rules << ['route', 'allow', 'in', 'on', lan, 'out', 'on', wan]
+      Array(state['forwards']).each do |f|
+        rules << ['route', 'allow', 'in', 'on', wan, 'out', 'on', lan, 'to', f['address'].to_s, 'port', f['to_port'].to_s, 'proto', f['protocol'].to_s]
+      end
+      %w[tcp udp].each { |proto| rules << ['route', 'deny', 'in', 'on', lan, 'out', 'on', wan, 'to', 'any', 'port', '853', 'proto', proto] } if state['dns']
+      Array(state['lan_only']).each { |address| rules << ['route', 'deny', 'in', 'on', lan, 'out', 'on', wan, 'from', address.to_s] }
+      rules
+    end
+
+    def ufw_delete(words)
+      command = words.first == 'route' ? ['route', 'delete', *words.drop(1)] : ['delete', *words]
+      run_command([UFW, *command, { allow_failure: true }])
+    end
+
+    # A rule at the top of UFW's list (insert 1), or appended when the list is empty (insert
+    # refuses position 1 then). A copy UFW has already is skipped where it stands.
+    def ufw_insert_first(words)
+      result = run_command([UFW, 'insert', '1', *words, { allow_failure: true }])
+      return unless result
+      raise Failed, result.delete_prefix('ignored: ') unless result.include?('Invalid position')
+      run_command([UFW, *words])
+    end
+
+    # Nothing in on the internet side, except Tailscale's port, which goes back on top of the
+    # deny so the deny never stands in front of it.
+    def shield_router(wan, tailscale)
+      ufw_insert_first(['deny', 'in', 'on', wan])
+      return unless tailscale
+      allow = ['allow', 'in', 'on', wan, 'to', 'any', 'port', TAILSCALE_PORT, 'proto', 'udp']
+      ufw_delete(allow)
+      ufw_insert_first(allow)
+    end
+
+    def unshield_router(wan, tailscale)
+      ufw_delete(['allow', 'in', 'on', wan, 'to', 'any', 'port', TAILSCALE_PORT, 'proto', 'udp']) if tailscale
+      ufw_delete(['deny', 'in', 'on', wan])
+    end
+
+    # The LAN files router mode pinned stay as they are; their copies from before go, so a
+    # later router session doesn't bring back an address from before this one.
+    def forget_lan_backups(pinned)
+      (pinned.is_a?(Hash) ? pinned.keys : []).each { |path| do_remove_files(path + NETPLAN_BACKUP_SUFFIX) }
+      nil
     end
 
     # The netplan files made to fit router mode: the LAN interface keeps an address (one from the
     # router the NAS replaces would run out), and every interface but the internet's has its
     # default route, if it has one, put behind the internet's (a third interface, a management
     # one say, would otherwise take the devices' traffic). A file changed is kept as it was
-    # beside it (NETPLAN_BACKUP_SUFFIX), once. Comments in it don't survive (it's read and written
-    # as YAML); the installer's file has none. Returns { path => sha256 of what was written }, for
-    # the way back.
-    def pin_lan_netplan(lan, wan, dir = NETPLAN_DIR)
-      Dir.glob(File.join(dir, '*.yaml')).sort.each_with_object({}) do |path, pinned|
+    # beside it (NETPLAN_BACKUP_SUFFIX), once: a copy is kept from one save to the next only for
+    # the files +kept+ lists (those this router session changed), and one an earlier session left
+    # behind is out of date, so it's made again. Comments in it don't survive (it's read and
+    # written as YAML); the installer's file has none. Returns { path => sha256 of what was
+    # written }, for the way back.
+    def pin_lan_netplan(lan, wan, kept = [])
+      Dir.glob(File.join(NETPLAN_DIR, '*.yaml')).sort.each_with_object({}) do |path, pinned|
         data = netplan_yaml(path) or next
         before = File.read(path)
         original = Marshal.load(Marshal.dump(data))
@@ -3622,7 +4193,7 @@ module AmahiHelper
         next if data == original # nothing to change: the file stays as it is, comments and all
         content = YAML.dump(data)
         backup = path + NETPLAN_BACKUP_SUFFIX
-        do_install(backup, before, nil, '0600') unless File.exist?(backup)
+        do_install(backup, before, nil, '0600') unless File.exist?(backup) && kept.include?(path)
         do_install(path, content, nil, '0600')
         pinned[path] = Digest::SHA256.hexdigest(content)
       end
@@ -3654,26 +4225,52 @@ module AmahiHelper
       nil
     end
 
+    # netplan apply, recorded in NETPLAN_APPLIED, and the NAS's own IPv6 address for DNS put back
+    # on its interface after it, whatever came of it (networkd takes it off). Raises, or with
+    # +allow_failure+ returns the note.
+    def netplan_apply(allow_failure: false)
+      note = run_command([NETPLAN, 'apply', { allow_failure: allow_failure }])
+      unless note
+        state_dir!(NETPLAN_APPLIED)
+        do_install(NETPLAN_APPLIED, "#{netplan_digest}\n", nil, '0644')
+      end
+      note
+    ensure
+      run_command(['/usr/bin/systemctl', 'try-restart', File.basename(ULA_UNIT), { allow_failure: true }]) if File.exist?(ULA_UNIT)
+    end
+
+    # The netplan files are as the helper last applied them.
+    def netplan_applied?
+      File.exist?(NETPLAN_APPLIED) && File.read(NETPLAN_APPLIED).strip == netplan_digest
+    end
+
+    def netplan_digest
+      Digest::SHA256.hexdigest(Dir.glob(File.join(NETPLAN_DIR, '*.yaml')).sort.map { |path| "#{path}\n#{File.read(path)}\n" }.join)
+    end
+
     # Puts back the files pin_lan_netplan changed, each only while it's still what the helper
-    # wrote (one changed since is left, and said so). Returns the notes, or nil.
+    # wrote: one changed since is left, and said so, and its copy from before goes (put back
+    # later, it would undo that change too). Returns the notes, or nil.
     def restore_lan_netplan(pinned)
       notes = []
       (pinned || {}).each do |path, sha|
         backup = path + NETPLAN_BACKUP_SUFFIX
         next unless File.exist?(backup)
         if File.exist?(path) && Digest::SHA256.hexdigest(File.read(path)) != sha
-          notes << "#{path} was changed since router mode set it up, so it's left as it is (its copy from before is #{backup})"
-          next
+          notes << "#{path} was changed since router mode set it up, so it's left as it is"
+        else
+          do_install(path, File.read(backup), nil, '0600')
         end
-        do_install(path, File.read(backup), nil, '0600')
         do_remove_files(backup)
       end
       notes.empty? ? nil : notes.join('; ')
     end
 
+    # Any of router mode's files, or its block in UFW's rules (before6.rules has only the filter
+    # part, whose marker begins with ROUTER_BEGIN too).
     def router_in_place?
       [ROUTER_STATE, WAN_NETPLAN, ROUTER_SYSCTL].any? { |path| File.exist?(path) } ||
-        (File.exist?(UFW_BEFORE_RULES) && File.read(UFW_BEFORE_RULES).include?(ROUTER_BEGIN))
+        [UFW_BEFORE_RULES, UFW_BEFORE6_RULES].any? { |path| File.exist?(path) && File.read(path).include?(ROUTER_BEGIN) }
     end
 
     def ufw_router_rules_off(state)
@@ -3766,13 +4363,13 @@ module AmahiHelper
       arm_timer(ADDRESS_REVERT_UNIT, ADDRESS_KEEP_WAIT, 'network.revert_address') if state['guard']
       write_address_state(state.merge('applied' => true, 'until' => state['guard'] ? Time.now.to_i + ADDRESS_KEEP_WAIT : nil))
       begin
-        run_command([NETPLAN, 'apply'])
+        netplan_apply
       rescue Failed
         do_revert_address
         raise
       end
       do_keep_address unless state['guard']
-      nil
+      refresh_app_firewall
     end
 
     # The change waiting is kept: the revert timer goes, and the copies from before.
@@ -3797,11 +4394,12 @@ module AmahiHelper
       stop_timer(ADDRESS_REVERT_UNIT)
       restore_address_files(state['files'], state['created'])
       if state['applied']
-        run_command([NETPLAN, 'apply', { allow_failure: true }])
+        netplan_apply(allow_failure: true)
         address = state['address'].to_s
         if state['mode'] == 'fixed' && !Array(state['before']).include?(address.split('/').first)
           run_command([IP, '-4', 'addr', 'del', address, 'dev', state['interface'], { allow_failure: true }])
         end
+        refresh_app_firewall
       end
       write_address_state(state.merge('state' => 'reverted', 'until' => nil))
       nil
@@ -3910,13 +4508,14 @@ module AmahiHelper
       content = content.sub(/#{Regexp.escape(ROUTER_BEGIN)}\n.*?#{Regexp.escape(ROUTER_END)}\n/m, '')
       content = content.sub(/#{Regexp.escape(ROUTER_FILTER_BEGIN)}\n.*?#{Regexp.escape(ROUTER_FILTER_END)}\n/m, '')
       if wan
-        # In front of UFW's own ICMP accepts (inserted first, before the filter table's COMMIT):
-        # the NAS doesn't answer pings from the internet, and a kept-off device can't ping out.
-        filter = [ROUTER_FILTER_BEGIN, "-I ufw-before-input 1 -i #{wan} -p icmp --icmp-type echo-request -j DROP"]
+        # In front of UFW's own ICMP and discovery accepts (inserted first, before the filter
+        # table's COMMIT): the NAS doesn't answer pings or service discovery from the internet,
+        # and a kept-off device can't ping out.
+        filter = [ROUTER_FILTER_BEGIN, "-I ufw-before-input 1 -i #{wan} -p icmp --icmp-type echo-request -j DROP",
+                  *discovery_drops('ufw-before-input', wan)]
         lan_only.each { |address| filter << "-I ufw-before-forward 1 -i #{lan} -o #{wan} -s #{address} -j DROP" } if lan
         filter << ROUTER_FILTER_END
-        commit = content.rindex("COMMIT\n") or raise Failed, "#{UFW_BEFORE_RULES} has no COMMIT to put the filter rules before"
-        content = "#{content[0...commit]}#{filter.join("\n")}\n#{content[commit..]}"
+        content = before_commit(content, filter, UFW_BEFORE_RULES)
         lines = [ROUTER_BEGIN, '*nat', ':PREROUTING ACCEPT [0:0]', ':POSTROUTING ACCEPT [0:0]',
                  ":#{NAT_PREROUTING} - [0:0]", ":#{NAT_POSTROUTING} - [0:0]", "-F #{NAT_PREROUTING}", "-F #{NAT_POSTROUTING}"]
         if dns && lan
@@ -3933,6 +4532,27 @@ module AmahiHelper
       do_install(UFW_BEFORE_RULES, content, nil, '0640')
     rescue SystemCallError => e
       raise Failed, "couldn't read #{UFW_BEFORE_RULES}: #{e.message}"
+    end
+
+    # UFW's before6.rules with the block's IPv6 filter part (service discovery in on the internet
+    # side dropped), or without it, given nil. Nothing to do where UFW has no IPv6 rules.
+    def write_router_filter6(wan)
+      return unless File.exist?(UFW_BEFORE6_RULES)
+      content = File.read(UFW_BEFORE6_RULES).sub(/#{Regexp.escape(ROUTER_FILTER_BEGIN)}\n.*?#{Regexp.escape(ROUTER_FILTER_END)}\n/m, '')
+      content = before_commit(content, [ROUTER_FILTER_BEGIN, *discovery_drops('ufw6-before-input', wan), ROUTER_FILTER_END], UFW_BEFORE6_RULES) if wan
+      do_install(UFW_BEFORE6_RULES, content, nil, '0640')
+    rescue SystemCallError => e
+      raise Failed, "couldn't read #{UFW_BEFORE6_RULES}: #{e.message}"
+    end
+
+    def discovery_drops(chain, wan)
+      DISCOVERY_PORTS.map { |port| "-I #{chain} 1 -i #{wan} -p udp --dport #{port} -j DROP" }
+    end
+
+    # +lines+ put in a UFW rules file just before its last COMMIT: the filter table's end.
+    def before_commit(content, lines, path)
+      commit = content.rindex("COMMIT\n") or raise Failed, "#{path} has no COMMIT to put the filter rules before"
+      "#{content[0...commit]}#{lines.join("\n")}\n#{content[commit..]}"
     end
 
     # The router's kernel settings (ROUTER_SYSCTL_ALL, ROUTER_SYSCTL_WAN), forwarding first, as
@@ -3961,7 +4581,7 @@ module AmahiHelper
       kept = (previous && previous['sysctl']).is_a?(Hash) ? previous['sysctl'].dup : {}
       Hash(previous && previous['rp_filter']).each { |scope, value| kept[sysctl_key(scope.to_s, 'rp_filter')] ||= value }
       router_sysctl_settings(wan).each_key do |key|
-        next if key == 'net.ipv4.ip_forward' || kept.key?(key)
+        next if kept.key?(key)
         value = read_sysctl(key) and kept[key] = value
       end
       kept
@@ -3976,7 +4596,7 @@ module AmahiHelper
     # The sysctl arguments that put the settings back.
     def sysctl_restore(state)
       Hash(state && state['sysctl']).filter_map do |key, value|
-        "#{key}=#{value}" if key.to_s.match?(%r{\Anet[./]ipv4[./]conf[./][A-Za-z0-9_.-]{1,15}[./][a-z_]+\z}) && value.to_s.match?(/\A[0-9]\z/)
+        "#{key}=#{value}" if key.to_s.match?(%r{\Anet[./]ipv4[./]conf[./]#{IFNAME}[./][a-z_]+\z}o) && value.to_s.match?(/\A[0-9]\z/)
       end
     end
 
@@ -4078,7 +4698,7 @@ module AmahiHelper
     # The interface a dnsmasq config hands out addresses on, or nil when it hands out none.
     def dhcp_interface(content)
       return unless content.match?(/^dhcp-range=/)
-      content[/^interface=([A-Za-z0-9_.-]{1,15})$/, 1]
+      content[/^interface=(#{IFNAME})$/o, 1]
     end
 
     def dhcp_names_on
@@ -4100,14 +4720,14 @@ module AmahiHelper
 
     # The names of the devices dnsmasq gave addresses to, as Unbound's local data
     # (UNBOUND_LEASES): name.<domain> and name, with reverse lookups. Only names that are one
-    # label (devices choose their own), on IPv4 addresses, and not one Amahi-kai's config
-    # already gives (the NAS, fixed hosts, DNS aliases). Written, and Unbound reloaded, only
-    # when they change.
+    # label (devices choose their own), on IPv4 addresses, and neither reserved
+    # (RESERVED_LEASE_NAMES) nor one Amahi-kai's config already gives (the NAS, fixed hosts, DNS
+    # aliases). Written, and Unbound reloaded, only when they change.
     def do_sync_leases
       return 'DNS is off' unless File.exist?(UNBOUND_CONF)
       config = File.read(UNBOUND_CONF)
       domain = config[/^\s*local-zone: "(#{UNBOUND_NAME})" static$/o, 1] or return 'DNS has no local domain'
-      taken = config.scan(/^\s*local-data: "([a-z0-9-]+)\./).flatten
+      taken = config.scan(/^\s*local-data: "([a-z0-9-]+)\./).flatten + RESERVED_LEASE_NAMES
       lines = ['# Names of the devices DHCP gave addresses to: written by Amahi-kai, changes here are lost', 'server:']
       dhcp_leases.each do |address, name|
         next if taken.include?(name)
@@ -4390,15 +5010,35 @@ module AmahiHelper
 
     def add_swap_to_fstab(path)
       return if File.foreach(FSTAB).any? { |line| line.split.first == path }
-      File.open(FSTAB, 'a') { |f| f.puts "#{path} none swap sw 0 0" }
+      add_fstab_line("#{path} none swap sw 0 0")
     end
 
+    def add_fstab_line(line)
+      replace_fstab(*fstab_with(line))
+    end
+
+    # [old, new]: fstab with +line+ after its last one, even when the file doesn't end in a line
+    # break. The new file is checked as the others are (fstab_check!).
+    def fstab_with(line)
+      old = File.read(FSTAB)
+      new = old.empty? || old.end_with?("\n") ? "#{old}#{line}\n" : "#{old}\n#{line}\n"
+      fstab_check!(old, new)
+      [old, new]
+    end
+
+    # Mounts the drive, then adds its fstab line, which is checked before anything is mounted.
     def do_mount_drive(device, mount_point, fstype, uuid)
       created = !File.exist?(mount_point)
       Dir.mkdir(mount_point, 0o755) if created
       protect_mount_point(mount_point)
       begin
-        run_command(['/usr/bin/mount', *(fstype == 'ntfs' ? %w[-t ntfs-3g] : []), '-o', MOUNT_OPTIONS.join(','), device, mount_point])
+        ownerless = OWNERLESS_FS.include?(fstype) ? ownerless_options : []
+        if uuid && fstab_entries.none? { |fields| fields[0] == "UUID=#{uuid}" }
+          type = fstype == 'ntfs' ? 'ntfs-3g' : fstype
+          fstab = fstab_with("UUID=#{uuid} #{mount_point} #{type} #{[FSTAB_OPTIONS, *ownerless].join(',')} 0 2")
+        end
+        run_command(['/usr/bin/mount', *(fstype == 'ntfs' ? %w[-t ntfs-3g] : []), '-o', (MOUNT_OPTIONS + ownerless).join(','),
+                     device, mount_point])
         raise Failed, "#{device} didn't mount at #{mount_point}" unless mount_point?(mount_point)
       rescue Failed
         if created && !mount_point?(mount_point)
@@ -4407,11 +5047,14 @@ module AmahiHelper
         end
         raise
       end
-      fstab_type = fstype == 'ntfs' ? 'ntfs-3g' : fstype
-      if uuid && fstab_entries.none? { |fields| fields[0] == "UUID=#{uuid}" }
-        File.open(FSTAB, 'a') { |f| f.puts "UUID=#{uuid} #{mount_point} #{fstab_type} #{FSTAB_OPTIONS} 0 2" }
-      end
+      replace_fstab(*fstab) if fstab
       { 'mount_point' => mount_point }
+    end
+
+    # The users group owns everything on a FAT or exFAT drive (see OWNERLESS_FS).
+    def ownerless_options
+      gid = group_id(USERS_GROUP) or raise Failed, "the #{USERS_GROUP} group doesn't exist"
+      ["gid=#{gid}", *OWNERLESS_MASKS]
     end
 
     def do_unmount_drive(mount_points, uuid)
@@ -4549,6 +5192,22 @@ module AmahiHelper
       (MOUNT_OPTIONS - mount_options(path)).empty?
     end
 
+    # The share root is root's, 0755: the web app's account owned it, so it could have put a link
+    # in place of a share's folder there, and an app given that share would get whatever it
+    # pointed to. The share folders in it stay the app's (shares.create_dir).
+    def do_secure_share_root
+      return nil unless File.directory?(SHARE_ROOT) && !File.symlink?(SHARE_ROOT)
+
+      stat = File.lstat(SHARE_ROOT)
+      return nil if stat.uid.zero? && stat.gid.zero? && (stat.mode & 0o7777) == 0o755
+
+      with_dir(SHARE_ROOT) do |dir|
+        dir.chown(0, 0)
+        dir.chmod(0o755)
+      end
+      { 'share_root' => 'root:root 0755' }
+    end
+
     # The options of the mount at +path+ (the newest, when several), from /proc/self/mounts;
     # empty when nothing is mounted there. (mount_point? can't see a folder bound onto itself.)
     def mount_options(path, mounts_file = '/proc/self/mounts')
@@ -4563,6 +5222,7 @@ module AmahiHelper
       options = %w[ro nosuid nodev noexec]
       options << 'noload' if %w[ext3 ext4].include?(fstype) # don't replay the journal
       options << 'norecovery' if fstype == 'xfs'
+      options << 'rescue=nologreplay' if fstype == 'btrfs' # ro alone still replays its log
       run_command(['/usr/bin/mount', *(fstype == 'ntfs' ? %w[-t ntfs-3g] : []), '-o', options.join(','), device, dir])
       begin
         directory_summary(dir)
@@ -4575,18 +5235,21 @@ module AmahiHelper
 
     # --- ZFS pools ---
 
-    # Takes each pool's due hourly and daily snapshots, then prunes. A pool that fails doesn't
-    # stop the others; the step fails at the end, so the timer shows it.
+    # Takes each of Amahi-kai's pools' due hourly and daily snapshots, then prunes; other pools
+    # are left alone. A pool that fails doesn't stop the others; the step fails at the end, so the
+    # timer shows it.
     def do_run_snapshots(now = Time.now)
       return { 'pools' => [] } unless File.executable?(ZPOOL)
-      results = pool_names.map do |pool|
+      results = pool_names.filter_map do |pool|
+        next unless managed?(pool)
+
         policy = snapshot_policy(pool)
         snaps = pool_snapshots(pool)
         taken = SNAPSHOT_KINDS.filter_map do |kind, interval|
           next unless policy[kind].positive?
           last = snaps.select { |snap| snap['kind'] == kind }.map { |snap| snap['created'] }.max
           next if last && now.to_i - last < interval
-          name = "amahi-#{kind}-#{now.strftime('%Y-%m-%d-%H%M')}"
+          name = "amahi-#{kind}-#{now.utc.strftime('%Y-%m-%d-%H%M')}"
           run_command([ZFS, 'snapshot', '-r', "#{pool}@#{name}"])
           name
         end
@@ -4741,6 +5404,32 @@ module AmahiHelper
       nil
     end
 
+    # -N imports it with nothing mounted, so a pool that isn't Amahi-kai's never covers a folder of
+    # the system: its datasets' mount points are checked first. (force: ZFS asks for -f, the pool
+    # last used by another system, such as this one before it was installed again.)
+    def do_import_found_pool(name, id, force)
+      capture([ZPOOL, 'import', '-N', *(force ? ['-f'] : []), '-d', BY_ID, id])
+      root = "#{POOL_ROOT}/#{name}"
+      datasets = capture([ZFS, 'list', '-H', '-o', 'name,mountpoint,canmount,setuid,devices', '-r', '-t', 'filesystem', name])
+                 .lines(chomp: true).map { |line| line.split("\t") }
+      # The pool's own folder at POOL_ROOT/<name> (managed?), and everything that can mount inside it
+      stray = datasets.find do |dataset, mountpoint, canmount|
+        if dataset == name then mountpoint != root
+        else canmount != 'off' && !%w[none legacy].include?(mountpoint) && !on_path?(mountpoint, root)
+        end
+      end
+      if stray || datasets.empty?
+        run_command([ZPOOL, 'export', name, { allow_failure: true }])
+        where = stray ? "#{stray[0]} mounts at #{stray[1]}" : 'ZFS lists nothing in it'
+        raise Failed, "#{name} isn't one of Amahi-kai's pools (#{where}), so it's left on its drives, not imported: import it from the command line"
+      end
+      datasets.each do |dataset, _mountpoint, _canmount, setuid, devices|
+        run_command([ZFS, 'set', 'setuid=off', 'devices=off', dataset]) if setuid == 'on' || devices == 'on'
+      end
+      run_command([ZFS, 'mount', '-a'])
+      nil
+    end
+
     # The security updates waiting, each with when it was first seen (kept from the last check
     # while it's still the same version), for the dashboard's notice.
     def do_check_security_updates(now = Time.now)
@@ -4851,18 +5540,28 @@ module AmahiHelper
       raise Failed, "couldn't remove #{e.message}"
     end
 
+    # Sets the running module's cap, and replies with the one ZFS uses (its c_max), or the cap
+    # asked for when the module doesn't say.
     def do_set_arc_max(bytes)
       File.write(ZFS_ARC_MAX, bytes.to_s) if File.exist?(ZFS_ARC_MAX)
-      { 'arc_max' => bytes }
+      { 'arc_max' => arc_in_use || bytes }
     rescue SystemCallError => e
       raise Failed, "couldn't set ZFS's cache size: #{e.message}"
     end
 
+    def arc_in_use
+      File.read(ARCSTATS)[/^c_max\s+\d+\s+(\d+)$/, 1]&.to_i
+    rescue SystemCallError
+      nil
+    end
+
     # { 'zfs' => installed?, 'pools' => [...] }, each pool with its health, its raw size
     # (zpool's, parity included), the space its files use and have left (zfs's, after
-    # parity), its mount point and what `zpool status` says (see parse_pool_status). A pool
-    # that can't be read comes with an 'error' instead.
-    def do_pool_status
+    # parity), its mount point, whether it's one of Amahi-kai's ('managed', managed?) and what
+    # `zpool status` says (see parse_pool_status). A pool that can't be read comes with an
+    # 'error' instead. With +scan+, the pools on the drives that aren't imported too: 'offline'
+    # and 'found' (offline_pools, found_pools).
+    def do_pool_status(scan = true)
       return { 'zfs' => false, 'pools' => [] } unless File.executable?(ZPOOL)
 
       rows = capture([ZPOOL, 'list', '-H', '-p', '-o', 'name,size,allocated,free,health']).lines(chomp: true)
@@ -4873,16 +5572,19 @@ module AmahiHelper
         begin
           used, available, mountpoint, snapshot_space = capture([ZFS, 'list', '-H', '-p', '-o', 'used,available,mountpoint,usedbysnapshots', name]).chomp.split("\t")
           pool.merge!('used' => used.to_i, 'available' => available.to_i, 'mountpoint' => mountpoint,
-                      'snapshot_space' => snapshot_space.to_i, 'snapshots' => pool_snapshots(name),
-                      'snapshot_policy' => snapshot_policy(name))
+                      'managed' => managed?(name, mountpoint), 'snapshot_space' => snapshot_space.to_i,
+                      'snapshots' => pool_snapshots(name), 'snapshot_policy' => snapshot_policy(name))
           pool.merge(parse_pool_status(capture([ZPOOL, 'status', '-P', name])))
         rescue Failed => e
-          pool.merge('error' => e.message)
+          pool.merge('error' => e.message, 'managed' => managed?(name, pool['mountpoint']))
         end
       end
-      { 'zfs' => true, 'pools' => pools, 'offline' => offline_pools }
+      return { 'zfs' => true, 'pools' => pools } unless scan
+
+      found = importable_pools
+      { 'zfs' => true, 'pools' => pools, 'offline' => offline_pools(found), 'found' => found_pools(found) }
     rescue Failed => e
-      { 'zfs' => true, 'pools' => [], 'offline' => [], 'error' => e.message } # e.g. the ZFS module isn't loaded
+      { 'zfs' => true, 'pools' => [], 'offline' => [], 'found' => [], 'error' => e.message } # e.g. the ZFS module isn't loaded
     end
 
     # { 'checked_at', 'smartctl' (installed?), 'drives' => { '/dev/sda' => SMART summary or
@@ -4892,7 +5594,7 @@ module AmahiHelper
       disks = block_tree.select { |d| d['type'] == 'disk' }.map { |d| d['path'] }.grep(WHOLE_DISK)
       health = { 'checked_at' => Time.now.utc.iso8601, 'smartctl' => File.executable?(SMARTCTL),
                  'drives' => disks.to_h { |disk| [disk, drive_health(disk, previous.dig('drives', disk))] } }
-      health.merge!(do_pool_status)
+      health.merge!(do_pool_status(false)) # every 15 minutes: no scan of the drives, which would wake them
       do_install(STORAGE_HEALTH, "#{JSON.pretty_generate(health)}\n", nil, '0640', APP_USER)
       { 'health' => health }
     end
@@ -5010,47 +5712,106 @@ module AmahiHelper
       manifest[:folders].each { |folder| app_folder("#{dir}/#{folder[:name]}", uid, gid) if folder[:kind] == :state }
       storage = app_storage(id, manifest, pool, uid, gid)
       secrets = app_secrets(id, manifest[:secrets])
-      if docker_output('image', 'inspect', '--format', '{{.Id}}', manifest[:image].sub(%r{:[^:@/]+@}, '@'))
+      if image_present?(manifest[:image])
         say("Using #{manifest[:image].sub(/@.*/, '')}, downloaded already")
       else
         say("Pulling #{manifest[:image].sub(/@.*/, '')}...")
         run_command([DOCKER, 'pull', manifest[:image], { stream: true }])
       end
       container = app_container(id)
-      run_command([DOCKER, 'rm', '--force', container, { allow_failure: true }])
-      ports = app_assign_ports(id, manifest[:ports])
-      ports.reject { |p| p[:host] == p[:preferred] }.uniq { |p| p[:host] }.each do |p|
-        say("Port #{p[:preferred]} is in use, so it gets port #{p[:host]}")
-      end
-      say('Creating the container...')
-      with_env_file(app_environment(manifest, uid, gid, secrets)) do |env_file|
-        run_command([DOCKER, 'create', '--name', container, '--restart', 'unless-stopped',
-                     '--security-opt', 'no-new-privileges', # nothing in it gains privileges, setuid files included
-                     '--memory', manifest[:memory], '--label', "amahi.app=#{id}", '--env-file', env_file,
-                     *(manifest[:run_as] == 'app' ? ['--user', "#{uid}:#{gid}"] : []),
-                     *ports.flat_map { |p| ['--publish', "0.0.0.0:#{p[:host]}:#{p[:container]}/#{p[:protocol]}"] },
-                     *app_folder_mounts(manifest, dir, storage), *app_share_mounts(shares), manifest[:image]])
-      end
+      ports = app_create_container(id, manifest, shares, uid, gid, dir, storage, secrets)
       shares.select { |share| share[:write] }.each { |share| app_share_writable(share[:path]) }
-      app_record_ports(id, ports)
       do_app_firewall
       say('Starting it...')
       run_command([DOCKER, 'start', container])
       { 'app' => id, 'container' => container, 'image' => manifest[:image], 'ports' => ports.map { |p| p.transform_keys(&:to_s) } }
     end
 
+    # Makes the app's new container under a name of its own (<container>-next) while the one it
+    # has is only stopped (its ports free for the new one), then swaps it in: a create that fails
+    # leaves the app its container, started again if it ran, instead of none. The definition it's
+    # made from is recorded (APP_DEFINITIONS). Returns its ports.
+    def app_create_container(id, manifest, shares, uid, gid, dir, storage, secrets)
+      container = app_container(id)
+      fresh = "#{container}-next"
+      run_command([DOCKER, 'rm', '--force', fresh, { allow_failure: true }]) # one a job cut off left
+      running = Hash(app_state(id))['Running'] == true
+      run_command([DOCKER, 'stop', '--time', '30', container, { allow_failure: true }]) if running
+      begin
+        ports = with_records_lock { app_assign_ports(id, manifest[:ports]).tap { |given| app_record_ports(id, given) } }
+        ports.reject { |p| p[:host] == p[:preferred] }.uniq { |p| p[:host] }.each do |p|
+          say("Port #{p[:preferred]} is in use, so it gets port #{p[:host]}")
+        end
+        share_mounts = app_share_mounts(shares)
+        app_share_sources!(shares)
+        say('Creating the container...')
+        with_env_file(app_environment(manifest, uid, gid, secrets)) do |env_file|
+          run_command([DOCKER, 'create', '--name', fresh, '--restart', 'unless-stopped',
+                       '--security-opt', 'no-new-privileges', # nothing in it gains privileges, setuid files included
+                       *APP_CAP_DROP.flat_map { |cap| ['--cap-drop', cap] }, '--pids-limit', APP_PIDS_LIMIT.to_s, *APP_LOG_OPTIONS,
+                       '--memory', manifest[:memory], '--label', "amahi.app=#{id}", '--env-file', env_file,
+                       *(manifest[:run_as] == 'app' ? ['--user', "#{uid}:#{gid}"] : []),
+                       *ports.flat_map { |p| ['--publish', "0.0.0.0:#{p[:host]}:#{p[:container]}/#{p[:protocol]}"] },
+                       *app_folder_mounts(manifest, dir, storage), *share_mounts, manifest[:image]])
+        end
+      rescue Failed, Refused
+        run_command([DOCKER, 'rm', '--force', fresh, { allow_failure: true }])
+        if running
+          say('Starting the container it had again...')
+          run_command([DOCKER, 'start', container, { allow_failure: true }])
+        end
+        raise
+      end
+      run_command([DOCKER, 'rm', '--force', container, { allow_failure: true }])
+      run_command([DOCKER, 'rename', fresh, container])
+      app_record_definition(id, manifest)
+      ports
+    end
+
+    # Each share's folder and its copy folders, checked again just before the container is made
+    # (apps.follow_pool makes containers too): real folders, reached through no link.
+    def app_share_sources!(shares)
+      shares.each do |share|
+        bad = [share[:path], *(share[:pooled] ? greyhole_copies(share[:name]) : [])].find { |path| !real_folder?(path) }
+        raise Failed, "share #{share[:name]}'s folder #{bad} isn't a real folder (a link, or missing)" if bad
+      end
+    end
+
+    def image_present?(image)
+      !docker_output('image', 'inspect', '--format', '{{.Id}}', image.sub(%r{:[^:@/]+@}, '@')).nil?
+    end
+
+    # Runs the block holding APP_RECORDS_LOCK, waiting for it; inside a block that holds it
+    # already, the block just runs.
+    def with_records_lock
+      return yield if @records_locked
+
+      File.open(APP_RECORDS_LOCK, File::RDWR | File::CREAT, 0o600) do |lock|
+        lock.flock(File::LOCK_EX)
+        @records_locked = true
+        yield
+      ensure
+        @records_locked = false
+      end
+    end
+
     # An app given a pooled share sees its copies through one mount per pool drive, made with
     # its container. Each app container whose drive mounts aren't the ones its shares have now
     # (a drive joined, left, is missing or back; a share pooled or turned Off), or that couldn't
-    # start over a mount, is made again (do_install_app, keeping its version, shares and data),
-    # with the drives mounted now. One the owner stopped stays stopped. One app's failure is
-    # its own: { 'apps' => { id => 'remade' | 'remade, stopped' | its reason } }.
+    # start over a mount, is made again (do_install_app, from the definition it was made from,
+    # its shares checked as apps.install checks them), with the drives mounted now. One the owner
+    # stopped stays stopped; one a job is changing is left to it. One app's failure is its own:
+    # { 'apps' => { id => 'remade' | 'remade, stopped' | its reason }, 'shares' => { id => the
+    # shares it has now, [{ 'name', 'write' }] } }.
     def do_follow_pool_apps
       out = docker_output('ps', '--all', '--filter', 'label=amahi.app', '--format', '{{.Label "amahi.app"}}')
-      return { 'apps' => {} } unless out
+      return { 'apps' => {}, 'shares' => {} } unless out
 
       shares = samba_shares
+      given = {}
       done = out.lines.map(&:strip).grep(APP_ID).uniq.filter_map do |id|
+        next if app_job_running?(id) # the job makes its container with the pool as it is
+
         info = JSON.parse(docker_output('inspect', app_container(id)) || '[]').first or next
         mounts = Array(info['Mounts'])
         chosen = mounts.filter_map do |mount|
@@ -5067,8 +5828,13 @@ module AmahiHelper
         stopped = !info.dig('State', 'Running') && !failed
         say("#{id}: making its container again with the pool drives mounted now")
         begin
-          do_install_app(id, app_manifest(id), chosen, true)
+          manifest = app_definition(id) || app_manifest(id)
+          # Its shares as its container has them, written to only where its definition writes shares
+          wanted = chosen.map { |share| { 'name' => share[:name], 'write' => share[:write] && manifest[:writes_shares] == true } }
+          checked = app_share_choices(wanted, id, manifest)
+          do_install_app(id, manifest, checked, true)
           run_command([DOCKER, 'stop', '--time', '30', app_container(id)]) if stopped
+          given[id] = checked.map { |share| { 'name' => share[:name], 'write' => share[:write] } }
           [id, stopped ? 'remade, stopped' : 'remade']
         rescue Failed, Refused => e
           [id, e.message]
@@ -5077,7 +5843,7 @@ module AmahiHelper
         nil
       end
       do_app_firewall if done.any?
-      { 'apps' => done.to_h }
+      { 'apps' => done.to_h, 'shares' => given }
     end
 
     # The image an app's container runs (name:tag@sha256:...), or nil without a container.
@@ -5095,16 +5861,28 @@ module AmahiHelper
     def do_update_app(id, manifest, shares)
       from = app_image(id) or raise Failed, "#{id} isn't installed"
       raise Failed, "#{id} runs #{image_tag(from)}, the catalog's version, already" if from == manifest[:image]
+      if version_below?(image_tag(manifest[:image]), image_tag(from))
+        raise Failed, "the catalog's #{id} (#{image_tag(manifest[:image])}) is older than the one it runs (#{image_tag(from)}), so there's nothing to update to"
+      end
 
-      app_backup_room!(id, manifest)
-      unless docker_output('image', 'inspect', '--format', '{{.Id}}', manifest[:image].sub(%r{:[^:@/]+@}, '@'))
+      # What it runs now, for the copy and a way back: the definition its container was made from
+      # (one made before these were kept: the catalog's, on the image it runs)
+      before = app_definition(id) || manifest.merge(image: from)
+      app_backup_room!(id, before)
+      unless image_present?(manifest[:image])
         say("Pulling #{manifest[:image].sub(/@.*/, '')}...")
         run_command([DOCKER, 'pull', manifest[:image], { stream: true }])
       end
       say("Stopping it (#{image_tag(from)})...")
       run_command([DOCKER, 'stop', '--time', '30', app_container(id)])
       say('Copying its data first, so the update can be undone...')
-      app_backup(id, manifest, from)
+      begin
+        app_backup(id, before, from, manifest[:image])
+      rescue Failed, SystemCallError => e
+        say("The copy didn't work, so it starts again on #{image_tag(from)}")
+        run_command([DOCKER, 'start', app_container(id), { allow_failure: true }])
+        raise Failed, "#{id}'s data couldn't be copied before the update (#{e.message}); it runs #{image_tag(from)} as before"
+      end
       say("Starting #{image_tag(manifest[:image])}...")
       reply = nil
       problem = begin
@@ -5117,7 +5895,7 @@ module AmahiHelper
       if problem
         say("It didn't come up healthy: #{problem}")
         say("Going back to #{image_tag(from)}, with its data from before the update...")
-        app_restore(id, manifest, from, shares)
+        app_restore(id, before, from, shares)
         app_forget_backup(id)
         return { 'app' => id, 'updated' => false, 'image' => from, 'problem' => problem }
       end
@@ -5131,6 +5909,11 @@ module AmahiHelper
       from = backup['from'].to_s
       raise Failed, "the copy from before #{id}'s update doesn't say which version it was" unless from.match?(APP_IMAGE)
 
+      # The old version's image first (an update removes it): nothing changes if it can't be had
+      unless image_present?(from)
+        say("Downloading #{image_tag(from)} again...")
+        run_command([DOCKER, 'pull', from, { stream: true }])
+      end
       say("Stopping it (#{image_tag(app_image(id) || manifest[:image])})...")
       run_command([DOCKER, 'stop', '--time', '30', app_container(id), { allow_failure: true }])
       say("Going back to #{image_tag(from)}, with its data from before the update...")
@@ -5184,7 +5967,9 @@ module AmahiHelper
     end
 
     # Replaces the app's copy: the description goes first, so a copy cut short is never offered.
-    def app_backup(id, manifest, from)
+    # +manifest+: the definition the app runs (its folders are the ones copied, and it's what an
+    # undo makes the container from again); +to+: the version it's updated to.
+    def app_backup(id, manifest, from, to = manifest[:image])
       unless File.directory?(APP_BACKUPS)
         Dir.mkdir(APP_BACKUPS, 0o750)
         File.chown(0, group_id(APP_USER), APP_BACKUPS)
@@ -5195,8 +5980,9 @@ module AmahiHelper
       folders = app_backup_folders(id, manifest)
       folders.each { |folder| run_command(['/usr/bin/cp', '-a', '--', folder, "#{data}/#{File.basename(folder)}"]) }
       snapshot = app_update_snapshot(id, manifest)
-      info = { 'taken_at' => Time.now.utc.iso8601, 'from' => from, 'to' => manifest[:image],
-               'folders' => folders.map { |folder| File.basename(folder) }, 'snapshot' => snapshot }.compact
+      info = { 'taken_at' => Time.now.utc.iso8601, 'from' => from, 'to' => to,
+               'folders' => folders.map { |folder| File.basename(folder) }, 'snapshot' => snapshot,
+               'definition' => manifest[:source].is_a?(Hash) ? manifest[:source].merge('image' => from) : nil }.compact
       do_install("#{APP_BACKUPS}/#{id}.json", "#{JSON.pretty_generate(info)}\n", nil, '0640', APP_USER)
     end
 
@@ -5297,17 +6083,51 @@ module AmahiHelper
       docker_output('inspect', '--format', '{{.RestartCount}}', app_container(id)).to_i
     end
 
-    # The app's web page answers on its port (the one it was given, P4.2), with any HTTP reply.
+    # The app's web page answers on its port (the one it was given, P4.2), with any HTTP reply;
+    # an HTTPS page (web_tls), which doesn't answer plain HTTP, with a TLS handshake (its
+    # certificate is its own, so it isn't checked).
     def app_answers?(id, manifest)
       return true unless manifest[:web_port]
       given = Array((read_json(APP_PORTS) || {})[id]).grep(Hash).find { |p| p['preferred'] == manifest[:web_port] }
       port = given ? given['host'] : manifest[:web_port]
       Socket.tcp('127.0.0.1', port, connect_timeout: 3) do |socket|
+        next tls_answers?(socket) if manifest[:web_tls]
+
         socket.write("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n")
         socket.wait_readable(5) && socket.readpartial(16).start_with?('HTTP/')
       end
     rescue SystemCallError, IOError
       false
+    end
+
+    # A TLS handshake completes within 5 seconds.
+    def tls_answers?(socket)
+      require 'openssl'
+      context = OpenSSL::SSL::SSLContext.new
+      context.verify_mode = OpenSSL::SSL::VERIFY_NONE
+      tls = OpenSSL::SSL::SSLSocket.new(socket, context)
+      tls.hostname = 'localhost'
+      deadline = monotonic_now + 5
+      loop do
+        left = [deadline - monotonic_now, 0].max
+        case tls.connect_nonblock(exception: false)
+        when :wait_readable then return false unless socket.wait_readable(left)
+        when :wait_writable then return false unless socket.wait_writable(left)
+        else return true
+        end
+      end
+    rescue OpenSSL::SSL::SSLError
+      false
+    end
+
+    # Whether version tag +a+ is below +b+, by their numbers in order ("4.0.16-ls253" <
+    # "4.0.17-ls254"); false when either has none, or they're the same numbers.
+    def version_below?(a, b)
+      left = a.to_s.scan(/\d+/).map(&:to_i)
+      right = b.to_s.scan(/\d+/).map(&:to_i)
+      return false if left.empty? || right.empty?
+
+      (left <=> right) == -1
     end
 
     def monotonic_now
@@ -5391,26 +6211,34 @@ module AmahiHelper
     end
 
     def app_record_ports(id, ports)
-      records = read_json(APP_PORTS) || {}
-      records = records.merge(id => ports.map { |p| p.transform_keys(&:to_s) }).sort.to_h
-      do_install(APP_PORTS, "#{JSON.pretty_generate(records)}\n", nil, '0640', APP_USER)
+      with_records_lock do
+        records = read_json(APP_PORTS) || {}
+        records = records.merge(id => ports.map { |p| p.transform_keys(&:to_s) }).sort.to_h
+        do_install(APP_PORTS, "#{JSON.pretty_generate(records)}\n", nil, '0640', APP_USER)
+      end
     end
 
     def app_forget_ports(id)
-      records = read_json(APP_PORTS) or return
-      return unless records.key?(id)
-      do_install(APP_PORTS, "#{JSON.pretty_generate(records.except(id))}\n", nil, '0640', APP_USER)
+      with_records_lock do
+        records = read_json(APP_PORTS)
+        next unless records&.key?(id)
+
+        do_install(APP_PORTS, "#{JSON.pretty_generate(records.except(id))}\n", nil, '0640', APP_USER)
+      end
     end
 
     # Rebuilds APP_CHAIN, jumped to from DOCKER-USER: established connections, traffic not going
     # into a container, and containers' own traffic pass; new connections into a container pass
     # only from Tailscale or the NAS's private subnets.
+    # Its rules go in whole, in one iptables-restore (--noflush: the chain named is emptied and
+    # filled in one step, the rest left as it is). Run before Docker starts too
+    # (amahi-kai-app-firewall-early.service), so the apps' ports are never open in between.
     def do_app_firewall
       subnets = lan_subnets
       run_command([IPTABLES, '-w', '-N', 'DOCKER-USER', { allow_failure: true }])
       run_command([IPTABLES, '-w', '-N', APP_CHAIN, { allow_failure: true }])
-      run_command([IPTABLES, '-w', '-F', APP_CHAIN])
-      app_chain_rules(subnets).each { |rule| run_command([IPTABLES, '-w', '-A', APP_CHAIN, *rule]) }
+      rules = app_chain_rules(subnets).map { |rule| "-A #{APP_CHAIN} #{rule.join(' ')}" }
+      run_command([IPTABLES_RESTORE, '-w', '--noflush', { stdin: "*filter\n:#{APP_CHAIN} - [0:0]\n#{rules.join("\n")}\nCOMMIT\n" }])
       unless run_command([IPTABLES, '-w', '-C', 'DOCKER-USER', '-j', APP_CHAIN, { allow_failure: true }]).nil?
         run_command([IPTABLES, '-w', '-I', 'DOCKER-USER', '1', '-j', APP_CHAIN])
       end
@@ -5477,14 +6305,14 @@ module AmahiHelper
       File.chmod(0o750, path)
     end
 
-    # The container's mounts for the app's folders: the system disk's (state) as before, and its
-    # dataset's, bound with --mount (never --volume, which would make a missing folder: on a pool
-    # that isn't mounted, that would be the system disk's). A dataset folder is left out when the
-    # app has no pool (an optional one not chosen).
+    # The container's mounts for the app's folders: the system disk's (state) and its dataset's,
+    # bound with --mount (never --volume, which would make a missing folder: on a pool that isn't
+    # mounted, that would be the system disk's, and whose colons split a path that has one). A
+    # dataset folder is left out when the app has no pool (an optional one not chosen).
     def app_folder_mounts(manifest, dir, storage)
       manifest[:folders].flat_map do |folder|
         if folder[:kind] == :state
-          ['--volume', "#{dir}/#{folder[:name]}:#{folder[:path]}"]
+          ['--mount', "type=bind,source=#{dir}/#{folder[:name]},target=#{folder[:path]}"]
         elsif storage
           ['--mount', "type=bind,source=#{storage}/#{folder[:name]},target=#{folder[:path]}"]
         else
@@ -5504,7 +6332,7 @@ module AmahiHelper
         raise Refused, "#{id}'s data is on the pool #{have}: uninstall it with its data to move it to #{chosen}" if chosen && chosen != have
         return have
       end
-      return existing_pool(chosen) if chosen
+      return managed_pool(chosen) if chosen
       raise Refused, "#{id} keeps its data on a ZFS pool: choose one (make one on Disks → ZFS Pools first)" if manifest[:storage] == :required
 
       nil
@@ -5568,18 +6396,22 @@ module AmahiHelper
     end
 
     def app_record_storage(id, pool)
-      records = app_storage_records
-      return if records[id] == pool
+      with_records_lock do
+        records = app_storage_records
+        next if records[id] == pool
 
-      records[id] = pool
-      do_install(APP_STORAGE, "#{JSON.pretty_generate(records)}\n", nil, '0640', APP_USER)
+        records[id] = pool
+        do_install(APP_STORAGE, "#{JSON.pretty_generate(records)}\n", nil, '0640', APP_USER)
+      end
     end
 
     def app_forget_storage(id)
-      records = app_storage_records
-      return unless records.delete(id)
+      with_records_lock do
+        records = app_storage_records
+        next unless records.delete(id)
 
-      do_install(APP_STORAGE, "#{JSON.pretty_generate(records)}\n", nil, '0640', APP_USER)
+        do_install(APP_STORAGE, "#{JSON.pretty_generate(records)}\n", nil, '0640', APP_USER)
+      end
     end
 
     # The apps whose storage is on the pool +name+: [[id, installed?]] (installed: it has a
@@ -5627,14 +6459,19 @@ module AmahiHelper
       File.unlink(path) if path && File.exist?(path)
     end
 
-    def do_uninstall_app(id, image, delete_data)
+    # The container goes (checked: Docker may not have removed it), then its image: the one the
+    # container ran, else its definition's. Data kept keeps the definition too, so a reinstall
+    # runs the version the data is from.
+    def do_uninstall_app(id, delete_data)
       pool = app_storage_pool(id)
       if delete_data && pool && !pool_names.include?(pool)
         raise Failed, "#{id}'s data is on the pool #{pool}, which isn't online: bring it online to delete it"
       end
-      image = app_image(id) || image
-      run_command([DOCKER, 'rm', '--force', app_container(id), { allow_failure: true }])
-      run_command([DOCKER, 'image', 'rm', image, { allow_failure: true }])
+      image = app_image(id) || app_definition(id)&.dig(:image)
+      container = app_container(id)
+      run_command([DOCKER, 'rm', '--force', container, { allow_failure: true }])
+      raise Failed, "Docker didn't remove #{container}; nothing else of #{id} was touched" if docker_output('inspect', '--format', '{{.Id}}', container)
+      run_command([DOCKER, 'image', 'rm', image, { allow_failure: true }]) if image
       return { 'app' => id, 'data_kept' => true } unless delete_data
 
       dir = "#{APPS_ROOT}/#{id}"
@@ -5643,6 +6480,7 @@ module AmahiHelper
       FileUtils.rm_f("#{APP_SECRETS}/#{id}.json")
       app_forget_ports(id)
       app_forget_backup(id)
+      app_forget_definition(id)
       if pool
         dataset = "#{pool}/#{APP_DATASETS}/#{id}"
         run_command([ZFS, 'destroy', '-r', dataset]) if zfs_dataset?(dataset)
@@ -5653,9 +6491,11 @@ module AmahiHelper
     end
 
     # { 'docker' => running?, 'apps' => { 'jellyfin' => { 'state' => 'running', ... } } }
+    # 'jobs': the apps whose job runs now (their APP_JOB_UNIT): the Apps page leaves their rows
+    # to the job.
     def do_apps_status
       out = docker_output('ps', '--all', '--filter', 'label=amahi.app', '--format', '{{json .}}')
-      return { 'docker' => false, 'apps' => {} } unless out
+      return { 'docker' => false, 'apps' => {}, 'jobs' => app_jobs_running } unless out
 
       apps = out.lines.filter_map do |line|
         row = JSON.parse(line)
@@ -5664,7 +6504,18 @@ module AmahiHelper
       rescue JSON::ParserError
         nil
       end
-      { 'docker' => true, 'apps' => apps.to_h }
+      { 'docker' => true, 'apps' => apps.to_h, 'jobs' => app_jobs_running }
+    end
+
+    def app_jobs_running
+      out, _err, status = Open3.capture3(ENV_MIN, SYSTEMCTL, 'list-units', '--plain', '--no-legend', '--state=active,activating',
+                                         "#{format(APP_JOB_UNIT, '*')}.service", unsetenv_others: true, chdir: '/')
+      return [] unless status.success?
+
+      prefix = format(APP_JOB_UNIT, '')
+      out.lines.map { |line| line.split.first.to_s.delete_prefix(prefix).delete_suffix('.service') }.grep(APP_ID)
+    rescue SystemCallError
+      []
     end
 
     # { 'ports' => ["amahi-jellyfin\t0.0.0.0:8096->8096/tcp", ...], 'limited' => true } for every
@@ -5979,7 +6830,7 @@ module AmahiHelper
                                         '--proto', '=https', '--tlsv1.2', '--max-time', '25',
                                         '-H', 'Accept: application/vnd.github+json', RELEASES_URL,
                                         unsetenv_others: true, chdir: '/')
-      return [nil, "couldn't read the releases from GitHub: #{last_lines(err, 1)}"] unless status.success?
+      return newest_tag(prereleases, "couldn't read the releases from GitHub: #{last_lines(err, 1)}") unless status.success?
 
       releases = JSON.parse(out)
       return [nil, "GitHub's releases list wasn't a list"] unless releases.is_a?(Array)
@@ -5991,9 +6842,30 @@ module AmahiHelper
       end
       [picks.max_by { |r| release_key(r[:version]) }, nil]
     rescue JSON::ParserError
-      [nil, "GitHub's releases list wasn't JSON"]
+      newest_tag(prereleases, "GitHub's releases list wasn't JSON")
     rescue SystemCallError => e
-      [nil, "couldn't run curl: #{e.message}"]
+      newest_tag(prereleases, "couldn't run curl: #{e.message}")
+    end
+
+    # When GitHub's releases list doesn't answer (it allows 60 lookups an hour from one address,
+    # which other homes behind a provider's shared address use too): the repository's tags. A
+    # release is published from its tag, and release candidates are the ones with rc. [pick, nil],
+    # or [nil, why the list didn't answer].
+    def newest_tag(prereleases, why)
+      out, _err, status = Open3.capture3(ENV_MIN.merge('GIT_TERMINAL_PROMPT' => '0'), ['/usr/bin/timeout', '/usr/bin/timeout'],
+                                         '60', GIT, *GIT_OPTIONS, 'ls-remote', '--tags', '--refs', 'origin', 'v*',
+                                         unsetenv_others: true, chdir: '/')
+      return [nil, why] unless status.success?
+
+      picks = out.lines(chomp: true).filter_map do |line|
+        tag = line.split("\t", 2)[1].to_s.delete_prefix('refs/tags/')
+        match = tag.match(RELEASE_TAG) or next
+        { tag: tag, version: tag.delete_prefix('v') } if prereleases || match[4].nil?
+      end
+      best = picks.max_by { |r| release_key(r[:version]) }
+      best ? [best, nil] : [nil, why]
+    rescue SystemCallError
+      [nil, why]
     end
 
     # Orders versions: 1.0.0rc1 < 1.0.0rc2 < 1.0.0 < 1.0.1.
@@ -6063,17 +6935,23 @@ module AmahiHelper
       git_output(*args).to_s.lines(chomp: true)
     end
 
-    # { 'temperatures' => { '/dev/sda' => 34, '/dev/vda' => nil } } for the whole disks lsblk lists.
+    # { 'temperatures' => { '/dev/sda' => 34, '/dev/vda' => nil }, 'asleep' => ['/dev/sdc'] } for
+    # the whole disks lsblk lists. A spun-down drive isn't woken for it: it has no temperature
+    # and is listed as asleep.
     def do_drive_temperatures
       disks = block_tree.select { |d| d['type'] == 'disk' }.map { |d| d['path'] }.grep(WHOLE_DISK)
-      { 'temperatures' => disks.to_h { |disk| [disk, drive_temperature(disk)] } }
+      readings = disks.to_h { |disk| [disk, drive_temperature(disk)] }
+      { 'temperatures' => readings.transform_values { |value| value == :asleep ? nil : value },
+        'asleep' => readings.select { |_disk, value| value == :asleep }.keys }
     end
 
     # smartctl's exit status is a bit mask that is often non-zero on healthy drives, so its
-    # output is read whatever the status. At most 5 seconds per disk.
+    # output is read whatever the status, unless it's the one for a sleeping drive (:asleep).
+    # At most 5 seconds per disk.
     def drive_temperature(disk)
-      out, _err, _status = Open3.capture3(ENV_MIN, ['/usr/bin/timeout', '/usr/bin/timeout'], '5', SMARTCTL, '-A', disk,
-                                          unsetenv_others: true, chdir: '/')
+      out, _err, status = Open3.capture3(ENV_MIN, ['/usr/bin/timeout', '/usr/bin/timeout'], '5', SMARTCTL,
+                                         '-n', "standby,#{SMART_ASLEEP}", '-A', disk, unsetenv_others: true, chdir: '/')
+      return :asleep if status.exitstatus == SMART_ASLEEP
       TEMPERATURE_PATTERNS.each do |pattern|
         value = out[pattern, 1]
         return value.to_i if value
@@ -6315,12 +7193,18 @@ module AmahiHelper
     def log(op, args, result, error, started)
       entry = {
         'time' => Time.now.utc.iso8601(3), 'op' => op, 'args' => filtered(args),
-        'caller' => ENV['SUDO_USER'] || Etc.getpwuid(Process.uid)&.name,
+        'caller' => ENV['SUDO_USER'] || app_job_caller || Etc.getpwuid(Process.uid)&.name,
         'result' => result, 'error' => error, 'ms' => ((Time.now - started) * 1000).round
       }.compact
       write_log(JSON.generate(entry))
     rescue StandardError => e
       warn "amahi-helper: couldn't write #{LOG_FILE}: #{e.message}"
+    end
+
+    # Who asked for the app job this runs (relay_app_job), or nil.
+    def app_job_caller
+      caller = ENV['AMAHI_APP_CALLER'].to_s
+      caller.empty? ? nil : caller
     end
 
     # The log is root:amahi 0640 in a root:amahi 0750 folder, so the app can show it.

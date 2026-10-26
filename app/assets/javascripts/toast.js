@@ -7,15 +7,16 @@
 (function() {
   'use strict';
 
-  // Map flash types to consistent Bootstrap/icon combos
+  // Map flash types to consistent Bootstrap/icon combos. Errors stay until they're closed: a
+  // refusal says what to do first, and gone after a few seconds it was easy to miss.
   var TYPE_MAP = {
     success: { bg: '#198754', icon: '✓', label: 'Success' },
     notice:  { bg: '#198754', icon: '✓', label: 'Success' },
-    danger:  { bg: '#dc3545', icon: '✗', label: 'Error' },
-    error:   { bg: '#dc3545', icon: '✗', label: 'Error' },
+    danger:  { bg: '#dc3545', icon: '✗', label: 'Error', sticky: true },
+    error:   { bg: '#dc3545', icon: '✗', label: 'Error', sticky: true },
     warning: { bg: '#ffc107', icon: '⚠', label: 'Warning', dark: true },
     info:    { bg: '#0dcaf0', icon: 'ℹ', label: 'Info', dark: true },
-    alert:   { bg: '#dc3545', icon: '✗', label: 'Error' }
+    alert:   { bg: '#dc3545', icon: '✗', label: 'Error', sticky: true }
   };
 
   var TOAST_DURATION = 5000;
@@ -70,6 +71,8 @@
         toast.classList.add('amahi-toast-visible');
       });
     });
+
+    if (config.sticky) return; // until closed
 
     // Auto-dismiss
     var timer = setTimeout(function() { dismissToast(toast); }, TOAST_DURATION);

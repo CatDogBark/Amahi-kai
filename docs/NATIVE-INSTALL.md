@@ -2,10 +2,13 @@
 
 ## Requirements
 
-- **OS:** Ubuntu 24.04 (Server)
+- **OS:** Ubuntu 24.04 (Server), on a dedicated machine or VM
 - **RAM:** 2GB minimum (4GB recommended)
-- **Disk:** 10GB+ for OS + app; additional storage for file shares
-- **Network:** Static IP recommended. Amahi-kai can also run DNS and DHCP for your LAN (optional, Network → DNS & DHCP)
+- **Disk:** a system disk of 32GB or more (64GB with apps), since the dashboard warns once less than
+  10GB is free there; other drives for file shares
+- **Network:** a fixed address: set one on Network → Devices (This NAS) after installing, or reserve
+  it in your router. Amahi-kai can also be your LAN's DNS and DHCP server, and its router (optional,
+  Network → DNS, DHCP and Internet)
 
 ## Install
 
@@ -36,7 +39,7 @@ restarts the app. New versions come through System Update (below).
 6. Runs migrations and, on a new install, creates the admin account and shows its password
 7. Precompiles assets
 8. Opens port 3000 in UFW (if active)
-9. Writes Samba's configuration (LAN only) and starts smbd/nmbd
+9. Writes Samba's configuration (the server itself, the LAN and Tailscale only) and starts smbd/nmbd
 10. Builds the file search index, then starts Amahi-kai and checks it answers
 
 ## Post-Install
@@ -89,7 +92,9 @@ sudo /opt/amahi-kai/bin/amahi-update            # update
 sudo /opt/amahi-kai/bin/amahi-update --repair   # run every step again on the current version
 ```
 
-An update checks out the channel's newest version, installs gems, backs up the database, runs migrations, installs the root helper and sudoers rules, regenerates the Samba config and restarts the app; if a step or the restarted app fails, it rolls back to the version that was running. With nothing new it stops after the pull. (A bare `git pull` and restart skips the helper and sudoers steps.)
+An update checks out the channel's newest version, installs gems, backs up the database, runs migrations, installs the root helper and sudoers rules, regenerates the Samba config, makes the network's settings again where they differ (DNS, blocking, DHCP, the IPv6 announcement and the router's rules), checks the user accounts and restarts the app; if a step or the restarted app fails, it rolls back to the version that was running, with that version's Samba and network settings. With nothing new it stops after the pull. (A bare `git pull` and restart skips the helper and sudoers steps.)
+
+Amahi-kai doesn't back the server up: see [What Amahi-kai doesn't back up](https://amahi-kai.com/wiki/getting-started#what-amahi-kai-doesnt-back-up).
 
 Re-running the installer (`sudo /opt/amahi-kai/bin/amahi-install`) sets up the system again
 around the version installed, without changing it.

@@ -1,9 +1,9 @@
 # Be sure to restart your server when you modify this file.
 
+# The cookie ends with the browser unless the sign-in ticked Remember me: then it lasts
+# UserSession::IDLE_TIMEOUT from the last request (ApplicationController#session_cookie_options,
+# which also marks it Secure over the Cloudflare Tunnel). UserSession enforces the same limits.
 AmahiKai::Application.config.session_store :cookie_store,
   key: '_amahi_kai_session',
   httponly: true,
-  same_site: :lax,
-  # The cookie lasts 7 days from the last request; UserSession enforces the same limit.
-  expire_after: 7.days
-  # secure: true  # Enable when serving over HTTPS
+  same_site: :lax

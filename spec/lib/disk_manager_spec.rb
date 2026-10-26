@@ -5,6 +5,61 @@ RSpec.describe DiskManager do
   # specs: lsblk on a CI runner varies between runs, which made these flaky.
   before { allow(DiskManager).to receive(:lsblk_json).and_return("") }
 
+  # The pages name a drive by its /dev/disk/by-id link: a page left open acts on that drive, by
+  # whatever kernel name it has now, or on none.
+  describe 'refs' do
+    let(:by_id) { Dir.mktmpdir }
+    let(:disk) { File.join(by_id, 'disk') }
+
+    before do
+      stub_const('DiskManager::BY_ID', by_id)
+      File.write(disk, '')
+      File.symlink(disk, "#{by_id}/wwn-0x5002538f")
+      File.symlink(disk, "#{by_id}/ata-Samsung_SSD_870_S6P")
+    end
+
+    after { FileUtils.rm_rf(by_id) }
+
+    it 'names each drive by one link, a model-and-serial name before a WWN' do
+      expect(DiskManager.by_id_refs).to eq(disk => "#{by_id}/ata-Samsung_SSD_870_S6P")
+    end
+
+    it 'follows a ref to the drive it names now, and refuses one that names none' do
+      expect(DiskManager.resolve("#{by_id}/ata-Samsung_SSD_870_S6P")).to eq(disk)
+      expect(DiskManager.resolve('/dev/sdb1')).to eq('/dev/sdb1') # a drive without a link goes by its kernel name
+      expect { DiskManager.resolve("#{by_id}/ata-Gone_1") }
+        .to raise_error(DiskManager::DiskError, "ata-Gone_1 isn't connected any more: reload the page")
+      expect { DiskManager.resolve("#{by_id}/../../etc/passwd") }.to raise_error(DiskManager::DiskError, /Invalid device path/)
+      expect { DiskManager.format_disk!("#{by_id}/ata-Samsung_SSD_870_S6P") }.to raise_error(DiskManager::DiskError, /Invalid device path/)
+    end
+  end
+
+  describe '.devices from lsblk' do
+    let(:lsblk) do
+      { 'blockdevices' => [{ 'name' => 'sdb', 'type' => 'disk', 'size' => '1T', 'model' => 'SSD',
+                             'children' => [{ 'name' => 'sdb1', 'type' => 'part', 'size' => '1T', 'fstype' => 'ext4', 'uuid' => 'u-2' }] }] }.to_json
+    end
+
+    before do
+      allow(DiskManager).to receive(:lsblk_json).and_return(lsblk)
+      allow(DiskManager).to receive(:by_id_refs).and_return('/dev/sdb' => '/dev/disk/by-id/ata-SSD_S1', '/dev/sdb1' => '/dev/disk/by-id/ata-SSD_S1-part1')
+      allow(DiskManager).to receive(:fstab_sources).and_return('UUID=u-2' => '/mnt/storage-2')
+    end
+
+    # A drive that came back unmounted went to the next free slot: Greyhole, and the shares on it,
+    # looked for it where its fstab line says.
+    it "gives each drive and partition its ref, and a partition the mount point its fstab line names" do
+      sdb = DiskManager.devices.sole
+      expect(sdb[:ref]).to eq('/dev/disk/by-id/ata-SSD_S1')
+      expect(sdb[:partitions].sole).to include(path: '/dev/sdb1', ref: '/dev/disk/by-id/ata-SSD_S1-part1', home: '/mnt/storage-2')
+    end
+
+    it 'mounts a drive that comes back where its fstab line says, and any other at the next free slot' do
+      expect(DiskManager.mount!('/dev/sdb1')).to eq('/mnt/storage-2')
+      expect(Privileged.calls).to eq([['disks.mount', { device: '/dev/sdb1', mount_point: '/mnt/storage-2' }]])
+    end
+  end
+
   describe '.devices' do
     it 'returns an array of device hashes' do
       devices = DiskManager.devices
@@ -131,7 +186,7 @@ RSpec.describe DiskManager do
       )
       preview = DiskManager.preview('/dev/sdb1')
       expect(preview[:entries].first).to eq(name: 'Movies', type: :directory, size: 5000, file_count: 1)
-      expect(preview.slice(:total_used, :file_count)).to eq(total_used: 6000, file_count: 2)
+      expect(preview.slice(:total_used, :file_count, :partial)).to eq(total_used: 6000, file_count: 2, partial: false)
     end
   end
 
@@ -215,8 +270,14 @@ RSpec.describe DiskManager do
 
     it 'lists the drives (not optical drives) with their temperatures' do
       expect(DiskManager.stats).to eq([
-        { device: '/dev/sda', model: 'Samsung SSD', size: '500G', temp_f: 86, tempcolor: 'cool' }
+        { device: '/dev/sda', model: 'Samsung SSD', size: '500G', temp_f: 86, tempcolor: 'cool', asleep: false }
       ])
+    end
+
+    it "says a drive is asleep (spun down), which isn't woken for its temperature" do
+      allow(Privileged).to receive(:call).with('disks.temperatures')
+        .and_return('ok' => true, 'temperatures' => { '/dev/sda' => nil }, 'asleep' => ['/dev/sda'])
+      expect(DiskManager.stats.first.values_at(:temp_f, :asleep)).to eq([nil, true])
     end
 
     it 'shows a dash for a drive with no temperature' do
@@ -294,6 +355,16 @@ RSpec.describe DiskManager do
       allow(File).to receive(:read).with('/etc/fstab').and_return("")
       DiskManager.send(:auto_mount_point)
       expect(Privileged.calls).to be_empty
+    end
+  end
+
+  describe '.devices without an answer from lsblk' do
+    it "gives the sample drives outside production, and an error in production: they'd be drives that aren't there" do
+      expect(DiskManager.devices.map { |d| d[:path] }).to eq(DiskManager.send(:sample_devices).map { |d| d[:path] })
+      allow(DiskManager).to receive(:production?).and_return(true)
+      expect { DiskManager.devices }.to raise_error(DiskManager::DiskError, /Couldn't list the drives/)
+      allow(DiskManager).to receive(:lsblk_json).and_return('not json')
+      expect { DiskManager.devices }.to raise_error(DiskManager::DiskError, /Couldn't read lsblk's list/)
     end
   end
 

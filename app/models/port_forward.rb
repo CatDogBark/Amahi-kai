@@ -1,11 +1,10 @@
 # A port let in from the internet to a device on the LAN, while the NAS is the router (Network →
-# DNS & DHCP). The address is the last part of the device's address on DHCP's network, as a fixed
-# host's is; a change rewrites the router's rules.
+# Internet). The address is the last part of the device's address on DHCP's network, as a fixed
+# host's is; DnsController rewrites the router's rules after a change, and says when it can't.
 class PortForward < ApplicationRecord
   PROTOCOLS = %w[tcp udp].freeze
 
   before_validation { self.to_port = port if to_port.blank? }
-  after_commit :rewrite_router
 
   validates :name, length: { maximum: 40 }
   validates :protocol, inclusion: { in: PROTOCOLS }
@@ -23,13 +22,5 @@ class PortForward < ApplicationRecord
 
   def label
     "#{protocol} #{port}#{" → #{to_port}" if to_port != port}"
-  end
-
-  private
-
-  def rewrite_router
-    DnsService.rewrite_router!
-  rescue Privileged::Error => e
-    Rails.logger.error("PortForward #{label}: the router's rules weren't rewritten: #{e.message}")
   end
 end

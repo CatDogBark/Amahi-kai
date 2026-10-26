@@ -39,7 +39,8 @@ next to it.
   Hosts, DNS Aliases, Gateway and Settings are gone; their old addresses open the new tabs.
 - [ ] **Network → DNS** opens, says **Not installed** (or **Off**), and offers **Install
   Unbound**. Nothing listens on port 53 on the NAS's addresses (the second command above).
-- [ ] **Network → Hosts** and **DNS Aliases** still list what they did.
+- [ ] **Network → Devices** (the fixed addresses) and **Network → DNS** (Names) still list what
+  they did.
 - [ ] **Network → Devices, This NAS** lists each port with its address, *from the network (DHCP)*
   or *fixed*, and its router. Give the NAS a fixed address on the port you're connected through
   (the one it has now is fine, or one outside the router's DHCP range): the moving page appears,
@@ -54,26 +55,26 @@ next to it.
 ## 3. DNS on the NAS, nothing pointed at it yet
 
 - [ ] **Install Unbound**, then turn **DNS for my network** on, pick the NAS's LAN interface
-  (`ens18`, `192.168.1.111`) and Quad9, and **Save**. The top card says **Answering**, with local and
+  (`ens18`, `192.168.1.1`) and Quad9, and **Save**. The top card says **Answering**, with local and
   outside names answered.
 - [ ] From the laptop, without changing its settings (the NAS's name in place of `nas`):
 
   ```bash
-  dig @192.168.1.111 example.com
+  dig @192.168.1.1 example.com
   ```
 
   ```bash
-  dig @192.168.1.111 nas.home.arpa
+  dig @192.168.1.1 nas.home.arpa
   ```
 
   ```bash
-  dig @192.168.1.111 dnssec-failed.org
+  dig @192.168.1.1 dnssec-failed.org
   ```
 
   The first answers with the `ad` flag, the second with the NAS's address, the third with
   `SERVFAIL` (a deliberately broken domain, refused).
 - [ ] **The firewall:** if the security audit's firewall is on, the dig above got through it; then
-  `sudo ufw show added` lists `allow to 192.168.1.111 port 53`.
+  `sudo ufw show added` lists `allow to 192.168.1.1 port 53`.
 - [ ] **Tailscale:** from a device on Tailscale but off the house Wi-Fi (a phone on cellular,
   say), ask the NAS's Tailscale address (Remote Access shows it; a terminal app on the phone, or
   a laptop on a hotspot):
@@ -84,17 +85,17 @@ next to it.
 
   It answers. That's the one path the test network couldn't try.
 - [ ] **Blocking:** turn it on with the two recommended lists. Within a minute the card says how
-  many domains it blocks (about 326,000). From the laptop, `dig @192.168.1.111 app-measurement.com`
+  many domains it blocks (about 326,000). From the laptop, `dig @192.168.1.1 app-measurement.com`
   answers `0.0.0.0`.
 
 **The way back:** turn the switch off and **Save**.
 
 ## 4. One device, then the house
 
-- [ ] **One computer:** set its DNS server to `192.168.1.111` by hand (IPv4; leave IPv6 alone while
+- [ ] **One computer:** set its DNS server to `192.168.1.1` by hand (IPv4; leave IPv6 alone while
   the router's IPv6 is off). Use it normally for a day: sites load, `nas.home.arpa` opens the
   NAS, and ads are fewer. **The way back:** set it back to automatic.
-- [ ] **The house:** in the router's settings, set the DNS server it hands out to `192.168.1.111`
+- [ ] **The house:** in the router's settings, set the DNS server it hands out to `192.168.1.1`
   (often under LAN or DHCP). Devices pick it up as they renew; turning Wi-Fi off and on hurries
   one. **The way back:** set it back to the router's own (or automatic).
 - [ ] **Each kind of device** gets names from the NAS and loses its ads where it should. These
@@ -145,12 +146,16 @@ forge; in the end forge, the Linksys and the modem sit side by side.
 - [ ] **A speed test from the main room before the switch**, to compare after: with the modem's
   cable at forge, the main room's internet crosses the wireless bridge.
 - [ ] **The house:** the Linksys into Bridge Mode (its DHCP and NAT stop; give it a fixed address on
-  Network → Hosts), the modem's cable moved to forge's port (power-cycle the modem). Devices
+  Network → Devices), the modem's cable moved to forge's port (power-cycle the modem). Devices
   renew and reach the internet through the NAS; the top card shows the provider's address; the
   speed test again.
 - [ ] A port forward to a device works from outside (a phone on cellular, the NAS's internet
   address and the port). Nothing else answers from outside: the web UI and SSH on the internet
   address time out.
+- [ ] **A save leaves the connection alone:** adding or removing a port forward changes no network
+  file, so the internet port keeps its lease (`journalctl -u systemd-networkd --since -5min` on
+  the NAS shows nothing for it) and, while the NAS announces itself over IPv6, its `fd…::53`
+  address stays on the LAN port (`ip -6 addr`).
 - **The way back:** turn the switch off on Network → Internet, move the cable back to the Linksys's
   internet port, take the Linksys out of Bridge Mode, power-cycle the modem.
 

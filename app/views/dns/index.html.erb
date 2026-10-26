@@ -118,7 +118,7 @@
         <h6>Network interface</h6>
         <p class="text-muted small">DNS answers on this one, for the devices on its network (and on Tailscale, when it's on). DHCP and the router use the same one.</p>
         <select name="interface" class="form-select mb-4 dns-interface" aria-label="Network interface">
-          <% @interfaces.each do |name, addresses| %>
+          <% @dns_interfaces.each do |name, addresses| %>
             <option value="<%= name %>" <%= 'selected' if name == @interface %>><%= port_display(name) %> (<%= addresses.reject(&:link_local?).map(&:to_s).join(', ').presence || 'no address' %>)</option>
           <% end %>
         </select>

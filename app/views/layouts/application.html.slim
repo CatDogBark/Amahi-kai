@@ -3,6 +3,8 @@ doctype 5
 html[lang="en" data-theme="dark" data-bs-theme="dark"]
   head
     meta charset="utf-8"
+    / Without it a phone lays the page out at desktop width, and the header's phone menu never shows.
+    meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport" /
     link rel="icon" type="image/svg+xml" href="/favicon.svg"
     link rel="alternate icon" href="/favicon.ico"
     title = full_page_title

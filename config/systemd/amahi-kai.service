@@ -3,7 +3,9 @@
 [Unit]
 Description=Amahi-kai Home Server (Puma)
 After=network.target mariadb.service
-Requires=mariadb.service
+# Wants, not Requires: MariaDB's package update stops and starts it, and Requires would stop
+# the web UI with it, for good (nothing starts it again until a reboot). The app reconnects.
+Wants=mariadb.service
 
 [Service]
 Type=simple

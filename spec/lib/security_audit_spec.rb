@@ -15,10 +15,10 @@ RSpec.describe SecurityAudit do
   end
 
   describe '.fix!' do
-    it 'returns true for simulated fixes in non-production' do
-      expect(SecurityAudit.fix!('ufw_firewall')).to eq(true)
-      expect(SecurityAudit.fix!('fail2ban')).to eq(true)
-      expect(SecurityAudit.fix!('ssh_root_login')).to eq(true)
+    it 'says every simulated fix worked, outside production' do
+      expect(SecurityAudit.fix!('ufw_firewall')).to eq(fixed: true)
+      expect(SecurityAudit.fix!('fail2ban')).to eq(fixed: true)
+      expect(SecurityAudit.fix!('ssh_root_login')).to eq(fixed: true)
     end
   end
 
@@ -120,16 +120,9 @@ RSpec.describe SecurityAudit do
   end
 
   describe '.fix!' do
-    it 'returns true for ssh_password_auth' do
-      expect(SecurityAudit.fix!('ssh_password_auth')).to eq(true)
-    end
-
-    it 'returns true for samba_lan_binding' do
-      expect(SecurityAudit.fix!('samba_lan_binding')).to eq(true)
-    end
-
-    it 'returns false for unknown check' do
-      expect(SecurityAudit.fix!('nonexistent')).to eq(true)
+    it 'says the simulated ssh_password_auth and samba_lan_binding fixes worked' do
+      expect(SecurityAudit.fix!('ssh_password_auth')).to eq(fixed: true)
+      expect(SecurityAudit.fix!('samba_lan_binding')).to eq(fixed: true)
     end
   end
 
@@ -238,13 +231,25 @@ RSpec.describe SecurityAudit do
                                      ])
     end
 
-    it "keeps the helper's reason when a fix is refused, and Fix all reports it" do
+    it "hands back the helper's reason with the result when a fix is refused, and Fix all reports it" do
       refusal = 'no account that can log in has an SSH key (~/.ssh/authorized_keys)'
       allow(Privileged).to receive(:call).with('security.harden_ssh', setting: 'password_login')
                                          .and_raise(Privileged::Error.new('security.harden_ssh', refusal, refused: true))
-      expect(SecurityAudit.fix!('ssh_password_auth')).to be false
-      expect(SecurityAudit.last_error).to eq(refusal)
+      expect(SecurityAudit.fix!('ssh_password_auth')).to eq(fixed: false, error: refusal)
       expect(SecurityAudit.fix_all!).to include({ name: 'ssh_password_auth', fixed: false, error: refusal })
+      expect(SecurityAudit.fix!('nonexistent')).to eq(fixed: false, error: 'nonexistent has no fix')
+    end
+
+    it "says why Samba's fix didn't work: the config refused, or smbd not restarting" do
+      allow(Share).to receive(:samba_conf).and_return("[global]\n")
+      allow(Privileged).to receive(:call).and_call_original
+      allow(Privileged).to receive(:call).with('samba.write_config', any_args)
+                                         .and_raise(Privileged::Error.new('samba.write_config', 'smb.conf refused: root preexec', refused: true))
+      expect(SecurityAudit.fix!('samba_lan_binding')).to eq(fixed: false, error: "Samba's settings were refused: smb.conf refused: root preexec")
+      allow(Privileged).to receive(:call).with('samba.write_config', any_args).and_return('ok' => true)
+      allow(Privileged).to receive(:call).with('services.restart', service: 'smbd')
+                                         .and_raise(Privileged::Error.new('services.restart', 'smbd.service failed'))
+      expect(SecurityAudit.fix!('samba_lan_binding')).to eq(fixed: false, error: 'smbd.service failed')
     end
   end
 

@@ -1,12 +1,12 @@
 module SharesHelper
 
   # The New Share form's Where: [label, value] for the system disk, the Greyhole pool (once it
-  # has drives) and each ZFS pool that's online (SharesController#params_create_share).
+  # has drives) and each of Amahi-kai's ZFS pools that's online (SharesController#params_create_share).
   def share_where_choices
     choices = [['System disk', 'disk']]
     choices << ['Greyhole pool (2 copies)', 'greyhole'] if Greyhole.installed? && DiskPoolPartition.exists?
     if StoragePools.zfs_installed?
-      StoragePools.status[:pools].each { |pool| choices << ["ZFS pool #{pool.name} (#{pool.layout})", "zfs:#{pool.name}"] }
+      StoragePools.managed_pools.each { |pool| choices << ["ZFS pool #{pool.name} (#{pool.layout})", "zfs:#{pool.name}"] }
     end
     choices
   end

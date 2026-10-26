@@ -141,11 +141,19 @@ function getShareSize(shareId) {
   })
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      if (area) area.innerHTML = '<strong>' + data.size + '</strong>';
+      // As text: the size can carry du's message, which names the share's files
+      if (!area) return;
+      var size = document.createElement('strong');
+      size.textContent = data.size;
+      area.replaceChildren(size);
     })
     .catch(function(err) {
       console.error('Get size failed:', err);
-      if (area) area.innerHTML = '<span class="text-danger">Error</span>';
+      if (!area) return;
+      var error = document.createElement('span');
+      error.className = 'text-danger';
+      error.textContent = 'Error';
+      area.replaceChildren(error);
     })
     .finally(function() {
       if (spinner) spinner.style.display = 'none';

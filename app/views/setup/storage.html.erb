@@ -1,7 +1,8 @@
 <h2>Choose your storage drives</h2>
 <p>
   Tick the drives to use for your files: Amahi-kai prepares them and adds them to the Greyhole
-  pool. The drive the system runs from is never offered.
+  pool. The drive the system runs from is never offered. Leave unticked any drive you want for a
+  ZFS pool later (Disks → ZFS Pools): a pool takes whole drives with nothing on them.
 </p>
 
 <% if @devices.any? { |d| !d[:os_disk] && !d[:zfs_pool] } %>
@@ -12,7 +13,8 @@
         <% device[:partitions].each do |part| %>
           <% box_id = "drive_#{part[:path].gsub('/', '_')}" %>
           <div class="drive-item">
-            <input type="checkbox" name="drives[]" value="<%= part[:path] %>" id="<%= box_id %>"
+            <%# Each drive goes by its ref (DiskManager.resolve): a page left open acts on that drive or on none %>
+            <input type="checkbox" name="drives[]" value="<%= part[:ref] %>" id="<%= box_id %>"
                    data-status="<%= part[:status] %>"
                    <%= 'checked' if @pool_paths.include?(part[:path]) || @pool_paths.include?(part[:mountpoint]) %>>
             <label for="<%= box_id %>">
@@ -29,17 +31,17 @@
                 <% fs_supported = %w[ext2 ext3 ext4 xfs btrfs].include?(part[:fstype].to_s.downcase) %>
                 <span class="setup-warning">⚠ Has a <%= part[:fstype] %> filesystem (it may hold files)</span>
                 <a href="#" class="setup-link" style="margin-left: 8px;"
-                   data-call="previewDrive" data-args='["<%= part[:path] %>", "<%= setup_preview_drive_path %>"]'>Preview its files</a>
+                   data-call="previewDrive" data-args='["<%= part[:ref] %>", "<%= setup_preview_drive_path %>", "<%= part[:path] %>"]'>Preview its files</a>
                 <div style="margin-top: 4px;">
                   <% unless fs_supported %>
                     <div class="setup-muted">Mounted as a share of its own, outside the pool (Greyhole can't use <%= part[:fstype] %>).</div>
                     <label class="setup-danger">
-                      <input type="checkbox" name="format_drives[]" value="<%= part[:path] %>" disabled data-requires="<%= box_id %>">
+                      <input type="checkbox" name="format_drives[]" value="<%= part[:ref] %>" disabled data-requires="<%= box_id %>">
                       Format it as ext4 instead (erases everything on it) to pool it
                     </label>
                   <% else %>
                     <label class="setup-muted">
-                      <input type="checkbox" name="format_drives[]" value="<%= part[:path] %>" disabled data-requires="<%= box_id %>">
+                      <input type="checkbox" name="format_drives[]" value="<%= part[:ref] %>" disabled data-requires="<%= box_id %>">
                       Format it as ext4 (erases everything on it)
                     </label>
                     <span class="setup-hint">or leave it unticked to use it as it is</span>

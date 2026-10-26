@@ -160,7 +160,8 @@ describe "Docker Apps", type: :request do
       allow(StoragePools).to receive(:zfs_installed?).and_return(true)
       allow(StoragePools).to receive(:status).and_return(
         installed: true, offline: [], error: nil,
-        pools: [StoragePools::Pool.new(name: 'tank', vdevs: [{ 'name' => 'mirror-0', 'children' => [] }])]
+        pools: [StoragePools::Pool.new(name: 'tank', managed: true, vdevs: [{ 'name' => 'mirror-0', 'children' => [] }]),
+                StoragePools::Pool.new(name: 'rpool', managed: false, vdevs: [])] # a system's own: not offered
       )
     end
 
@@ -250,6 +251,16 @@ describe "Docker Apps", type: :request do
         shares = [{ name: 'Downloads', write: true }, { name: 'Movies', write: false }]
         expect(Privileged.calls).to include(['apps.install', { app: 'transmission', shares: shares }])
         expect(DockerApp.find_by(identifier: 'transmission').shares).to eq(shares)
+      end
+
+      # The new shares were saved before the helper ran: a failed reinstall left the record saying
+      # shares the container didn't have.
+      it "saves the shares chosen only once the helper has given them" do
+        app = DockerApp.create!(identifier: 'transmission', name: 'Transmission', image: AppCatalog.find('transmission')[:image], status: 'running')
+        app.update!(shares: [{ name: 'Movies', write: false }])
+        helper_fails('apps.install', 'docker exited 125: invalid mount')
+        get "/apps/docker/install_stream/transmission", params: { share: %w[Downloads] }, headers: same_origin
+        expect(app.reload).to have_attributes(status: 'error', shares: [{ name: 'Movies', write: false }])
       end
 
       it "keeps every share read only for an app that only reads them" do
@@ -345,7 +356,15 @@ describe "Docker Apps", type: :request do
       allow(AppCatalog).to receive(:backup).and_return(nil)
       allow(AppCatalog).to receive(:backup).with('gitea').and_return(from: old, taken_at: Time.utc(2026, 10, 5, 12), until: Time.utc(2026, 11, 4, 12))
       get "/apps/installed_apps"
-      expect(response.body).to include('Undo update', 'data-url="/apps/docker/undo_update_stream/gitea"', '(until November 4)')
+      # The date in the viewer's time zone (time_ago.js), the copy's age in the confirm (no time zone there)
+      expect(response.body).to include('Undo update', 'data-url="/apps/docker/undo_update_stream/gitea"',
+                                       '(until <time datetime="2026-11-04T12:00:00Z" data-local="month-day">November 4</time>)',
+                                       "with its data from #{ApplicationController.helpers.time_ago_in_words(Time.utc(2026, 10, 5, 12))} ago.")
+      expect(response.body).not_to include("ZFS pool's own snapshots")
+      # Its data on a ZFS pool: the roll-back takes the pool's later snapshots of it with it
+      allow(AppCatalog).to receive(:backup).with('gitea').and_return(from: old, taken_at: Time.utc(2026, 10, 5, 12), until: Time.utc(2026, 11, 4, 12), snapshot: true)
+      get "/apps/installed_apps"
+      expect(response.body).to include("and so are the ZFS pool&#39;s own snapshots of its data taken since")
       helper_replies('apps.undo_update', 'image' => old)
       get "/apps/docker/undo_update_stream/gitea", headers: same_origin
       expect(response.body).to include('✓ Gitea is back on 1.27.2-rootless, with its data from before the update')
@@ -378,10 +397,18 @@ describe "Docker Apps", type: :request do
                                       ['apps.uninstall', { app: 'gitea', delete_data: true }]])
     end
 
-    it "refuses an app that isn't in the catalog" do
+    it "refuses an app that isn't installed or in the catalog" do
       post "/apps/docker/uninstall/portainer"
       expect(response).to have_http_status(:not_found)
       expect(Privileged.calls).to be_empty
+    end
+
+    # An app the catalog dropped couldn't be uninstalled until System Update.
+    it "uninstalls an installed app the catalog dropped" do
+      DockerApp.create!(identifier: 'portainer', name: 'Portainer', image: "portainer/portainer-ce:2.0@sha256:#{'a' * 64}", status: 'running')
+      post "/apps/docker/uninstall/portainer"
+      expect(response.parsed_body).to eq('status' => 'ok')
+      expect(Privileged.calls).to eq([['apps.uninstall', { app: 'portainer', delete_data: false }]])
     end
   end
 

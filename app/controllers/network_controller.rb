@@ -50,18 +50,33 @@ class NetworkController < ApplicationController
     return refuse("#{interface} is the internet side; Network → Internet manages it") if row.part == :internet
     mode = params[:mode].to_s
     return refuse('Choose an automatic or a fixed address') unless NetworkAddress::MODES.include?(mode)
-    if mode == 'automatic' && DnsService.dhcp? && interface == DnsService.interface
+    dhcp_here = DnsService.dhcp? && interface == DnsService.interface
+    if mode == 'automatic' && dhcp_here
       return refuse("The NAS hands out addresses on #{interface} (Network → DHCP), so it needs a fixed one there")
+    end
+    prefix = params[:prefix].to_s.strip.presence || '24'
+    # DHCP's range and the fixed devices' addresses are the last part of an address on a /24.
+    if mode == 'fixed' && dhcp_here && prefix != '24'
+      return refuse("The NAS hands out addresses on #{interface} (Network → DHCP), which works on a /24 network: keep the prefix at 24 there")
     end
     address = gateway = nil
     dns = []
     if mode == 'fixed'
-      address = "#{params[:address].to_s.strip}/#{params[:prefix].to_s.strip.presence || 24}"
+      address = "#{params[:address].to_s.strip}/#{prefix}"
       # The NAS is the router: its LAN interface has no router of its own.
       gateway = params[:gateway].to_s.strip.presence unless DnsService.router? && interface == DnsService.interface
       dns = params[:dns].to_s.split(/[\s,]+/).reject(&:blank?)
     end
-    guard = NetworkAddress.arrival_interface(request.env) == interface
+    arrival = NetworkAddress.arrival_interface(request.env)
+    # Through the tunnel or Tailscale, the way in runs over the port with the default route, and
+    # the guard can't watch for the browser coming back: a wrong address there would cut the
+    # admin off for good. That one is changed from the LAN.
+    if %w[lo tailscale0].include?(arrival) && NetworkInterfaces.default_routes.any? { |name, _gateway, _metric| name == interface }
+      over = arrival == 'lo' ? 'the Cloudflare Tunnel' : 'Tailscale'
+      return refuse("You're connected through #{over}, which runs over #{interface}: a wrong address there would cut you off " \
+                    'with nothing to put it back. Change it from a computer on your LAN, where the NAS can check that you still reach it')
+    end
+    guard = arrival == interface
     NetworkAddress.change!(interface: interface, mode: mode, guard: guard, address: address, gateway: gateway, dns: dns)
     if guard
       @interface = interface
@@ -138,21 +153,36 @@ class NetworkController < ApplicationController
   def destroy_host
     host = Host.find(params[:id])
     host.destroy
-    flash[:notice] = "#{host.name} no longer has a fixed address."
+    done = "#{host.name} no longer has a fixed address"
+    # A device kept off the internet loses its rule with the address.
+    problem = DnsService.rewrite_router_problem if host.lan_only
+    if problem
+      flash[:alert] = "#{done}, but the router's rules weren't rewritten (#{problem}), so its address stays kept off the internet until a save " \
+                      'on Network → Internet puts them in place.'
+    else
+      flash[:notice] = "#{done}."
+    end
     redirect_to network_index_path
   end
 
   # LAN only: a device with a fixed address keeps the LAN (the shares, DNS, the NAS) but can't
-  # reach the internet through the NAS, by a router rule on its address (Host applies it while
-  # the NAS is the router; otherwise the flag waits for router mode).
+  # reach the internet through the NAS, by a router rule on its address, rewritten here while the
+  # NAS is the router (otherwise the flag waits for router mode). When the rules can't follow, the
+  # page says the device is still as it was.
   def toggle_lan_only
     host = Host.find(params[:id])
     host.update!(lan_only: !host.lan_only)
-    flash[:notice] = if host.lan_only
-                       "#{host.name} can't reach the internet#{' once the NAS is the router' unless DnsService.router?}; the LAN still works for it."
-                     else
-                       "#{host.name} reaches the internet again."
-                     end
+    if (problem = DnsService.rewrite_router_problem)
+      flash[:alert] = "#{host.name} is saved as #{host.lan_only ? 'LAN only' : 'reaching the internet'}, but the router's rules weren't rewritten " \
+                      "(#{problem}), so it #{host.lan_only ? 'still reaches the internet' : 'is still kept off the internet'} until a save on " \
+                      'Network → Internet puts them in place.'
+    else
+      flash[:notice] = if host.lan_only
+                         "#{host.name} can't reach the internet#{' once the NAS is the router' unless DnsService.router?}; the LAN still works for it."
+                       else
+                         "#{host.name} reaches the internet again."
+                       end
+    end
     redirect_to network_index_path
   end
 

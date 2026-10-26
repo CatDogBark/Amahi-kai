@@ -85,7 +85,7 @@ describe "Network Controller", type: :request do
         get "/network"
         expect(response.body).to include("LAN only</span>", ">Internet again</button>")
 
-        allow(DnsService).to receive_messages(router?: true, on?: true, wan_interface: 'ens20', interface: 'ens18', lan_prefix: '192.168.1')
+        allow(DnsService).to receive_messages(router?: true, on?: true, installed?: true, wan_interface: 'ens20', interface: 'ens18', lan_prefix: '192.168.1')
         Privileged.reset!
         post "/network/host/#{host.id}/lan_only"
         expect(flash[:notice]).to eq("camera reaches the internet again.")
@@ -95,6 +95,24 @@ describe "Network Controller", type: :request do
         expect(router_on.last[:lan_only]).to eq([])
         post "/network/host/#{host.id}/lan_only"
         expect(Privileged.calls.last[1][:lan_only]).to eq(['192.168.1.52'])
+      end
+
+      it "says when the router's rules couldn't follow LAN only, or a kept-off device's removal" do
+        host = Host.create!(name: "camera", mac: "aa:bb:cc:dd:ee:02", address: "52")
+        allow(DnsService).to receive_messages(router?: true, on?: true, installed?: true, wan_interface: 'ens20', interface: 'ens18', lan_prefix: '192.168.1')
+        allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('network.router_on', 'ufw: no'))
+        post "/network/host/#{host.id}/lan_only"
+        expect(host.reload.lan_only).to be true # saved all the same
+        expect(flash[:alert]).to eq("camera is saved as LAN only, but the router's rules weren't rewritten (ufw: no), so it still reaches the internet " \
+                                    "until a save on Network → Internet puts them in place.")
+        delete "/network/host/#{host.id}"
+        expect(flash[:alert]).to include("camera no longer has a fixed address, but the router's rules weren't rewritten (ufw: no)")
+        # The internet port gone: nothing to rewrite them on, and the page says so
+        host = Host.create!(name: "camera", mac: "aa:bb:cc:dd:ee:02", address: "52")
+        allow(DnsService).to receive(:wan_interface).and_return(nil)
+        Setting.set('dns_wan_interface', 'ens20')
+        post "/network/host/#{host.id}/lan_only"
+        expect(flash[:alert]).to include("(the router's internet port ens20 isn't here)")
       end
     end
 
@@ -184,6 +202,22 @@ describe "Network Controller", type: :request do
         expect(response.body).to include('Moving the NAS to nas.local', 'asks the network for an address')
       end
 
+      it "refuses a change to the port the way in runs over, when the request came through the tunnel or Tailscale" do
+        allow(NetworkInterfaces).to receive(:default_routes).and_return([['ens18', '192.168.1.1', 100]])
+        allow(NetworkAddress).to receive(:arrival_interface).and_return('tailscale0')
+        put "/network/address", params: { interface: 'ens18', mode: 'fixed', address: '192.168.1.111', prefix: '24' }
+        expect(flash[:alert]).to include("You're connected through Tailscale, which runs over ens18", 'from a computer on your LAN')
+        expect(flash[:alert]).to end_with('that you still reach it.') # one full stop: refuse adds it
+        allow(NetworkAddress).to receive(:arrival_interface).and_return('lo')
+        put "/network/address", params: { interface: 'ens18', mode: 'automatic' }
+        expect(flash[:alert]).to include("You're connected through the Cloudflare Tunnel")
+        expect(Privileged.calls).to be_empty
+        # Behind the NAS router the LAN port carries no way out, so it can change from anywhere
+        allow(NetworkInterfaces).to receive(:default_routes).and_return([['ens20', '10.77.0.1', 50]])
+        put "/network/address", params: { interface: 'ens18', mode: 'fixed', address: '192.168.1.111', prefix: '24' }
+        expect(Privileged.calls.last.first).to eq('network.set_address')
+      end
+
       it "refuses the internet side, a port that isn't there, automatic on the port the NAS hands out addresses on, and what the helper refuses" do
         put "/network/address", params: { interface: 'ens20', mode: 'automatic' }
         expect(flash[:alert]).to include('internet side')
@@ -192,6 +226,9 @@ describe "Network Controller", type: :request do
         allow(DnsService).to receive_messages(dhcp?: true, interface: 'ens18')
         put "/network/address", params: { interface: 'ens18', mode: 'automatic' }
         expect(flash[:alert]).to include('needs a fixed one')
+        # DHCP's range and the fixed devices' addresses fit a /24
+        put "/network/address", params: { interface: 'ens18', mode: 'fixed', address: '192.168.1.111', prefix: '16' }
+        expect(flash[:alert]).to include('works on a /24 network: keep the prefix at 24 there')
         expect(Privileged.calls).to be_empty
         allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('network.set_address', "\"192.168.1.0/24\" is the network's own address", refused: true))
         put "/network/address", params: { interface: 'ens18', mode: 'fixed', address: '192.168.1.0' }
@@ -315,7 +352,7 @@ describe "Network Controller", type: :request do
 
     describe "POST /network/security/fix" do
       it "fixes a specific security check" do
-        allow(SecurityAudit).to receive(:fix!).with("ufw_firewall").and_return(true)
+        allow(SecurityAudit).to receive(:fix!).with("ufw_firewall").and_return(fixed: true)
         post "/network/security/fix", params: { check_name: "ufw_firewall" }, as: :json
         body = JSON.parse(response.body)
         expect(body["status"]).to eq("ok")
@@ -323,7 +360,7 @@ describe "Network Controller", type: :request do
       end
 
       it "returns error when fix fails" do
-        allow(SecurityAudit).to receive(:fix!).with("unknown_check").and_return(false)
+        allow(SecurityAudit).to receive(:fix!).with("unknown_check").and_return(fixed: false, error: "unknown_check has no fix")
         post "/network/security/fix", params: { check_name: "unknown_check" }, as: :json
         body = JSON.parse(response.body)
         expect(body["status"]).to eq("error")
