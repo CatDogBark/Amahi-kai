@@ -179,6 +179,7 @@ class AppCatalog
       data = YAML.safe_load(File.read(path))
       requires = data['requires'].is_a?(Integer) ? data['requires'] : 1
       { identifier: File.basename(path, '.yml'), name: data['name'].to_s, description: data['description'],
+        sign_in: (data['sign_in'].strip.presence if data['sign_in'].is_a?(String)),
         requires: requires, installable: requires <= FORMAT,
         category: data['category'], logo_url: data['logo'], image: data['image'], web_port: data['web_port'],
         web_tls: data['web_tls'] == true,

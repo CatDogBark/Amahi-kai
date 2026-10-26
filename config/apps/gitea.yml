@@ -1,5 +1,6 @@
 name: Gitea
 description: Your own Git server, like a small GitHub, for code and its history.
+sign_in: "Its first page sets it up: make the admin account there, or the first account you register is the admin."
 category: development
 logo: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/gitea.png
 releases: https://github.com/go-gitea/gitea/releases/tag/v{version}

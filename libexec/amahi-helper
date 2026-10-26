@@ -3122,6 +3122,12 @@ module AmahiHelper
         ok = value.is_a?(String) && !value.strip.empty? && value.length <= 300 && !value.match?(/[\r\n\0]/)
         bad.call("#{field} must be one line of text") unless ok
       end
+      # How to sign in the first time, said under the installed app (the catalog's CI wants one for
+      # every app; an Amahi-kai that doesn't know the field ignores it)
+      sign_in = data['sign_in']
+      unless sign_in.nil? || (sign_in.is_a?(String) && !sign_in.strip.empty? && sign_in.length <= 300 && !sign_in.match?(/[\r\n\0]/))
+        bad.call('sign_in must be one line of text')
+      end
       %w[logo releases].each do |field|
         value = data[field]
         bad.call("#{field} must be an https link") unless value.nil? || (value.is_a?(String) && value.match?(%r{\Ahttps://[^\s"'<>]{1,500}\z}))

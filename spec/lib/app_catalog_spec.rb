@@ -11,7 +11,7 @@ RSpec.describe AppCatalog do
 
   describe ".all" do
     it "lists the apps, by name" do
-      expect(AppCatalog.all.map { |app| app[:identifier] }).to eq(%w[bittube gitea jellyfin transmission uptimekuma vaultwarden])
+      expect(AppCatalog.all.map { |app| app[:identifier] }).to eq(%w[bitshare bittube gitea jellyfin pigallery2 transmission uptimekuma vaultwarden])
     end
 
     it "gives each app what the pages show" do
@@ -19,6 +19,7 @@ RSpec.describe AppCatalog do
       expect(vaultwarden).to include(name: "Vaultwarden", category: "security", web_port: 8880,
                                      ports: [{ host: 8880, container: 8080, protocol: "tcp", label: "web" }],
                                      secrets: [{ env: "ADMIN_TOKEN", label: "Admin page token (the /admin page)" }])
+      expect(vaultwarden[:sign_in]).to start_with("Its web vault needs HTTPS")
       expect(vaultwarden[:image]).to start_with("vaultwarden/server:1.37.3@sha256:")
       expect(vaultwarden[:logo_url]).to start_with("https://")
       expect(vaultwarden[:web_tls]).to be(false)
@@ -110,7 +111,7 @@ RSpec.describe AppCatalog do
 
   describe "filters" do
     it "finds apps by category and by name or description" do
-      expect(AppCatalog.by_category("media").map { |app| app[:identifier] }).to eq(%w[bittube jellyfin])
+      expect(AppCatalog.by_category("media").map { |app| app[:identifier] }).to eq(%w[bittube jellyfin pigallery2])
       expect(AppCatalog.by_category("gaming")).to eq([])
       expect(AppCatalog.search("GITEA").map { |app| app[:identifier] }).to eq(["gitea"])
       expect(AppCatalog.search("password").map { |app| app[:identifier] }).to eq(["vaultwarden"])

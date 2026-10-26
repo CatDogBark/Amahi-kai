@@ -206,6 +206,11 @@ RSpec.describe 'AmahiHelper apps' do
       expect(helper.catalog_entry_problem('Gitea_2', gitea)).to eq('not an app id (lowercase letters and digits)')
       expect(helper.catalog_entry_problem('gitea', gitea.sub(/^name: .*$/, 'name: ""'))).to eq('name must be one line of text')
       expect(helper.catalog_entry_problem('gitea', gitea.sub('logo: https://', 'logo: http://'))).to eq('logo must be an https link')
+      # How to sign in the first time: one line, or none (a manifest from before it)
+      expect(helper.catalog_entry_problem('gitea', gitea.sub(/^sign_in: .*\n/, ''))).to be_nil
+      ['sign_in: ""', 'sign_in: "a\\nb"', 'sign_in: [1]', "sign_in: \"#{'x' * 301}\""].each do |line|
+        expect(helper.catalog_entry_problem('gitea', gitea.sub(/^sign_in: .*$/, line))).to eq('sign_in must be one line of text'), line
+      end
       expect(helper.catalog_entry_problem('gitea', "requires: two\n#{gitea}")).to eq('requires must be a whole number from 1 to 999')
       expect(helper.catalog_entry_problem('gitea', 'name: [unclosed')).to start_with("can't be read")
       expect(helper.catalog_entry_problem('gitea', "#{gitea}# #{'x' * AmahiHelper::CATALOG_MAX_BYTES}")).to eq("over #{AmahiHelper::CATALOG_MAX_BYTES} bytes")
@@ -231,7 +236,7 @@ RSpec.describe 'AmahiHelper apps' do
     let(:ids) { Dir[File.join(catalog, '*.yml')].map { |path| File.basename(path, '.yml') } }
 
     it "has the apps chosen for the catalog, each a manifest the helper accepts" do
-      expect(ids).to contain_exactly('jellyfin', 'vaultwarden', 'uptimekuma', 'gitea', 'transmission', 'bittube')
+      expect(ids).to contain_exactly('jellyfin', 'vaultwarden', 'uptimekuma', 'gitea', 'transmission', 'bittube', 'bitshare', 'pigallery2')
       ids.each do |id|
         manifest = helper.app_manifest(id)
         expect(manifest[:image]).to match(/:[^@]+@sha256:\h{64}\z/), "#{id} isn't pinned by tag and digest"

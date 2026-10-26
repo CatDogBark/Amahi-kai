@@ -100,15 +100,22 @@
             button.btn.btn-sm.btn-outline-primary type="button" data=share_dialog.merge('verb' => 'Install again') Install again
             button.btn.btn-sm.btn-outline-secondary type="button" data-confirm=uninstall_note data-call="dockerAppAction" data-args='["/apps/docker/uninstall/#{identifier}", "@el"]' Uninstall
     - secrets = installed ? AppCatalog.secrets(identifier) : []
-    - if secrets.any?
+    / How to sign in the first time (the manifest's sign_in), shown open above what Amahi-kai made for it
+    - sign_in = entry[:sign_in] if installed
+    - if sign_in.present? || secrets.any?
       tr
         td colspan="3"
-          details.app-secrets.ps-3.pb-2
-            summary.small Passwords and keys Amahi-kai made for #{name}
-            table.table.table-sm.small.mb-0.mt-1
-              - secrets.each do |secret|
-                tr
-                  td.text-muted style="width: 40%" = secret[:label]
-                  td
-                    code.me-2 = secret[:value]
-                    button.btn.btn-sm.btn-outline-secondary.py-0 type="button" data-copy=secret[:value] Copy
+          - if sign_in.present?
+            .app-sign-in.small.ps-3.pt-1.pb-1 id="app-sign-in-#{identifier}"
+              span.text-muted First sign-in:
+              =< sign_in
+          - if secrets.any?
+            details.app-secrets.ps-3.pb-2
+              summary.small Passwords and keys Amahi-kai made for #{name}
+              table.table.table-sm.small.mb-0.mt-1
+                - secrets.each do |secret|
+                  tr
+                    td.text-muted style="width: 40%" = secret[:label]
+                    td
+                      code.me-2 = secret[:value]
+                      button.btn.btn-sm.btn-outline-secondary.py-0 type="button" data-copy=secret[:value] Copy

@@ -84,6 +84,7 @@ The file is `apps/<id>.yml`, where `<id>` is the app's name in lowercase letters
 ```yaml
 name: bitTube
 description: Your YouTube channels and streaming services in one place, with YouTube ad-free.
+sign_in: "Its first page asks you to make an account, its admin; the admin adds everyone else in Settings → People."
 category: media
 logo: https://cdn.jsdelivr.net/gh/CatDogBark/amahi-kai-apps@main/logos/bittube.svg
 releases: https://github.com/CatDogBark/bitTube/releases/tag/v{version}
@@ -100,6 +101,10 @@ environment:
   TZ: "{{timezone}}"
 ```
 
+- **`sign_in`** says how to sign in the first time, in one sentence: who to sign in as and with
+  what ("the password Amahi-kai made for it", for one of your `secrets`), or what your app's first
+  page asks for. The Apps page shows it under the installed app, and the install window as the
+  install finishes. The catalog wants one for every app.
 - **`image`** is pinned twice, by tag and by digest (`name:tag@sha256:...`), so every server gets
   exactly the build you tested.
 - **`ports`**: `host` is the port the app gets on the server when it's free (1024 or above, not

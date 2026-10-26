@@ -229,6 +229,10 @@ class AppsController < ApplicationController
     sse.emit('')
     sse.emit("✓ #{entry[:name]} is installed and running")
     sse.emit("  Open it at #{app.url(host)} (on your LAN or Tailscale)") if web
+    if entry[:sign_in].present?
+      sse.emit("  First sign-in: #{entry[:sign_in]}")
+      sse.emit("  Passwords and keys Amahi-kai made for it are on the Apps page, under #{entry[:name]}") if entry[:secrets].any?
+    end
     sse.done
   rescue Privileged::Error => e
     app&.update(status: 'error', error_message: e.message)

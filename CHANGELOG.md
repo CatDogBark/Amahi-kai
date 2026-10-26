@@ -6,6 +6,7 @@ All notable changes to Amahi-kai are documented here.
 
 ### 🔒 Security & Fixes
 
+- **Each app says how to sign in the first time** (Apps) — The Apps page gave no word on how to get into an app once it was installed: the password Amahi-kai made for PiGallery2 sat in a folded list, and nothing said its user is admin, or that Jellyfin, Gitea, Uptime Kuma and bitTube have you make the first account on their own first page. Every app in the catalog now says how, under the installed app on the Apps page (above the passwords Amahi-kai made for it) and when its install finishes.
 - **Disks → Devices says what comes after formatting** — A drive formatted there (Initialize or Format) is left unmounted, and Greyhole's pool and shares only take mounted drives, but the page said only "Successfully formatted", and beside the drive, when ZFS was installed, only how to keep it for a ZFS pool. It says to mount it for shares or Greyhole's pool now, and the hint beside the drive gives both ways.
 
 ### 🔧 Architecture & Code Quality
