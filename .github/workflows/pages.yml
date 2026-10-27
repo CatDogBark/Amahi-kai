@@ -37,6 +37,16 @@ jobs:
           path: catalog
       - name: The app grid from the catalog
         run: ruby script/site-apps --catalog catalog/apps
+      # Each stylesheet and script is linked with a hash of its content. Cloudflare tells browsers
+      # to keep them for 4 hours, so a page that changed along with its stylesheet would otherwise
+      # be drawn with the old one until then. The last line lists the links, and fails if none is.
+      - name: Stylesheets and scripts linked by their content
+        run: |
+          for path in site/assets/*.css site/assets/*.js; do
+            link=${path#site}
+            sed -i "s|\"$link\"|\"$link?v=$(sha256sum "$path" | cut -c1-12)\"|g" site/index.html site/_layouts/*.html
+          done
+          grep -h -o '"/assets/[^"]*?v=[0-9a-f]*"' site/index.html site/_layouts/*.html
       - uses: actions/configure-pages@v4
       - uses: actions/jekyll-build-pages@v1
         with:
