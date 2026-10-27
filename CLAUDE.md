@@ -140,6 +140,11 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
   joins, so it wins; its October 2026 refresh block (mint, Space Grotesk, the glass panels) is at
   its end. Every page is dark (`data-theme="dark"` in the layouts).
 - `Open3` doesn't set `$?`; use the status it returns (or `Shell.success?`).
+- **`systemctl enable --now` / `disable --now` only start and stop native units.** Greyhole's is an
+  init script (a generated unit): `--now` switched its boot start but left the daemon as it
+  was. Switch a unit with two commands (enable then start, disable then stop), as the helper's
+  `switch_unit` and `services.enable` do. Checking a process over SSH, `pgrep -f` inside
+  `bash -c '…'` matches that shell's own command line: use `ps -eo args | grep '[g]reyhole'`.
 - **`lsblk -J` only nests partitions and volumes under their disk when NAME is the first
   column**; with PATH first it lists every device flat, and a disk looks empty (#45: the helper's
   system-disk check didn't hold). Ask for `NAME,PATH,...`; the helper refuses a flat list, and
