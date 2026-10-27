@@ -5989,7 +5989,8 @@ module AmahiHelper
       running = Hash(app_state(id))['Running'] == true
       run_command([DOCKER, 'stop', '--time', '30', container, { allow_failure: true }]) if running
       begin
-        ports = with_records_lock { app_assign_ports(id, manifest[:ports]).tap { |given| app_record_ports(id, given) } }
+        bind = tailnet ? '127.0.0.1' : '0.0.0.0'
+        ports = with_records_lock { app_assign_ports(id, manifest[:ports], bind).tap { |given| app_record_ports(id, given) } }
         ports.reject { |p| p[:host] == p[:preferred] }.uniq { |p| p[:host] }.each do |p|
           say("Port #{p[:preferred]} is in use, so it gets port #{p[:host]}")
         end
@@ -6005,7 +6006,7 @@ module AmahiHelper
                        *APP_CAP_DROP.flat_map { |cap| ['--cap-drop', cap] }, '--pids-limit', APP_PIDS_LIMIT.to_s, *APP_LOG_OPTIONS,
                        '--memory', manifest[:memory], '--label', "amahi.app=#{id}", '--env-file', env_file,
                        *(manifest[:run_as] == 'app' ? ['--user', "#{uid}:#{gid}"] : []),
-                       *ports.flat_map { |p| ['--publish', "#{tailnet ? '127.0.0.1' : '0.0.0.0'}:#{p[:host]}:#{p[:container]}/#{p[:protocol]}"] },
+                       *ports.flat_map { |p| ['--publish', "#{bind}:#{p[:host]}:#{p[:container]}/#{p[:protocol]}"] },
                        *app_folder_mounts(manifest, dir, storage), *share_mounts, manifest[:image]])
         end
       rescue Failed, Refused
@@ -6628,13 +6629,13 @@ module AmahiHelper
     # free; otherwise the next free one. Ports with the same number (Transmission's peer port,
     # TCP and UDP) stay together. Another app's ports count as taken even while it's stopped
     # or uninstalled with its data kept.
-    def app_assign_ports(id, wanted)
+    def app_assign_ports(id, wanted, address = '0.0.0.0')
       records = read_json(APP_PORTS) || {}
       before = Array(records[id]).select { |p| p.is_a?(Hash) }
       taken = records.reject { |other, _| other == id }.values.flatten.grep(Hash).map { |p| [p['host'], p['protocol']] }
       wanted.group_by { |p| p[:host] }.flat_map do |preferred, group|
         protocols = group.map { |p| p[:protocol] }
-        free = ->(port) { port_free?(port, protocols, taken) }
+        free = ->(port) { port_free?(port, protocols, taken, address) }
         last = before.find { |p| p['preferred'] == preferred && p['protocol'] == protocols.first }&.dig('host')
         host = [last, preferred].compact.uniq.find(&free) ||
                ((preferred + 1)..65_535).find(&free) || (1024...preferred).find(&free) or
@@ -6644,17 +6645,20 @@ module AmahiHelper
       end
     end
 
-    def port_free?(port, protocols, taken)
+    def port_free?(port, protocols, taken, address = '0.0.0.0')
       return false unless port.is_a?(Integer) && port.between?(1024, 65_535) && !APP_RESERVED_PORTS.include?(port)
-      protocols.all? { |protocol| !taken.include?([port, protocol]) && port_bindable?(port, protocol) }
+      protocols.all? { |protocol| !taken.include?([port, protocol]) && port_bindable?(port, protocol, address) }
     end
 
-    # Nothing on the NAS listens on +port+ (docker-proxy holds every running app's ports).
+    # Nothing on the NAS listens on +port+ at +address+, the one the app's ports are published on
+    # (docker-proxy holds every running app's ports). An app reached through Tailscale is published
+    # on 127.0.0.1 and checked there: tailscaled holds its port on the Tailscale addresses while
+    # it's served, so 0.0.0.0 would read as taken and move it to another port at each update.
     # SO_REUSEADDR so that connections still closing (TIME_WAIT) don't count; a listener does.
-    def port_bindable?(port, protocol)
+    def port_bindable?(port, protocol, address = '0.0.0.0')
       socket = Socket.new(:INET, protocol == 'udp' ? :DGRAM : :STREAM)
       socket.setsockopt(:SOCKET, :REUSEADDR, true) unless protocol == 'udp'
-      socket.bind(Addrinfo.new(Socket.sockaddr_in(port, '0.0.0.0')))
+      socket.bind(Addrinfo.new(Socket.sockaddr_in(port, address)))
       true
     rescue SystemCallError
       false

@@ -877,6 +877,18 @@ RSpec.describe 'AmahiHelper apps' do
         expect(ran).to be_empty
       end
 
+      # tailscaled holds 8880 on the Tailscale addresses while it serves the app, so a check on
+      # 0.0.0.0 moved it to 8881 at each update or change of its shares
+      it 'keeps its port while it is served, checking it on 127.0.0.1, where it is published' do
+        allow(helper).to receive(:port_bindable?) { |_port, _protocol, address| address == '127.0.0.1' }
+        helper.do_install_app('vault', helper.app_manifest('vault'))
+        create = ran.find { |argv| argv[1] == 'create' }
+        expect(create.each_cons(2).select { |flag, _| flag == '--publish' }.map(&:last)).to eq(['127.0.0.1:8880:8080/tcp'])
+        expect(env_files.sole[1]).to include('DOMAIN=https://amahi-kai.tail1234.ts.net:8880')
+        expect(helper).to have_received(:port_bindable?).with(8880, 'tcp', '127.0.0.1')
+        expect(helper).not_to have_received(:port_bindable?).with(anything, anything, '0.0.0.0')
+      end
+
       it 'comes off the tailnet when uninstalled, at the port it was given' do
         helper.do_install_app('vault', helper.app_manifest('vault'))
         ran.clear
@@ -1618,6 +1630,17 @@ RSpec.describe 'AmahiHelper apps' do
     expect(helper.port_bindable?(udp.addr[1], 'udp')).to be false
   ensure
     udp&.close
+  end
+
+  # tailscaled holds a served app's port on the Tailscale addresses (another address stands in for
+  # them here): checked on 0.0.0.0 that reads as taken, on 127.0.0.1, where the app is published, not
+  it 'sees a port as free on the address an app is published on, while something listens on another' do
+    server = TCPServer.new('127.0.0.2', 0)
+    port = server.addr[1]
+    expect(helper.port_bindable?(port, 'tcp')).to be false
+    expect(helper.port_bindable?(port, 'tcp', '127.0.0.1')).to be true
+  ensure
+    server&.close
   end
 
   describe 'the app firewall' do
