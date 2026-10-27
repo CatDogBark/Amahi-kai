@@ -5753,15 +5753,16 @@ module AmahiHelper
       { 'greyhole' => follow_need('greyhole.service', greyhole_drives.any? && !File.exist?(GREYHOLE_OFF)) }
     end
 
+    # Asked for on the page, so a start or stop that fails says why.
     def do_greyhole_switch(on)
       if on
         raise Failed, 'Greyhole needs a drive in its pool to run: add one first' if greyhole_drives.empty?
 
         FileUtils.rm_f(GREYHOLE_OFF)
-        run_command([SYSTEMCTL, 'enable', '--now', 'greyhole.service'])
+        switch_unit('greyhole.service', true)
       else
         do_install(GREYHOLE_OFF, "Switched off on Disks → Greyhole Pool\n", nil, '0644')
-        follow_need('greyhole.service', false)
+        switch_unit('greyhole.service', false)
       end
       { 'on' => on }
     end
@@ -5770,13 +5771,21 @@ module AmahiHelper
     def follow_need(unit, work)
       enabled = unit_state('is-enabled', unit) == 'enabled'
       if work && !enabled
-        run_command([SYSTEMCTL, 'enable', '--now', unit, { allow_failure: true }])
+        switch_unit(unit, true, allow_failure: true)
         'on'
       elsif !work && (enabled || unit_state('is-active', unit) == 'failed')
-        run_command([SYSTEMCTL, 'disable', '--now', unit, { allow_failure: true }])
-        run_command([SYSTEMCTL, 'reset-failed', unit, { allow_failure: true }])
+        switch_unit(unit, false, allow_failure: true)
         'off'
       end
+    end
+
+    # Enables and starts +unit+, or disables and stops it and forgets its failure: two commands,
+    # not enable --now, which only starts and stops native units (Greyhole's is an init script).
+    def switch_unit(unit, on, allow_failure: false)
+      opts = allow_failure ? [{ allow_failure: true }] : []
+      run_command([SYSTEMCTL, on ? 'enable' : 'disable', unit, *opts])
+      run_command([SYSTEMCTL, on ? 'start' : 'stop', unit, *opts])
+      run_command([SYSTEMCTL, 'reset-failed', unit, { allow_failure: true }]) unless on
     end
 
     # What systemctl is-enabled or is-active says of +unit+ ('enabled', 'failed', ...): its last

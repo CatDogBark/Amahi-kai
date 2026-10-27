@@ -205,7 +205,9 @@ RSpec.describe 'AmahiHelper ZFS pools' do
     it 'switches a service on when it gets work, off when it has none, and leaves it alone otherwise' do
       states['is-enabled'] = 'disabled'
       expect(helper.follow_need('smartmontools.service', true)).to eq('on')
-      expect(ran).to eq([['/usr/bin/systemctl', 'enable', '--now', 'smartmontools.service', { allow_failure: true }]])
+      # Two commands, not enable --now, which leaves an init script's service (Greyhole's) as it was
+      expect(ran).to eq([['/usr/bin/systemctl', 'enable', 'smartmontools.service', { allow_failure: true }],
+                         ['/usr/bin/systemctl', 'start', 'smartmontools.service', { allow_failure: true }]])
 
       ran.clear
       states['is-enabled'] = 'enabled' # left on: a stop on Settings → Servers lasts until the next restart
@@ -213,7 +215,8 @@ RSpec.describe 'AmahiHelper ZFS pools' do
       expect(ran).to eq([])
 
       expect(helper.follow_need('smartmontools.service', false)).to eq('off')
-      expect(ran).to eq([['/usr/bin/systemctl', 'disable', '--now', 'smartmontools.service', { allow_failure: true }],
+      expect(ran).to eq([['/usr/bin/systemctl', 'disable', 'smartmontools.service', { allow_failure: true }],
+                         ['/usr/bin/systemctl', 'stop', 'smartmontools.service', { allow_failure: true }],
                          ['/usr/bin/systemctl', 'reset-failed', 'smartmontools.service', { allow_failure: true }]])
 
       ran.clear
@@ -267,14 +270,16 @@ RSpec.describe 'AmahiHelper ZFS pools' do
 
       it 'is switched off, staying off after a restart, and on again once its pool has a drive' do
         allow(helper).to receive(:greyhole_drives).and_return(['/mnt/storage-1'])
+        # Asked for on the page: a stop or start that fails says why (no allow_failure)
         expect(helper.do_greyhole_switch(false)).to eq('on' => false)
         expect(File).to exist(off)
-        expect(ran.first).to eq(['/usr/bin/systemctl', 'disable', '--now', 'greyhole.service', { allow_failure: true }])
+        expect(ran).to eq([['/usr/bin/systemctl', 'disable', 'greyhole.service'], ['/usr/bin/systemctl', 'stop', 'greyhole.service'],
+                           ['/usr/bin/systemctl', 'reset-failed', 'greyhole.service', { allow_failure: true }]])
 
         ran.clear
         expect(helper.do_greyhole_switch(true)).to eq('on' => true)
         expect(File).not_to exist(off)
-        expect(ran).to eq([['/usr/bin/systemctl', 'enable', '--now', 'greyhole.service']])
+        expect(ran).to eq([['/usr/bin/systemctl', 'enable', 'greyhole.service'], ['/usr/bin/systemctl', 'start', 'greyhole.service']])
 
         allow(helper).to receive(:greyhole_drives).and_return([])
         expect { helper.do_greyhole_switch(true) }.to raise_error(AmahiHelper::Failed, 'Greyhole needs a drive in its pool to run: add one first')
