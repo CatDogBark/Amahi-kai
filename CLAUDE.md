@@ -1,61 +1,31 @@
 # Amahi-kai: notes for Claude sessions
 
-Amahi-kai is a Rails 8.1 NAS web app, modernized from the 2013 Amahi platform, released as 1.0
-on 2026-10-25, for other people to install. Two installs run it today: CatDogBark's NAS, an
-Ubuntu 24.04 VM on Proxmox that is also the house's router (it follows releases), reached on the
-LAN by IP over plain HTTP and through a Cloudflare Tunnel (no Tailscale, and no Greyhole in use:
-its storage is a ZFS pool); and a test VM that takes `dev` first, where Tailscale and Greyhole
-are tried. The two are set up differently: check what the NAS runs before calling something
-missing there. CatDogBark owns the repo (`CatDogBark/Amahi-kai`, **public**) and both.
+Amahi-kai is a Rails 8.1 NAS web app for Ubuntu 24.04, modernized from the 2013 Amahi platform,
+for other people to install. The repo is public (`CatDogBark/Amahi-kai`); its maintainer is
+CatDogBark (catdogbark@pm.me).
 
-Current work (CatDogBark, 2026-10-25): 1.0 is out. The road there was
-**`docs/plans/release-1.0.md`**: the code review and the docs review (seven fix batches on `dev`,
-each checked on the test VM), 1.0.0rc1 and its fresh install on the test VM, then 1.0.0 to
-1.0.3 on 2026-10-25. Networking, Tailscale included, is done. After 1.0: the real pool's checks with bitShare (bitShare's work in tandem), signed
-updates, and backups (no users yet, and CatDogBark's NAS has Proxmox's backups; the backups plan,
-for bare metal, is `docs/plans/backups.md`). 1.0 is for other people to install. CatDogBark's NAS is the house's
-router now and follows releases; the test VM takes `dev` first. bitShare (its own project)
-doesn't hold 1.0. The paragraph below is from before and stays for its links.
-
-Earlier (CatDogBark, 2026-10-08): getting Amahi-kai to a shelf-stable state first, by finishing
-its major code work (the October look and cleanup were #101–#112). Then testing everything,
-including Greyhole, shares and the Trash with CatDogBark's storage checklist
-(https://claude.ai/artifact/AzGwHaFHxKfxPsKYj2st1a). bitShare (P4.6) comes after all of
-Amahi-kai. The plans: storage,
-**`docs/plans/storage.md`** (ZFS pools for bitShare, PRs S1–S5, all built; tested on the drives
-once they're in, with
-**`docs/testing/storage-on-real-drives.md`**), then Phase 4, planned in **`docs/plans/apps.md`**
-(P4.1, P4.2, P4.4, P4.5, P4.5b and P4.5c done: the app catalog is its own repo,
+Read **`docs/plans/roadmap.md`** first, then the plan for the work you're on: storage is
+**`docs/plans/storage.md`**, apps **`docs/plans/apps.md`** (the app catalog is its own repo,
 [CatDogBark/amahi-kai-apps](https://github.com/CatDogBark/amahi-kai-apps), fetched with the update
-check, and apps are announced over mDNS; `docs/testing/apps.md`; P4.6 next). Read
-**`docs/plans/roadmap.md`** first, then the plan for the PR you're on. Phase 3, the code review
-fix plan (**`docs/plans/privileged-helper.md`**), is done, Content-Security-Policy included
-(enforced: no inline scripts or handlers; inline styles still allowed). The
-privilege model is in `docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`.
+check), backups **`docs/plans/backups.md`**. The privilege model is in
+`docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`, and the test checklists are in `docs/testing/`.
+The Content-Security-Policy is enforced: no inline scripts or handlers (inline styles are still
+allowed).
 
 ## Workflow
 
-- **Development is on `dev`** (since 2026-10-21); `main` is the release branch. Commit to `dev`
-  and push → CI green on `dev` → tell CatDogBark and wait for his go → PR `dev` → `main`, merged
-  with a merge commit (not squash, so the two keep one history) → tagged and released as
-  `CONTRIBUTING.md` says (Cutting a release) when he asks. Pull requests into `dev` run no CI.
-- **System Update follows an update channel** (`AMAHI_UPDATE_CHANNEL` in the NAS's `amahi.env`):
-  `releases`, `candidates` or `development` (the `dev` branch). Since 2026-10-24 the NAS
-  (`192.168.1.1`) is the house's router, so it follows `releases`; the test VM (`192.168.1.13`)
-  follows `development`. A push to `dev` is tried on the test VM first, and reaches the NAS only in
-  a release.
-- After each merge, stop and report to CatDogBark in a few plain sentences: what changed, and exactly
-  what to click or check on the test VM (the NAS, for a release). Wait for his OK before starting
-  the next PR.
-- Claude can reach the NAS over SSH (CatDogBark's go-ahead, 2026-10-05) for
-  read-only checks. `sudo` there needs CatDogBark's password, which Claude never types, so anything
-  that needs root is CatDogBark's to run: give him the commands, one per block. Never ask for or print
-  secrets (tokens, passwords, `amahi.env`, `secret_key_base`). Don't change the NAS directly;
-  changes go through PRs and System Update.
-- **This repo is public: the owner is CatDogBark here**, never their real name, and the contact email is
-  catdogbark@pm.me. Commit as `CatDogBark <186357707+CatDogBark@users.noreply.github.com>`. Keep `CHANGELOG.md` up to date in each PR
-  (Unreleased → "Security & Fixes" or "Architecture & Code Quality"), written for users.
-- Don't decide things the plan marks as CatDogBark's decision; ask.
+- **Development is on `dev`**; `main` is the release branch. Commit to `dev` and push → CI green
+  on `dev` → PR `dev` → `main`, merged with a merge commit (not squash, so the two keep one
+  history) → tagged and released as `CONTRIBUTING.md` says (Cutting a release). Pull requests
+  into `dev` run no CI. Merges into `main` and releases are the maintainer's call.
+- **System Update follows an update channel** (`AMAHI_UPDATE_CHANNEL` in the server's
+  `amahi.env`): `releases`, `candidates` or `development` (the `dev` branch). A push to `dev` is
+  tried on a test install that follows `development` before it goes into a release.
+- Never ask for or print secrets (tokens, passwords, `amahi.env`, `secret_key_base`).
+- In this repo, its docs, pull requests and commit messages, the maintainer is CatDogBark. Keep
+  `CHANGELOG.md` up to date in each PR (Unreleased → "Security & Fixes" or "Architecture & Code
+  Quality"), written for users.
+- Don't decide things a plan marks as the maintainer's decision; ask.
 
 ## Tests and CI
 
@@ -81,9 +51,9 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
   `tmp/capybara/`.
 - Every spec runs in CI: there are no tags that CI skips. A spec that needs root
   skips itself (`skip 'needs root' unless Process.euid.zero?`).
-- **Ruby is 3.2 on the NAS (Ubuntu's `ruby3.2`, 3.2.3).** Change `Gemfile.lock` only under Ruby
-  3.2.x with Bundler 2.4.19, so the resolver can't pick gems the NAS can't run. Update gems
-  minimally (`bundle update --conservative --patch <gem>`).
+- **Ruby is 3.2 where Amahi-kai runs (Ubuntu 24.04's `ruby3.2`, 3.2.3).** Change `Gemfile.lock`
+  only under Ruby 3.2.x with Bundler 2.4.19, so the resolver can't pick gems an install can't
+  run. Update gems minimally (`bundle update --conservative --patch <gem>`).
 - Outside production `Shell.simulated?` is true (no setting changes it), so `Privileged.call`
   records calls in `Privileged.calls` (reset before each example) instead of running the helper.
   Commands that only read the system (`Shell.output`, `Shell.success?`, `Open3`) do run in tests,
@@ -120,7 +90,7 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
   Puma finishes open requests before it stops, so a stream that waits on the update must end
   when Puma is stopping (`server_stopping?` in `SettingsController`), or the restart waits for
   systemd to kill Puma (90 seconds; `force_shutdown_after` in `config/puma.rb` now caps it).
-  If System Update breaks, CatDogBark runs `sudo /opt/amahi-kai/bin/amahi-update` over SSH.
+  If System Update itself breaks, run `sudo /opt/amahi-kai/bin/amahi-update` on the server.
 - **Root access goes through the helper.** User accounts, Samba's files, share folders, Settings →
   Servers, the hostname, dnsmasq, swap, reboot/power off, data drives (format, mount, fstab),
   ZFS pools, Greyhole, package installs (pinned apt repositories, a fixed package list), the Cloudflare
@@ -177,6 +147,3 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
 - Production refuses to boot without `SECRET_KEY_BASE` and creates `/var/lib/amahi-kai` at boot.
   To check production boot without root: `unshare -rm` and bind a scratch dir over `/var/lib`.
 - Samba config is generated from `Share.samba_conf` and must pass `testparm` before it's installed.
-- The detailed code review (findings, file and line references) is a Claude Doc CatDogBark owns:
-  https://claude.ai/code/artifact/df32228a-72d8-41b9-b5c1-80e0dea1f32d. Unfixed security
-  details stay there, not in this public repo.
