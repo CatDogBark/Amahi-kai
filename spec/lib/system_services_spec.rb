@@ -45,6 +45,15 @@ RSpec.describe SystemServices do
       expect(services['mariadb']).not_to be_idle
     end
 
+    # Greyhole runs once its pool has a drive (the root helper's follow_need keeps it off until then).
+    it 'shows Greyhole as idle while its pool has no drive, turned on and off on Disks → Greyhole Pool' do
+      greyhole = described_class.all.index_by(&:key)['greyhole']
+      expect(greyhole).to be_idle
+      expect(greyhole).to have_attributes(idle_summary: 'No drives in its pool yet', note: 'Turned on and off on Disks → Greyhole Pool')
+      DiskPoolPartition.add!('/mnt/storage-1')
+      expect(described_class.all.index_by(&:key)['greyhole']).not_to be_idle # stopped, with a drive
+    end
+
     it 'lists Avahi, which announces the apps on the LAN, with Start, Stop and Restart when installed' do
       expect(services['avahi-daemon']).to have_attributes(name: 'Avahi (apps on the network)', unit: 'avahi-daemon',
                                                           actions: %w[start stop restart])

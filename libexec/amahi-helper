@@ -416,6 +416,9 @@ module AmahiHelper
 
   GREYHOLE_CONF = '/etc/greyhole.conf'
   GREYHOLE_BIN = '/usr/bin/greyhole'
+  # Greyhole switched off on Disks → Greyhole Pool: it stays off after a restart (follow_need).
+  GREYHOLE_OFF = '/var/lib/amahi-kai/greyhole-off'
+  SMARTD_UNIT = 'smartmontools.service'
   # Greyhole's trash folder on each pool drive, and the root-only folder beside it where a file
   # being restored is staged.
   GREYHOLE_TRASH = '.gh_trash'
@@ -1115,9 +1118,9 @@ module AmahiHelper
       validate: ->(_a) { {} },
       plan: ->(_v) { [[:drive_temperatures]] }
     },
-    # Lets smartd start in a virtual machine (SMARTD_DROPIN), and starts it. Run by the
-    # installer and at every System Update. Starting can fail with nothing to watch, or without
-    # smartmontools installed; neither is this operation failing.
+    # Lets smartd start in a virtual machine (SMARTD_DROPIN), and runs it, now and at boot, while
+    # a drive has SMART to watch (follow_need): without one it would fail at every start. Run by
+    # the installer and at every System Update; the storage check follows the drives after that.
     'smart.setup' => {
       params: [],
       validate: ->(_a) { {} },
@@ -1125,7 +1128,7 @@ module AmahiHelper
         [[:make_dir, File.dirname(SMARTD_DROPIN), '0755'],
          [:install, SMARTD_DROPIN, SMARTD_DROPIN_CONTENT, nil],
          %w[/usr/bin/systemctl daemon-reload],
-         ['/usr/bin/systemctl', 'start', 'smartmontools.service', { allow_failure: true }]]
+         [:smartd_follow_need]]
       }
     },
     # Loads ZFS and caps its memory cache (see ARC_LIMIT), now and at every boot, replying with
@@ -1425,6 +1428,21 @@ module AmahiHelper
       validate: ->(_a) { installed!(GREYHOLE_BIN) && {} },
       plan: ->(_v) { [[GREYHOLE_BIN, '--empty-trash']] }
     },
+    # Disks → Greyhole Pool's switch: off stops Greyhole and keeps it off after a restart
+    # (GREYHOLE_OFF); on starts it, and at every boot, once its pool has a drive.
+    'greyhole.switch' => {
+      params: %w[on],
+      validate: ->(a) { installed!(GREYHOLE_BIN) && { on: boolean(a, 'on') } },
+      plan: ->(v) { [[:greyhole_switch, v[:on]]] }
+    },
+    # Greyhole runs, now and at boot, while its pool has a drive and it isn't switched off: run
+    # after its install and each change to its config (the pool's first drive starts it, the last
+    # one gone stops it), and at every System Update.
+    'greyhole.follow_need' => {
+      params: [],
+      validate: ->(_a) { installed!(GREYHOLE_BIN) && {} },
+      plan: ->(_v) { [[:greyhole_follow_need]] }
+    },
     # Removes Greyhole (Disks → Greyhole Pool) when its config lists no drives and no share
     # keeping copies: the package, its config and its apt repository. Its database stays, so
     # installing it again picks up where it was.
@@ -1435,7 +1453,7 @@ module AmahiHelper
         repository = APT_REPOSITORIES.fetch('greyhole')
         [['/usr/bin/systemctl', 'disable', '--now', 'greyhole.service', { allow_failure: true }],
          ['/usr/bin/apt-get', '-y', '-o', 'DPkg::Lock::Timeout=300', 'purge', *GREYHOLE_PACKAGES, { env: APT_ENV, stream: true }],
-         [:remove_files, GREYHOLE_CONF, GREYHOLE_POOL_CONF, repository[:list], repository[:keyring]],
+         [:remove_files, GREYHOLE_CONF, GREYHOLE_POOL_CONF, GREYHOLE_OFF, repository[:list], repository[:keyring]],
          # The package leaves systemd's unit for its init script loaded until a reload, and listed
          # as failed if Greyhole couldn't start (with no drives, it fails at every boot).
          ['/usr/bin/systemctl', 'daemon-reload', { allow_failure: true }],
@@ -5710,7 +5728,64 @@ module AmahiHelper
                  'drives' => disks.to_h { |disk| [disk, drive_health(disk, previous.dig('drives', disk))] } }
       health.merge!(do_pool_status(false)) # every 15 minutes: no scan of the drives, which would wake them
       do_install(STORAGE_HEALTH, "#{JSON.pretty_generate(health)}\n", nil, '0640', APP_USER)
+      do_smartd_follow_need(health['drives'])
       { 'health' => health }
+    end
+
+    # --- Services that run only while they have work ---
+    #
+    # smartd while a drive has SMART to watch, Greyhole while its pool has a drive (and it isn't
+    # switched off): each would otherwise start with nothing to do, fail, and be listed as failed
+    # at every boot. Each is switched on (enabled and started) when it gets work, and off
+    # (disabled, stopped, its failure forgotten) when it has none; otherwise it's left as it is,
+    # so a stop on Settings → Servers lasts until the next restart, as for every service.
+
+    # +drives+: { disk => its SMART data, or nil } as the storage check read them; read now when
+    # not given (smart.setup).
+    def do_smartd_follow_need(drives = nil)
+      return nil unless File.executable?(SMARTCTL)
+
+      drives ||= block_tree.select { |d| d['type'] == 'disk' }.map { |d| d['path'] }.grep(WHOLE_DISK).to_h { |disk| [disk, drive_health(disk, nil)] }
+      { 'smartd' => follow_need(SMARTD_UNIT, drives.values.any?(Hash)) }
+    end
+
+    def do_greyhole_follow_need
+      { 'greyhole' => follow_need('greyhole.service', greyhole_drives.any? && !File.exist?(GREYHOLE_OFF)) }
+    end
+
+    def do_greyhole_switch(on)
+      if on
+        raise Failed, 'Greyhole needs a drive in its pool to run: add one first' if greyhole_drives.empty?
+
+        FileUtils.rm_f(GREYHOLE_OFF)
+        run_command([SYSTEMCTL, 'enable', '--now', 'greyhole.service'])
+      else
+        do_install(GREYHOLE_OFF, "Switched off on Disks → Greyhole Pool\n", nil, '0644')
+        follow_need('greyhole.service', false)
+      end
+      { 'on' => on }
+    end
+
+    # 'on' when +unit+ was switched on, 'off' when switched off, nil when it's left as it was.
+    def follow_need(unit, work)
+      enabled = unit_state('is-enabled', unit) == 'enabled'
+      if work && !enabled
+        run_command([SYSTEMCTL, 'enable', '--now', unit, { allow_failure: true }])
+        'on'
+      elsif !work && (enabled || unit_state('is-active', unit) == 'failed')
+        run_command([SYSTEMCTL, 'disable', '--now', unit, { allow_failure: true }])
+        run_command([SYSTEMCTL, 'reset-failed', unit, { allow_failure: true }])
+        'off'
+      end
+    end
+
+    # What systemctl is-enabled or is-active says of +unit+ ('enabled', 'failed', ...): its last
+    # line on stdout (for an init script it says where it's looking on stderr).
+    def unit_state(question, unit)
+      out, _err, _status = Open3.capture3(ENV_MIN, [SYSTEMCTL, SYSTEMCTL], question, unit, unsetenv_others: true, chdir: '/')
+      out.lines.last.to_s.strip
+    rescue SystemCallError
+      ''
     end
 
     # One drive's SMART data from `smartctl --json -i -H -A` (at most 10 seconds): see

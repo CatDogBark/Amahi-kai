@@ -126,9 +126,10 @@ RSpec.describe Greyhole do
       expect(Greyhole.install! { |msg| messages << msg }).to be true
 
       expect(Privileged.calls.map(&:first)).to eq(%w[packages.add_repository greyhole.setup_database greyhole.write_config
-                                                     greyhole.setup_database services.restart services.enable])
-      expect(Privileged.calls.last).to eq(['services.enable', { service: 'greyhole' }])
-      expect(messages).to include('  Setting up greyhole (0.16.4-1) ...')
+                                                     greyhole.setup_database services.restart greyhole.follow_need])
+      # It runs once its pool has a drive: started with none, it failed (and at every boot)
+      expect(Privileged.calls.last).to eq(['greyhole.follow_need', {}])
+      expect(messages).to include('  Setting up greyhole (0.16.4-1) ...', 'Greyhole starts once a drive joins its pool')
       expect(SambaService).to have_received(:push_config)
     end
 
@@ -314,10 +315,18 @@ RSpec.describe Greyhole do
       expect(Privileged.calls.last).to eq(['services.restart', { service: 'greyhole' }])
     end
 
-    # Restarted with no drive, Greyhole failed ("no storage_pool_drive defined") and showed failed.
-    it "stops Greyhole when the pool's last drive is gone, instead of restarting it" do
+    # Restarted with no drive, Greyhole failed ("no storage_pool_drive defined") and showed failed;
+    # only stopped, it still started at every boot, and failed.
+    it "has the helper stop Greyhole, and keep it off at boot, when the pool's last drive is gone, instead of restarting it" do
       expect(Greyhole.configure!).to be true
-      expect(Privileged.calls.last).to eq(['services.stop', { service: 'greyhole' }])
+      expect(Privileged.calls.map(&:first)).to eq(%w[greyhole.write_config greyhole.follow_need])
+    end
+
+    it "is switched on and off through the root helper (Disks → Greyhole Pool), off lasting after a restart" do
+      expect(Greyhole.switch!(false)).to be true
+      expect(Privileged.calls).to eq([['greyhole.switch', { on: false }]])
+      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('greyhole.switch', 'Greyhole needs a drive in its pool to run: add one first'))
+      expect { Greyhole.switch!(true) }.to raise_error(Greyhole::GreyholeError, /needs a drive/)
     end
 
     it 'writes only lines the root helper accepts' do

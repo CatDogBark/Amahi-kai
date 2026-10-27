@@ -34,7 +34,8 @@ class SystemServices
     { key: 'radvd', name: 'radvd (IPv6 announcements)', unit: 'radvd', package: 'radvd', check: '/usr/sbin/radvd',
       note: 'Turned on and off on Network → Internet (IPv6)', idle: :ipv6_off, actions: %w[start stop restart] },
     { key: 'greyhole', name: 'Greyhole', unit: 'greyhole', package: 'greyhole', check: '/usr/bin/greyhole',
-      process: 'greyhole --daemon', actions: %w[start stop restart] },
+      process: 'greyhole --daemon', note: 'Turned on and off on Disks → Greyhole Pool', idle: :no_pool_drives,
+      actions: %w[start stop restart] },
     { key: 'docker', name: 'Docker', unit: 'docker', package: %w[docker-ce docker.io], check: '/usr/bin/docker',
       actions: %w[start stop restart] },
     # Announces the installed apps on the LAN (the helper's apps.announce), so devices find them.
@@ -59,13 +60,14 @@ class SystemServices
     'start' => 'services.start', 'stop' => 'services.stop', 'restart' => 'services.restart'
   }.freeze
 
-  # smartd exits when no drive has SMART to watch (virtual disks have none), and systemd then
-  # counts it as failed; it starts with the server once a real drive is connected.
+  # smartd runs only while a drive has SMART to watch (virtual disks have none), and Greyhole
+  # while its pool has a drive: the root helper keeps each off until then (follow_need).
   # [shown under the badge, its tooltip]
   IDLE_REASONS = {
     no_smart_drives: ['No drive with SMART yet',
-                      'smartd stops itself when no drive has SMART to watch (virtual disks have none). ' \
-                      'It starts with the server once a drive with SMART is connected.'],
+                      'smartd runs while a drive has SMART to watch (virtual disks have none). ' \
+                      'It starts by itself, within 15 minutes, once a drive with SMART is connected.'],
+    no_pool_drives: ['No drives in its pool yet', 'Greyhole runs once its pool has a drive (Disks → Greyhole Pool).'],
     dns_off: ['DNS is off', 'Unbound runs while DNS is on (Network → DNS).'],
     dhcp_off: ['DHCP is off', 'dnsmasq runs while the NAS hands out addresses (Network → DHCP).'],
     ipv6_off: ['Not announcing', 'radvd runs while the NAS announces itself as the IPv6 DNS server (Network → Internet).']
@@ -172,6 +174,8 @@ class SystemServices
       when :no_smart_drives
         health = StorageHealth.load
         health.checked? && health.drives.empty? # the last check found no drive with SMART data
+      when :no_pool_drives
+        !DiskPoolPartition.exists?
       when :dns_off
         !DnsService.on?
       when :dhcp_off

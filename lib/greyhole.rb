@@ -68,8 +68,10 @@ class Greyhole
       SambaService.push_config
       privileged('services.restart', service: 'smbd')
 
-      progress.call("Enabling and starting Greyhole...")
-      privileged('services.enable', service: 'greyhole')
+      # It runs, now and at boot, once its pool has a drive (greyhole.follow_need): without one it
+      # can't, and the package's own start failed.
+      reply = privileged('greyhole.follow_need')
+      progress.call(reply['greyhole'] == 'on' ? 'Greyhole is running' : 'Greyhole starts once a drive joins its pool')
       true
     end
 
@@ -106,6 +108,14 @@ class Greyhole
     def stop!
       return true unless production?
       service('services.stop')
+    end
+
+    # Disks → Greyhole Pool's switch: off stops Greyhole and keeps it off after a restart; on
+    # starts it, and at every boot, once its pool has a drive. Raises GreyholeError.
+    def switch!(on)
+      return true unless production?
+      privileged('greyhole.switch', on: on)
+      true
     end
 
     def restart!
@@ -291,15 +301,17 @@ class Greyhole
       end
     end
 
-    # Writes /etc/greyhole.conf (root:amahi 0640: it holds the database password) and
-    # restarts Greyhole if it's running; with the pool's last drive gone it's stopped instead,
-    # since it can't run without one (restarted, it failed). Returns false, with the reason
-    # logged, on failure.
+    # Writes /etc/greyhole.conf (root:amahi 0640: it holds the database password) and restarts
+    # Greyhole if it's running. Its pool's first drive starts it, now and at boot, and with the
+    # last one gone it's stopped and off at boot (greyhole.follow_need), since it can't run without
+    # one (restarted, it failed). Returns false, with the reason logged, on failure.
     def configure!
       return true unless production?
       sync_removals!
+      was_running = running?
       privileged('greyhole.write_config', content: generate_config)
-      DiskPoolPartition.exists? ? restart! : stop! if running?
+      privileged('greyhole.follow_need')
+      restart! if was_running && DiskPoolPartition.exists?
       true
     rescue GreyholeError => e
       Rails.logger.error("Greyhole configure error: #{e.message}")

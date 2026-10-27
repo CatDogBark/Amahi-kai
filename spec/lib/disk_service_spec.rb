@@ -55,14 +55,14 @@ RSpec.describe DiskService do
         expect(DockerApp).to have_received(:follow_pool!).twice # once Greyhole is done (sync_removals!)
       end
 
-      it "starts Greyhole when its first drive goes in, leaving 10 GB free on it" do
-        allow(Greyhole).to receive(:running?).and_return(false)
-        allow(Greyhole).to receive(:start!).and_return(true)
+      # configure! starts it with its first drive, now and at boot (greyhole.follow_need): only
+      # started, it didn't start again after a restart.
+      it "configures Greyhole when its first drive goes in, which starts it, leaving 10 GB free on it" do
+        allow(Greyhole).to receive(:start!)
         described_class.toggle_pool_partition(path)
-        expect(Greyhole).to have_received(:start!).once
+        expect(Greyhole).to have_received(:configure!).once
+        expect(Greyhole).not_to have_received(:start!)
         expect(DiskPoolPartition.find_by(path: path).minimum_free).to eq(10)
-        described_class.toggle_pool_partition('/mnt/data2')
-        expect(Greyhole).to have_received(:start!).once
       end
     end
 
@@ -94,8 +94,8 @@ RSpec.describe DiskService do
     context 'when running' do
       before { allow(Greyhole).to receive(:running?).and_return(true) }
 
-      it 'stops Greyhole' do
-        expect(Greyhole).to receive(:stop!)
+      it 'switches Greyhole off, lasting after a restart' do
+        expect(Greyhole).to receive(:switch!).with(false)
         described_class.toggle_greyhole
       end
     end
@@ -103,8 +103,8 @@ RSpec.describe DiskService do
     context 'when not running' do
       before { allow(Greyhole).to receive(:running?).and_return(false) }
 
-      it 'starts Greyhole' do
-        expect(Greyhole).to receive(:start!)
+      it 'switches Greyhole on' do
+        expect(Greyhole).to receive(:switch!).with(true)
         described_class.toggle_greyhole
       end
     end

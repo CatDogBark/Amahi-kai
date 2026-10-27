@@ -475,10 +475,16 @@ if [[ -x /usr/sbin/zpool ]]; then
   reply=$(/usr/local/sbin/amahi-helper zfs.setup </dev/null 2>/dev/null) \
     || log "⚠ Couldn't set ZFS's memory cache cap: $reply"
 fi
-# smartd starts in a virtual machine too: Ubuntu's unit skips it in one, even with the drives
-# passed through to it.
+# smartd starts in a virtual machine too (Ubuntu's unit skips it in one, even with the drives
+# passed through to it), while a drive has SMART to watch: without one it would fail at every boot.
 reply=$(/usr/local/sbin/amahi-helper smart.setup </dev/null 2>/dev/null) \
   || log "⚠ Couldn't set up SMART monitoring: $reply"
+# Greyhole runs while its pool has a drive: one with none used to start at every boot, and fail;
+# this switches it off.
+if [[ -x /usr/bin/greyhole ]]; then
+  reply=$(/usr/local/sbin/amahi-helper greyhole.follow_need </dev/null 2>/dev/null) \
+    || log "⚠ Couldn't check whether Greyhole has drives to run with: $reply"
+fi
 # The watch that gives DHCP's devices their names in DNS, as this version writes it, and running
 # again if systemd stopped it (before 1.0.2 a burst of leases could). Nothing while DHCP is off.
 reply=$(/usr/local/sbin/amahi-helper dns.names_setup </dev/null 2>/dev/null) \
