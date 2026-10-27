@@ -3,12 +3,21 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
-    paths: [site/**]
+    paths: [site/**, lib/site_apps.rb, script/site-apps, .github/workflows/pages.yml]
+  # Daily too, so an app added to the catalog shows on the site within a day.
+  schedule:
+    - cron: '17 15 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: read
   pages: write
   id-token: write
+
+# One deploy at a time: a newer one waits for the one running.
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -21,6 +30,13 @@ jobs:
       # The site serves the one-line installer: one bash won't read never goes up.
       - name: install.sh is valid bash
         run: bash -n site/install.sh
+      # The app grid lists what the catalog has today: each app's logo, name and description.
+      - uses: actions/checkout@v4
+        with:
+          repository: CatDogBark/amahi-kai-apps
+          path: catalog
+      - name: The app grid from the catalog
+        run: ruby script/site-apps --catalog catalog/apps
       - uses: actions/configure-pages@v4
       - uses: actions/jekyll-build-pages@v1
         with:
