@@ -55,6 +55,11 @@
           .small.mt-1
             = app.shares.any? ? "Shares #{app.share_summary}" : 'No shares'
             button.btn.btn-link.p-0.ms-2.align-baseline type="button" style="font-size: inherit" data=share_dialog.merge('verb' => 'Save and restart') Change
+          / A folder it was given that's gone (renamed or moved): it can't start until it's given its folders again
+          - missing = app.missing_folders
+          - if missing.any?
+            .small.text-warning.mt-1 id="app-missing-folders-#{identifier}"
+              = "#{missing.to_sentence} #{missing.one? ? "isn't" : "aren't"} there any more (renamed, moved or deleted): #{name} can't start until Change gives it its folders again."
           - if entry[:storage]
             .small.mt-1 id="app-storage-#{identifier}"
               - if storage_pool

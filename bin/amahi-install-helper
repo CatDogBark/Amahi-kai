@@ -14,6 +14,7 @@
 #   /etc/systemd/system/amahi-kai-snapshots.{service,timer}      pool snapshots, every hour
 #   /etc/systemd/system/amahi-kai-app-firewall.service   app ports kept to the LAN and Tailscale, with Docker
 #   /etc/systemd/system/amahi-kai-app-firewall-early.service   the same rules in place before Docker starts
+#   /etc/systemd/system/amahi-kai-app-shares.service   the share folders apps are given, mounted before Docker starts
 #   /etc/systemd/system/amahi-kai-app-backups.{service,timer}    app update copies deleted after 30 days, daily
 #   /etc/systemd/system/amahi-kai-trash.{service,timer}          files kept in the Trash too long deleted, daily
 #   /etc/systemd/system/amahi-kai-tailscale.{service,path}       DNS and Samba follow Tailscale's address
@@ -55,7 +56,7 @@ for unit in amahi-kai.service amahi-kai-indexer.service amahi-kai-indexer.timer 
             amahi-kai-update.service amahi-kai-update-check.service amahi-kai-update-check.timer \
             amahi-kai-storage-check.service amahi-kai-storage-check.timer \
             amahi-kai-snapshots.service amahi-kai-snapshots.timer amahi-kai-app-firewall.service \
-            amahi-kai-app-firewall-early.service \
+            amahi-kai-app-firewall-early.service amahi-kai-app-shares.service \
             amahi-kai-app-backups.service amahi-kai-app-backups.timer \
             amahi-kai-trash.service amahi-kai-trash.timer \
             amahi-kai-tailscale.service amahi-kai-tailscale.path; do
@@ -94,6 +95,9 @@ if [[ -d /run/systemd/system ]]; then
   # And the same rules before Docker starts, so the apps' ports aren't open until they're in.
   systemctl enable amahi-kai-app-firewall-early.service >/dev/null 2>&1 \
     || echo "Couldn't enable amahi-kai-app-firewall-early.service; app ports are open at boot until Docker is up" >&2
+  # And the share folders apps are given, mounted again before Docker starts them after a restart.
+  systemctl enable amahi-kai-app-shares.service >/dev/null 2>&1 \
+    || echo "Couldn't enable amahi-kai-app-shares.service; apps given folders of shares won't start after a restart" >&2
   if systemctl is-active --quiet docker.service; then
     systemctl restart amahi-kai-app-firewall.service \
       || echo "Couldn't limit app ports to the LAN and Tailscale (journalctl -u amahi-kai-app-firewall)" >&2

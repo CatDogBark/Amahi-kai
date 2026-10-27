@@ -154,7 +154,10 @@ class DisksController < ApplicationController
 
   def toggle_greyhole
     running = Greyhole.running?
-    flash[:error] = "Greyhole didn't #{running ? 'stop' : 'start'}. Its reason is in: journalctl -u greyhole" unless DiskService.toggle_greyhole
+    DiskService.toggle_greyhole
+    redirect_to disks_storage_pool_path
+  rescue Greyhole::GreyholeError => e
+    flash[:error] = "Greyhole didn't #{running ? 'stop' : 'start'}: #{e.message}"
     redirect_to disks_storage_pool_path
   end
 

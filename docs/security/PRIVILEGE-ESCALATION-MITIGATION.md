@@ -130,6 +130,18 @@ copy folder on each Greyhole drive, read only. For a share an app writes into, t
 `users` group in its container, and the share's folders get a default ACL (`setfacl -d`, applied to
 folders only, through `find`, which doesn't follow links) so what the app makes stays group-writable.
 
+An app can be given only some folders of a share instead (`/shares/<name>/<folder>`). A share's own
+folder is made by the helper, but a folder inside it can be swapped for a link by an app that writes
+there, and Docker follows a link in a mount's source each time it starts a container, at boot
+included. So the helper never gives Docker the folder's path: it opens the folder without following
+a link, checks that what it opened is that path (no link anywhere on the way), and bind-mounts it
+through that handle (`/proc/self/fd/<n>`, `mount --no-canonicalize`) under
+`/run/amahi-kai-app-shares`, root's only; the container mounts that. `/run` is empty after a
+restart, and `amahi-kai-app-shares.service` (`apps.share_binds`) mounts the recorded folders again,
+checked the same way, before Docker starts; a folder that's gone isn't mounted, so its app doesn't
+start rather than starting without it. Folder names are refused with `..`, a comma, a quote or a
+control character.
+
 Updates (`apps.update`) run the version the catalog pins; the web app names the app. The helper
 copies the app's folders (`cp -a`) into a root-only folder first, and puts them back
 (`apps.undo_update`, or by itself when the new version isn't healthy) only from that copy, by

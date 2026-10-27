@@ -1117,6 +1117,190 @@ RSpec.describe 'AmahiHelper apps' do
       expect { helper.greyhole_copies('..') }.to raise_error(AmahiHelper::Failed, /can't be a folder/)
     end
 
+    # Some folders of a share rather than all of it: each at /shares/<name>/<folder>, from the
+    # helper's own mount of it (APP_SHARE_BIND_ROOT), never the folder's path, which an app that
+    # writes there could swap for a link.
+    describe 'folders of shares' do
+      let(:bind_root) { "#{dir}/run/app-shares" }
+
+      before do
+        FileUtils.mkdir_p(%W[#{files}/downloads/tv/new #{files}/downloads/music #{files}/movies/Kids])
+        stub_const('AmahiHelper::APP_SHARE_BIND_ROOT', bind_root)
+        stub_const('AmahiHelper::APP_SHARE_BINDS', "#{dir}/app-share-binds.json")
+        allow(helper).to receive(:say)
+      end
+
+      it 'takes folders of a share, each read only or read and write' do
+        expect(choose(transmission, [{ 'name' => 'Downloads', 'folder' => 'tv/new', 'write' => true }, { 'name' => 'Downloads', 'folder' => 'music' }])).to eq(
+          [{ name: 'Downloads', path: "#{files}/downloads", pooled: false, folder: 'tv/new', write: true },
+           { name: 'Downloads', path: "#{files}/downloads", pooled: false, folder: 'music', write: false }]
+        )
+      end
+
+      it 'refuses a folder that is missing, outside the share, odd, or reached through a link, and folders that overlap' do
+        FileUtils.mkdir_p("#{dir}/elsewhere")
+        File.symlink("#{dir}/elsewhere", "#{files}/downloads/linked")
+        expect(refused(transmission, [{ 'name' => 'Downloads', 'folder' => 'films' }])).to eq("Downloads/films isn't a real folder (a link, or missing)")
+        expect(refused(transmission, [{ 'name' => 'Downloads', 'folder' => 'linked' }])).to eq("Downloads/linked isn't a real folder (a link, or missing)")
+        ['../movies', 'tv/../..', '/etc', 'tv/', 'a,b', 'say "hi"', "tv\nnew", ''].each do |folder|
+          expect(refused(transmission, [{ 'name' => 'Downloads', 'folder' => folder }])).to match(/must be a folder inside the share|folder is missing/), folder
+        end
+        expect(refused(transmission, [{ 'name' => 'Downloads' }, { 'name' => 'Downloads', 'folder' => 'music' }]))
+          .to eq('Downloads is given whole, so its folders are in it already')
+        expect(refused(transmission, [{ 'name' => 'Downloads', 'folder' => 'music' }, { 'name' => 'downloads', 'folder' => 'music' }]))
+          .to eq('Downloads/music is listed twice')
+        expect(refused(transmission, [{ 'name' => 'Downloads', 'folder' => 'tv' }, { 'name' => 'Downloads', 'folder' => 'tv/new' }]))
+          .to eq('Downloads/tv/new is inside Downloads/tv, given too')
+        expect(refused(transmission, [{ 'name' => 'Movies', 'folder' => 'Kids', 'write' => true }])).to eq('share Movies is pooled by Greyhole, so apps can only read it')
+      end
+
+      it "mounts each folder from the helper's own mount of it, and a pooled share's folder with that folder of its copies" do
+        allow(helper).to receive(:mount_point?) { |path| path == "#{drives}/storage-1" }
+        allow(helper).to receive(:real_root?).and_return(true)
+        allow(helper).to receive(:do_own_dir)
+        allow(helper).to receive(:group_id).and_call_original
+        allow(helper).to receive(:group_id).with('users').and_return(100)
+        chosen = choose(transmission, [{ 'name' => 'Downloads', 'folder' => 'tv/new', 'write' => true }, { 'name' => 'Movies', 'folder' => 'Kids' }])
+        binds = { %w[Downloads tv/new] => "#{bind_root}/transmission/1/0", %w[Movies Kids] => "#{bind_root}/transmission/1/1" }
+        expect(helper.app_share_mounts(chosen, binds)).to eq(
+          ['--group-add', '100',
+           '--mount', "type=bind,source=#{bind_root}/transmission/1/0,target=/shares/Downloads/tv/new",
+           '--mount', "type=bind,source=#{bind_root}/transmission/1/1,target=/shares/Movies/Kids,readonly",
+           '--mount', "type=bind,source=#{drives}/storage-1/Movies/Kids,target=#{drives}/storage-1/Movies/Kids,readonly"]
+        )
+        expect(File.directory?("#{drives}/storage-1/Movies/Kids")).to be true # made on the drive, as Greyhole would
+        expect { helper.app_share_mounts(chosen, {}) }.to raise_error(AmahiHelper::Failed, "Downloads/tv/new isn't mounted for the app")
+      end
+
+      it 'mounts the folders in a set of their own for the next container, and takes the set down if one fails' do
+        mounted = []
+        allow(helper).to receive(:bind_share_folder) { |root, folder, target| mounted << [root, folder, target] }
+        chosen = choose(transmission, [{ 'name' => 'Downloads', 'folder' => 'tv/new' }, { 'name' => 'Downloads', 'folder' => 'music' }])
+        binds, set = helper.app_share_binds_make('transmission', chosen)
+        expect(set).to match(%r{\A#{bind_root}/transmission/\d{14}-\h{6}\z})
+        expect(binds).to eq(%w[Downloads tv/new] => "#{set}/0", %w[Downloads music] => "#{set}/1")
+        expect(mounted).to eq([["#{files}/downloads", 'tv/new', "#{set}/0"], ["#{files}/downloads", 'music', "#{set}/1"]])
+        expect(helper.app_share_binds_make('transmission', choose(transmission, [{ 'name' => 'Downloads' }]))).to eq([{}, nil])
+
+        allow(helper).to receive(:bind_share_folder).and_raise(AmahiHelper::Failed, 'mount exited 32')
+        allow(helper).to receive(:app_share_binds_remove)
+        expect { helper.app_share_binds_make('transmission', chosen) }.to raise_error(AmahiHelper::Failed, 'mount exited 32')
+        expect(helper).to have_received(:app_share_binds_remove).with(start_with("#{bind_root}/transmission/"))
+      end
+
+      it 'records the set the container mounts for the restart, and takes down the sets before it' do
+        allow(helper).to receive(:do_install) { |path, content, *| File.write(path, content) }
+        allow(helper).to receive(:app_share_binds_remove)
+        FileUtils.mkdir_p(%W[#{bind_root}/transmission/20261026000000-aaaaaa #{bind_root}/transmission/20261027000000-bbbbbb])
+        chosen = choose(transmission, [{ 'name' => 'Downloads', 'folder' => 'tv/new' }])
+        helper.app_share_binds_keep('transmission', "#{bind_root}/transmission/20261027000000-bbbbbb", chosen)
+        expect(JSON.parse(File.read("#{dir}/app-share-binds.json"))).to eq(
+          'transmission' => [{ 'path' => "#{bind_root}/transmission/20261027000000-bbbbbb/0", 'share' => 'Downloads', 'folder' => 'tv/new' }]
+        )
+        expect(helper).to have_received(:app_share_binds_remove).with("#{bind_root}/transmission/20261026000000-aaaaaa").once
+
+        helper.app_share_binds_keep('transmission', nil, []) # given whole shares again, or uninstalled
+        expect(JSON.parse(File.read("#{dir}/app-share-binds.json"))).to eq({})
+        expect(helper).to have_received(:app_share_binds_remove).with("#{bind_root}/transmission/20261027000000-bbbbbb")
+      end
+
+      # apps.share_binds, from amahi-kai-app-shares.service before Docker starts: /run is empty after a restart.
+      it "mounts the recorded folders again after a restart, from the share's folder now, and leaves out what can't be" do
+        set = "#{bind_root}/transmission/20261027000000-bbbbbb"
+        File.write("#{dir}/app-share-binds.json", {
+          'transmission' => [{ 'path' => "#{set}/0", 'share' => 'Downloads', 'folder' => 'tv/new' },
+                             { 'path' => "#{set}/1", 'share' => 'Downloads', 'folder' => 'gone' },
+                             { 'path' => '/etc/passwd', 'share' => 'Downloads', 'folder' => 'tv/new' },
+                             { 'path' => "#{set}/3", 'share' => 'Photos', 'folder' => 'x' }]
+        }.to_json)
+        mounted = []
+        allow(helper).to receive(:bind_share_folder).and_call_original
+        allow(helper).to receive(:with_dir).and_call_original
+        allow(Open3).to receive(:capture3).and_call_original
+        allow(Open3).to receive(:capture3).with(hash_including('PATH'), ['/usr/bin/mount', '/usr/bin/mount'], '--no-canonicalize', '--bind', anything, anything, anything) do |*args|
+          mounted << args[5]
+          ['', '', instance_double(Process::Status, success?: true)]
+        end
+        expect(helper.do_share_binds).to eq('transmission' => {
+          "#{set}/0" => 'mounted',
+          "#{set}/1" => "#{files}/downloads/gone doesn't exist",
+          '/etc/passwd' => "/etc/passwd isn't one of the helper's",
+          "#{set}/3" => '"Photos" isn\'t one of the NAS\'s shares'
+        })
+        expect(mounted).to eq(["#{set}/0"])
+        expect(File.directory?("#{set}/1")).to be false # no empty folder for Docker to mount in its place
+      end
+
+      it "binds the folder through a handle on it, refusing one reached through a link" do
+        allow(Open3).to receive(:capture3).and_call_original
+        FileUtils.mkdir_p("#{dir}/elsewhere")
+        FileUtils.rm_rf("#{files}/downloads/tv")
+        File.symlink("#{dir}/elsewhere", "#{files}/downloads/tv") # a writer swapped the folder above it for a link
+        FileUtils.mkdir_p("#{dir}/elsewhere/new")
+        expect { helper.bind_share_folder("#{files}/downloads", 'tv/new', "#{bind_root}/t/1/0") }
+          .to raise_error(AmahiHelper::Failed, /moved while it was being changed/)
+        File.unlink("#{files}/downloads/tv")
+        File.symlink("#{dir}/elsewhere/new", "#{files}/downloads/tv") # the folder itself
+        expect { helper.bind_share_folder("#{files}/downloads", 'tv', "#{bind_root}/t/1/0") }.to raise_error(AmahiHelper::Failed, /is not a folder/)
+        expect(Open3).not_to have_received(:capture3).with(anything, ['/usr/bin/mount', '/usr/bin/mount'], any_args)
+        expect(File.exist?("#{bind_root}/t/1/0")).to be false
+      end
+
+      it "mounts the folder itself, as root" do
+        skip 'needs root' unless Process.euid.zero?
+
+        target = "#{bind_root}/t/1/0"
+        File.write("#{files}/downloads/tv/new/episode.mkv", 'x')
+        helper.bind_share_folder("#{files}/downloads", 'tv/new', target)
+        expect(Dir.children(target)).to eq(['episode.mkv'])
+        helper.app_share_binds_remove("#{bind_root}/t/1")
+        expect(File.exist?(target)).to be false
+      end
+
+      it "mounts the folders for a container, and mounts them again from the record after a restart, as root" do
+        skip 'needs root' unless Process.euid.zero?
+
+        allow(helper).to receive(:do_install) { |path, content, *| File.write(path, content) }
+        File.write("#{files}/downloads/music/song.flac", 'x')
+        chosen = choose(transmission, [{ 'name' => 'Downloads', 'folder' => 'music' }])
+        binds, set = helper.app_share_binds_make('transmission', chosen)
+        helper.app_share_binds_keep('transmission', set, chosen)
+        expect(Dir.children(binds[%w[Downloads music]])).to eq(['song.flac'])
+
+        helper.app_share_binds_remove(set) # /run, emptied by a restart
+        expect(File.exist?(set)).to be false
+        expect(helper.do_share_binds).to eq('transmission' => { "#{set}/0" => 'mounted' })
+        expect(Dir.children("#{set}/0")).to eq(['song.flac'])
+        expect(helper.do_share_binds).to eq('transmission' => { "#{set}/0" => 'mounted' }) # once
+        expect(File.foreach('/proc/self/mountinfo').count { |line| line.split(' ')[4] == "#{set}/0" }).to eq(1)
+        helper.app_share_binds_keep('transmission', nil, [])
+        expect(File.exist?(set)).to be false
+      end
+
+      it "follows the pool with the folders a container has, written to only where the app writes shares" do
+        allow(helper).to receive(:do_install_app)
+        allow(helper).to receive(:do_app_firewall)
+        allow(helper).to receive(:greyhole_copies).with('Movies', 'Kids').and_return(["#{drives}/storage-1/Movies/Kids"])
+        mounts = [{ 'Destination' => '/shares/Movies/Kids', 'Source' => "#{bind_root}/transmission/1/0", 'RW' => false },
+                  { 'Destination' => '/shares/Downloads/tv/new', 'Source' => "#{bind_root}/transmission/1/1", 'RW' => true },
+                  { 'Destination' => "#{drives}/storage-1/Movies/Kids", 'RW' => false },
+                  { 'Destination' => "#{drives}/storage-2/Movies/Kids", 'RW' => false }]
+        allow(helper).to receive(:docker_output) do |*args|
+          args.first == 'ps' ? 'transmission' : [{ 'Mounts' => mounts, 'State' => { 'Running' => true, 'Error' => '' } }].to_json
+        end
+        expect(helper.do_follow_pool_apps).to eq(
+          'apps' => { 'transmission' => 'remade' },
+          'shares' => { 'transmission' => [{ 'name' => 'Movies', 'folder' => 'Kids', 'write' => false },
+                                           { 'name' => 'Downloads', 'folder' => 'tv/new', 'write' => true }] }
+        )
+        expect(helper).to have_received(:do_install_app).with(
+          'transmission', anything,
+          [{ name: 'Movies', path: "#{files}/movies", pooled: true, folder: 'Kids', write: false },
+           { name: 'Downloads', path: "#{files}/downloads", pooled: false, folder: 'tv/new', write: true }], true
+        )
+      end
+    end
+
     # apps.follow_pool: each app container whose pool drive mounts don't match the pool now is
     # made again, keeping its shares (read from its mounts), version and data.
     describe 'following the pool' do

@@ -116,6 +116,14 @@ describe DockerApp do
       expect(build_app(volume_mappings: { '/data' => '/x' }.to_json).shares).to eq([])
       expect(build_app.share_summary).to eq('')
     end
+
+    it 'keeps folders of a share, named as in the file browser' do
+      app = build_app
+      app.shares = [{ name: 'Vault', folder: 'media/Pictures', write: false }, { name: 'Vault', folder: '', write: true }]
+      app.save!
+      expect(app.reload.shares).to eq([{ name: 'Vault', folder: 'media/Pictures', write: false }, { name: 'Vault', write: true }])
+      expect(app.share_summary).to eq('Vault/media/Pictures (read only) · Vault (read and write)')
+    end
   end
 
   describe 'start, stop and restart' do
@@ -166,9 +174,10 @@ describe DockerApp do
       app_with('jellyfin', %w[Photos Gone])
       allow(Privileged).to receive(:call).and_call_original
       allow(Privileged).to receive(:call).with('apps.follow_pool')
-                                         .and_return('apps' => { 'jellyfin' => 'remade' }, 'shares' => { 'jellyfin' => [{ 'name' => 'Photos', 'write' => false }] })
+                                         .and_return('apps' => { 'jellyfin' => 'remade' },
+                                                     'shares' => { 'jellyfin' => [{ 'name' => 'Photos', 'write' => false }, { 'name' => 'Vault', 'folder' => 'media', 'write' => false }] })
       DockerApp.follow_pool!
-      expect(DockerApp.find_by(identifier: 'jellyfin').shares).to eq([{ name: 'Photos', write: false }])
+      expect(DockerApp.find_by(identifier: 'jellyfin').shares).to eq([{ name: 'Photos', write: false }, { name: 'Vault', folder: 'media', write: false }])
     end
 
     it "doesn't ask when no app has shares, and a helper failure is only logged" do

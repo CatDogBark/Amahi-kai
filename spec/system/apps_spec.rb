@@ -98,6 +98,68 @@ RSpec.describe 'Apps', type: :system do
     end
   end
 
+  # Only some folders of a share, picked in the dialog's folder browser one level at a time.
+  describe 'folders of a share' do
+    let(:root) { Dir.mktmpdir }
+
+    before do
+      allow(DockerService).to receive_messages(installed?: true, running?: true)
+      FileUtils.mkdir_p(%W[#{root}/vault/media/Pictures #{root}/vault/media/Movies])
+      create(:share, name: 'Vault', path: "#{root}/vault")
+    end
+
+    after { FileUtils.rm_rf(root) }
+
+    def open_change(app)
+      sign_in_as_admin
+      visit '/apps'
+      find("[data-app-shares='#{app.identifier}'][data-verb='Save and restart']").click
+    end
+
+    it 'gives an app a folder chosen in the browser, read only or read and write' do
+      app = create(:docker_app, identifier: 'transmission', name: 'Transmission', status: 'running')
+      app.update!(shares: [{ name: 'Vault', write: false }])
+      open_change(app)
+      within('#app-shares-dialog tr[data-share-folders="Vault"]') do
+        choose 'Only some folders'
+        click_button '📁 media'
+        expect(page).to have_button('📁 Movies')
+        click_button '📁 Pictures'
+        expect(page).to have_text('No folders in here.')
+        click_button 'Choose media/Pictures'
+        find('[data-folder="media/Pictures"] select').select('Read and write')
+        click_button '+ Add a folder'
+        click_button '📁 media'
+        click_button 'Choose media'
+        expect(page).to have_text('media/Pictures, chosen already, is inside media: remove it first')
+        click_button 'Cancel'
+      end
+      within('#app-shares-dialog') { click_button 'Save and restart' }
+      within('#app-install-modal') { expect(page).to have_text('Transmission is installed and running', wait: 15) }
+      expect(Privileged.calls).to include(['apps.install', { app: 'transmission', shares: [{ name: 'Vault', folder: 'media/Pictures', write: true }] }])
+    end
+
+    it 'shows the folders an app was given, and asks for one before giving only some' do
+      app = create(:docker_app, identifier: 'jellyfin', name: 'Jellyfin', status: 'running')
+      app.update!(shares: [{ name: 'Vault', folder: 'media/Movies', write: false }])
+      open_change(app)
+      within('#app-shares-dialog') do
+        within('tr[data-share-folders="Vault"]') do
+          expect(page).to have_checked_field('Only some folders')
+          expect(page).to have_css('[data-folder="media/Movies"]')
+          expect(page).to have_no_css('[data-folder] select') # Jellyfin only reads shares
+          find('[data-folder="media/Movies"] [data-role="remove-folder"]').click
+        end
+        click_button 'Save and restart'
+        expect(page).to have_text('Choose a folder, or All of Vault')
+        choose 'All of Vault'
+        click_button 'Save and restart'
+      end
+      within('#app-install-modal') { expect(page).to have_text('Jellyfin is installed and running', wait: 15) }
+      expect(Privileged.calls).to include(['apps.install', { app: 'jellyfin', shares: [{ name: 'Vault', write: false }] }])
+    end
+  end
+
   it 'shows the installed apps page' do
     sign_in_as_admin
     visit '/apps/installed_apps'

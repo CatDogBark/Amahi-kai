@@ -319,20 +319,21 @@ describe "Disks Controller", type: :request do
     end
 
     describe "POST /disks/toggle_greyhole" do
-      it "stops greyhole when running" do
+      it "switches greyhole off when running" do
         allow(Greyhole).to receive(:running?).and_return(true)
-        allow(Greyhole).to receive(:stop!)
+        allow(Greyhole).to receive(:switch!)
         post "/disks/toggle_greyhole"
         expect(response).to redirect_to("/disks/storage_pool")
-        expect(Greyhole).to have_received(:stop!)
+        expect(Greyhole).to have_received(:switch!).with(false)
       end
 
-      it "starts greyhole when stopped" do
+      it "switches greyhole on when stopped, saying why it couldn't" do
         allow(Greyhole).to receive(:running?).and_return(false)
-        allow(Greyhole).to receive(:start!)
+        allow(Greyhole).to receive(:switch!).and_raise(Greyhole::GreyholeError, 'Greyhole needs a drive in its pool to run: add one first')
         post "/disks/toggle_greyhole"
         expect(response).to redirect_to("/disks/storage_pool")
-        expect(Greyhole).to have_received(:start!)
+        expect(Greyhole).to have_received(:switch!).with(true)
+        expect(flash[:error]).to eq("Greyhole didn't start: Greyhole needs a drive in its pool to run: add one first")
       end
     end
 

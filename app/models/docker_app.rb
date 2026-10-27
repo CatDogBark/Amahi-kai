@@ -61,23 +61,46 @@ class DockerApp < ApplicationRecord
     self.port_mappings = list.to_json
   end
 
-  # [{ name:, write: }]: the shares the app was given, at /shares/<name> inside it.
+  # [{ name:, write: }]: the shares the app was given, at /shares/<name> inside it; folder: for one
+  # given only a folder of the share, at /shares/<name>/<folder>.
   def shares
     list = JSON.parse(volume_mappings.to_s)
-    list.is_a?(Array) ? list.grep(Hash).map { |share| { name: share['name'].to_s, write: share['write'] == true } } : []
+    return [] unless list.is_a?(Array)
+
+    list.grep(Hash).map do |share|
+      { name: share['name'].to_s, folder: share['folder'].presence, write: share['write'] == true }.compact
+    end
   rescue JSON::ParserError
     []
   end
 
   def shares=(list)
-    self.volume_mappings = list.map { |share| { name: share[:name], write: share[:write] == true } }.to_json
+    self.volume_mappings = list.map { |share| { name: share[:name], folder: share[:folder].presence, write: share[:write] == true }.compact }.to_json
   end
 
-  # "Movies, TV (read only) · Downloads (read and write)": for the Apps page.
+  # "Movies, Vault/media/Pictures (read only) · Downloads (read and write)": for the Apps page.
   def share_summary
     shares.group_by { |share| share[:write] }.sort_by { |write, _| write ? 1 : 0 }.map do |write, group|
-      "#{group.map { |share| share[:name] }.join(', ')} (#{write ? 'read and write' : 'read only'})"
+      "#{group.map { |share| self.class.share_label(share) }.join(', ')} (#{write ? 'read and write' : 'read only'})"
     end.join(' · ')
+  end
+
+  # "Vault/media/Pictures" for a folder of a share, "Vault" for all of it.
+  def self.share_label(share)
+    [share[:name], share[:folder]].compact.join('/')
+  end
+
+  # The folders the app was given that aren't there now (renamed, moved or deleted): until it's
+  # given its folders again, it can't start (the root helper only mounts real folders).
+  def missing_folders
+    given = shares.select { |share| share[:folder] }
+    return [] if given.empty?
+
+    paths = Share.where(name: given.map { |share| share[:name] }).to_h { |share| [share.name.downcase, share.path] }
+    given.reject do |share|
+      root = paths[share[:name].downcase]
+      root && File.directory?(File.join(root, share[:folder]))
+    end.map { |share| self.class.share_label(share) }
   end
 
   # "3300 (web) · 2222 (Git over SSH)", "51413 (peers, TCP and UDP)": for the Apps page.
@@ -146,7 +169,7 @@ class DockerApp < ApplicationRecord
       # The shares each remade container has now (one gone from Samba is left out of it)
       (reply['shares'] || {}).each do |identifier, shares|
         app = find_by(identifier: identifier) or next
-        app.update!(shares: Array(shares).grep(Hash).map { |share| { name: share['name'].to_s, write: share['write'] == true } })
+        app.update!(shares: Array(shares).grep(Hash).map { |share| { name: share['name'].to_s, folder: share['folder'], write: share['write'] == true } })
       end
       (reply['apps'] || {}).each do |identifier, outcome|
         next if outcome.to_s.start_with?('remade')

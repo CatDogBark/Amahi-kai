@@ -56,7 +56,8 @@ document.addEventListener('click', function(event) {
 });
 
 // Choosing an app's shares (_shares_dialog) before it's installed, or installed again with new
-// ones. Shares Greyhole pools, and every share of an app that only reads, stay read only.
+// ones: each share all of it, or only some of its folders. Shares Greyhole pools, and every share
+// of an app that only reads, stay read only.
 document.addEventListener('click', function(event) {
   var button = event.target.closest('[data-app-shares]');
   if (button) openShareDialog(button);
@@ -68,6 +69,7 @@ function openShareDialog(button) {
   var writes = button.dataset.writes === 'true';
   var current = JSON.parse(button.dataset.current || '[]');
   var rows = Array.prototype.slice.call(dialog.querySelectorAll('[data-share]'));
+  shareDialogEvents(dialog);
 
   dialog.querySelectorAll('[data-fill="name"]').forEach(function(el) { el.textContent = name; });
   dialog.querySelector('[data-fill="verb"]').textContent = button.dataset.verb;
@@ -75,28 +77,188 @@ function openShareDialog(button) {
   dialog.querySelector('[data-role="read-only-note"]').hidden = writes;
   rows.forEach(function(row) {
     // Share names don't depend on case (the helper, the share's delete check and MariaDB all ignore it)
-    var given = current.filter(function(share) { return share.name.toLowerCase() === row.dataset.share.toLowerCase(); })[0];
+    var given = current.filter(function(share) { return share.name.toLowerCase() === row.dataset.share.toLowerCase(); });
+    var whole = given.filter(function(share) { return !share.folder; })[0];
     var pooled = row.dataset.pooled === 'true';
-    row.querySelector('[data-role="give"]').checked = !!given;
-    row.querySelector('[data-role="access"]').value = given && given.write ? 'write' : 'read';
-    row.querySelector('[data-role="access"]').hidden = !writes || pooled;
+    row.dataset.canWrite = String(writes && !pooled);
+    row.querySelector('[data-role="give"]').checked = given.length > 0;
+    row.querySelector('[data-role="access"]').value = whole && whole.write ? 'write' : 'read';
     row.querySelector('[data-role="pooled-note"]').hidden = !writes || !pooled;
+    var folders = shareFoldersRow(row);
+    folders.querySelector('[data-role="folder-list"]').replaceChildren();
+    folders.querySelector('[data-role="browser"]').hidden = true;
+    given.filter(function(share) { return share.folder; }).forEach(function(share) { addShareFolder(row, share.folder, share.write); });
+    setShareScope(row, given.length > 0 && !whole ? 'folders' : 'all');
   });
 
   dialog.querySelector('[data-role="confirm"]').onclick = function() {
     var params = [];
+    var missing = null;
     if (storage.value()) params.push('pool=' + encodeURIComponent(storage.value()));
     rows.forEach(function(row) {
       if (!row.querySelector('[data-role="give"]').checked) return;
-      var share = encodeURIComponent(row.dataset.share);
-      params.push('share[]=' + share);
-      var access = row.querySelector('[data-role="access"]');
-      if (!access.hidden && access.value === 'write') params.push('write[]=' + share);
+      var folders = shareFoldersRow(row);
+      var given = [];
+      if (folders.querySelector('[data-role="scope"]:checked').value === 'all') {
+        given.push({ path: row.dataset.share, write: row.querySelector('[data-role="access"]').value === 'write' });
+      } else {
+        folders.querySelectorAll('[data-folder]').forEach(function(item) {
+          var access = item.querySelector('select');
+          given.push({ path: row.dataset.share + '/' + item.dataset.folder, write: !!access && access.value === 'write' });
+        });
+        folders.querySelector('[data-role="folders-needed"]').hidden = given.length > 0;
+        if (!given.length) missing = missing || row;
+      }
+      given.forEach(function(share) {
+        params.push('share[]=' + encodeURIComponent(share.path));
+        if (share.write && row.dataset.canWrite === 'true') params.push('write[]=' + encodeURIComponent(share.path));
+      });
     });
+    if (missing) return;
     bootstrap.Modal.getOrCreateInstance(dialog).hide();
     openAppInstall(button.dataset.appShares, button.dataset.url + (params.length ? '?' + params.join('&') : ''), name);
   };
   bootstrap.Modal.getOrCreateInstance(dialog).show();
+}
+
+// The row under a share's row: all of it, or the folders chosen and the browser to choose more.
+function shareFoldersRow(row) {
+  return row.nextElementSibling;
+}
+
+// All of the share or only some folders, shown while the share is given; the share's own access
+// (read only, or read and write) is for all of it, and each folder has its own.
+function setShareScope(row, scope) {
+  var folders = shareFoldersRow(row);
+  var given = row.querySelector('[data-role="give"]').checked;
+  folders.querySelector('[data-role="scope"][value="' + scope + '"]').checked = true;
+  folders.hidden = !given;
+  folders.querySelector('[data-role="folders"]').hidden = scope !== 'folders';
+  folders.querySelector('[data-role="folders-needed"]').hidden = true;
+  row.querySelector('[data-role="access"]').hidden = row.dataset.canWrite !== 'true' || scope !== 'all';
+}
+
+// A folder chosen (its path in the share), with its own access for an app that may write there.
+function addShareFolder(row, folder, write) {
+  var item = document.createElement('li');
+  item.className = 'd-flex align-items-center gap-2 mb-1';
+  item.dataset.folder = folder;
+  var label = document.createElement('span');
+  label.textContent = '📁 ' + folder;
+  item.appendChild(label);
+  if (row.dataset.canWrite === 'true') {
+    var access = row.querySelector('[data-role="access"]').cloneNode(true);
+    access.hidden = false;
+    access.removeAttribute('data-role');
+    access.setAttribute('aria-label', folder + ' access');
+    access.value = write ? 'write' : 'read';
+    item.appendChild(access);
+  }
+  var remove = document.createElement('button');
+  remove.type = 'button';
+  remove.className = 'btn btn-sm btn-link text-danger p-0';
+  remove.dataset.role = 'remove-folder';
+  remove.setAttribute('aria-label', 'Remove ' + folder);
+  remove.textContent = '×';
+  item.appendChild(remove);
+  shareFoldersRow(row).querySelector('[data-role="folder-list"]').appendChild(item);
+}
+
+// The folder browser, at +path+ in the row's share: its folders (apps/share_folders), a way back
+// up, and Choose for the folder it's at.
+function browseShareFolders(row, path) {
+  var dialog = document.getElementById('app-shares-dialog');
+  var browser = shareFoldersRow(row).querySelector('[data-role="browser"]');
+  var crumbs = browser.querySelector('[data-role="crumbs"]');
+  var entries = browser.querySelector('[data-role="entries"]');
+  var choose = browser.querySelector('[data-role="choose-here"]');
+  browser.hidden = false;
+  browser.dataset.path = path;
+  choose.disabled = !path;
+  choose.textContent = path ? 'Choose ' + path : 'Open a folder to choose it';
+  crumbs.replaceChildren();
+  var parts = path ? path.split('/') : [];
+  [row.dataset.share].concat(parts).forEach(function(part, index) {
+    if (index) crumbs.appendChild(document.createTextNode(' / '));
+    var crumb = document.createElement('button');
+    crumb.type = 'button';
+    crumb.className = 'btn btn-link btn-sm p-0 align-baseline';
+    crumb.dataset.role = 'crumb';
+    crumb.dataset.path = parts.slice(0, index).join('/');
+    crumb.textContent = part;
+    crumbs.appendChild(crumb);
+  });
+  entries.textContent = 'Reading the folders…';
+  var url = dialog.dataset.foldersUrl + '?share=' + encodeURIComponent(row.dataset.share) + '&path=' + encodeURIComponent(path);
+  fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+    .then(function(response) { return response.json().then(function(body) { return { ok: response.ok, body: body }; }); })
+    .then(function(reply) {
+      if (browser.dataset.path !== path) return; // another folder was opened meanwhile
+      entries.replaceChildren();
+      if (!reply.ok) { entries.textContent = reply.body.error || "Couldn't read the folders"; return; }
+      if (!reply.body.folders.length) { entries.textContent = 'No folders in here.'; return; }
+      reply.body.folders.forEach(function(folder) {
+        var entry = document.createElement('button');
+        entry.type = 'button';
+        entry.className = 'btn btn-sm btn-outline-secondary';
+        entry.dataset.role = 'folder-entry';
+        entry.dataset.path = path ? path + '/' + folder : folder;
+        entry.textContent = '📁 ' + folder;
+        entries.appendChild(entry);
+      });
+    })
+    .catch(function() { entries.textContent = "Couldn't read the folders"; });
+}
+
+// Why +folder+ can't be added beside the folders chosen already (the root helper refuses the
+// same), or null.
+function shareFolderClash(row, folder) {
+  var chosen = Array.prototype.map.call(shareFoldersRow(row).querySelectorAll('[data-folder]'), function(item) { return item.dataset.folder; });
+  for (var i = 0; i < chosen.length; i++) {
+    if (chosen[i] === folder) return folder + ' is chosen already';
+    if (folder.indexOf(chosen[i] + '/') === 0) return folder + ' is inside ' + chosen[i] + ', chosen already';
+    if (chosen[i].indexOf(folder + '/') === 0) return chosen[i] + ', chosen already, is inside ' + folder + ': remove it first';
+  }
+  return null;
+}
+
+// The dialog's own controls, listened to once.
+function shareDialogEvents(dialog) {
+  if (dialog.dataset.listening) return;
+  dialog.dataset.listening = 'true';
+  dialog.addEventListener('change', function(event) {
+    var target = event.target;
+    var row = target.closest('[data-share]') || (target.closest('[data-share-folders]') || {}).previousElementSibling;
+    if (!row) return;
+    if (target.matches('[data-role="give"]')) {
+      setShareScope(row, shareFoldersRow(row).querySelector('[data-role="scope"]:checked').value);
+    } else if (target.matches('[data-role="scope"]')) {
+      setShareScope(row, target.value);
+      if (target.value === 'folders' && !shareFoldersRow(row).querySelector('[data-folder]')) browseShareFolders(row, '');
+    }
+  });
+  dialog.addEventListener('click', function(event) {
+    var target = event.target.closest('button');
+    var folders = target && target.closest('[data-share-folders]');
+    if (!folders) return;
+    var row = folders.previousElementSibling;
+    var browser = folders.querySelector('[data-role="browser"]');
+    switch (target.dataset.role) {
+      case 'add-folder': browseShareFolders(row, ''); break;
+      case 'folder-entry':
+      case 'crumb': browseShareFolders(row, target.dataset.path); break;
+      case 'browser-cancel': browser.hidden = true; break;
+      case 'remove-folder': target.closest('[data-folder]').remove(); break;
+      case 'choose-here': {
+        var clash = shareFolderClash(row, browser.dataset.path);
+        if (clash) { browser.querySelector('[data-role="entries"]').textContent = clash; break; }
+        addShareFolder(row, browser.dataset.path, false);
+        folders.querySelector('[data-role="folders-needed"]').hidden = true;
+        browser.hidden = true;
+        break;
+      }
+    }
+  });
 }
 
 // Storage, for an app that keeps data on a ZFS pool (P4.6; data-storage: required or optional): the

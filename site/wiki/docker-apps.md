@@ -104,8 +104,23 @@ change that fails leaves the app as it was, running.
 
 A share whose folder is a link (to somewhere else on the server) isn't given to an app.
 
+**Only some folders of a share** can be given instead of all of it: tick the share, choose **Only
+some folders**, and pick each folder in the share's folders (**+ Add a folder**). Each appears in
+the app where it is in the share, at `/shares/<name>/<folder>` (`/shares/Vault/media/Pictures`),
+so an app's own settings keep working when you narrow what it's given, and the rest of the share
+is out of the app's reach. A share can give several folders, none inside another.
+
+- Amahi-kai mounts each folder given to an app itself, after checking that it's a real folder and
+  that no link is on the way to it, and mounts it again before Docker starts the apps after a
+  restart (`amahi-kai-app-shares.service`): a folder an app could write in can't be swapped for a
+  link to elsewhere on the server.
+- A folder renamed, moved or deleted after it was given keeps the app from starting until you
+  give it its folders again with **Change**; the app's row says which folder is missing.
+- Moving a file from one folder given to an app to another one, inside the app, copies it: each
+  folder is mounted on its own.
+
 - Shares are **read only** unless you choose **Read and write**, which only apps that save files
-  into shares offer (Transmission, for downloads).
+  into shares offer (Transmission, for downloads); each folder given has its own.
 - Shares that **Greyhole pools** are always read only to apps: their files change over SMB only.
   When the storage pool changes (a drive joins or leaves it, or a share's pool copies turn on or
   Off), the apps given a pooled share restart with the pool as it is now, so they keep reading

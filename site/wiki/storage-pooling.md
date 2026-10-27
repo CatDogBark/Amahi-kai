@@ -101,10 +101,13 @@ Either:
 - **Disks → Greyhole Pool → Install Greyhole** (the progress streams as it installs)
 
 Amahi-kai adds Greyhole's apt repository (its signing key is checked against a pinned
-fingerprint), installs the package and the PHP modules it needs, creates its database and turns
-on the service.
+fingerprint), installs the package and the PHP modules it needs, and creates its database.
+Greyhole can't run without a drive, so it starts once the first drive joins its pool, and runs at
+every boot from then on; with the last drive gone, it stops, and stays off at boot.
 
 **Disks → Greyhole Pool** shows Greyhole's status, with **Start** and **Stop**, and **Uninstall**.
+Stop there keeps Greyhole off after a restart too, until you click Start (Stop on **Settings →
+Servers** stops it only until the next restart, as for every service).
 Uninstalling takes only the package, its config and its repository, and is offered once no drive is
 in the pool and no share keeps copies with it (the page says which).
 

@@ -295,6 +295,31 @@ describe "Docker Apps", type: :request do
         expect(Privileged.calls).to include(['apps.install', { app: 'jellyfin', shares: [{ name: 'Downloads', write: false }] }])
       end
 
+      it "gives the app folders of a share, each read only unless it writes shares there" do
+        get "/apps/docker/install_stream/transmission",
+            params: { share: %w[Movies/Kids Downloads/tv/new Downloads/music/], write: %w[Downloads/tv/new Movies/Kids] }, headers: same_origin
+        shares = [{ name: 'Downloads', folder: 'music', write: false }, { name: 'Downloads', folder: 'tv/new', write: true },
+                  { name: 'Movies', folder: 'Kids', write: false }]
+        expect(Privileged.calls).to include(['apps.install', { app: 'transmission', shares: shares }])
+        expect(DockerApp.find_by(identifier: 'transmission').shares).to eq(shares)
+      end
+
+      it "names an app's folders on its row, and says which aren't there any more" do
+        root = Dir.mktmpdir
+        FileUtils.mkdir_p("#{root}/tv/new")
+        Share.find_by(name: 'Downloads').update_column(:path, root)
+        gitea(identifier: 'transmission', name: 'Transmission', status: 'stopped',
+              volume_mappings: [{ name: 'Downloads', folder: 'tv/new', write: true }, { name: 'Downloads', folder: 'music' }].to_json)
+        get "/apps/installed_apps"
+        expect(response.body).to include('Shares Downloads/music (read only) · Downloads/tv/new (read and write)')
+        expect(Nokogiri::HTML(response.body).at_css('#app-missing-folders-transmission').text.squish).to eq(
+          "Downloads/music isn't there any more (renamed, moved or deleted): Transmission can't start until Change gives it its folders again."
+        )
+        expect(CGI.unescapeHTML(response.body)).to include(%(data-current="[{"name":"Downloads","folder":"tv/new","write":true},{"name":"Downloads","folder":"music","write":false}]"))
+      ensure
+        FileUtils.rm_rf(root) if root
+      end
+
       it "lists the shares in the dialog, pooled ones marked, and shows an installed app's shares with Change" do
         gitea(identifier: 'transmission', name: 'Transmission', status: 'stopped',
               volume_mappings: [{ name: 'Downloads', write: true }, { name: 'Movies', write: false }].to_json)
@@ -303,6 +328,43 @@ describe "Docker Apps", type: :request do
         expect(response.body).to include('Shares Movies (read only) · Downloads (read and write)')
         expect(CGI.unescapeHTML(response.body)).to include(%(data-current="[{"name":"Downloads","write":true},{"name":"Movies","write":false}]"))
         expect(response.body).to include('data-verb="Save and restart"', 'id="app-install-modal"')
+      end
+    end
+
+    # The share dialog's folder browser (apps.js): a share's folders, one level at a time.
+    describe "a share's folders" do
+      let(:root) { Dir.mktmpdir }
+
+      before do
+        FileUtils.mkdir_p(%W[#{root}/vault/media/Pictures #{root}/vault/media/Movies #{root}/vault/.recycle #{root}/elsewhere])
+        File.write("#{root}/vault/notes.txt", 'x')
+        File.symlink("#{root}/elsewhere", "#{root}/vault/linked")
+        create(:share, name: 'Vault', path: "#{root}/vault")
+      end
+
+      after { FileUtils.rm_rf(root) }
+
+      it "lists a share's folders, not its files, links or hidden folders" do
+        get '/apps/share_folders', params: { share: 'vault' }
+        expect(response.parsed_body).to eq('share' => 'Vault', 'path' => '', 'folders' => ['media'])
+        get '/apps/share_folders', params: { share: 'Vault', path: 'media/' }
+        expect(response.parsed_body).to eq('share' => 'Vault', 'path' => 'media', 'folders' => %w[Movies Pictures])
+      end
+
+      it "refuses a folder outside the share, one reached through a link or not there, and a share that isn't" do
+        ['../elsewhere', 'media/../..', 'linked', 'nope', 'notes.txt'].each do |path|
+          get '/apps/share_folders', params: { share: 'Vault', path: path }
+          expect(response).to have_http_status(:unprocessable_content), path
+          expect(response.parsed_body.keys).to eq(['error'])
+        end
+        get '/apps/share_folders', params: { share: 'Photos' }
+        expect(response).to have_http_status(:not_found)
+      end
+
+      it 'is for admins only' do
+        login_as(create(:user))
+        get '/apps/share_folders', params: { share: 'Vault' }
+        expect(response.body).not_to include('media')
       end
     end
 

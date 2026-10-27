@@ -179,15 +179,115 @@ RSpec.describe 'AmahiHelper ZFS pools' do
   end
 
   describe 'smart.setup' do
-    it "clears the unit's virtual machine condition and starts smartd, which may find nothing to watch" do
+    it "clears the unit's virtual machine condition, and runs smartd only while a drive has SMART to watch" do
       expect(steps('smart.setup', {})).to eq(
         [[:make_dir, '/etc/systemd/system/smartmontools.service.d', '0755'],
          [:install, '/etc/systemd/system/smartmontools.service.d/amahi-kai.conf', AmahiHelper::SMARTD_DROPIN_CONTENT, nil],
          %w[/usr/bin/systemctl daemon-reload],
-         ['/usr/bin/systemctl', 'start', 'smartmontools.service', { allow_failure: true }]]
+         [:smartd_follow_need]]
       )
       expect(AmahiHelper::SMARTD_DROPIN_CONTENT.lines.map(&:strip).reject { |l| l.start_with?('#') })
         .to eq(['[Unit]', 'ConditionVirtualization='])
+    end
+  end
+
+  # smartd while a drive has SMART to watch, Greyhole while its pool has a drive and it isn't
+  # switched off: each is switched on when it gets work and off when it has none, else left alone.
+  describe 'services that run while they have work' do
+    let(:states) { { 'is-enabled' => 'enabled', 'is-active' => 'active' } }
+    let(:ran) { [] }
+
+    before do
+      allow(helper).to receive(:unit_state) { |question, _unit| states[question] }
+      allow(helper).to receive(:run_command) { |argv| ran << argv && nil }
+    end
+
+    it 'switches a service on when it gets work, off when it has none, and leaves it alone otherwise' do
+      states['is-enabled'] = 'disabled'
+      expect(helper.follow_need('smartmontools.service', true)).to eq('on')
+      # Two commands, not enable --now, which leaves an init script's service (Greyhole's) as it was
+      expect(ran).to eq([['/usr/bin/systemctl', 'enable', 'smartmontools.service', { allow_failure: true }],
+                         ['/usr/bin/systemctl', 'start', 'smartmontools.service', { allow_failure: true }]])
+
+      ran.clear
+      states['is-enabled'] = 'enabled' # left on: a stop on Settings → Servers lasts until the next restart
+      expect(helper.follow_need('smartmontools.service', true)).to be_nil
+      expect(ran).to eq([])
+
+      expect(helper.follow_need('smartmontools.service', false)).to eq('off')
+      expect(ran).to eq([['/usr/bin/systemctl', 'disable', 'smartmontools.service', { allow_failure: true }],
+                         ['/usr/bin/systemctl', 'stop', 'smartmontools.service', { allow_failure: true }],
+                         ['/usr/bin/systemctl', 'reset-failed', 'smartmontools.service', { allow_failure: true }]])
+
+      ran.clear
+      states.merge!('is-enabled' => 'disabled', 'is-active' => 'failed') # off at boot, but it failed once
+      expect(helper.follow_need('smartmontools.service', false)).to eq('off')
+      states['is-active'] = 'inactive'
+      expect(helper.follow_need('smartmontools.service', false)).to be_nil
+    end
+
+    it 'reads the systemctl answer for an init script too, from what it prints last' do
+      allow(helper).to receive(:unit_state).and_call_original
+      allow(Open3).to receive(:capture3).with(AmahiHelper::ENV_MIN, %w[/usr/bin/systemctl /usr/bin/systemctl], 'is-enabled', 'greyhole.service',
+                                              unsetenv_others: true, chdir: '/')
+                                        .and_return(["enabled\n", "greyhole.service is not a native service, redirecting to systemd-sysv-install.\n", nil])
+      expect(helper.unit_state('is-enabled', 'greyhole.service')).to eq('enabled')
+    end
+
+    it 'runs smartd while a drive has SMART data, and not on virtual disks' do
+      allow(File).to receive(:executable?).and_call_original
+      allow(File).to receive(:executable?).with('/usr/sbin/smartctl').and_return(true)
+      allow(helper).to receive(:follow_need).and_return('off')
+      expect(helper.do_smartd_follow_need('/dev/sda' => nil, '/dev/sdb' => nil)).to eq('smartd' => 'off')
+      expect(helper).to have_received(:follow_need).with('smartmontools.service', false)
+      helper.do_smartd_follow_need('/dev/sda' => nil, '/dev/sdb' => { 'model' => 'Samsung SSD 870 EVO 1TB', 'asleep' => true })
+      expect(helper).to have_received(:follow_need).with('smartmontools.service', true)
+
+      allow(File).to receive(:executable?).with('/usr/sbin/smartctl').and_return(false) # no smartmontools
+      expect(helper.do_smartd_follow_need).to be_nil
+    end
+
+    describe 'Greyhole' do
+      let(:off) { "#{dir}/greyhole-off" }
+
+      before do
+        stub_const('AmahiHelper::GREYHOLE_OFF', off)
+        allow(helper).to receive(:do_install) { |path, content, *| File.write(path, content) }
+      end
+
+      it "runs while its pool has a drive and it isn't switched off" do
+        allow(helper).to receive(:follow_need) { |_unit, work| work ? 'on' : 'off' }
+        allow(helper).to receive(:greyhole_drives).and_return([])
+        expect(helper.do_greyhole_follow_need).to eq('greyhole' => 'off')
+        allow(helper).to receive(:greyhole_drives).and_return(['/mnt/storage-1'])
+        expect(helper.do_greyhole_follow_need).to eq('greyhole' => 'on')
+        File.write(off, 'off')
+        expect(helper.do_greyhole_follow_need).to eq('greyhole' => 'off')
+        allow(File).to receive(:executable?).and_call_original
+        allow(File).to receive(:executable?).with('/usr/bin/greyhole').and_return(true)
+        expect(steps('greyhole.follow_need', {})).to eq([[:greyhole_follow_need]])
+      end
+
+      it 'is switched off, staying off after a restart, and on again once its pool has a drive' do
+        allow(helper).to receive(:greyhole_drives).and_return(['/mnt/storage-1'])
+        # Asked for on the page: a stop or start that fails says why (no allow_failure)
+        expect(helper.do_greyhole_switch(false)).to eq('on' => false)
+        expect(File).to exist(off)
+        expect(ran).to eq([['/usr/bin/systemctl', 'disable', 'greyhole.service'], ['/usr/bin/systemctl', 'stop', 'greyhole.service'],
+                           ['/usr/bin/systemctl', 'reset-failed', 'greyhole.service', { allow_failure: true }]])
+
+        ran.clear
+        expect(helper.do_greyhole_switch(true)).to eq('on' => true)
+        expect(File).not_to exist(off)
+        expect(ran).to eq([['/usr/bin/systemctl', 'enable', 'greyhole.service'], ['/usr/bin/systemctl', 'start', 'greyhole.service']])
+
+        allow(helper).to receive(:greyhole_drives).and_return([])
+        expect { helper.do_greyhole_switch(true) }.to raise_error(AmahiHelper::Failed, 'Greyhole needs a drive in its pool to run: add one first')
+        allow(File).to receive(:executable?).and_call_original
+        allow(File).to receive(:executable?).with('/usr/bin/greyhole').and_return(true)
+        expect(steps('greyhole.switch', { 'on' => false })).to eq([[:greyhole_switch, false]])
+        expect(refusal('greyhole.switch', { 'on' => 'yes' })).to include('true or false')
+      end
     end
   end
 
@@ -1076,6 +1176,7 @@ RSpec.describe 'AmahiHelper ZFS pools' do
       stub_const('AmahiHelper::STORAGE_HEALTH', health_file)
       allow(File).to receive(:executable?).with('/usr/sbin/smartctl').and_return(true)
       allow(helper).to receive(:do_pool_status).and_return('zfs' => true, 'pools' => [{ 'name' => 'old', 'health' => 'ONLINE' }])
+      allow(helper).to receive(:do_smartd_follow_need) # smartd following the drives: see 'services that run while they have work'
       allow(helper).to receive(:do_install) { |path, content, *| File.write(path, content) }
       allow(Open3).to receive(:capture3) do |_env, _cmd, *args, **_opts|
         data, code = outputs.fetch(args.last, [no_smart, 1])
@@ -1113,6 +1214,11 @@ RSpec.describe 'AmahiHelper ZFS pools' do
               '-n', 'standby,9', '-i', '-H', '-A', '/dev/sdc', unsetenv_others: true, chdir: '/')
       expect(helper).to have_received(:do_install).with(health_file, anything, nil, '0640', 'amahi')
       expect(helper).to have_received(:do_pool_status).with(false) # no scan of the drives, which would wake them
+    end
+
+    it 'has smartd follow the drives it read' do
+      helper.do_check_health
+      expect(helper).to have_received(:do_smartd_follow_need).with(include('/dev/sdc' => include('model' => 'Samsung SSD 870 EVO 1TB'), '/dev/sda' => nil))
     end
 
     it 'records no SMART data without smartctl' do

@@ -22,12 +22,11 @@ module DiskService
       checked = true
 
       # Regenerate Greyhole config whenever pool membership changes. With its first drive in,
-      # Greyhole has something to do: start it (it can't run without one). Then it checks the
-      # pool, making the copies the shares are short of on the new drive.
+      # Greyhole has something to do, and configure! starts it (it can't run without one). Then it
+      # checks the pool, making the copies the shares are short of on the new drive.
       begin
         if Greyhole.installed?
           Greyhole.configure!
-          Greyhole.start! if first && !Greyhole.running?
           Greyhole.check_pool!
         end
       rescue StandardError => e
@@ -38,13 +37,9 @@ module DiskService
       { checked: checked, removing: false, path: path }
     end
 
-    # Starts or stops Greyhole; true if that worked.
+    # Switches Greyhole off (stopped, and off after a restart) or on. Raises GreyholeError.
     def toggle_greyhole
-      if Greyhole.running?
-        Greyhole.stop!
-      else
-        Greyhole.start!
-      end
+      Greyhole.switch!(!Greyhole.running?)
     end
 
     # Mounts a drive and shares it as it is: the share is its mount point, its files where they

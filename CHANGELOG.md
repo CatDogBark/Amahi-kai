@@ -4,6 +4,16 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-10-26
+
+Apps can be given only some folders of a share rather than all of it, and services with nothing to do (Greyhole without drives, SMART monitoring without a drive that has SMART) no longer fail at every boot.
+
+### 🔒 Security & Fixes
+
+- **Apps can be given only some folders of a share** (Apps → Shares) — An app was given whole shares: Jellyfin given Vault for its movies could read everything else in Vault too, and Transmission given it to download into could change all of it. A share can give only some of its folders now, picked in a browser of the share's folders, each read only or read and write; they appear in the app where they are in the share (`/shares/Vault/media/Pictures`), and the rest of the share is out of the app's reach. Amahi-kai mounts each folder itself, checked to be a real folder reached through no link, and again before Docker starts the apps after a restart, so an app that writes in a share can't swap a folder for a link to elsewhere on the server. A folder renamed or deleted keeps its app from starting until it's given its folders again, and the app's row says which.
+- **Services with nothing to do don't fail at every boot** — Greyhole installed with no drive in its pool, and SMART monitoring (smartd) on a server whose drives have no SMART data (virtual disks, in a virtual machine), started anyway, failed, and were listed as failed at every boot; smartd failed at every System Update too. Each runs now, and at boot, only while it has work: Greyhole once its pool has a drive (it starts with the first one and stops with the last), smartd while a drive has SMART data (the storage check starts it within 15 minutes of one being connected). This update switches off one that has none. Stop on Disks → Greyhole Pool now keeps Greyhole off after a restart too.
+- **Uninstalling Greyhole leaves no failed service behind** (Disks → Greyhole Pool) — After Uninstall, systemd went on listing `greyhole.service` as failed until the next restart. Uninstall clears it now.
+
 ## [1.1.0] — 2026-10-26
 
 PiGallery2, a photo gallery, comes to the app catalog with this release; every app says how to sign in the first time; and the dashboard shows your storage pools.
