@@ -122,6 +122,24 @@ subnets, and the rest are dropped. `amahi-kai-app-firewall.service` (`apps.firew
 after Docker starts or restarts, and every install does too. There is no host networking, so an
 app can't open ports of its own on the NAS.
 
+An app whose manifest says `access: tailscale` (catalog format 5, P4.7) is published on
+`127.0.0.1` only, so nothing reaches its ports from the LAN or the internet. The helper puts its
+web port on the tailnet itself, as root:
+- `tailscale serve --bg --https=<port> http://127.0.0.1:<port>`: HTTPS with Tailscale's certificate
+  for the NAS's name, at the app's own port. The port is a whole number, and the target is always
+  the NAS itself.
+- `tailscale serve --https=<port> off` at uninstall.
+
+It first reads `tailscale status` and refuses the app, before anything changes, unless Tailscale
+is connected, with MagicDNS on and a certificate for the NAS's name allowed. The name goes into
+the app's environment (`{{tailscale_url}}`) only after it matches a DNS-name pattern. Such an app
+isn't announced on the LAN.
+
+A secret marked `hash: argon2` reaches the container as an Argon2id hash. The helper runs Ubuntu's
+`argon2` with the secret on its stdin, never its command line, and a new random salt each time. It
+installs that one package, by name, the first time it's needed, as it does `acl` for apps that
+write into shares.
+
 Shares are given to an app by name. The helper finds each share's folder in smb.conf (which only
 it writes), checks the folder is in the share root or on a mounted data drive, and mounts it with
 `--mount` (which never creates a missing folder) at `/shares/<name>`, read only unless the app's

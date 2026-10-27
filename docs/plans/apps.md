@@ -152,7 +152,8 @@ Decisions (CatDogBark, 2026-10-04):
   one, and keeps it through reinstalls (`/var/lib/amahi-kai/app-ports.json`). The Apps page shows
   every port each app uses.
 - [x] **Plain HTTP on the LAN**, like the admin UI. Vaultwarden's web vault needs HTTPS, so it
-  waits for HTTPS through Tailscale (later; turned on in the Tailscale admin console).
+  waited for HTTPS through Tailscale (turned on in the Tailscale admin console): P4.7, where it's
+  reached only through Tailscale.
 - [x] **No host networking.** Docker forwards each app's ports to its container; an app with the
   NAS's own network could open any port and get around the rules above.
 - [x] **Outgoing internet access allowed** (metadata, monitors, peers, mirrors).
@@ -160,7 +161,7 @@ Decisions (CatDogBark, 2026-10-04):
 ### P4.3: Apps through Cloudflare (optional, later)
 
 A specialty case since P4.2: Tailscale is the default way to reach apps from outside. Built if an
-app needs a public hostname. HTTPS for apps through Tailscale (Vaultwarden needs it) comes first.
+app needs a public hostname. HTTPS for apps through Tailscale (Vaultwarden needs it) came first: P4.7.
 
 - [ ] Hostname naming (`jellyfin.example.com`, or chosen per app).
 - [ ] Which apps may be published at all, and whether each needs Cloudflare Access in front.
@@ -238,8 +239,10 @@ Decided (CatDogBark, 2026-10-06): app updates mustn't wait for an Amahi-kai upda
 - [x] **The fetched catalog comes first** for the helper and the pages; `config/apps` is the copy
   that comes with Amahi-kai, for a NAS that hasn't fetched one yet, and for an app the catalog
   no longer lists. Bring it up to date with the repo now and then.
-- [x] **Formats.** A manifest's `requires` (default 1) is the catalog format it needs. This
-  Amahi-kai knows format 1 (`CATALOG_FORMAT`, `AppCatalog::FORMAT`); an app or update that needs
+- [x] **Formats.** A manifest's `requires` (default 1) is the catalog format it needs. An
+  Amahi-kai knows the formats up to its own (`CATALOG_FORMAT`, `AppCatalog::FORMAT`): 2 adds
+  `web_tls`, 3 folders' `kind` and `required` (P4.6), 4 names as the app spells them and secrets
+  inside values, 5 `access: tailscale` and a secret's `hash` (P4.7). An app or update that needs
   more is listed with "Needs a newer Amahi-kai: run System Update first", and the helper refuses
   to install it. A new manifest field raises the format, so older NASes don't misread it.
 

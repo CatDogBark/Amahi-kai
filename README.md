@@ -44,8 +44,8 @@ network, drives, storage pool and a first share. More in [docs/NATIVE-INSTALL.md
 - **Docker apps:** one-click installs from a catalog of its own, [amahi-kai-apps](https://github.com/CatDogBark/amahi-kai-apps)
   (Jellyfin, PiGallery2, Vaultwarden, Gitea, Uptime Kuma, Transmission, bitTube, and bitShare,
   which is early), with updates that copy the app's data first and roll back by themselves;
-  [make your own](https://amahi-kai.com/wiki/making-apps). Vaultwarden's web vault needs HTTPS,
-  which comes after 1.0.
+  [make your own](https://amahi-kai.com/wiki/making-apps). Vaultwarden, which needs HTTPS, is
+  reached only through Tailscale, over HTTPS with Tailscale's certificate.
 - **Networking:** the NAS as your network's DNS server (encrypted lookups, DNSSEC, ad and
   tracker blocking), its DHCP server, and if you like its router, with nothing from the internet
   let in but the ports you choose; the NAS's own address set from the page
