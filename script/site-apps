@@ -1,0 +1,45 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Writes the website's app grid (site/index.html) from an app catalog, so amahi-kai.com lists
+# what the catalog has: each app's logo, name and description. The site's deploy
+# (.github/workflows/pages.yml) runs it on the catalog's repo before building the site, daily and
+# on each change to the site; the grid committed here is only the last one written.
+#
+#   script/site-apps --catalog ../amahi-kai-apps/apps    from the catalog's repo
+#   script/site-apps                                     from config/apps (the copy that comes with Amahi-kai)
+#   script/site-apps --check [--catalog DIR]             exit 1 if the page's grid is different
+#
+# Ruby's standard library only.
+
+require_relative '../lib/site_apps'
+
+args = ARGV.dup
+check = !args.delete('--check').nil?
+dir = File.expand_path('../config/apps', __dir__)
+if (at = args.index('--catalog'))
+  dir = File.expand_path(args[at + 1].to_s)
+  args.slice!(at, 2)
+end
+unless args.empty? && File.directory?(dir)
+  warn 'usage: script/site-apps [--check] [--catalog DIR]'
+  exit 2
+end
+
+begin
+  text = File.read(SiteApps::PAGE)
+  written = SiteApps.page(dir, text)
+rescue ArgumentError, SystemCallError, Psych::Exception => e
+  warn "script/site-apps: #{e.message}"
+  exit 1
+end
+count = SiteApps.apps(dir).size
+if written == text
+  puts "site/index.html lists the #{count} apps in #{dir} already"
+elsif check
+  warn "site/index.html's app grid isn't the #{count} apps in #{dir}: run script/site-apps"
+  exit 1
+else
+  File.write(SiteApps::PAGE, written)
+  puts "site/index.html now lists the #{count} apps in #{dir}"
+end
