@@ -23,8 +23,8 @@ Website: https://amahi-kai.com
 This fork was created in **February 2026** to modernize the Amahi Platform for current Ubuntu systems with updated dependencies.
 
 **Modernization performed by:**
-- **Kai 🌊** (OpenClaw AI Agent) - Technical implementation
 - **CatDogBark** - Project direction, infrastructure, and testing
+- **Claude** (Anthropic) - Technical implementation
 
 ### Key Changes from Original
 
@@ -74,4 +74,4 @@ The Amahi team created an excellent home server platform that served thousands o
 
 ---
 
-**Last Updated**: 2026-10-25
+**Last Updated**: 2026-10-27

@@ -8,6 +8,8 @@ networking and remote access, managed from your browser.
 A modernized fork of the [original Amahi platform](https://github.com/amahi/platform), revived for
 current Linux.
 
+**Website:** [amahi-kai.com](https://amahi-kai.com), with the guides in its [wiki](https://amahi-kai.com/wiki/).
+
 ## Install
 
 On a dedicated Ubuntu 24.04 machine or VM:
@@ -93,7 +95,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for how changes are made and released, an
 ## Credits
 
 - **Original:** [Amahi](http://www.amahi.org) (2007-2013)
-- **Modernization:** Kai 🌊 + CatDogBark (2026)
+- **Modernization:** CatDogBark (2026) + Claude
 
 Questions, problems, ideas: [GitHub Issues](https://github.com/CatDogBark/Amahi-kai/issues), or email
 catdogbark@pm.me.
