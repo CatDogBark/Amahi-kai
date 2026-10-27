@@ -318,6 +318,46 @@ install on pools: certain things they keep do.
   workflow, pinned in the catalog (0.3.0 on 2026-10-10); the image carries the Linux client for
   computers to download.
 
+### P4.7: Apps reached only through Tailscale (catalog format 5)
+
+CatDogBark (2026-10-27): Vaultwarden can't work over plain HTTP. Browsers keep its web vault from
+running there (it encrypts in the page, which browsers allow only on HTTPS pages), and the
+Bitwarden apps refuse a server that isn't HTTPS: their command-line client since 2025.11 ("Insecure URL
+not allowed"), and the Android app over LAN HTTP since about 2025.8. A password server also has
+no business on the internet, and apps aren't on the Cloudflare Tunnel by design. So it's reached
+only through Tailscale, over HTTPS with Tailscale's certificate for the NAS's name; HTTPS on the
+LAN for everything stays a later, optional front door (roadmap, "HTTPS on the LAN").
+
+- [x] **`access: tailscale`** (format 5): the app's ports are published on `127.0.0.1` only, and its
+  `web_port` is served on the tailnet by `tailscale serve --bg --https=<port> http://127.0.0.1:<port>`,
+  at the same port number (the address `https://<the NAS's name on the tailnet>:<port>`).
+  tailscaled keeps the serve entry across restarts; it's set again with each new container and
+  removed at uninstall. `{{tailscale_url}}` in the environment is that address (Vaultwarden's
+  `DOMAIN`, for its links and passkeys). The page must be plain HTTP on TCP (not `web_tls`).
+  An older Amahi-kai lists the app as needing a newer one instead of putting it on the LAN.
+- [x] **Refused, before anything changes, while Tailscale can't serve it**: install, update and
+  undo say what's missing. They want Tailscale installed and connected, MagicDNS on, and HTTPS
+  Certificates on, with the NAS's name among `tailscale status`'s `CertDomains`. The Apps page
+  says so on the app's row (no Install until then), and Remote Access shows HTTPS certificates
+  on or off.
+- [x] **Not announced on the LAN** (nothing there can open it), and **Open** goes to the tailnet
+  address, through the Cloudflare Tunnel too.
+- [x] **A secret's `hash: argon2`** (format 5): the container gets an Argon2id hash of it (PHC form,
+  OWASP's settings: `-id -k 19456 -t 2 -p 1`), from Ubuntu's `argon2`, installed by the helper the
+  first time it's needed. The secret goes on argon2's stdin, with a new salt for each container.
+  The Apps page shows the token itself, to sign in with. Vaultwarden's `ADMIN_TOKEN` takes it, so
+  Vaultwarden stops warning about a plain-text token.
+- [x] **Vaultwarden's manifest** (the catalog's PR, after this release): `requires: 5`, `access:
+  tailscale`, `DOMAIN: "{{tailscale_url}}"`, `hash: argon2` on `ADMIN_TOKEN`, and a first sign-in
+  note. Sign-ups stay on at install (CatDogBark, 2026-10-27): the household makes its accounts,
+  then turns them off on `/admin`. It keeps its own port, `:8880`, so 443 on the tailnet is left
+  for Amahi-kai's own HTTPS later.
+- [ ] `config/apps` brought up to date from the catalog once its PR is merged (the copy comes
+  after the catalog). Specs that use Vaultwarden as their sample app then stub Tailscale's readiness.
+- Renaming the NAS in Tailscale leaves the app's `DOMAIN` on the old name until its container is
+  made again (Change → Save and restart): the wiki says so. Following a rename on its own can
+  come later.
+
 ### Also in Phase 4
 
 - The wiki's Docker Apps page rewritten for the new model, with the plain statement that Docker

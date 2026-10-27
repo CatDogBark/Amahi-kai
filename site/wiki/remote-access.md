@@ -110,3 +110,13 @@ gets a new address, and sets DNS and Samba up for it within a minute or so; noth
 
 If you already reach your LAN through another device's Tailscale subnet route, you don't need
 Tailscale on the server itself.
+
+### HTTPS for apps reached only through Tailscale
+
+Apps that can't work over plain HTTP, like Vaultwarden, are reached only through Tailscale, over
+HTTPS with Tailscale's certificate for the server's name ([Docker Apps](docker-apps)). That needs
+Tailscale on the server itself, and two switches for your tailnet in Tailscale's admin console,
+under **DNS**: **MagicDNS** (on by default for new tailnets) and **HTTPS Certificates**. Turning
+HTTPS Certificates on only lets your devices ask for a certificate for their own name; it
+changes nothing else, and plain HTTP over Tailscale keeps working. Remote Access shows whether
+it's on.

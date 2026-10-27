@@ -8,6 +8,10 @@
 - logo = installed ? app.logo_url : app[:logo_url]
 - status = installed ? app.status : 'available'
 - entry = AppCatalog.find(identifier) || {}
+/ An app reached only through Tailscale, over HTTPS (P4.7): the NAS's name on its tailnet while
+/ Tailscale can serve it, else nil (and it can't be installed until it can).
+- tailnet = TailscaleService.https_name if entry[:access] == 'tailscale'
+- link = app.url(request.host) if installed
 / The share dialog (_shares_dialog, apps.js) opens from buttons carrying these; it then installs.
 - storage_pool = AppCatalog.storage_pool(identifier) if entry[:storage]
 - share_dialog = { 'app-shares' => identifier, 'app-name' => name, 'url' => apps_docker_install_stream_path(identifier),
@@ -35,6 +39,18 @@
           .small.mt-1
             = app.ports.map { |port| port[:host] }.uniq.one? ? 'Port ' : 'Ports '
             = app.port_summary
+        - if entry[:access] == 'tailscale'
+          .small.mt-1 id="app-tailscale-#{identifier}"
+            - if !tailnet
+              span.text-warning
+                | Reached only through Tailscale, over HTTPS: it needs Tailscale on the NAS, connected, with
+                  MagicDNS and HTTPS Certificates on in Tailscale's admin console (DNS).
+              =< link_to 'Remote Access', remote_access_index_path
+            - elsif link
+              | Tailscale only: open it from a device on your tailnet, at
+              =< link
+            - else
+              | Reached only through Tailscale, over HTTPS: devices on your tailnet open it at the NAS's name there.
         - if installed && %w[running stopped].include?(status)
           / Versions (P4.5): Update when the catalog has another one, Undo update while the copy
           / from before the last update is kept. Both run in the install window (apps.js).
@@ -80,6 +96,8 @@
         - when 'available'
           - if entry[:installable] == false
             span.small.text-warning Needs a newer Amahi-kai: run System Update first
+          - elsif entry[:access] == 'tailscale' && !tailnet
+            span.small.text-warning Needs Tailscale ready first
           - else
             button.btn.btn-sm.btn-primary type="button" data=share_dialog.merge('verb' => 'Install')
               = t('install', default: 'Install')
@@ -89,10 +107,10 @@
             | Installing
         - when 'running'
           .d-flex.gap-1.justify-content-end
-            - if app.url(request.host) && via_tunnel?
+            - if link && via_tunnel? && !tailnet
               span.small.text-secondary.me-1.align-self-center Open it on your LAN or Tailscale
-            - elsif app.url(request.host)
-              a.btn.btn-sm.btn-success href=app.url(request.host) target="_blank" rel="noopener" Open
+            - elsif link
+              a.btn.btn-sm.btn-success href=link target="_blank" rel="noopener" Open
             button.btn.btn-sm.btn-outline-danger type="button" data-call="dockerAppAction" data-args='["/apps/docker/stop/#{identifier}", "@el"]' Stop
             button.btn.btn-sm.btn-outline-secondary type="button" data-confirm=uninstall_note data-call="dockerAppAction" data-args='["/apps/docker/uninstall/#{identifier}", "@el"]' Uninstall
         - when 'stopped'

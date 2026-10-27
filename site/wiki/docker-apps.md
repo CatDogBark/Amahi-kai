@@ -36,7 +36,7 @@ against a pinned fingerprint), installs Docker and turns the service on.
 | **bitTube** | Your YouTube channels and streaming services in one place, YouTube ad-free | `http://<server>:8484` |
 | **Jellyfin** | Your own streaming service for movies, TV and music | `http://<server>:8096` |
 | **PiGallery2** | Your photos and home videos as a gallery, folder by folder, as they are on the NAS | `http://<server>:8098` |
-| **Vaultwarden** | A password manager server for the Bitwarden apps (its web vault needs HTTPS, which comes after 1.0; see below) | `http://<server>:8880` |
+| **Vaultwarden** | A password manager server for the Bitwarden apps; reached only through Tailscale, over HTTPS (see below) | `https://<the server's name on your tailnet>:8880` |
 | **Uptime Kuma** | Watches websites and services, and tells you when one goes down | `http://<server>:3001` |
 | **Gitea** | Your own Git server, like a small GitHub | `http://<server>:3300` (Git over SSH on port 2222) |
 | **Transmission** | A BitTorrent client with a web interface | `http://<server>:9091` (peers on port 51413) |
@@ -88,9 +88,40 @@ server's address: bitTube Desktop finds bitTube that way. **Settings → Servers
 - **Not through the Cloudflare Tunnel**: it carries Amahi-kai's own pages, not the apps'. There the
   Apps page says to open apps on your LAN or Tailscale.
 
-Apps use plain HTTP, like Amahi-kai's own pages on the LAN. **Vaultwarden** needs HTTPS for its
-web vault, so it's usable once HTTPS through Tailscale is added (later); until then only its
-`/admin` page works.
+Apps use plain HTTP, like Amahi-kai's own pages on the LAN, except the ones reached only through
+Tailscale.
+
+### Apps reached only through Tailscale
+
+Some apps can't work over plain HTTP: browsers won't run **Vaultwarden**'s web vault without
+HTTPS, since it encrypts your passwords in the page, and the Bitwarden apps refuse a server that
+isn't HTTPS. Those apps are reached only from devices on your Tailscale network, over HTTPS, at
+the server's name there: `https://<name>.<your tailnet>.ts.net:8880` for Vaultwarden. Nothing on
+the LAN reaches them, and they aren't announced there. The Apps page says **Tailscale only** on
+their row, and **Open** goes to that address.
+
+They need, before they're installed:
+
+1. **Tailscale on the server**, connected (Network → Remote Access).
+2. **MagicDNS** and **HTTPS Certificates** on for your tailnet, in Tailscale's admin console under
+   **DNS**. HTTPS Certificates only lets your devices ask Tailscale for a certificate for their
+   own name; it changes nothing else. Remote Access shows whether it's on.
+3. **Tailscale on each device** that uses the app, at home too: it connects straight over the LAN
+   when it can. To share with your household, add them to your tailnet, or share the server with
+   theirs.
+
+The certificate is Tailscale's, for the server's name on your tailnet, renewed by Tailscale. Like
+every public certificate it's listed in public certificate logs, so the server's name on your
+tailnet (not its address) is public.
+
+**Vaultwarden**: open its address on a device on your tailnet and create your account; the
+Bitwarden apps and browser extensions take the same address: choose self-hosted on their sign-in
+screen.
+It lets anyone who can reach it make an account, so once your household has theirs, turn
+sign-ups off on its admin page (`/admin`, with the token on its row).
+
+If you rename the server in Tailscale, give the app its new address: **Change** next to its shares,
+then **Save and restart**.
 
 **Set the app up right away.** Jellyfin, Uptime Kuma and Gitea ask the first person who opens
 them to create the admin account, so open the app and do that as soon as it's installed.
@@ -136,7 +167,7 @@ is out of the app's reach. A share can give several folders, none inside another
 
 Apps that need a password from the start get one generated at install, never a default one:
 
-- **Vaultwarden**: the token for its `/admin` page
+- **Vaultwarden**: the token for its `/admin` page (Vaultwarden itself is given only a hash of it)
 - **Transmission**: the web interface password (user `admin`)
 - **PiGallery2**: the gallery's password (user `admin`)
 

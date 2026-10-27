@@ -118,6 +118,30 @@ describe "Docker Apps", type: :request do
       FileUtils.rm_f(secrets)
     end
 
+    # P4.7: an app reached only through Tailscale, over HTTPS, says so, and what it needs
+    it "says an app reached only through Tailscale needs it ready first, and opens it at its HTTPS address once it is" do
+      entry = AppCatalog.find('vaultwarden').merge(access: 'tailscale')
+      allow(AppCatalog).to receive(:find).and_call_original
+      allow(AppCatalog).to receive(:find).with('vaultwarden').and_return(entry)
+      allow(TailscaleService).to receive(:https_name).and_return(nil)
+      get "/apps/docker_apps"
+      page = Nokogiri::HTML(response.body)
+      expect(page.at_css('#app-tailscale-vaultwarden').text.squish)
+        .to include('it needs Tailscale on the NAS, connected, with MagicDNS and HTTPS Certificates on')
+      expect(page.at_css('#app-tailscale-vaultwarden a')['href']).to eq('/network/remote_access')
+      expect(page.at_css('#docker_app_vaultwarden').text).to include('Needs Tailscale ready first')
+      expect(response.body).not_to include('data-url="/apps/docker/install_stream/vaultwarden"')
+
+      # Installed, and opened through the Cloudflare Tunnel: its address is on the tailnet all the same
+      allow(TailscaleService).to receive(:https_name).and_return('amahi-kai.tail1234.ts.net')
+      DockerApp.create!(identifier: 'vaultwarden', name: 'Vaultwarden', image: entry[:image], status: 'running', host_port: 8880)
+      get "/apps/installed_apps", headers: { 'Host' => 'nas.example.com', 'CF-Connecting-IP' => '203.0.113.9' }
+      page = Nokogiri::HTML(response.body)
+      expect(page.at_css('#docker_app_vaultwarden a.btn-success')['href']).to eq('https://amahi-kai.tail1234.ts.net:8880/')
+      expect(page.at_css('#app-tailscale-vaultwarden').text.squish)
+        .to eq('Tailscale only: open it from a device on your tailnet, at https://amahi-kai.tail1234.ts.net:8880/')
+    end
+
     it "shows each installed app's ports" do
       gitea(port_mappings: [{ host: 3300, protocol: 'tcp', label: 'web' }, { host: 2222, protocol: 'tcp', label: 'Git over SSH' }].to_json)
       get "/apps/installed_apps"

@@ -585,14 +585,31 @@ module AmahiHelper
   # above CATALOG_FORMAT is listed but can't be installed until System Update brings an
   # Amahi-kai that knows it. Format 2 adds `web_tls` (the app's page is HTTPS, its certificate its
   # own), format 3 folders' `kind` and `required`, format 4 environment names as the app spells
-  # them and secrets inside values (APP_ENV_NAME_SPELLED).
+  # them and secrets inside values (APP_ENV_NAME_SPELLED), format 5 apps reached only through
+  # Tailscale (APP_ACCESS) and secrets the container gets hashed (APP_SECRET_HASHES).
   CATALOG_REPO = 'https://github.com/CatDogBark/amahi-kai-apps.git'
   CATALOG_PROTOCOLS = %w[https].freeze
   CATALOG_SRC = '/var/lib/amahi-kai/catalog-src'
   APP_CATALOG = '/var/lib/amahi-kai/catalog'
   CATALOG_STATUS = '/var/lib/amahi-kai/catalog-status.json'
   CATALOG_LOCK = '/run/amahi-kai-catalog.lock'
-  CATALOG_FORMAT = 4
+  CATALOG_FORMAT = 5
+  # Who reaches an app (format 5, P4.7): the LAN and Tailscale (lan, the default), or only
+  # devices on the NAS's tailnet, over HTTPS (tailscale): its ports are published on the NAS
+  # itself only, and its web page is served on the tailnet by `tailscale serve`, with Tailscale's
+  # certificate for the NAS's name, at the same port number. Browsers keep some apps' pages
+  # from working over plain HTTP (Vaultwarden's web vault encrypts in the page), and the
+  # Bitwarden apps refuse it. {{tailscale_url}} in its environment is that address.
+  APP_ACCESS = %w[lan tailscale].freeze
+  APP_TAILSCALE_URL = '{{tailscale_url}}'
+  # A secret's `hash` (format 5): the container gets an Argon2id hash of it, in the PHC form
+  # (Vaultwarden's ADMIN_TOKEN takes one), while the admin pages show the secret itself to sign
+  # in with. OWASP's settings; argon2 (Ubuntu's package) is installed the first time it's needed.
+  APP_SECRET_HASHES = %w[argon2].freeze
+  ARGON2 = '/usr/bin/argon2'
+  ARGON2_SETTINGS = %w[-id -k 19456 -t 2 -p 1 -l 32 -e].freeze
+  # A tailnet name, as `tailscale status` gives the NAS's (amahi-kai.tail1234.ts.net)
+  TAILNET_NAME = /\A(?=.{1,253}\z)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+\z/
   CATALOG_MAX_APPS = 200
   CATALOG_MAX_BYTES = 64 * 1024
   # Apps on the LAN (mDNS). Avahi announces each installed app with a web page as an HTTP
@@ -3002,7 +3019,7 @@ module AmahiHelper
 
     def app_request(value)
       id = app_id(value)
-      { id: id, manifest: app_manifest(id) }
+      { id: id, manifest: tailscale_ready_for!(app_manifest(id)) }
     end
 
     def app_id(value)
@@ -3015,7 +3032,7 @@ module AmahiHelper
     # and its settings), else the catalog's manifest.
     def app_install_request(value)
       id = app_id(value)
-      { id: id, manifest: app_definition(id) || app_manifest(id) }
+      { id: id, manifest: tailscale_ready_for!(app_definition(id) || app_manifest(id)) }
     end
 
     # An update to undo: the definition the app ran before it, as its copy recorded it (else, for
@@ -3023,7 +3040,14 @@ module AmahiHelper
     def app_undo_request(value)
       id = app_id(value)
       before = definition_from(id, Hash(app_backup_info(id))['definition'])
-      { id: id, manifest: before || app_definition(id) || app_manifest(id) }
+      { id: id, manifest: tailscale_ready_for!(before || app_definition(id) || app_manifest(id)) }
+    end
+
+    # An app reached through Tailscale (APP_ACCESS) is refused, before anything changes, while
+    # Tailscale can't serve it (tailscale_https_name says what's missing).
+    def tailscale_ready_for!(manifest)
+      tailscale_https_name if manifest[:access] == 'tailscale'
+      manifest
     end
 
     # An installed app, for start, stop and restart: its container is what counts, not the
@@ -3123,13 +3147,14 @@ module AmahiHelper
     # What installing an app takes from its manifest, every field checked.
     def check_manifest(id, data)
       bad = ->(why) { raise Failed, "#{id}'s manifest: #{why}" }
+      format = manifest_requires(id, data)
       image = data['image'].to_s
       bad.call('image must be name:tag@sha256:digest') unless image.match?(APP_IMAGE)
       run_as = data['run_as']
       bad.call('run_as must be app or image') unless %w[app image].include?(run_as)
       memory = (data['memory'] || APP_DEFAULT_MEMORY).to_s
       bad.call("memory #{memory.inspect} must be like 512m or 2g") unless memory.match?(APP_MEMORY)
-      environment = app_environment_spec(data['environment'], bad, manifest_requires(id, data))
+      environment = app_environment_spec(data['environment'], bad, format)
       writes_shares = data.fetch('writes_shares', false)
       bad.call('writes_shares must be true or false') unless [true, false].include?(writes_shares)
       # What writes into shares runs as the app's own user: the whole container (run_as: app),
@@ -3145,16 +3170,33 @@ module AmahiHelper
       web_tls = data.fetch('web_tls', false)
       bad.call('web_tls must be true or false') unless [true, false].include?(web_tls)
       bad.call('web_tls needs a web_port') if web_tls && web_port.nil?
+      access = app_access(data, web_port, web_tls, ports, format, bad)
       folders = app_folders(data['folders'], bad)
-      secrets = app_secret_names(data['secrets'], environment, bad)
+      secrets = app_secret_names(data['secrets'], environment, bad, format)
       environment.each do |key, value|
         value.scan(APP_SECRET_PLACEHOLDER).flatten.each do |name|
           bad.call("#{key} has {{secret:#{name}}}, which isn't one of its secrets") unless secrets.include?(name)
         end
+        bad.call("#{key} has #{APP_TAILSCALE_URL}, which is for an app with access: tailscale") if value.include?(APP_TAILSCALE_URL) && access != 'tailscale'
       end
-      { image: image, run_as: run_as, memory: memory, ports: ports, web_port: web_port, web_tls: web_tls,
+      { image: image, run_as: run_as, memory: memory, ports: ports, web_port: web_port, web_tls: web_tls, access: access,
         folders: folders, storage: app_storage_need(folders), environment: environment,
-        secrets: secrets, writes_shares: writes_shares }
+        secrets: secrets, hashed_secrets: app_hashed_secrets(data['secrets']), writes_shares: writes_shares }
+    end
+
+    # Who reaches the app (APP_ACCESS): lan unless it says tailscale. That needs requires: 5 (an
+    # older Amahi-kai would put the app on the LAN instead of listing it as needing a newer one)
+    # and a web page over plain HTTP on a TCP port, for `tailscale serve` to put HTTPS in front of.
+    def app_access(data, web_port, web_tls, ports, format, bad)
+      access = data.fetch('access', 'lan')
+      bad.call('access must be lan or tailscale') unless APP_ACCESS.include?(access)
+      return access if access == 'lan'
+
+      bad.call('access: tailscale needs requires: 5') if format < 5
+      bad.call('access: tailscale needs a web_port') if web_port.nil?
+      bad.call('access: tailscale serves its page over HTTPS itself, so web_tls must be false') if web_tls
+      bad.call('access: tailscale needs its web port to be TCP') unless web_port.nil? || ports.any? { |p| p[:host] == web_port && p[:protocol] == 'tcp' }
+      access
     end
 
     # What the Apps pages show besides: a name, a description and a category, each one line,
@@ -3289,14 +3331,23 @@ module AmahiHelper
       end
     end
 
-    def app_secret_names(list, environment, bad)
+    def app_secret_names(list, environment, bad, format = 1)
       Array(list).map do |secret|
         name = secret.is_a?(Hash) ? secret['env'].to_s : ''
         bad.call("secret #{name.inspect} isn't a valid environment name") unless name.match?(APP_ENV_NAME)
         bad.call("#{name} would have the image download more code as it starts") if APP_REFUSED_ENV.include?(name)
         bad.call("secret #{name} is set in environment too") if environment.key?(name)
+        if secret.key?('hash')
+          bad.call("secret #{name}'s hash must be #{APP_SECRET_HASHES.join(' or ')}") unless APP_SECRET_HASHES.include?(secret['hash'])
+          bad.call("secret #{name}'s hash needs requires: 5") if format < 5
+        end
         name
       end
+    end
+
+    # The secrets the container gets hashed (APP_SECRET_HASHES); the admin pages show them as made.
+    def app_hashed_secrets(list)
+      Array(list).select { |secret| secret.is_a?(Hash) && APP_SECRET_HASHES.include?(secret['hash']) }.map { |secret| secret['env'].to_s }
     end
 
     # [{ name:, path:, pooled:, write: }] for the shares the app is to be given, and folder: for
@@ -5928,10 +5979,12 @@ module AmahiHelper
     # Makes the app's new container under a name of its own (<container>-next) while the one it
     # has is only stopped (its ports free for the new one), then swaps it in: a create that fails
     # leaves the app its container, started again if it ran, instead of none. The definition it's
-    # made from is recorded (APP_DEFINITIONS). Returns its ports.
+    # made from is recorded (APP_DEFINITIONS). An app reached through Tailscale (APP_ACCESS) is
+    # published on the NAS itself only, and served on the tailnet. Returns its ports.
     def app_create_container(id, manifest, shares, uid, gid, dir, storage, secrets)
       container = app_container(id)
       fresh = "#{container}-next"
+      tailnet = manifest[:access] == 'tailscale'
       run_command([DOCKER, 'rm', '--force', fresh, { allow_failure: true }]) # one a job cut off left
       running = Hash(app_state(id))['Running'] == true
       run_command([DOCKER, 'stop', '--time', '30', container, { allow_failure: true }]) if running
@@ -5940,17 +5993,19 @@ module AmahiHelper
         ports.reject { |p| p[:host] == p[:preferred] }.uniq { |p| p[:host] }.each do |p|
           say("Port #{p[:preferred]} is in use, so it gets port #{p[:host]}")
         end
+        web = app_web_host_port(ports, manifest)
+        url = "https://#{tailscale_https_name}:#{web}" if tailnet
         binds, set = app_share_binds_make(id, shares)
         share_mounts = app_share_mounts(shares, binds)
         app_share_sources!(shares)
         say('Creating the container...')
-        with_env_file(app_environment(manifest, uid, gid, secrets)) do |env_file|
+        with_env_file(app_environment(manifest, uid, gid, secrets, url)) do |env_file|
           run_command([DOCKER, 'create', '--name', fresh, '--restart', 'unless-stopped',
                        '--security-opt', 'no-new-privileges', # nothing in it gains privileges, setuid files included
                        *APP_CAP_DROP.flat_map { |cap| ['--cap-drop', cap] }, '--pids-limit', APP_PIDS_LIMIT.to_s, *APP_LOG_OPTIONS,
                        '--memory', manifest[:memory], '--label', "amahi.app=#{id}", '--env-file', env_file,
                        *(manifest[:run_as] == 'app' ? ['--user', "#{uid}:#{gid}"] : []),
-                       *ports.flat_map { |p| ['--publish', "0.0.0.0:#{p[:host]}:#{p[:container]}/#{p[:protocol]}"] },
+                       *ports.flat_map { |p| ['--publish', "#{tailnet ? '127.0.0.1' : '0.0.0.0'}:#{p[:host]}:#{p[:container]}/#{p[:protocol]}"] },
                        *app_folder_mounts(manifest, dir, storage), *share_mounts, manifest[:image]])
         end
       rescue Failed, Refused
@@ -5966,7 +6021,80 @@ module AmahiHelper
       run_command([DOCKER, 'rename', fresh, container])
       app_record_definition(id, manifest)
       app_share_binds_keep(id, set, shares)
+      app_tailscale_serve(web) if tailnet
       ports
+    end
+
+    # The host port the app's web page was given (its web_port, or the next free one), or nil.
+    def app_web_host_port(ports, manifest)
+      ports.find { |p| p[:preferred] == manifest[:web_port] && p[:protocol] == 'tcp' }&.dig(:host)
+    end
+
+    # --- Apps reached through Tailscale (see APP_ACCESS) ---
+
+    # The NAS's name on its tailnet, when Tailscale can serve an app there over HTTPS: connected,
+    # with MagicDNS, and HTTPS certificates on for the tailnet (a switch in Tailscale's admin
+    # console). Refused with what's missing otherwise.
+    def tailscale_https_name
+      raise Refused, 'this app is reached through Tailscale: install Tailscale on the NAS first (Remote Access)' unless File.executable?(TAILSCALE)
+
+      out, _err, status = Open3.capture3(ENV_MIN, [TAILSCALE, TAILSCALE], 'status', '--json', unsetenv_others: true, chdir: '/')
+      data = status.success? ? JSON.parse(out) : {}
+      unless data.is_a?(Hash) && data['BackendState'] == 'Running'
+        raise Refused, "this app is reached through Tailscale, which isn't connected: connect it (Remote Access)"
+      end
+
+      name = data.dig('Self', 'DNSName').to_s.chomp('.')
+      unless data.dig('CurrentTailnet', 'MagicDNSEnabled') == true && name.match?(TAILNET_NAME)
+        raise Refused, "this app is reached through Tailscale by the NAS's name there: turn on MagicDNS in Tailscale's admin console (DNS)"
+      end
+      unless Array(data['CertDomains']).include?(name)
+        raise Refused, "this app is reached over HTTPS through Tailscale: turn on HTTPS Certificates in Tailscale's admin console (DNS)"
+      end
+
+      name
+    rescue JSON::ParserError, SystemCallError
+      raise Refused, "Tailscale's status can't be read, so this app can't be served through it"
+    end
+
+    # The app's page on the tailnet, over HTTPS at the NAS's name and the app's own port, from that
+    # port on the NAS itself. tailscaled keeps it across restarts; done again with each container.
+    def app_tailscale_serve(port)
+      say("Serving it on your tailnet over HTTPS, on port #{port}...")
+      run_command(['/usr/bin/timeout', '30', TAILSCALE, 'serve', '--bg', "--https=#{port}", "http://127.0.0.1:#{port}"])
+    end
+
+    def app_tailscale_unserve(port)
+      return unless File.executable?(TAILSCALE)
+
+      run_command(['/usr/bin/timeout', '30', TAILSCALE, 'serve', "--https=#{port}", 'off', { allow_failure: true }])
+    end
+
+    # An uninstalled app reached through Tailscale comes off the tailnet, at the port it was given.
+    def app_unserve_uninstalled(id, definition)
+      return unless definition && definition[:access] == 'tailscale'
+
+      given = Array((read_json(APP_PORTS) || {})[id]).grep(Hash).find { |p| p['preferred'] == definition[:web_port] && p['protocol'] == 'tcp' }
+      app_tailscale_unserve(given && given['host'].is_a?(Integer) ? given['host'] : definition[:web_port])
+    end
+
+    # An Argon2id hash of +secret+ in the PHC form (APP_SECRET_HASHES), from argon2 (installed the
+    # first time), the secret on its stdin and a new salt each time.
+    def argon2_hash(secret)
+      unless File.executable?(ARGON2)
+        say('Installing argon2, to hash a password the app is given...')
+        run_command(['/usr/bin/apt-get', 'update', { env: APT_ENV, stream: true }])
+        run_command(['/usr/bin/apt-get', '-y', '--no-install-recommends', '-o', 'DPkg::Lock::Timeout=300', 'install', 'argon2',
+                     { env: APT_ENV, stream: true }])
+      end
+      out, err, status = Open3.capture3(ENV_MIN, [ARGON2, ARGON2], SecureRandom.alphanumeric(22), *ARGON2_SETTINGS,
+                                        stdin_data: secret, unsetenv_others: true, chdir: '/')
+      hash = out.strip
+      raise Failed, "argon2 didn't hash the app's password: #{last_lines(err, 1)}" unless status.success? && hash.match?(/\A\$argon2id\$\S+\z/)
+
+      hash
+    rescue SystemCallError => e
+      raise Failed, "argon2 can't run: #{e.message}"
     end
 
     # Each share's folder and its copy folders, checked again just before the container is made
@@ -6758,12 +6886,17 @@ module AmahiHelper
       secrets
     end
 
-    def app_environment(manifest, uid, gid, secrets)
+    # The container's environment: the manifest's, its placeholders filled in (+tailscale_url+ is
+    # the app's address on the tailnet, for one reached through Tailscale), and its secrets, those
+    # it takes hashed (APP_SECRET_HASHES) as hashes.
+    def app_environment(manifest, uid, gid, secrets, tailscale_url = nil)
       values = { 'uid' => uid.to_s, 'gid' => gid.to_s, 'timezone' => host_timezone }
+      hashed = Array(manifest[:hashed_secrets])
       manifest[:environment].transform_values do |value|
         value.gsub(APP_PLACEHOLDERS) { values.fetch(Regexp.last_match(1)) }
              .gsub(APP_SECRET_PLACEHOLDER) { secrets.fetch(Regexp.last_match(1)) }
-      end.merge(secrets)
+             .gsub(APP_TAILSCALE_URL) { tailscale_url || raise(Failed, "#{APP_TAILSCALE_URL} without an address on the tailnet") }
+      end.merge(secrets.to_h { |name, value| [name, hashed.include?(name) ? argon2_hash(value) : value] })
     end
 
     def host_timezone
@@ -6793,11 +6926,13 @@ module AmahiHelper
       if delete_data && pool && !pool_names.include?(pool)
         raise Failed, "#{id}'s data is on the pool #{pool}, which isn't online: bring it online to delete it"
       end
-      image = app_image(id) || app_definition(id)&.dig(:image)
+      definition = app_definition(id)
+      image = app_image(id) || definition&.dig(:image)
       container = app_container(id)
       run_command([DOCKER, 'rm', '--force', container, { allow_failure: true }])
       raise Failed, "Docker didn't remove #{container}; nothing else of #{id} was touched" if docker_output('inspect', '--format', '{{.Id}}', container)
       app_share_binds_keep(id, nil, [])
+      app_unserve_uninstalled(id, definition)
       run_command([DOCKER, 'image', 'rm', image, { allow_failure: true }]) if image
       return { 'app' => id, 'data_kept' => true } unless delete_data
 
@@ -6890,13 +7025,14 @@ module AmahiHelper
     end
 
     # [file name, Avahi service file] for an installed app with a web page, on the host port it
-    # was given (APP_PORTS), or nil.
+    # was given (APP_PORTS), or nil. An app reached only through Tailscale (APP_ACCESS) isn't
+    # announced: nothing on the LAN can open it.
     def app_announcement(id)
       return nil unless id.match?(APP_ID) && (path = app_manifest_path(id))
 
       data = YAML.safe_load(File.read(path))
       web = data['web_port']
-      return nil unless data.is_a?(Hash) && web.is_a?(Integer)
+      return nil unless data.is_a?(Hash) && web.is_a?(Integer) && data['access'] != 'tailscale'
 
       given = Array((read_json(APP_PORTS) || {})[id]).grep(Hash).find { |port| port['preferred'] == web }
       port = given && given['host'].is_a?(Integer) ? given['host'] : web

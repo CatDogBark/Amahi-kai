@@ -185,7 +185,22 @@
               </div>
             </div>
           <% end %>
+          <div class="col-md-4">
+            <div class="p-3 border rounded" id="tailscale-https">
+              <small class="text-muted d-block">HTTPS certificates</small>
+              <strong><%= @tailscale_status[:magic_dns_on] && @tailscale_status[:https_certificates] ? '🟢 On' : 'Off' %></strong>
+            </div>
+          </div>
         </div>
+
+        <p class="text-muted small mb-3" id="tailscale-https-note">
+          <% if @tailscale_status[:magic_dns_on] && @tailscale_status[:https_certificates] %>
+            Apps reached only through Tailscale (Vaultwarden) are served over HTTPS at this NAS's name on your tailnet.
+          <% else %>
+            Apps reached only through Tailscale (Vaultwarden) need MagicDNS and HTTPS Certificates on, in Tailscale's
+            admin console under DNS; they're served over HTTPS at this NAS's name on your tailnet.
+          <% end %>
+        </p>
 
         <p class="text-muted small mb-3">
           Access your NAS at <strong><%= amahi_url(@tailscale_status[:tailscale_ip]) %></strong>

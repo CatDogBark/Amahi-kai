@@ -158,6 +158,14 @@ cheap, every address of Amahi-kai or an app is made in one place (`DockerApp#url
 people's networks call for it. A token for the DNS challenge mustn't be able to change
 amahi-kai.com: a separate zone, or a delegated `_acme-challenge` record.
 
+Decided (CatDogBark, 2026-10-27), when Vaultwarden needed it: the app that can't work without HTTPS
+is reached **only through Tailscale**, over HTTPS with Tailscale's certificate (catalog format 5,
+`access: tailscale`: docs/plans/apps.md, P4.7). That needs no domain and no certificate to install
+on each device, and a password server is better off the LAN and the internet anyway. LAN HTTPS for
+Amahi-kai and every app stays the optional front door above, for when users ask: the NAS's own
+certificate authority as the default (Caddy does one, and fetches Tailscale's certificates
+too), Let's Encrypt through a DNS challenge for those with a domain.
+
 ### The debug pages as a Settings tab
 
 The debug pages (`/tab/debug`: App Logs, Logs and System Info) are from the original Amahi. They

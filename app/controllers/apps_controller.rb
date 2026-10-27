@@ -228,6 +228,12 @@ class AppsController < ApplicationController
 
   private
 
+  # Where the install window says an app opens: an app reached only through Tailscale (P4.7)
+  # opens on devices on the tailnet.
+  def where_to_open(app)
+    app.tailscale_only? ? 'from a device on your tailnet' : 'on your LAN or Tailscale'
+  end
+
   # Installs +entry+ through the root helper (apps.install), streaming its progress. Changing an
   # app's shares installs it again with the new ones. +pool+: the ZFS pool chosen for an app that
   # keeps data on one (P4.6), the first time; after that the helper keeps it on its own.
@@ -249,7 +255,7 @@ class AppsController < ApplicationController
                 shares: shares)
     sse.emit('')
     sse.emit("✓ #{entry[:name]} is installed and running")
-    sse.emit("  Open it at #{app.url(host)} (on your LAN or Tailscale)") if web
+    sse.emit("  Open it at #{app.url(host)} (#{where_to_open(app)})") if web && app.url(host)
     if entry[:sign_in].present?
       sse.emit("  First sign-in: #{entry[:sign_in]}")
       sse.emit("  Passwords and keys Amahi-kai made for it are on the Apps page, under #{entry[:name]}") if entry[:secrets].any?
@@ -296,7 +302,7 @@ class AppsController < ApplicationController
                     ports: ports, host_port: ports.find { |port| port[:label] == 'web' }&.dig(:host) || app.host_port)
         sse.emit('')
         worked = yield app, entry, reply, sse
-        sse.emit("  Open it at #{app.url(host)} (on your LAN or Tailscale)") if app.url(host)
+        sse.emit("  Open it at #{app.url(host)} (#{where_to_open(app)})") if app.url(host)
         worked ? sse.done : sse.done('error')
       rescue Privileged::Error => e
         DockerApp.refresh_statuses!

@@ -30,6 +30,24 @@ describe "RemoteAccess Controller", type: :request do
         get '/network/remote_access'
         expect(response).to have_http_status(:ok)
       end
+
+      # P4.7: what an app reached only through Tailscale (Vaultwarden) needs from the tailnet
+      it "says whether Tailscale's HTTPS certificates are on, and what apps reached through it need" do
+        connected = { installed: true, running: true, tailscale_ip: '100.64.0.1', hostname: 'amahi-kai.tail1234.ts.net',
+                      magic_dns: 'amahi-kai.tail1234.ts.net', peers: 1, magic_dns_on: true, https_certificates: false }
+        allow(TailscaleService).to receive(:status).and_return(connected)
+        get '/network/remote_access'
+        page = Nokogiri::HTML(response.body)
+        expect(page.at_css('#tailscale-https').text.squish).to eq('HTTPS certificates Off')
+        expect(page.at_css('#tailscale-https-note').text.squish)
+          .to start_with('Apps reached only through Tailscale (Vaultwarden) need MagicDNS and HTTPS Certificates on')
+
+        allow(TailscaleService).to receive(:status).and_return(connected.merge(https_certificates: true))
+        get '/network/remote_access'
+        page = Nokogiri::HTML(response.body)
+        expect(page.at_css('#tailscale-https').text.squish).to eq('HTTPS certificates 🟢 On')
+        expect(page.at_css('#tailscale-https-note').text.squish).to include('are served over HTTPS at this NAS')
+      end
     end
 
     describe "POST start_tunnel" do

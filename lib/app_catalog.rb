@@ -17,8 +17,10 @@ class AppCatalog
   # The catalog format this Amahi-kai knows (the helper's CATALOG_FORMAT). An app whose
   # `requires` is higher is listed, but installing it waits for System Update. Format 2 adds
   # `web_tls`; 3, folders kept on a ZFS pool (`kind: dataset`, and `required`); 4, environment
-  # names as the app spells them, and generated secrets inside values (`{{secret:NAME}}`).
-  FORMAT = 4
+  # names as the app spells them, and generated secrets inside values (`{{secret:NAME}}`); 5,
+  # apps reached only through Tailscale, over HTTPS (`access: tailscale`, `{{tailscale_url}}`),
+  # and secrets the container gets hashed (`hash: argon2`).
+  FORMAT = 5
   # Where the helper keeps each app's folders and generated secrets (outside production: tmp/).
   APPS_ROOT = '/var/lib/amahi-kai/apps'.freeze
   SECRETS_DIR = '/var/lib/amahi-kai/app-secrets'.freeze
@@ -182,7 +184,7 @@ class AppCatalog
         sign_in: (data['sign_in'].strip.presence if data['sign_in'].is_a?(String)),
         requires: requires, installable: requires <= FORMAT,
         category: data['category'], logo_url: data['logo'], image: data['image'], web_port: data['web_port'],
-        web_tls: data['web_tls'] == true,
+        web_tls: data['web_tls'] == true, access: data['access'] == 'tailscale' ? 'tailscale' : 'lan',
         writes_shares: data['writes_shares'] == true, releases: data['releases'],
         storage: storage_need(data['folders']),
         ports: Array(data['ports']).map do |p|

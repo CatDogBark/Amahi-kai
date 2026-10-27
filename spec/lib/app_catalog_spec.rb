@@ -48,6 +48,14 @@ RSpec.describe AppCatalog do
       AppCatalog.reload!
     end
 
+    # P4.7: format 5
+    it "says which apps are reached only through Tailscale, and installs format 5" do
+      File.write("#{fetched}/vault.yml", "#{File.read(File.join(AppCatalog::CATALOG_DIR, 'vaultwarden.yml'))}requires: 5\naccess: tailscale\n")
+      AppCatalog.reload!
+      expect(AppCatalog.find("vault")).to include(access: "tailscale", requires: 5, installable: true)
+      expect(AppCatalog.find("gitea")[:access]).to eq("lan")
+    end
+
     it "says which apps keep data on a ZFS pool, and where each one's is" do
       store = File.read(File.join(AppCatalog::CATALOG_DIR, "uptimekuma.yml"))
                   .sub("  - { name: data, path: /app/data }", "  - { name: data, path: /app/data, kind: dataset }")

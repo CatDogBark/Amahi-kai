@@ -44,8 +44,20 @@ module TailscaleService
 
       # MagicDNS hostname (e.g., amahi-kai.tail1234.ts.net)
       result[:magic_dns] = result[:hostname] if result[:hostname].present?
+      # The two tailnet settings an app reached through Tailscale needs (the helper's APP_ACCESS):
+      # MagicDNS, and HTTPS certificates for the NAS's name, both switched on in Tailscale's
+      # admin console (DNS).
+      result[:magic_dns_on] = data.dig('CurrentTailnet', 'MagicDNSEnabled') == true
+      result[:https_certificates] = result[:hostname].present? && Array(data['CertDomains']).include?(result[:hostname])
 
       result
+    end
+
+    # The NAS's name on its tailnet when Tailscale can serve an app there over HTTPS (connected,
+    # MagicDNS and HTTPS certificates on), else nil; the helper checks the same before it serves one.
+    def https_name
+      info = status
+      info[:hostname] if info[:running] && info[:magic_dns_on] && info[:https_certificates]
     end
 
     # Installs Tailscale from its apt repository and starts the daemon; apt's output goes

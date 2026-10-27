@@ -117,6 +117,9 @@ environment:
 - **`secrets`** (`{ env: ADMIN_TOKEN, label: Admin page token }`) are generated at install. With
   `requires: 4` a setting can hold one inside its value as `{{secret:ADMIN_TOKEN}}`, such as a
   password inside a JSON list of users; secrets are letters and digits, so they fit inside quotes.
+  With **`requires: 5`**, `hash: argon2` gives the container an Argon2id hash of the secret, in the
+  PHC form (`$argon2id$v=19$...`), while the Apps page shows the secret itself to sign in with:
+  Vaultwarden's `ADMIN_TOKEN` takes one. A `{{secret:...}}` inside a value is the secret itself.
 - **`folders`**: each `path` is made of plain names (letters, digits, `.`, `_`, `-`), isn't
   `/shares` or under it (where the app's shares go), and no two folders share one.
 - **`folders`** with `backup: false` (caches, downloads) aren't copied before an update.
@@ -132,6 +135,14 @@ environment:
 - **`web_tls: true`** says the app's page is HTTPS with its own certificate (as bitShare's is):
   **Open** goes to `https://`, and the app is announced on the LAN as HTTPS. It needs
   `requires: 2`, since older Amahi-kai versions don't know it.
+- **`access: tailscale`** makes the app reachable only from devices on the server's Tailscale
+  network, over HTTPS (Vaultwarden is: browsers won't run its web vault over plain HTTP, and the
+  Bitwarden apps refuse it). Its ports are published on the server itself only, and its
+  `web_port` (plain HTTP, on TCP; not `web_tls`) is served on the tailnet with Tailscale's
+  certificate, at `https://<the server's name on the tailnet>:<its port>`. `{{tailscale_url}}`
+  in its environment is that address (Vaultwarden's `DOMAIN`). It's installed only once the
+  server's Tailscale is connected with MagicDNS and HTTPS Certificates on, and it isn't announced
+  on the LAN. It needs `requires: 5`: an older Amahi-kai would put the app on the LAN instead.
 
 Every field is in the catalog's [README](https://github.com/CatDogBark/amahi-kai-apps#readme).
 
@@ -186,8 +197,9 @@ notice on its dashboard.
 
 A server only understands the manifest fields its Amahi-kai knows. A manifest that uses newer
 ones says so with `requires` (the catalog format it needs: 2 for `web_tls`, 3 for `kind:
-dataset`). Older servers then list the app with "Needs a newer Amahi-kai" instead of installing
-what they can't read.
+dataset`, 4 for names as the app spells them and secrets inside values, 5 for `access` and a
+secret's `hash`). Older servers then list the app with "Needs a newer Amahi-kai" instead of
+installing what they can't read.
 
 ---
 
@@ -195,5 +207,6 @@ what they can't read.
 
 - **A catalog of your own.** Servers install from the one catalog only. To try an app on your
   server before it's in the catalog, run it with `docker run` as above.
-- **HTTPS.** Apps are reached over plain HTTP on the LAN, like Amahi-kai's own pages; HTTPS for
-  both is planned.
+- **HTTPS on the LAN.** Apps are reached over plain HTTP on the LAN, like Amahi-kai's own pages;
+  HTTPS for both is planned. An app that can't work without HTTPS can be reached only through
+  Tailscale, over HTTPS, today (`access: tailscale`).

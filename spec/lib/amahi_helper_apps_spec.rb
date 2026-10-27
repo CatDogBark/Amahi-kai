@@ -400,6 +400,105 @@ RSpec.describe 'AmahiHelper apps' do
       end
       expect(failure('requires' => 4, 'environment' => { 'docker_mods' => 'x' })).to include('download more code')
     end
+
+    # Format 5 (P4.7): an app reached only through Tailscale, over HTTPS, and secrets the
+    # container gets hashed. Older Amahi-kais must list them as needing a newer one: one that put a
+    # Tailscale-only app on the LAN, or gave it its admin token as it is, would get it wrong.
+    it 'takes access: tailscale and hashed secrets only with requires: 5, for a page over plain HTTP on TCP' do
+      tailnet = { 'requires' => 5, 'access' => 'tailscale', 'web_port' => 8500, 'environment' => { 'DOMAIN' => '{{tailscale_url}}' } }
+      expect(failure(tailnet)).to be_nil
+      expect(helper.app_manifest('test')).to include(access: 'tailscale', hashed_secrets: [])
+      expect(failure(tailnet.merge('requires' => 4))).to include('access: tailscale needs requires: 5')
+      expect(failure(tailnet.merge('access' => 'internet'))).to include('access must be lan or tailscale')
+      expect(failure(tailnet.except('web_port'))).to include('access: tailscale needs a web_port')
+      expect(failure(tailnet.merge('web_tls' => true))).to include('so web_tls must be false')
+      expect(failure(tailnet.merge('ports' => [{ 'host' => 8500, 'container' => 80, 'protocol' => 'udp' }]))).to include('its web port to be TCP')
+      expect(failure('requires' => 5, 'environment' => { 'DOMAIN' => '{{tailscale_url}}' }))
+        .to include('DOMAIN has {{tailscale_url}}, which is for an app with access: tailscale')
+
+      expect(failure('requires' => 5, 'secrets' => [{ 'env' => 'TOKEN', 'label' => 'Token', 'hash' => 'argon2' }])).to be_nil
+      expect(helper.app_manifest('test')).to include(access: 'lan', secrets: ['TOKEN'], hashed_secrets: ['TOKEN'])
+      expect(failure('secrets' => [{ 'env' => 'TOKEN', 'hash' => 'argon2' }])).to include("secret TOKEN's hash needs requires: 5")
+      expect(failure('requires' => 5, 'secrets' => [{ 'env' => 'TOKEN', 'hash' => 'md5' }])).to include("secret TOKEN's hash must be argon2")
+    end
+  end
+
+  # What an app reached only through Tailscale needs (P4.7), read from `tailscale status`, as
+  # root reads it: what's missing is said, so the Apps page can say what to switch on.
+  describe "Tailscale's readiness to serve an app" do
+    let(:ready) do
+      { 'BackendState' => 'Running', 'Self' => { 'DNSName' => 'amahi-kai.tail1234.ts.net.' },
+        'CurrentTailnet' => { 'MagicDNSEnabled' => true }, 'CertDomains' => ['amahi-kai.tail1234.ts.net'] }
+    end
+
+    def status_says(data, success: true)
+      allow(File).to receive(:executable?).with('/usr/bin/tailscale').and_return(true)
+      allow(Open3).to receive(:capture3).with(anything, ['/usr/bin/tailscale', '/usr/bin/tailscale'], 'status', '--json', any_args)
+                                        .and_return([data.to_json, '', instance_double(Process::Status, success?: success)])
+    end
+
+    def missing
+      helper.tailscale_https_name
+      nil
+    rescue AmahiHelper::Refused => e
+      e.message
+    end
+
+    it 'names the NAS on its tailnet when Tailscale is connected, with MagicDNS and HTTPS certificates on' do
+      status_says(ready)
+      expect(helper.tailscale_https_name).to eq('amahi-kai.tail1234.ts.net')
+    end
+
+    it 'says what is missing otherwise' do
+      allow(File).to receive(:executable?).with('/usr/bin/tailscale').and_return(false)
+      expect(missing).to include('install Tailscale on the NAS first')
+      status_says(ready.merge('BackendState' => 'NeedsLogin'))
+      expect(missing).to include("which isn't connected")
+      status_says(ready, success: false)
+      expect(missing).to include("which isn't connected")
+      status_says(ready.merge('CurrentTailnet' => { 'MagicDNSEnabled' => false }))
+      expect(missing).to include('turn on MagicDNS')
+      status_says(ready.merge('Self' => { 'DNSName' => 'bad name;x.' }))
+      expect(missing).to include('turn on MagicDNS')
+      status_says(ready.merge('CertDomains' => nil))
+      expect(missing).to include('turn on HTTPS Certificates')
+      status_says(ready.merge('CertDomains' => ['other.tail1234.ts.net']))
+      expect(missing).to include('turn on HTTPS Certificates')
+    end
+  end
+
+  describe 'hashing a secret for the container (hash: argon2)' do
+    let(:hash) { '$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA' }
+    let(:ran) { [] }
+
+    before do
+      allow(helper).to receive(:say)
+      allow(helper).to receive(:run_command) { |argv| ran << argv.reject { |a| a.is_a?(Hash) } }
+    end
+
+    def argon2_says(out, success: true)
+      allow(Open3).to receive(:capture3).with(anything, ['/usr/bin/argon2', '/usr/bin/argon2'], any_args)
+                                        .and_return([out, 'argon2: error', instance_double(Process::Status, success?: success)])
+    end
+
+    it 'gives argon2 the secret on its stdin, a new salt and OWASP settings, installing it the first time' do
+      allow(File).to receive(:executable?).with('/usr/bin/argon2').and_return(false)
+      argon2_says("#{hash}\n")
+      expect(helper.argon2_hash('s3cret')).to eq(hash)
+      expect(Open3).to have_received(:capture3).with(anything, ['/usr/bin/argon2', '/usr/bin/argon2'], match(/\A[A-Za-z0-9]{22}\z/),
+                                                     '-id', '-k', '19456', '-t', '2', '-p', '1', '-l', '32', '-e',
+                                                     stdin_data: 's3cret', unsetenv_others: true, chdir: '/')
+      expect(ran.map(&:last)).to eq(%w[update argon2])
+    end
+
+    it "doesn't install it again, and fails when it doesn't give a hash" do
+      allow(File).to receive(:executable?).with('/usr/bin/argon2').and_return(true)
+      argon2_says('', success: false)
+      expect { helper.argon2_hash('s3cret') }.to raise_error(AmahiHelper::Failed, "argon2 didn't hash the app's password: argon2: error")
+      argon2_says("not a hash\n")
+      expect { helper.argon2_hash('s3cret') }.to raise_error(AmahiHelper::Failed, /didn't hash/)
+      expect(ran).to be_empty
+    end
   end
 
   describe 'installing' do
@@ -728,6 +827,74 @@ RSpec.describe 'AmahiHelper apps' do
         allow(helper).to receive(:docker_output).with('inspect', '--format', '{{.Id}}', 'amahi-gitea').and_return("abc\n")
         expect { helper.do_uninstall_app('gitea', true) }.to raise_error(AmahiHelper::Failed, "Docker didn't remove amahi-gitea; nothing else of gitea was touched")
         expect(File.directory?("#{apps_root}/gitea/data")).to be true
+      end
+    end
+
+    # P4.7: published on the NAS itself only, served on the tailnet over HTTPS at the NAS's name
+    # and its own port, told that address, and given its admin token hashed.
+    describe 'an app reached only through Tailscale' do
+      let(:serve) { ['/usr/bin/timeout', '30', '/usr/bin/tailscale', 'serve', '--bg', '--https=8880', 'http://127.0.0.1:8880'] }
+
+      before do
+        stub_const('AmahiHelper::APP_MANIFESTS', "#{dir}/manifests")
+        FileUtils.mkdir_p("#{dir}/manifests")
+        FileUtils.cp(Dir["#{catalog}/*.yml"], "#{dir}/manifests")
+        File.write("#{dir}/manifests/vault.yml", {
+          'name' => 'Vault', 'description' => 'Passwords.', 'category' => 'security', 'requires' => 5, 'access' => 'tailscale',
+          'image' => "example/vault:1.0@sha256:#{'c' * 64}", 'run_as' => 'app', 'web_port' => 8880,
+          'ports' => [{ 'host' => 8880, 'container' => 8080 }], 'folders' => [{ 'name' => 'data', 'path' => '/data' }],
+          'environment' => { 'DOMAIN' => '{{tailscale_url}}' },
+          'secrets' => [{ 'env' => 'ADMIN_TOKEN', 'label' => 'Admin token', 'hash' => 'argon2' }]
+        }.to_yaml)
+        allow(File).to receive(:executable?).with('/usr/bin/tailscale').and_return(true)
+        allow(helper).to receive(:tailscale_https_name).and_return('amahi-kai.tail1234.ts.net')
+        allow(helper).to receive(:argon2_hash) { |secret| "$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$#{secret.reverse}" }
+      end
+
+      it 'is published on the NAS itself only, served on the tailnet over HTTPS, and told its address' do
+        helper.do_install_app('vault', helper.app_manifest('vault'))
+        create = ran.find { |argv| argv[1] == 'create' }
+        expect(create.each_cons(2).select { |flag, _| flag == '--publish' }.map(&:last)).to eq(['127.0.0.1:8880:8080/tcp'])
+        expect(env_files.sole[1].lines(chomp: true)).to include('DOMAIN=https://amahi-kai.tail1234.ts.net:8880')
+        # Served once the new container has taken the app's name, before it starts
+        expect(ran.index(serve)).to be > ran.index { |argv| argv[1] == 'rename' }
+        expect(ran.index(serve)).to be < ran.index { |argv| argv[1] == 'start' }
+      end
+
+      it 'gets its admin token hashed, while the admin pages keep the token itself to sign in with' do
+        helper.do_install_app('vault', helper.app_manifest('vault'))
+        token = JSON.parse(File.read("#{secrets_dir}/vault.json"))['ADMIN_TOKEN']
+        expect(token).to match(/\A[A-Za-z0-9]{32}\z/)
+        expect(env_files.sole[1].lines(chomp: true)).to include("ADMIN_TOKEN=$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$#{token.reverse}")
+        expect(env_files.sole[1]).not_to include("=#{token}")
+      end
+
+      it "is refused before anything changes while Tailscale can't serve it" do
+        allow(helper).to receive(:tailscale_https_name)
+          .and_raise(AmahiHelper::Refused, "this app is reached over HTTPS through Tailscale: turn on HTTPS Certificates in Tailscale's admin console (DNS)")
+        expect(refusal('apps.install', 'app' => 'vault')).to include('turn on HTTPS Certificates')
+        expect(refusal('apps.update', 'app' => 'vault')).to include('turn on HTTPS Certificates')
+        expect(ran).to be_empty
+      end
+
+      it 'comes off the tailnet when uninstalled, at the port it was given' do
+        helper.do_install_app('vault', helper.app_manifest('vault'))
+        ran.clear
+        helper.do_uninstall_app('vault', false)
+        expect(ran).to include(['/usr/bin/timeout', '30', '/usr/bin/tailscale', 'serve', '--https=8880', 'off', { allow_failure: true }])
+      end
+
+      it "isn't announced on the LAN, where nothing can open it" do
+        stub_const('AmahiHelper::APP_PORTS', "#{dir}/app-ports.json")
+        expect(helper.app_announcement('vault')).to be_nil
+      end
+
+      it 'leaves an app on the LAN as it was' do
+        helper.do_install_app('gitea', helper.app_manifest('gitea'))
+        create = ran.find { |argv| argv[1] == 'create' }
+        expect(create.each_cons(2).select { |flag, _| flag == '--publish' }.map(&:last)).to all(start_with('0.0.0.0:'))
+        expect(ran.flatten).not_to include('serve')
+        expect(helper).not_to have_received(:tailscale_https_name)
       end
     end
 
