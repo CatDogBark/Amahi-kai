@@ -50,6 +50,10 @@ one up as soon as it's installed.
 - [ ] **Uptime Kuma** (port 3001): create the admin account, add a monitor (for example
   `https://www.google.com`), and it goes green.
 - [ ] **Jellyfin** (port 8096): the setup wizard runs. Skip adding media: shares come with P4.4.
+- [ ] **PiGallery2** (port 8098): it asks for a login. The user is `admin`; the password is under
+  **Passwords and keys Amahi-kai made for PiGallery2** on its row. Give it a share with photos, or
+  only its photo folder (**Change** → **Only some folders**): the gallery shows those folders and
+  their photos.
 - [ ] **Gitea** (ports 3300 and 2222): its first page is the installer. Keep SQLite, set the
   **Gitea Base URL** to `http://192.168.1.1:3300/`, create the admin account, then create a
   test repository.

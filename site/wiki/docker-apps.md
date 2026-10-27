@@ -35,6 +35,7 @@ against a pinned fingerprint), installs Docker and turns the service on.
 |-----|---------------|---------------|
 | **bitTube** | Your YouTube channels and streaming services in one place, YouTube ad-free | `http://<server>:8484` |
 | **Jellyfin** | Your own streaming service for movies, TV and music | `http://<server>:8096` |
+| **PiGallery2** | Your photos and home videos as a gallery, folder by folder, as they are on the NAS | `http://<server>:8098` |
 | **Vaultwarden** | A password manager server for the Bitwarden apps (its web vault needs HTTPS, which comes after 1.0; see below) | `http://<server>:8880` |
 | **Uptime Kuma** | Watches websites and services, and tells you when one goes down | `http://<server>:3001` |
 | **Gitea** | Your own Git server, like a small GitHub | `http://<server>:3300` (Git over SSH on port 2222) |
@@ -137,6 +138,7 @@ Apps that need a password from the start get one generated at install, never a d
 
 - **Vaultwarden**: the token for its `/admin` page
 - **Transmission**: the web interface password (user `admin`)
+- **PiGallery2**: the gallery's password (user `admin`)
 
 An installed app's row on the Apps page has **Passwords and keys Amahi-kai made for …**: open it
 to see them, with a **Copy** button. Only admins see the Apps page. Reinstalling keeps the same
