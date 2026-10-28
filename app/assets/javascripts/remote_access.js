@@ -19,7 +19,7 @@ function setupTunnel(stageUrl, streamUrl) {
   });
 }
 
-function installTailscale(streamUrl) {
+function installTailscale(streamUrl, statusUrl) {
   var id = 'tailscale-install';
   var modal = document.getElementById(id + '-install-modal');
   var output = document.getElementById(id + '-output');
@@ -50,19 +50,16 @@ function installTailscale(streamUrl) {
     terminal.scrollTop = terminal.scrollHeight;
   };
 
-  // Tailscale's login address, as a link (the address comes from the server's stream)
+  // Tailscale's sign-in page (its address comes from the server's stream), as a link to click, and
+  // the window waits for the sign-in
   source.addEventListener('auth_url', function(e) {
     if (!e.data) return;
-    var linkDiv = document.createElement('div');
-    linkDiv.className = 'term-line step';
-    var link = document.createElement('a');
-    link.href = e.data;
-    link.target = '_blank';
-    link.rel = 'noopener';
-    link.textContent = '→ Click here to log in to Tailscale';
-    linkDiv.appendChild(link);
-    output.appendChild(linkDiv);
+    var line = document.createElement('div');
+    line.className = 'term-line step';
+    tailscaleSignIn(line, e.data);
+    output.appendChild(line);
     terminal.scrollTop = terminal.scrollHeight;
+    waitForTailscale(statusUrl);
   });
 
   source.addEventListener('done', function() {
@@ -82,51 +79,48 @@ function installTailscale(streamUrl) {
   };
 }
 
-// Connect. Tailscale's sign-in page goes in a tab this click opens itself: one opened once the
-// NAS answers, seconds later, was blocked as a pop-up (Firefox), and the page reloaded to Connect.
-// The page then waits for the sign-in, done in that tab, and reloads once Tailscale is connected.
+// Connect. When the NAS isn't in a tailnet yet, Tailscale gives a sign-in page: it's shown as a
+// link to click, never opened by the page. A tab a script opens seconds after the click is a
+// pop-up to the browser, and Firefox blocked it. The page then waits for the sign-in, done in
+// that tab (or on any device), and reloads once Tailscale is connected.
 function startTailscale(btn, url, statusUrl) {
   btn.disabled = true;
   btn.textContent = 'Connecting...';
-  var signIn = window.open('', '_blank');
-  if (signIn) { signIn.opener = null; }
   fetch(url, {
     method: 'POST',
-    headers: { 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content, 'Accept': 'application/json' }
+    headers: csrfHeaders()
   }).then(function(r) {
     if (!r.ok) throw new Error('Server returned ' + r.status);
     return r.json();
   }).then(function(data) {
     if (data.status === 'error') throw new Error(data.error || 'Tailscale did not start');
     if (!data.auth_url) {
-      if (signIn) { signIn.close(); }
       window.location.reload();
       return;
     }
-    if (signIn && !signIn.closed) {
-      signIn.location.href = data.auth_url;
-    } else {
-      tailscaleSignInLink(btn, data.auth_url);
-    }
-    btn.textContent = 'Waiting for the sign-in...';
+    var signIn = document.createElement('span');
+    tailscaleSignIn(signIn, data.auth_url);
+    btn.replaceWith(signIn);
     waitForTailscale(statusUrl);
   }).catch(function(err) {
-    if (signIn) { signIn.close(); }
     alert('Failed to connect: ' + err.message);
     btn.disabled = false;
     btn.textContent = 'Connect';
   });
 }
 
-// The sign-in page as a link beside the button, for a browser that kept even that tab from opening.
-function tailscaleSignInLink(btn, href) {
+// "Sign in to Tailscale to finish", a link to its sign-in page in a new tab, and the wait for it.
+function tailscaleSignIn(container, href) {
   var link = document.createElement('a');
   link.href = href;
   link.target = '_blank';
   link.rel = 'noopener';
   link.className = 'btn btn-primary btn-sm';
-  link.textContent = 'Sign in to Tailscale';
-  btn.insertAdjacentElement('afterend', link);
+  link.textContent = 'Sign in to Tailscale to finish';
+  var waiting = document.createElement('span');
+  waiting.className = 'small text-secondary ms-2';
+  waiting.textContent = 'Waiting for you to sign in…';
+  container.replaceChildren(link, waiting);
 }
 
 // Asks whether Tailscale is connected every 3 seconds, for 10 minutes, and reloads once it is.
@@ -146,7 +140,7 @@ function waitForTailscale(statusUrl) {
 function tailscaleAction(url) {
   fetch(url, {
     method: 'POST',
-    headers: { 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content }
+    headers: csrfHeaders()
   }).then(function() { window.location.reload(); });
 }
 
@@ -159,7 +153,7 @@ function tunnelAction(action, btn, url) {
   }
   fetch(url, {
     method: 'POST',
-    headers: { 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content, 'Accept': 'application/json' }
+    headers: csrfHeaders()
   }).then(function(r) {
     return r.json().catch(function() { return {}; }).then(function(data) {
       if (!r.ok) throw new Error(data.error || ('Server returned ' + r.status));

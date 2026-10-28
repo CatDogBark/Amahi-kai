@@ -91,6 +91,13 @@ describe "RemoteAccess Controller", type: :request do
         button = Nokogiri::HTML(response.body).at_css('[data-call="startTailscale"]')
         expect(JSON.parse(button['data-args'])).to eq(['@el', '/network/remote_access/start_tailscale', '/network/remote_access/tailscale_status'])
       end
+
+      it "gives the install window the same address, to wait for the sign-in" do
+        allow(TailscaleService).to receive(:status).and_return(installed: false, running: false)
+        get '/network/remote_access'
+        button = Nokogiri::HTML(response.body).at_css('[data-call="installTailscale"]')
+        expect(JSON.parse(button['data-args'])).to eq(['/network/remote_access/install_tailscale_stream', '/network/remote_access/tailscale_status'])
+      end
     end
 
     describe "POST stop_tailscale" do
