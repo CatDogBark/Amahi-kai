@@ -12,6 +12,8 @@ All notable changes to Amahi-kai are documented here.
 ### 🔧 Architecture & Code Quality
 
 - **Apps reached only through Tailscale, and hashed secrets** (catalog format 5) — A manifest that says `requires: 5` can set `access: tailscale`: its ports are published on the server itself only, its web port is served on the tailnet over HTTPS by `tailscale serve`, and `{{tailscale_url}}` in its environment is that address. A secret can say `hash: argon2`, and the container gets an Argon2id hash of it (Ubuntu's `argon2` is installed the first time one is needed). Servers on an older Amahi-kai list such an app as needing a newer one.
+- **CI jobs have time limits** — A step that hung ran until GitHub's 6-hour limit: an Ubuntu mirror that stopped answering held three CI jobs on `apt-get` until they were cancelled by hand. CI's jobs now stop after 20 minutes, the release after 15 and the website's deploy after 10, so a hang fails and can be run again.
+- **`config.ru` and the `Rakefile` as Rails 8 writes them** — They did the same job in Rails 3's words (`File.expand_path(..., __FILE__)`, a stray shebang, the application's class by name); both now use `require_relative` and `Rails.application`. Nothing changes in how the server starts or the tasks run.
 
 ## [1.2.0] — 2026-10-26
 
