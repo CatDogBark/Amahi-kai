@@ -4,9 +4,17 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.4.1] — 2026-10-27
+
+The Apps page puts your apps first, each saying whether it's running, and gives each app a page of its own for everything else.
+
 ### 🚀 Major Features
 
 - **The Apps page, laid out again** (Apps) — Your apps come first, as cards that say in a word whether each is **Running**, **Stopped**, **Installing…** or **Needs attention**, with **Open** (or **Start**) and **Manage**; below them, **Add apps** lists the catalog's other apps by category, with **Install**. Before, one table mixed both, the state of an app was only told by its buttons, and each app's sign-in and passwords sat on a row of their own that read like another app. **Manage** opens the app's own page, with everything else: how to sign in and the passwords Amahi-kai made for it, hidden until **Show** (**Copy** copies one without showing it), its address, ports and version (**Update**, **Undo update**), its shares and storage (**Change**), and **Stop** and **Uninstall**. The Installed tab is gone; its old address opens the Apps page.
+
+### 🔧 Architecture & Code Quality
+
+- **Lucide's licence ships with its icons** — The icons on Amahi-kai's pages are Lucide's (ISC licence; the ones derived from Feather, MIT), and their licence notice now sits beside them (`app/assets/images/icons/LICENSE-lucide`), as both licences ask.
 
 ## [1.4.0] — 2026-10-27
 
