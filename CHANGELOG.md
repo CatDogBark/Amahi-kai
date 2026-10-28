@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+### 🔧 Architecture & Code Quality
+
+- **The root helper's source is split by area** — `libexec/amahi-helper` had grown to 7,800 lines in one file. Its code now sits in nine parts in `libexec/amahi-helper.d/` (core, sharing, disks, ZFS pools, Greyhole, DNS, network, apps, system), each area's operations beside their code, moved unchanged: every setting, operation and method is byte for byte what it was. It's still installed as one file: `bin/amahi-join-helper` puts the parts in place, and the installer self-tests that file before it replaces the helper, as before, so the helper that runs as root still loads nothing but Ruby's standard library. Nothing changes in what it does.
+
 ## [1.4.1] — 2026-10-27
 
 The Apps page puts your apps first, each saying whether it's running, and gives each app a page of its own for everything else.

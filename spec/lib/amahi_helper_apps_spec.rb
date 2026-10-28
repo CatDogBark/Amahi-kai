@@ -1781,7 +1781,7 @@ RSpec.describe 'AmahiHelper apps' do
       expect(helper).to have_received(:do_app_firewall).once
       allow(helper).to receive(:do_app_firewall).and_raise(AmahiHelper::Failed, 'iptables exited 4')
       expect(helper.refresh_app_firewall).to eq("the app firewall wasn't rebuilt for the network's change: iptables exited 4")
-      source = File.read(Rails.root.join('libexec/amahi-helper'))
+      source = HelperSource.text
       %w[do_router_on do_router_off do_apply_address do_revert_address].each do |step|
         body = source[/    def #{step}\b.*?\n    end\n/m]
         expect(body).to include('refresh_app_firewall'), step

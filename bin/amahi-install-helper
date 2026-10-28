@@ -2,7 +2,7 @@
 # bin/amahi-install-helper: installs the root helper and the app's sudoers rules.
 # bin/amahi-install and bin/amahi-update run it as root; running it again is safe.
 #
-#   /usr/local/sbin/amahi-helper    from libexec/amahi-helper, root:root 0755
+#   /usr/local/sbin/amahi-helper    libexec/amahi-helper and its parts as one file, root:root 0755
 #   /var/log/amahi-kai/helper.log   the helper's audit log, root:amahi 0640
 #   /etc/logrotate.d/amahi-kai      from config/logrotate-amahi-kai.conf
 #   /etc/systemd/system/amahi-kai.service          the web UI (enabled; bin/amahi-install and
@@ -37,9 +37,18 @@ fi
 
 # The new helper runs its self-test beside the one in place, and replaces it only if it passes:
 # a helper that doesn't run breaks every change, System Update's included. (A name with a dot
-# in front is one nothing else runs; mv replaces the file in one step.)
+# in front is one nothing else runs; mv replaces the file in one step.) It's one file:
+# libexec/amahi-helper with its parts in place (bin/amahi-join-helper), so run as root it loads
+# nothing but Ruby's standard library.
 helper_new=/usr/local/sbin/.amahi-helper.new
-install -o root -g root -m 0755 "$APP_DIR/libexec/amahi-helper" "$helper_new"
+rm -f "$helper_new"
+if ! "$APP_DIR/bin/amahi-join-helper" > "$helper_new"; then
+  rm -f "$helper_new"
+  echo "Couldn't put the new privileged helper together; kept the one in place" >&2
+  exit 1
+fi
+chown root:root "$helper_new"
+chmod 0755 "$helper_new"
 if ! "$helper_new" --self-test; then
   rm -f "$helper_new"
   echo "The new privileged helper failed its self-test; kept the one in place" >&2

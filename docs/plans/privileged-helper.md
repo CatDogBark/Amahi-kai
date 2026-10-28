@@ -23,9 +23,11 @@ validates every request itself**. It is also the first version of the platform's
 
 ### 1. One root-owned program outside the app directory
 
-- Source in the repo: `libexec/amahi-helper`. Installed as `/usr/local/sbin/amahi-helper`,
-  `root:root 0755`, by `bin/amahi-install-helper`, which `bin/amahi-install` and `bin/amahi-update`
-  run as root.
+- Source in the repo: `libexec/amahi-helper` and its parts, one per area, in
+  `libexec/amahi-helper.d/` (split from the one file in 1.4.2, moved unchanged). Installed as one
+  file, `/usr/local/sbin/amahi-helper`, `root:root 0755`: `bin/amahi-install-helper`, which
+  `bin/amahi-install` and `bin/amahi-update` run as root, puts the parts in place with
+  `bin/amahi-join-helper`, self-tests the result beside the helper in place, and then replaces it.
 - Never run it from `/opt/amahi-kai` directly. Since PR N that tree is root's (only `tmp/`,
   `log/`, `public/assets/` and `vendor/bundle/` are `amahi`'s), so `amahi` can't change the source
   the updater installs; before N it could.
@@ -117,8 +119,9 @@ deletes the rules it made unnecessary, but only after a grep shows no remaining 
   Samba is installed, the real `testparm` is used.
 - `spec/lib/privileged_spec.rb`: how Rails runs the helper, and a contract check that every
   `Privileged.call('<op>'` in `app/` and `lib/` names an operation and every operation is called.
-- CI (lint job): `ruby --disable-gems libexec/amahi-helper --self-test` and
-  `sudo visudo -cf config/sudoers/amahi-kai`.
+- CI (lint job): `ruby --disable-gems libexec/amahi-helper --self-test`, the same for the joined
+  file, and `sudo visudo -cf config/sudoers/amahi-kai`. `spec/lib/amahi_helper_join_spec.rb`: the
+  join puts every part in, loads nothing else, and makes a helper with the same operations.
 
 ## PR L: users, Samba, share folders (built)
 

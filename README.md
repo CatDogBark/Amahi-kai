@@ -86,7 +86,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for how changes are made and released, an
 | --- | --- |
 | `app/` | Controllers, models, views, helpers, services, assets |
 | `lib/` | System integration: disks, Samba, Greyhole, Docker, tunnel, services, update status |
-| `libexec/amahi-helper` | The root helper |
+| `libexec/amahi-helper`, `libexec/amahi-helper.d/` | The root helper and its parts, one per area (installed as one file) |
 | `bin/` | `amahi-install`, `amahi-update` and the scripts they run |
 | `config/` | Rails config, the app catalog's built-in copy, sudoers rules, systemd units |
 | `docs/` | Install guide, security model, plans |

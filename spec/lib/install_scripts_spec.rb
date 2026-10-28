@@ -363,10 +363,14 @@ RSpec.describe 'install and update scripts' do
       expect(script.index(installed)).to be < script.index('git clone --branch')
     end
 
-    it "self-tests the new helper beside the one in place before it replaces it" do
+    it "joins the helper's parts into one file, and self-tests it beside the one in place before it replaces it" do
       helper = File.read(Rails.root.join('bin/amahi-install-helper'))
+      joined = helper.index('if ! "$APP_DIR/bin/amahi-join-helper" > "$helper_new"; then')
+      expect(joined).to be < helper.index('chmod 0755 "$helper_new"')
+      expect(helper.index('chmod 0755 "$helper_new"')).to be < helper.index('"$helper_new" --self-test')
       expect(helper.index('"$helper_new" --self-test')).to be < helper.index('mv -f "$helper_new" /usr/local/sbin/amahi-helper')
-      expect(helper).not_to include('install -o root -g root -m 0755 "$APP_DIR/libexec/amahi-helper" /usr/local/sbin/amahi-helper')
+      # Installing libexec/amahi-helper itself would leave its parts behind: it couldn't run
+      expect(helper).not_to include('"$APP_DIR/libexec/amahi-helper"')
     end
   end
 

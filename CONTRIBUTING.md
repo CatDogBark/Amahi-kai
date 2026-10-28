@@ -60,8 +60,9 @@ Ruby they need. On GitHub:
 
 - One change per pull request, with specs; CI must pass.
 - Add a line to `CHANGELOG.md` (Unreleased), written for the people who use Amahi-kai.
-- Anything that needs root is an operation in `libexec/amahi-helper` (arguments, validation and
-  logging), called with `Privileged.call`. Don't add sudoers rules.
+- Anything that needs root is an operation of the root helper (arguments, validation and
+  logging), in its area's part in `libexec/amahi-helper.d/`, called with `Privileged.call`. Don't
+  add sudoers rules.
 - Run commands as argument lists (`Open3.capture3('systemctl', 'show', unit)`), not strings through
   a shell.
 - Migrations must be safe to run twice and must work with the previous version's code: an update

@@ -117,10 +117,10 @@ RSpec.describe Privileged do
       namespaces = described_class.operations.map { |op| op.split('.').first }.uniq
       pattern = /['"]((?:#{namespaces.join('|')})\.[a-z_]+)['"]/
       in_code = Dir[Rails.root.join('{app,lib}/**/*.rb')].flat_map { |file| File.read(file).scan(pattern).flatten }
-      in_units = [*Dir[Rails.root.join('config/systemd/*.service')], Rails.root.join('libexec/amahi-helper')].flat_map do |file|
-        File.read(file).scan(%r{^\s*ExecStart=-?/usr/local/sbin/amahi-helper ([a-z]+\.[a-z_]+)$}).flatten
+      in_units = [*Dir[Rails.root.join('config/systemd/*.service')].map { |file| File.read(file) }, HelperSource.text].flat_map do |text|
+        text.scan(%r{^\s*ExecStart=-?/usr/local/sbin/amahi-helper ([a-z]+\.[a-z_]+)$}).flatten
       end
-      in_units += File.read(Rails.root.join('libexec/amahi-helper')).scan(/arm_timer\(.*?'([a-z]+\.[a-z_]+)'\)/).flatten
+      in_units += HelperSource.text.scan(/arm_timer\(.*?'([a-z]+\.[a-z_]+)'\)/).flatten
       in_scripts = Dir[Rails.root.join('bin/amahi-*')].flat_map do |file|
         File.read(file).scan(%r{/usr/local/sbin/amahi-helper ([a-z]+\.[a-z_]+)}).flatten
       end

@@ -96,9 +96,12 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
   ZFS pools, Greyhole, package installs (pinned apt repositories, a fixed package list), the Cloudflare
   Tunnel, Tailscale, Docker apps and the security audit's fixes are changed by `libexec/amahi-helper`
   (`Privileged.call('users.create', ...)`), which validates and logs every call. Add an operation
-  there, not a sudoers rule. The helper's is the only sudoers rule left (since P4.1), in
-  `config/sudoers/amahi-kai`; `bin/amahi-install-helper` installs it and the helper (the
-  installer and the updater both run it) only after `visudo -cf` passes.
+  there, not a sudoers rule: in its area's part in `libexec/amahi-helper.d/` (`add_operations`, with
+  its code beside it; a new area is a new part, listed in `libexec/amahi-helper`).
+  `bin/amahi-join-helper` puts the parts together, and the one file it makes is what's installed.
+  The helper's is the only sudoers rule left (since P4.1), in `config/sudoers/amahi-kai`;
+  `bin/amahi-install-helper` installs it and the helper (the installer and the updater both run
+  it) only after `visudo -cf` passes.
 - **Root owns the code.** `/opt/amahi-kai` is root's except `tmp/`, `log/`, `public/assets/` and
   `vendor/bundle/` (`bin/amahi-set-ownership`, run by the installer and at the start of every
   update). Root never runs app code: in `bin/amahi-install` and `bin/amahi-update`, every `bundle`,

@@ -6,7 +6,9 @@ root. Last updated 2026-10-25 (the 1.0 review). Design and history: [`docs/plans
 ## Summary
 
 The web app runs as the unprivileged `amahi` user. It reaches root one way only:
-**the root helper**, `/usr/local/sbin/amahi-helper` (from `libexec/amahi-helper`). It runs a
+**the root helper**, `/usr/local/sbin/amahi-helper` (`libexec/amahi-helper` and its parts in
+`libexec/amahi-helper.d/`, put together as one file by `bin/amahi-join-helper`, so it loads
+nothing but Ruby's standard library). It runs a
 fixed list of operations, checks every request, and logs every call. One of them,
 `system.update`, starts **System Update**: `bin/amahi-update` as its own systemd job
 (`amahi-kai-update.service`), which pulls the code and redeploys, and rolls back if that
@@ -192,7 +194,7 @@ sudo find /opt/amahi-kai -xdev \( -path /opt/amahi-kai/tmp -o -path /opt/amahi-k
 
 ## Adding something that needs root
 
-Add an operation to `libexec/amahi-helper` (arguments, validation, plan), with specs in
+Add an operation to its area's part in `libexec/amahi-helper.d/` (arguments, validation, plan), with specs in
 `spec/lib/amahi_helper_spec.rb`, and call it with `Privileged.call`. Don't add a sudoers rule. The
 contract spec in `spec/lib/privileged_spec.rb` fails if the app calls an operation the helper
 doesn't have, or the helper has one nothing calls. Never run app code as root in
