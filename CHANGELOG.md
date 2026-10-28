@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.3.1] — 2026-10-27
+
+Tailscale's Connect works in Firefox and with pop-up blockers: its sign-in is a link to click, and the page waits for it.
+
 ### 🔒 Security & Fixes
 
 - **Tailscale's Connect works in Firefox, and with pop-up blockers** (Network → Remote Access) — Connect asked the NAS for Tailscale's sign-in page, then tried to open it in a new tab seconds later, which Firefox blocks as a pop-up; the page then reloaded five seconds on and showed Connect again, so it looked as if Connect had failed. The page opens nothing itself now: it shows **Sign in to Tailscale to finish**, a link to the sign-in page, waits while you sign in (in that tab, or on any device), and shows the NAS connected once it is. The install window does the same.
