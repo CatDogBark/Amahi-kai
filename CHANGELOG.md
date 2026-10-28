@@ -4,9 +4,14 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.4.2] — 2026-10-27
+
+The root helper's source is split by area, for working on it; nothing changes in what Amahi-kai does.
+
 ### 🔧 Architecture & Code Quality
 
 - **The root helper's source is split by area** — `libexec/amahi-helper` had grown to 7,800 lines in one file. Its code now sits in nine parts in `libexec/amahi-helper.d/` (core, sharing, disks, ZFS pools, Greyhole, DNS, network, apps, system), each area's operations beside their code, moved unchanged: every setting, operation and method is byte for byte what it was. It's still installed as one file: `bin/amahi-join-helper` puts the parts in place, and the installer self-tests that file before it replaces the helper, as before, so the helper that runs as root still loads nothing but Ruby's standard library. Nothing changes in what it does.
+- **Brakeman reads the root helper now** — CI's security scanner only reads `.rb` files, so it never saw the helper as one file without an extension. It does now, and the three lines it flags, there all along, are recorded in `config/brakeman.ignore` with why each is safe: the HTTPS apps' health check (a TLS handshake with the app on the server itself), the app catalog's `git` (an argument list, no shell), and netplan's settings copied in memory.
 
 ## [1.4.1] — 2026-10-27
 
