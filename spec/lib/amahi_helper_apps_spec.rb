@@ -35,6 +35,11 @@ RSpec.describe 'AmahiHelper apps' do
     # No app's job runs (APP_JOBS) unless a test says so
     allow(helper).to receive(:app_job_running?).and_return(false)
     allow(helper).to receive(:app_jobs_running).and_return([])
+    # Vaultwarden, the catalog's, is reached only through Tailscale and given its admin token hashed
+    # (format 5, P4.7): Tailscale is ready and argon2 hashes unless a test says otherwise, so no spec
+    # reads the machine's own Tailscale (a laptop on a tailnet passed what CI's runner refused)
+    allow(helper).to receive(:tailscale_https_name).and_return('amahi-kai.tail1234.ts.net')
+    allow(helper).to receive(:argon2_hash) { |secret| "$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$#{secret.reverse}" }
   end
 
   after { FileUtils.rm_rf(dir) }
@@ -426,6 +431,8 @@ RSpec.describe 'AmahiHelper apps' do
   # What an app reached only through Tailscale needs (P4.7), read from `tailscale status`, as
   # root reads it: what's missing is said, so the Apps page can say what to switch on.
   describe "Tailscale's readiness to serve an app" do
+    before { allow(helper).to receive(:tailscale_https_name).and_call_original }
+
     let(:ready) do
       { 'BackendState' => 'Running', 'Self' => { 'DNSName' => 'amahi-kai.tail1234.ts.net.' },
         'CurrentTailnet' => { 'MagicDNSEnabled' => true }, 'CertDomains' => ['amahi-kai.tail1234.ts.net'] }
@@ -468,6 +475,8 @@ RSpec.describe 'AmahiHelper apps' do
   end
 
   describe 'hashing a secret for the container (hash: argon2)' do
+    before { allow(helper).to receive(:argon2_hash).and_call_original }
+
     let(:hash) { '$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA' }
     let(:ran) { [] }
 
@@ -524,6 +533,7 @@ RSpec.describe 'AmahiHelper apps' do
       allow(File).to receive(:chown)
       allow(helper).to receive(:do_install) { |path, content, *| File.write(path, content) }
       allow(helper).to receive(:passwd) { |name| accounts[name] }
+      allow(File).to receive(:executable?).with('/usr/bin/tailscale').and_return(true) # for tailscale serve's removal
       allow(helper).to receive(:run_command) do |argv|
         ran << argv
         accounts[argv.last] = account(argv.last, 996) if argv.first == '/usr/sbin/useradd'
@@ -550,11 +560,12 @@ RSpec.describe 'AmahiHelper apps' do
       token = JSON.parse(File.read("#{secrets_dir}/vaultwarden.json"))['ADMIN_TOKEN']
       expect(token).to match(/\A[A-Za-z0-9]{32}\z/)
 
-      docker = ran.drop(1).map(&:first).uniq
-      expect(docker).to eq(['/usr/bin/docker'])
-      # Made under a name of its own, then swapped in for the old one (none here)
-      expect(ran.drop(1).map { |argv| argv[1..2].join(' ') }).to eq(
-        ["pull #{manifest[:image]}", 'rm --force', 'create --name', 'rm --force', 'rename amahi-vaultwarden-next', 'start amahi-vaultwarden']
+      serve = ['/usr/bin/timeout', '30', '/usr/bin/tailscale', 'serve', '--bg', '--https=8880', 'http://127.0.0.1:8880']
+      expect(ran.drop(1).map(&:first).uniq).to eq(['/usr/bin/docker', '/usr/bin/timeout'])
+      # Made under a name of its own, then swapped in for the old one (none here), and served on the
+      # tailnet before it starts
+      expect(ran.drop(1).map { |argv| argv == serve ? 'serve' : argv[1..2].join(' ') }).to eq(
+        ["pull #{manifest[:image]}", 'rm --force', 'create --name', 'rm --force', 'rename amahi-vaultwarden-next', 'serve', 'start amahi-vaultwarden']
       )
       expect(ran[1]).to eq(['/usr/bin/docker', 'pull', manifest[:image], { stream: true }])
       create = ran.find { |argv| argv[1] == 'create' }
@@ -562,14 +573,16 @@ RSpec.describe 'AmahiHelper apps' do
                             '--security-opt', 'no-new-privileges', '--cap-drop', 'NET_RAW', '--cap-drop', 'MKNOD',
                             '--pids-limit', '2048', '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3',
                             '--memory', '512m', '--label', 'amahi.app=vaultwarden', '--env-file', env_files.sole[0],
-                            '--user', '996:996', '--publish', '0.0.0.0:8880:8080/tcp',
+                            '--user', '996:996', '--publish', '127.0.0.1:8880:8080/tcp',
                             '--mount', "type=bind,source=#{apps_root}/vaultwarden/data,target=/data", manifest[:image]])
-      expect(ran[-2]).to eq(%w[/usr/bin/docker rename amahi-vaultwarden-next amahi-vaultwarden])
+      expect(ran[-3]).to eq(%w[/usr/bin/docker rename amahi-vaultwarden-next amahi-vaultwarden])
       expect(JSON.parse(File.read("#{dir}/app-definitions/vaultwarden.json"))).to eq(manifest[:source].merge('image' => manifest[:image]))
       expect(create.join(' ')).not_to include(token)
 
       path, content, mode = env_files.sole
-      expect(content.lines(chomp: true)).to contain_exactly('ROCKET_PORT=8080', 'TZ=America/Chicago', "ADMIN_TOKEN=#{token}")
+      expect(content.lines(chomp: true)).to contain_exactly('ROCKET_PORT=8080', 'TZ=America/Chicago',
+                                                            'DOMAIN=https://amahi-kai.tail1234.ts.net:8880',
+                                                            "ADMIN_TOKEN=$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$#{token.reverse}")
       expect(mode).to eq(0o600)
       expect(File.exist?(path)).to be false
       expect(helper).to have_received(:do_app_firewall)
@@ -846,9 +859,6 @@ RSpec.describe 'AmahiHelper apps' do
           'environment' => { 'DOMAIN' => '{{tailscale_url}}' },
           'secrets' => [{ 'env' => 'ADMIN_TOKEN', 'label' => 'Admin token', 'hash' => 'argon2' }]
         }.to_yaml)
-        allow(File).to receive(:executable?).with('/usr/bin/tailscale').and_return(true)
-        allow(helper).to receive(:tailscale_https_name).and_return('amahi-kai.tail1234.ts.net')
-        allow(helper).to receive(:argon2_hash) { |secret| "$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$#{secret.reverse}" }
       end
 
       it 'is published on the NAS itself only, served on the tailnet over HTTPS, and told its address' do

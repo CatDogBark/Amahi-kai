@@ -19,7 +19,7 @@ function setupTunnel(stageUrl, streamUrl) {
   });
 }
 
-function installTailscale(streamUrl) {
+function installTailscale(streamUrl, statusUrl) {
   var id = 'tailscale-install';
   var modal = document.getElementById(id + '-install-modal');
   var output = document.getElementById(id + '-output');
@@ -50,19 +50,16 @@ function installTailscale(streamUrl) {
     terminal.scrollTop = terminal.scrollHeight;
   };
 
-  // Tailscale's login address, as a link (the address comes from the server's stream)
+  // Tailscale's sign-in page (its address comes from the server's stream), as a link to click, and
+  // the window waits for the sign-in
   source.addEventListener('auth_url', function(e) {
     if (!e.data) return;
-    var linkDiv = document.createElement('div');
-    linkDiv.className = 'term-line step';
-    var link = document.createElement('a');
-    link.href = e.data;
-    link.target = '_blank';
-    link.rel = 'noopener';
-    link.textContent = '→ Click here to log in to Tailscale';
-    linkDiv.appendChild(link);
-    output.appendChild(linkDiv);
+    var line = document.createElement('div');
+    line.className = 'term-line step';
+    tailscaleSignIn(line, e.data);
+    output.appendChild(line);
     terminal.scrollTop = terminal.scrollHeight;
+    waitForTailscale(statusUrl);
   });
 
   source.addEventListener('done', function() {
@@ -82,22 +79,29 @@ function installTailscale(streamUrl) {
   };
 }
 
-function startTailscale(btn, url) {
+// Connect. When the NAS isn't in a tailnet yet, Tailscale gives a sign-in page: it's shown as a
+// link to click, never opened by the page. A tab a script opens seconds after the click is a
+// pop-up to the browser, and Firefox blocked it. The page then waits for the sign-in, done in
+// that tab (or on any device), and reloads once Tailscale is connected.
+function startTailscale(btn, url, statusUrl) {
   btn.disabled = true;
   btn.textContent = 'Connecting...';
   fetch(url, {
     method: 'POST',
-    headers: { 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content, 'Accept': 'application/json' }
+    headers: csrfHeaders()
   }).then(function(r) {
     if (!r.ok) throw new Error('Server returned ' + r.status);
     return r.json();
   }).then(function(data) {
-    if (data.auth_url) {
-      window.open(data.auth_url, '_blank');
-      setTimeout(function() { window.location.reload(); }, 5000);
-    } else {
+    if (data.status === 'error') throw new Error(data.error || 'Tailscale did not start');
+    if (!data.auth_url) {
       window.location.reload();
+      return;
     }
+    var signIn = document.createElement('span');
+    tailscaleSignIn(signIn, data.auth_url);
+    btn.replaceWith(signIn);
+    waitForTailscale(statusUrl);
   }).catch(function(err) {
     alert('Failed to connect: ' + err.message);
     btn.disabled = false;
@@ -105,11 +109,38 @@ function startTailscale(btn, url) {
   });
 }
 
+// "Sign in to Tailscale to finish", a link to its sign-in page in a new tab, and the wait for it.
+function tailscaleSignIn(container, href) {
+  var link = document.createElement('a');
+  link.href = href;
+  link.target = '_blank';
+  link.rel = 'noopener';
+  link.className = 'btn btn-primary btn-sm';
+  link.textContent = 'Sign in to Tailscale to finish';
+  var waiting = document.createElement('span');
+  waiting.className = 'small text-secondary ms-2';
+  waiting.textContent = 'Waiting for you to sign in…';
+  container.replaceChildren(link, waiting);
+}
+
+// Asks whether Tailscale is connected every 3 seconds, for 10 minutes, and reloads once it is.
+function waitForTailscale(statusUrl) {
+  var tries = 0;
+  var timer = setInterval(function() {
+    if (++tries > 200) { clearInterval(timer); return; }
+    fetch(statusUrl, { headers: { 'Accept': 'application/json' } }).then(function(r) {
+      return r.ok ? r.json() : {};
+    }).then(function(data) {
+      if (data.running) { clearInterval(timer); window.location.reload(); }
+    }).catch(function() {});
+  }, 3000);
+}
+
 // Stop or log out: the button's data-args name the address.
 function tailscaleAction(url) {
   fetch(url, {
     method: 'POST',
-    headers: { 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content }
+    headers: csrfHeaders()
   }).then(function() { window.location.reload(); });
 }
 
@@ -122,7 +153,7 @@ function tunnelAction(action, btn, url) {
   }
   fetch(url, {
     method: 'POST',
-    headers: { 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content, 'Accept': 'application/json' }
+    headers: csrfHeaders()
   }).then(function(r) {
     return r.json().catch(function() { return {}; }).then(function(data) {
       if (!r.ok) throw new Error(data.error || ('Server returned ' + r.status));

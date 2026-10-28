@@ -74,6 +74,32 @@ describe "RemoteAccess Controller", type: :request do
       end
     end
 
+    # Asked every few seconds by the page while a sign-in waits in another tab (Connect)
+    describe "GET tailscale_status" do
+      it "says whether Tailscale is connected" do
+        allow(TailscaleService).to receive(:running?).and_return(false)
+        get '/network/remote_access/tailscale_status', as: :json
+        expect(response.parsed_body).to eq('running' => false)
+        allow(TailscaleService).to receive(:running?).and_return(true)
+        get '/network/remote_access/tailscale_status', as: :json
+        expect(response.parsed_body).to eq('running' => true)
+      end
+
+      it "gives the Connect button its address" do
+        allow(TailscaleService).to receive(:status).and_return(installed: true, running: false)
+        get '/network/remote_access'
+        button = Nokogiri::HTML(response.body).at_css('[data-call="startTailscale"]')
+        expect(JSON.parse(button['data-args'])).to eq(['@el', '/network/remote_access/start_tailscale', '/network/remote_access/tailscale_status'])
+      end
+
+      it "gives the install window the same address, to wait for the sign-in" do
+        allow(TailscaleService).to receive(:status).and_return(installed: false, running: false)
+        get '/network/remote_access'
+        button = Nokogiri::HTML(response.body).at_css('[data-call="installTailscale"]')
+        expect(JSON.parse(button['data-args'])).to eq(['/network/remote_access/install_tailscale_stream', '/network/remote_access/tailscale_status'])
+      end
+    end
+
     describe "POST stop_tailscale" do
       it "stops tailscale" do
         post '/network/remote_access/stop_tailscale', as: :json

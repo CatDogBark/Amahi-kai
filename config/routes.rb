@@ -64,6 +64,7 @@ Rails.application.routes.draw do
     # Tailscale VPN
     get 'install_tailscale_stream', action: 'install_tailscale_stream'
     post 'start_tailscale', action: 'start_tailscale'
+    get 'tailscale_status', action: 'tailscale_status'
     post 'stop_tailscale', action: 'stop_tailscale'
     post 'logout_tailscale', action: 'logout_tailscale'
   end

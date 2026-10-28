@@ -149,7 +149,7 @@
           </div>
         </div>
 
-        <button type="button" class="btn btn-primary" data-call="installTailscale" data-args='["<%= remote_access_install_tailscale_stream_path %>"]'>
+        <button type="button" class="btn btn-primary" data-call="installTailscale" data-args='["<%= remote_access_install_tailscale_stream_path %>", "<%= remote_access_tailscale_status_path %>"]'>
           <%= lucide_icon('download', size: 16) %> Install Tailscale
         </button>
 
@@ -230,7 +230,7 @@
           </div>
         </div>
         <div class="d-flex gap-2">
-          <button type="button" class="btn btn-success btn-sm" data-call="startTailscale" data-args='["@el", "<%= remote_access_start_tailscale_path %>"]'>
+          <button type="button" class="btn btn-success btn-sm" data-call="startTailscale" data-args='["@el", "<%= remote_access_start_tailscale_path %>", "<%= remote_access_tailscale_status_path %>"]'>
             Connect
           </button>
           <button type="button" class="btn btn-outline-secondary btn-sm" data-confirm="This will remove this device from your Tailnet. Continue?" data-call="tailscaleAction" data-args='["<%= remote_access_logout_tailscale_path %>"]'>

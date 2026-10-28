@@ -1,10 +1,15 @@
 name: Vaultwarden
 description: A password manager server for the Bitwarden apps and browser extensions.
-sign_in: "Its web vault needs HTTPS, which Amahi-kai doesn't serve yet; the token Amahi-kai made for it opens its admin page (/admin)."
+sign_in: "Open it from a device on your Tailscale network and create your account; once your household has theirs, turn sign-ups off on its admin page (/admin), with the token Amahi-kai made for it."
 category: security
 logo: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/vaultwarden-light.png
 releases: https://github.com/dani-garcia/vaultwarden/releases/tag/{version}
 image: vaultwarden/server:1.37.3@sha256:1587c45feaa479f1f5e8af3b00eded36bff77bcf1880cf8dbf0541706dd470e0
+# Reached only through Tailscale, over HTTPS (format 5): browsers won't run its web vault over
+# plain HTTP, and the Bitwarden apps refuse a server that isn't HTTPS. Its port is open on the
+# NAS itself only; Tailscale serves it at https://<the NAS's name on the tailnet>:8880.
+requires: 5
+access: tailscale
 run_as: app
 web_port: 8880
 memory: 512m
@@ -16,5 +21,8 @@ environment:
   # A user other than root can't listen on port 80.
   ROCKET_PORT: "8080"
   TZ: "{{timezone}}"
+  # Its own address, for the links it makes and for passkeys
+  DOMAIN: "{{tailscale_url}}"
 secrets:
-  - { env: ADMIN_TOKEN, label: "Admin page token (the /admin page)" }
+  # Vaultwarden is given an Argon2id hash of the token; the Apps page shows the token itself.
+  - { env: ADMIN_TOKEN, label: "Admin page token (the /admin page)", hash: argon2 }

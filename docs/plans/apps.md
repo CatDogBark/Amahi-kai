@@ -355,8 +355,9 @@ LAN for everything stays a later, optional front door (roadmap, "HTTPS on the LA
   note. Sign-ups stay on at install (CatDogBark, 2026-10-27): the household makes its accounts,
   then turns them off on `/admin`. It keeps its own port, `:8880`, so 443 on the tailnet is left
   for Amahi-kai's own HTTPS later.
-- [ ] `config/apps` brought up to date from the catalog once its PR is merged (the copy comes
-  after the catalog). Specs that use Vaultwarden as their sample app then stub Tailscale's readiness.
+- [x] `config/apps` brought up to date from the catalog once its PR was merged (#19, after 1.3.0;
+  the copy comes after the catalog). Specs that use Vaultwarden as their sample app stub Tailscale's
+  readiness and the hash.
 - Renaming the NAS in Tailscale leaves the app's `DOMAIN` on the old name until its container is
   made again (Change → Save and restart): the wiki says so. Following a rename on its own can
   come later.

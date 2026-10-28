@@ -19,7 +19,8 @@ RSpec.describe AppCatalog do
       expect(vaultwarden).to include(name: "Vaultwarden", category: "security", web_port: 8880,
                                      ports: [{ host: 8880, container: 8080, protocol: "tcp", label: "web" }],
                                      secrets: [{ env: "ADMIN_TOKEN", label: "Admin page token (the /admin page)" }])
-      expect(vaultwarden[:sign_in]).to start_with("Its web vault needs HTTPS")
+      expect(vaultwarden[:sign_in]).to start_with("Open it from a device on your Tailscale network")
+      expect(vaultwarden).to include(access: "tailscale", requires: 5, installable: true)
       expect(vaultwarden[:image]).to start_with("vaultwarden/server:1.37.3@sha256:")
       expect(vaultwarden[:logo_url]).to start_with("https://")
       expect(vaultwarden[:web_tls]).to be(false)
