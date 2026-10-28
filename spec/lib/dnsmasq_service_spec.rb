@@ -112,12 +112,22 @@ RSpec.describe DnsmasqService do
       expect(written).to include('dhcp-host=aa:bb:cc:dd:ee:01,10.99.0.20,printer')
     end
 
+    it 'gives a device only named its name, wherever DHCP puts it (no address)' do
+      allow(DnsmasqService).to receive(:rewrite_config!)
+      allow(DnsService).to receive(:rewrite!)
+      Host.create!(name: 'carport-cam', mac: 'D0:3F:27:4A:93:1D')
+      described_class.write_config!(dhcp)
+      expect(written.lines.map(&:strip)).to include('dhcp-host=d0:3f:27:4a:93:1d,carport-cam')
+    end
+
     it 'writes only lines the root helper accepts' do
       allow(DnsmasqService).to receive(:rewrite_config!)
       allow(DnsService).to receive(:rewrite!)
       allow(DnsService).to receive_messages(on?: true, server_addresses: ['10.0.0.2'], domain: 'home.lan')
       Host.create!(name: 'nas-backup', mac: 'aa:bb:cc:dd:ee:02', address: '21')
+      Host.create!(name: 'carport-cam', mac: 'aa:bb:cc:dd:ee:03')
       described_class.write_config!(dhcp.merge(net: '10.0.0', first: 50, last: 99, router: 254, lease_time: 3600))
+      expect(written).to include('dhcp-host=aa:bb:cc:dd:ee:03,carport-cam')
       Privileged.operations # loads libexec/amahi-helper
       expect { AmahiHelper.dnsmasq_conf(written, AmahiHelper::DNSMASQ_LINES) }.not_to raise_error
       described_class.write_config!(dhcp_enabled: false)

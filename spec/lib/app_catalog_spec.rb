@@ -26,6 +26,13 @@ RSpec.describe AppCatalog do
       expect(vaultwarden[:web_tls]).to be(false)
     end
 
+    # Install asks for shares only for apps that work with files in them (shares, or writes_shares)
+    it "says which apps work with files in shares" do
+      uses = AppCatalog.all.to_h { |app| [app[:identifier], app[:uses_shares]] }
+      expect(uses).to eq("bitshare" => false, "bittube" => true, "gitea" => false, "jellyfin" => true, "pigallery2" => true,
+                         "transmission" => true, "uptimekuma" => false, "vaultwarden" => false)
+    end
+
     it "has a logo for each app, on https" do
       AppCatalog.all.each { |app| expect(app[:logo_url]).to start_with("https://"), app[:identifier] }
     end

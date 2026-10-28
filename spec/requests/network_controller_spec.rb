@@ -41,11 +41,28 @@ describe "Network Controller", type: :request do
         allow(DnsService).to receive(:rewrite!)
         allow(NetworkAddress).to receive_messages(interfaces: [], nameservers: [], state: nil)
         Host.create!(name: "printer", mac: "aa:bb:cc:dd:ee:01", address: "20")
+        Host.create!(name: "carport-cam", mac: "d0:3f:27:4a:93:1d")
+        Host.create!(name: "old-phone", mac: "aa:bb:cc:dd:ee:09")
         allow(Leases).to receive(:all).and_return([{ expiration: Time.now.to_i + 3600, mac: "aa:bb:cc:dd:ee:01", ip: "192.168.1.20", name: "printer" },
-                                                   { expiration: Time.now.to_i + 600, mac: "aa:bb:cc:dd:ee:02", ip: "192.168.1.150", name: "laptop" }])
+                                                   { expiration: Time.now.to_i + 600, mac: "aa:bb:cc:dd:ee:02", ip: "192.168.1.150", name: "laptop" },
+                                                   { expiration: Time.now.to_i + 900, mac: "d0:3f:27:4a:93:1d", ip: "192.168.1.132",
+                                                     name: "WYZE_CAKP2JFUS-D03F274A931D" }])
         get "/network"
         expect(response).to have_http_status(:ok)
-        expect(response.body).to include("2 devices seen", "Fixed at <code>192.168.1.20</code>", "laptop", "Fix this address", "Unfix")
+        expect(response.body).to include("3 devices seen", "Fixed at <code>192.168.1.20</code>", "laptop", "Fix this address", "Unfix")
+        page = Nokogiri::HTML(response.body)
+        camera = page.css('tr').find { |row| row.text.include?('d0:3f:27:4a:93:1d') }
+        # Named, not fixed: it renews, can be renamed, fixed or forgotten
+        expect(camera.text).to include('carport-cam', 'Renews in')
+        expect(camera.css('a[data-reveal=".name-form"]').text).to eq('Rename')
+        expect(camera.css('button').map(&:text)).to eq(['Save', 'Fix this address', 'Forget'])
+        expect(camera.at_css('form.name-form input[name="host[name]"]')['value']).to eq('carport-cam')
+        # A device not named yet is offered its own name, as DNS can hold it
+        laptop = page.css('tr').find { |row| row.text.include?('aa:bb:cc:dd:ee:02') }
+        expect(laptop.css('a[data-reveal=".name-form"]').text).to eq('Name')
+        old = page.css('tr').find { |row| row.text.include?('old-phone') }
+        expect(old.text).to include('Named; not seen now')
+        expect(old.css('button').map(&:text)).to eq(['Forget'])
         get "/network/hosts"
         expect(response).to redirect_to("/network")
       end
@@ -68,10 +85,41 @@ describe "Network Controller", type: :request do
         expect(flash[:alert]).to include("Mac")
       end
 
-      it "takes a fixed address away" do
+      it "takes a fixed address away, and the device keeps its name" do
         host = Host.create!(name: "testhost", mac: "aa:bb:cc:dd:ee:01", address: "51")
-        expect { delete "/network/host/#{host.id}" }.to change(Host, :count).by(-1)
-        expect(flash[:notice]).to eq("testhost no longer has a fixed address.")
+        expect { delete "/network/host/#{host.id}" }.not_to change(Host, :count)
+        expect(flash[:notice]).to eq("testhost no longer has a fixed address; its name stays with it.")
+        expect(host.reload.address).to be_nil
+      end
+
+      it "names a device without fixing its address, renames it, fixes and unfixes it keeping the name, then forgets it" do
+        allow(DnsService).to receive_messages(dhcp?: true, domain: 'home.arpa')
+        expect { put "/network/hosts/name", params: { host: { mac: "D0:3F:27:4A:93:1D", name: "carport" } } }.to change(Host, :count).by(1)
+        expect(flash[:notice]).to eq("carport answers by its name wherever it is: carport.home.arpa.")
+        host = Host.last
+        expect(host.address).to be_nil
+        put "/network/hosts/name", params: { host: { mac: "d0:3f:27:4a:93:1d", name: "carport-cam" } }
+        expect(host.reload.name).to eq("carport-cam")
+        expect(Host.count).to eq(1)
+        # Fix this address on it keeps the name it was given
+        post "/network/hosts", params: { host: { name: "carport-cam", mac: "d0:3f:27:4a:93:1d", address: "132" } }
+        expect(flash[:notice]).to eq("carport-cam keeps 192.168.1.132.")
+        expect(host.reload.address).to eq("132")
+        delete "/network/host/#{host.id}/name"
+        expect(flash[:alert]).to eq("carport-cam has a fixed address: unfix it first.")
+        delete "/network/host/#{host.id}"
+        expect(host.reload.name).to eq("carport-cam")
+        expect { delete "/network/host/#{host.id}/name" }.to change(Host, :count).by(-1)
+        expect(flash[:notice]).to eq("carport-cam is forgotten: the device answers by the name it asks for again.")
+      end
+
+      it "names a device from the form when no address is given, and says why it refused a name" do
+        allow(DnsService).to receive_messages(dhcp?: false, domain: 'home.arpa')
+        post "/network/hosts", params: { host: { name: "porch", mac: "d0:3f:27:2e:56:b2", address: "" } }
+        expect(flash[:notice]).to eq("porch answers by its name once the NAS hands out addresses (Network → DHCP): porch.home.arpa.")
+        expect(Host.find_by(name: "porch").address).to be_nil
+        put "/network/hosts/name", params: { host: { mac: "aa:bb:cc:dd:ee:09", name: "ignore" } }
+        expect(flash[:alert]).to eq("Name is a word dnsmasq reads as an order: choose another.")
       end
 
       it "keeps a fixed device off the internet and lets it out again, rewriting the router's rules while the NAS is the router" do
@@ -107,9 +155,12 @@ describe "Network Controller", type: :request do
         expect(flash[:alert]).to eq("camera is saved as LAN only, but the router's rules weren't rewritten (ufw: no), so it still reaches the internet " \
                                     "until a save on Network → Internet puts them in place.")
         delete "/network/host/#{host.id}"
-        expect(flash[:alert]).to include("camera no longer has a fixed address, but the router's rules weren't rewritten (ufw: no)")
+        expect(flash[:alert]).to include("camera no longer has a fixed address; its name stays with it, but the router's rules weren't rewritten (ufw: no)")
+        # A device only named can't be kept off the internet: the rule is on its address
+        post "/network/host/#{host.id}/lan_only"
+        expect(flash[:alert]).to eq("LAN only needs a fixed address: camera has none.")
         # The internet port gone: nothing to rewrite them on, and the page says so
-        host = Host.create!(name: "camera", mac: "aa:bb:cc:dd:ee:02", address: "52")
+        host.reload.update!(address: "52")
         allow(DnsService).to receive(:wan_interface).and_return(nil)
         Setting.set('dns_wan_interface', 'ens20')
         post "/network/host/#{host.id}/lan_only"

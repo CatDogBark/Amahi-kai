@@ -186,6 +186,9 @@ class AppCatalog
         category: data['category'], logo_url: data['logo'], image: data['image'], web_port: data['web_port'],
         web_tls: data['web_tls'] == true, access: data['access'] == 'tailscale' ? 'tailscale' : 'lan',
         writes_shares: data['writes_shares'] == true, releases: data['releases'],
+        # Whether Install asks which shares to give it: an app that works with files in shares
+        # says so (`shares: true`), and one that writes in them does too
+        uses_shares: data['shares'] == true || data['writes_shares'] == true,
         storage: storage_need(data['folders']),
         ports: Array(data['ports']).map do |p|
           { host: p['host'], container: p['container'], protocol: p['protocol'] || 'tcp',

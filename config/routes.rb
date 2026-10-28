@@ -17,7 +17,9 @@ Rails.application.routes.draw do
     get '/', action: 'index', as: 'index'
     get 'hosts', to: redirect('/network')
     post 'hosts', action: 'create_host'
+    put 'hosts/name', action: 'name_host', as: 'name_host'
     delete 'host/:id', action: 'destroy_host', as: 'destroy_host'
+    delete 'host/:id/name', action: 'forget_host', as: 'forget_host'
     post 'host/:id/lan_only', action: 'toggle_lan_only', as: 'toggle_lan_only'
     get 'dns_aliases', to: redirect('/network/dns#dns-aliases')
     # This NAS: its own address on an interface, and the way a change is kept (lib/network_address.rb)

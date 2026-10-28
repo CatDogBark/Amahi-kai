@@ -40,7 +40,8 @@ Run each command on its own. `192.168.1.1` is the NAS's LAN address.
 
 ## 2. Install each app
 
-For each app: click **Install**. The window ends with "✓ … is installed and running" and "Open it
+For each app: click **Install** (an app that works with files in shares first asks which to give
+it: give none for now). The window ends with "✓ … is installed and running" and "Open it
 at http://192.168.1.1:<port>/". The app's row then says **Port …** (or **Ports …**) and has
 **Open**. Click it.
 
@@ -108,6 +109,9 @@ Each folder belongs to a different number below 1000.
 
 ## 4. Shares
 
+- [ ] Only apps that work with files in shares ask for them: **Install** for Uptime Kuma, Gitea or
+  Vaultwarden opens the install window at once, and their rows have no shares line; Jellyfin's,
+  PiGallery2's, Transmission's and bitTube's ask which shares to give them first.
 - [ ] **Jellyfin**: click **Change** next to **No shares** on its row, tick **Movies** (or any share
   with a video in it), **Save and restart**. The row says **Shares Movies (read only)**. In
   Jellyfin, add `/shares/Movies` as a library: the video plays.

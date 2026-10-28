@@ -440,10 +440,11 @@ module DnsService
     def config
       own = interface_addresses
       tailscale = NetworkInterfaces.addresses(NetworkInterfaces::TAILSCALE)
+      apps = apps_bridge
       lines = ['# Amahi-kai DNS (Network → DNS, DHCP and Internet): written by Amahi-kai, changes here are lost', 'server:']
-      lines.concat(listening(own, tailscale).map { |address| "  interface: #{address}" })
+      lines.concat(listening(own, tailscale, apps).map { |address| "  interface: #{address}" })
       lines << '  ip-freebind: yes'
-      lines.concat(allowed(own, tailscale).map { |network| "  access-control: #{network} allow" })
+      lines.concat(allowed(own, tailscale, apps).map { |network| "  access-control: #{network} allow" })
       lines.concat(['  hide-identity: yes', '  hide-version: yes', '  qname-minimisation: yes', '  prefetch: yes',
                     # Counts of DNSSEC's answers too, for the page's totals (no names, no devices).
                     '  extended-statistics: yes',
@@ -515,6 +516,13 @@ module DnsService
       Privileged.call('dns.write_config', content: config)
       Privileged.call('services.restart', service: 'unbound') if running?
       true
+    end
+
+    # Before an app's container is made (AppsController): the config brought up to date if it
+    # isn't, so Unbound answers on Docker's bridge once Docker runs (it starts with the first app),
+    # and the helper gives the container the NAS's DNS. Whether it rewrote it.
+    def follow_docker!
+      on? && installed? && differs?(UNBOUND_CONF, config) && rewrite!
     end
 
     # Blocking, while DNS is on: the lists chosen and the allowlist go to the helper, which
@@ -622,22 +630,30 @@ module DnsService
     end
 
     # The NAS's own (127.0.0.1, ::1), the interface's IPv4 addresses and ULAs, the address it
-    # announces (on the interface once its unit runs: ip-freebind lets Unbound start first), and
-    # Tailscale's.
-    def listening(own, tailscale)
+    # announces (on the interface once its unit runs: ip-freebind lets Unbound start first),
+    # Tailscale's, and Docker's bridge's (apps_bridge).
+    def listening(own, tailscale, apps = [])
       lan = own.select { |address| address.ipv4? || address.ula? }.map(&:to_s)
       lan << own_ipv6_address if ipv6_advertise?
-      (%w[127.0.0.1 ::1] + lan + tailscale.reject(&:link_local?).map(&:to_s)).uniq
+      (%w[127.0.0.1 ::1] + lan + tailscale.reject(&:link_local?).map(&:to_s) + apps.map(&:to_s)).uniq
     end
 
-    # The networks on the interface, and Tailscale's when it's on. (Unbound always answers the
-    # NAS itself.)
-    def allowed(own, tailscale)
+    # The networks on the interface, Tailscale's when it's on, and the apps' containers' on
+    # Docker's bridge. (Unbound always answers the NAS itself.)
+    def allowed(own, tailscale, apps = [])
       networks = own.reject(&:link_local?).map(&:network)
       networks << own_ipv6_network if ipv6_advertise?
       networks << 'fe80::/10' if own.any?(&:link_local?)
       networks.concat(NetworkInterfaces::TAILSCALE_NETS) if tailscale.any?
+      networks.concat(apps.map(&:network))
       networks.uniq
+    end
+
+    # Docker's bridge's IPv4 address while Docker runs: Unbound answers the apps' containers there,
+    # and the root helper gives them it as their DNS (apps reach devices by their names on Network
+    # → Devices).
+    def apps_bridge
+      NetworkInterfaces.addresses(NetworkInterfaces::DOCKER).select(&:ipv4?)
     end
 
     # Each name both as name.<domain> and on its own, first come first served: the NAS, then
@@ -654,7 +670,8 @@ module DnsService
       end
       add.call(hostname, nas, true)
       net = lan_prefix
-      Host.order(:name).each { |host| add.call(host.name, ["#{net}.#{host.address}"], true) } if net.present?
+      # (A device only named answers through its lease: the helper's dns.sync_leases.)
+      Host.fixed.order(:name).each { |host| add.call(host.name, ["#{net}.#{host.address}"], true) } if net.present?
       DnsAlias.order(:name).each do |entry|
         add.call(entry.name, entry.address.present? ? [entry.address.strip] : nas, false)
       end

@@ -59,9 +59,9 @@ describe Host do
     expect(duplicate).not_to be_valid
   end
 
-  it "should require an address" do
+  it "doesn't need an address: a device can be only named" do
     host = Host.new(name: "myhost", mac: "aa:bb:cc:dd:ee:ff", address: nil)
-    expect(host).not_to be_valid
+    expect(host).to be_valid
   end
 
   it "should require address to be between 1 and 254" do
@@ -141,6 +141,39 @@ describe Host do
   it "refuses a name longer than a hostname label (63 characters)" do
     expect(Host.new(name: "a" * 63, mac: "aa:bb:cc:dd:ee:01", address: "60")).to be_valid
     expect(Host.new(name: "a" * 64, mac: "aa:bb:cc:dd:ee:02", address: "61")).not_to be_valid
+  end
+
+  describe "a device only named (no fixed address)" do
+    before do
+      allow(DnsmasqService).to receive(:rewrite_config!)
+      allow(DnsService).to receive(:rewrite!)
+    end
+
+    it "is kept with its name and no address, and isn't fixed" do
+      host = Host.create!(name: "carport-cam", mac: "d0:3f:27:4a:93:1d", address: "")
+      expect(host.reload.address).to be_nil
+      expect(host).not_to be_fixed
+      expect(Host.fixed).to be_empty
+      expect(Host.create!(name: "porch-cam", mac: "d0:3f:27:2e:56:b2")).not_to be_fixed
+    end
+
+    it "can't take a word dnsmasq reads as an order (ignore would leave it without an address)" do
+      %w[ignore Infinite].each do |word|
+        host = Host.new(name: word, mac: "d0:3f:27:4a:93:1d")
+        expect(host).not_to be_valid
+        expect(host.errors.full_messages).to eq(["Name is a word dnsmasq reads as an order: choose another"])
+      end
+      expect(Host.new(name: "ignore-me", mac: "d0:3f:27:4a:93:1d")).to be_valid
+    end
+
+    it "can't be kept off the internet: LAN only is a rule on a fixed address" do
+      host = Host.new(name: "carport-cam", mac: "d0:3f:27:4a:93:1d", lan_only: true)
+      expect(host).not_to be_valid
+      expect(host.errors.full_messages).to eq(["LAN only needs a fixed address: carport-cam has none"])
+      Host.create!(name: "printer", mac: "aa:bb:cc:dd:ee:53", address: "53", lan_only: true)
+      Host.create!(name: "porch-cam", mac: "d0:3f:27:2e:56:b2")
+      expect(Host.lan_only_addresses("192.168.1")).to eq(["192.168.1.53"])
+    end
   end
 
   describe "callbacks" do

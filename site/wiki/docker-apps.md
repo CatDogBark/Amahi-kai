@@ -120,16 +120,19 @@ screen.
 It lets anyone who can reach it make an account, so once your household has theirs, turn
 sign-ups off on its admin page (`/admin`, with the token on its row).
 
-If you rename the server in Tailscale, give the app its new address: **Change** next to its shares,
-then **Save and restart**.
+If you rename the server in Tailscale, click **give Vaultwarden its new address** on its row (every
+Tailscale-only app has one): it restarts with the new name, keeping its data.
 
 **Set the app up right away.** Jellyfin, Uptime Kuma and Gitea ask the first person who opens
 them to create the admin account, so open the app and do that as soon as it's installed.
 
 ### Giving an app shares
 
-**Install** first asks which shares to give the app (none by default). They appear inside the app
-at `/shares/<name>`: in Jellyfin, for example, add `/shares/Movies` as a library. To change them
+An app that works with files in shares (Jellyfin, PiGallery2, Transmission, bitTube) asks at
+**Install** which shares to give it (none by default). The others install without asking
+(Vaultwarden, Gitea, Uptime Kuma), or ask only for the ZFS pool their data goes on (bitShare), and
+their rows have no shares line. Shares appear inside the app at `/shares/<name>`: in Jellyfin, for
+example, add `/shares/Movies` as a library. To change them
 later, click **Change** next to **Shares** on the app's row: the app restarts with the new ones,
 keeping its data and the version it runs. The new container is made before the old one goes, so a
 change that fails leaves the app as it was, running.

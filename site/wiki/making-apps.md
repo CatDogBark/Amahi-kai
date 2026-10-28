@@ -38,7 +38,9 @@ When someone clicks **Install**, Amahi-kai's root helper:
    - with the shares the admin chose at `/shares/<name>`, read only unless your app writes
      into shares and the admin allowed it;
    - with your ports published on the server, the usual ones when they're free, the next free
-     ones if not. Only the server's LAN and Tailscale can reach them.
+     ones if not. Only the server's LAN and Tailscale can reach them;
+   - asking the server's DNS while it's on (Network → DNS), so your app reaches the LAN's
+     devices by their names (Network → Devices), not addresses that change.
 6. Starts it, and announces it on the LAN as "<Name> on <server>", so devices can find it.
 
 **Updates:** when your manifest's `image` changes in the catalog, each server's Apps page offers
@@ -65,6 +67,9 @@ installing it again picks up where it was.
   (`writes_shares: true`) must run its processes as the app's user: `run_as: app`, or `run_as:
   image` with `PUID: "{{uid}}"` and `PGID: "{{gid}}"` in its environment, both exactly so. The
   catalog's check refuses anything else.
+- **Shares only if it works with files in them.** `shares: true` has **Install** ask which shares to
+  give it (read only, unless `writes_shares: true`, which says so too); an app without either
+  installs without being asked, and gets none.
 - **No default passwords.** If it needs one from the start, take it from an environment variable
   your manifest marks as a secret: Amahi-kai generates it.
 - **Settings through the environment**, not a file someone has to edit.

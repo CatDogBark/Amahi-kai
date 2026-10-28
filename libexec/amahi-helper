@@ -571,6 +571,8 @@ module AmahiHelper
   # down partway. The unit's name also keeps one job at a time for an app.
   APP_JOBS = %w[apps.install apps.update apps.undo_update apps.uninstall].freeze
   APP_JOB_UNIT = 'amahi-kai-appjob-%s'
+  # apps.follow_dns, run in the background when the NAS's DNS for apps changes (follow_dns_apps_later)
+  APPS_FOLLOW_DNS_UNIT = 'amahi-kai-apps-follow-dns'
   HELPER_PATH = '/usr/local/sbin/amahi-helper'
   SYSTEMCTL = '/usr/bin/systemctl'
   # Changes to the records all apps share (APP_PORTS, APP_STORAGE) take this lock, so two apps'
@@ -1667,6 +1669,15 @@ module AmahiHelper
       validate: ->(_a) { installed!(DOCKER) && {} },
       plan: ->(_v) { [[:follow_pool_apps]] }
     },
+    # Remakes the containers of the apps whose DNS isn't the NAS's as it is now (app_dns_options):
+    # after Unbound starts or stops answering on Docker's bridge (do_dns_config starts this in the
+    # background), and each time Docker starts (amahi-kai-app-firewall.service). Takes nothing from
+    # the app.
+    'apps.follow_dns' => {
+      params: [],
+      validate: ->(_a) { installed!(DOCKER) && {} },
+      plan: ->(_v) { [[:follow_dns_apps]] }
+    },
     # Mounts again the folders in shares that apps are given (do_share_binds): /run is empty
     # after a restart. Run by amahi-kai-app-shares.service before Docker starts.
     'apps.share_binds' => {
@@ -1776,11 +1787,16 @@ module AmahiHelper
   # writes these files whole, so every line must be one the app generates.
   IPV4 = '(?:(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)\\.){3}(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)'
   DOMAIN = '[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?'
+  # A device's name on a dhcp-host line: one label, and not a word dnsmasq reads there as an
+  # order (ignore: no address for it; infinite: a lease that never ends).
+  DHCP_NAME = '(?!(?:ignore|infinite)\\b(?!-))[a-z][a-z0-9-]{0,62}'
   DNSMASQ_LINES = [
     /\Adhcp-range=#{IPV4},#{IPV4},\d{1,7}s\z/,
     /\Adhcp-option=option:router,#{IPV4}\z/,
     /\Adhcp-authoritative\z/,
-    /\Adhcp-host=(?:[0-9a-f]{2}:){5}[0-9a-f]{2},#{IPV4},[a-z][a-z0-9-]{0,62}\z/,
+    /\Adhcp-host=(?:[0-9a-f]{2}:){5}[0-9a-f]{2},#{IPV4},#{DHCP_NAME}\z/o,
+    # A device named without a fixed address: its name, wherever it is (Network → Devices)
+    /\Adhcp-host=(?:[0-9a-f]{2}:){5}[0-9a-f]{2},#{DHCP_NAME}\z/o,
     %r{\Alocal=/#{DOMAIN}/\z}i,
     /\Aexpand-hosts\z/,
     /\Adomain=#{DOMAIN}\z/i,
@@ -3214,6 +3230,9 @@ module AmahiHelper
       unless sign_in.nil? || (sign_in.is_a?(String) && !sign_in.strip.empty? && sign_in.length <= 300 && !sign_in.match?(/[\r\n\0]/))
         bad.call('sign_in must be one line of text')
       end
+      # Whether the app works with files in shares, so Install asks which to give it (writes_shares
+      # says so too); an Amahi-kai that doesn't know the field asks every app, as it did
+      bad.call('shares must be true or false') unless data['shares'].nil? || [true, false].include?(data['shares'])
       %w[logo releases].each do |field|
         value = data[field]
         bad.call("#{field} must be an https link") unless value.nil? || (value.is_a?(String) && value.match?(%r{\Ahttps://[^\s"'<>]{1,500}\z}))
@@ -4841,11 +4860,18 @@ module AmahiHelper
       before = File.exist?(UNBOUND_CONF) ? unbound_listening(File.read(UNBOUND_CONF)) : []
       if content
         do_install(UNBOUND_CONF, content, :unbound)
+        # The leases' names give way to the names this config gives (fixed hosts, DNS aliases), and
+        # take back one it no longer gives: a device unfixed answers by its name through its lease
+        # at once, whichever of dnsmasq's and Unbound's configs is written last.
+        do_sync_leases if File.exist?(DNSMASQ_CONF) && dhcp_interface(File.read(DNSMASQ_CONF))
       else
         do_remove_files(UNBOUND_CONF, UNBOUND_LEASES)
         blocking_stop
       end
       after = content ? unbound_listening(content) : []
+      # The apps' containers follow when Unbound starts or stops answering on Docker's bridge
+      bridge = docker_bridge_address
+      follow_dns_apps_later if bridge && before.include?(bridge) != after.include?(bridge)
       return unless File.executable?(UFW)
       (before - after).each { |address| run_command([UFW, 'delete', 'allow', 'to', address, 'port', '53', { allow_failure: true }]) }
       # UFW refuses IPv6 rules when its IPv6 is off; then only IPv4 gets in, which is noted.
@@ -4902,18 +4928,22 @@ module AmahiHelper
     end
 
     # The names of the devices dnsmasq gave addresses to, as Unbound's local data
-    # (UNBOUND_LEASES): name.<domain> and name, with reverse lookups. Only names that are one
-    # label (devices choose their own), on IPv4 addresses, and neither reserved
-    # (RESERVED_LEASE_NAMES) nor one Amahi-kai's config already gives (the NAS, fixed hosts, DNS
-    # aliases). Written, and Unbound reloaded, only when they change.
+    # (UNBOUND_LEASES): name.<domain> and name, with reverse lookups. A device named on Network →
+    # Devices (dhcp_named) answers by that name at once, wherever it is, and before any other
+    # device's; the others by the name they ask for, an underscore read as a hyphen (Wyze cameras
+    # ask for WYZE_CAKP2JFUS-…). Only names that are one label, on IPv4 addresses, and neither
+    # reserved (RESERVED_LEASE_NAMES) nor one Amahi-kai's config already gives (the NAS, fixed
+    # hosts, DNS aliases). Written, and Unbound reloaded, only when they change.
     def do_sync_leases
       return 'DNS is off' unless File.exist?(UNBOUND_CONF)
       config = File.read(UNBOUND_CONF)
       domain = config[/^\s*local-zone: "(#{UNBOUND_NAME})" static$/o, 1] or return 'DNS has no local domain'
       taken = config.scan(/^\s*local-data: "([a-z0-9-]+)\./).flatten + RESERVED_LEASE_NAMES
+      named = dhcp_named
+      chosen, asked = dhcp_leases.map { |address, mac, name| [address, named[mac] || name, named.key?(mac)] }.partition(&:last)
       lines = ['# Names of the devices DHCP gave addresses to: written by Amahi-kai, changes here are lost', 'server:']
-      dhcp_leases.each do |address, name|
-        next if taken.include?(name)
+      (chosen + asked).each do |address, name, _chosen|
+        next if name.nil? || taken.include?(name)
         taken << name
         lines << %(  local-data: "#{name}.#{domain} IN A #{address}") << %(  local-data: "#{name}. IN A #{address}")
         lines << %(  local-data-ptr: "#{address} #{name}.#{domain}")
@@ -4924,14 +4954,22 @@ module AmahiHelper
       unbound_reload
     end
 
-    # [[address, name]] from dnsmasq's leases ("expiry mac address name client-id").
+    # [[address, mac, name]] from dnsmasq's leases ("expiry mac address name client-id"), on IPv4
+    # addresses; name is nil when the one asked for can't be a DNS label.
     def dhcp_leases(path = DNSMASQ_LEASES)
       return [] unless File.exist?(path)
       File.foreach(path).filter_map do |line|
-        _expiry, _mac, address, name = line.split
-        name = name.to_s.downcase
-        [address, name] if name.match?(/\A[a-z][a-z0-9-]{0,62}\z/) && ip_address?(address.to_s, :ipv4?)
+        _expiry, mac, address, name = line.split
+        name = name.to_s.downcase.tr('_', '-')
+        [address, mac.to_s.downcase, (name if name.match?(/\A[a-z][a-z0-9-]{0,62}\z/))] if ip_address?(address.to_s, :ipv4?)
       end
+    end
+
+    # The devices named on Network → Devices without a fixed address, { mac => name }: dnsmasq's
+    # dhcp-host lines with no address (DNSMASQ_LINES).
+    def dhcp_named(path = DNSMASQ_CONF)
+      return {} unless File.exist?(path)
+      File.read(path).scan(/^dhcp-host=((?:[0-9a-f]{2}:){5}[0-9a-f]{2}),(#{DHCP_NAME})$/o).to_h
     end
 
     # Blocking on: the lists and allowlist saved, the daily refresh set, and a refresh now in
@@ -6004,7 +6042,7 @@ module AmahiHelper
           run_command([DOCKER, 'create', '--name', fresh, '--restart', 'unless-stopped',
                        '--security-opt', 'no-new-privileges', # nothing in it gains privileges, setuid files included
                        *APP_CAP_DROP.flat_map { |cap| ['--cap-drop', cap] }, '--pids-limit', APP_PIDS_LIMIT.to_s, *APP_LOG_OPTIONS,
-                       '--memory', manifest[:memory], '--label', "amahi.app=#{id}", '--env-file', env_file,
+                       '--memory', manifest[:memory], '--label', "amahi.app=#{id}", *app_dns_options, '--env-file', env_file,
                        *(manifest[:run_as] == 'app' ? ['--user', "#{uid}:#{gid}"] : []),
                        *ports.flat_map { |p| ['--publish', "#{bind}:#{p[:host]}:#{p[:container]}/#{p[:protocol]}"] },
                        *app_folder_mounts(manifest, dir, storage), *share_mounts, manifest[:image]])
@@ -6255,32 +6293,15 @@ module AmahiHelper
 
         info = JSON.parse(docker_output('inspect', app_container(id)) || '[]').first or next
         mounts = Array(info['Mounts'])
-        # /shares/<name> for a share, /shares/<name>/<folder> for a folder of one
-        chosen = mounts.filter_map do |mount|
-          inside = mount['Destination'].to_s.delete_prefix("#{APP_SHARE_TARGET}/")
-          next if inside == mount['Destination']
-
-          name, folder = inside.split('/', 2)
-          share = shares[name.downcase] or next
-          share = share.merge(folder: folder) if folder
-          share.merge(write: mount['RW'] == true && !share[:pooled])
-        end
+        chosen = app_container_shares(info, shares)
         have = mounts.map { |mount| mount['Destination'].to_s }.select { |dest| dest.start_with?("#{drives_root}/") }.sort
         want = chosen.select { |share| share[:pooled] }.flat_map { |share| greyhole_copies(share[:name], *share[:folder]) }.uniq.sort
         failed = info.dig('State', 'Error').to_s.include?('mount')
         next if have == want && !failed
 
-        stopped = !info.dig('State', 'Running') && !failed
         say("#{id}: making its container again with the pool drives mounted now")
         begin
-          manifest = app_definition(id) || app_manifest(id)
-          # Its shares as its container has them, written to only where its definition writes shares
-          wanted = chosen.map do |share|
-            { 'name' => share[:name], 'folder' => share[:folder], 'write' => share[:write] && manifest[:writes_shares] == true }.compact
-          end
-          checked = app_share_choices(wanted, id, manifest)
-          do_install_app(id, manifest, checked, true)
-          run_command([DOCKER, 'stop', '--time', '30', app_container(id)]) if stopped
+          checked, stopped = app_remake(id, info, chosen, failed: failed)
           given[id] = checked.map { |share| { 'name' => share[:name], 'folder' => share[:folder], 'write' => share[:write] }.compact }
           [id, stopped ? 'remade, stopped' : 'remade']
         rescue Failed, Refused => e
@@ -6291,6 +6312,98 @@ module AmahiHelper
       end
       do_app_firewall if done.any?
       { 'apps' => done.to_h, 'shares' => given }
+    end
+
+    # An app's shares as its container has them (+info+, docker inspect's), from +shares+
+    # (samba_shares): /shares/<name> for a share, /shares/<name>/<folder> for a folder of one.
+    def app_container_shares(info, shares)
+      Array(info['Mounts']).filter_map do |mount|
+        inside = mount['Destination'].to_s.delete_prefix("#{APP_SHARE_TARGET}/")
+        next if inside == mount['Destination']
+
+        name, folder = inside.split('/', 2)
+        share = shares[name.downcase] or next
+        share = share.merge(folder: folder) if folder
+        share.merge(write: mount['RW'] == true && !share[:pooled])
+      end
+    end
+
+    # Makes an app's container again from its definition, with the shares it has (+chosen+,
+    # app_container_shares; written to only where its definition writes shares, and checked as
+    # apps.install checks them), keeping its version and data, and stopped again if it was
+    # stopped (not if it +failed+ to start). Returns [the shares given, whether it's stopped].
+    def app_remake(id, info, chosen, failed: false)
+      stopped = !info.dig('State', 'Running') && !failed
+      manifest = app_definition(id) || app_manifest(id)
+      wanted = chosen.map do |share|
+        { 'name' => share[:name], 'folder' => share[:folder], 'write' => share[:write] && manifest[:writes_shares] == true }.compact
+      end
+      checked = app_share_choices(wanted, id, manifest)
+      do_install_app(id, manifest, checked, true)
+      run_command([DOCKER, 'stop', '--time', '30', app_container(id)]) if stopped
+      [checked, stopped]
+    end
+
+    # apps.follow_dns: each app container made with other DNS than app_dns_options gives now is
+    # made again, keeping its shares, version and data.
+    def do_follow_dns_apps
+      out = docker_output('ps', '--all', '--filter', 'label=amahi.app', '--format', '{{.Label "amahi.app"}}')
+      return { 'apps' => {} } unless out
+
+      want = app_dns_options
+      shares = samba_shares
+      done = out.lines.map(&:strip).grep(APP_ID).uniq.filter_map do |id|
+        next if app_job_running?(id) # the job makes its container with the DNS as it is
+
+        info = JSON.parse(docker_output('inspect', app_container(id)) || '[]').first or next
+        next if app_dns_of(info) == want
+
+        say("#{id}: making its container again with #{want.empty? ? "Docker's own DNS" : "the NAS's DNS"}")
+        begin
+          _checked, stopped = app_remake(id, info, app_container_shares(info, shares))
+          [id, stopped ? 'remade, stopped' : 'remade']
+        rescue Failed, Refused => e
+          [id, e.message]
+        end
+      rescue JSON::ParserError
+        nil
+      end
+      do_app_firewall if done.any?
+      { 'apps' => done.to_h }
+    end
+
+    # The NAS's DNS for an app's container while Unbound answers on Docker's bridge
+    # (DnsService's config writes the bridge's address while Docker runs): the bridge's address,
+    # and the local domain to look short names up in, so an app reaches a device by the name it
+    # has on Network → Devices. Nothing otherwise: Docker's own, the NAS's upstream servers.
+    def app_dns_options
+      return [] unless File.exist?(UNBOUND_CONF)
+      bridge = docker_bridge_address or return []
+      config = File.read(UNBOUND_CONF)
+      return [] unless unbound_listening(config).include?(bridge)
+      domain = config[/^\s*local-zone: "(#{UNBOUND_NAME})" static$/o, 1]
+      ['--dns', bridge, *(['--dns-search', domain.chomp('.')] if domain)]
+    end
+
+    # The IPv4 address of Docker's bridge (its containers' gateway), or nil while Docker isn't up.
+    def docker_bridge_address
+      Socket.getifaddrs.find { |ifaddr| ifaddr.name == DOCKER_BRIDGE && ifaddr.addr&.ipv4? }&.addr&.ip_address
+    end
+
+    # The DNS options a container was made with (+info+, docker inspect's), as app_dns_options
+    # gives them.
+    def app_dns_of(info)
+      [*Array(info.dig('HostConfig', 'Dns')).flat_map { |server| ['--dns', server] },
+       *Array(info.dig('HostConfig', 'DnsSearch')).flat_map { |domain| ['--dns-search', domain] }]
+    end
+
+    # apps.follow_dns in the background, once Unbound has started or stopped answering on Docker's
+    # bridge: remaking every app's container takes minutes, longer than a page waits. One already
+    # running (the same unit) does it with the config as it then is.
+    def follow_dns_apps_later
+      return unless File.executable?(DOCKER) && File.executable?(SYSTEMD_RUN)
+      run_command([SYSTEMD_RUN, "--unit=#{APPS_FOLLOW_DNS_UNIT}", '--no-block', '--collect', '--quiet', HELPER_PATH, 'apps.follow_dns',
+                   { allow_failure: true }])
     end
 
     # The image an app's container runs (name:tag@sha256:...), or nil without a container.

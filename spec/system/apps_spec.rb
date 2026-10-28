@@ -43,6 +43,9 @@ RSpec.describe 'Apps', type: :system do
       visit '/apps'
       within('#docker_app_store') { click_button 'Install' }
       within('#app-shares-dialog') do
+        # Store doesn't work with shares: the dialog is for its pool only
+        expect(page).to have_css('#app-shares-title', text: 'Storage for Store')
+        expect(page).to have_css('[data-role="shares-part"]', visible: :hidden)
         expect(page).to have_text('Store keeps its data on a ZFS pool')
         expect(page).to have_select('app-storage-pool', selected: 'ZFS pool tank (Mirror)')
         expect(page).to have_no_text("there isn't one yet")
@@ -157,6 +160,34 @@ RSpec.describe 'Apps', type: :system do
       end
       within('#app-install-modal') { expect(page).to have_text('Jellyfin is installed and running', wait: 15) }
       expect(Privileged.calls).to include(['apps.install', { app: 'jellyfin', shares: [{ name: 'Vault', write: false }] }])
+    end
+  end
+
+  # Install asks which shares to give an app only when it works with files in shares (the
+  # catalog's shares, or writes_shares): Vaultwarden, Gitea and Uptime Kuma install without asking
+  describe 'apps that work with shares, and the others' do
+    before do
+      allow(DockerService).to receive(:installed?).and_return(true)
+      allow(DockerService).to receive(:running?).and_return(true)
+    end
+
+    it 'installs an app that does not work with shares without asking' do
+      sign_in_as_admin
+      visit '/apps'
+      within('#docker_app_gitea') { click_button 'Install' }
+      within('#app-install-modal') { expect(page).to have_text('Gitea is installed and running', wait: 15) }
+      expect(page).to have_no_css('#app-shares-dialog.show')
+      expect(Privileged.calls).to include(['apps.install', { app: 'gitea', shares: [] }])
+    end
+
+    it 'asks which shares to give an app that works with them' do
+      sign_in_as_admin
+      visit '/apps'
+      within('#docker_app_jellyfin') { click_button 'Install' }
+      within('#app-shares-dialog') do
+        expect(page).to have_css('#app-shares-title', text: 'Shares for Jellyfin')
+        expect(page).to have_css('[data-role="shares-part"]', visible: :visible)
+      end
     end
   end
 

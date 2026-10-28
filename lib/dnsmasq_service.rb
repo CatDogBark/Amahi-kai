@@ -106,9 +106,10 @@ module DnsmasqService
         config_lines << "dhcp-option=option:dns-server,#{dns_server(net, options[:router])}"
         config_lines << "domain=#{DnsService.domain}"
         config_lines << "dhcp-authoritative"
-        # Static addresses (Network → Hosts): this MAC always gets this address and name.
+        # The devices known on Network → Devices: one with a fixed address always gets that address
+        # and its name; one only named gets its name, at whatever address it's given.
         Host.order(:name).each do |host|
-          config_lines << "dhcp-host=#{host.mac.downcase},#{net}.#{host.address},#{host.name.downcase}"
+          config_lines << ["dhcp-host=#{host.mac.downcase}", *("#{net}.#{host.address}" if host.fixed?), host.name.downcase].join(',')
         end
       else
         config_lines << "bind-interfaces"

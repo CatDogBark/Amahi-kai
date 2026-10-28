@@ -175,6 +175,10 @@ app needs a public hostname. HTTPS for apps through Tailscale (Vaultwarden needs
 - [x] **Shares chosen at install**, none by default, and changed later from the app's row (a
   reinstall with the new shares: the container is recreated, data and ports kept, and the image
   isn't downloaded again).
+- [x] **Only apps that work with files in shares are asked** (CatDogBark, 2026-10-27, after
+  Vaultwarden's Install asked for shares it never reads): a manifest says `shares: true`, or
+  `writes_shares: true`; the others install without the dialog unless they have a ZFS pool to
+  choose (then it's for the pool only) or were given shares before (so they can be taken back).
 - [x] **Read only by default; read and write only for shares Greyhole doesn't pool**, and only for
   apps whose manifest says `writes_shares` (Transmission). A pooled share's files are links to
   their copies on the drives, so the app also gets that share's copy folder on each Greyhole drive,

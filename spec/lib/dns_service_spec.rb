@@ -51,6 +51,26 @@ RSpec.describe DnsService do
       end
     end
 
+    it "listens on Docker's bridge while Docker runs, and answers the apps' containers there" do
+      bridge = NetworkInterfaces::Address.new(ip: IPAddr.new('172.17.0.1'), prefix: 16)
+      allow(NetworkInterfaces).to receive(:addresses).with('docker0').and_return([bridge])
+      expect(lines).to include('interface: 172.17.0.1', 'access-control: 172.17.0.0/16 allow')
+      Privileged.operations # loads libexec/amahi-helper
+      expect { AmahiHelper.unbound_conf(described_class.config) }.not_to raise_error
+    end
+
+    it "brings the config up to date before an app's container is made, and only when it isn't" do
+      allow(described_class).to receive_messages(on?: true, installed?: true, running?: false)
+      allow(File).to receive(:read).and_call_original
+      allow(File).to receive(:read).with(DnsService::UNBOUND_CONF).and_return('old')
+      expect(described_class.follow_docker!).to be true
+      expect(Privileged.calls.map(&:first)).to eq(['dns.write_config'])
+      Privileged.reset!
+      allow(File).to receive(:read).with(DnsService::UNBOUND_CONF).and_return(described_class.config)
+      expect(described_class.follow_docker!).to be false
+      expect(Privileged.calls).to be_empty
+    end
+
     it 'forwards over TLS to Quad9 by default, at all its addresses' do
       expect(lines).to include('forward-tls-upstream: yes', 'forward-addr: 9.9.9.9@853#dns.quad9.net',
                                'forward-addr: 2620:fe::9@853#dns.quad9.net', %(tls-cert-bundle: "#{DnsService::CA_CERTS}"))
@@ -79,6 +99,7 @@ RSpec.describe DnsService do
       allow(DnsService).to receive(:rewrite!).and_return(true)
       Setting.set('net', '192.168.1')
       Host.create!(name: 'Printer', mac: 'aa:bb:cc:dd:ee:01', address: '20')
+      Host.create!(name: 'carport-cam', mac: 'aa:bb:cc:dd:ee:02') # only named: it answers through its lease
       DnsAlias.create!(name: 'files', address: '192.168.1.30')
       DnsAlias.create!(name: 'media', address: '')
       DnsAlias.create!(name: 'kai', address: '192.168.1.99') # the NAS's own name comes first
@@ -90,7 +111,7 @@ RSpec.describe DnsService do
                                'local-data-ptr: "192.168.1.20 printer.home.arpa."',
                                'local-data: "files.home.arpa. IN A 192.168.1.30"', 'local-data: "files. IN A 192.168.1.30"',
                                'local-data: "media.home.arpa. IN A 192.168.1.10"')
-      expect(lines.join("\n")).not_to include('192.168.1.99', '192.168.1.30 files', 'IN AAAA 2600:1700')
+      expect(lines.join("\n")).not_to include('192.168.1.99', '192.168.1.30 files', 'IN AAAA 2600:1700', 'carport-cam')
     end
 
     it "uses home.arpa when the domain setting is .local (mDNS's)" do

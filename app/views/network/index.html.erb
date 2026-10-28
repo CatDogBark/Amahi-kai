@@ -95,9 +95,9 @@
     </div>
     <div class="card-body">
       <% if @dhcp_on %>
-        <p class="text-muted small">The devices the NAS has given an address to, and when their address comes up for renewal. A <strong>fixed</strong> address stays with the device (by its hardware address) every time, which port forwards and names rely on. <strong>LAN only</strong> keeps a fixed device off the internet while the NAS is the router (<a href="<%= dns_internet_path %>">Network → Internet</a>): it still reaches the shares, DNS and everything on the LAN, but nothing beyond. For a TV, a camera or a toy that has no business out there.</p>
+        <p class="text-muted small">The devices the NAS has given an address to, and when their address comes up for renewal. <strong>Name</strong> a device and it answers by that name (<code>name.<%= @domain %></code>) wherever DHCP puts it: reach it by its name, and its address can change. A <strong>fixed</strong> address stays with the device (by its hardware address) every time, which port forwards rely on. <strong>LAN only</strong> keeps a fixed device off the internet while the NAS is the router (<a href="<%= dns_internet_path %>">Network → Internet</a>): it still reaches the shares, DNS and everything on the LAN, but nothing beyond. For a TV, a camera or a toy that has no business out there.</p>
       <% else %>
-        <p class="text-muted small">Devices appear here while the NAS hands out addresses (<a href="<%= dns_dhcp_path %>">Network → DHCP</a>). A <strong>fixed</strong> address can still be given below: the device answers by its name in DNS (<code>name.<%= @domain %></code>), and gets that address once the NAS hands them out. <strong>LAN only</strong> keeps a fixed device off the internet once the NAS is the router.</p>
+        <p class="text-muted small">Devices appear here while the NAS hands out addresses (<a href="<%= dns_dhcp_path %>">Network → DHCP</a>). A name or a <strong>fixed</strong> address can still be given below: a fixed device answers by its name in DNS (<code>name.<%= @domain %></code>) now and gets its address once the NAS hands them out; a named one answers by its name from then on. <strong>LAN only</strong> keeps a fixed device off the internet once the NAS is the router.</p>
       <% end %>
 
       <% if @devices.any? || @unseen_hosts.any? %>
@@ -105,30 +105,48 @@
           <thead><tr><th>Name</th><th>Address</th><th>Hardware address</th><th>Status</th><th></th></tr></thead>
           <tbody>
             <% @devices.each do |device| %>
+              <% host = device[:host] %>
+              <%# The name it asks for, as a name DNS can hold (Wyze cameras ask for WYZE_CAKP2JFUS-…) %>
+              <% asked = device[:name].to_s.downcase.gsub(/[^a-z0-9-]/, '-') %>
               <tr>
-                <td><%= device[:host]&.name || device[:name] || '(no name)' %></td>
+                <td>
+                  <%= host&.name || device[:name] || '(no name)' %>
+                  <a href="#" class="btn btn-sm btn-link p-0 ms-1 align-baseline" data-reveal=".name-form"><%= host ? 'Rename' : 'Name' %></a>
+                  <form action="<%= network_name_host_path %>" method="post" class="name-form mt-1" style="display: none">
+                    <input type="hidden" name="_method" value="put">
+                    <input type="hidden" name="authenticity_token" value="<%= form_authenticity_token %>">
+                    <input type="hidden" name="host[mac]" value="<%= device[:mac] %>">
+                    <div class="input-group input-group-sm">
+                      <input type="text" class="form-control" name="host[name]" value="<%= host&.name || asked %>" maxlength="63" required aria-label="Name for <%= device[:mac] %>" placeholder="printer">
+                      <button type="submit" class="btn btn-primary">Save</button>
+                    </div>
+                  </form>
+                </td>
                 <td><code><%= device[:ip] %></code></td>
                 <td><code><%= device[:mac] %></code></td>
                 <td>
-                  <% if device[:host] %>
-                    Fixed at <code><%= @net %>.<%= device[:host].address %></code>
-                    <% if device[:host].lan_only %><span class="badge bg-secondary ms-1">LAN only</span><% end %>
+                  <% if host&.fixed? %>
+                    Fixed at <code><%= @net %>.<%= host.address %></code>
+                    <% if host.lan_only %><span class="badge bg-secondary ms-1">LAN only</span><% end %>
                   <% else %>
                     Renews in <%= distance_of_time_in_words(Time.now, device[:expires]) %>
                   <% end %>
                 </td>
                 <td class="text-end">
-                  <% if device[:host] %>
-                    <%= button_to device[:host].lan_only ? 'Internet again' : 'LAN only', network_toggle_lan_only_path(device[:host]), class: 'btn btn-sm btn-outline-secondary me-1', form_class: 'd-inline' %>
-                    <%= button_to 'Unfix', network_destroy_host_path(device[:host]), method: :delete, class: 'btn btn-sm btn-outline-secondary', form_class: 'd-inline' %>
+                  <% if host&.fixed? %>
+                    <%= button_to host.lan_only ? 'Internet again' : 'LAN only', network_toggle_lan_only_path(host), class: 'btn btn-sm btn-outline-secondary me-1', form_class: 'd-inline' %>
+                    <%= button_to 'Unfix', network_destroy_host_path(host), method: :delete, class: 'btn btn-sm btn-outline-secondary', form_class: 'd-inline' %>
                   <% else %>
                     <form action="<%= network_hosts_path %>" method="post" class="d-inline">
                       <input type="hidden" name="authenticity_token" value="<%= form_authenticity_token %>">
-                      <input type="hidden" name="host[name]" value="<%= device[:name].to_s.downcase.gsub(/[^a-z0-9-]/, '-').presence || 'device' %>">
+                      <input type="hidden" name="host[name]" value="<%= host&.name || asked.presence || 'device' %>">
                       <input type="hidden" name="host[mac]" value="<%= device[:mac] %>">
                       <input type="hidden" name="host[address]" value="<%= device[:ip].to_s.split('.').last %>">
                       <button type="submit" class="btn btn-sm btn-outline-secondary">Fix this address</button>
                     </form>
+                    <% if host %>
+                      <%= button_to 'Forget', network_forget_host_path(host), method: :delete, class: 'btn btn-sm btn-outline-secondary ms-1', form_class: 'd-inline' %>
+                    <% end %>
                   <% end %>
                 </td>
               </tr>
@@ -136,12 +154,16 @@
             <% @unseen_hosts.each do |host| %>
               <tr class="text-muted">
                 <td><%= host.name %></td>
-                <td><code><%= @net %>.<%= host.address %></code></td>
+                <td><% if host.fixed? %><code><%= @net %>.<%= host.address %></code><% else %>—<% end %></td>
                 <td><code><%= host.mac %></code></td>
-                <td>Fixed; not seen now<% if host.lan_only %> <span class="badge bg-secondary ms-1">LAN only</span><% end %></td>
+                <td><%= host.fixed? ? 'Fixed' : 'Named' %>; not seen now<% if host.lan_only %> <span class="badge bg-secondary ms-1">LAN only</span><% end %></td>
                 <td class="text-end">
-                  <%= button_to host.lan_only ? 'Internet again' : 'LAN only', network_toggle_lan_only_path(host), class: 'btn btn-sm btn-outline-secondary me-1', form_class: 'd-inline' %>
-                  <%= button_to 'Unfix', network_destroy_host_path(host), method: :delete, class: 'btn btn-sm btn-outline-secondary', form_class: 'd-inline' %>
+                  <% if host.fixed? %>
+                    <%= button_to host.lan_only ? 'Internet again' : 'LAN only', network_toggle_lan_only_path(host), class: 'btn btn-sm btn-outline-secondary me-1', form_class: 'd-inline' %>
+                    <%= button_to 'Unfix', network_destroy_host_path(host), method: :delete, class: 'btn btn-sm btn-outline-secondary', form_class: 'd-inline' %>
+                  <% else %>
+                    <%= button_to 'Forget', network_forget_host_path(host), method: :delete, class: 'btn btn-sm btn-outline-secondary', form_class: 'd-inline' %>
+                  <% end %>
                 </td>
               </tr>
             <% end %>
@@ -151,8 +173,8 @@
         <p class="small text-muted mb-4">No devices yet.</p>
       <% end %>
 
-      <h6>Give a device a fixed address</h6>
-      <p class="text-muted small">For a device that isn't in the list: its name (letters, digits and hyphens), its hardware address, and the last part of the address it should keep on <code><%= @net %>.x</code>.</p>
+      <h6>Name a device, or give it a fixed address</h6>
+      <p class="text-muted small">For a device that isn't in the list: its name (letters, digits and hyphens), its hardware address, and, to fix its address, the last part of the address it should keep on <code><%= @net %>.x</code>. Leave the address empty to only name it.</p>
       <form action="<%= network_hosts_path %>" method="post" class="row g-2 align-items-end">
         <input type="hidden" name="authenticity_token" value="<%= form_authenticity_token %>">
         <div class="col-md-4">
@@ -167,7 +189,7 @@
           <label class="form-label small" for="host-address">Address</label>
           <div class="input-group">
             <span class="input-group-text"><%= @net %>.</span>
-            <input type="number" class="form-control" id="host-address" name="host[address]" min="2" max="254" required>
+            <input type="number" class="form-control" id="host-address" name="host[address]" min="2" max="254" placeholder="optional">
           </div>
         </div>
         <div class="col-md-1">

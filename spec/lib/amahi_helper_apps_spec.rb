@@ -40,6 +40,9 @@ RSpec.describe 'AmahiHelper apps' do
     # reads the machine's own Tailscale (a laptop on a tailnet passed what CI's runner refused)
     allow(helper).to receive(:tailscale_https_name).and_return('amahi-kai.tail1234.ts.net')
     allow(helper).to receive(:argon2_hash) { |secret| "$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$#{secret.reverse}" }
+    # Containers get Docker's own DNS unless a test says the NAS's answers on the bridge: CI's
+    # runner has a Docker bridge, a laptop may not
+    allow(helper).to receive(:app_dns_options).and_return([])
   end
 
   after { FileUtils.rm_rf(dir) }
@@ -234,6 +237,20 @@ RSpec.describe 'AmahiHelper apps' do
       out = StringIO.new
       expect(helper.check_catalog("#{dir}/check", out)).to eq(1)
       expect(out.string).to include('broken: image must be name:tag@sha256:digest', 'forge and gitea: both list host port 3300/tcp')
+    end
+  end
+
+  # Whether an app works with files in shares, so Install asks which to give it: a listing field,
+  # which an Amahi-kai that doesn't know it ignores (every app asked, as before)
+  describe "a manifest's shares" do
+    def problem(extra)
+      helper.catalog_entry_problem('demo', File.read("#{catalog}/gitea.yml") + extra)
+    end
+
+    it 'is true or false when it is there' do
+      expect(problem("shares: true\n")).to be_nil
+      expect(problem("shares: false\n")).to be_nil
+      expect(problem("shares: yes please\n")).to eq('shares must be true or false')
     end
   end
 
@@ -586,6 +603,13 @@ RSpec.describe 'AmahiHelper apps' do
       expect(mode).to eq(0o600)
       expect(File.exist?(path)).to be false
       expect(helper).to have_received(:do_app_firewall)
+    end
+
+    it "gives the container the NAS's DNS while Unbound answers on Docker's bridge" do
+      allow(helper).to receive(:app_dns_options).and_return(['--dns', '172.17.0.1', '--dns-search', 'home.arpa'])
+      helper.do_install_app('vaultwarden', helper.app_manifest('vaultwarden'))
+      create = ran.find { |argv| argv[1] == 'create' }
+      expect(create.each_cons(6).to_a).to include(['--label', 'amahi.app=vaultwarden', '--dns', '172.17.0.1', '--dns-search', 'home.arpa'])
     end
 
     it 'fills in a secret inside a value, under the name the app spells (format 4), and keeps it out of the definition' do
@@ -1487,6 +1511,76 @@ RSpec.describe 'AmahiHelper apps' do
           [{ name: 'Movies', path: "#{files}/movies", pooled: true, folder: 'Kids', write: false },
            { name: 'Downloads', path: "#{files}/downloads", pooled: false, folder: 'tv/new', write: true }], true
         )
+      end
+    end
+
+    # The NAS's DNS for apps: the bridge's address while Unbound's config listens there (DnsService
+    # writes it while Docker runs), with the local domain to search.
+    describe "the NAS's DNS for an app" do
+      before do
+        allow(helper).to receive(:app_dns_options).and_call_original
+        stub_const('AmahiHelper::UNBOUND_CONF', "#{dir}/amahi-kai.conf")
+        allow(helper).to receive(:docker_bridge_address).and_return('172.17.0.1')
+      end
+
+      it "is the bridge's address and the local domain while Unbound answers there, else Docker's own" do
+        expect(helper.app_dns_options).to eq([]) # DNS off: no config
+        File.write(AmahiHelper::UNBOUND_CONF, %(server:\n  interface: 127.0.0.1\n  interface: 192.168.1.1\n  local-zone: "home.arpa." static\n))
+        expect(helper.app_dns_options).to eq([]) # not on the bridge (Docker started after the last save)
+        File.write(AmahiHelper::UNBOUND_CONF, %(server:\n  interface: 192.168.1.1\n  interface: 172.17.0.1\n  local-zone: "home.arpa." static\n))
+        expect(helper.app_dns_options).to eq(['--dns', '172.17.0.1', '--dns-search', 'home.arpa'])
+        allow(helper).to receive(:docker_bridge_address).and_return(nil) # Docker down
+        expect(helper.app_dns_options).to eq([])
+      end
+    end
+
+    # apps.follow_dns: each app container made with other DNS than the NAS's now is made again,
+    # keeping its shares, version and data.
+    describe 'following the DNS' do
+      def containers(states)
+        allow(helper).to receive(:docker_output) do |*args|
+          if args.first == 'ps' then states.keys.join("\n")
+          else
+            id = args.last.delete_prefix('amahi-')
+            [{ 'Mounts' => [{ 'Destination' => '/shares/Movies', 'Source' => "#{files}/movies", 'RW' => false }],
+               'State' => states[id][:state], 'HostConfig' => states[id][:dns] }].to_json
+          end
+        end
+      end
+
+      let(:nas_dns) { { 'Dns' => ['172.17.0.1'], 'DnsSearch' => ['home.arpa'] } }
+
+      before do
+        allow(helper).to receive(:do_install_app)
+        allow(helper).to receive(:run_command)
+        allow(helper).to receive(:do_app_firewall)
+        allow(helper).to receive(:app_manifest).and_return({})
+        allow(helper).to receive(:app_dns_options).and_return(['--dns', '172.17.0.1', '--dns-search', 'home.arpa'])
+      end
+
+      it "makes again the apps made with other DNS, keeping their shares, and a stopped one stopped" do
+        containers('jellyfin' => { state: { 'Running' => true }, dns: { 'Dns' => [], 'DnsSearch' => [] } },
+                   'gitea' => { state: { 'Running' => true }, dns: nas_dns },
+                   'emby' => { state: { 'Running' => false }, dns: {} })
+        expect(helper.do_follow_dns_apps).to eq('apps' => { 'jellyfin' => 'remade', 'emby' => 'remade, stopped' })
+        expect(helper).to have_received(:do_install_app).with('jellyfin', {}, [{ name: 'Movies', path: "#{files}/movies", pooled: true, write: false }], true)
+        expect(helper).to have_received(:run_command).with(['/usr/bin/docker', 'stop', '--time', '30', 'amahi-emby']).once
+        expect(helper).to have_received(:do_app_firewall)
+      end
+
+      it "gives back Docker's own DNS once the NAS's stops answering on the bridge, and leaves an app whose job runs to it" do
+        allow(helper).to receive(:app_dns_options).and_return([])
+        containers('gitea' => { state: { 'Running' => true }, dns: nas_dns }, 'jellyfin' => { state: { 'Running' => true }, dns: nas_dns })
+        allow(helper).to receive(:app_job_running?).with('jellyfin').and_return(true)
+        expect(helper.do_follow_dns_apps).to eq('apps' => { 'gitea' => 'remade' })
+      end
+
+      it 'leaves alone the apps that already have it, and does nothing without Docker' do
+        containers('gitea' => { state: { 'Running' => true }, dns: nas_dns })
+        expect(helper.do_follow_dns_apps).to eq('apps' => {})
+        expect(helper).not_to have_received(:do_app_firewall)
+        allow(helper).to receive(:docker_output).and_return(nil)
+        expect(helper.do_follow_dns_apps).to eq('apps' => {})
       end
     end
 
