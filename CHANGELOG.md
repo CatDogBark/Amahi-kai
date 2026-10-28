@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-10-27
+
+Vaultwarden works now, reached only from devices on your Tailscale network, over HTTPS with Tailscale's certificate, and given its admin token hashed; CI jobs have time limits.
+
 ### 🔒 Security & Fixes
 
 - **Vaultwarden works, reached only through Tailscale over HTTPS** (Apps) — Vaultwarden couldn't be used: browsers won't run its web vault over plain HTTP, and the Bitwarden apps now refuse a server that isn't HTTPS, so only its admin page answered. An app like it is now reached only from devices on your Tailscale network, at `https://<the server's name on your tailnet>:<its port>`, with Tailscale's certificate. It's never on the LAN or the internet: its port is open on the server itself only, and it isn't announced on the LAN. It installs once the server's Tailscale is connected with MagicDNS and HTTPS Certificates on (switches in Tailscale's admin console, under DNS); until then the Apps page says what's missing, and Network → Remote Access shows whether HTTPS certificates are on. Vaultwarden itself comes to this with the catalog's next change.
