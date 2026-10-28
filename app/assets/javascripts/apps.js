@@ -1,7 +1,8 @@
 // Apps plugin JS
 
 // Apps (app/views/apps): the buttons post to the apps actions, then the page reloads to show the
-// app's new state. Copy buttons (data-copy) copy an app's generated password or key.
+// app's new state. On an app's own page, a password or key Amahi-kai made for it stays hidden
+// until Show (data-secret-toggle), and Copy (data-copy) copies it either way.
 
 function dockerAppAction(url, btn) {
   if (btn) {
@@ -38,6 +39,17 @@ document.addEventListener('click', function(event) {
   document.body.appendChild(field);
   field.select();
   try { document.execCommand('copy'); done(); } finally { field.remove(); }
+});
+
+document.addEventListener('click', function(event) {
+  var button = event.target.closest('[data-secret-toggle]');
+  if (!button) return;
+  var secret = button.closest('.kai-secret');
+  var show = button.getAttribute('aria-pressed') !== 'true';
+  secret.querySelector('[data-secret-value]').hidden = !show;
+  secret.querySelectorAll('[data-secret-mask]').forEach(function(mask) { mask.hidden = show; });
+  button.setAttribute('aria-pressed', String(show));
+  button.textContent = show ? 'Hide' : 'Show';
 });
 
 // Installing an app: the install window (shared/install_terminal), titled with the app's name.

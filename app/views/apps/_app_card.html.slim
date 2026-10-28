@@ -1,0 +1,30 @@
+/ An installed app on the Apps page: its state in a word, Open (or Start), and Manage for the rest
+/ (its own page: how to sign in and its passwords, ports, version, shares, Stop, Uninstall).
+- entry = AppCatalog.find(app.identifier) || {}
+- link = app.url(request.host)
+article.kai-app-card id="docker_app_#{app.identifier}"
+  .kai-app-card-head
+    = render 'app_logo', name: app.name, logo: app.logo_url
+    .kai-app-card-title
+      h3 = link_to app.name, apps_app_path(app.identifier)
+      .kai-app-pills
+        = render 'app_status', app: app
+        - if app.tailscale_only?
+          span.kai-pill.kai-pill-outline Tailscale only
+        - if app.update_available? && entry[:installable] != false
+          span.kai-pill.kai-pill-amber Update ready
+        - if app.missing_folders.any?
+          span.kai-pill.kai-pill-amber Folders missing
+  p.kai-app-card-text = app.description.presence || t('no_description_supplied')
+  .kai-app-card-actions
+    - if app.status == 'running'
+      / An app's port isn't on the Cloudflare Tunnel; one reached through Tailscale opens anywhere on the tailnet
+      - if link && via_tunnel? && !app.tailscale_only?
+        span.kai-app-card-note Open it on your LAN or Tailscale
+      - elsif link
+        a.btn.btn-primary href=link target="_blank" rel="noopener"
+          | Open
+          = lucide_icon('arrow-up-right', size: 15)
+    - elsif app.status == 'stopped'
+      button.btn.btn-primary type="button" data-call="dockerAppAction" data-args='["/apps/docker/start/#{app.identifier}", "@el"]' Start
+    a.btn.btn-outline-secondary href=apps_app_path(app.identifier) Manage

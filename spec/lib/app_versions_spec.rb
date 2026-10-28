@@ -87,11 +87,11 @@ RSpec.describe AppVersions do
 
   it "knows the real catalog's apps and their release notes" do
     versions = described_class.new
-    expect(versions.ids).to eq(%w[bitshare bittube gitea jellyfin pigallery2 transmission uptimekuma vaultwarden])
+    expect(versions.ids).to eq(%w[bitshare bitstream bittube gitea jellyfin pigallery2 transmission uptimekuma vaultwarden])
     versions.ids.each do |id|
       notes = YAML.safe_load(File.read(versions.path(id)))['releases']
-      # bitShare's repo is private, with no releases to link: the field is optional
-      next expect(notes).to(be_nil) if id == 'bitshare'
+      # bitShare's and bitStream's repos are private, with no releases to link: the field is optional
+      next expect(notes).to(be_nil) if %w[bitshare bitstream].include?(id)
 
       expect(notes).to match(%r{\Ahttps://github\.com/.+\{version\}\z}), "#{id} has no releases link"
     end

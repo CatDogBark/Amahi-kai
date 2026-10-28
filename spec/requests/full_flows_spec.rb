@@ -58,9 +58,9 @@ RSpec.describe "Full integration flows", type: :request do
       expect(response).to have_http_status(:ok)
     end
 
-    it "views installed apps" do
+    it "goes from the old installed apps page to the Apps page" do
       get "/apps/installed_apps"
-      expect(response).to have_http_status(:ok)
+      expect(response).to redirect_to('/apps')
     end
   end
 

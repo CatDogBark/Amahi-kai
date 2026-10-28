@@ -10,6 +10,12 @@ and uninstall them from the **Apps** tab. Each app runs on its own port of the s
 from your LAN and Tailscale, as its own user, with its own data folder, and keeps that data when
 it's uninstalled.
 
+The Apps page lists **your apps** first, each saying whether it's **Running** or **Stopped**, with
+**Open** (or **Start**) and **Manage**. Below them, **Add apps** lists the catalog's other apps,
+by category, with **Install**. **Manage** opens the app's own page: how to sign in and the
+passwords Amahi-kai made for it, its address, ports and version, its shares and storage, and
+**Stop** and **Uninstall**.
+
 ---
 
 ## Prerequisites
@@ -43,7 +49,7 @@ against a pinned fingerprint), installs Docker and turns the service on.
 | **bitShare** (early: version 0.3, a project of its own) | Keeps folders in sync across your computers through the NAS, every version kept; its data goes on a ZFS pool | `https://<server>:8443` (its own certificate: the browser warns once) |
 
 If an app's usual port is already used by something else on the server, it gets the next free one
-at install, and keeps it. The Apps page shows each installed app's ports.
+at install, and keeps it. Each installed app's page (**Manage**) shows its ports.
 
 Each app is defined by a small file, its manifest, in the app catalog,
 [CatDogBark/amahi-kai-apps](https://github.com/CatDogBark/amahi-kai-apps): the image and its exact
@@ -57,7 +63,7 @@ make an app of your own, see [Making Apps](making-apps).
 ## Installing an app
 
 1. Go to the **Apps** tab
-2. Click **Install** on the app
+2. Click **Install** on the app, under **Add apps**
 3. Watch the install window as Amahi-kai:
    - creates the app's own user (`app-<name>`) and its folders
    - generates its passwords or keys, if it has any
@@ -66,8 +72,8 @@ make an app of your own, see [Making Apps](making-apps).
 4. The last line says where to open it, for example `http://192.168.1.111:8096/`
 
 An install, update or uninstall runs as a job of its own on the server, so it finishes even if the
-page is closed or Amahi-kai's web page restarts meanwhile; the app's row catches up when you
-open the Apps page again. While one runs for an app, its other buttons wait for it.
+page is closed or Amahi-kai's web page restarts meanwhile; the Apps page catches up when you
+open it again. While one runs for an app, its other buttons wait for it.
 
 Once it's installed, **Open** on the Apps page and on the dashboard goes straight to the app, on
 its port.
@@ -98,7 +104,7 @@ HTTPS, since it encrypts your passwords in the page, and the Bitwarden apps refu
 isn't HTTPS. Those apps are reached only from devices on your Tailscale network, over HTTPS, at
 the server's name there: `https://<name>.<your tailnet>.ts.net:8880` for Vaultwarden. Nothing on
 the LAN reaches them, and they aren't announced there. The Apps page says **Tailscale only** on
-their row, and **Open** goes to that address.
+them, and **Open** goes to that address.
 
 They need, before they're installed:
 
@@ -118,9 +124,9 @@ tailnet (not its address) is public.
 Bitwarden apps and browser extensions take the same address: choose self-hosted on their sign-in
 screen.
 It lets anyone who can reach it make an account, so once your household has theirs, turn
-sign-ups off on its admin page (`/admin`, with the token on its row).
+sign-ups off on its admin page (`/admin`, with the token on its page: **Manage** on Vaultwarden).
 
-If you rename the server in Tailscale, click **give Vaultwarden its new address** on its row (every
+If you rename the server in Tailscale, click **give Vaultwarden its new address** on its page (every
 Tailscale-only app has one): it restarts with the new name, keeping its data.
 
 **Set the app up right away.** Jellyfin, Uptime Kuma and Gitea ask the first person who opens
@@ -131,9 +137,9 @@ them to create the admin account, so open the app and do that as soon as it's in
 An app that works with files in shares (Jellyfin, PiGallery2, Transmission, bitTube) asks at
 **Install** which shares to give it (none by default). The others install without asking
 (Vaultwarden, Gitea, Uptime Kuma), or ask only for the ZFS pool their data goes on (bitShare), and
-their rows have no shares line. Shares appear inside the app at `/shares/<name>`: in Jellyfin, for
+their pages say shares aren't used. Shares appear inside the app at `/shares/<name>`: in Jellyfin, for
 example, add `/shares/Movies` as a library. To change them
-later, click **Change** next to **Shares** on the app's row: the app restarts with the new ones,
+later, click **Change** next to **Shares** on the app's page (**Manage**): the app restarts with the new ones,
 keeping its data and the version it runs. The new container is made before the old one goes, so a
 change that fails leaves the app as it was, running.
 
@@ -150,7 +156,8 @@ is out of the app's reach. A share can give several folders, none inside another
   restart (`amahi-kai-app-shares.service`): a folder an app could write in can't be swapped for a
   link to elsewhere on the server.
 - A folder renamed, moved or deleted after it was given keeps the app from starting until you
-  give it its folders again with **Change**; the app's row says which folder is missing.
+  give it its folders again with **Change**; the app's page says which folder is missing, and the
+  Apps page marks the app **Folders missing**.
 - Moving a file from one folder given to an app to another one, inside the app, copies it: each
   folder is mounted on its own.
 
@@ -174,9 +181,9 @@ Apps that need a password from the start get one generated at install, never a d
 - **Transmission**: the web interface password (user `admin`)
 - **PiGallery2**: the gallery's password (user `admin`)
 
-An installed app's row on the Apps page has **Passwords and keys Amahi-kai made for …**: open it
-to see them, with a **Copy** button. Only admins see the Apps page. Reinstalling keeps the same
-values.
+They're on the app's page (**Manage**), under **Sign in**, hidden until **Show**; **Copy** copies
+one without showing it. They're never on the Apps page itself, and only admins see the Apps pages.
+Reinstalling keeps the same values.
 
 ---
 
@@ -184,22 +191,23 @@ values.
 
 ### Start / Stop / Uninstall
 
-Use the buttons on the app's row. The page shows what Docker reports, so an app that stopped on
-its own shows as stopped, and one whose container was removed outside Amahi-kai shows an error
-with **Install again**. They work for an app the catalog no longer lists too.
+**Open** and **Start** are on the Apps page; **Stop** and **Uninstall** are on the app's page
+(**Manage**). The Apps page shows what Docker reports, so an app that stopped on its own says
+**Stopped**, and one whose container was removed outside Amahi-kai says **Needs attention**, with
+the reason and **Install again** on its page. They work for an app the catalog no longer lists too.
 
 **Uninstall keeps the app's data.** It removes the container and its image; the app's folder,
 passwords and user stay, and installing the app again picks them up, on the version it ran (Update
 then moves it on, with a copy first). To delete the data too, uninstall the app, then click
-**Delete it** on its row (it says its data from an earlier install is kept). Uninstall waits for
+**Delete it** on its card under **Add apps** (it says its data from an earlier install is kept). Uninstall waits for
 Docker to be running.
 
 ### Updating an app
 
-Each installed app's row says which version it runs. When the update check (every 6 hours, or
+Each installed app's page says which version it runs. When the update check (every 6 hours, or
 **Check now**) finds a newer version of an app in the catalog, the dashboard says so, the update
-button in the header gets its dot, and the app's row offers **Update to <version>**, next to
-**What's new** (the release notes). Nothing updates on its own, and a catalog version older than
+button in the header gets its dot, the app says **Update ready** on the Apps page, and its page
+offers **Update to <version>**, next to **What's new** (the release notes). Nothing updates on its own, and a catalog version older than
 the one an app runs isn't offered.
 
 **Update**:
@@ -210,7 +218,7 @@ the one an app runs isn't offered.
 2. Starts the new version, and waits up to 5 minutes for it to come up healthy.
 3. If it doesn't come up, puts the old version and its data back by itself, and says why.
 
-The copy is kept for **30 days**. During that time **Undo update** on the row puts the old
+The copy is kept for **30 days**. During that time **Undo update** on its page puts the old
 version back, as it ran, with the app's data as it was before the update; anything changed since is
 lost, and for data on a ZFS pool, so are the pool's own snapshots of it taken since. If the old
 version's image is gone, it's downloaded again first; nothing changes if it can't be.
@@ -263,7 +271,7 @@ Some apps keep the data that grows on a ZFS pool (bitShare's files, say), so it 
 system disk. Installing one asks for the pool, under **Storage**; it can't be installed before
 there's a pool (**Disks → ZFS Pools**). Its data goes in a dataset of its own,
 `<pool>/apps/<app>` (mounted at `/srv/pools/<pool>/apps/<app>`), and stays on that pool: its
-settings stay in its folder on the system disk. The app's row says which pool.
+settings stay in its folder on the system disk. The app's page says which pool.
 
 - The pool's hourly and daily snapshots cover it. **Rolling the pool back** stops the app while
   it runs, then starts it again: its data goes back too.
@@ -274,7 +282,7 @@ settings stay in its folder on the system disk. The app's row says which pool.
 
 ### Backing up an app's data
 
-Stop the app on the Apps page, then copy its folder:
+Stop the app on its page (**Manage**), then copy its folder:
 
 ```bash
 sudo cp -a /var/lib/amahi-kai/apps/jellyfin /path/to/backup/
@@ -301,17 +309,17 @@ sudo iptables -S AMAHI-APPS
 ### The install window ends with ✗
 
 The line above it says why (for example, the image couldn't be downloaded). Fix that and click
-**Install again**. The root helper's log has every step:
+**Install again** on the app's page. The root helper's log has every step:
 
 ```bash
 sudo tail -n 40 /var/log/amahi-kai/helper.log
 ```
 
-### The app's page doesn't open
+### The app doesn't open
 
-- Check the app shows **Open** (running) on the Apps page
+- Check the app says **Running** on the Apps page
 - Look at its log: `sudo docker logs amahi-<app>`
-- Use the port on its row (it may not be the usual one)
+- Use the port on its page (it may not be the usual one)
 - From outside your LAN, use Tailscale: apps aren't reachable any other way
 
 ### An app that ran out of memory

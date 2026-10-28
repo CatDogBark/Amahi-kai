@@ -13,7 +13,13 @@ Run each command on its own. `192.168.1.1` is the NAS's LAN address.
 ## 1. Before you start
 
 - [ ] **Settings → System Status** says **Up to date**.
-- [ ] **Apps**: Docker shows **Running**, and the five apps are listed.
+- [ ] **Apps**: Docker shows **Running**; **Your apps** lists the apps installed, each saying
+  **Running** or **Stopped**, and **Add apps** lists the catalog's others, with the category
+  filters. A filter narrows **Add apps** only. `http://192.168.1.1:3000/apps/installed_apps` (the
+  old Installed tab) opens the Apps page.
+- [ ] **Manage** on an app opens its own page, and **All apps** goes back. A password Amahi-kai
+  made for it is under **Sign in**, hidden: **Show** shows it, **Hide** hides it, and **Copy**
+  copies it without showing it.
 - [ ] Amahi-kai's firewall rules for apps are in place. This lists them:
 
   ```bash
@@ -42,8 +48,8 @@ Run each command on its own. `192.168.1.1` is the NAS's LAN address.
 
 For each app: click **Install** (an app that works with files in shares first asks which to give
 it: give none for now). The window ends with "✓ … is installed and running" and "Open it
-at http://192.168.1.1:<port>/". The app's row then says **Port …** (or **Ports …**) and has
-**Open**. Click it.
+at http://192.168.1.1:<port>/". The app is then under **Your apps**, **Running**, with **Open**:
+click it. Its page (**Manage**) says **Port …** (or **Ports …**).
 
 Jellyfin, Uptime Kuma and Gitea give the admin account to whoever opens them first, so set each
 one up as soon as it's installed.
@@ -51,31 +57,30 @@ one up as soon as it's installed.
 - [ ] **Uptime Kuma** (port 3001): create the admin account, add a monitor (for example
   `https://www.google.com`), and it goes green.
 - [ ] **Jellyfin** (port 8096): the setup wizard runs. Skip adding media: shares come with P4.4.
-- [ ] **PiGallery2** (port 8098): it asks for a login. The user is `admin`; the password is under
-  **Passwords and keys Amahi-kai made for PiGallery2** on its row. Give it a share with photos, or
+- [ ] **PiGallery2** (port 8098): it asks for a login. The user is `admin`; the password is on
+  its page (**Manage**), under **Sign in**. Give it a share with photos, or
   only its photo folder (**Change** → **Only some folders**): the gallery shows those folders and
   their photos.
 - [ ] **Gitea** (ports 3300 and 2222): its first page is the installer. Keep SQLite, set the
   **Gitea Base URL** to `http://192.168.1.1:3300/`, create the admin account, then create a
   test repository.
 - [ ] **Transmission** (ports 9091 and 51413): it asks for a login. The user is `admin`; the
-  password is under **Passwords and keys Amahi-kai made for Transmission** on its row (**Copy**
-  works).
+  password is on its page (**Manage**), under **Sign in** (**Copy** works).
 - [ ] **bitTube** (port 8484): make its account on the first visit, follow a channel on its
   Channels page (`@veritasium`), and play a video: it starts within a few seconds, seeking works,
   and a sponsor segment (if the video has one) is skipped. In its Settings, tick your streaming
   services and paste a TMDB key: their tabs fill in. Give it a share with **Read and write**
-  (Change next to its shares), set its download folder to `/shares/<name>`, and download a video:
+  (**Change** next to **Shares** on its page), set its download folder to `/shares/<name>`, and download a video:
   it appears in the share as an MP4.
 - [ ] **Vaultwarden** (port 8880, reached only through Tailscale): with Tailscale off on the NAS, or
-  HTTPS Certificates off for the tailnet, its row says what's missing and offers no Install. With
+  HTTPS Certificates off for the tailnet, its card under **Add apps** says what's missing and offers no Install. With
   both on, it installs. Then:
-  - Its row says **Tailscale only**, and **Open** goes to
+  - Its card says **Tailscale only**, and **Open** goes to
     `https://<the NAS's name on the tailnet>:8880/`.
   - On a device on the tailnet, that page opens with a valid certificate, and the web vault lets
     you create an account.
   - A Bitwarden app signs in with that address as its self-hosted server.
-  - `/admin` takes the token under **Passwords and keys**; the container itself has only an
+  - `/admin` takes the token on its page (**Manage** → **Sign in**); the container itself has only an
     Argon2id hash of it (`$argon2id$…`).
   - From a LAN device without Tailscale, `http://<NAS>:8880` doesn't answer.
   - After a restart of the NAS it's served again.
@@ -104,16 +109,17 @@ Each folder belongs to a different number below 1000.
 - [ ] **Through Tailscale**: on your phone, turn Wi-Fi off, keep Tailscale on, and open
   `http://<the NAS's Tailscale name or 100.x address>:3001`. Uptime Kuma opens.
 - [ ] **Through the Cloudflare Tunnel** (Amahi-kai's public address): the Apps page says "Open it
-  on your LAN or Tailscale" instead of **Open**, and the dashboard's app tiles go to the Apps page.
+  on your LAN or Tailscale" instead of **Open**, and the dashboard's app tiles go to each app's page.
 - [ ] `http://192.168.1.1:3000/app/uptimekuma` is a Not Found page (the old proxy is gone).
 
 ## 4. Shares
 
 - [ ] Only apps that work with files in shares ask for them: **Install** for Uptime Kuma, Gitea or
-  Vaultwarden opens the install window at once, and their rows have no shares line; Jellyfin's,
+  Vaultwarden opens the install window at once, and their pages say Shares **Not used**; Jellyfin's,
   PiGallery2's, Transmission's and bitTube's ask which shares to give them first.
-- [ ] **Jellyfin**: click **Change** next to **No shares** on its row, tick **Movies** (or any share
-  with a video in it), **Save and restart**. The row says **Shares Movies (read only)**. In
+- [ ] **Jellyfin**: on its page (**Manage**), click **Change** next to Shares **None**, tick **Movies**
+  (or any share with a video in it), **Save and restart**. Its page says Shares **Movies (read
+  only)**. In
   Jellyfin, add `/shares/Movies` as a library: the video plays.
 - [ ] Jellyfin can't change the share (it's read only):
 
@@ -134,15 +140,15 @@ Each folder belongs to a different number below 1000.
 
 This needs an app whose catalog version is newer than the one it runs. The first time a version
 bump reaches the NAS (`script/app-versions`, then a PR and System Update), install the app
-**before** that update, so its row then offers the new version. Uptime Kuma or Vaultwarden is a
+**before** that update, so it then offers the new version. Uptime Kuma or Vaultwarden is a
 good one to try first: they have Docker health checks and small data.
 
-- [ ] The row says **Version <old>** and **Update to <new>**, with **What's new** opening the
-  release notes. The dashboard's Apps card says **1 update**.
+- [ ] The Apps page marks it **Update ready**, and its page says Version **<old>** and **Update to
+  <new>**, with **What's new** opening the release notes. The dashboard's Apps card says **1 update**.
 - [ ] **Update to <new>**: the window copies the data, starts the new version, waits for it to be
-  healthy and ends with ✓. The row says **Version <new>**, with **Undo update (until <date>)**.
+  healthy and ends with ✓. Its page says Version **<new>**, with **Undo update (until <date>)**.
   The app's own data (Uptime Kuma's monitors) is still there.
-- [ ] **Undo update**: the window ends with ✓, the row says **Version <old>** again, and Update is
+- [ ] **Undo update**: the window ends with ✓, its page says Version **<old>** again, and Update is
   offered again.
 - [ ] **Settings → Jobs** lists **App update copies**, daily.
 - [ ] Optional, rollback: the copy and the version come back by themselves when the new version
@@ -150,8 +156,9 @@ good one to try first: they have Docker health checks and small data.
 
 ## 6. Uninstall and data
 
-- [ ] **Uninstall** Uptime Kuma (it says the data stays). Its row goes back to **Install**, with
-  "Its data from an earlier install is kept and used again."
+- [ ] **Uninstall** Uptime Kuma on its page (it says the data stays). The Apps page opens, and its
+  card under **Add apps** has **Install**, with "Its data from an earlier install is kept and used
+  again."
 - [ ] **Install** it again: your monitor is still there, on the same port.
 - [ ] **Uninstall** it, then **Delete it**. Its folder is gone:
 
@@ -169,7 +176,7 @@ good one to try first: they have Docker health checks and small data.
 With a ZFS pool online (say `test`) and bitShare's catalog entry marking its folders
 `kind: dataset` (catalog format 3):
 
-- [ ] **Install** bitShare: the dialog asks for the pool under **Storage**. Its row says "Its data
+- [ ] **Install** bitShare: the dialog asks for the pool under **Storage**. Its page says "Its data
   is on the ZFS pool test", and the pool's card lists bitShare under "Apps keeping their data here".
 
   ```bash
@@ -196,7 +203,7 @@ With a ZFS pool online (say `test`) and bitShare's catalog entry marking its fol
   python3 -m http.server 3001
   ```
 
-  Install Uptime Kuma: the window says "Port 3001 is in use, so it gets port 3002", its row says
+  Install Uptime Kuma: the window says "Port 3001 is in use, so it gets port 3002", its page says
   **Port 3002**, and Open goes there. Stop the test server with Ctrl+C.
 
 ---

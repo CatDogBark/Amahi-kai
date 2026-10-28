@@ -1,0 +1,13 @@
+/ An installed app's state in a word (DockerApp#status): running, stopped, installing, or one that
+/ needs you (its install or its container failed: its page says why).
+- case app.status
+- when 'running'
+  span.kai-pill.kai-pill-running Running
+- when 'stopped'
+  span.kai-pill.kai-pill-stopped Stopped
+- when 'pulling', 'installing'
+  span.kai-pill.kai-pill-busy Installing…
+- when 'error'
+  span.kai-pill.kai-pill-alert Needs attention
+- else
+  span.kai-pill = app.status.to_s.humanize

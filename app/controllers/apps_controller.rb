@@ -107,25 +107,38 @@ class AppsController < ApplicationController
 
   # ─── Docker Apps (docs/plans/apps.md: the root helper installs and runs them) ───
 
+  # The Apps page has your apps and the catalog's others on one page now.
   def installed_apps
-    set_title t('apps')
-    @docker_installed, @docker_running = docker_state
-    DockerApp.refresh_statuses! if @docker_running
-    @docker_apps = DockerApp.order(:name)
-    @shares = Share.by_name
-    @storage_pools = storage_pools
+    redirect_to apps_index_path
   end
 
+  # The Apps page: the apps installed, each in a word (running, stopped) with Open or Start and
+  # Manage; then the catalog's apps not installed, by category, with Install.
   def docker_apps
     set_title t('apps')
     @docker_installed, @docker_running = docker_state
     DockerApp.refresh_statuses! if @docker_running
-    @current_category = params[:category]
-    installed = DockerApp.all.index_by(&:identifier)
-    catalog = AppCatalog.all
-    catalog = catalog.select { |app| app[:category] == @current_category } if @current_category.present?
-    @docker_apps = catalog.map { |entry| installed[entry[:identifier]] || entry }
+    @installed_apps = DockerApp.all.sort_by { |app| app.name.to_s.downcase }
+    installed = @installed_apps.map(&:identifier)
     @categories = AppCatalog.categories
+    @current_category = params[:category].presence_in(@categories)
+    @catalog_apps = AppCatalog.all.reject { |entry| installed.include?(entry[:identifier]) }
+    @catalog_apps = @catalog_apps.select { |entry| entry[:category] == @current_category } if @current_category
+    @shares = Share.by_name
+    @storage_pools = storage_pools
+  end
+
+  # An installed app's own page (Manage): how to sign in and the passwords Amahi-kai made for it,
+  # its address, ports and version (Update, Undo update), its shares and storage, and Stop and
+  # Uninstall. One that isn't installed (uninstalled from here, say) goes back to the Apps page.
+  def show
+    @app = DockerApp.find_by(identifier: params[:id])
+    return redirect_to(apps_index_path) unless @app
+
+    @docker_installed, @docker_running = docker_state
+    DockerApp.refresh_statuses! if @docker_running
+    @app.reload
+    set_title @app.name
     @shares = Share.by_name
     @storage_pools = storage_pools
   end
@@ -166,7 +179,7 @@ class AppsController < ApplicationController
     app_stream('apps.update') do |app, entry, reply, sse|
       if reply['updated']
         sse.emit("✓ #{entry[:name]} is updated to #{AppCatalog.tag(reply['image'])} and running")
-        sse.emit("  Undo update, on its row, goes back to #{AppCatalog.tag(reply['from'])} for #{AppCatalog::BACKUP_DAYS} days.")
+        sse.emit("  Undo update, on its page, goes back to #{AppCatalog.tag(reply['from'])} for #{AppCatalog::BACKUP_DAYS} days.")
         true
       else
         sse.emit("✗ #{AppCatalog.tag(entry[:image])} didn't come up healthy: #{reply['problem']}")
@@ -268,7 +281,7 @@ class AppsController < ApplicationController
     sse.emit("  Open it at #{app.url(host)} (#{where_to_open(app)})") if web && app.url(host)
     if entry[:sign_in].present?
       sse.emit("  First sign-in: #{entry[:sign_in]}")
-      sse.emit("  Passwords and keys Amahi-kai made for it are on the Apps page, under #{entry[:name]}") if entry[:secrets].any?
+      sse.emit("  Passwords and keys Amahi-kai made for it are on its page: Manage, on #{entry[:name]} on the Apps page") if entry[:secrets].any?
     end
     sse.done
   rescue Privileged::Error => e

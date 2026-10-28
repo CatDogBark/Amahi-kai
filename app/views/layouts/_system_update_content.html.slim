@@ -35,7 +35,7 @@
       ul.mb-1.mt-1
         - apps.each do |app|
           li = app_update_label(app)
-      a href="/apps/installed_apps" Update on the Apps page →
+      a href=apps_index_path Update on the Apps page →
   - if update.checked?
     p.small.text-muted.mb-0.mt-3 = safe_join(['Checked ', relative_time_tag(update.checked_at, clock: true), '. Amahi-kai checks itself and its apps every 6 hours', (" and follows #{update.channel_label}" if update.channel_label), '.'].compact)
   - if update.error

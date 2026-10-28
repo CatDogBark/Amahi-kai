@@ -11,7 +11,7 @@ RSpec.describe AppCatalog do
 
   describe ".all" do
     it "lists the apps, by name" do
-      expect(AppCatalog.all.map { |app| app[:identifier] }).to eq(%w[bitshare bittube gitea jellyfin pigallery2 transmission uptimekuma vaultwarden])
+      expect(AppCatalog.all.map { |app| app[:identifier] }).to eq(%w[bitshare bitstream bittube gitea jellyfin pigallery2 transmission uptimekuma vaultwarden])
     end
 
     it "gives each app what the pages show" do
@@ -29,7 +29,7 @@ RSpec.describe AppCatalog do
     # Install asks for shares only for apps that work with files in them (shares, or writes_shares)
     it "says which apps work with files in shares" do
       uses = AppCatalog.all.to_h { |app| [app[:identifier], app[:uses_shares]] }
-      expect(uses).to eq("bitshare" => false, "bittube" => true, "gitea" => false, "jellyfin" => true, "pigallery2" => true,
+      expect(uses).to eq("bitshare" => false, "bitstream" => false, "bittube" => true, "gitea" => false, "jellyfin" => true, "pigallery2" => true,
                          "transmission" => true, "uptimekuma" => false, "vaultwarden" => false)
     end
 

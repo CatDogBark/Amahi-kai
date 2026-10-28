@@ -1,3 +1,5 @@
+/ The Apps page (docs/plans/apps.md): your apps first, each in a word with Open or Start and Manage
+/ (its own page has the rest), then the catalog's other apps, by category, to install.
 - if !@docker_installed
   .card.mb-4.border-warning
     .card-body.text-center.py-5
@@ -5,36 +7,48 @@
       p.text-muted.mb-4 Docker is required to run containerized apps. Click below to install Docker Engine on this server.
       - install_url = apps_install_docker_stream_path
       button.btn.btn-primary.btn-lg data-call="openInstallTerminal" data-args='["docker", "#{install_url}"]' Install Docker
-
-- if !@docker_installed
   == render 'shared/install_terminal', id: 'docker', title: 'Installing Docker', stream_url: apps_install_docker_stream_path
 
-- if @docker_installed
+- else
   = render 'docker_service_toggle'
-  = render 'catalog_status'
+  - if !@docker_running
+    p.kai-notice.kai-notice-warn Docker isn't running, so neither are your apps: start it with the switch above.
 
-  - if @categories.any?
-    .app-store-header.row
-      .col-12
-        span.me-2= link_to t('all', default: 'All'), '/apps/docker_apps', class: (@current_category.blank? ? 'fw-bold' : '')
-        - @categories.each do |cat|
-          span.me-2= link_to cat.capitalize, "/apps/docker_apps?category=#{cat}", class: (@current_category == cat ? 'fw-bold' : '')
+  section.kai-apps-section aria-labelledby="apps-yours"
+    .kai-apps-head
+      h2#apps-yours Your apps
+      - if @installed_apps.any?
+        - counts = @installed_apps.map { |app| app.status == 'pulling' ? 'installing' : app.status }.tally
+        p.kai-apps-count
+          = ["#{@installed_apps.size} installed", "#{counts['running'].to_i} running",
+             ("#{counts['stopped']} stopped" if counts['stopped']),
+             ("#{counts['installing']} installing" if counts['installing']),
+             ("#{counts['error']} #{counts['error'] == 1 ? 'needs' : 'need'} attention" if counts['error'])].compact.join(' · ')
+    - if @installed_apps.any?
+      .kai-apps-grid
+        - @installed_apps.each do |app|
+          = render 'app_card', app: app
+    - else
+      p.kai-apps-empty No apps yet: add one below.
 
-  #apps-table
-    .settings-table
-      - if @docker_apps.any?
-        table.settings
-          tr
-            th.settings-col1.settings-col1-pad1.apps-col1[scope='col']= t('application')
-            th.settings-col2.ps-2.apps-col2[scope='col']= t('description')
-            th.text-end.pe-3[scope='col' style='width: 120px']= t('status', default: 'Status')
-
-        - @docker_apps.each do |app|
-          = render partial: 'docker_app', locals: { app: app }
-      - else
-        div.align-center.default-message
-          h4= t('no_docker_apps', default: 'No Docker apps available')
-          p= t('docker_not_configured', default: 'Check that Docker is installed and the app catalog is configured.')
+  section.kai-apps-section#add aria-labelledby="apps-add"
+    .kai-apps-head
+      h2#apps-add Add apps
+      = render 'catalog_status'
+    - if @categories.any?
+      nav.kai-apps-filters aria-label="Categories"
+        = link_to t('all', default: 'All'), apps_index_path(anchor: 'add'), class: 'kai-chip', aria: { current: ('page' unless @current_category) }
+        - @categories.each do |category|
+          = link_to category.capitalize, apps_index_path(category: category, anchor: 'add'), class: 'kai-chip',
+                    aria: { current: ('page' if category == @current_category) }
+    - if @catalog_apps.any?
+      .kai-apps-grid
+        - @catalog_apps.each do |entry|
+          = render 'catalog_card', entry: entry
+    - elsif @current_category
+      p.kai-apps-empty = "Every #{@current_category.capitalize} app in the catalog is already one of yours, above."
+    - else
+      p.kai-apps-empty Every app in the catalog is one of yours, above.
 
 == render 'shared/install_terminal', id: 'app', title: 'Installing App', stream_url: ''
 == render 'shares_dialog', shares: @shares, pools: @storage_pools

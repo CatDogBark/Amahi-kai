@@ -258,7 +258,7 @@ RSpec.describe 'AmahiHelper apps' do
     let(:ids) { Dir[File.join(catalog, '*.yml')].map { |path| File.basename(path, '.yml') } }
 
     it "has the apps chosen for the catalog, each a manifest the helper accepts" do
-      expect(ids).to contain_exactly('jellyfin', 'vaultwarden', 'uptimekuma', 'gitea', 'transmission', 'bittube', 'bitshare', 'pigallery2')
+      expect(ids).to contain_exactly('jellyfin', 'vaultwarden', 'uptimekuma', 'gitea', 'transmission', 'bittube', 'bitshare', 'pigallery2', 'bitstream')
       ids.each do |id|
         manifest = helper.app_manifest(id)
         expect(manifest[:image]).to match(/:[^@]+@sha256:\h{64}\z/), "#{id} isn't pinned by tag and digest"

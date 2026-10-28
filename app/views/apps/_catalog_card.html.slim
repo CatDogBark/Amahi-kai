@@ -1,0 +1,41 @@
+/ An app of the catalog that isn't installed: what it is, and Install. Install asks first which
+/ shares to give it, or which ZFS pool its data goes on, when it uses them (_shares_dialog, apps.js).
+- identifier = entry[:identifier]
+- name = entry[:name]
+/ An app reached only through Tailscale, over HTTPS (P4.7): the NAS's name on its tailnet while
+/ Tailscale can serve it, else nil (and it can't be installed until it can).
+- tailnet = TailscaleService.https_name if entry[:access] == 'tailscale'
+- storage_pool = AppCatalog.storage_pool(identifier) if entry[:storage]
+- share_dialog = { 'app-shares' => identifier, 'app-name' => name, 'url' => apps_docker_install_stream_path(identifier),
+                   'writes' => entry[:writes_shares].to_s, 'current' => '[]',
+                   'uses-shares' => entry[:uses_shares].to_s, 'storage' => entry[:storage].to_s, 'storage-pool' => storage_pool.to_s }
+- data_path = File.join(AppCatalog.apps_root, identifier)
+- data_place = storage_pool ? "on the ZFS pool #{storage_pool}, and its settings in #{data_path}" : "in #{data_path}"
+article.kai-app-card id="docker_app_#{identifier}"
+  .kai-app-card-head
+    = render 'app_logo', name: name, logo: entry[:logo_url]
+    .kai-app-card-title
+      h3 = name
+      .kai-app-card-meta = [entry[:category].to_s.capitalize, AppCatalog.tag(entry[:image])].compact_blank.join(' · ')
+  p.kai-app-card-text = entry[:description].presence || t('no_description_supplied')
+  - if entry[:access] == 'tailscale'
+    p.kai-app-card-note id="app-tailscale-#{identifier}"
+      - if tailnet
+        | Reached only through Tailscale, over HTTPS: devices on your tailnet open it at the NAS's name there.
+      - else
+        span.text-warning
+          | Reached only through Tailscale, over HTTPS: it needs Tailscale on the NAS, connected, with
+            MagicDNS and HTTPS Certificates on in Tailscale's admin console (DNS).
+        =< link_to 'Remote Access', remote_access_index_path
+  - if AppCatalog.data_kept?(identifier)
+    p.kai-app-card-note
+      | Its data from an earlier install is kept and used again.
+      button.btn.btn-link.p-0.ms-1.text-danger.align-baseline type="button" style="font-size: inherit" data-confirm="Delete #{name}'s data #{data_place}? This can't be undone." data-call="dockerAppAction" data-args='["/apps/docker/uninstall/#{identifier}?delete_data=1", "@el"]' Delete it
+  .kai-app-card-actions
+    - if entry[:installable] == false
+      span.kai-app-card-note.text-warning Needs a newer Amahi-kai: run System Update first
+    - elsif entry[:access] == 'tailscale' && !tailnet
+      span.kai-app-card-note.text-warning Needs Tailscale ready first
+    - else
+      button.btn.btn-outline-primary type="button" data=share_dialog.merge('verb' => 'Install')
+        = t('install', default: 'Install')
