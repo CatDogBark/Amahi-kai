@@ -4860,6 +4860,10 @@ module AmahiHelper
       before = File.exist?(UNBOUND_CONF) ? unbound_listening(File.read(UNBOUND_CONF)) : []
       if content
         do_install(UNBOUND_CONF, content, :unbound)
+        # The leases' names give way to the names this config gives (fixed hosts, DNS aliases), and
+        # take back one it no longer gives: a device unfixed answers by its name through its lease
+        # at once, whichever of dnsmasq's and Unbound's configs is written last.
+        do_sync_leases if File.exist?(DNSMASQ_CONF) && dhcp_interface(File.read(DNSMASQ_CONF))
       else
         do_remove_files(UNBOUND_CONF, UNBOUND_LEASES)
         blocking_stop

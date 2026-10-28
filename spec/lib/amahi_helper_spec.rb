@@ -981,6 +981,7 @@ RSpec.describe 'AmahiHelper' do
       before do
         @conf = "#{dir}/amahi-kai.conf"
         stub_const('AmahiHelper::UNBOUND_CONF', @conf)
+        stub_const('AmahiHelper::DNSMASQ_CONF', "#{dir}/dnsmasq.conf") # DHCP off: no leases' names to follow
         allow(helper).to receive(:check_unbound_conf)
         allow(File).to receive(:executable?).and_call_original
         allow(File).to receive(:executable?).with(AmahiHelper::UFW).and_return(true)
@@ -1153,6 +1154,27 @@ RSpec.describe 'AmahiHelper' do
         ran.clear
         helper.do_sync_leases
         expect(ran).to be_empty
+      end
+
+      it "follow a new Unbound config while DHCP is on: a device unfixed answers by its name through its lease at once" do
+        allow(helper).to receive(:check_unbound_conf)
+        allow(File).to receive(:executable?).and_call_original
+        allow(File).to receive(:executable?).with(AmahiHelper::UFW).and_return(false)
+        allow(helper).to receive(:docker_bridge_address).and_return(nil)
+        File.write(AmahiHelper::DNSMASQ_CONF, "port=0\ninterface=ens19\ndhcp-range=10.99.0.100,10.99.0.199,14400s\ndhcp-host=bc:24:11:c1:dc:cf,client\n")
+        fixed = %(server:\n  local-zone: "home.arpa." static\n  local-data: "client.home.arpa. IN A 10.99.0.150"\n)
+        # dnsmasq's config written first: client was still a fixed host in Unbound's, so its lease went without the name
+        File.write(AmahiHelper::UNBOUND_CONF, fixed)
+        helper.do_sync_leases
+        expect(File.read(AmahiHelper::UNBOUND_LEASES)).not_to include('client')
+        # Then Unbound's, without it: the lease takes the name back
+        helper.do_dns_config(%(server:\n  local-zone: "home.arpa." static\n))
+        expect(File.read(AmahiHelper::UNBOUND_LEASES)).to include('local-data: "client. IN A 10.99.0.150"')
+        # With DHCP off there are no leases' names to follow
+        File.write(AmahiHelper::DNSMASQ_CONF, "port=0\nbind-interfaces\nexcept-interface=lo\n")
+        File.unlink(AmahiHelper::UNBOUND_LEASES)
+        helper.do_dns_config(fixed)
+        expect(File.exist?(AmahiHelper::UNBOUND_LEASES)).to be false
       end
 
       it "answer by a device's name on Network → Devices at once, before the name another device asks for" do
