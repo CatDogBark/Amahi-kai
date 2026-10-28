@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+### 🔒 Security & Fixes
+
+- **Tailscale's Connect works in Firefox** (Network → Remote Access) — Connect asked the NAS for Tailscale's sign-in page, then opened it in a new tab seconds later, which Firefox blocked as a pop-up; the page then reloaded five seconds on and showed Connect again, so it looked as if Connect had failed. The tab is opened by the click itself now and gets the sign-in page once the NAS has it (or the page offers a link, where even that is blocked), and the page waits for the sign-in instead of reloading, showing the NAS connected once it is.
+
 ## [1.3.0] — 2026-10-27
 
 Vaultwarden works now, reached only from devices on your Tailscale network, over HTTPS with Tailscale's certificate, and given its admin token hashed; CI jobs have time limits.

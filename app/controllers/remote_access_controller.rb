@@ -183,6 +183,12 @@ class RemoteAccessController < ApplicationController
     render json: { status: result[:success] ? :ok : :error, auth_url: result[:auth_url], error: result[:error] }.compact
   end
 
+  # Whether Tailscale is connected now: the page asks every few seconds while a sign-in is waiting
+  # in another tab, and reloads once it is.
+  def tailscale_status
+    render json: { running: TailscaleService.running? }
+  end
+
   def stop_tailscale
     TailscaleService.stop!
     render json: { status: :ok }

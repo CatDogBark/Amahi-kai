@@ -82,9 +82,14 @@ function installTailscale(streamUrl) {
   };
 }
 
-function startTailscale(btn, url) {
+// Connect. Tailscale's sign-in page goes in a tab this click opens itself: one opened once the
+// NAS answers, seconds later, was blocked as a pop-up (Firefox), and the page reloaded to Connect.
+// The page then waits for the sign-in, done in that tab, and reloads once Tailscale is connected.
+function startTailscale(btn, url, statusUrl) {
   btn.disabled = true;
   btn.textContent = 'Connecting...';
+  var signIn = window.open('', '_blank');
+  if (signIn) { signIn.opener = null; }
   fetch(url, {
     method: 'POST',
     headers: { 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content, 'Accept': 'application/json' }
@@ -92,17 +97,49 @@ function startTailscale(btn, url) {
     if (!r.ok) throw new Error('Server returned ' + r.status);
     return r.json();
   }).then(function(data) {
-    if (data.auth_url) {
-      window.open(data.auth_url, '_blank');
-      setTimeout(function() { window.location.reload(); }, 5000);
-    } else {
+    if (data.status === 'error') throw new Error(data.error || 'Tailscale did not start');
+    if (!data.auth_url) {
+      if (signIn) { signIn.close(); }
       window.location.reload();
+      return;
     }
+    if (signIn && !signIn.closed) {
+      signIn.location.href = data.auth_url;
+    } else {
+      tailscaleSignInLink(btn, data.auth_url);
+    }
+    btn.textContent = 'Waiting for the sign-in...';
+    waitForTailscale(statusUrl);
   }).catch(function(err) {
+    if (signIn) { signIn.close(); }
     alert('Failed to connect: ' + err.message);
     btn.disabled = false;
     btn.textContent = 'Connect';
   });
+}
+
+// The sign-in page as a link beside the button, for a browser that kept even that tab from opening.
+function tailscaleSignInLink(btn, href) {
+  var link = document.createElement('a');
+  link.href = href;
+  link.target = '_blank';
+  link.rel = 'noopener';
+  link.className = 'btn btn-primary btn-sm';
+  link.textContent = 'Sign in to Tailscale';
+  btn.insertAdjacentElement('afterend', link);
+}
+
+// Asks whether Tailscale is connected every 3 seconds, for 10 minutes, and reloads once it is.
+function waitForTailscale(statusUrl) {
+  var tries = 0;
+  var timer = setInterval(function() {
+    if (++tries > 200) { clearInterval(timer); return; }
+    fetch(statusUrl, { headers: { 'Accept': 'application/json' } }).then(function(r) {
+      return r.ok ? r.json() : {};
+    }).then(function(data) {
+      if (data.running) { clearInterval(timer); window.location.reload(); }
+    }).catch(function() {});
+  }, 3000);
 }
 
 // Stop or log out: the button's data-args name the address.
