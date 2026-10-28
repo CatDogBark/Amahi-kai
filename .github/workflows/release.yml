@@ -12,9 +12,12 @@ permissions:
   contents: write
   actions: read
 
+# The job stops after 15 minutes: a step that hangs (an apt mirror that stopped answering
+# held three jobs for 18 minutes on 2026-10-27) fails then, instead of after GitHub's 6 hours.
 jobs:
   release:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
