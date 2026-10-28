@@ -9,6 +9,8 @@ module NetworkInterfaces
   # bridges.
   NOT_LAN = /\A(lo|docker|br-|veth|tailscale|virbr|wg|tun|tap|zt)/
   TAILSCALE = 'tailscale0'
+  # Docker's default bridge: the apps' containers' gateway
+  DOCKER = 'docker0'
   # Tailscale gives each device an address from these.
   TAILSCALE_NETS = %w[100.64.0.0/10 fd7a:115c:a1e0::/48].freeze
   ROUTES = '/proc/net/route'

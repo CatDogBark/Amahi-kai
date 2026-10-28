@@ -858,6 +858,15 @@ RSpec.describe 'AmahiHelper' do
       expect(steps('network.write_dnsmasq_config', { 'content' => dnsmasq_conf })).to eq([[:dnsmasq_config, dnsmasq_conf]])
     end
 
+    it 'accepts a device named without an address, and nothing more on its line' do
+      expect(refusal('network.write_dnsmasq_config', { 'content' => "port=0\ndhcp-host=d0:3f:27:4a:93:1d,carport-cam\n" })).to be_nil
+      ['dhcp-host=d0:3f:27:4a:93:1d,carport-cam,set:x', 'dhcp-host=d0:3f:27:4a:93:1d,Carport', 'dhcp-host=d0:3f:27:4a:93:1d,ignore,x',
+       'dhcp-host=d0:3f:27:4a:93:1d,1cam', 'dhcp-host=d0:3f:27:4a:93:1d,ignore', 'dhcp-host=d0:3f:27:4a:93:1d,infinite',
+       'dhcp-host=d0:3f:27:4a:93:1d,10.99.0.9,ignore'].each do |line|
+        expect(refusal('network.write_dnsmasq_config', { 'content' => "port=0\n#{line}\n" })).to include('not one Amahi-kai writes'), line
+      end
+    end
+
     it 'refuses dnsmasq lines that could run scripts, read files or redirect DNS' do
       ['dhcp-script=/tmp/x', 'conf-file=/etc/shadow', 'conf-dir=/tmp', 'addn-hosts=/tmp/h', 'server=8.8.8.8',
        'dhcp-range=192.168.1.100,192.168.1.300,600s', 'domain=bad domain', 'except-interface=eth0',
@@ -904,6 +913,8 @@ RSpec.describe 'AmahiHelper' do
       allow(NetworkInterfaces).to receive(:addresses).with('ens19').and_return([lan, ula])
       allow(NetworkInterfaces).to receive(:addresses).with('tailscale0')
         .and_return([NetworkInterfaces::Address.new(ip: IPAddr.new('100.64.96.4'), prefix: 32)])
+      allow(NetworkInterfaces).to receive(:addresses).with('docker0')
+        .and_return([NetworkInterfaces::Address.new(ip: IPAddr.new('172.17.0.1'), prefix: 16)])
       allow(DnsService).to receive(:rewrite!)
       allow(DnsmasqService).to receive(:rewrite_config!)
       Setting.set('dns_interface', 'ens19')
@@ -974,11 +985,28 @@ RSpec.describe 'AmahiHelper' do
         allow(File).to receive(:executable?).and_call_original
         allow(File).to receive(:executable?).with(AmahiHelper::UFW).and_return(true)
         allow(helper).to receive(:run_command) { |argv| ran << argv.dup && nil }
+        allow(helper).to receive(:docker_bridge_address).and_return(nil) # no Docker unless a test says so
       end
 
       after { FileUtils.rm_rf(dir) }
 
       def ufw_rules = ran.select { |argv| argv.first == AmahiHelper::UFW }.map { |argv| argv.drop(1).reject { |a| a.is_a?(Hash) }.join(' ') }
+
+      it "has the apps' containers follow, in the background, when Unbound starts or stops answering on Docker's bridge" do
+        allow(helper).to receive(:docker_bridge_address).and_return('172.17.0.1')
+        allow(File).to receive(:executable?).with(AmahiHelper::DOCKER).and_return(true)
+        allow(File).to receive(:executable?).with(AmahiHelper::SYSTEMD_RUN).and_return(true)
+        follow = [AmahiHelper::SYSTEMD_RUN, '--unit=amahi-kai-apps-follow-dns', '--no-block', '--collect', '--quiet',
+                  AmahiHelper::HELPER_PATH, 'apps.follow_dns', { allow_failure: true }]
+        helper.do_dns_config("server:\n  interface: 10.99.0.1\n")
+        expect(ran).not_to include(follow)
+        helper.do_dns_config("server:\n  interface: 10.99.0.1\n  interface: 172.17.0.1\n")
+        expect(ran.count(follow)).to eq(1)
+        helper.do_dns_config("server:\n  interface: 10.99.0.2\n  interface: 172.17.0.1\n") # still there: nothing to follow
+        expect(ran.count(follow)).to eq(1)
+        helper.do_dns_config(nil)
+        expect(ran.count(follow)).to eq(2)
+      end
 
       it 'lets DNS in to the addresses Unbound listens on, and no longer to those it stopped listening on' do
         helper.do_dns_config("server:\n  interface: 127.0.0.1\n  interface: ::1\n  interface: 10.99.0.1\n  interface: fd99::1\n")
@@ -1125,6 +1153,24 @@ RSpec.describe 'AmahiHelper' do
         ran.clear
         helper.do_sync_leases
         expect(ran).to be_empty
+      end
+
+      it "answer by a device's name on Network → Devices at once, before the name another device asks for" do
+        File.write(AmahiHelper::DNSMASQ_LEASES, <<~LEASES)
+          1792700000 bc:24:11:c1:dc:cf 10.99.0.150 camera *
+          1792700001 d0:3f:27:4a:93:1d 10.99.0.132 WYZE_CAKP2JFUS-D03F274A931D 01:d0:3f:27:4a:93:1d
+          1792700002 d0:3f:27:2e:56:b2 10.99.0.122 WYZE_CAKP2JFUS-D03F272E56B2 01:d0:3f:27:2e:56:b2
+        LEASES
+        File.write(AmahiHelper::DNSMASQ_CONF, "port=0\ndhcp-host=d0:3f:27:4a:93:1d,camera\ndhcp-host=aa:bb:cc:dd:ee:09,10.99.0.9,printer\n")
+        expect(helper.dhcp_named).to eq('d0:3f:27:4a:93:1d' => 'camera')
+        helper.do_sync_leases
+        content = File.read(AmahiHelper::UNBOUND_LEASES)
+        # The camera named on Devices takes the name; the device that asked for it goes without
+        expect(content).to include('local-data: "camera. IN A 10.99.0.132"', 'local-data-ptr: "10.99.0.132 camera.home.arpa."')
+        expect(content).not_to include('10.99.0.150')
+        # An underscore in the name a device asks for reads as a hyphen
+        expect(content).to include('local-data: "wyze-cakp2jfus-d03f272e56b2.home.arpa. IN A 10.99.0.122"')
+        expect { helper.unbound_conf(content) }.not_to raise_error
       end
 
       it 'wait for DNS to be on' do

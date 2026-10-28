@@ -38,7 +38,9 @@ When someone clicks **Install**, Amahi-kai's root helper:
    - with the shares the admin chose at `/shares/<name>`, read only unless your app writes
      into shares and the admin allowed it;
    - with your ports published on the server, the usual ones when they're free, the next free
-     ones if not. Only the server's LAN and Tailscale can reach them.
+     ones if not. Only the server's LAN and Tailscale can reach them;
+   - asking the server's DNS while it's on (Network → DNS), so your app reaches the LAN's
+     devices by their names (Network → Devices), not addresses that change.
 6. Starts it, and announces it on the LAN as "<Name> on <server>", so devices can find it.
 
 **Updates:** when your manifest's `image` changes in the catalog, each server's Apps page offers

@@ -26,6 +26,28 @@ RSpec.describe 'DNS & DHCP', type: :system do
     expect(page).to have_checked_field('mode-automatic-ens18')
   end
 
+  it 'names a device behind Name, and it keeps the address DHCP gave it' do
+    allow(NetworkAddress).to receive_messages(interfaces: [], nameservers: [], state: nil)
+    allow(NetworkPorts).to receive(:all).and_return({})
+    allow(DnsService).to receive_messages(dhcp?: true, domain: 'home.arpa')
+    allow(Leases).to receive(:all).and_return([{ expiration: Time.now.to_i + 3600, mac: 'd0:3f:27:4a:93:1d', ip: '192.168.1.132',
+                                                 name: 'WYZE_CAKP2JFUS-D03F274A931D' }])
+    sign_in_as_admin
+    visit '/network'
+    expect(page).to have_no_field('host[name]', with: 'wyze-cakp2jfus-d03f274a931d')
+    click_link 'Name'
+    # The name it asks for, as DNS can hold it, to start from
+    field = find_field('host[name]', with: 'wyze-cakp2jfus-d03f274a931d')
+    field.fill_in(with: 'carport-cam')
+    within('.name-form') { click_button 'Save' }
+    expect(page).to have_text('carport-cam answers by its name wherever it is: carport-cam.home.arpa.')
+    host = Host.find_by(name: 'carport-cam')
+    expect(host.mac).to eq('d0:3f:27:4a:93:1d')
+    expect(host.address).to be_nil
+    expect(page).to have_link('Rename')
+    expect(page).to have_button('Forget')
+  end
+
   # The moving page's probe calls the NAS at its new address, another origin (here the same
   # server by another name, localhost against the session's 127.0.0.1): the page's
   # Content-Security-Policy has to let it, and a probe that lands keeps the change and sends the

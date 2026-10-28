@@ -228,6 +228,15 @@ class AppsController < ApplicationController
 
   private
 
+  # The NAS's DNS answers on Docker's bridge before an app's container is made, so the app
+  # reaches devices by their names (DnsService.follow_docker!). A failure there doesn't stop the
+  # install: the app gets Docker's own DNS.
+  def follow_docker_dns
+    DnsService.follow_docker!
+  rescue Privileged::Error => e
+    Rails.logger.error("DNS for apps not brought up to date: #{e.message}")
+  end
+
   # Where the install window says an app opens: an app reached only through Tailscale (P4.7)
   # opens on devices on the tailnet.
   def where_to_open(app)
@@ -247,6 +256,7 @@ class AppsController < ApplicationController
                 container_name: "amahi-#{entry[:identifier]}", status: 'installing', error_message: nil)
     args = { app: entry[:identifier], shares: shares }
     args[:pool] = pool if pool
+    follow_docker_dns
     reply = Privileged.call('apps.install', **args) { |line| sse.emit("  #{line}") }
     ports = DockerApp.assigned_ports(entry, reply['ports'])
     web = ports.find { |port| port[:label] == 'web' }
@@ -296,6 +306,7 @@ class AppsController < ApplicationController
         next
       end
       begin
+        follow_docker_dns
         reply = Privileged.call(operation, app: app.identifier, shares: app.shares) { |line| sse.emit("  #{line}") }
         ports = reply['ports'] ? DockerApp.assigned_ports(entry, reply['ports']) : app.ports
         app.update!(image: reply['image'].presence || app.image, status: 'running', error_message: nil,

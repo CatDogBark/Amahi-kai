@@ -140,27 +140,60 @@ class NetworkController < ApplicationController
     refuse(e.message)
   end
 
+  # A fixed address for a device (Fix this address, or the form): a device already named keeps its
+  # name unless another is given. Without an address, the form only names it.
   def create_host
-    host = Host.new(params.require(:host).permit(:name, :mac, :address))
+    values = params.require(:host).permit(:name, :mac, :address)
+    host = known_host(values[:mac]) || Host.new(mac: values[:mac])
+    host.assign_attributes(values.slice(:name, :address).to_h.select { |_key, value| value.present? || host.new_record? })
     if host.save
-      flash[:notice] = "#{host.name} keeps #{DnsService.lan_prefix.presence || '192.168.1'}.#{host.address}."
+      flash[:notice] = host.fixed? ? "#{host.name} keeps #{lan_prefix}.#{host.address}." : named_notice(host)
     else
       flash[:alert] = "#{host.errors.full_messages.join('. ')}."
     end
     redirect_to network_index_path
   end
 
+  # A name for a device, without a fixed address: DHCP gives it the name wherever it puts it, and
+  # DNS answers by it at once (the helper's dns.sync_leases). A device already known is renamed.
+  def name_host
+    values = params.require(:host).permit(:name, :mac)
+    host = known_host(values[:mac]) || Host.new(mac: values[:mac])
+    host.name = values[:name].to_s.strip
+    if host.save
+      flash[:notice] = named_notice(host)
+    else
+      flash[:alert] = "#{host.errors.full_messages.join('. ')}."
+    end
+    redirect_to network_index_path
+  end
+
+  # Unfix: the device keeps its name, and takes whatever address DHCP gives it from now on.
   def destroy_host
     host = Host.find(params[:id])
-    host.destroy
-    done = "#{host.name} no longer has a fixed address"
+    was_lan_only = host.lan_only
+    host.update!(address: nil, lan_only: false)
+    done = "#{host.name} no longer has a fixed address; its name stays with it"
     # A device kept off the internet loses its rule with the address.
-    problem = DnsService.rewrite_router_problem if host.lan_only
+    problem = DnsService.rewrite_router_problem if was_lan_only
     if problem
       flash[:alert] = "#{done}, but the router's rules weren't rewritten (#{problem}), so its address stays kept off the internet until a save " \
                       'on Network → Internet puts them in place.'
     else
       flash[:notice] = "#{done}."
+    end
+    redirect_to network_index_path
+  end
+
+  # Forget: the device's name goes too (a device only named; one with a fixed address is unfixed
+  # first).
+  def forget_host
+    host = Host.find(params[:id])
+    if host.fixed?
+      flash[:alert] = "#{host.name} has a fixed address: unfix it first."
+    else
+      host.destroy
+      flash[:notice] = "#{host.name} is forgotten: the device answers by the name it asks for again."
     end
     redirect_to network_index_path
   end
@@ -171,7 +204,10 @@ class NetworkController < ApplicationController
   # page says the device is still as it was.
   def toggle_lan_only
     host = Host.find(params[:id])
-    host.update!(lan_only: !host.lan_only)
+    unless host.update(lan_only: !host.lan_only)
+      flash[:alert] = "#{host.errors.full_messages.join('. ')}."
+      return redirect_to network_index_path
+    end
     if (problem = DnsService.rewrite_router_problem)
       flash[:alert] = "#{host.name} is saved as #{host.lan_only ? 'LAN only' : 'reaching the internet'}, but the router's rules weren't rewritten " \
                       "(#{problem}), so it #{host.lan_only ? 'still reaches the internet' : 'is still kept off the internet'} until a save on " \
@@ -190,6 +226,20 @@ class NetworkController < ApplicationController
 
   def set_page_title
     @page_title = t('network')
+  end
+
+  # The device known by this hardware address, in whatever case it was saved.
+  def known_host(mac)
+    Host.where('LOWER(mac) = ?', mac.to_s.strip.downcase).first
+  end
+
+  def lan_prefix
+    DnsService.lan_prefix.presence || '192.168.1'
+  end
+
+  def named_notice(host)
+    where = DnsService.dhcp? ? 'wherever it is' : 'once the NAS hands out addresses (Network → DHCP)'
+    "#{host.name} answers by its name #{where}: #{host.name}.#{DnsService.domain}."
   end
 
   def refuse(problem)

@@ -240,6 +240,30 @@ are compared through `router.json`: the settings they were made from, and `rules
 number the helper stamps (`ROUTER_RULES_VERSION`, bumped when the rules change shape). The
 update's log says what was applied. Details in `release-1.0.md` §2f.
 
+### Names that follow devices, and apps on the NAS's DNS (built 2026-10-27)
+
+CatDogBark (2026-10-27): fixed addresses are a chore nobody should need; reach a device by its
+name instead. Found when the cameras went dark after the NAS became the router: their addresses
+had come from the old router's DHCP, so the stream server's copies went stale, and the Wyze
+cameras had no names in DNS (they ask for `WYZE_CAKP2JFUS-…`, and an underscore isn't a hostname).
+
+- **Name** on any device row (Network → Devices) saves a host with no address: dnsmasq gets
+  `dhcp-host=<mac>,<name>`, so the device is given that name wherever it lands, and
+  `dns.sync_leases` writes the name for its lease at once (from those lines, before any name a
+  device asks for). **Unfix** now keeps the name; **Forget** drops a named device. LAN only and
+  port forwards still need a fixed address (they're rules on an address).
+- Lease names with `_` answer with `-`; `ignore` and `infinite` can't be names (dnsmasq reads
+  them as orders on a dhcp-host line).
+- **Apps use the NAS's DNS**: Unbound also listens on Docker's bridge (`docker0`'s address while
+  Docker runs) and answers its network; the helper gives each container `--dns <bridge>
+  --dns-search <domain>` while Unbound answers there. When it starts or stops (DNS on or off,
+  Docker started after the last save), `do_dns_config` starts `apps.follow_dns` in the
+  background (a unit of its own), which makes again the containers whose DNS differs, keeping
+  their shares, data and version; it also runs each time Docker starts. Before an app's
+  container is made, `DnsService.follow_docker!` brings Unbound's config up to date.
+- Not done: an API for apps to ask the NAS about devices (the capability API on the roadmap);
+  names cover what apps need for now.
+
 ### Security at the routing layer (planned 2026-10-23)
 
 The switches, their order and their limits are in [`release-1.0.md`](release-1.0.md) §2c. Built

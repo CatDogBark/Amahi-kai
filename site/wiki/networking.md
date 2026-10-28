@@ -8,7 +8,7 @@ title: "Networking"
 Amahi-kai can be your network's DNS server, private and checked, with names for your devices; it
 can hand out addresses (DHCP) in place of your router; and it can be your router. Each has its
 own page under **Network**, in **Advanced mode**: **DNS**, **DHCP** and **Internet**, with
-**Devices** for the devices on the network and their fixed addresses. Everything is off until
+**Devices** for the devices on the network, their names and fixed addresses. Everything is off until
 you turn it on, and each builds on the one before: DHCP needs DNS, the router needs DHCP.
 
 ---
@@ -246,18 +246,32 @@ pages too; a server with several ports is hard to follow by `enp3s0f1` alone. **
 blinks a real port's light for five seconds, to see which socket it is on the back of the
 server.
 
-## Devices and fixed addresses
+## Devices: names and fixed addresses
 
-**Network → Devices** lists the devices the NAS has given an address to, and lets you fix a
-device's address so it keeps it every time (**Fix this address** on a device in the list, or add
-one by hand):
+**Network → Devices** lists the devices the NAS has given an address to. Each answers in DNS by
+the name it asks for (`printer.home.arpa`, and `printer`) while DNS is on; a name with an
+underscore (Wyze cameras ask for `WYZE_CAKP2JFUS-…`) answers with a hyphen in its place.
 
-- **Name**: the device's name on the network (letters, numbers and hyphens, up to 63 characters)
+**Name** a device to give it a name of your own (letters, numbers and hyphens, up to 63
+characters, starting with a letter): it answers by that name at once, and the name follows it
+wherever DHCP puts it, so reach it by its name and let its address change. A camera named
+`carport-cam` is `carport-cam` to every device and app, whatever address it has today.
+**Rename** changes it; **Forget** drops it, and the device answers by the name it asks for again.
+
+**Fix this address** keeps a device at the address it has now, every time; or add one by hand:
+
+- **Name**: the device's name on the network
 - **MAC**: the device's MAC address
-- **Address**: the last part of the IP address to give it (the network part is filled in)
+- **Address**: the last part of the IP address to give it (the network part is filled in); leave
+  it empty to only name the device
 
-The name answers in DNS (`printer.home.arpa`, and `printer`) while DNS is on. While the NAS hands
-out addresses (DNS + DHCP), the device always gets this one.
+While the NAS hands out addresses (DNS + DHCP), a fixed device always gets its address. Port
+forwards and LAN only need one; for anything else, a name is enough. **Unfix** lets the device
+take whatever address DHCP gives it, and it keeps its name.
+
+**Apps** ask the NAS's DNS while it's on, so an app reaches a device by its name too (a camera
+viewer, say, at `carport-cam`). Turning DNS on or off makes the apps' containers again in the
+background (a minute or two each), keeping their data.
 
 **LAN only** on a fixed device keeps it off the internet while the NAS is the router (Network →
 Internet): it still reaches the shares, DNS, the NAS and every other device on the LAN, but

@@ -122,6 +122,19 @@ next to it.
   answer by name (`laptop.home.arpa`).
 - **The way back:** turn the router's DHCP **on** again first, then turn DHCP off. While the NAS is off, devices can't get a new address, so don't leave
   this on while the NAS is being worked on.
+- [ ] **Names that follow devices** (Network → Devices): **Name** a device without fixing its
+  address (`carport-cam`). From a PC, `nslookup carport-cam` answers its address at once.
+  Restart the device (or wait for its renewal) so DHCP gives it another address if it can:
+  the name answers the new one. A Wyze camera answers by `wyze-cakp2jfus-…` before it's named.
+- [ ] **Unfix** a fixed device: it keeps its name and takes an address from the range;
+  **Forget** drops the name. A device called `ignore` is refused.
+- [ ] **Apps on the NAS's DNS:** with DNS on, an app's container asks the NAS
+  (`sudo docker exec amahi-<app> cat /etc/resolv.conf` shows the bridge's address,
+  `172.17.0.1`, and the local domain), and finds a named device:
+  `sudo docker exec amahi-<app> nslookup carport-cam` (where the image has nslookup).
+  Turn DNS off: within a few minutes the apps' containers are made again without it
+  (`systemctl status amahi-kai-apps-follow-dns`), and they still reach the internet.
+  Turn it on again: they're made again with it.
 
 ## 5b. Router mode (only with a second interface for the internet)
 
