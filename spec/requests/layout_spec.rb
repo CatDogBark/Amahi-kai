@@ -50,9 +50,10 @@ RSpec.describe 'The layout', type: :request do
     expect(Nokogiri::HTML(response.body).at_css('#advanced-toggle')['aria-pressed']).to eq('false')
   end
 
-  it "labels Apps' sub-tabs Available and Installed" do
+  # Your apps and the catalog's others are one page now, and each app has a page of its own
+  it 'gives Apps no sub-tabs' do
     login_as_admin
-    expect(page_at('/apps').css('.setup-subtab a').map { |a| a.text.strip }).to eq(%w[Available Installed])
+    expect(page_at('/apps').css('.setup-subtab')).to be_empty
   end
 
   it 'gives a user Dashboard and Files only' do

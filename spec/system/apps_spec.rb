@@ -79,7 +79,7 @@ RSpec.describe 'Apps', type: :system do
 
     def open_change(app)
       sign_in_as_admin
-      visit '/apps'
+      visit "/apps/#{app.identifier}"
       find("[data-app-shares='#{app.identifier}'][data-verb='Save and restart']").click
     end
 
@@ -115,7 +115,7 @@ RSpec.describe 'Apps', type: :system do
 
     def open_change(app)
       sign_in_as_admin
-      visit '/apps'
+      visit "/apps/#{app.identifier}"
       find("[data-app-shares='#{app.identifier}'][data-verb='Save and restart']").click
     end
 
@@ -191,9 +191,28 @@ RSpec.describe 'Apps', type: :system do
     end
   end
 
-  it 'shows the installed apps page' do
+  # Manage opens an app's own page, where a password Amahi-kai made stays hidden until Show
+  it "opens an installed app's page from Manage, and shows its password only on Show" do
+    allow(DockerService).to receive_messages(installed?: true, running?: true)
+    create(:docker_app, identifier: 'transmission', name: 'Transmission', status: 'running')
+    allow(AppCatalog).to receive(:secrets).and_call_original
+    allow(AppCatalog).to receive(:secrets).with('transmission').and_return([{ label: 'Sign in as admin with this password', value: 'Gener4ted' }])
     sign_in_as_admin
-    visit '/apps/installed_apps'
+    visit '/apps/installed_apps' # the old Installed tab's page: the Apps page now
     expect(page).to have_css('.kai-mainnav .kai-navlink[aria-current="page"]', text: 'Apps')
+    within('#docker_app_transmission') do
+      expect(page).to have_css('.kai-pill', text: 'Running')
+      click_link 'Manage'
+    end
+    expect(page).to have_current_path('/apps/transmission')
+    within('.kai-secret') do
+      expect(page).to have_no_text('Gener4ted')
+      click_button 'Show'
+      expect(page).to have_css('code', text: 'Gener4ted')
+      click_button 'Hide'
+      expect(page).to have_no_text('Gener4ted')
+    end
+    click_link 'All apps'
+    expect(page).to have_current_path('/apps')
   end
 end

@@ -68,7 +68,7 @@ describe "Front page", type: :request do
       expect(response.body).to include(
         "App update: Gitea 1.0.0-rootless → #{AppCatalog.tag(AppCatalog.find('gitea')[:image])} — update on the Apps page"
       )
-      expect(response.body).to include('href="/apps/installed_apps" class="update-notice"', '1 update')
+      expect(response.body).to include('href="/apps" class="update-notice"', '1 update')
       expect(response.body).not_to include('Jellyfin 10')
     end
 
@@ -76,7 +76,7 @@ describe "Front page", type: :request do
       login_as_admin
       %w[bittube gitea jellyfin transmission].each { |id| installed(id) }
       get root_path
-      notice = Nokogiri::HTML(response.body).at_css('a.update-notice[href="/apps/installed_apps"]').text
+      notice = Nokogiri::HTML(response.body).at_css('a.update-notice[href="/apps"]').text
       expect(notice).to include('App updates:', 'bitTube old →', ' · Gitea old →', ' · Jellyfin old →', 'and 1 more')
       expect(notice).not_to include('Transmission old') # the System Update dialog lists all four
       expect(response.body).to include('4 updates')

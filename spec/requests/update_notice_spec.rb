@@ -42,7 +42,7 @@ RSpec.describe 'Update notice', type: :request do
       dialog = page.at_css('#whats-new')
       expect(dialog.at_css('.modal-title').text).to include("What's new")
       expect(dialog.at_css('.whats-new-apps').text).to include('An app update', "Gitea 1.0.0-rootless → #{AppCatalog.tag(entry_image)}")
-      expect(dialog.at_css('.whats-new-apps a[href="/apps/installed_apps"]')).not_to be_nil
+      expect(dialog.at_css('.whats-new-apps a[href="/apps"]')).not_to be_nil
       expect(dialog.text).to include('Up to date (aaaaaaa)', 'checks itself and its apps every 6 hours')
       expect(dialog.at_css('#whats-new-install')).to be_nil # Update now is Amahi-kai's
       expect(dialog.at_css('#whats-new-check')).not_to be_nil

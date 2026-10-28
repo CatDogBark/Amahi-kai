@@ -118,6 +118,9 @@ Rails.application.routes.draw do
     post 'docker/uninstall/:id', action: 'docker_uninstall', as: 'docker_uninstall'
     post 'docker/start/:id', action: 'docker_start', as: 'docker_start'
     post 'docker/stop/:id', action: 'docker_stop', as: 'docker_stop'
+    # An installed app's own page (Manage); an app id (the helper's APP_ID) has no underscore, so
+    # it never takes the pages above
+    get ':id', action: 'show', as: 'app', constraints: { id: /[a-z][a-z0-9]{1,23}/ }
   end
 
   # Disks (consolidated from plugin)

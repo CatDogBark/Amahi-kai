@@ -41,7 +41,7 @@ describe "Docker Apps", type: :request do
 
       File.write(status_path, { checked_at: 1.hour.ago.utc.iso8601, commit: 'abc1234', apps: %w[gitea], error: 'GitHub is offline',
                                 problems: [{ app: 'broken', problem: 'image must be name:tag@sha256:digest' }] }.to_json)
-      get "/apps/installed_apps"
+      get "/apps"
       expect(response.body).to include('App catalog checked', 'the last check failed: GitHub is offline',
                                        'skipped broken (image must be name:tag@sha256:digest)')
     end
@@ -75,9 +75,11 @@ describe "Docker Apps", type: :request do
       File.write("#{fetched}/gitea.yml", newer)
       AppCatalog.reload!
       gitea(image: YAML.safe_load(File.read(Rails.root.join('config/apps/gitea.yml')))['image']) # what came with Amahi-kai
-      get "/apps/installed_apps"
+      get "/apps/gitea"
       expect(response.body).to include('9.9.9-rootless needs a newer Amahi-kai: run System Update first')
       expect(response.body).not_to include('Update to 9.9.9-rootless')
+      get "/apps"
+      expect(response.body).not_to include('Update ready') # there's nothing it can do yet
     end
   end
 
@@ -96,24 +98,82 @@ describe "Docker Apps", type: :request do
       expect(Privileged.calls).to include(['apps.status', {}])
       expect(response.body).to include('href="http://192.168.1.111:3300/"')
       expect(response.body).not_to include('/app/gitea')
-      expect(response.body).to include("Its data stays in #{AppCatalog.apps_root}/gitea")
+      get "/apps/gitea", headers: { 'Host' => '192.168.1.111' }
+      expect(response.body).to include('href="http://192.168.1.111:3300/"', "Its data stays in #{AppCatalog.apps_root}/gitea")
     end
 
-    # How to sign in the first time, open, above the passwords Amahi-kai made (kept folded away)
-    it "says how to sign in on an installed app's row, above the passwords Amahi-kai made for it" do
+    # Your apps first, each in a word; the catalog's others below, to install
+    it "puts your apps first, each in a word with Open or Start and Manage, and offers only the others to install" do
+      gitea
+      DockerApp.create!(identifier: 'transmission', name: 'Transmission', image: AppCatalog.find('transmission')[:image], status: 'stopped')
+      DockerApp.create!(identifier: 'uptimekuma', name: 'Uptime Kuma', image: AppCatalog.find('uptimekuma')[:image], status: 'error',
+                        error_message: 'docker exited 1: pull access denied')
+      DockerApp.create!(identifier: 'jellyfin', name: 'Jellyfin', image: AppCatalog.find('jellyfin')[:image], status: 'installing')
+      get "/apps"
+      page = Nokogiri::HTML(response.body)
+      yours = page.at_css('section[aria-labelledby="apps-yours"]')
+      expect(yours.css('article h3').map { |name| name.text.squish }).to eq(['Gitea', 'Jellyfin', 'Transmission', 'Uptime Kuma'])
+      expect(yours.at_css('.kai-apps-count').text.squish).to eq('4 installed · 1 running · 1 stopped · 1 installing · 1 needs attention')
+      expect(%w[gitea transmission uptimekuma jellyfin].map { |id| page.at_css("#docker_app_#{id} .kai-pill").text })
+        .to eq(['Running', 'Stopped', 'Needs attention', 'Installing…'])
+      expect(page.at_css('#docker_app_gitea a.btn-primary').text.squish).to eq('Open')
+      expect(page.at_css('#docker_app_transmission button.btn-primary')['data-args']).to eq('["/apps/docker/start/transmission", "@el"]')
+      expect(yours.css('a.btn-outline-secondary').map { |manage| manage['href'] }).to eq(%w[/apps/gitea /apps/jellyfin /apps/transmission /apps/uptimekuma])
+      expect(yours.css('[data-app-shares]')).to be_empty # nothing to install up here, and no passwords either
+      add = page.at_css('section#add')
+      expect(add.css('article').map { |card| card['id'] }).to eq(%w[docker_app_bitshare docker_app_bitstream docker_app_bittube
+                                                                   docker_app_pigallery2 docker_app_vaultwarden])
+    end
+
+    it "filters only the apps to add, and says when a category has none left" do
+      %w[bittube jellyfin pigallery2].each do |id|
+        DockerApp.create!(identifier: id, name: AppCatalog.find(id)[:name], image: AppCatalog.find(id)[:image], status: 'running')
+      end
+      get "/apps", params: { category: 'media' }
+      page = Nokogiri::HTML(response.body)
+      expect(page.at_css('.kai-apps-filters a[aria-current="page"]').text).to eq('Media')
+      expect(page.at_css('section#add').text.squish).to include('Every Media app in the catalog is already one of yours, above.')
+      expect(page.css('section[aria-labelledby="apps-yours"] article').size).to eq(3) # yours stay, whatever the filter
+      get "/apps", params: { category: 'nope' }
+      expect(Nokogiri::HTML(response.body).at_css('.kai-apps-filters a[aria-current="page"]').text).to eq('All')
+    end
+
+    it "has a page for each installed app, and sends the Installed page and an app that isn't installed to the Apps page" do
+      get "/apps/installed_apps"
+      expect(response).to redirect_to('/apps')
+      get "/apps/gitea"
+      expect(response).to redirect_to('/apps')
+      gitea
+      get "/apps/gitea"
+      expect(response).to have_http_status(:ok)
+      page = Nokogiri::HTML(response.body)
+      expect(page.at_css('title').text).to eq('Amahi-kai › Gitea')
+      expect(page.at_css('#docker_app_gitea .kai-pill').text).to eq('Running')
+      expect(page.at_css('#docker_app_gitea button[data-call="dockerAppAction"]')['data-args']).to eq('["/apps/docker/stop/gitea", "@el"]')
+      expect(page.at_css('.kai-app-danger button')['data-args']).to eq('["/apps/docker/uninstall/gitea", "@el"]')
+    end
+
+    # How to sign in the first time, above the passwords Amahi-kai made, which stay hidden until Show
+    it "says how to sign in on an installed app's page, above the passwords Amahi-kai made for it" do
       secrets = File.join(AppCatalog.secrets_dir, 'transmission.json')
       FileUtils.mkdir_p(File.dirname(secrets))
       File.write(secrets, { 'PASS' => 'Gener4ted' }.to_json)
       DockerApp.create!(identifier: 'transmission', name: 'Transmission', image: AppCatalog.find('transmission')[:image],
                         status: 'running', host_port: 9091)
       gitea
-      get "/apps/installed_apps"
+      get "/apps/transmission"
       page = Nokogiri::HTML(response.body)
-      expect(page.at_css('#app-sign-in-transmission').text.squish)
-        .to eq('First sign-in: Sign in as admin with the password Amahi-kai made for it.')
-      expect(page.at_css('#docker_app_transmission details.app-secrets code').text).to eq('Gener4ted')
-      expect(page.at_css('#app-sign-in-gitea').text.squish).to start_with('First sign-in: Its first page sets it up')
-      expect(page.at_css('#docker_app_gitea details.app-secrets')).to be_nil # nothing made for it
+      expect(page.at_css('#app-sign-in-transmission').text.squish).to eq('Sign in as admin with the password Amahi-kai made for it.')
+      value = page.at_css('.kai-secret code[data-secret-value]')
+      expect(value.text).to eq('Gener4ted')
+      expect(value['hidden']).not_to be_nil # until Show
+      expect(page.at_css('.kai-secret [data-copy]')['data-copy']).to eq('Gener4ted')
+      get "/apps"
+      expect(response.body).not_to include('Gener4ted') # never on the Apps page itself
+      get "/apps/gitea"
+      page = Nokogiri::HTML(response.body)
+      expect(page.at_css('#app-sign-in-gitea').text.squish).to start_with('Its first page sets it up')
+      expect(page.at_css('.kai-secret')).to be_nil # nothing made for it
     ensure
       FileUtils.rm_f(secrets)
     end
@@ -135,9 +195,14 @@ describe "Docker Apps", type: :request do
       # Installed, and opened through the Cloudflare Tunnel: its address is on the tailnet all the same
       allow(TailscaleService).to receive(:https_name).and_return('amahi-kai.tail1234.ts.net')
       DockerApp.create!(identifier: 'vaultwarden', name: 'Vaultwarden', image: entry[:image], status: 'running', host_port: 8880)
-      get "/apps/installed_apps", headers: { 'Host' => 'nas.example.com', 'CF-Connecting-IP' => '203.0.113.9' }
+      tunnel = { 'Host' => 'nas.example.com', 'CF-Connecting-IP' => '203.0.113.9' }
+      get "/apps", headers: tunnel
       page = Nokogiri::HTML(response.body)
-      expect(page.at_css('#docker_app_vaultwarden a.btn-success')['href']).to eq('https://amahi-kai.tail1234.ts.net:8880/')
+      expect(page.at_css('#docker_app_vaultwarden a.btn-primary')['href']).to eq('https://amahi-kai.tail1234.ts.net:8880/')
+      expect(page.at_css('#docker_app_vaultwarden').text).to include('Tailscale only')
+      get "/apps/vaultwarden", headers: tunnel
+      page = Nokogiri::HTML(response.body)
+      expect(page.at_css('#app-open-vaultwarden')['href']).to eq('https://amahi-kai.tail1234.ts.net:8880/')
       expect(page.at_css('#app-tailscale-vaultwarden').text.squish)
         .to start_with('Tailscale only: open it from a device on your tailnet, at https://amahi-kai.tail1234.ts.net:8880/')
       # Renamed in Tailscale, the NAS has a new name: making the container again gives it to Vaultwarden
@@ -147,17 +212,23 @@ describe "Docker Apps", type: :request do
       expect(rename['data-title']).to eq('Giving Vaultwarden its new address...')
     end
 
-    it "shows each installed app's ports" do
+    it "shows each installed app's ports on its page" do
       gitea(port_mappings: [{ host: 3300, protocol: 'tcp', label: 'web' }, { host: 2222, protocol: 'tcp', label: 'Git over SSH' }].to_json)
-      get "/apps/installed_apps"
-      expect(CGI.unescapeHTML(response.body)).to include('Ports 3300 (web) · 2222 (Git over SSH)')
+      get "/apps/gitea"
+      page = Nokogiri::HTML(response.body)
+      expect(page.at_css('#app-ports-gitea').text).to eq('3300 (web) · 2222 (Git over SSH)')
+      expect(page.at_css('#app-ports-gitea').previous_element.text).to eq('Ports')
     end
 
     it "says to open apps on the LAN or Tailscale when the page came through the Cloudflare Tunnel" do
       gitea
-      get "/apps/docker_apps", headers: { 'Host' => 'nas.example.com', 'CF-Connecting-IP' => '203.0.113.9' }
+      tunnel = { 'Host' => 'nas.example.com', 'CF-Connecting-IP' => '203.0.113.9' }
+      get "/apps/docker_apps", headers: tunnel
       expect(response.body).not_to include('href="http://nas.example.com:3300/"')
       expect(response.body).to include('Open it on your LAN or Tailscale')
+      get "/apps/gitea", headers: tunnel
+      expect(response.body).not_to include('nas.example.com:3300')
+      expect(Nokogiri::HTML(response.body).at_css('#app-address-gitea').text.squish).to eq('On your LAN or Tailscale')
     end
 
     it "filters by category" do
@@ -174,12 +245,12 @@ describe "Docker Apps", type: :request do
       expect(response.body.scan("delete_data=1").size).to eq(1)
     end
 
-    it "shows an installed app's generated passwords to admins, with a copy button" do
+    it "shows an installed app's generated passwords to admins on its page, with a copy button" do
       gitea(identifier: 'transmission', name: 'Transmission', host_port: 9091)
       allow(AppCatalog).to receive(:secrets).and_return([])
       allow(AppCatalog).to receive(:secrets).with('transmission')
                                             .and_return([{ label: 'Web interface password (user admin)', value: 'pa55word' }])
-      get "/apps/installed_apps"
+      get "/apps/transmission"
       expect(response.body).to include('Web interface password (user admin)')
       expect(response.body).to include('data-copy="pa55word"')
     end
@@ -242,21 +313,20 @@ describe "Docker Apps", type: :request do
       expect(Privileged.calls).to include(['apps.install', { app: 'gitea', shares: [] }])
     end
 
-    it "says on an installed app's row which pool its data is on" do
+    it "says on an installed app's page which pool its data is on" do
       DockerApp.create!(identifier: 'store', name: 'Store', image: AppCatalog.find('store')[:image], status: 'running', host_port: 3001)
-      get "/apps/installed_apps"
+      get "/apps/store"
       page = Nokogiri::HTML(response.body)
       expect(page.at_css('#app-storage-store').text.squish).to include('Its data needs a ZFS pool now, and it has none')
-      # Store doesn't work with shares: no shares line, and Change, to choose the pool, is on this one
+      # Store doesn't work with shares: no Change for shares, and Change, to choose the pool, is on this one
       expect(page.at_css('#app-shares-store')).to be_nil
       expect(page.at_css('#app-storage-store button[data-app-shares]')['data-uses-shares']).to eq('false')
 
       File.write(storage, { 'store' => 'tank' }.to_json)
-      get "/apps/installed_apps"
+      get "/apps/store"
       page = Nokogiri::HTML(response.body)
       expect(page.at_css('#app-storage-store').text.squish).to eq('Its data is on the ZFS pool tank')
-      expect(page.at_css('#docker_app_store button[data-app-shares]')).to be_nil # nothing left to change
-      get "/apps/docker_apps"
+      expect(page.css('button[data-app-shares]')).to be_empty # nothing left to change
       expect(response.body).to include("Its data stays on the ZFS pool tank, and its settings in #{AppCatalog.apps_root}/store: both are used again")
     end
   end
@@ -276,7 +346,7 @@ describe "Docker Apps", type: :request do
     it "says where the password it made is, after how to sign in" do
       get "/apps/docker/install_stream/transmission", headers: same_origin
       expect(response.body).to include('First sign-in: Sign in as admin with the password Amahi-kai made for it.')
-      expect(response.body).to include('Passwords and keys Amahi-kai made for it are on the Apps page, under Transmission')
+      expect(response.body).to include('Passwords and keys Amahi-kai made for it are on its page: Manage, on Transmission on the Apps page')
     end
 
     it "keeps the ports the helper gave when the catalog's were taken" do
@@ -337,18 +407,21 @@ describe "Docker Apps", type: :request do
         expect(DockerApp.find_by(identifier: 'transmission').shares).to eq(shares)
       end
 
-      it "names an app's folders on its row, and says which aren't there any more" do
+      it "names an app's folders on its page, and says which aren't there any more" do
         root = Dir.mktmpdir
         FileUtils.mkdir_p("#{root}/tv/new")
         Share.find_by(name: 'Downloads').update_column(:path, root)
         gitea(identifier: 'transmission', name: 'Transmission', status: 'stopped',
               volume_mappings: [{ name: 'Downloads', folder: 'tv/new', write: true }, { name: 'Downloads', folder: 'music' }].to_json)
-        get "/apps/installed_apps"
-        expect(response.body).to include('Shares Downloads/music (read only) · Downloads/tv/new (read and write)')
-        expect(Nokogiri::HTML(response.body).at_css('#app-missing-folders-transmission').text.squish).to eq(
+        get "/apps/transmission"
+        page = Nokogiri::HTML(response.body)
+        expect(page.at_css('#app-shares-transmission').text.squish).to start_with('Downloads/music (read only) · Downloads/tv/new (read and write)')
+        expect(page.at_css('#app-missing-folders-transmission').text.squish).to eq(
           "Downloads/music isn't there any more (renamed, moved or deleted): Transmission can't start until Change gives it its folders again."
         )
         expect(CGI.unescapeHTML(response.body)).to include(%(data-current="[{"name":"Downloads","folder":"tv/new","write":true},{"name":"Downloads","folder":"music","write":false}]"))
+        get "/apps"
+        expect(Nokogiri::HTML(response.body).at_css('#docker_app_transmission').text).to include('Folders missing')
       ensure
         FileUtils.rm_rf(root) if root
       end
@@ -356,9 +429,9 @@ describe "Docker Apps", type: :request do
       it "lists the shares in the dialog, pooled ones marked, and shows an installed app's shares with Change" do
         gitea(identifier: 'transmission', name: 'Transmission', status: 'stopped',
               volume_mappings: [{ name: 'Downloads', write: true }, { name: 'Movies', write: false }].to_json)
-        get "/apps/installed_apps"
+        get "/apps/transmission"
         expect(response.body).to include('data-share="Movies" data-pooled="true"', 'data-share="Downloads" data-pooled="false"')
-        expect(response.body).to include('Shares Movies (read only) · Downloads (read and write)')
+        expect(Nokogiri::HTML(response.body).at_css('#app-shares-transmission').text.squish).to start_with('Movies (read only) · Downloads (read and write)')
         expect(CGI.unescapeHTML(response.body)).to include(%(data-current="[{"name":"Downloads","write":true},{"name":"Movies","write":false}]"))
         expect(response.body).to include('data-verb="Save and restart"', 'id="app-install-modal"')
       end
@@ -433,14 +506,20 @@ describe "Docker Apps", type: :request do
 
     it "offers Update to the catalog's version, with its release notes, only when the app runs another" do
       gitea(image: old)
-      get "/apps/installed_apps"
-      expect(response.body).to include('Version 1.27.2-rootless', 'Update to 1.27.3-rootless',
-                                       'data-url="/apps/docker/update_stream/gitea"',
+      get "/apps/gitea"
+      version = Nokogiri::HTML(response.body).at_css('#app-version-gitea')
+      expect(version.text).to start_with('1.27.2-rootless')
+      expect([version.at_css('button').text, version.at_css('a').text]).to eq(['Update to 1.27.3-rootless', "What's new"])
+      expect(response.body).to include('data-url="/apps/docker/update_stream/gitea"',
                                        'href="https://github.com/go-gitea/gitea/releases/tag/v1.27.3"')
+      get "/apps"
+      expect(Nokogiri::HTML(response.body).at_css('#docker_app_gitea').text).to include('Update ready')
       DockerApp.find_by(identifier: 'gitea').update!(image: catalog)
-      get "/apps/installed_apps"
-      expect(response.body).to include('Version 1.27.3-rootless')
+      get "/apps/gitea"
+      expect(Nokogiri::HTML(response.body).at_css('#app-version-gitea').text.squish).to eq('1.27.3-rootless')
       expect(response.body).not_to include('Update to')
+      get "/apps"
+      expect(response.body).not_to include('Update ready')
     end
 
     it "counts the updates on the dashboard" do
@@ -477,7 +556,7 @@ describe "Docker Apps", type: :request do
       gitea
       allow(AppCatalog).to receive(:backup).and_return(nil)
       allow(AppCatalog).to receive(:backup).with('gitea').and_return(from: old, taken_at: Time.utc(2026, 10, 5, 12), until: Time.utc(2026, 11, 4, 12))
-      get "/apps/installed_apps"
+      get "/apps/gitea"
       # The date in the viewer's time zone (time_ago.js), the copy's age in the confirm (no time zone there)
       expect(response.body).to include('Undo update', 'data-url="/apps/docker/undo_update_stream/gitea"',
                                        '(until <time datetime="2026-11-04T12:00:00Z" data-local="month-day">November 4</time>)',
@@ -485,7 +564,7 @@ describe "Docker Apps", type: :request do
       expect(response.body).not_to include("ZFS pool's own snapshots")
       # Its data on a ZFS pool: the roll-back takes the pool's later snapshots of it with it
       allow(AppCatalog).to receive(:backup).with('gitea').and_return(from: old, taken_at: Time.utc(2026, 10, 5, 12), until: Time.utc(2026, 11, 4, 12), snapshot: true)
-      get "/apps/installed_apps"
+      get "/apps/gitea"
       expect(response.body).to include("and so are the ZFS pool&#39;s own snapshots of its data taken since")
       helper_replies('apps.undo_update', 'image' => old)
       get "/apps/docker/undo_update_stream/gitea", headers: same_origin
@@ -547,11 +626,11 @@ describe "Docker Apps", type: :request do
       expect(response.body).to include('href="http://192.168.1.111:3300/"')
     end
 
-    it "links to the Apps page instead through the Cloudflare Tunnel" do
+    it "links to the app's page instead through the Cloudflare Tunnel" do
       gitea(show_in_dashboard: true)
       get "/", headers: { 'Host' => 'nas.example.com', 'CF-Connecting-IP' => '203.0.113.9' }
       expect(response.body).not_to include(':3300/')
-      expect(response.body).to include('href="/apps/installed_apps"', 'LAN or Tailscale')
+      expect(response.body).to include('href="/apps/gitea"', 'LAN or Tailscale')
     end
   end
 

@@ -1189,3 +1189,195 @@ table.settings tbody tr { border-bottom-color: var(--kai-line); }
 /* Dashboard tiles (shares, apps): lit on hover, where inline handlers used to do it */
 .kai-tile:hover { background: rgba(255, 255, 255, 0.06); }
 .kai-tile-lift:hover { transform: translateY(-2px); }
+
+/* Apps: your apps as cards, each in a word (Running, Stopped) with Open or Start and Manage, then
+   the catalog's other apps; an app's own page (Manage) has the rest */
+.kai-apps-section { margin: 8px 0 32px; }
+.kai-apps-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+  margin-bottom: 14px;
+}
+.kai-apps-head h2 { margin: 0; font-size: 22px; font-weight: 600; color: var(--kai-title); }
+.kai-apps-head .catalog-status { margin: 0 !important; }
+.kai-apps-count { margin: 0; color: var(--kai-muted); }
+.kai-apps-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 290px), 1fr));
+  gap: 16px;
+}
+.kai-app-card, .kai-app-panel {
+  border-radius: 16px;
+  background: var(--kai-glass);
+  border: 1px solid var(--kai-line);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+.kai-app-card { display: flex; flex-direction: column; gap: 12px; padding: 18px; }
+.kai-app-card-head, .kai-app-hero-id { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.kai-app-card-title { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
+.kai-app-card h3 { margin: 0; font-size: 18px; font-weight: 600; color: var(--kai-title); }
+.kai-app-card h3 a { color: var(--kai-title); text-decoration: none; }
+.kai-app-card h3 a:hover { color: var(--kai-mint-text); }
+.kai-app-card-meta, .kai-app-card-note { margin: 0; color: var(--kai-muted); font-size: 13px; }
+.kai-app-card-text {
+  margin: 0;
+  color: var(--kai-muted);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.kai-app-card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: auto; }
+.kai-app-card-actions .btn, .kai-app-hero-actions .btn { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.kai-app-logo {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  box-sizing: border-box;
+  padding: 7px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--kai-line);
+  object-fit: contain;
+}
+.kai-app-initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--kai-title);
+  font-size: 20px;
+  font-weight: 700;
+}
+/* Its state in a word, and what's beside it (Tailscale only, Update ready, Folders missing) */
+.kai-app-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.kai-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #c4cdd2;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.kai-pill-running::before, .kai-pill-stopped::before, .kai-pill-busy::before, .kai-pill-alert::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  box-sizing: border-box;
+  border-radius: 50%;
+}
+.kai-pill-running { background: var(--kai-mint-soft); color: var(--kai-mint-text); }
+.kai-pill-running::before { background: var(--kai-mint); }
+.kai-pill-stopped::before { border: 2px solid var(--kai-muted); }
+.kai-pill-busy { background: rgba(255, 197, 110, 0.14); color: #ffd79a; }
+.kai-pill-busy::before {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--kai-accent);
+  border-right-color: transparent;
+  animation: kai-spin 0.9s linear infinite;
+}
+.kai-pill-alert { background: rgba(255, 143, 143, 0.14); color: #ffb0b0; }
+.kai-pill-alert::before { border-radius: 2px; background: #ff8f8f; }
+.kai-pill-outline { background: transparent; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16); font-weight: 500; }
+.kai-pill-amber { background: transparent; box-shadow: inset 0 0 0 1px rgba(255, 197, 110, 0.6); color: #ffd79a; }
+@keyframes kai-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .kai-pill-busy::before { animation: none; } }
+/* The catalog's categories */
+.kai-apps-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.kai-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #c4cdd2;
+  font-weight: 500;
+  text-decoration: none;
+}
+.kai-chip:hover { background: rgba(255, 255, 255, 0.06); color: var(--kai-title); text-decoration: none; }
+.kai-chip[aria-current="page"] {
+  border-color: var(--kai-mint-ring);
+  background: var(--kai-mint-soft);
+  color: var(--kai-mint-text);
+  font-weight: 600;
+}
+.kai-apps-empty {
+  margin: 0;
+  padding: 18px 20px;
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  border-radius: 16px;
+  color: var(--kai-muted);
+}
+.kai-notice { margin: 0 0 16px; padding: 12px 16px; border-radius: 12px; line-height: 1.45; }
+.kai-notice-warn { background: rgba(255, 197, 110, 0.08); border: 1px solid rgba(255, 197, 110, 0.4); color: #ffe2b5; }
+.kai-notice-alert { background: rgba(255, 143, 143, 0.08); border: 1px solid rgba(255, 143, 143, 0.4); color: #ffd0d0; }
+/* An app's own page */
+.kai-apps-back { margin: 0 0 14px; }
+.kai-apps-back a { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; font-weight: 600; text-decoration: none; }
+.kai-app-panel { padding: 22px; }
+.kai-app-panel h2 { margin: 0 0 12px; font-size: 18px; font-weight: 600; color: var(--kai-title); }
+.kai-app-panel-text { margin: 0 0 12px; line-height: 1.5; }
+.kai-app-panel-note {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--kai-line);
+  color: var(--kai-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.kai-app-hero { margin-bottom: 20px; }
+.kai-app-hero-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; }
+.kai-app-hero .kai-app-logo { width: 60px; height: 60px; padding: 9px; border-radius: 14px; }
+.kai-app-hero .kai-app-initial { font-size: 24px; }
+.kai-app-hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.kai-app-hero-text { margin: 14px 0 0; max-width: 760px; color: var(--kai-muted); font-size: 15px; line-height: 1.5; }
+.kai-app-hero .kai-notice { margin: 14px 0 0; }
+.kai-app-columns { display: flex; align-items: flex-start; gap: 20px; }
+.kai-app-column { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
+/* One column below that, in the order you'd want it: how to sign in, details, files, uninstall */
+@media (max-width: 991.98px) {
+  .kai-app-columns { flex-direction: column; align-items: stretch; }
+  .kai-app-column { display: contents; }
+  .kai-app-panel-signin { order: 1; }
+  .kai-app-panel-details { order: 2; }
+  .kai-app-panel-files { order: 3; }
+  .kai-app-danger { order: 4; }
+}
+.kai-app-facts { display: grid; grid-template-columns: minmax(0, 110px) minmax(0, 1fr); gap: 10px 16px; margin: 0; }
+.kai-app-facts dt { color: var(--kai-muted); font-weight: 500; }
+.kai-app-facts dd { margin: 0; overflow-wrap: anywhere; }
+.kai-app-facts code { color: var(--kai-text); }
+.kai-secret { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+.kai-secret-label { color: var(--kai-muted); font-size: 13px; }
+.kai-secret-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.kai-secret-actions { flex: none; display: flex; gap: 8px; }
+.kai-secret-box {
+  flex: 1 1 220px;
+  min-width: 0;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-family: var(--bs-font-monospace);
+  overflow-wrap: anywhere;
+}
+.kai-secret-box [data-secret-mask] { letter-spacing: 0.12em; }
+.kai-secret-box code { padding: 0; background: none; color: var(--kai-text); font-size: 14px; }
+.kai-app-danger { border-color: rgba(255, 143, 143, 0.32); }
+.kai-app-danger .btn-outline-danger { color: #ffb0b0; border-color: #ff8f8f; }
+.kai-app-danger .btn-outline-danger:hover { background: rgba(255, 143, 143, 0.12); color: #ffd0d0; }

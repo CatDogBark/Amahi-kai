@@ -26,7 +26,7 @@ When someone clicks **Install**, Amahi-kai's root helper:
    `/var/lib/amahi-kai/apps/<id>/`, owned by that user. Folders marked `kind: dataset` go on a
    ZFS pool instead (below).
 3. Generates the secrets your manifest asks for (an admin token, a password), shown to the
-   server's admins on the Apps page, and kept for the next install.
+   server's admins on the app's page (Apps → **Manage**), and kept for the next install.
 4. Pulls your image, by its digest.
 5. Creates the container:
    - as the app's user (`--user <uid>:<gid>`) when the manifest says `run_as: app`;
@@ -195,8 +195,8 @@ script/app-versions --catalog ../amahi-kai-apps/apps --update yourapp
 ```
 
 Read the release notes first: a new major version can need changes to the manifest. Within 6
-hours of the merge, every server running your app shows **Update** on its row, and the update
-notice on its dashboard.
+hours of the merge, every server running your app marks it **Update ready** on the Apps page, with
+**Update** on its page, and the update notice on its dashboard.
 
 ### New manifest fields
 

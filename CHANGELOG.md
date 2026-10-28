@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+### 🚀 Major Features
+
+- **The Apps page, laid out again** (Apps) — Your apps come first, as cards that say in a word whether each is **Running**, **Stopped**, **Installing…** or **Needs attention**, with **Open** (or **Start**) and **Manage**; below them, **Add apps** lists the catalog's other apps by category, with **Install**. Before, one table mixed both, the state of an app was only told by its buttons, and each app's sign-in and passwords sat on a row of their own that read like another app. **Manage** opens the app's own page, with everything else: how to sign in and the passwords Amahi-kai made for it, hidden until **Show** (**Copy** copies one without showing it), its address, ports and version (**Update**, **Undo update**), its shares and storage (**Change**), and **Stop** and **Uninstall**. The Installed tab is gone; its old address opens the Apps page.
+
 ## [1.4.0] — 2026-10-27
 
 Devices keep their names wherever DHCP puts them and apps reach them by name, so a camera viewer needs no fixed addresses; Install asks for shares only for apps that work with files in them; and bitStream brings the home's cameras to the browser, Android and the KDE desktop.

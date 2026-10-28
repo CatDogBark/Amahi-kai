@@ -105,7 +105,7 @@
         <% apps_here = Array(@pool_apps[pool.name]) %>
         <% if apps_here.any? %>
           <p class="small mt-1 mb-0" id="pool-apps-<%= pool.name %>">
-            Apps keeping their data here: <%= safe_join(apps_here.map { |app| link_to(app, apps_installed_apps_path) }, ', ') %>.
+            Apps keeping their data here: <%= safe_join(apps_here.map { |app| link_to(app, apps_index_path) }, ', ') %>.
             <span class="text-muted">While they're installed, it can't be taken offline or deleted; a roll-back stops them while it runs, then starts them again.</span>
           </p>
         <% end %>

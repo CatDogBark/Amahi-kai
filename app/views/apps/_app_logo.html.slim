@@ -1,0 +1,8 @@
+/ An app's logo, or its first letter when it has none or the logo doesn't load (dispatch.js,
+/ data-fallback). Its name is beside it, so the picture says nothing more to a screen reader.
+- initial = name.to_s[0].to_s.upcase
+- if logo.present?
+  img.kai-app-logo src=logo alt="" data-fallback=""
+  span.kai-app-logo.kai-app-initial.d-none data-fallback-for="logo" aria-hidden="true" = initial
+- else
+  span.kai-app-logo.kai-app-initial aria-hidden="true" = initial

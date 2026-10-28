@@ -1,0 +1,175 @@
+/ An installed app's own page (Manage on the Apps page): its state, with Open and Stop, Start, or
+/ Install again; how to sign in and the passwords and keys Amahi-kai made for it, hidden until
+/ Show; its address, ports and version (Update, Undo update); its shares and storage (Change); and
+/ Uninstall. The buttons post to the apps actions or open the install window (apps.js), and the
+/ page reloads; an app uninstalled here goes back to the Apps page.
+- app = @app
+- identifier = app.identifier
+- name = app.name
+- status = app.status
+- entry = AppCatalog.find(identifier) || {}
+/ An app reached only through Tailscale, over HTTPS (P4.7): the NAS's name on its tailnet while
+/ Tailscale can serve it, else nil
+- tailnet = TailscaleService.https_name if entry[:access] == 'tailscale'
+- link = app.url(request.host)
+/ An app's port isn't on the Cloudflare Tunnel; one reached through Tailscale opens anywhere on the tailnet
+- tunnel_only = via_tunnel? && !tailnet
+/ The share dialog (_shares_dialog, apps.js) opens from buttons carrying these, then installs the
+/ app again. An app that doesn't work with shares (uses-shares false) skips it, unless it has a
+/ pool to choose or shares given before.
+- storage_pool = AppCatalog.storage_pool(identifier) if entry[:storage]
+- current_shares = app.shares
+- shows_shares = entry[:uses_shares] != false || current_shares.any?
+- share_dialog = { 'app-shares' => identifier, 'app-name' => name, 'url' => apps_docker_install_stream_path(identifier),
+                   'writes' => entry[:writes_shares].to_s, 'current' => current_shares.to_json,
+                   'uses-shares' => entry[:uses_shares].to_s, 'storage' => entry[:storage].to_s, 'storage-pool' => storage_pool.to_s }
+- data_path = File.join(AppCatalog.apps_root, identifier)
+- kept = storage_pool ? "Its data stays on the ZFS pool #{storage_pool}, and its settings in #{data_path}: both are used again if you install it later." : "Its data stays in #{data_path} and is used again if you install it later."
+- secrets = AppCatalog.secrets(identifier)
+- sign_in = entry[:sign_in]
+- missing = app.missing_folders
+- versioned = %w[running stopped].include?(status)
+
+p.kai-apps-back
+  a href=apps_index_path
+    = lucide_icon('chevron-left', size: 16)
+    | All apps
+
+section.kai-app-panel.kai-app-hero id="docker_app_#{identifier}" aria-label=name
+  .kai-app-hero-row
+    .kai-app-hero-id
+      = render 'app_logo', name: name, logo: app.logo_url
+      .kai-app-pills
+        = render 'app_status', app: app
+        - if app.category.present?
+          span.kai-pill.kai-pill-outline = app.category.capitalize
+        - if app.tailscale_only?
+          span.kai-pill.kai-pill-outline Tailscale only
+    .kai-app-hero-actions
+      - case status
+      - when 'running'
+        - if link && tunnel_only
+          span.kai-app-card-note Open it on your LAN or Tailscale
+        - elsif link
+          a.btn.btn-primary id="app-open-#{identifier}" href=link target="_blank" rel="noopener"
+            | Open
+            = lucide_icon('arrow-up-right', size: 15)
+        button.btn.btn-outline-secondary type="button" data-call="dockerAppAction" data-args='["/apps/docker/stop/#{identifier}", "@el"]' Stop
+      - when 'stopped'
+        button.btn.btn-primary type="button" data-call="dockerAppAction" data-args='["/apps/docker/start/#{identifier}", "@el"]' Start
+      - when 'error'
+        button.btn.btn-primary type="button" data=share_dialog.merge('verb' => 'Install again') Install again
+  p.kai-app-hero-text = app.description.presence || t('no_description_supplied')
+  - if status == 'error' && app.error_message.present?
+    p.kai-notice.kai-notice-alert id="app-error-#{identifier}" = app.error_message
+  / A folder it was given that's gone (renamed or moved): it can't start until it's given its folders again
+  - if missing.any?
+    p.kai-notice.kai-notice-warn id="app-missing-folders-#{identifier}"
+      = "#{missing.to_sentence} #{missing.one? ? "isn't" : "aren't"} there any more (renamed, moved or deleted): #{name} can't start until Change gives it its folders again."
+
+.kai-app-columns
+  .kai-app-column
+    / How to sign in the first time (the manifest's sign_in), above what Amahi-kai made for it
+    - if sign_in.present? || secrets.any?
+      section.kai-app-panel.kai-app-panel-signin aria-labelledby="app-sign-in-head"
+        h2#app-sign-in-head Sign in
+        - if sign_in.present?
+          p.kai-app-panel-text id="app-sign-in-#{identifier}" = sign_in
+        - secrets.each_with_index do |secret, index|
+          .kai-secret
+            span.kai-secret-label id="app-secret-#{identifier}-#{index}" = secret[:label]
+            .kai-secret-row
+              span.kai-secret-box
+                span data-secret-mask="" aria-hidden="true" ••••••••••••••••••••
+                span.visually-hidden data-secret-mask="" Hidden: Show shows it
+                code data-secret-value="" hidden=true = secret[:value]
+              span.kai-secret-actions
+                button.btn.btn-outline-secondary type="button" data-secret-toggle="" aria-pressed="false" aria-describedby="app-secret-#{identifier}-#{index}" Show
+                button.btn.btn-outline-primary type="button" data-copy=secret[:value] aria-describedby="app-secret-#{identifier}-#{index}" Copy
+
+    section.kai-app-panel.kai-app-panel-files aria-labelledby="app-files-head"
+      h2#app-files-head Files and storage
+      dl.kai-app-facts
+        dt Shares
+        - if shows_shares
+          dd id="app-shares-#{identifier}"
+            = current_shares.any? ? app.share_summary : 'None'
+            button.btn.btn-link.p-0.ms-2.align-baseline type="button" style="font-size: inherit" data=share_dialog.merge('verb' => 'Save and restart') Change
+        - else
+          dd Not used
+        - if entry[:storage]
+          dt Storage
+          dd id="app-storage-#{identifier}"
+            - if storage_pool
+              | Its data is on the ZFS pool
+              =< link_to storage_pool, disks_pools_path
+            - elsif entry[:storage] == :required
+              | Its data needs a ZFS pool now, and it has none: Change gives it one. What it kept on the system disk isn't moved.
+            - else
+              | No pool for its data: what it keeps on one is off. Change gives it one.
+            / An app that doesn't work with shares has its own Change here, to choose the pool
+            - if !storage_pool && !shows_shares
+              button.btn.btn-link.p-0.ms-2.align-baseline type="button" style="font-size: inherit" data=share_dialog.merge('verb' => 'Save and restart') Change
+        dt Its settings
+        dd
+          code = data_path
+
+  .kai-app-column
+    section.kai-app-panel.kai-app-panel-details aria-labelledby="app-details-head"
+      h2#app-details-head Details
+      dl.kai-app-facts
+        - if link
+          dt Address
+          dd id="app-address-#{identifier}"
+            - if tunnel_only
+              | On your LAN or Tailscale
+            - else
+              = link_to link.delete_suffix('/').sub(%r{\Ahttps?://}, ''), link, target: '_blank', rel: 'noopener'
+        - if app.ports.any?
+          dt = app.ports.map { |port| port[:host] }.uniq.one? ? 'Port' : 'Ports'
+          dd id="app-ports-#{identifier}" = app.port_summary
+        / Versions (P4.5): Update when the catalog has another one, Undo update while the copy from
+        / before the last update is kept. Both run in the install window (apps.js).
+        - if versioned
+          - backup = AppCatalog.backup(identifier)
+          dt Version
+          dd id="app-version-#{identifier}"
+            = app.version
+            - if app.update_available? && entry[:installable] == false
+              span.text-warning.ms-2 = "#{app.catalog_version} needs a newer Amahi-kai: run System Update first"
+            - elsif app.update_available?
+              - target = app.catalog_version
+              button.btn.btn-link.p-0.ms-2.align-baseline.fw-semibold type="button" style="font-size: inherit" data-app-stream=identifier data-url=apps_docker_update_stream_path(identifier) data-title="Updating #{name}..." data-confirm="Update #{name} to #{target}? It stops for a minute or two. A copy of its data is kept for #{AppCatalog::BACKUP_DAYS} days, and if #{target} doesn't come up, #{name} goes back to #{app.version} by itself." = "Update to #{target}"
+              - releases = AppCatalog.releases_url(identifier, entry[:image])
+              - if releases
+                a.ms-2 href=releases target="_blank" rel="noopener" What's new
+            - if backup
+              button.btn.btn-link.p-0.ms-2.align-baseline type="button" style="font-size: inherit" data-app-stream=identifier data-url=apps_docker_undo_update_stream_path(identifier) data-title="Undoing #{name}'s update..." data-confirm="Undo the update? #{name} goes back to #{AppCatalog.tag(backup[:from])} with its data from #{time_ago_in_words(backup[:taken_at])} ago. Anything changed in #{name} since then is lost#{backup[:snapshot] ? ", and so are the ZFS pool's own snapshots of its data taken since" : ''}." Undo update
+              span.text-secondary.ms-1 = safe_join(['(until ', local_time_tag(backup[:until], 'month-day'), ')'])
+      - if entry[:access] == 'tailscale'
+        .kai-app-panel-note id="app-tailscale-#{identifier}"
+          - if !tailnet
+            span.text-warning
+              | Reached only through Tailscale, over HTTPS: it needs Tailscale on the NAS, connected, with
+                MagicDNS and HTTPS Certificates on in Tailscale's admin console (DNS).
+            =< link_to 'Remote Access', remote_access_index_path
+          - elsif link
+            | Tailscale only: open it from a device on your tailnet, at
+            =< link
+            / Its address goes into its settings when its container is made: after a rename of the
+            / NAS in Tailscale, making the container again gives it the new one
+            .mt-1 id="app-tailscale-rename-#{identifier}"
+              | If you rename the NAS in Tailscale,
+              button.btn.btn-link.p-0.ms-1.align-baseline type="button" style="font-size: inherit" data=share_dialog.merge('verb' => 'Save and restart', 'title' => "Giving #{name} its new address...") give #{name} its new address
+          - else
+            | Reached only through Tailscale, over HTTPS: devices on your tailnet open it at the NAS's name there.
+
+    section.kai-app-panel.kai-app-danger aria-labelledby="app-uninstall-head"
+      h2#app-uninstall-head Uninstall
+      p.kai-app-panel-text = kept
+      button.btn.btn-outline-danger type="button" data-confirm="Uninstall #{name}? #{kept}" data-call="dockerAppAction" data-args='["/apps/docker/uninstall/#{identifier}", "@el"]' = "Uninstall #{name}"
+
+== render 'shared/install_terminal', id: 'app', title: 'Installing App', stream_url: ''
+== render 'shares_dialog', shares: @shares, pools: @storage_pools
+
+= javascript_include_tag 'apps'
