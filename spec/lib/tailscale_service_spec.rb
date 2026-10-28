@@ -71,6 +71,26 @@ RSpec.describe TailscaleService do
       tailscale_status('not json')
       expect(described_class.status).to eq({ installed: true, running: false })
     end
+
+    # P4.7: an app reached only through Tailscale needs MagicDNS and HTTPS certificates for the
+    # NAS's name, both switched on for the tailnet
+    it "says whether MagicDNS and HTTPS certificates are on, and names the NAS for apps served over HTTPS" do
+      allow(described_class).to receive(:installed?).and_return(true)
+      ready = { 'Self' => { 'DNSName' => 'myhost.tail123.ts.net.' }, 'CurrentTailnet' => { 'MagicDNSEnabled' => true },
+                'CertDomains' => ['myhost.tail123.ts.net'] }
+      tailscale_status(status_json('Running', **ready))
+      expect(described_class.status).to include(magic_dns_on: true, https_certificates: true)
+      expect(described_class.https_name).to eq('myhost.tail123.ts.net')
+
+      tailscale_status(status_json('Running', **ready.except('CertDomains')))
+      expect(described_class.status).to include(magic_dns_on: true, https_certificates: false)
+      expect(described_class.https_name).to be_nil
+
+      tailscale_status(status_json('Running', **ready.merge('CurrentTailnet' => { 'MagicDNSEnabled' => false })))
+      expect(described_class.https_name).to be_nil
+      tailscale_status(status_json('NeedsLogin', **ready))
+      expect(described_class.https_name).to be_nil
+    end
   end
 
   describe '.install!' do

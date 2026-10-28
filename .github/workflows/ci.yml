@@ -10,10 +10,13 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Every job stops after 20 minutes: a step that hangs (an apt mirror that stopped answering
+# held three jobs for 18 minutes on 2026-10-27) fails then, instead of after GitHub's 6 hours.
 jobs:
   models:
     name: Model Specs
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       RAILS_ENV: test
       BUNDLE_JOBS: 4
@@ -53,6 +56,7 @@ jobs:
   requests:
     name: Request Specs
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       RAILS_ENV: test
       BUNDLE_JOBS: 4
@@ -99,6 +103,7 @@ jobs:
   lib:
     name: Lib Specs
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       RAILS_ENV: test
       BUNDLE_JOBS: 4
@@ -149,6 +154,7 @@ jobs:
   root:
     name: Root Specs
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       RAILS_ENV: test
       BUNDLE_JOBS: 4
@@ -178,6 +184,7 @@ jobs:
     needs: [models, requests, lib]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       RAILS_ENV: test
       BUNDLE_JOBS: 4
@@ -293,6 +300,7 @@ jobs:
     # only one of them accepts. DATABASE_URL replaces the test database settings.
     name: Specs on MariaDB
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       mariadb:
         image: mariadb:10.11  # what Ubuntu 24.04 ships
@@ -336,6 +344,7 @@ jobs:
   lint:
     name: Lint & Security
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: ruby/setup-ruby@v1
@@ -369,6 +378,7 @@ jobs:
   browser:
     name: Browser
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       RAILS_ENV: test
       BUNDLE_JOBS: 4

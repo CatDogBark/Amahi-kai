@@ -47,9 +47,9 @@ Click **Fix All**, or a check's own **Fix** button. The progress streams as it r
 
 - **Firewall:** turns on UFW with Amahi-kai's rules: SSH, the web UI (3000), HTTPS and Samba,
   plus DHCP when Amahi-kai runs dnsmasq for your network, and DNS to the NAS's DNS addresses while
-  Network → DNS is on. Nothing on the NAS serves HTTPS yet (it comes after 1.0), so its port is
-  open with nothing behind it; apps' ports are Docker's and limited to the LAN and Tailscale (see
-  below).
+  Network → DNS is on. Nothing on the NAS serves HTTPS on the LAN yet, so its port is open with
+  nothing behind it; apps' ports are Docker's and limited to the LAN and Tailscale (see below), and
+  an app reached only through Tailscale (Vaultwarden) is served over HTTPS on the tailnet alone.
 - **SSH:** turns off root login and password login. **Password login is only turned off once an
   account that can log in has an SSH key**, so the fix can't lock you out. Set up a key first
   (below).

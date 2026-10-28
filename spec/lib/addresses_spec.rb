@@ -28,4 +28,17 @@ RSpec.describe 'Addresses of Amahi-kai and its apps' do
     expect(DockerApp.new(identifier: 'bitshare', host_port: 8443).url('192.168.1.111')).to eq('https://192.168.1.111:8443/')
     expect(DockerApp.new(identifier: 'gitea', host_port: 3300).url('192.168.1.111')).to eq('http://192.168.1.111:3300/')
   end
+
+  # P4.7: whatever address the page was opened by, and none while Tailscale can't serve it
+  it "makes the address of an app reached only through Tailscale its HTTPS one at the NAS's name on the tailnet" do
+    allow(AppCatalog).to receive(:find).and_call_original
+    allow(AppCatalog).to receive(:find).with('vaultwarden').and_return({ access: 'tailscale' })
+    vault = DockerApp.new(identifier: 'vaultwarden', host_port: 8880)
+    allow(TailscaleService).to receive(:https_name).and_return('amahi-kai.tail1234.ts.net')
+    expect(vault.url('192.168.1.111')).to eq('https://amahi-kai.tail1234.ts.net:8880/')
+    expect(vault).to be_tailscale_only
+    allow(TailscaleService).to receive(:https_name).and_return(nil)
+    expect(vault.url('192.168.1.111')).to be_nil
+    expect(DockerApp.new(identifier: 'gitea', host_port: 3300)).not_to be_tailscale_only
+  end
 end

@@ -39,14 +39,24 @@ class DockerApp < ApplicationRecord
   end
 
   # The app's page, on its own port of the NAS (docs/plans/apps.md, O3): HTTPS when its manifest
-  # says its page is (`web_tls`, with its own certificate). Every address of an app is made here
-  # (and Amahi-kai's by ApplicationHelper#amahi_url), so HTTPS can change them in one place
-  # later. A spec checks.
+  # says its page is (`web_tls`, with its own certificate). An app reached only through Tailscale
+  # (`access: tailscale`, P4.7) is at the NAS's name on the tailnet over HTTPS, whatever +host+
+  # the page was opened by, and has no address while Tailscale can't serve it. Every address of
+  # an app is made here (and Amahi-kai's by ApplicationHelper#amahi_url), so HTTPS can change
+  # them in one place later. A spec checks.
   def url(host)
     return unless host_port
 
-    scheme = AppCatalog.find(identifier)&.dig(:web_tls) ? 'https' : 'http'
+    entry = AppCatalog.find(identifier)
+    return (name = TailscaleService.https_name) && "https://#{name}:#{host_port}/" if entry&.dig(:access) == 'tailscale'
+
+    scheme = entry&.dig(:web_tls) ? 'https' : 'http'
     "#{scheme}://#{host}:#{host_port}/"
+  end
+
+  # Whether the app is reached only through Tailscale, over HTTPS (its manifest's access).
+  def tailscale_only?
+    AppCatalog.find(identifier)&.dig(:access) == 'tailscale'
   end
 
   # [{ host:, container:, protocol:, label: }]: the ports the app was given at install.

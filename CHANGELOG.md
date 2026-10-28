@@ -4,6 +4,21 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-10-27
+
+Vaultwarden works now, reached only from devices on your Tailscale network, over HTTPS with Tailscale's certificate, and given its admin token hashed; CI jobs have time limits.
+
+### 🔒 Security & Fixes
+
+- **Vaultwarden works, reached only through Tailscale over HTTPS** (Apps) — Vaultwarden couldn't be used: browsers won't run its web vault over plain HTTP, and the Bitwarden apps now refuse a server that isn't HTTPS, so only its admin page answered. An app like it is now reached only from devices on your Tailscale network, at `https://<the server's name on your tailnet>:<its port>`, with Tailscale's certificate. It's never on the LAN or the internet: its port is open on the server itself only, and it isn't announced on the LAN. It installs once the server's Tailscale is connected with MagicDNS and HTTPS Certificates on (switches in Tailscale's admin console, under DNS); until then the Apps page says what's missing, and Network → Remote Access shows whether HTTPS certificates are on. Vaultwarden itself comes to this with the catalog's next change.
+- **An app's admin token can be given to it hashed** (Apps) — Vaultwarden warned that its admin token was given to it as plain text. An app can now be given an Argon2id hash of a password Amahi-kai makes, while its row on the Apps page still shows the password itself to sign in with.
+
+### 🔧 Architecture & Code Quality
+
+- **Apps reached only through Tailscale, and hashed secrets** (catalog format 5) — A manifest that says `requires: 5` can set `access: tailscale`: its ports are published on the server itself only, its web port is served on the tailnet over HTTPS by `tailscale serve`, and `{{tailscale_url}}` in its environment is that address. A secret can say `hash: argon2`, and the container gets an Argon2id hash of it (Ubuntu's `argon2` is installed the first time one is needed). Servers on an older Amahi-kai list such an app as needing a newer one.
+- **CI jobs have time limits** — A step that hung ran until GitHub's 6-hour limit: an Ubuntu mirror that stopped answering held three CI jobs on `apt-get` until they were cancelled by hand. CI's jobs now stop after 20 minutes, the release after 15 and the website's deploy after 10, so a hang fails and can be run again.
+- **`config.ru` and the `Rakefile` as Rails 8 writes them** — They did the same job in Rails 3's words (`File.expand_path(..., __FILE__)`, a stray shebang, the application's class by name); both now use `require_relative` and `Rails.application`. Nothing changes in how the server starts or the tasks run.
+
 ## [1.2.0] — 2026-10-26
 
 Apps can be given only some folders of a share rather than all of it, and services with nothing to do (Greyhole without drives, SMART monitoring without a drive that has SMART) no longer fail at every boot.

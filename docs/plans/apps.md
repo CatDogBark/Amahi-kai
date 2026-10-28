@@ -152,7 +152,8 @@ Decisions (CatDogBark, 2026-10-04):
   one, and keeps it through reinstalls (`/var/lib/amahi-kai/app-ports.json`). The Apps page shows
   every port each app uses.
 - [x] **Plain HTTP on the LAN**, like the admin UI. Vaultwarden's web vault needs HTTPS, so it
-  waits for HTTPS through Tailscale (later; turned on in the Tailscale admin console).
+  waited for HTTPS through Tailscale (turned on in the Tailscale admin console): P4.7, where it's
+  reached only through Tailscale.
 - [x] **No host networking.** Docker forwards each app's ports to its container; an app with the
   NAS's own network could open any port and get around the rules above.
 - [x] **Outgoing internet access allowed** (metadata, monitors, peers, mirrors).
@@ -160,7 +161,7 @@ Decisions (CatDogBark, 2026-10-04):
 ### P4.3: Apps through Cloudflare (optional, later)
 
 A specialty case since P4.2: Tailscale is the default way to reach apps from outside. Built if an
-app needs a public hostname. HTTPS for apps through Tailscale (Vaultwarden needs it) comes first.
+app needs a public hostname. HTTPS for apps through Tailscale (Vaultwarden needs it) came first: P4.7.
 
 - [ ] Hostname naming (`jellyfin.example.com`, or chosen per app).
 - [ ] Which apps may be published at all, and whether each needs Cloudflare Access in front.
@@ -238,8 +239,10 @@ Decided (CatDogBark, 2026-10-06): app updates mustn't wait for an Amahi-kai upda
 - [x] **The fetched catalog comes first** for the helper and the pages; `config/apps` is the copy
   that comes with Amahi-kai, for a NAS that hasn't fetched one yet, and for an app the catalog
   no longer lists. Bring it up to date with the repo now and then.
-- [x] **Formats.** A manifest's `requires` (default 1) is the catalog format it needs. This
-  Amahi-kai knows format 1 (`CATALOG_FORMAT`, `AppCatalog::FORMAT`); an app or update that needs
+- [x] **Formats.** A manifest's `requires` (default 1) is the catalog format it needs. An
+  Amahi-kai knows the formats up to its own (`CATALOG_FORMAT`, `AppCatalog::FORMAT`): 2 adds
+  `web_tls`, 3 folders' `kind` and `required` (P4.6), 4 names as the app spells them and secrets
+  inside values, 5 `access: tailscale` and a secret's `hash` (P4.7). An app or update that needs
   more is listed with "Needs a newer Amahi-kai: run System Update first", and the helper refuses
   to install it. A new manifest field raises the format, so older NASes don't misread it.
 
@@ -317,6 +320,46 @@ install on pools: certain things they keep do.
 - [x] Where its image comes from: built from `~/Projects/bitShare`, published to GHCR by its tag
   workflow, pinned in the catalog (0.3.0 on 2026-10-10); the image carries the Linux client for
   computers to download.
+
+### P4.7: Apps reached only through Tailscale (catalog format 5)
+
+CatDogBark (2026-10-27): Vaultwarden can't work over plain HTTP. Browsers keep its web vault from
+running there (it encrypts in the page, which browsers allow only on HTTPS pages), and the
+Bitwarden apps refuse a server that isn't HTTPS: their command-line client since 2025.11 ("Insecure URL
+not allowed"), and the Android app over LAN HTTP since about 2025.8. A password server also has
+no business on the internet, and apps aren't on the Cloudflare Tunnel by design. So it's reached
+only through Tailscale, over HTTPS with Tailscale's certificate for the NAS's name; HTTPS on the
+LAN for everything stays a later, optional front door (roadmap, "HTTPS on the LAN").
+
+- [x] **`access: tailscale`** (format 5): the app's ports are published on `127.0.0.1` only, and its
+  `web_port` is served on the tailnet by `tailscale serve --bg --https=<port> http://127.0.0.1:<port>`,
+  at the same port number (the address `https://<the NAS's name on the tailnet>:<port>`).
+  tailscaled keeps the serve entry across restarts; it's set again with each new container and
+  removed at uninstall. `{{tailscale_url}}` in the environment is that address (Vaultwarden's
+  `DOMAIN`, for its links and passkeys). The page must be plain HTTP on TCP (not `web_tls`).
+  An older Amahi-kai lists the app as needing a newer one instead of putting it on the LAN.
+- [x] **Refused, before anything changes, while Tailscale can't serve it**: install, update and
+  undo say what's missing. They want Tailscale installed and connected, MagicDNS on, and HTTPS
+  Certificates on, with the NAS's name among `tailscale status`'s `CertDomains`. The Apps page
+  says so on the app's row (no Install until then), and Remote Access shows HTTPS certificates
+  on or off.
+- [x] **Not announced on the LAN** (nothing there can open it), and **Open** goes to the tailnet
+  address, through the Cloudflare Tunnel too.
+- [x] **A secret's `hash: argon2`** (format 5): the container gets an Argon2id hash of it (PHC form,
+  OWASP's settings: `-id -k 19456 -t 2 -p 1`), from Ubuntu's `argon2`, installed by the helper the
+  first time it's needed. The secret goes on argon2's stdin, with a new salt for each container.
+  The Apps page shows the token itself, to sign in with. Vaultwarden's `ADMIN_TOKEN` takes it, so
+  Vaultwarden stops warning about a plain-text token.
+- [x] **Vaultwarden's manifest** (the catalog's PR, after this release): `requires: 5`, `access:
+  tailscale`, `DOMAIN: "{{tailscale_url}}"`, `hash: argon2` on `ADMIN_TOKEN`, and a first sign-in
+  note. Sign-ups stay on at install (CatDogBark, 2026-10-27): the household makes its accounts,
+  then turns them off on `/admin`. It keeps its own port, `:8880`, so 443 on the tailnet is left
+  for Amahi-kai's own HTTPS later.
+- [ ] `config/apps` brought up to date from the catalog once its PR is merged (the copy comes
+  after the catalog). Specs that use Vaultwarden as their sample app then stub Tailscale's readiness.
+- Renaming the NAS in Tailscale leaves the app's `DOMAIN` on the old name until its container is
+  made again (Change → Save and restart): the wiki says so. Following a rename on its own can
+  come later.
 
 ### Also in Phase 4
 

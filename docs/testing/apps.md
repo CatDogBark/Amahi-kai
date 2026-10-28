@@ -66,10 +66,19 @@ one up as soon as it's installed.
   services and paste a TMDB key: their tabs fill in. Give it a share with **Read and write**
   (Change next to its shares), set its download folder to `/shares/<name>`, and download a video:
   it appears in the share as an MP4.
-- [ ] **Vaultwarden** (port 8880): it installs and runs. Its `/admin` page
-  (`http://192.168.1.1:8880/admin`) takes the token under **Passwords and keys**. The web vault
-  itself needs HTTPS, which comes later through Tailscale, so creating an account there is
-  expected to fail for now.
+- [ ] **Vaultwarden** (port 8880, reached only through Tailscale): with Tailscale off on the NAS, or
+  HTTPS Certificates off for the tailnet, its row says what's missing and offers no Install. With
+  both on, it installs. Then:
+  - Its row says **Tailscale only**, and **Open** goes to
+    `https://<the NAS's name on the tailnet>:8880/`.
+  - On a device on the tailnet, that page opens with a valid certificate, and the web vault lets
+    you create an account.
+  - A Bitwarden app signs in with that address as its self-hosted server.
+  - `/admin` takes the token under **Passwords and keys**; the container itself has only an
+    Argon2id hash of it (`$argon2id$…`).
+  - From a LAN device without Tailscale, `http://<NAS>:8880` doesn't answer.
+  - After a restart of the NAS it's served again.
+  - Uninstalled, `sudo tailscale serve status` no longer lists port 8880.
 
 Then check they run as their own users, with their own folders:
 
