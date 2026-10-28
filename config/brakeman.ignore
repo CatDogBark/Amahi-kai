@@ -41,6 +41,75 @@
         1104
       ],
       "note": "Production runs Ubuntu 24.04 ruby3.2, which Ubuntu keeps patching for the life of the release; .ruby-version only sets the CI Ruby. Decided in Phase 3 planning (2026-10-03)."
+    },
+    {
+      "warning_type": "Command Injection",
+      "warning_code": 14,
+      "fingerprint": "4d5f0c190d69a149a69e181457a52808cfc83b5ee380b3b3af735736f2d37b04",
+      "check_name": "Execute",
+      "message": "Possible command injection",
+      "file": "libexec/amahi-helper.d/system.rb",
+      "line": 591,
+      "link": "https://brakemanscanner.org/docs/warning_types/command_injection/",
+      "code": "Open3.capture3({ \"PATH\" => \"/usr/sbin:/usr/bin:/sbin:/bin\", \"GIT_TERMINAL_PROMPT\" => \"0\" }, [([\"/usr/bin/git\", \"-c\", \"core.hooksPath=/dev/null\", \"-c\", \"core.fsmonitor=false\", \"-c\", \"protocol.allow=never\", *[\"https\"].flat_map do\n [\"-c\", \"protocol.#{name}.allow=always\"]\n end, *repo ? ([\"-C\", \"/var/lib/amahi-kai/catalog-src\"]) : ([]), *args] or [\"/usr/bin/timeout\", timeout.to_s, *[\"/usr/bin/git\", \"-c\", \"core.hooksPath=/dev/null\", \"-c\", \"core.fsmonitor=false\", \"-c\", \"protocol.allow=never\", *[\"https\"].flat_map do\n [\"-c\", \"protocol.#{name}.allow=always\"]\n end, *repo ? ([\"-C\", \"/var/lib/amahi-kai/catalog-src\"]) : ([]), *args]])[0], ([\"/usr/bin/git\", \"-c\", \"core.hooksPath=/dev/null\", \"-c\", \"core.fsmonitor=false\", \"-c\", \"protocol.allow=never\", *[\"https\"].flat_map do\n [\"-c\", \"protocol.#{name}.allow=always\"]\n end, *repo ? ([\"-C\", \"/var/lib/amahi-kai/catalog-src\"]) : ([]), *args] or [\"/usr/bin/timeout\", timeout.to_s, *[\"/usr/bin/git\", \"-c\", \"core.hooksPath=/dev/null\", \"-c\", \"core.fsmonitor=false\", \"-c\", \"protocol.allow=never\", *[\"https\"].flat_map do\n [\"-c\", \"protocol.#{name}.allow=always\"]\n end, *repo ? ([\"-C\", \"/var/lib/amahi-kai/catalog-src\"]) : ([]), *args]])[0]], *([\"/usr/bin/git\", \"-c\", \"core.hooksPath=/dev/null\", \"-c\", \"core.fsmonitor=false\", \"-c\", \"protocol.allow=never\", *[\"https\"].flat_map do\n [\"-c\", \"protocol.#{name}.allow=always\"]\n end, *repo ? ([\"-C\", \"/var/lib/amahi-kai/catalog-src\"]) : ([]), *args] or [\"/usr/bin/timeout\", timeout.to_s, *[\"/usr/bin/git\", \"-c\", \"core.hooksPath=/dev/null\", \"-c\", \"core.fsmonitor=false\", \"-c\", \"protocol.allow=never\", *[\"https\"].flat_map do\n [\"-c\", \"protocol.#{name}.allow=always\"]\n end, *repo ? ([\"-C\", \"/var/lib/amahi-kai/catalog-src\"]) : ([]), *args]]).drop(1), :unsetenv_others => true, :chdir => \"/\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "AmahiHelper",
+        "method": "self.catalog_git"
+      },
+      "user_input": "name",
+      "confidence": "Medium",
+      "cwe_id": [
+        77
+      ],
+      "note": "The root helper runs git for the app catalog as an argument list (Open3 with an argv array: no shell), at a fixed path, with a minimal environment (unsetenv_others), hooks and fsmonitor off and only https allowed; its arguments come from the helper's own callers, never from the web app."
+    },
+    {
+      "warning_type": "SSL Verification Bypass",
+      "warning_code": 71,
+      "fingerprint": "4f8f568d905fd5780cce38e780fbe2cc9da2533dc10c7c645f5d4b4ff0ef7647",
+      "check_name": "SSLVerify",
+      "message": "SSL certificate verification was bypassed",
+      "file": "libexec/amahi-helper.d/apps.rb",
+      "line": 1262,
+      "link": "https://brakemanscanner.org/docs/warning_types/ssl_verification_bypass/",
+      "code": "OpenSSL::SSL::SSLContext.new.verify_mode = OpenSSL::SSL::VERIFY_NONE",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "AmahiHelper",
+        "method": "self.tls_answers?"
+      },
+      "user_input": null,
+      "confidence": "High",
+      "cwe_id": [
+        295
+      ],
+      "note": "The root helper's check that an app whose own page is HTTPS (web_tls, with its own certificate, often self-signed) answers on its port: it only completes a TLS handshake with the app on the server itself, and sends or trusts nothing over it, so there's no certificate to verify against."
+    },
+    {
+      "warning_type": "Remote Code Execution",
+      "warning_code": 25,
+      "fingerprint": "5c1f73aa7628b85220dd10e64cd4fa7dc26f8e4fce3abe2e0c0c6a2672886f16",
+      "check_name": "Deserialize",
+      "message": "Use of `Marshal.load` may be dangerous",
+      "file": "libexec/amahi-helper.d/network.rb",
+      "line": 581,
+      "link": "https://brakemanscanner.org/docs/warning_types/unsafe_deserialization",
+      "code": "Marshal.load(Marshal.dump(netplan_yaml(path)))",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "AmahiHelper",
+        "method": "self.pin_lan_netplan"
+      },
+      "user_input": null,
+      "confidence": "Weak",
+      "cwe_id": [
+        502
+      ],
+      "note": "Marshal.load(Marshal.dump(data)) deep-copies a Hash the root helper itself parsed with YAML.safe_load from the root-owned /etc/netplan files, to tell whether it changed: no serialized data from outside is ever loaded."
     }
   ],
   "brakeman_version": "8.1.0"

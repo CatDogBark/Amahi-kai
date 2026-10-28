@@ -368,6 +368,11 @@ jobs:
       # The root helper must load with the standard library alone (no gems, no Bundler).
       - name: Privileged helper self-test
         run: ruby --disable-gems libexec/amahi-helper --self-test
+      # And as it's installed: its parts joined into one file (bin/amahi-join-helper).
+      - name: Privileged helper self-test, joined
+        run: |
+          ruby --disable-gems bin/amahi-join-helper > "$RUNNER_TEMP/amahi-helper"
+          ruby --disable-gems "$RUNNER_TEMP/amahi-helper" --self-test
       # A sudoers file visudo rejects would be kept off the NAS; catch it here first.
       - name: Sudoers syntax
         run: sudo visudo -cf config/sudoers/amahi-kai

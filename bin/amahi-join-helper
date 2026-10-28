@@ -1,0 +1,39 @@
+#!/usr/bin/ruby --disable-gems
+# frozen_string_literal: true
+
+# Prints the root helper as the one file that's installed: libexec/amahi-helper with each of its
+# parts (libexec/amahi-helper.d/<part>.rb) in place of the require_relative line that loads it,
+# so the helper that runs as root loads nothing but Ruby's standard library.
+# bin/amahi-install-helper installs this output once it passes its self-test.
+#
+# Refuses (exit 1, nothing printed) a listed part that isn't there, a part in the folder that
+# isn't listed, any other require_relative, and a part that loads a file itself (require_relative
+# or load: a require, with gems off, reads only Ruby's own library, as a method does for openssl).
+
+libexec = File.expand_path('../libexec', __dir__)
+parts_dir = File.join(libexec, 'amahi-helper.d')
+part_line = %r{\Arequire_relative 'amahi-helper\.d/([a-z][a-z0-9-]*)'\n\z}
+refuse = ->(why) { warn "amahi-join-helper: #{why}"; exit 1 }
+
+listed = []
+out = +''
+File.foreach(File.join(libexec, 'amahi-helper')) do |line|
+  if (name = line[part_line, 1])
+    path = File.join(parts_dir, "#{name}.rb")
+    refuse.("#{path} isn't there") unless File.file?(path)
+    refuse.("#{name} is listed twice") if listed.include?(name)
+    text = File.read(path)
+    loads = text[/^\s*(?:require_relative|load)\b.*$/]
+    refuse.("#{name}.rb loads a file itself (#{loads.strip}): the parts are listed in libexec/amahi-helper") if loads
+    listed << name
+    out << "# ---- libexec/amahi-helper.d/#{name}.rb ----\n" << text.delete_prefix("# frozen_string_literal: true\n")
+    out << "\n" unless out.end_with?("\n")
+  elsif line.match?(/\A\s*require_relative\b/)
+    refuse.("#{line.strip}: only the parts are loaded, each on a line of its own")
+  else
+    out << line
+  end
+end
+unlisted = Dir.children(parts_dir).select { |file| file.end_with?('.rb') }.map { |file| File.basename(file, '.rb') } - listed
+refuse.("not listed in libexec/amahi-helper: #{unlisted.sort.join(', ')}") if unlisted.any?
+$stdout.write(out)
