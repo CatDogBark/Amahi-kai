@@ -3214,6 +3214,9 @@ module AmahiHelper
       unless sign_in.nil? || (sign_in.is_a?(String) && !sign_in.strip.empty? && sign_in.length <= 300 && !sign_in.match?(/[\r\n\0]/))
         bad.call('sign_in must be one line of text')
       end
+      # Whether the app works with files in shares, so Install asks which to give it (writes_shares
+      # says so too); an Amahi-kai that doesn't know the field asks every app, as it did
+      bad.call('shares must be true or false') unless data['shares'].nil? || [true, false].include?(data['shares'])
       %w[logo releases].each do |field|
         value = data[field]
         bad.call("#{field} must be an https link") unless value.nil? || (value.is_a?(String) && value.match?(%r{\Ahttps://[^\s"'<>]{1,500}\z}))

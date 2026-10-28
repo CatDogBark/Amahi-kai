@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+### 🔒 Security & Fixes
+
+- **Install asks for shares only for apps that use them** (Apps) — Every app's Install asked which shares to give it, Vaultwarden, Gitea and Uptime Kuma too, which never read a file in one: an app given shares it has no use for only gets files it shouldn't see. Now an app that works with files in shares says so in the catalog (`shares: true`, or `writes_shares`), and only those ask: Jellyfin, PiGallery2, Transmission and bitTube. The others install without the dialog (bitShare's asks only for its ZFS pool), and their rows have no shares line, unless they were given shares before. Vaultwarden's row has a link of its own to give it its new address after the NAS is renamed in Tailscale (it was the shares' Change).
+
 ## [1.3.1] — 2026-10-27
 
 Tailscale's Connect works in Firefox and with pop-up blockers: its sign-in is a link to click, and the page waits for it.

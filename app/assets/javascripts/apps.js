@@ -57,10 +57,17 @@ document.addEventListener('click', function(event) {
 
 // Choosing an app's shares (_shares_dialog) before it's installed, or installed again with new
 // ones: each share all of it, or only some of its folders. Shares Greyhole pools, and every share
-// of an app that only reads, stay read only.
+// of an app that only reads, stay read only. An app that doesn't work with files in shares
+// (data-uses-shares false) installs without asking, unless it has a ZFS pool to choose or was
+// given shares before.
 document.addEventListener('click', function(event) {
   var button = event.target.closest('[data-app-shares]');
-  if (button) openShareDialog(button);
+  if (!button) return;
+  if (button.dataset.usesShares === 'false' && !button.dataset.storage && JSON.parse(button.dataset.current || '[]').length === 0) {
+    openAppInstall(button.dataset.appShares, button.dataset.url, button.dataset.appName, button.dataset.title);
+    return;
+  }
+  openShareDialog(button);
 });
 
 function openShareDialog(button) {
@@ -69,8 +76,12 @@ function openShareDialog(button) {
   var writes = button.dataset.writes === 'true';
   var current = JSON.parse(button.dataset.current || '[]');
   var rows = Array.prototype.slice.call(dialog.querySelectorAll('[data-share]'));
+  // An app that doesn't work with shares is here for its pool only, or to drop shares given before
+  var asksShares = button.dataset.usesShares !== 'false' || current.length > 0;
   shareDialogEvents(dialog);
 
+  dialog.querySelector('[data-role="shares-part"]').hidden = !asksShares;
+  dialog.querySelector('[data-fill="title"]').textContent = asksShares ? 'Shares for' : 'Storage for';
   dialog.querySelectorAll('[data-fill="name"]').forEach(function(el) { el.textContent = name; });
   dialog.querySelector('[data-fill="verb"]').textContent = button.dataset.verb;
   var storage = storageChoice(dialog, button);

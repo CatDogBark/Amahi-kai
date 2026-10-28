@@ -139,7 +139,12 @@ describe "Docker Apps", type: :request do
       page = Nokogiri::HTML(response.body)
       expect(page.at_css('#docker_app_vaultwarden a.btn-success')['href']).to eq('https://amahi-kai.tail1234.ts.net:8880/')
       expect(page.at_css('#app-tailscale-vaultwarden').text.squish)
-        .to eq('Tailscale only: open it from a device on your tailnet, at https://amahi-kai.tail1234.ts.net:8880/')
+        .to start_with('Tailscale only: open it from a device on your tailnet, at https://amahi-kai.tail1234.ts.net:8880/')
+      # Renamed in Tailscale, the NAS has a new name: making the container again gives it to Vaultwarden
+      rename = page.at_css('#app-tailscale-rename-vaultwarden button[data-app-shares]')
+      expect(rename.text).to eq('give Vaultwarden its new address')
+      expect(rename['data-uses-shares']).to eq('false')
+      expect(rename['data-title']).to eq('Giving Vaultwarden its new address...')
     end
 
     it "shows each installed app's ports" do
@@ -240,13 +245,17 @@ describe "Docker Apps", type: :request do
     it "says on an installed app's row which pool its data is on" do
       DockerApp.create!(identifier: 'store', name: 'Store', image: AppCatalog.find('store')[:image], status: 'running', host_port: 3001)
       get "/apps/installed_apps"
-      expect(Nokogiri::HTML(response.body).at_css('#app-storage-store').text.squish).to include('Its data needs a ZFS pool now, and it has none')
+      page = Nokogiri::HTML(response.body)
+      expect(page.at_css('#app-storage-store').text.squish).to include('Its data needs a ZFS pool now, and it has none')
+      # Store doesn't work with shares: no shares line, and Change, to choose the pool, is on this one
+      expect(page.at_css('#app-shares-store')).to be_nil
+      expect(page.at_css('#app-storage-store button[data-app-shares]')['data-uses-shares']).to eq('false')
 
       File.write(storage, { 'store' => 'tank' }.to_json)
       get "/apps/installed_apps"
       page = Nokogiri::HTML(response.body)
       expect(page.at_css('#app-storage-store').text.squish).to eq('Its data is on the ZFS pool tank')
-      expect(page.at_css('#docker_app_store button[data-app-shares]')['data-storage-pool']).to eq('tank')
+      expect(page.at_css('#docker_app_store button[data-app-shares]')).to be_nil # nothing left to change
       get "/apps/docker_apps"
       expect(response.body).to include("Its data stays on the ZFS pool tank, and its settings in #{AppCatalog.apps_root}/store: both are used again")
     end

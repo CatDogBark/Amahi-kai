@@ -237,6 +237,20 @@ RSpec.describe 'AmahiHelper apps' do
     end
   end
 
+  # Whether an app works with files in shares, so Install asks which to give it: a listing field,
+  # which an Amahi-kai that doesn't know it ignores (every app asked, as before)
+  describe "a manifest's shares" do
+    def problem(extra)
+      helper.catalog_entry_problem('demo', File.read("#{catalog}/gitea.yml") + extra)
+    end
+
+    it 'is true or false when it is there' do
+      expect(problem("shares: true\n")).to be_nil
+      expect(problem("shares: false\n")).to be_nil
+      expect(problem("shares: yes please\n")).to eq('shares must be true or false')
+    end
+  end
+
   describe 'the catalog' do
     let(:ids) { Dir[File.join(catalog, '*.yml')].map { |path| File.basename(path, '.yml') } }
 

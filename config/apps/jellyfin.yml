@@ -2,6 +2,8 @@ name: Jellyfin
 description: Your own streaming service for movies, TV and music, on TVs, phones and browsers.
 sign_in: "Its first page sets it up: make your account there, then add libraries from your shares."
 category: media
+# It works with files in shares: Install asks which to give it, read only
+shares: true
 logo: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/jellyfin.png
 releases: https://github.com/jellyfin/jellyfin/releases/tag/v{version}
 image: jellyfin/jellyfin:12.1@sha256:78d3ea1207d1322471fcac39a614f004f2ccf7e878f95ab2977d752f07e4dd7e

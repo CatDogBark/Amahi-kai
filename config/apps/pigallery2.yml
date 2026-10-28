@@ -2,6 +2,8 @@ name: PiGallery2
 description: Your photos and home videos as a gallery, folder by folder, as they are on the NAS.
 sign_in: "Sign in as admin with the password Amahi-kai made for it."
 category: media
+# It works with files in shares: Install asks which to give it, read only
+shares: true
 logo: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/pigallery2-dark.png
 releases: https://github.com/bpatrik/pigallery2/releases/tag/{version}
 image: bpatrik/pigallery2:3.5.2@sha256:d7a61b6daa410537064d4f661122545bc4d9b16cd91a3862d654c3555cb63992
