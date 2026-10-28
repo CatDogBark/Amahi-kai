@@ -1,0 +1,21 @@
+name: bitStream
+description: Your home's cameras, live, in the browser, on Android and on the KDE desktop, with switches for Wyze floodlights.
+sign_in: "Sign in as admin with the password Amahi-kai made for it, and add your cameras on its Set up page."
+category: security
+logo: https://cdn.jsdelivr.net/gh/CatDogBark/amahi-kai-apps@main/logos/bitstream.svg
+image: ghcr.io/catdogbark/bitstream:0.2.0@sha256:119d3af90edde92fa5d85db52a0175de1eb3c9cfaf0b70fc6bd5060d8186b833
+# go2rtc relays each camera's stream once, to the browser, the phone app (RTSP), the widget
+# (HLS) and other players. Cameras are reached by their names on Network → Devices, through the
+# NAS's DNS. One password, made here, for its pages, its API and its RTSP.
+run_as: app
+web_port: 1984
+memory: 512m
+ports:
+  - { host: 1984, container: 1984 }
+  - { host: 8554, container: 8554, label: RTSP }
+folders:
+  - { name: config, path: /config }
+secrets:
+  - { env: BITSTREAM_PASSWORD, label: Password (user admin) }
+environment:
+  TZ: "{{timezone}}"
