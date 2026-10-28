@@ -110,6 +110,11 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
   joins, so it wins; its October 2026 refresh block (mint, Space Grotesk, the glass panels) is at
   its end. Every page is dark (`data-theme="dark"` in the layouts).
 - `Open3` doesn't set `$?`; use the status it returns (or `Shell.success?`).
+- **Specs must not read the machine they run on.** A laptop connected to a tailnet with HTTPS
+  certificates on passed two specs that CI's runner, with no Tailscale, refused. The helper's app
+  specs stub `tailscale_https_name` and `argon2_hash` for everything but those methods' own specs.
+  To check a spec doesn't lean on a tool you have, hide it the way CI lacks it:
+  `unshare -rm sh -c 'mount --bind /dev/null /usr/bin/tailscale && bundle exec rspec …'`.
 - **`systemctl enable --now` / `disable --now` only start and stop native units.** Greyhole's is an
   init script (a generated unit): `--now` switched its boot start but left the daemon as it
   was. Switch a unit with two commands (enable then start, disable then stop), as the helper's

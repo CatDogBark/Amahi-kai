@@ -35,6 +35,11 @@ RSpec.describe 'AmahiHelper apps' do
     # No app's job runs (APP_JOBS) unless a test says so
     allow(helper).to receive(:app_job_running?).and_return(false)
     allow(helper).to receive(:app_jobs_running).and_return([])
+    # Vaultwarden, the catalog's, is reached only through Tailscale and given its admin token hashed
+    # (format 5, P4.7): Tailscale is ready and argon2 hashes unless a test says otherwise, so no spec
+    # reads the machine's own Tailscale (a laptop on a tailnet passed what CI's runner refused)
+    allow(helper).to receive(:tailscale_https_name).and_return('amahi-kai.tail1234.ts.net')
+    allow(helper).to receive(:argon2_hash) { |secret| "$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$#{secret.reverse}" }
   end
 
   after { FileUtils.rm_rf(dir) }
@@ -426,6 +431,8 @@ RSpec.describe 'AmahiHelper apps' do
   # What an app reached only through Tailscale needs (P4.7), read from `tailscale status`, as
   # root reads it: what's missing is said, so the Apps page can say what to switch on.
   describe "Tailscale's readiness to serve an app" do
+    before { allow(helper).to receive(:tailscale_https_name).and_call_original }
+
     let(:ready) do
       { 'BackendState' => 'Running', 'Self' => { 'DNSName' => 'amahi-kai.tail1234.ts.net.' },
         'CurrentTailnet' => { 'MagicDNSEnabled' => true }, 'CertDomains' => ['amahi-kai.tail1234.ts.net'] }
@@ -468,6 +475,8 @@ RSpec.describe 'AmahiHelper apps' do
   end
 
   describe 'hashing a secret for the container (hash: argon2)' do
+    before { allow(helper).to receive(:argon2_hash).and_call_original }
+
     let(:hash) { '$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA' }
     let(:ran) { [] }
 
@@ -524,11 +533,7 @@ RSpec.describe 'AmahiHelper apps' do
       allow(File).to receive(:chown)
       allow(helper).to receive(:do_install) { |path, content, *| File.write(path, content) }
       allow(helper).to receive(:passwd) { |name| accounts[name] }
-      # Vaultwarden, the sample app here, is reached only through Tailscale and given its admin
-      # token hashed (format 5, P4.7)
-      allow(File).to receive(:executable?).with('/usr/bin/tailscale').and_return(true)
-      allow(helper).to receive(:tailscale_https_name).and_return('amahi-kai.tail1234.ts.net')
-      allow(helper).to receive(:argon2_hash) { |secret| "$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$#{secret.reverse}" }
+      allow(File).to receive(:executable?).with('/usr/bin/tailscale').and_return(true) # for tailscale serve's removal
       allow(helper).to receive(:run_command) do |argv|
         ran << argv
         accounts[argv.last] = account(argv.last, 996) if argv.first == '/usr/sbin/useradd'
