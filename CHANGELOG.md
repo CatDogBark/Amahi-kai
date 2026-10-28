@@ -4,10 +4,18 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
-### 🔒 Security & Fixes
+## [1.4.0] — 2026-10-27
+
+Devices keep their names wherever DHCP puts them and apps reach them by name, so a camera viewer needs no fixed addresses; Install asks for shares only for apps that work with files in them; and bitStream brings the home's cameras to the browser, Android and the KDE desktop.
+
+### 🚀 Major Features
 
 - **Devices can be named without fixing their address** (Network → Devices) — **Name** on a device gives it a name of your own that follows it wherever DHCP puts it, answering in DNS at once (`carport-cam`, and `carport-cam.home.arpa`): reach it by its name and let its address change. **Unfix** keeps the device's name now, and **Forget** drops it. Devices whose own names have an underscore (Wyze cameras ask for `WYZE_CAKP2JFUS-…`) answer with a hyphen in its place instead of not at all. A device can't be called `ignore` or `infinite`: dnsmasq read those as orders, and a device named `ignore` got no address.
 - **Apps reach devices by their names** (Apps) — While the NAS's DNS is on, apps ask it, so an app reaches a device by its name on Network → Devices (a camera viewer at `carport-cam`, say), and apps get the NAS's blocklists too; before, they asked the NAS's upstream servers, which know none of the LAN's names. Turning DNS on or off makes the apps' containers again in the background, keeping their data, and so does this update, once, on a NAS whose DNS is on: each app restarts for a minute or so after it.
+- **bitStream joins the app catalog** (Apps) — The home's cameras, live: in the browser, on Android (its app downloads from bitStream itself and updates itself from there) and in a KDE Plasma widget, with switches for Wyze floodlights. Cameras are added by their names on Network → Devices. One password, made at install, for its pages, its streams and its API.
+
+### 🔒 Security & Fixes
+
 - **Install asks for shares only for apps that use them** (Apps) — Every app's Install asked which shares to give it, Vaultwarden, Gitea and Uptime Kuma too, which never read a file in one: an app given shares it has no use for only gets files it shouldn't see. Now an app that works with files in shares says so in the catalog (`shares: true`, or `writes_shares`), and only those ask: Jellyfin, PiGallery2, Transmission and bitTube. The others install without the dialog (bitShare's asks only for its ZFS pool), and their rows have no shares line, unless they were given shares before. Vaultwarden's row has a link of its own to give it its new address after the NAS is renamed in Tailscale (it was the shares' Change).
 
 ## [1.3.1] — 2026-10-27
