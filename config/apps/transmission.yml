@@ -1,6 +1,6 @@
 name: Transmission
 description: A BitTorrent client with a web interface, for downloading torrents to the NAS.
-sign_in: "Sign in as admin with the password Amahi-kai made for it."
+sign_in: "Sign in as admin with the password Amahi-kai made for it, then in its preferences set Download to a share folder you gave it, under /shares, and turn off the temporary folder: until then it downloads to the system disk."
 category: downloads
 logo: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/transmission.png
 releases: https://github.com/transmission/transmission/releases/tag/{version}

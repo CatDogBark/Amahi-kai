@@ -1,6 +1,6 @@
 name: Uptime Kuma
 description: Watches your websites, servers and services, and tells you when one goes down.
-sign_in: "Its first page asks you to make the admin account."
+sign_in: "Its first page asks which database to use (SQLite is the simple one), then for the admin account."
 category: monitoring
 logo: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/uptime-kuma.png
 releases: https://github.com/louislam/uptime-kuma/releases/tag/{version}

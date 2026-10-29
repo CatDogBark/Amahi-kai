@@ -71,12 +71,15 @@ module BrowserSpec
   end
 end
 
-# Passed through driven_by (Rails registers the driver itself, with these options).
+# Passed through driven_by (Rails registers the driver itself, with these options). On CI's
+# runners the first example, right after Chrome's cold start, twice timed out opening its page
+# at 15 seconds (Ferrum::TimeoutError in `page.driver.browser.page`) while the rest passed;
+# the limits leave that start room, and a browser that hangs still fails.
 CUPRITE_OPTIONS = {
   browser_path: BrowserSpec.browser_path,
   js_errors: true,
-  process_timeout: 30,
-  timeout: 15,
+  process_timeout: 60,
+  timeout: 30,
   browser_options: { 'force-prefers-reduced-motion' => nil, 'no-sandbox' => nil, 'disable-gpu' => nil }
 }
 Capybara.default_max_wait_time = 5
