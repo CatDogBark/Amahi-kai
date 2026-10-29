@@ -6,6 +6,8 @@ All notable changes to Amahi-kai are documented here.
 
 ### 🔒 Security & Fixes
 
+- **Transmission can save downloads into a share** (Apps) — Given a share with read and write, Transmission was denied writing into it: its image starts as root and then switches to the app's user with the groups the image itself lists, which dropped the `users` group Amahi-kai gives it. Now an app like that, given a share to write into, runs with `users` as its own group (`PGID`), so it writes where the share lets the `users` group write, and its files stay editable over SMB.
+
 - **Gitea can keep its repositories in a share** (Apps) — Install now asks Gitea's shares, and a share folder given read and write can hold its repositories instead of the system disk: set **Repository Root Path** to that folder under `/shares` on Gitea's first page. The app catalog had it first; this is the copy that comes with Amahi-kai, and the wiki.
 
 ## [1.4.3] — 2026-10-28

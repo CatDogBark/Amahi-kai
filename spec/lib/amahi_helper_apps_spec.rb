@@ -961,6 +961,36 @@ RSpec.describe 'AmahiHelper apps' do
       expect(ran.flatten).not_to include('/usr/sbin/zfs')
     end
 
+    # linuxserver.io's init drops to its user with the image's own groups (users is 1000 there), so
+    # the --group-add users was lost: Transmission was denied writing into the share it was given
+    describe "the group of an image that drops to the app's user" do
+      def pgid(shares)
+        allow(helper).to receive(:app_share_mounts).and_return([])
+        allow(helper).to receive(:group_id).with('users').and_return(100)
+        helper.do_install_app('transmission', helper.app_manifest('transmission'), shares)
+        env_files.last[1][/^PGID=(\d+)$/, 1]
+      end
+
+      before { FileUtils.mkdir_p("#{dir}/downloads") }
+
+      it 'is the users group when it writes into a share' do
+        expect(pgid([{ name: 'Downloads', path: "#{dir}/downloads", pooled: false, write: true }])).to eq('100')
+      end
+
+      it "is the app's own group when it only reads shares, or has none" do
+        expect(pgid([{ name: 'Downloads', path: "#{dir}/downloads", pooled: false, write: false }])).to eq('996')
+        expect(pgid([])).to eq('996')
+      end
+
+      it "leaves a run_as: app container the app's group, with users added" do
+        allow(helper).to receive(:group_id).with('users').and_return(100)
+        allow(helper).to receive(:app_share_mounts).and_return(['--group-add', '100'])
+        helper.do_install_app('gitea', helper.app_manifest('gitea'), [{ name: 'Downloads', path: "#{dir}/downloads", pooled: false, write: true }])
+        create = ran.find { |argv| argv[1] == 'create' }
+        expect(create.each_cons(2).find { |flag, _| flag == '--user' }.last).to eq('996:996')
+      end
+    end
+
     describe 'a share on a ZFS pool' do
       let(:folder) { "#{dir}/downloads" }
       let(:share) { { name: 'Downloads', path: folder, pooled: false, write: true } }

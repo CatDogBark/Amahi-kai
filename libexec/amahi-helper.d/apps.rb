@@ -641,7 +641,7 @@ module AmahiHelper
         share_mounts = app_share_mounts(shares, binds)
         app_share_sources!(shares)
         say('Creating the container...')
-        with_env_file(app_environment(manifest, uid, gid, secrets, url)) do |env_file|
+        with_env_file(app_environment(manifest, uid, app_env_gid(manifest, gid, shares), secrets, url)) do |env_file|
           run_command([DOCKER, 'create', '--name', fresh, '--restart', 'unless-stopped',
                        '--security-opt', 'no-new-privileges', # nothing in it gains privileges, setuid files included
                        *APP_CAP_DROP.flat_map { |cap| ['--cap-drop', cap] }, '--pids-limit', APP_PIDS_LIMIT.to_s, *APP_LOG_OPTIONS,
@@ -1590,6 +1590,17 @@ module AmahiHelper
              .gsub(APP_SECRET_PLACEHOLDER) { secrets.fetch(Regexp.last_match(1)) }
              .gsub(APP_TAILSCALE_URL) { tailscale_url || raise(Failed, "#{APP_TAILSCALE_URL} without an address on the tailnet") }
       end.merge(secrets.to_h { |name, value| [name, hashed.include?(name) ? argon2_hash(value) : value] })
+    end
+
+    # The group {{gid}} stands for. An image whose init drops to the app's user (run_as: image,
+    # PUID and PGID) takes that user's groups from the image's own /etc/group, so Docker's
+    # --group-add users is lost there (linuxserver.io's images call gid 1000 users): given a share
+    # to write into, it runs with the users group as its own group (PGID) instead, and can write
+    # where the users group can. A run_as: app container keeps --group-add, and the app's group.
+    def app_env_gid(manifest, gid, shares)
+      return gid unless manifest[:run_as] == 'image' && shares.any? { |share| share[:write] }
+
+      group_id(USERS_GROUP) or raise Failed, "there's no #{USERS_GROUP} group"
     end
 
     def host_timezone
