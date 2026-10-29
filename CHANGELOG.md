@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.5.0] — 2026-10-29
+
+When something goes wrong, Amahi-kai helps you say so: Settings → Help shows this server and its logs, and Report a problem puts a report together, names and addresses taken out, for GitHub or email. Every page also says it's working while it waits.
+
 ### 🚀 Major Features
 
 - **Report a problem** (Settings → Help, and a red flag's **Report this problem**) — Puts a report together for you: what happened, what you expected and how to make it happen again, in your words, then this server's details and the newest lines of the logs most likely to show the fault, with an app's own when it needs attention. The server's name, users, shares and what's in them, pools, devices, addresses, email addresses and anything that looks like a key are replaced by stand-ins like `<share-1>` (the same name always the same one); a switch shows them as they are, and any of it can be changed. Amahi-kai sends nothing itself: **Open on GitHub** opens a new issue filled in (a report too long for the link is also saved as a file to attach), **Send by email** opens your email app, and **Download report** and **Copy** give you the text.
