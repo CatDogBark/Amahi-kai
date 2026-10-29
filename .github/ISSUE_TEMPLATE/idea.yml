@@ -1,0 +1,16 @@
+name: An idea
+description: Something Amahi-kai could do, or do better.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+      description: What you'd like Amahi-kai to do.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: What it would let you do, or what it would save you.

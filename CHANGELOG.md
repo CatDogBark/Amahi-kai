@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+### 🔧 Architecture & Code Quality
+
+- **Reporting a problem on GitHub** — New issues use forms: a problem asks for the version, what happened and how to make it happen again; an idea asks what and why. A security problem goes privately, through the repository's Security tab or by email (`SECURITY.md`). `CONTRIBUTING.md` says how to become a contributor.
+
 ## [1.4.4] — 2026-10-28
 
 Transmission saves its downloads into shares, Uptime Kuma's ping monitors work, and Gitea keeps its repositories in a share folder.

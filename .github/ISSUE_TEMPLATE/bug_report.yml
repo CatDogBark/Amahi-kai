@@ -1,0 +1,49 @@
+name: Something isn't working
+description: A problem with Amahi-kai, or with an app it installs.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting it. A security problem goes privately instead: **Report a vulnerability** on the [Security tab](https://github.com/CatDogBark/Amahi-kai/security/advisories/new).
+  - type: input
+    id: version
+    attributes:
+      label: Amahi-kai version
+      description: Settings → System Status shows it, like 1.4.4.
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, and what Amahi-kai did or showed. The exact words of an error help most.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to make it happen again
+      placeholder: |
+        1. Open Apps
+        2. Install Transmission
+        3. ...
+  - type: dropdown
+    id: storage
+    attributes:
+      label: Storage
+      options:
+        - Greyhole (drives in a pool)
+        - A ZFS pool
+        - Both
+        - Neither, or not sure
+  - type: textarea
+    id: report
+    attributes:
+      label: System details and logs
+      description: Anything from the server that shows the problem. Take out passwords, keys and addresses you'd rather not share.
+      render: text
