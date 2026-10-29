@@ -16,10 +16,12 @@ class ReportScrubber
   EMAIL = /\b[\w.+-]+@[\w-]+(?:\.[\w-]+)+\b/
   TAILNET = /\b[\w-]+(?:\.[\w-]+)*\.ts\.net\b/i
   # 32 or more letters and digits with both in it (base64's = padding after): a key, a token, a
-  # password Amahi-kai made, not the setting's name before it. A git commit (40 hex) or an image
-  # digest (64 hex) stays.
-  SECRET = /(?<![\w:])(?=[A-Za-z0-9_\-+\/]{32,})(?=[^\s=]*[A-Za-z])(?=[^\s=]*\d)[A-Za-z0-9_\-+\/]{32,}={0,2}/
+  # password Amahi-kai made, not the setting's name before it nor a path's part. A git commit (40
+  # hex), an image digest (64 hex) or an id (a UUID) stays.
+  SECRET = /(?<![\w:\/])(?=[A-Za-z0-9_\-+]{32,})(?=[^\s=\/]*[A-Za-z])(?=[^\s=\/]*\d)[A-Za-z0-9_\-+]{32,}={0,2}/
   HEX_HASH = /\A(?:\h{40}|\h{64})\z/
+  # A request's or a job's id, which ties a report's lines together and names no one.
+  UUID = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
   # An SSH key's fingerprint (sshd logs the key each login used); an image digest is sha256: in hex.
   KEY_FINGERPRINT = %r{\bSHA256:[A-Za-z0-9+/]{40,}=*}
   # The server's own accounts (ssh, sudo and logind name them in the journal), as /etc/passwd has them.
@@ -62,7 +64,7 @@ class ReportScrubber
   def scrub(text)
     text = text.to_s.dup
     text = text.gsub(KEY_FINGERPRINT, 'SHA256:<key-fingerprint>')
-    text = text.gsub(SECRET) { |token| token.match?(HEX_HASH) ? token : '<secret>' }
+    text = text.gsub(SECRET) { |token| token.match?(HEX_HASH) || token.match?(UUID) ? token : '<secret>' }
     text = text.gsub(EMAIL) { |email| standin('email', email) }
     text = text.gsub(TAILNET) { |name| standin('tailnet-name', name.downcase) }
     text = text.gsub(MAC) { |mac| standin('mac', mac.downcase) }

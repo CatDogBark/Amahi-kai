@@ -28,6 +28,14 @@ RSpec.describe ReportScrubber do
       .to eq('ULA <ipv6-address-1>, link <ipv6-address-2>%ens18, ::1, MAC <mac-1>')
   end
 
+  # On a real install, every line of Amahi-kai's log starts with its request's id, and a long path
+  # was taken for a key
+  it "keeps request ids and paths, which name no one" do
+    line = 'I, [2026-10-29T22:54:18.916876 #3820]  INFO -- : [0f8fad5b-d9cb-469f-a165-70867728950e] Started GET ' \
+           '"/settings/help/log?source=journal" from /opt/amahi-kai/app/controllers/settings_controller_with_a_long_name2026.rb'
+    expect(scrubber.scrub(line)).to eq(line)
+  end
+
   # sshd logs each login's key by its fingerprint: base64, where an image digest is hex
   it "takes out an SSH key's fingerprint whole" do
     expect(scrubber.scrub('Accepted publickey for troy from 192.168.1.169 port 45426 ssh2: ED25519 SHA256:JcOwwz/abc+def123GHI456jkl789MNO012pqr345ST'))
