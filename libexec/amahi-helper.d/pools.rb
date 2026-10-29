@@ -99,7 +99,9 @@ module AmahiHelper
     },
     # A new pool on whole data disks, which are wiped first, in the layout the user chose:
     # ashift=12, lz4 compression, autotrim when every drive is an SSD, autoexpand (replacing
-    # every drive with a bigger one grows the pool), mounted at POOL_ROOT/<name>. zpool records it in its cache file, so it's imported at every boot.
+    # every drive with a bigger one grows the pool), POSIX ACLs kept in the inode (an app that
+    # writes a share sets a default ACL there; ZFS on Linux has them off unless asked), mounted at
+    # POOL_ROOT/<name>. zpool records it in its cache file, so it's imported at every boot.
     'pools.create' => {
       params: %w[name layout devices],
       validate: ->(a) { pool_request(a['name'], a['layout'], a['devices']) },
@@ -108,7 +110,8 @@ module AmahiHelper
          ['/usr/bin/udevadm', 'settle', { allow_failure: true }],
          [:make_dir, POOL_ROOT, '0755'],
          [ZPOOL, 'create', '-f', '-o', 'ashift=12', '-o', 'autoexpand=on', *(v[:ssd] ? %w[-o autotrim=on] : []),
-          '-O', 'compression=lz4', '-O', 'setuid=off', '-O', 'devices=off', '-O', "mountpoint=#{POOL_ROOT}/#{v[:name]}",
+          '-O', 'compression=lz4', '-O', 'setuid=off', '-O', 'devices=off', '-O', 'acltype=posixacl', '-O', 'xattr=sa',
+          '-O', "mountpoint=#{POOL_ROOT}/#{v[:name]}",
           *SNAPSHOT_KEEP.flat_map { |kind, keep| ['-O', "amahi:snapshot-#{kind}=#{keep}"] }, v[:name], *v[:vdevs]],
          [:pool_status]]
       }

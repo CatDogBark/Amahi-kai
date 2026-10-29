@@ -43,6 +43,9 @@ RSpec.describe 'AmahiHelper apps' do
     # Containers get Docker's own DNS unless a test says the NAS's answers on the bridge: CI's
     # runner has a Docker bridge, a laptop may not
     allow(helper).to receive(:app_dns_options).and_return([])
+    # A share's folder is on ext4 unless a test puts it on ZFS, whatever the runner's /tmp is
+    allow(helper).to receive(:capture).and_call_original
+    allow(helper).to receive(:capture).with(['/usr/bin/findmnt', '-n', '-o', 'FSTYPE', '-T', anything]).and_return("ext4\n")
   end
 
   after { FileUtils.rm_rf(dir) }
@@ -955,6 +958,47 @@ RSpec.describe 'AmahiHelper apps' do
       expect(ran[acl]).to eq(['/usr/bin/find', "#{dir}/downloads", '-xdev', '-type', 'd', '-exec',
                               '/usr/bin/setfacl', '-P', '-d', '-m', 'u::rwx,g::rwx,o::rx', '{}', '+'])
       expect(ran.index { |argv| argv[1] == 'start' }).to be > acl
+      expect(ran.flatten).not_to include('/usr/sbin/zfs')
+    end
+
+    describe 'a share on a ZFS pool' do
+      let(:folder) { "#{dir}/downloads" }
+      let(:share) { { name: 'Downloads', path: folder, pooled: false, write: true } }
+
+      def on_zfs(acltype, mountpoint: '/srv/pools/tank')
+        allow(helper).to receive(:capture).with(['/usr/bin/findmnt', '-n', '-o', 'FSTYPE', '-T', folder]).and_return("zfs\n")
+        allow(helper).to receive(:capture).with(['/usr/sbin/zfs', 'get', '-H', '-o', 'name,value', 'acltype', folder])
+                                          .and_return("tank/shares\t#{acltype}\n")
+        allow(helper).to receive(:capture).with(%w[/usr/sbin/zfs get -H -o value mountpoint tank]).and_return("#{mountpoint}\n")
+      end
+
+      before do
+        FileUtils.mkdir_p(folder)
+        allow(helper).to receive(:app_share_mounts).and_return([])
+        allow(File).to receive(:executable?).with('/usr/bin/setfacl').and_return(true)
+      end
+
+      # ZFS on Linux's default: setfacl failed with "Operation not supported" and the install stopped
+      it 'gets POSIX ACLs on its dataset before setfacl when the pool has them off' do
+        on_zfs('off')
+        helper.do_install_app('transmission', helper.app_manifest('transmission'), [share])
+        set = ran.index { |argv| argv.first == '/usr/sbin/zfs' }
+        expect(ran[set]).to eq(['/usr/sbin/zfs', 'set', 'acltype=posixacl', 'xattr=sa', 'tank/shares'])
+        expect(ran.index { |argv| argv.first == '/usr/bin/find' }).to be > set
+      end
+
+      it 'leaves a dataset that has them as it is' do
+        on_zfs('posix')
+        helper.do_install_app('transmission', helper.app_manifest('transmission'), [share])
+        expect(ran.flatten).not_to include('/usr/sbin/zfs')
+        expect(ran.map(&:first)).to include('/usr/bin/find')
+      end
+
+      it "never changes a pool that isn't Amahi-kai's" do
+        on_zfs('off', mountpoint: '/tank')
+        helper.do_install_app('transmission', helper.app_manifest('transmission'), [share])
+        expect(ran.flatten).not_to include('/usr/sbin/zfs')
+      end
     end
 
     # The old container went first: a create that failed left the app none, and Install again then

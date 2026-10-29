@@ -1318,10 +1318,25 @@ module AmahiHelper
         run_command(['/usr/bin/apt-get', '-y', '--no-install-recommends', '-o', 'DPkg::Lock::Timeout=300',
                      'install', 'acl', { env: APT_ENV, stream: true }])
       end
+      share_posix_acls(path)
       say("Letting what it writes in #{path} stay editable over SMB...")
       # setfacl -P takes a physical walk: a folder swapped for a link since find listed it is
       # skipped, never followed.
       run_command(['/usr/bin/find', path, '-xdev', '-type', 'd', '-exec', SETFACL, '-P', '-d', '-m', 'u::rwx,g::rwx,o::rx', '{}', '+'])
+    end
+
+    # ZFS on Linux leaves POSIX ACLs off (acltype=off) unless asked, and setfacl then fails with
+    # "Operation not supported". Pools made now have them on (pools.create); on an older one of
+    # Amahi-kai's, the share's dataset gets them here, with xattr=sa, which keeps them in each
+    # file's inode. Nothing there changes but what setfacl then sets.
+    def share_posix_acls(path)
+      return unless capture([FINDMNT, '-n', '-o', 'FSTYPE', '-T', path]).strip == 'zfs'
+
+      dataset, acltype = capture([ZFS, 'get', '-H', '-o', 'name,value', 'acltype', path]).chomp.split("\t")
+      return unless %w[off noacl].include?(acltype) && managed?(dataset.split('/').first)
+
+      say("Turning on POSIX ACLs for #{dataset}...")
+      run_command([ZFS, 'set', 'acltype=posixacl', 'xattr=sa', dataset])
     end
 
     # [{ preferred:, host:, container:, protocol: }]: the host port for each of the manifest's
