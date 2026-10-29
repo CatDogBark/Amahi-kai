@@ -70,9 +70,13 @@ RSpec.describe "Full integration flows", type: :request do
       expect(response).to have_http_status(:ok)
     end
 
-    it "views debug page" do
+    it "views Settings → Help, where the old debug page leads" do
+      allow(ServerSummary).to receive(:rows).and_return([['Amahi-kai', '1.4.4']])
+      allow(HelpLogs).to receive(:lines).and_return([])
       get "/tab/debug"
+      follow_redirect!
       expect(response).to have_http_status(:ok)
+      expect(request.path).to eq('/settings/help')
     end
   end
 

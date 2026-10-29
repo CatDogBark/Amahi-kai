@@ -146,10 +146,12 @@ RSpec.describe 'Update notice', type: :request do
     end
   end
 
-  it 'is on the debug pages too' do
+  it 'is on Settings → Help too, which took over the debug pages and their own layout' do
     login_as_admin
     update_status(available)
-    get '/tab/debug'
+    allow(ServerSummary).to receive(:rows).and_return([['Amahi-kai', '1.4.4']])
+    allow(HelpLogs).to receive(:lines).and_return([])
+    get '/settings/help'
     expect(page.at_css('#update-btn .update-dot')).not_to be_nil
     expect(page.at_css('#whats-new #whats-new-install')).not_to be_nil
   end

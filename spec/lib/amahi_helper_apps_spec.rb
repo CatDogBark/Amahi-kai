@@ -295,6 +295,23 @@ RSpec.describe 'AmahiHelper apps' do
       expect(refusal('apps.start', { 'app' => 'jellyfin' })).to eq("docker isn't installed")
     end
 
+    # Settings → Help and a problem's report: an app's own output, read only, even during a job
+    it "reads an app container's newest lines, 1 to 500, and says when it has no container" do
+      allow(helper).to receive(:docker_output).with('info', '--format', '{{.ServerVersion}}').and_return("27.3.1\n")
+      expect(steps('apps.logs', { 'app' => 'gitea', 'lines' => 150 })).to eq([[:app_logs, 'gitea', 150]])
+      expect(refusal('apps.logs', { 'app' => '../etc', 'lines' => 150 })).to include("isn't one Amahi-kai knows")
+      expect(refusal('apps.logs', { 'app' => 'gitea', 'lines' => 9999 })).to include('whole number from 1 to 500')
+
+      allow(helper).to receive(:docker_output).with('inspect', '--format', '{{.Id}}', 'amahi-gitea').and_return("abc\n")
+      allow(Open3).to receive(:capture2e).and_return(["2026-10-29T03:41:07Z one\n2026-10-29T03:41:08Z two\n", instance_double(Process::Status, success?: true)])
+      expect(helper.do_app_logs('gitea', 150)).to eq('lines' => ['2026-10-29T03:41:07Z one', '2026-10-29T03:41:08Z two'])
+      expect(Open3).to have_received(:capture2e).with(anything, %w[/usr/bin/docker /usr/bin/docker], 'logs', '--tail', '150', '--timestamps',
+                                                      'amahi-gitea', unsetenv_others: true, chdir: '/')
+
+      allow(helper).to receive(:docker_output).with('inspect', '--format', '{{.Id}}', 'amahi-gitea').and_return(nil)
+      expect(helper.do_app_logs('gitea', 150)).to eq('lines' => [], 'missing' => true)
+    end
+
     it 'starts, stops and restarts only the app container' do
       allow(helper).to receive(:docker_output).with('inspect', '--format', '{{.Id}}', 'amahi-gitea').and_return("abc\n")
       expect(steps('apps.start', { 'app' => 'gitea' })).to eq([%w[/usr/bin/docker start amahi-gitea]])

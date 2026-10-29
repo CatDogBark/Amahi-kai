@@ -1,0 +1,72 @@
+/* Settings → Help (settings/help, help.js): Report a problem, this server, the logs. */
+
+.kai-help-report {
+  border-color: var(--kai-mint-ring, rgba(79, 224, 176, 0.55));
+}
+
+.kai-help-summary {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: 1.1rem;
+  row-gap: 0.55rem;
+  font-size: 0.9rem;
+}
+
+.kai-help-summary dt {
+  color: var(--kai-muted);
+  font-weight: 400;
+}
+
+.kai-help-summary dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.kai-help-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.kai-help-source {
+  min-height: 2.5rem;
+  padding: 0.4rem 0.9rem;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--kai-muted);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.kai-help-source:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--kai-title);
+}
+
+.kai-help-source[aria-selected="true"] {
+  background: var(--kai-mint-soft, rgba(79, 224, 176, 0.14));
+  color: var(--kai-mint-text, #86f0cb);
+}
+
+.kai-help-source:focus-visible {
+  outline: 2px solid var(--kai-mint, #4fe0b0);
+  outline-offset: 2px;
+}
+
+.kai-help-log {
+  min-height: 26rem;
+  max-height: 36rem;
+  margin: 0;
+  padding: 1rem;
+  overflow: auto;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--kai-line, rgba(255, 255, 255, 0.09));
+  border-radius: 12px;
+  color: #c9d4d8;
+  font-size: 0.78rem;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

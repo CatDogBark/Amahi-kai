@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+### 🚀 Major Features
+
+- **Settings → Help** (Settings) — A new tab for when something isn't working: **Report a problem**; this server in a few lines (Amahi-kai's version and update channel, the system, its processor and memory, the system disk, the storage pools, the apps and whether any service is down); and the logs, a tab each: Amahi-kai's own, the root helper's (every change made as root, without passwords or keys), the last System Update, the system journal and each app's own output. **Download logs** saves them all as one text file. It replaces the old debug pages, whose system log was one Ubuntu no longer keeps; their old address leads here.
+
 ### 🔒 Security & Fixes
 
 - **Every page says it's working while it waits** — Pressing a button that sends a form (Network, DNS, ZFS Pools, Settings, Shares, the setup wizard, and the rest) left the page as it was until the next one came, with only the browser's tab showing anything happening, so a slow save looked like nothing happened and invited a second press. Now the button shows a spinner and "Working…", the form's buttons wait, and a save still running after a few seconds says so in a flag. Back brings the page as it was before.

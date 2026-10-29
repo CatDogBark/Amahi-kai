@@ -158,6 +158,13 @@ module AmahiHelper
       validate: ->(_a) { {} },
       plan: ->(_v) { [[:update_target]] }
     },
+    # The system journal's newest lines (Settings → Help, a problem's report): journald keeps it
+    # for root and the adm group, not the app. Read only.
+    'system.journal' => {
+      params: %w[lines],
+      validate: ->(a) { { lines: integer(a, 'lines', 1..500) } },
+      plan: ->(v) { [[:journal, v[:lines]]] }
+    },
     'system.check_update' => {
       params: [],
       validate: ->(_a) { {} },
@@ -643,6 +650,11 @@ module AmahiHelper
     end
 
     # --- Checking for updates ---
+
+    # { 'lines' => [...] }: the journal's last +lines+, oldest first, each cut to LOG_LINE_MAX.
+    def do_journal(lines)
+      { 'lines' => log_lines(capture([JOURNALCTL, '--no-pager', '--quiet', '-o', 'short-iso', '-n', lines.to_s]), lines) }
+    end
 
     def do_check_update
       status = with_update_lock { update_status }

@@ -213,6 +213,32 @@ class SettingsController < ApplicationController
     end
   end
 
+  # Settings → Help: Report a problem, this server in a few lines, and its logs. Amahi-kai's own
+  # is on the page; each other log comes when its tab is opened (help_log), since the journal's
+  # and the apps' each take a call to the root helper.
+  def help
+    @page_title = t('settings')
+    @summary = ServerSummary.rows
+    @log_sources = HelpLogs.sources
+    @first_log = HelpLogs.lines('amahi')
+  end
+
+  # One log's newest lines, for its tab on Help.
+  def help_log
+    source = HelpLogs.source(params[:source].to_s)
+    return render(json: { error: "there's no log #{params[:source].to_s.inspect}" }, status: :not_found) unless source
+
+    render json: { lines: HelpLogs.lines(source.key) }
+  rescue HelpLogs::Unreadable => e
+    render json: { error: "Couldn't read it: #{e.message}" }, status: :unprocessable_content
+  end
+
+  # Every log, as a text file to keep or attach (Download logs).
+  def help_logs
+    send_data "#{ServerSummary.text}\n\n#{HelpLogs.text}\n", type: 'text/plain; charset=utf-8',
+                                                              filename: "amahi-kai-logs-#{Time.now.utc.strftime('%Y-%m-%d-%H%M')}.txt"
+  end
+
   private
 
   # nil if the job started (or was already running), else why not.

@@ -12,6 +12,7 @@
  *= require ocean-bg
  *= require install_terminal
  *= require dns
+ *= require help
  *= require theme
  */
 
