@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.4.3] — 2026-10-28
+
+Apps can write into shares on a ZFS pool: Gitea, Transmission and bitTube install with read and write on one.
+
 ### 🔒 Security & Fixes
 
 - **Apps can write into shares on a ZFS pool** (Apps) — An app given read and write on a share (Transmission, Gitea, bitTube) failed to install when the share was on a ZFS pool: Amahi-kai gives the app's folder a default ACL, so what the app makes there stays editable over SMB, and ZFS on Linux leaves ACLs off unless asked, so setting it failed with "Operation not supported". New pools have ACLs on (`acltype=posixacl`, kept beside each file with `xattr=sa`); on a pool made before, the share's dataset gets them the first time an app is given write access there. Files already on the pool keep their permissions.
