@@ -217,6 +217,17 @@ folder, and deleting a user removes one an older version made. To decide:
 The Content-Security-Policy forbids inline scripts and handlers, but still allows inline styles;
 taking them out is a later pass.
 
+### Pages that wait on a check
+
+A few pages run a check before they show (measured on a test install, 2026-10-29). Network → DNS
+asks the NAS's own DNS for `example.com` (its "Answered in N ms" line), with a 2-second limit, and
+reads Unbound's counts through the root helper (0.4 s): about half a second, but up to 2.5 s while
+the DNS provider doesn't answer. Network → Security and Remote Access run the security check and
+read Docker's ports (0.7 s). Every other page takes under 0.4 s. Not worth changing now (a slow
+DNS page while DNS is down tells its own story); if it is later, the rule would be that a page
+never waits on something that can hang, and anything over about half a second loads after the page
+appears (as Settings → Help's journal tab does).
+
 ## Design records
 
 The plans each part was built from: [`privileged-helper.md`](privileged-helper.md) (the root
