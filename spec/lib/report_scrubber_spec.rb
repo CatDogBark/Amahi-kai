@@ -28,6 +28,12 @@ RSpec.describe ReportScrubber do
       .to eq('ULA <ipv6-address-1>, link <ipv6-address-2>%ens18, ::1, MAC <mac-1>')
   end
 
+  # sshd logs each login's key by its fingerprint: base64, where an image digest is hex
+  it "takes out an SSH key's fingerprint whole" do
+    expect(scrubber.scrub('Accepted publickey for troy from 192.168.1.169 port 45426 ssh2: ED25519 SHA256:JcOwwz/abc+def123GHI456jkl789MNO012pqr345ST'))
+      .to eq('Accepted publickey for <user-1> from <lan-address-1> port 45426 ssh2: ED25519 SHA256:<key-fingerprint>')
+  end
+
   it 'takes out email addresses, tailnet names and keys, keeping commit and image hashes' do
     text = 'mail catdogbark@pm.me; serve amahi-kai.tail1234.ts.net; ADMIN_TOKEN=Kq8sD9fL2mN4pR7tV1wX3yZ5aB6cE0gH; ' \
            "commit 82767a8a1b2c3d4e5f60718293a4b5c6d7e8f901, image sha256:#{'4813745e' * 8}"
@@ -55,7 +61,13 @@ RSpec.describe ReportScrubber do
     Host.create!(name: 'carport-cam', mac: 'aa:bb:cc:dd:ee:01')
     allow(SystemInfo).to receive(:hostname).and_return('nas')
     allow(StoragePools).to receive(:status).and_return(pools: [StoragePools::Pool.new(name: 'data', managed: true)], offline: [], found: [])
+    # The server's own accounts, the journal names them (ssh, sudo); system and service ones aren't people
+    accounts = [Etc::Passwd.new('root', 'x', 0), Etc::Passwd.new('amahi', 'x', 998), Etc::Passwd.new('troy', 'x', 1000),
+                Etc::Passwd.new('nobody', 'x', 65_534)]
+    allow(Etc).to receive(:passwd) { |&block| accounts.each(&block) }
     found = described_class.names
+    expect(found['user']).to include('troy')
+    expect(found['user']).not_to include('root', 'amahi', 'nobody')
     expect(found['share']).to eq(['Vault', 'vault']) # TV and tv: too short to take out without taking out other words
     expect(found['pool']).to eq(['data'])
     expect(found['device']).to include('carport-cam')

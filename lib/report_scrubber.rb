@@ -1,10 +1,12 @@
+require 'etc'
 require 'ipaddr'
 
 # Takes the names and addresses out of a problem's report (Settings → Help → Report a problem):
 # each becomes a stand-in like <share-1>, and the same name gets the same stand-in everywhere in
 # the report, so it still reads as one story. Out: this server's name, users, shares and what's in
-# them, ZFS pools, devices' and DNS names, addresses (IPv4, IPv6, MAC), email addresses, a
-# tailnet's names, and anything that looks like a key or token. Kept: what's needed to find the
+# them, the server's accounts, ZFS pools, devices' and DNS names, addresses (IPv4, IPv6, MAC),
+# email addresses, a tailnet's names, SSH keys' fingerprints, and anything that looks like a key or
+# token. Kept: what's needed to find the
 # fault (versions, commit and image hashes, loopback addresses, times, the apps' names).
 class ReportScrubber
   MAC = /\b(?:[0-9a-f]{2}:){5}[0-9a-f]{2}\b/i
@@ -18,6 +20,10 @@ class ReportScrubber
   # digest (64 hex) stays.
   SECRET = /(?<![\w:])(?=[A-Za-z0-9_\-+\/]{32,})(?=[^\s=]*[A-Za-z])(?=[^\s=]*\d)[A-Za-z0-9_\-+\/]{32,}={0,2}/
   HEX_HASH = /\A(?:\h{40}|\h{64})\z/
+  # An SSH key's fingerprint (sshd logs the key each login used); an image digest is sha256: in hex.
+  KEY_FINGERPRINT = %r{\bSHA256:[A-Za-z0-9+/]{40,}=*}
+  # The server's own accounts (ssh, sudo and logind name them in the journal), as /etc/passwd has them.
+  LOGIN_UIDS = 1000...65_534
   # Where a share's files are: a share's folder (named here when it isn't one the NAS has now),
   # and below a share's stand-in, its folders and files.
   SHARE_PATH = %r{((?:/srv/pools/[^/\s]+/shares|/var/lib/amahi-kai/files|/shares)/)([^/\s'"<>,;:)\]]+)}
@@ -32,11 +38,19 @@ class ReportScrubber
   def self.names
     {
       'server-name' => [SystemInfo.hostname],
-      'user' => User.pluck(:login, :name).flatten,
+      'user' => User.pluck(:login, :name).flatten + logins,
       'share' => Share.pluck(:name, :path).flat_map { |name, path| [name, (File.basename(path) if path.present?)] },
       'pool' => pool_names,
       'device' => Host.pluck(:name) + DnsAlias.pluck(:name) + PortForward.pluck(:name)
     }.transform_values { |list| list.compact.map(&:to_s).reject { |n| n.length < 3 }.uniq.sort_by { |n| -n.length } }
+  end
+
+  def self.logins
+    names = []
+    Etc.passwd { |entry| names << entry.name if LOGIN_UIDS.cover?(entry.uid) }
+    names
+  rescue StandardError
+    []
   end
 
   def self.pool_names
@@ -47,6 +61,7 @@ class ReportScrubber
 
   def scrub(text)
     text = text.to_s.dup
+    text = text.gsub(KEY_FINGERPRINT, 'SHA256:<key-fingerprint>')
     text = text.gsub(SECRET) { |token| token.match?(HEX_HASH) ? token : '<secret>' }
     text = text.gsub(EMAIL) { |email| standin('email', email) }
     text = text.gsub(TAILNET) { |name| standin('tailnet-name', name.downcase) }
