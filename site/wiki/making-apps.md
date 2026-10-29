@@ -31,7 +31,7 @@ When someone clicks **Install**, Amahi-kai's root helper:
 5. Creates the container:
    - as the app's user (`--user <uid>:<gid>`) when the manifest says `run_as: app`;
    - with `no-new-privileges`, so nothing in it can gain privileges (setuid programs in the
-     image included);
+     image included), and without raw sockets (`NET_RAW`) or device files (`MKNOD`);
    - with a memory limit (`1g` unless the manifest sets another), restarted unless stopped;
    - with your environment settings and the generated secrets;
    - with each of your folders mounted at the path you gave;
@@ -66,7 +66,12 @@ installing it again picks up where it was.
   linuxserver.io images, with `PUID`/`PGID`) use `run_as: image`. An app that writes into shares
   (`writes_shares: true`) must run its processes as the app's user: `run_as: app`, or `run_as:
   image` with `PUID: "{{uid}}"` and `PGID: "{{gid}}"` in its environment, both exactly so. The
-  catalog's check refuses anything else.
+  catalog's check refuses anything else. (Given a share to write into, a `run_as: image` app's
+  `{{gid}}` is the `users` group, so it can write there.)
+- **Ping without raw sockets.** An image's `ping` is often marked to need raw sockets, which an
+  app doesn't get, and then it doesn't run at all. Name it in the manifest (`ping: /usr/bin/ping`)
+  and Amahi-kai mounts a copy of that same file without the mark, which pings the way Docker lets
+  any container.
 - **Shares only if it works with files in them.** `shares: true` has **Install** ask which shares to
   give it (read only, unless `writes_shares: true`, which says so too); an app without either
   installs without being asked, and gets none.

@@ -39,6 +39,10 @@ module AmahiHelper
   # newer manifest; an app the catalog dropped is still started, stopped and uninstalled by it.
   APP_DEFINITIONS = '/var/lib/amahi-kai/app-definitions'
 
+  # Copies of the ping an app's manifest names, without its file capability (app_ping_mount):
+  # root's, one folder an app, one copy an image.
+  APP_PINGS = '/var/lib/amahi-kai/app-pings'
+
   # apps.follow_dns, run in the background when the NAS's DNS for apps changes (follow_dns_apps_later)
   APPS_FOLLOW_DNS_UNIT = 'amahi-kai-apps-follow-dns'
 
@@ -396,6 +400,10 @@ module AmahiHelper
       bad.call('web_tls must be true or false') unless [true, false].include?(web_tls)
       bad.call('web_tls needs a web_port') if web_tls && web_port.nil?
       access = app_access(data, web_port, web_tls, ports, format, bad)
+      ping = data['ping']
+      unless ping.nil? || (ping.is_a?(String) && normalized_path?(ping) && ping.split('/').drop(1).all? { |part| part.match?(APP_PATH_PART) })
+        bad.call("ping #{ping.inspect} must be an absolute, normalized path of plain names")
+      end
       folders = app_folders(data['folders'], bad)
       secrets = app_secret_names(data['secrets'], environment, bad, format)
       environment.each do |key, value|
@@ -406,7 +414,7 @@ module AmahiHelper
       end
       { image: image, run_as: run_as, memory: memory, ports: ports, web_port: web_port, web_tls: web_tls, access: access,
         folders: folders, storage: app_storage_need(folders), environment: environment,
-        secrets: secrets, hashed_secrets: app_hashed_secrets(data['secrets']), writes_shares: writes_shares }
+        secrets: secrets, hashed_secrets: app_hashed_secrets(data['secrets']), writes_shares: writes_shares, ping: ping }
     end
 
     # Who reaches the app (APP_ACCESS): lan unless it says tailscale. That needs requires: 5 (an
@@ -640,6 +648,7 @@ module AmahiHelper
         binds, set = app_share_binds_make(id, shares)
         share_mounts = app_share_mounts(shares, binds)
         app_share_sources!(shares)
+        ping = app_ping_mount(id, manifest)
         say('Creating the container...')
         with_env_file(app_environment(manifest, uid, app_env_gid(manifest, gid, shares), secrets, url)) do |env_file|
           run_command([DOCKER, 'create', '--name', fresh, '--restart', 'unless-stopped',
@@ -648,7 +657,7 @@ module AmahiHelper
                        '--memory', manifest[:memory], '--label', "amahi.app=#{id}", *app_dns_options, '--env-file', env_file,
                        *(manifest[:run_as] == 'app' ? ['--user', "#{uid}:#{gid}"] : []),
                        *ports.flat_map { |p| ['--publish', "#{bind}:#{p[:host]}:#{p[:container]}/#{p[:protocol]}"] },
-                       *app_folder_mounts(manifest, dir, storage), *share_mounts, manifest[:image]])
+                       *app_folder_mounts(manifest, dir, storage), *share_mounts, *ping, manifest[:image]])
         end
       rescue Failed, Refused
         run_command([DOCKER, 'rm', '--force', fresh, { allow_failure: true }])
@@ -663,8 +672,65 @@ module AmahiHelper
       run_command([DOCKER, 'rename', fresh, container])
       app_record_definition(id, manifest)
       app_share_binds_keep(id, set, shares)
+      app_ping_prune(id, manifest)
       app_tailscale_serve(web) if tailnet
       ports
+    end
+
+    # --- An app's ping (the manifest's ping) ---
+
+    # An image's ping is often given cap_net_raw as a file capability, which an app's container
+    # doesn't have (APP_CAP_DROP), and the kernel then refuses to run it at all ("Operation not
+    # permitted"). Docker lets a container's users ping without it (net.ipv4.ping_group_range), so
+    # an app whose manifest names its ping gets that same file, copied out of the same image
+    # without the capability, mounted read only in its place. One copy an image: a container made
+    # again from the same image reuses it, and one an update falls back to keeps its own.
+    def app_ping_mount(id, manifest)
+      return [] unless manifest[:ping]
+
+      path = app_ping_path(id, manifest[:image])
+      app_ping_copy(id, manifest, path) unless File.file?(path) && !File.symlink?(path)
+      ['--mount', "type=bind,source=#{path},target=#{manifest[:ping]},readonly"]
+    end
+
+    def app_ping_path(id, image)
+      "#{APP_PINGS}/#{id}/ping-#{image[/@sha256:(\h{16})/, 1]}"
+    end
+
+    # docker cp out of a container made from the image and never started, then its bytes into a
+    # new file, which has no extended attributes (the capability is one).
+    def app_ping_copy(id, manifest, path)
+      say("Copying #{manifest[:ping]} out of the image, to ping without raw sockets...")
+      [APP_PINGS, File.dirname(path)].each do |dir|
+        raise Failed, "#{dir} isn't a folder" if File.symlink?(dir)
+
+        Dir.mkdir(dir, 0o755) unless File.directory?(dir)
+      end
+      taken = "#{path}.image"
+      FileUtils.rm_f([taken, "#{path}.new"])
+      scratch = "#{app_container(id)}-ping"
+      run_command([DOCKER, 'rm', '--force', scratch, { allow_failure: true }])
+      run_command([DOCKER, 'create', '--name', scratch, manifest[:image]])
+      begin
+        run_command([DOCKER, 'cp', '--follow-link', "#{scratch}:#{manifest[:ping]}", taken])
+      ensure
+        run_command([DOCKER, 'rm', '--force', scratch, { allow_failure: true }])
+      end
+      raise Failed, "#{manifest[:ping]} isn't a file in #{manifest[:image]}" unless File.file?(taken) && !File.symlink?(taken)
+
+      File.open("#{path}.new", File::WRONLY | File::CREAT | File::EXCL, 0o755) do |copy|
+        File.open(taken, 'rb') { |source| IO.copy_stream(source, copy) }
+      end
+      File.chmod(0o755, "#{path}.new")
+      File.rename("#{path}.new", path)
+    ensure
+      FileUtils.rm_f(taken) if taken
+    end
+
+    # Once the container is swapped in, the copies for other images go.
+    def app_ping_prune(id, manifest)
+      keep = manifest[:ping] && app_ping_path(id, manifest[:image])
+      Dir.glob("#{APP_PINGS}/#{id}/ping-*").each { |file| FileUtils.rm_f(file) unless file == keep }
     end
 
     # The host port the app's web page was given (its web_port, or the next free one), or nil.
@@ -1638,6 +1704,7 @@ module AmahiHelper
       app_share_binds_keep(id, nil, [])
       app_unserve_uninstalled(id, definition)
       run_command([DOCKER, 'image', 'rm', image, { allow_failure: true }]) if image
+      FileUtils.rm_rf("#{APP_PINGS}/#{id}") # made again from the image at the next install
       return { 'app' => id, 'data_kept' => true } unless delete_data
 
       dir = "#{APPS_ROOT}/#{id}"

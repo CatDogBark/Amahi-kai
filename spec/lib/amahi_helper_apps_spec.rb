@@ -362,6 +362,17 @@ RSpec.describe 'AmahiHelper apps' do
                                                      secrets: ['TOKEN'])
     end
 
+    # ping goes into a --mount like a folder's path, so it's held to the same plain names
+    it 'takes the path of its ping, an absolute one of plain names' do
+      expect(failure('ping' => '/usr/bin/ping')).to be_nil
+      expect(helper.app_manifest('test')[:ping]).to eq('/usr/bin/ping')
+      ['usr/bin/ping', '/usr/../bin/ping', '/bin/ping,readonly=false', '/bin/', 7].each do |path|
+        expect(failure('ping' => path)).to include('ping'), path.inspect
+      end
+      File.write("#{dir}/test.yml", good.to_yaml)
+      expect(helper.app_manifest('test')[:ping]).to be_nil
+    end
+
     # Docker's mount options split on , : and =, so a folder path with one could add options of its
     # own; two folders at one path failed only after the old container was gone.
     it 'wants folder paths of plain names, not where the shares go, and no two at one path' do
@@ -959,6 +970,65 @@ RSpec.describe 'AmahiHelper apps' do
                               '/usr/bin/setfacl', '-P', '-d', '-m', 'u::rwx,g::rwx,o::rx', '{}', '+'])
       expect(ran.index { |argv| argv[1] == 'start' }).to be > acl
       expect(ran.flatten).not_to include('/usr/sbin/zfs')
+    end
+
+    # Uptime Kuma's ping is setcap cap_net_raw, so with NET_RAW dropped the kernel refused to run it
+    # ("spawn EPERM"): it gets a copy of the image's own ping without the capability, read only
+    describe "an app's ping" do
+      let(:pings) { "#{dir}/app-pings" }
+      let(:manifest) { helper.app_manifest('uptimekuma') }
+      let(:copy) { "#{pings}/uptimekuma/ping-#{manifest[:image][/@sha256:(\h{16})/, 1]}" }
+
+      before do
+        stub_const('AmahiHelper::APP_PINGS', pings)
+        allow(helper).to receive(:run_command) do |argv|
+          ran << argv
+          accounts[argv.last] = account(argv.last, 996) if argv.first == '/usr/sbin/useradd'
+          File.binwrite(argv[4], "\x7fELF ping") if argv[1] == 'cp' # docker cp out of the scratch container
+          nil
+        end
+      end
+
+      it 'mounts a copy of the same file, from the same image, in its place' do
+        helper.do_install_app('uptimekuma', manifest)
+        docker = ran.select { |argv| argv.first == '/usr/bin/docker' }.map { |argv| argv.reject { |a| a.is_a?(Hash) } }
+        expect(docker).to include(['/usr/bin/docker', 'create', '--name', 'amahi-uptimekuma-ping', manifest[:image]],
+                                  ['/usr/bin/docker', 'cp', '--follow-link', 'amahi-uptimekuma-ping:/usr/bin/ping', "#{copy}.image"],
+                                  ['/usr/bin/docker', 'rm', '--force', 'amahi-uptimekuma-ping'])
+        steps = docker.map { |argv| argv[1..3].join(' ') }
+        copied = steps.index('cp --follow-link amahi-uptimekuma-ping:/usr/bin/ping')
+        expect(steps.rindex('rm --force amahi-uptimekuma-ping')).to be > copied # the scratch container goes
+        expect(steps.index('create --name amahi-uptimekuma-next')).to be > copied
+        create = ran.find { |argv| argv[1] == 'create' && argv[3] == 'amahi-uptimekuma-next' }
+        expect(create.each_cons(2).select { |flag, _| flag == '--mount' }.map(&:last))
+          .to include("type=bind,source=#{copy},target=/usr/bin/ping,readonly")
+        expect(File.binread(copy)).to eq("\x7fELF ping".b)
+        expect(File.stat(copy).mode & 0o777).to eq(0o755)
+        expect(Dir.children("#{pings}/uptimekuma")).to eq([File.basename(copy)]) # the docker cp is gone
+      end
+
+      it 'reuses the copy for the same image, and drops the old one when the image changes' do
+        helper.do_install_app('uptimekuma', manifest)
+        ran.clear
+        helper.do_install_app('uptimekuma', manifest)
+        expect(ran.select { |argv| argv[1] == 'cp' }).to be_empty
+
+        newer = manifest.merge(image: manifest[:image].sub(/@sha256:\h+/, "@sha256:#{'b' * 64}"))
+        helper.do_install_app('uptimekuma', newer)
+        expect(Dir.children("#{pings}/uptimekuma")).to eq(["ping-#{'b' * 16}"])
+      end
+
+      it 'goes with the container at uninstall' do
+        helper.do_install_app('uptimekuma', manifest)
+        helper.do_uninstall_app('uptimekuma', false)
+        expect(File.exist?("#{pings}/uptimekuma")).to be false
+      end
+
+      it "isn't made for an app that doesn't name one" do
+        helper.do_install_app('gitea', helper.app_manifest('gitea'))
+        expect(ran.select { |argv| argv[1] == 'cp' }).to be_empty
+        expect(File.exist?(pings)).to be false
+      end
     end
 
     # linuxserver.io's init drops to its user with the image's own groups (users is 1000 there), so
