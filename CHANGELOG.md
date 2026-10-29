@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.4.4] — 2026-10-28
+
+Transmission saves its downloads into shares, Uptime Kuma's ping monitors work, and Gitea keeps its repositories in a share folder.
+
 ### 🔒 Security & Fixes
 
 - **Uptime Kuma's ping monitors work** (Apps) — A ping monitor was always down with "spawn EPERM": the `ping` in Uptime Kuma's image is marked to need raw sockets, which Amahi-kai doesn't give apps, and Linux then refuses to run it at all. An app's manifest can now name its ping (`ping: /usr/bin/ping`), and Amahi-kai mounts a copy of that same file, taken from the same image without the mark, in its place: it pings the way Docker lets any container, and the app still gets no raw sockets.
