@@ -134,9 +134,9 @@ them to create the admin account, so open the app and do that as soon as it's in
 
 ### Giving an app shares
 
-An app that works with files in shares (Jellyfin, PiGallery2, Transmission, bitTube) asks at
+An app that works with files in shares (Jellyfin, PiGallery2, Transmission, bitTube, Gitea) asks at
 **Install** which shares to give it (none by default). The others install without asking
-(Vaultwarden, Gitea, Uptime Kuma), or ask only for the ZFS pool their data goes on (bitShare), and
+(Vaultwarden, Uptime Kuma), or ask only for the ZFS pool their data goes on (bitShare), and
 their pages say shares aren't used. Shares appear inside the app at `/shares/<name>`: in Jellyfin, for
 example, add `/shares/Movies` as a library. To change them
 later, click **Change** next to **Shares** on the app's page (**Manage**): the app restarts with the new ones,
@@ -162,7 +162,8 @@ is out of the app's reach. A share can give several folders, none inside another
   folder is mounted on its own.
 
 - Shares are **read only** unless you choose **Read and write**, which only apps that save files
-  into shares offer (Transmission, for downloads); each folder given has its own.
+  into shares offer (Transmission, for downloads; Gitea, for its repositories: set its Repository
+  Root Path to the folder under `/shares` on its first page); each folder given has its own.
 - Shares that **Greyhole pools** are always read only to apps: their files change over SMB only.
   When the storage pool changes (a drive joins or leaves it, or a share's pool copies turn on or
   Off), the apps given a pooled share restart with the pool as it is now, so they keep reading

@@ -29,7 +29,7 @@ RSpec.describe AppCatalog do
     # Install asks for shares only for apps that work with files in them (shares, or writes_shares)
     it "says which apps work with files in shares" do
       uses = AppCatalog.all.to_h { |app| [app[:identifier], app[:uses_shares]] }
-      expect(uses).to eq("bitshare" => false, "bitstream" => false, "bittube" => true, "gitea" => false, "jellyfin" => true, "pigallery2" => true,
+      expect(uses).to eq("bitshare" => false, "bitstream" => false, "bittube" => true, "gitea" => true, "jellyfin" => true, "pigallery2" => true,
                          "transmission" => true, "uptimekuma" => false, "vaultwarden" => false)
     end
 

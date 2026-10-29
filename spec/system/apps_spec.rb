@@ -164,7 +164,7 @@ RSpec.describe 'Apps', type: :system do
   end
 
   # Install asks which shares to give an app only when it works with files in shares (the
-  # catalog's shares, or writes_shares): Vaultwarden, Gitea and Uptime Kuma install without asking
+  # catalog's shares, or writes_shares): Vaultwarden and Uptime Kuma install without asking
   describe 'apps that work with shares, and the others' do
     before do
       allow(DockerService).to receive(:installed?).and_return(true)
@@ -174,10 +174,10 @@ RSpec.describe 'Apps', type: :system do
     it 'installs an app that does not work with shares without asking' do
       sign_in_as_admin
       visit '/apps'
-      within('#docker_app_gitea') { click_button 'Install' }
-      within('#app-install-modal') { expect(page).to have_text('Gitea is installed and running', wait: 15) }
+      within('#docker_app_uptimekuma') { click_button 'Install' }
+      within('#app-install-modal') { expect(page).to have_text('Uptime Kuma is installed and running', wait: 15) }
       expect(page).to have_no_css('#app-shares-dialog.show')
-      expect(Privileged.calls).to include(['apps.install', { app: 'gitea', shares: [] }])
+      expect(Privileged.calls).to include(['apps.install', { app: 'uptimekuma', shares: [] }])
     end
 
     it 'asks which shares to give an app that works with them' do

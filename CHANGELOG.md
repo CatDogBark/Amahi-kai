@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+### 🔒 Security & Fixes
+
+- **Gitea can keep its repositories in a share** (Apps) — Install now asks Gitea's shares, and a share folder given read and write can hold its repositories instead of the system disk: set **Repository Root Path** to that folder under `/shares` on Gitea's first page. The app catalog had it first; this is the copy that comes with Amahi-kai, and the wiki.
+
 ## [1.4.3] — 2026-10-28
 
 Apps can write into shares on a ZFS pool: Gitea, Transmission and bitTube install with read and write on one.
