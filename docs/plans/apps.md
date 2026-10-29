@@ -184,7 +184,8 @@ app needs a public hostname. HTTPS for apps through Tailscale (Vaultwarden needs
   their copies on the drives, so the app also gets that share's copy folder on each Greyhole drive,
   read only, at the same path. A share an app writes into gets a default ACL on its folders, so
   what the app makes is group-writable (`users`, like files made over SMB) whatever its umask; the
-  app joins the `users` group in its container.
+  app joins the `users` group in its container. On a ZFS pool made before pools had POSIX ACLs on,
+  the share's dataset gets `acltype=posixacl` and `xattr=sa` first (setfacl fails without them).
 - [x] **Any share can be given**, and the dialog says that everyone with an account in the app can
   see it, whatever the share's own user list says (Samba enforces those, not the folders: every
   share folder is `users` 2775, files 0664).

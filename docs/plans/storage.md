@@ -95,7 +95,7 @@ operations with their own validation and logging.
 - **Install ZFS** (`zfsutils-linux`) on request, like Greyhole and Docker today.
 - **Create a pool:** pick unmounted data drives (never the OS disk, never a drive already used by
   share storage), pick a layout, confirm wiping them. Created with `ashift=12`, `compression=lz4`,
-  `setuid=off`, `devices=off` (apps' datasets inherit them), and `autotrim=on` for SSDs, and imported at every boot. Pools mount at `/srv/pools/<name>`,
+  `setuid=off`, `devices=off`, `acltype=posixacl` with `xattr=sa` (apps' datasets inherit them), and `autotrim=on` for SSDs, and imported at every boot. Pools mount at `/srv/pools/<name>`,
   not under `/mnt`; the helper accepts a share folder on one only in its `shares` dataset. The drives are named by
   their `/dev/disk/by-id` links (model and serial), so a failed one can be found in its bay.
 - **Pool status:** health, capacity, each drive's state, the last scrub and its result.

@@ -115,11 +115,11 @@ Use the other two SSDs (here `/dev/sdd` and `/dev/sde`).
   ```
 
   ```bash
-  zfs get compression,mountpoint,amahi:snapshot-hourly,amahi:snapshot-daily test
+  zfs get compression,acltype,xattr,mountpoint,amahi:snapshot-hourly,amahi:snapshot-daily test
   ```
 
-  Expect `ashift 12`, `autoexpand on`, `autotrim on`, `compression lz4`, mountpoint
-  `/srv/pools/test`, snapshots `24` and `30`.
+  Expect `ashift 12`, `autoexpand on`, `autotrim on`, `compression lz4`, `acltype posix`,
+  `xattr sa`, mountpoint `/srv/pools/test`, snapshots `24` and `30`.
 - [ ] ZFS's memory cache is capped at 2 GB (`2147483648`):
 
   ```bash
