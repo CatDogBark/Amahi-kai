@@ -18,7 +18,9 @@ class DiskManager
   BY_ID_NAME = /\A[\w.:@+=-]{1,200}\z/
   BY_ID_PREFERENCE = %w[ata- nvme- scsi- usb- wwn- virtio-].freeze
 
-  class DiskError < StandardError; end
+  class DiskError < StandardError
+    include ReportableError
+  end
 
   # Detect all block devices with partition info
   # Outside production, a machine without lsblk's answer gets the sample drives. In production
@@ -27,7 +29,7 @@ class DiskManager
   def self.devices
     raw = lsblk_json
     if raw.blank?
-      raise DiskError, "Couldn't list the drives (lsblk gave no answer)" if production?
+      raise DiskError.new("Couldn't list the drives (lsblk gave no answer)", failed: true) if production?
 
       return sample_devices
     end
@@ -35,7 +37,7 @@ class DiskManager
     begin
       data = JSON.parse(raw)
     rescue JSON::ParserError
-      raise DiskError, "Couldn't read lsblk's list of the drives" if production?
+      raise DiskError.new("Couldn't read lsblk's list of the drives", failed: true) if production?
 
       return sample_devices
     end
@@ -300,7 +302,7 @@ class DiskManager
   def self.privileged(operation, **args)
     Privileged.call(operation, **args)
   rescue Privileged::Error => e
-    raise DiskError, e.message
+    raise ReportableError.from_privileged(DiskError, e)
   end
 
   def self.auto_mount_point

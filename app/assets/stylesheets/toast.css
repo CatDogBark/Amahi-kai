@@ -15,7 +15,7 @@
 
 .amahi-toast {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 0.65rem;
   padding: 0.75rem 1rem;
   border-radius: 8px;
@@ -68,6 +68,60 @@
 
 .amahi-toast-close:hover {
   opacity: 1;
+}
+
+.amahi-toast-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+/* A flag that stays until it's dismissed: Dismiss, and for something that broke, Report this
+   problem. In the flag's own colour, so they read on red and on blue alike. */
+.amahi-toast-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.amahi-toast-dismiss,
+.amahi-toast-report {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.25rem;
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.85rem;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.amahi-toast-dismiss {
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+}
+
+.amahi-toast-report {
+  border: 1px solid #fff;
+  background: #fff;
+  color: #9a1c27;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.amahi-toast-report:hover,
+.amahi-toast-report:focus {
+  background: #f8e3e5;
+  color: #7a1520;
+}
+
+.amahi-toast-dismiss:focus-visible,
+.amahi-toast-report:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
 }
 
 /* Mobile: full width */

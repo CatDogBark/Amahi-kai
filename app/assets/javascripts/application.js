@@ -19,6 +19,7 @@
 //= require tooltips
 //= require lib/dispatch
 //= require install_terminal
+//= require lib/busy_forms
 //= require lib/application
 //= require form_reply
 //= require address_move

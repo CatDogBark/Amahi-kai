@@ -29,6 +29,22 @@ class ApplicationController < ActionController::Base
 
   private
 
+  # A red flag for something that went wrong. One that broke (:failed) offers Report a problem
+  # (toast.js); one that only needs a change, like a refusal, keeps the page's own red flag
+  # (+refusal+).
+  def flash_failure(message, error = nil, now: false, refusal: :error)
+    (now ? flash.now : flash)[broke?(error) ? :failed : refusal] = message
+  end
+
+  # Whether an error means something broke: it says so itself (ReportableError#failed?, or a
+  # root helper's refusal, Privileged::Error#refused?); any other, or none given, broke.
+  def broke?(error)
+    return error.failed? if error.respond_to?(:failed?)
+    return !error.refused? if error.respond_to?(:refused?)
+
+    true
+  end
+
   # A request the page makes by itself (fetch, asking for JSON), not the page loading.
   def background_request?
     request.xhr? || request.format.json?

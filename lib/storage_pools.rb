@@ -18,7 +18,9 @@ module StoragePools
   SCRUB_CRON = '/etc/cron.d/zfsutils-linux'.freeze
   LSBLK_COLUMNS = 'NAME,PATH,TYPE,SIZE,MODEL,SERIAL,FSTYPE,LABEL,UUID,PARTUUID,MOUNTPOINTS,ROTA'.freeze
 
-  class Error < StandardError; end
+  class Error < StandardError
+    include ReportableError
+  end
 
   # The roles (StoragePools.drives) of a free disk with an old ZFS label on it, which Erase clears.
   OLD_LABEL = %i[left_pool old_zfs].freeze
@@ -364,7 +366,7 @@ module StoragePools
       end
       mounted_parts(device.to_s).each { |part| DiskManager.unmount!(part) }
     rescue DiskManager::DiskError => e
-      raise Error, e.message
+      raise Error.new(e.message, failed: true)
     end
 
     # Replaces a pool's drive (+old+: its name in the pool's status) with a free disk.
@@ -434,7 +436,7 @@ module StoragePools
     def privileged(operation, **args, &block)
       Privileged.call(operation, **args, &block)
     rescue Privileged::Error => e
-      raise Error, e.message
+      raise ReportableError.from_privileged(Error, e)
     end
 
     # The kernel name of the drive the page named (DiskManager.resolve).

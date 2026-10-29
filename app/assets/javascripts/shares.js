@@ -25,7 +25,7 @@ function updatePoolCopies(shareId, copies) {
   })
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      if (data.status === 'error') alert(data.message);
+      if (data.status === 'error') showToast(data.message, 'error');
       // Turning off while Greyhole moves the files back: the page shows it, with the card
       // still open, and updates itself.
       if (data.removing) { reloadWithShareOpen(shareId); return; }

@@ -12,11 +12,11 @@ function dockerAppAction(url, btn) {
   fetch(url, { method: 'POST', headers: csrfHeaders(), credentials: 'same-origin' })
     .then(function(r) { return r.json().catch(function() { return {}; }); })
     .then(function(data) {
-      if (data.status !== 'ok') alert('That didn\'t work: ' + (data.message || 'no answer from Amahi-kai'));
+      if (data.status !== 'ok') showToastAfterReload('That didn\'t work: ' + (data.message || 'no answer from Amahi-kai'), 'failed');
       window.location.reload();
     })
     .catch(function(err) {
-      alert('That didn\'t work: ' + err.message);
+      showToastAfterReload('That didn\'t work: ' + err.message, 'failed');
       window.location.reload();
     });
 }

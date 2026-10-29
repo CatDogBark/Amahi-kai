@@ -186,7 +186,7 @@ class DnsController < ApplicationController
     flash[:notice] = "Blocking is paused for #{helpers.distance_of_time_in_words(Time.now, Time.at(reply['until'].to_i))}."
     redirect_to dns_index_path(anchor: 'dns-blocking')
   rescue Privileged::Error => e
-    flash[:alert] = "Couldn't pause blocking: #{e.message}"
+    flash_failure("Couldn't pause blocking: #{e.message}", e, refusal: :alert)
     redirect_to dns_index_path(anchor: 'dns-blocking')
   end
 
@@ -196,7 +196,7 @@ class DnsController < ApplicationController
     flash[:notice] = 'Blocking is back on.'
     redirect_to dns_index_path(anchor: 'dns-blocking')
   rescue Privileged::Error => e
-    flash[:alert] = "Couldn't resume blocking: #{e.message}"
+    flash_failure("Couldn't resume blocking: #{e.message}", e, refusal: :alert)
     redirect_to dns_index_path(anchor: 'dns-blocking')
   end
 
@@ -243,7 +243,7 @@ class DnsController < ApplicationController
     DnsService.check_routers!
     redirect_to dns_internet_path(anchor: 'dns-ipv6')
   rescue Privileged::Error => e
-    flash[:alert] = "Couldn't ask the IPv6 routers: #{e.message}"
+    flash_failure("Couldn't ask the IPv6 routers: #{e.message}", e, refusal: :alert)
     redirect_to dns_internet_path(anchor: 'dns-ipv6')
   end
 
@@ -294,7 +294,7 @@ class DnsController < ApplicationController
   end
 
   def not_applied(error, path)
-    flash[:alert] = "Saved, but it couldn't be applied: #{error.message}"
+    flash_failure("Saved, but it couldn't be applied: #{error.message}", error, refusal: :alert)
     redirect_to path
   end
 
@@ -302,7 +302,7 @@ class DnsController < ApplicationController
   # rules don't follow (+meanwhile+).
   def forward_saved(done, meanwhile)
     if (problem = DnsService.rewrite_router_problem)
-      flash[:alert] = "#{done}, but the router's rules weren't rewritten (#{problem}), so #{meanwhile} until a save on this page puts them in place."
+      flash_failure("#{done}, but the router's rules weren't rewritten (#{problem}), so #{meanwhile} until a save on this page puts them in place.")
     else
       flash[:notice] = "#{done}."
     end

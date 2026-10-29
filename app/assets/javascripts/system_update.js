@@ -8,7 +8,7 @@
 function checkForUpdates(button, url) {
   var label = button.textContent;
   var again = function(message) {
-    alert(message);
+    showToast(message, 'failed');
     button.disabled = false;
     button.textContent = label;
   };

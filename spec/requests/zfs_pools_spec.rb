@@ -188,7 +188,7 @@ RSpec.describe 'ZFS pools', type: :request do
       expect(StoragePools).to have_received(:free_share_drive!).with('/dev/sdg')
       allow(StoragePools).to receive(:free_share_drive!).and_raise(StoragePools::Error, "/dev/sdb can't be freed: it has files on it (photos)")
       post '/disks/free_pool_drive', params: { drive: '/dev/sdb' }, as: :json
-      expect(response.parsed_body).to eq('status' => 'error', 'error' => "/dev/sdb can't be freed: it has files on it (photos)")
+      expect(response.parsed_body).to eq('status' => 'error', 'error' => "/dev/sdb can't be freed: it has files on it (photos)", 'failed' => false)
     end
 
     it 'says on Devices that a drive for a ZFS pool stays unmounted, while ZFS is installed' do
@@ -379,7 +379,7 @@ RSpec.describe 'ZFS pools', type: :request do
       expect(response.parsed_body).to eq('status' => 'ok')
       expect(Privileged.calls.map(&:first) - ['storage.check_health']).to eq(%w[pools.snapshot pools.snapshot_policy pools.destroy_snapshot pools.rollback])
       post '/disks/pool_snapshot_policy', params: { name: 'tank', hourly: 'lots', daily: 14 }, as: :json
-      expect(response.parsed_body).to eq('status' => 'error', 'error' => 'Keep a whole number of snapshots')
+      expect(response.parsed_body).to eq('status' => 'error', 'error' => 'Keep a whole number of snapshots', 'failed' => false)
     end
 
     it 'says the page updates while a resilver runs, and offers no Add drives for a pool of mixed groups' do
@@ -397,7 +397,7 @@ RSpec.describe 'ZFS pools', type: :request do
       allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('pools.create', '/dev/sdb is mounted at /mnt/storage-1; unmount it first', refused: true))
       post '/disks/create_pool', params: { name: 'tank', layout: 'mirror', devices: %w[/dev/sdb /dev/sdd] }, as: :json
       expect(response).to have_http_status(:unprocessable_content)
-      expect(response.parsed_body).to eq('status' => 'error', 'error' => '/dev/sdb is mounted at /mnt/storage-1; unmount it first')
+      expect(response.parsed_body).to eq('status' => 'error', 'error' => '/dev/sdb is mounted at /mnt/storage-1; unmount it first', 'failed' => false)
     end
 
     it 'installs ZFS and the drive health tools, streaming the progress' do
@@ -502,7 +502,7 @@ RSpec.describe 'ZFS pools', type: :request do
       expect(Privileged.calls).to eq([['pools.scrub', { name: 'tank' }], ['storage.check_health', {}]])
       allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('pools.scrub', 'there\'s no pool named "x"', refused: true))
       post '/disks/scrub_pool', params: { name: 'x' }, as: :json
-      expect(response.parsed_body).to eq('status' => 'error', 'error' => 'there\'s no pool named "x"')
+      expect(response.parsed_body).to eq('status' => 'error', 'error' => 'there\'s no pool named "x"', 'failed' => false)
     end
 
     it 'offers smartmontools when ZFS is installed but it is not' do

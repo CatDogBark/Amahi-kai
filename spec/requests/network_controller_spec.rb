@@ -152,10 +152,10 @@ describe "Network Controller", type: :request do
         allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('network.router_on', 'ufw: no'))
         post "/network/host/#{host.id}/lan_only"
         expect(host.reload.lan_only).to be true # saved all the same
-        expect(flash[:alert]).to eq("camera is saved as LAN only, but the router's rules weren't rewritten (ufw: no), so it still reaches the internet " \
+        expect(flash[:failed]).to eq("camera is saved as LAN only, but the router's rules weren't rewritten (ufw: no), so it still reaches the internet " \
                                     "until a save on Network → Internet puts them in place.")
         delete "/network/host/#{host.id}"
-        expect(flash[:alert]).to include("camera no longer has a fixed address; its name stays with it, but the router's rules weren't rewritten (ufw: no)")
+        expect(flash[:failed]).to include("camera no longer has a fixed address; its name stays with it, but the router's rules weren't rewritten (ufw: no)")
         # A device only named can't be kept off the internet: the rule is on its address
         post "/network/host/#{host.id}/lan_only"
         expect(flash[:alert]).to eq("LAN only needs a fixed address: camera has none.")
@@ -164,7 +164,7 @@ describe "Network Controller", type: :request do
         allow(DnsService).to receive(:wan_interface).and_return(nil)
         Setting.set('dns_wan_interface', 'ens20')
         post "/network/host/#{host.id}/lan_only"
-        expect(flash[:alert]).to include("(the router's internet port ens20 isn't here)")
+        expect(flash[:failed]).to include("(the router's internet port ens20 isn't here)")
       end
     end
 

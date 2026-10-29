@@ -105,7 +105,7 @@ describe "Disks Controller", type: :request do
           .and_return(mount_point: '/mnt/storage-3', share_name: 'storage-3', refused: 'smb.conf refused: [storage-3] path')
         post "/disks/mount_as_share", params: { device: '/dev/sdc1' }
         expect(flash[:notice]).to eq("Mounted /dev/sdc1 at /mnt/storage-3 and created share 'storage-3'")
-        expect(flash[:error]).to eq("Samba didn't take the new settings, so the share isn't on the network yet: smb.conf refused: [storage-3] path")
+        expect(flash[:failed]).to eq("Samba didn't take the new settings, so the share isn't on the network yet: smb.conf refused: [storage-3] path")
 
         share = Share.new(name: 'storage-3')
         share.errors.add(:path, "couldn't be created")

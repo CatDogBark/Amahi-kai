@@ -74,7 +74,7 @@ class SettingsController < ApplicationController
     if service.perform(verb)
       flash[:notice] = "#{service.name}: #{verb} done"
     else
-      flash[:error] = "#{service.name}: #{verb} failed (details in the Amahi-kai log)"
+      flash_failure("#{service.name}: #{verb} failed (details in the Amahi-kai log)")
     end
     redirect_to settings_servers_path
   end
@@ -119,7 +119,7 @@ class SettingsController < ApplicationController
     flash[:notice] = held ? "Held at their versions: #{Array(params[:packages]).join(', ')}." : "Released: #{Array(params[:packages]).join(', ')}."
     redirect_to settings_dependencies_path
   rescue Privileged::Error => e
-    flash[:error] = e.message
+    flash_failure(e.message, e)
     redirect_to settings_dependencies_path
   end
 
@@ -130,7 +130,7 @@ class SettingsController < ApplicationController
     flash[:notice] = enabled ? 'Automatic security updates are on: Ubuntu installs its security fixes by itself.' : 'Automatic security updates are off: updates install only from here.'
     redirect_to settings_dependencies_path
   rescue Privileged::Error => e
-    flash[:error] = e.message
+    flash_failure(e.message, e)
     redirect_to settings_dependencies_path
   end
 
@@ -181,7 +181,7 @@ class SettingsController < ApplicationController
     flash[:notice] = "System Update now follows #{UpdateStatus::CHANNELS.fetch(channel, channel)}."
     redirect_to settings_system_status_path(anchor: 'update-channel')
   rescue Privileged::Error => e
-    flash[:error] = e.message
+    flash_failure(e.message, e)
     redirect_to settings_system_status_path(anchor: 'update-channel')
   end
 

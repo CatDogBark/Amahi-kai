@@ -86,8 +86,17 @@ function terminalButton(id) {
   return document.querySelector('#' + id + '-install-footer button');
 }
 
-// Ends a run: the cursor stops, the status says how it went, the button appears.
+// Ends a run: the cursor stops, the status says how it went, the button appears. A run that
+// failed leaves a flag for the page the window's button reloads, offering Report a problem:
+// the job's name and its last ✗ line.
 function finishTerminal(id, cls, message, buttonLabel) {
+  if (cls === 'error' && window.showToastAfterReload) {
+    var title = document.getElementById(id + '-title');
+    var errors = document.querySelectorAll('#' + id + '-output .term-line.error');
+    var last = errors.length ? errors[errors.length - 1].textContent : (message || '');
+    last = last.replace(/^✗\s*/, '');
+    window.showToastAfterReload((title ? title.textContent.trim() + ': ' : '') + (last || 'it failed'), 'failed');
+  }
   var took = stopTerminalClock(id);
   setTerminalState(id, terminalStateFor(cls));
   document.getElementById(id + '-cursor').style.display = 'none';

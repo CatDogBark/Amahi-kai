@@ -21,7 +21,7 @@ class TrashController < ApplicationController
     Trash.restore!(params[:kind], params[:share], params[:path])
     flash[:notice] = "#{params[:share]}/#{params[:path]} is back in its share."
   rescue Trash::Error, Privileged::Error => e
-    flash[:error] = "Couldn't restore #{params[:share]}/#{params[:path]}: #{e.message}"
+    flash_failure("Couldn't restore #{params[:share]}/#{params[:path]}: #{e.message}", e)
   ensure
     redirect_to trash_path
   end
@@ -30,7 +30,7 @@ class TrashController < ApplicationController
     Trash.delete!(params[:kind], params[:share], params[:path])
     flash[:notice] = "Deleted #{params[:share]}/#{params[:path]} for good."
   rescue Trash::Error, Privileged::Error => e
-    flash[:error] = "Couldn't delete #{params[:share]}/#{params[:path]}: #{e.message}"
+    flash_failure("Couldn't delete #{params[:share]}/#{params[:path]}: #{e.message}", e)
   ensure
     redirect_to trash_path
   end
@@ -39,7 +39,7 @@ class TrashController < ApplicationController
     Trash.empty!
     flash[:notice] = 'The trash is empty.'
   rescue Trash::Error, Privileged::Error => e
-    flash[:error] = "Couldn't empty the trash: #{e.message}"
+    flash_failure("Couldn't empty the trash: #{e.message}", e)
   ensure
     redirect_to trash_path
   end
@@ -49,7 +49,7 @@ class TrashController < ApplicationController
     Trash.set_days!(params[:days])
     flash[:notice] = params[:days].to_i.zero? ? 'The Trash keeps files until it is emptied.' : "The Trash keeps files for #{params[:days].to_i} days."
   rescue Trash::Error, Privileged::Error => e
-    flash[:error] = "Couldn't change how long the Trash keeps files: #{e.message}"
+    flash_failure("Couldn't change how long the Trash keeps files: #{e.message}", e)
   ensure
     redirect_to trash_path
   end
