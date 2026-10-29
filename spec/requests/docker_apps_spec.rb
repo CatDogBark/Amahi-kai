@@ -163,7 +163,8 @@ describe "Docker Apps", type: :request do
       gitea
       get "/apps/transmission"
       page = Nokogiri::HTML(response.body)
-      expect(page.at_css('#app-sign-in-transmission').text.squish).to eq('Sign in as admin with the password Amahi-kai made for it.')
+      expect(page.at_css('#app-sign-in-transmission').text.squish).to eq('Sign in as admin with the password Amahi-kai made for it, then in its preferences set Download to a share folder ' \
+                                                                               'you gave it, under /shares, and turn off the temporary folder: until then it downloads to the system disk.')
       value = page.at_css('.kai-secret code[data-secret-value]')
       expect(value.text).to eq('Gener4ted')
       expect(value['hidden']).not_to be_nil # until Show
@@ -337,7 +338,7 @@ describe "Docker Apps", type: :request do
       expect(Privileged.calls).to include(['apps.install', { app: 'uptimekuma', shares: [] }])
       expect(response.body).to include('✓ Uptime Kuma is installed and running')
       expect(response.body).to include('Open it at http://192.168.1.111:3001/ (on your LAN or Tailscale)')
-      expect(response.body).to include('First sign-in: Its first page asks you to make the admin account.')
+      expect(response.body).to include('First sign-in: Its first page asks which database to use (SQLite is the simple one), then for the admin account.')
       expect(response.body).not_to include('Passwords and keys') # Amahi-kai made none for it
       expect(DockerApp.find_by(identifier: 'uptimekuma')).to have_attributes(status: 'running', host_port: 3001,
                                                                              container_name: 'amahi-uptimekuma')
@@ -345,7 +346,7 @@ describe "Docker Apps", type: :request do
 
     it "says where the password it made is, after how to sign in" do
       get "/apps/docker/install_stream/transmission", headers: same_origin
-      expect(response.body).to include('First sign-in: Sign in as admin with the password Amahi-kai made for it.')
+      expect(response.body).to include('First sign-in: Sign in as admin with the password Amahi-kai made for it, then in its preferences')
       expect(response.body).to include('Passwords and keys Amahi-kai made for it are on its page: Manage, on Transmission on the Apps page')
     end
 

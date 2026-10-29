@@ -186,6 +186,15 @@ app needs a public hostname. HTTPS for apps through Tailscale (Vaultwarden needs
   what the app makes is group-writable (`users`, like files made over SMB) whatever its umask; the
   app joins the `users` group in its container. On a ZFS pool made before pools had POSIX ACLs on,
   the share's dataset gets `acltype=posixacl` and `xattr=sa` first (setfacl fails without them).
+  An image whose init drops to the app's user (`run_as: image`, `PUID`/`PGID`, linuxserver.io's)
+  takes that user's groups from its own `/etc/group` and loses `--group-add`, so given a share to
+  write into it gets the `users` group as `PGID`.
+- [x] **Ping without `NET_RAW`.** Containers drop `NET_RAW` (and `MKNOD`), and an image's `ping`
+  is often `setcap cap_net_raw`, which the kernel then refuses to run. A manifest's `ping:` names
+  it: the helper copies it out of the image (`docker create` + `docker cp`, never started) into a
+  file with no extended attributes, `/var/lib/amahi-kai/app-pings/<id>/ping-<digest>`, and mounts
+  that read only in its place; it pings with ICMP datagram sockets (Docker's
+  `net.ipv4.ping_group_range`). One copy per image; uninstall removes them.
 - [x] **Any share can be given**, and the dialog says that everyone with an account in the app can
   see it, whatever the share's own user list says (Samba enforces those, not the folders: every
   share folder is `users` 2775, files 0664).
