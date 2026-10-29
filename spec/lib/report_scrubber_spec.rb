@@ -1,0 +1,64 @@
+require 'rails_helper'
+
+# Taking the names and addresses out of a problem's report (ReportScrubber): stand-ins like
+# <share-1>, the same name always the same one, and what's needed to find the fault left in.
+RSpec.describe ReportScrubber do
+  let(:names) do
+    { 'server-name' => ['nas'], 'user' => %w[troy Rhonda], 'share' => %w[Vault vault-old], 'pool' => ['data'],
+      'device' => %w[carport-cam linksys] }
+  end
+  let(:scrubber) { described_class.new(names) }
+
+  it "takes out this server's name, its users, shares, pools and devices, in any case, as whole words" do
+    expect(scrubber.scrub('nas: troy shared Vault and vault-old on pool data; carport-cam and Linksys answered; RHONDA too'))
+      .to eq('<server-name>: <user-1> shared <share-1> and <share-2> on pool <pool-1>; <device-1> and <device-2> answered; <user-2> too')
+    expect(scrubber.scrub('database canvas metadata troyes')).to eq('database canvas metadata troyes') # inside other words: kept
+  end
+
+  it 'gives the same name the same stand-in everywhere in a report' do
+    expect(scrubber.scrub("Vault at 192.168.1.20\nvault again, 192.168.1.20, then 192.168.1.21"))
+      .to eq("<share-1> at <lan-address-1>\n<share-1> again, <lan-address-1>, then <lan-address-2>")
+  end
+
+  it 'takes out addresses, keeping loopback, any-address and masks, and times' do
+    text = 'LAN 10.99.0.60 WAN 66.8.144.62 lo 127.0.0.1 on 0.0.0.0/255.255.255.0 at 03:41:06.123 and 2026-10-29T03:41:06Z'
+    expect(scrubber.scrub(text))
+      .to eq('LAN <lan-address-1> WAN <address-1> lo 127.0.0.1 on 0.0.0.0/255.255.255.0 at 03:41:06.123 and 2026-10-29T03:41:06Z')
+    expect(scrubber.scrub('ULA fd4f:6682:2e09::53, link fe80::8269:1aff:fe0a:1384%ens18, ::1, MAC D0:3F:27:4A:93:1D'))
+      .to eq('ULA <ipv6-address-1>, link <ipv6-address-2>%ens18, ::1, MAC <mac-1>')
+  end
+
+  it 'takes out email addresses, tailnet names and keys, keeping commit and image hashes' do
+    text = 'mail catdogbark@pm.me; serve amahi-kai.tail1234.ts.net; ADMIN_TOKEN=Kq8sD9fL2mN4pR7tV1wX3yZ5aB6cE0gH; ' \
+           "commit 82767a8a1b2c3d4e5f60718293a4b5c6d7e8f901, image sha256:#{'4813745e' * 8}"
+    expect(scrubber.scrub(text)).to eq("mail <email-1>; serve <tailnet-name-1>; ADMIN_TOKEN=<secret>; commit 82767a8a1b2c3d4e5f60718293a4b5c6d7e8f901, image sha256:#{'4813745e' * 8}")
+  end
+
+  it "takes out the folders and files in a share, wherever its path is written, and a share it doesn't know" do
+    text = <<~TEXT
+      setfacl: /srv/pools/data/shares/vault/Downloads/complete/movie.mkv: Operation not supported
+      Couldn't create /shares/Vault/Downloads/complete: Permission denied
+      apps.install app=transmission shares=[Vault/Downloads rw]
+      gone: /var/lib/amahi-kai/files/oldstuff/a.txt
+    TEXT
+    expect(scrubber.scrub(text)).to eq(<<~TEXT)
+      setfacl: /srv/pools/<pool-1>/shares/<share-1>/<folder-1>/<folder-2>/<file-1>: Operation not supported
+      Couldn't create /shares/<share-1>/<folder-1>/<folder-2>: Permission denied
+      apps.install app=transmission shares=[<share-1>/<folder-1> rw]
+      gone: /var/lib/amahi-kai/files/<share-2>/<file-2>
+    TEXT
+  end
+
+  it "reads the NAS's own names, the longest first, leaving out ones too short to tell" do
+    create(:share, name: 'Vault', path: '/srv/pools/data/shares/vault')
+    create(:share, name: 'TV', path: '/var/lib/amahi-kai/files/tv')
+    Host.create!(name: 'carport-cam', mac: 'aa:bb:cc:dd:ee:01')
+    allow(SystemInfo).to receive(:hostname).and_return('nas')
+    allow(StoragePools).to receive(:status).and_return(pools: [StoragePools::Pool.new(name: 'data', managed: true)], offline: [], found: [])
+    found = described_class.names
+    expect(found['share']).to eq(['Vault', 'vault']) # TV and tv: too short to take out without taking out other words
+    expect(found['pool']).to eq(['data'])
+    expect(found['device']).to include('carport-cam')
+    expect(found['server-name']).to eq(['nas'])
+  end
+end

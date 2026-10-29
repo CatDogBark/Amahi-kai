@@ -233,6 +233,22 @@ class SettingsController < ApplicationController
     render json: { error: "Couldn't read it: #{e.message}" }, status: :unprocessable_content
   end
 
+  # Report a problem, from Help or a red flag's Report this problem (+about+: what the flag said;
+  # +page+: where). It starts with that, and this server's details and recent logs with the names
+  # and addresses taken out (the page keeps them too, for its switch); the browser sends it.
+  def report
+    @page_title = t('settings')
+    @about = params[:about].to_s.strip.first(1000).presence
+    @from = params[:page].to_s.presence if params[:page].to_s.match?(%r{\A/[\w/.\-]{0,200}\z})
+    details = ProblemReport.details(about: @about, page: @from)
+    scrubber = ReportScrubber.new
+    @details = scrubber.scrub(details)
+    @details_as_is = details
+    @what_happened = @about ? scrubber.scrub(@about) : '' # the same stand-ins as the details
+    @version = ProblemReport.version
+    @storage = ProblemReport.storage_choice
+  end
+
   # Every log, as a text file to keep or attach (Download logs).
   def help_logs
     send_data "#{ServerSummary.text}\n\n#{HelpLogs.text}\n", type: 'text/plain; charset=utf-8',

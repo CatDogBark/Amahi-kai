@@ -104,6 +104,7 @@ Rails.application.routes.draw do
     get 'help', action: 'help'
     get 'help/log', action: 'help_log', as: 'help_log'
     get 'help/logs', action: 'help_logs', as: 'help_logs'
+    get 'help/report', action: 'report', as: 'help_report'
   end
 
   # Apps (consolidated from plugin)

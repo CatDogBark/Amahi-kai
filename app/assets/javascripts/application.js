@@ -21,6 +21,7 @@
 //= require install_terminal
 //= require lib/busy_forms
 //= require help
+//= require report
 //= require lib/application
 //= require form_reply
 //= require address_move
