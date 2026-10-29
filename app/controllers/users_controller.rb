@@ -29,6 +29,8 @@ class UsersController < ApplicationController
       end
     else
       @users = User.all_users
+      # The form says why; when the NAS's account couldn't be made, a red flag offers a report too
+      flash_failure(@user.errors.full_messages.to_sentence, now: true) if @user.system_failed?
       respond_to do |format|
         format.html { render :index, status: :unprocessable_entity }
         format.json { render json: { errors: true, content: render_to_string(partial: 'form', formats: [:html], locals: { object: @user }), status: :ok } }
@@ -58,7 +60,7 @@ class UsersController < ApplicationController
     if @user != current_user && !@user.admin?
       @user.destroy
       if @user.errors.any?
-        render json: { status: @user.errors.full_messages.to_sentence.presence || t('error_occured'), id: nil }
+        render json: { status: @user.errors.full_messages.to_sentence.presence || t('error_occured'), id: nil, failed: @user.system_failed? }
       else
         render json: { status: :ok, id: @user.id }
       end
@@ -93,7 +95,7 @@ class UsersController < ApplicationController
     else
       @user.update(params_password_update)
       if @user.errors.any?
-        render json: { status: :not_acceptable, message: @user.errors.full_messages.join(', ') }
+        render json: { status: :not_acceptable, message: @user.errors.full_messages.join(', '), failed: @user.system_failed? }
       else
         keep_signed_in_after_password_change(@user)
         render json: { status: :ok, message: t('password_changed_successfully') }
