@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+### 🔧 Architecture & Code Quality
+
+- **The repository's front page** — GitHub now recognizes the license: `COPYING` holds the GNU AGPL v3 on its own, and the original Amahi notice that came before it is kept word for word in `NOTICE.md`. The README shows the latest release, the license and a screenshot. `SECURITY.md` says how to report a security problem privately and what happens next, `CODE_OF_CONDUCT.md` is the Contributor Covenant 2.1, pull requests start from a template, and GitHub's code scanning (CodeQL) checks the code.
+
 ## [1.5.0] — 2026-10-29
 
 When something goes wrong, Amahi-kai helps you say so: Settings → Help shows this server and its logs, and Report a problem puts a report together, names and addresses taken out, for GitHub or email. Every page also says it's working while it waits.
