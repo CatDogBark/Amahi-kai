@@ -1,36 +1,7 @@
-Amahi Home Server Platform
-
-This program is Copyright (C) 2007-2013, Amahi
-
-This program is free software released under the terms of the GNU
-AGPLv3, found below for your convenience.
-
-We further require that you leave the logos and URLs pointing to
-the Amahi web site intact and in the same visible condition if
-you redistribute this program.
-
-Contact the Amahi Team at the address listed in
-http://www.amahi.org/ (under Contact Us) if you are interested in
-licensing this program under other terms.
-
-It is important to note that this license applies to the Amahi
-platform and closely tied plugins and themes released by the
-Amahi team, not to the programs that run on top of or installed by
-the Amahi platform. Conversely, Amahi makes no claims as to the
-Linux platforms on top of which it runs. Any
-brands used are owned by their respective parties.
-
-The Amahi Team wishes to thank all the components of open source
-system without which the Amahi Home Server would not be possible.
-
-The Amahi Team
-
------------------------------------------------------------------------
-
                     GNU AFFERO GENERAL PUBLIC LICENSE
                        Version 3, 19 November 2007
 
- Copyright (C) 2007 Free Software Foundation, Inc. <http://fsf.org/>
+ Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
  Everyone is permitted to copy and distribute verbatim copies
  of this license document, but changing it is not allowed.
 
@@ -672,7 +643,7 @@ the "copyright" line and a pointer to where the full notice is found.
     GNU Affero General Public License for more details.
 
     You should have received a copy of the GNU Affero General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Also add information on how to contact you by electronic and paper mail.
 
@@ -687,4 +658,4 @@ specific requirements.
   You should also get your employer (if you work as a programmer) or school,
 if any, to sign a "copyright disclaimer" for the program, if necessary.
 For more information on this, and how to apply and follow the GNU AGPL, see
-<http://www.gnu.org/licenses/>.
+<https://www.gnu.org/licenses/>.

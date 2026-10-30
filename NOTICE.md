@@ -9,6 +9,40 @@ Copyright (C) 2007-2013, Amahi
 https://github.com/amahi/platform
 Licensed under GNU AGPL v3
 
+### The original Amahi license notice
+
+The original platform's license file opened with this notice, kept here word for word; the license
+it introduces, the GNU AGPL v3, is in [COPYING](COPYING).
+
+```text
+Amahi Home Server Platform
+
+This program is Copyright (C) 2007-2013, Amahi
+
+This program is free software released under the terms of the GNU
+AGPLv3, found below for your convenience.
+
+We further require that you leave the logos and URLs pointing to
+the Amahi web site intact and in the same visible condition if
+you redistribute this program.
+
+Contact the Amahi Team at the address listed in
+http://www.amahi.org/ (under Contact Us) if you are interested in
+licensing this program under other terms.
+
+It is important to note that this license applies to the Amahi
+platform and closely tied plugins and themes released by the
+Amahi team, not to the programs that run on top of or installed by
+the Amahi platform. Conversely, Amahi makes no claims as to the
+Linux platforms on top of which it runs. Any
+brands used are owned by their respective parties.
+
+The Amahi Team wishes to thank all the components of open source
+system without which the Amahi Home Server would not be possible.
+
+The Amahi Team
+```
+
 ## Derivative Work
 
 **Amahi-kai Platform** (modernized fork)
@@ -39,7 +73,7 @@ What Amahi-kai does now is in the [README](README.md); what changed, release by 
 
 This derivative work is distributed under the **GNU AGPL v3** license as required by the original Amahi Platform license.
 
-As required by the original license (see [COPYING](COPYING)), this software:
+As required by the original license (see [the original notice](#the-original-amahi-license-notice) and [COPYING](COPYING)), this software:
 - ✅ Retains attribution to the original Amahi project
 - ✅ Maintains references to amahi.org
 - ✅ Makes source code available to all users
@@ -74,4 +108,4 @@ The Amahi team created an excellent home server platform that served thousands o
 
 ---
 
-**Last Updated**: 2026-10-27
+**Last Updated**: 2026-10-29
