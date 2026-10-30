@@ -4,5 +4,6 @@
 //= require lib/dispatch
 //= require form_reply
 //= require toast
+//= require lib/busy_forms
 //= require install_terminal
 //= require setup_wizard

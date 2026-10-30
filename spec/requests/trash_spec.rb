@@ -74,7 +74,7 @@ RSpec.describe 'Trash', type: :request do
                                       ['greyhole.trash_delete', { share: 'Photos', path: '2026/beach.jpg' }],
                                       ['greyhole.trash_empty', {}]])
 
-      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('greyhole.trash_restore', 'Photos has a 2026/beach.jpg now'))
+      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('greyhole.trash_restore', 'Photos has a 2026/beach.jpg now', refused: true))
       post '/files/trash/restore', params: { kind: 'pool', share: 'Photos', path: '2026/beach.jpg' }
       expect(response).to redirect_to('/files/trash')
       expect(flash[:error]).to include('Photos has a 2026/beach.jpg now')

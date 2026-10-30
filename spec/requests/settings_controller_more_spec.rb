@@ -126,7 +126,7 @@ RSpec.describe "SettingsController more", type: :request do
     it "reports a failed command" do
       allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('services.restart', 'exit 1'))
       post "/settings/servers/smbd/restart"
-      expect(flash[:error]).to include('failed')
+      expect(flash[:failed]).to include('failed')
     end
 
     it "refuses services without controls" do

@@ -67,6 +67,12 @@ class User < ApplicationRecord
 
   # --- Role helpers ---
 
+  # Whether a change didn't go through because the root helper failed rather than refused it:
+  # the page's red flag then offers Report a problem (UsersController).
+  def system_failed?
+    @system_failed == true
+  end
+
   def admin?
     role == 'admin'
   end
@@ -210,6 +216,7 @@ class User < ApplicationRecord
   rescue Privileged::Error => e
     Rails.logger.error("User #{login}: #{operation} failed: #{e.message}")
     @system_error = e.message
+    @system_failed = !e.refused?
     false
   end
 
@@ -263,6 +270,7 @@ class User < ApplicationRecord
     Rails.logger.error("User #{login}: users.delete failed: #{e.message}")
     return if e.refused?
 
+    @system_failed = true
     errors.add(:base, "Couldn't delete #{login}'s account on the NAS: #{e.message}")
     throw :abort
   end

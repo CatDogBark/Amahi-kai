@@ -34,7 +34,8 @@
             _this.element.style.opacity = "0";
             setTimeout(function() { _this.element.remove(); }, 500);
           } else {
-            if (typeof showToast === 'function') showToast(data.status || "Error", 'error');
+            // failed: the NAS's account couldn't be deleted (not a refusal): its flag offers a report
+            if (typeof showToast === 'function') showToast(data.status || "Error", data.failed ? 'failed' : 'error');
             if (spinner) spinner.style.display = 'none';
             event.currentTarget.style.display = '';
           }
@@ -138,6 +139,7 @@
         .then(function(r) { return r.json(); })
         .then(function(data) {
           _this.showMessage(_this.passwordMessageTarget, data.message);
+          if (data.failed && typeof showToast === 'function') showToast(data.message, 'failed');
           if (data.status === "ok") {
             form.querySelectorAll("input[type=password]").forEach(function(i) { i.value = ""; });
             var edit = form.querySelector('.password-edit');

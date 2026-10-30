@@ -1,0 +1,69 @@
+- @page_title = t('settings')
+
+/! Report a problem (SettingsController#report). The page sends nothing itself: report.js opens a
+/! new issue in the browser, the email app, or saves or copies the report.
+.kai-report data-issues-url=ProblemReport::ISSUES_URL data-email=ProblemReport::EMAIL data-version=@version data-storage=@storage
+  p.mb-2
+    = link_to '← Help', settings_help_path
+  h2.kai-report-title Report a problem
+  p.kai-report-intro
+    | Nothing leaves this server until you send it, and you see every word first. Amahi-kai sends
+      nothing itself: GitHub or your email app does, from this computer.
+
+  .alert.kai-report-status#report-status role="status" hidden=true
+
+  .card.mb-4
+    .card-header.bg-dark.text-white
+      h5.mb-0 What went wrong
+    .card-body
+      .mb-3
+        label.form-label for="report-what"
+          | What happened
+          span.text-muted.ms-1 (needed)
+        textarea.form-control#report-what rows="4" required=true aria-describedby="report-what-problem" = @what_happened
+        .invalid-feedback#report-what-problem Say what happened, in a few words.
+      .mb-3
+        label.form-label for="report-expected" What you expected
+        textarea.form-control#report-expected rows="2" placeholder="What should have happened instead"
+      div
+        label.form-label for="report-steps" How to make it happen again
+        textarea.form-control#report-steps rows="3" placeholder=("1. Open Apps\n2. Install Transmission\n3. …")
+
+  .card.mb-4
+    .card-header.bg-dark.text-white.d-flex.flex-wrap.justify-content-between.align-items-center.gap-2
+      h5.mb-0 System details
+      .d-flex.align-items-center.gap-2
+        span#report-scrub-label Hide names and addresses
+        button.kai-switch#report-scrub type="button" role="switch" aria-checked="true" aria-labelledby="report-scrub-label"
+          span.kai-switch-knob aria-hidden="true"
+    .card-body
+      p.small.text-muted#report-scrub-note
+        | Addresses, and the names of this server, its users, devices, pools, shares, folders and files, are
+          replaced like &lt;share-1&gt;; the same name gets the same stand-in everywhere, so the report still
+          makes sense. You can change any of it before you send it.
+      label.visually-hidden for="report-details" System details to send
+      textarea.form-control.kai-report-details#report-details rows="18" spellcheck="false" = @details
+      textarea#report-details-as-is hidden=true aria-hidden="true" tabindex="-1" = @details_as_is
+
+  .card
+    .card-header.bg-dark.text-white
+      h5.mb-0 Send it
+    .card-body
+      .kai-report-ways
+        .kai-report-way.kai-report-way-main
+          button.btn.btn-primary#report-github type="button" Open on GitHub
+          p.small.mb-0 A new issue, filled in, in your browser. You look it over there and submit it. Needs a GitHub account.
+        .kai-report-way
+          button.btn.btn-outline-light#report-email type="button" Send by email
+          p.small.mb-0
+            | Opens your email app, addressed to #{ProblemReport::EMAIL}. No GitHub account needed.
+        .kai-report-way
+          button.btn.btn-outline-light#report-download type="button" Download report
+          p.small.mb-0 The whole report as a text file, to attach to an issue or an email.
+        .kai-report-way
+          button.btn.btn-outline-light#report-copy type="button" Copy
+          p.small.mb-0 The whole report, to paste wherever you like.
+      p.small.text-muted.mt-3.mb-0
+        | A security problem? Don't post it publicly:
+        =< link_to 'report a vulnerability privately', 'https://github.com/CatDogBark/Amahi-kai/security/advisories/new', target: '_blank', rel: 'noopener'
+        | .

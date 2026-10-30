@@ -214,6 +214,9 @@ module AmahiHelper
   # operations can't touch it) owning its folders under APPS_ROOT, and secrets generated at
   # install in APP_SECRETS (root:amahi 0640, shown to admins).
   DOCKER = '/usr/bin/docker'
+  JOURNALCTL = '/usr/bin/journalctl'
+  # A log line handed to the app (system.journal, apps.logs) is cut at this many characters.
+  LOG_LINE_MAX = 2000
 
   APP_MANIFESTS = "#{APP_DIR}/config/apps".freeze
 
@@ -506,6 +509,11 @@ module AmahiHelper
       raise Refused, "#{what} is too long (at most #{max} characters)" if value.length > max
       raise Refused, "#{what} contains a NUL byte" if value.include?("\0")
       value
+    end
+
+    # The last +count+ lines of +text+, each cut to LOG_LINE_MAX characters and made valid UTF-8.
+    def log_lines(text, count)
+      text.to_s.dup.force_encoding('UTF-8').scrub('?').lines(chomp: true).last(count).map { |line| line[0, LOG_LINE_MAX] }
     end
 
     def integer(args, key, range)

@@ -101,7 +101,7 @@ RSpec.describe 'Settings → System Dependencies', type: :request do
     end
 
     it 'shows what the helper refused' do
-      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('updates.set_automatic', 'unattended-upgrades is not installed'))
+      allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('updates.set_automatic', 'unattended-upgrades is not installed', refused: true))
       post '/settings/dependencies_automatic', params: { enabled: '1' }
       expect(flash[:error]).to include('unattended-upgrades is not installed')
     end

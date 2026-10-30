@@ -74,7 +74,7 @@ class SettingsController < ApplicationController
     if service.perform(verb)
       flash[:notice] = "#{service.name}: #{verb} done"
     else
-      flash[:error] = "#{service.name}: #{verb} failed (details in the Amahi-kai log)"
+      flash_failure("#{service.name}: #{verb} failed (details in the Amahi-kai log)")
     end
     redirect_to settings_servers_path
   end
@@ -119,7 +119,7 @@ class SettingsController < ApplicationController
     flash[:notice] = held ? "Held at their versions: #{Array(params[:packages]).join(', ')}." : "Released: #{Array(params[:packages]).join(', ')}."
     redirect_to settings_dependencies_path
   rescue Privileged::Error => e
-    flash[:error] = e.message
+    flash_failure(e.message, e)
     redirect_to settings_dependencies_path
   end
 
@@ -130,7 +130,7 @@ class SettingsController < ApplicationController
     flash[:notice] = enabled ? 'Automatic security updates are on: Ubuntu installs its security fixes by itself.' : 'Automatic security updates are off: updates install only from here.'
     redirect_to settings_dependencies_path
   rescue Privileged::Error => e
-    flash[:error] = e.message
+    flash_failure(e.message, e)
     redirect_to settings_dependencies_path
   end
 
@@ -181,7 +181,7 @@ class SettingsController < ApplicationController
     flash[:notice] = "System Update now follows #{UpdateStatus::CHANNELS.fetch(channel, channel)}."
     redirect_to settings_system_status_path(anchor: 'update-channel')
   rescue Privileged::Error => e
-    flash[:error] = e.message
+    flash_failure(e.message, e)
     redirect_to settings_system_status_path(anchor: 'update-channel')
   end
 
@@ -211,6 +211,48 @@ class SettingsController < ApplicationController
         simulate_update(sse, from)
       end
     end
+  end
+
+  # Settings → Help: Report a problem, this server in a few lines, and its logs. Amahi-kai's own
+  # is on the page; each other log comes when its tab is opened (help_log), since the journal's
+  # and the apps' each take a call to the root helper.
+  def help
+    @page_title = t('settings')
+    @summary = ServerSummary.rows
+    @log_sources = HelpLogs.sources
+    @first_log = HelpLogs.lines('amahi')
+  end
+
+  # One log's newest lines, for its tab on Help.
+  def help_log
+    source = HelpLogs.source(params[:source].to_s)
+    return render(json: { error: "there's no log #{params[:source].to_s.inspect}" }, status: :not_found) unless source
+
+    render json: { lines: HelpLogs.lines(source.key) }
+  rescue HelpLogs::Unreadable => e
+    render json: { error: "Couldn't read it: #{e.message}" }, status: :unprocessable_content
+  end
+
+  # Report a problem, from Help or a red flag's Report this problem (+about+: what the flag said;
+  # +page+: where). It starts with that, and this server's details and recent logs with the names
+  # and addresses taken out (the page keeps them too, for its switch); the browser sends it.
+  def report
+    @page_title = t('settings')
+    @about = params[:about].to_s.strip.first(1000).presence
+    @from = params[:page].to_s.presence if params[:page].to_s.match?(%r{\A/[\w/.\-]{0,200}\z})
+    details = ProblemReport.details(about: @about, page: @from)
+    scrubber = ReportScrubber.new
+    @details = scrubber.scrub(details)
+    @details_as_is = details
+    @what_happened = @about ? scrubber.scrub(@about) : '' # the same stand-ins as the details
+    @version = ProblemReport.version
+    @storage = ProblemReport.storage_choice
+  end
+
+  # Every log, as a text file to keep or attach (Download logs).
+  def help_logs
+    send_data "#{ServerSummary.text}\n\n#{HelpLogs.text}\n", type: 'text/plain; charset=utf-8',
+                                                              filename: "amahi-kai-logs-#{Time.now.utc.strftime('%Y-%m-%d-%H%M')}.txt"
   end
 
   private

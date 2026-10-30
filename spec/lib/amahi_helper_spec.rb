@@ -765,6 +765,21 @@ RSpec.describe 'AmahiHelper' do
       end
     end
 
+    # Settings → Help and a problem's report: the app can't read the journal itself
+    it "reads the journal's newest lines, 1 to 500, each cut to a length" do
+      expect(steps('system.journal', { 'lines' => 150 })).to eq([[:journal, 150]])
+      [0, 501, '150', nil].each do |lines|
+        expect(refusal('system.journal', { 'lines' => lines })).to include('whole number from 1 to 500'), lines.inspect
+      end
+      long = 'x' * 3000
+      allow(helper).to receive(:capture).with(['/usr/bin/journalctl', '--no-pager', '--quiet', '-o', 'short-iso', '-n', '2'])
+                                        .and_return("Oct 29 one\n#{long}\nOct 29 \xFF three\n".b)
+      reply = helper.do_journal(2)
+      expect(reply['lines'].size).to eq(2) # the last two
+      expect(reply['lines'].first.length).to eq(2000)
+      expect(reply['lines'].last).to eq('Oct 29 ? three') # not UTF-8, and still a line to show
+    end
+
     it 'reboots and powers off through systemd' do
       expect(steps('system.reboot', {})).to eq([%w[/usr/bin/systemctl reboot]])
       expect(steps('system.poweroff', {})).to eq([%w[/usr/bin/systemctl poweroff]])

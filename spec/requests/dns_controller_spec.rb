@@ -209,7 +209,7 @@ describe 'Network → DNS & DHCP', type: :request do
       it "says so when the settings couldn't be applied" do
         allow(Privileged).to receive(:call).and_raise(Privileged::Error.new('dns.write_config', 'unbound-checkconf rejected the config'))
         put '/network/dns', params: { dns_on: '1', provider: 'quad9', interface: 'ens18' }
-        expect(flash[:alert]).to include("couldn't be applied", 'unbound-checkconf rejected')
+        expect(flash[:failed]).to include("couldn't be applied", 'unbound-checkconf rejected')
       end
     end
 
@@ -356,7 +356,7 @@ describe 'Network → DNS & DHCP', type: :request do
         allow(Privileged).to receive(:call).and_call_original
         allow(Privileged).to receive(:call).with('network.router_on', any_args).and_raise(Privileged::Error.new('network.router_on', 'ufw: no'))
         put '/network/internet', params: router
-        expect(flash[:alert]).to include('ufw: no')
+        expect(flash[:failed]).to include('ufw: no')
         expect([Setting.get('dns_mode'), Setting.get('dns_wan_interface')]).to eq(['dns_dhcp', ''])
         expect(Privileged.calls.map(&:first)).not_to include('network.write_dnsmasq_config')
       end
@@ -412,11 +412,11 @@ describe 'Network → DNS & DHCP', type: :request do
         allow(Privileged).to receive(:call).and_call_original
         allow(Privileged).to receive(:call).with('network.router_on', any_args).and_raise(Privileged::Error.new('network.router_on', 'ufw: no'))
         post '/network/dns/forwards', params: { port_forward: { port: '8080', protocol: 'tcp', address: '60' } }
-        expect(flash[:alert]).to eq("Forwarding tcp 8080 to 192.168.1.60, but the router's rules weren't rewritten (ufw: no), so the port " \
+        expect(flash[:failed]).to eq("Forwarding tcp 8080 to 192.168.1.60, but the router's rules weren't rewritten (ufw: no), so the port " \
                                     "isn't let in until a save on this page puts them in place.")
         expect(PortForward.count).to eq(1) # saved all the same
         delete "/network/dns/forwards/#{PortForward.last.id}"
-        expect(flash[:alert]).to include('No longer forwarding tcp 8080, but', 'so the port is still let in until a save')
+        expect(flash[:failed]).to include('No longer forwarding tcp 8080, but', 'so the port is still let in until a save')
 
         allow(DnsService).to receive_messages(router_state: { 'lan' => 'ens18', 'wan' => 'ens19', 'forwards' => [] }, running?: true, check: nil,
                                               router_stale?: true)

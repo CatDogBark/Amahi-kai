@@ -100,6 +100,11 @@ Rails.application.routes.draw do
     post 'update_channel', action: 'update_channel'
     get 'update_dialog', action: 'update_dialog'
     get 'update_system_stream', action: 'update_system_stream'
+    # Help: this server, its logs (one at a time as JSON, all as a download)
+    get 'help', action: 'help'
+    get 'help/log', action: 'help_log', as: 'help_log'
+    get 'help/logs', action: 'help_logs', as: 'help_logs'
+    get 'help/report', action: 'report', as: 'help_report'
   end
 
   # Apps (consolidated from plugin)
@@ -164,10 +169,9 @@ Rails.application.routes.draw do
   get 'session/status' => 'user_sessions#status', :as => :session_status
   delete 'logout' => 'user_sessions#destroy', :as => :logout
 
-  get '/tab/debug'=>'debug#index'
-  post '/tab/debug'=>'debug#submit'
-  get '/tab/debug/system'=>'debug#system'
-  get '/tab/debug/logs'=>'debug#logs'
+  # The old debug pages: Settings → Help has their logs and system details now
+  get '/tab/debug', to: redirect('/settings/help')
+  get '/tab/debug/*rest', to: redirect('/settings/help')
 
   resources :shares, except: %i[new edit show update] do
     collection do

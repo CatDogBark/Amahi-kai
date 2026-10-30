@@ -4,6 +4,25 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.5.0] — 2026-10-29
+
+When something goes wrong, Amahi-kai helps you say so: Settings → Help shows this server and its logs, and Report a problem puts a report together, names and addresses taken out, for GitHub or email. Every page also says it's working while it waits.
+
+### 🚀 Major Features
+
+- **Report a problem** (Settings → Help, and a red flag's **Report this problem**) — Puts a report together for you: what happened, what you expected and how to make it happen again, in your words, then this server's details and the newest lines of the logs most likely to show the fault, with an app's own when it needs attention. The server's name, users, shares and what's in them, pools, devices, addresses, email addresses and anything that looks like a key are replaced by stand-ins like `<share-1>` (the same name always the same one); a switch shows them as they are, and any of it can be changed. Amahi-kai sends nothing itself: **Open on GitHub** opens a new issue filled in (a report too long for the link is also saved as a file to attach), **Send by email** opens your email app, and **Download report** and **Copy** give you the text.
+- **Settings → Help** (Settings) — A new tab for when something isn't working: **Report a problem**; this server in a few lines (Amahi-kai's version and update channel, the system, its processor and memory, the system disk, the storage pools, the apps and whether any service is down); and the logs, a tab each: Amahi-kai's own, the root helper's (every change made as root, without passwords or keys), the last System Update, the system journal and each app's own output. **Download logs** saves them all as one text file. It replaces the old debug pages, whose system log was one Ubuntu no longer keeps; their old address leads here.
+
+### 🔒 Security & Fixes
+
+- **Every page says it's working while it waits** — Pressing a button that sends a form (Network, DNS, ZFS Pools, Settings, Shares, the setup wizard, and the rest) left the page as it was until the next one came, with only the browser's tab showing anything happening, so a slow save looked like nothing happened and invited a second press. Now the button shows a spinner and "Working…", the form's buttons wait, and a save still running after a few seconds says so in a flag. Back brings the page as it was before.
+- **Flags instead of pop-up boxes** — The few places that told you something went wrong in a browser pop-up (the Apps page, ZFS Pools, Security, Remote Access, Shares, System Update's Check now) use the side flags like every other page.
+- **A flag for something that broke offers to report it** — A red flag now says whether you need to change something (a name taken, a choice missing) or something broke (a command failed, a service didn't start, the router's rules weren't rewritten). The first has **Dismiss**; the second also has **Report this problem**, started with what went wrong and where. Red flags stay until dismissed. A job in its window (an install, System Update) that ends in ✗ leaves one too, for the page its button reloads.
+
+### 🔧 Architecture & Code Quality
+
+- **Reporting a problem on GitHub** — New issues use forms: a problem asks for the version, what happened and how to make it happen again; an idea asks what and why. A security problem goes privately, through the repository's Security tab or by email (`SECURITY.md`). `CONTRIBUTING.md` says how to become a contributor.
+
 ## [1.4.4] — 2026-10-28
 
 Transmission saves its downloads into shares, Uptime Kuma's ping monitors work, and Gitea keeps its repositories in a share folder.

@@ -26,7 +26,8 @@ ruby:
       { id: 'system_status', label: 'system status', url: '/settings/system_status', advanced: true },
       { id: 'servers', label: 'servers', url: '/settings/servers', advanced: true },
       { id: 'jobs', label: 'jobs', url: '/settings/jobs', advanced: true },
-      { id: 'dependencies', label: 'dependencies', url: '/settings/dependencies', advanced: true }
+      { id: 'dependencies', label: 'dependencies', url: '/settings/dependencies', advanced: true },
+      { id: 'help', label: 'help', url: '/settings/help', actions: %w[help report] }
     ]}
   ]
   visible_tabs = advanced? ? tabs : tabs.reject { |t| t[:advanced] }
@@ -41,7 +42,8 @@ ruby:
     if subtab[:controller]
       subtab[:controller] == ctrl && (subtab[:action].nil? || subtab[:action] == act)
     else
-      ctrl == tab[:id] && (subtab[:id] == act || (subtab[:id] == 'index' && act == tab[:id]) || subtab[:url] == request.path)
+      ctrl == tab[:id] && (subtab[:id] == act || subtab[:actions]&.include?(act) || (subtab[:id] == 'index' && act == tab[:id]) ||
+                           subtab[:url] == request.path)
     end
   end
 

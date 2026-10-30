@@ -166,6 +166,22 @@ then, keep your own copies of:
 
 ## Troubleshooting
 
+### Reporting a problem
+
+**Settings → Help → Report a problem** puts a report together: what happened, in your words, and
+this server's details and the newest lines of its logs. When something breaks, its red flag offers
+**Report this problem**, and the report starts with what the flag said.
+
+- **Names and addresses come out first.** The server's name, users, shares and what's in them,
+  pools, devices, addresses and anything that looks like a key are replaced by stand-ins like
+  `<share-1>`; the same name always gets the same one. A switch shows them as they are, and you
+  can change any of it before you send it.
+- **Nothing is sent by Amahi-kai.** **Open on GitHub** opens a new issue filled in, in your
+  browser, for you to submit (a report too long for the link is also saved as a file to attach);
+  **Send by email** opens your email app; **Download report** and **Copy** give you the text.
+- **A security problem** goes privately instead: the repository's
+  [Security tab](https://github.com/CatDogBark/Amahi-kai/security/advisories/new).
+
 ### The service won't start
 
 ```bash

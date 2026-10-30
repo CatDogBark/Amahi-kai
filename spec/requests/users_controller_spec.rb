@@ -90,6 +90,28 @@ describe "Users Controller", type: :request do
         get '/users'
         expect(Nokogiri::HTML(response.body).at_css('#new-user-step1')['style']).to eq('display:none;')
       end
+
+      # The form says why either way; only an account the NAS failed to make (not one it refused)
+      # gets the red flag that offers Report a problem
+      it 'offers a report when the NAS could not make the account, not when it refused it' do
+        flags = lambda do
+          data = Nokogiri::HTML(response.body).at_css('#flash-data')
+          data ? JSON.parse(data.text).map { |flag| flag['type'] } : []
+        end
+        params = { user: { login: 'meow', name: 'Meow', password: 'longenough1', password_confirmation: 'longenough1', role: 'user' } }
+        allow(Privileged).to receive(:call).and_call_original
+        allow(Privileged).to receive(:call).with('users.create', login: 'meow', name: 'Meow')
+                                           .and_raise(Privileged::Error.new('users.create', 'useradd exited 10: cannot lock /etc/group'))
+        post '/users', params: params
+        expect(Nokogiri::HTML(response.body).at_css('#new-user-form .alert-danger').text).to include('cannot lock /etc/group')
+        expect(flags.call).to include('failed')
+
+        allow(Privileged).to receive(:call).with('users.create', login: 'meow', name: 'Meow')
+                                           .and_raise(Privileged::Error.new('users.create', 'login meow is taken by a system account', refused: true))
+        post '/users', params: params
+        expect(Nokogiri::HTML(response.body).at_css('#new-user-form .alert-danger').text).to include('taken by a system account')
+        expect(flags.call).not_to include('failed')
+      end
     end
 
     describe "DELETE /users/:id" do
@@ -107,6 +129,7 @@ describe "Users Controller", type: :request do
                                            .and_raise(Privileged::Error.new('users.delete', 'userdel exited 8: user busy is currently used by process 1'))
         delete "/users/#{user.id}", as: :json
         expect(response.parsed_body['status']).to eq("Couldn't delete busy's account on the NAS: userdel exited 8: user busy is currently used by process 1")
+        expect(response.parsed_body['failed']).to be true # its flag offers a report
         expect(User.exists?(user.id)).to be true
       end
 
@@ -144,6 +167,22 @@ describe "Users Controller", type: :request do
         old_digest = user.password_digest
         put "/users/#{user.id}/update_password", params: { user: { password: "newpassword1", password_confirmation: "newpassword1" } }, as: :json
         expect(user.reload.password_digest).not_to eq(old_digest)
+      end
+
+      it 'says when Samba refused or failed to take the new password, and keeps the old one' do
+        user = create(:user, login: 'kai2')
+        allow(User).to receive(:system_user_exists?).and_return(true)
+        allow(Privileged).to receive(:call).and_call_original
+        allow(Privileged).to receive(:call).with('users.set_password', login: 'kai2', password: 'newpassword1')
+                                           .and_raise(Privileged::Error.new('users.set_password', 'smbpasswd exited 1'))
+        params = { user: { password: 'newpassword1', password_confirmation: 'newpassword1' } }
+        put "/users/#{user.id}/update_password", params: params, as: :json
+        expect(response.parsed_body).to include('status' => 'not_acceptable', 'failed' => true)
+        expect(response.parsed_body['message']).to include("Couldn't update the Samba password for kai2: smbpasswd exited 1")
+        allow(Privileged).to receive(:call).with('users.set_password', login: 'kai2', password: 'newpassword1')
+                                           .and_raise(Privileged::Error.new('users.set_password', 'password too long', refused: true))
+        put "/users/#{user.id}/update_password", params: params, as: :json
+        expect(response.parsed_body['failed']).to be false
       end
 
       it "rejects blank password" do

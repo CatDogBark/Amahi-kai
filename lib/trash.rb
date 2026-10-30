@@ -13,7 +13,9 @@ require 'fileutils'
 #   file to <share folder>/.recycle/<path>, in folders the users group (Amahi-kai's account
 #   among them) can change, so the app restores and deletes those itself.
 module Trash
-  class Error < StandardError; end
+  class Error < StandardError
+    include ReportableError
+  end
 
   POOL = '.gh_trash'.freeze
   RECYCLE = '.recycle'.freeze
@@ -64,7 +66,7 @@ module Trash
       File.rename(source, target)
       prune(File.join(share.path, RECYCLE), File.dirname(source))
     rescue SystemCallError => e
-      raise Error, "couldn't restore #{share_name}/#{path}: #{e.message}"
+      raise Error.new("couldn't restore #{share_name}/#{path}: #{e.message}", failed: true)
     end
 
     # Deletes a file from the trash for good, every copy of it.
@@ -74,7 +76,7 @@ module Trash
       File.unlink(source)
       prune(File.join(share.path, RECYCLE), File.dirname(source))
     rescue SystemCallError => e
-      raise Error, "couldn't delete #{share_name}/#{path}: #{e.message}"
+      raise Error.new("couldn't delete #{share_name}/#{path}: #{e.message}", failed: true)
     end
 
     # Empties every share's trash: Greyhole's on the pool drives, and each recycle bin.

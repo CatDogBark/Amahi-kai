@@ -177,8 +177,8 @@ class NetworkController < ApplicationController
     # A device kept off the internet loses its rule with the address.
     problem = DnsService.rewrite_router_problem if was_lan_only
     if problem
-      flash[:alert] = "#{done}, but the router's rules weren't rewritten (#{problem}), so its address stays kept off the internet until a save " \
-                      'on Network → Internet puts them in place.'
+      flash_failure("#{done}, but the router's rules weren't rewritten (#{problem}), so its address stays kept off the internet until a save " \
+                    'on Network → Internet puts them in place.')
     else
       flash[:notice] = "#{done}."
     end
@@ -209,9 +209,9 @@ class NetworkController < ApplicationController
       return redirect_to network_index_path
     end
     if (problem = DnsService.rewrite_router_problem)
-      flash[:alert] = "#{host.name} is saved as #{host.lan_only ? 'LAN only' : 'reaching the internet'}, but the router's rules weren't rewritten " \
-                      "(#{problem}), so it #{host.lan_only ? 'still reaches the internet' : 'is still kept off the internet'} until a save on " \
-                      'Network → Internet puts them in place.'
+      flash_failure("#{host.name} is saved as #{host.lan_only ? 'LAN only' : 'reaching the internet'}, but the router's rules weren't rewritten " \
+                    "(#{problem}), so it #{host.lan_only ? 'still reaches the internet' : 'is still kept off the internet'} until a save on " \
+                    'Network → Internet puts them in place.')
     else
       flash[:notice] = if host.lan_only
                          "#{host.name} can't reach the internet#{' once the NAS is the router' unless DnsService.router?}; the LAN still works for it."

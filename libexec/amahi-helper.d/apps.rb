@@ -237,6 +237,13 @@ module AmahiHelper
       validate: ->(_a) { {} },
       plan: ->(_v) { [[:apps_status]] }
     },
+    # An app's own output, its container's newest lines (Settings → Help, a problem's report).
+    # Read only; an app without a container has none.
+    'apps.logs' => {
+      params: %w[app lines],
+      validate: ->(a) { installed!(DOCKER) && { id: app_id(a['app']), lines: integer(a, 'lines', 1..500) } },
+      plan: ->(v) { [[:app_logs, v[:id], v[:lines]]] }
+    },
     # Every container's published ports, and whether APP_CHAIN limits them, for the security
     # audit. Read-only.
     'docker.published_ports' => {
@@ -1726,6 +1733,19 @@ module AmahiHelper
     # { 'docker' => running?, 'apps' => { 'jellyfin' => { 'state' => 'running', ... } } }
     # 'jobs': the apps whose job runs now (their APP_JOB_UNIT): the Apps page leaves their rows
     # to the job.
+    # { 'lines' => [...] }: the container's last +lines+ (stdout and stderr together, as docker
+    # logs gives them), each cut to LOG_LINE_MAX; 'missing' when the app has no container.
+    def do_app_logs(id, lines)
+      container = app_container(id)
+      return { 'lines' => [], 'missing' => true } unless docker_output('inspect', '--format', '{{.Id}}', container)
+
+      out, status = Open3.capture2e(ENV_MIN, [DOCKER, DOCKER], 'logs', '--tail', lines.to_s, '--timestamps', container,
+                                    unsetenv_others: true, chdir: '/')
+      raise Failed, "docker logs exited #{status.exitstatus}: #{last_lines(out, 3)}" unless status.success?
+
+      { 'lines' => log_lines(out, lines) }
+    end
+
     def do_apps_status
       out = docker_output('ps', '--all', '--filter', 'label=amahi.app', '--format', '{{json .}}')
       return { 'docker' => false, 'apps' => {}, 'jobs' => app_jobs_running } unless out

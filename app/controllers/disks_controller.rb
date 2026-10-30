@@ -37,7 +37,7 @@ class DisksController < ApplicationController
     @devices = DiskManager.devices.each_with_index.sort_by { |device, i| [device[:os_disk] ? 0 : 1, i] }.map(&:first)
   rescue DiskManager::DiskError => e
     @devices = []
-    flash.now[:alert] = e.message
+    flash_failure(e.message, e, now: true, refusal: :alert)
   end
 
   # The drive buttons send the drive's ref (DiskManager.resolve); the messages give its kernel name.
@@ -48,9 +48,9 @@ class DisksController < ApplicationController
       DiskManager.format_disk!(device)
       flash[:notice] = "Formatted #{device} as ext4. Mount it to use it for shares or Greyhole's pool."
     rescue DiskManager::DiskError => e
-      flash[:error] = "Format failed: #{e.message}"
+      flash_failure("Format failed: #{e.message}", e)
     rescue Errno::ENOENT => e
-      flash[:error] = "Unexpected error: #{e.message}"
+      flash_failure("Unexpected error: #{e.message}", e)
     end
     redirect_to disks_devices_path
   end
@@ -65,9 +65,9 @@ class DisksController < ApplicationController
       # A pool drive back: the apps given pooled shares get it again
       DockerApp.follow_pool! if DiskPoolPartition.exists?(path: mp)
     rescue DiskManager::DiskError => e
-      flash[:error] = "Mount failed: #{e.message}"
+      flash_failure("Mount failed: #{e.message}", e)
     rescue Errno::ENOENT => e
-      flash[:error] = "Unexpected error: #{e.message}"
+      flash_failure("Unexpected error: #{e.message}", e)
     end
     redirect_to disks_devices_path
   end
@@ -80,10 +80,10 @@ class DisksController < ApplicationController
       @device = device
       render :preview
     rescue DiskManager::DiskError => e
-      flash[:error] = "Preview failed: #{e.message}"
+      flash_failure("Preview failed: #{e.message}", e)
       redirect_to disks_devices_path
     rescue Errno::ENOENT => e
-      flash[:error] = "Unexpected error: #{e.message}"
+      flash_failure("Unexpected error: #{e.message}", e)
       redirect_to disks_devices_path
     end
   end
@@ -95,9 +95,9 @@ class DisksController < ApplicationController
       device = DiskManager.resolve(device)
       result = DiskService.create_share_from_mount(device)
       flash[:notice] = "Mounted #{device} at #{result[:mount_point]} and created share '#{result[:share_name]}'"
-      flash[:error] = "Samba didn't take the new settings, so the share isn't on the network yet: #{result[:refused]}" if result[:refused]
+      flash_failure("Samba didn't take the new settings, so the share isn't on the network yet: #{result[:refused]}") if result[:refused]
     rescue DiskManager::DiskError => e
-      flash[:error] = "Mount failed: #{e.message}"
+      flash_failure("Mount failed: #{e.message}", e)
     rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotSaved => e
       reason = e.record&.errors&.full_messages&.to_sentence.presence || e.message
       flash[:error] = "#{device} is mounted, but its share wasn't made: #{reason}"
@@ -112,9 +112,9 @@ class DisksController < ApplicationController
       DiskManager.unmount!(device)
       flash[:notice] = "Unmounted #{device}"
     rescue DiskManager::DiskError => e
-      flash[:error] = "Unmount failed: #{e.message}"
+      flash_failure("Unmount failed: #{e.message}", e)
     rescue Errno::ENOENT => e
-      flash[:error] = "Unexpected error: #{e.message}"
+      flash_failure("Unexpected error: #{e.message}", e)
     end
     redirect_to disks_devices_path
   end
@@ -142,7 +142,7 @@ class DisksController < ApplicationController
   rescue Greyhole::GreyholeError => e
     respond_to do |format|
       format.html do
-        flash[:error] = "#{path} stays in the pool: #{e.message}"
+        flash_failure("#{path} stays in the pool: #{e.message}", e)
         redirect_to disks_storage_pool_path
       end
       format.any { render json: { status: 'error', message: e.message }, status: :unprocessable_content }
@@ -157,7 +157,7 @@ class DisksController < ApplicationController
     DiskService.toggle_greyhole
     redirect_to disks_storage_pool_path
   rescue Greyhole::GreyholeError => e
-    flash[:error] = "Greyhole didn't #{running ? 'stop' : 'start'}: #{e.message}"
+    flash_failure("Greyhole didn't #{running ? 'stop' : 'start'}: #{e.message}", e)
     redirect_to disks_storage_pool_path
   end
 
@@ -169,7 +169,7 @@ class DisksController < ApplicationController
     flash[:notice] = "Greyhole uses the drive at #{path} now."
     redirect_to disks_storage_pool_path
   rescue Greyhole::GreyholeError => e
-    flash[:error] = "Greyhole didn't take the drive at #{path}: #{e.message}"
+    flash_failure("Greyhole didn't take the drive at #{path}: #{e.message}", e)
     redirect_to disks_storage_pool_path
   end
 
@@ -311,6 +311,6 @@ class DisksController < ApplicationController
     yield
     render json: { status: 'ok' }
   rescue StoragePools::Error => e
-    render json: { status: 'error', error: e.message }, status: :unprocessable_content
+    render json: { status: 'error', error: e.message, failed: e.failed? }, status: :unprocessable_content
   end
 end

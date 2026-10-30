@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: A security problem
+    url: https://github.com/CatDogBark/Amahi-kai/security/advisories/new
+    about: Report it privately, not in a public issue.
+  - name: How to use Amahi-kai
+    url: https://amahi-kai.com/wiki/
+    about: The wiki covers installing, storage, apps, updating and more.

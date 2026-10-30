@@ -1,0 +1,52 @@
+- @page_title = t('settings')
+
+/! Settings → Help: Report a problem, this server in a few lines, and its logs (help.js switches
+/! them, fetching each from help_log the first time its tab is opened).
+.kai-help
+  .row.g-4
+    .col-lg-5
+      .card.mb-4.kai-help-report
+        .card-header.bg-dark.text-white
+          h5.mb-0
+            span.me-2 = lucide_icon('help-circle', size: 18)
+            | Something not working?
+        .card-body
+          p
+            | Tell us what happened. Amahi-kai adds this server's details and its recent logs, with names and
+              addresses taken out, and shows you all of it before anything is sent.
+          a.btn.btn-primary#report-a-problem href="/settings/help/report" Report a problem
+          p.small.text-muted.mt-3.mb-0
+            | How-tos and answers are in the
+            =< link_to 'wiki', 'https://amahi-kai.com/wiki/', target: '_blank', rel: 'noopener'
+            | . A security problem goes privately:
+            =< link_to 'report a vulnerability', 'https://github.com/CatDogBark/Amahi-kai/security/advisories/new', target: '_blank', rel: 'noopener'
+            | .
+
+      .card.mb-4
+        .card-header.bg-dark.text-white
+          h5.mb-0
+            span.me-2 = lucide_icon('server', size: 18)
+            | This server
+        .card-body
+          dl.kai-help-summary.mb-0
+            - @summary.each do |label, value|
+              dt = label
+              dd = value
+
+    .col-lg-7
+      .card
+        .card-header.bg-dark.text-white.d-flex.justify-content-between.align-items-center.flex-wrap.gap-2
+          h5.mb-0
+            span.me-2 = lucide_icon('file-text', size: 18)
+            | Logs
+          a.btn.btn-sm.btn-outline-light.d-inline-flex.align-items-center.gap-1 href=settings_help_logs_path download=""
+            = lucide_icon('download', size: 15)
+            | Download logs
+        .card-body
+          .kai-help-sources role="tablist" aria-label="Which log"
+            - @log_sources.each_with_index do |source, index|
+              button.kai-help-source type="button" role="tab" aria-selected=(index.zero? ? 'true' : 'false') aria-controls="help-log" data-log-source=source.key data-log-about=source.about
+                = source.label
+          p.small.text-muted.mt-3.mb-2#help-log-about = @log_sources.first.about
+          pre.kai-help-log#help-log role="tabpanel" tabindex="0" data-log-url=settings_help_log_path aria-live="polite"
+            = @first_log.join("\n").presence || '(empty)'

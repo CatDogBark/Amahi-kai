@@ -6,7 +6,9 @@ require 'shell'
 # pinned), packages.install, greyhole.setup_database, greyhole.write_config (only the
 # lines generate_config writes) and services.* for greyhole.service.
 class Greyhole
-  class GreyholeError < StandardError; end
+  class GreyholeError < StandardError
+    include ReportableError
+  end
 
   CONFIG_PATH = '/etc/greyhole.conf'
   PACKAGES = %w[php8.3-mbstring php8.3-mysql greyhole].freeze
@@ -363,7 +365,7 @@ class Greyhole
     def privileged(operation, **args, &block)
       Privileged.call(operation, **args, &block)
     rescue Privileged::Error => e
-      raise GreyholeError, e.message
+      raise ReportableError.from_privileged(GreyholeError, e)
     end
 
     def service(operation)

@@ -4,7 +4,7 @@
 
 function setupTunnel(stageUrl, streamUrl) {
   var token = document.getElementById('tunnel-token-field').value.trim();
-  if (!token) { alert('Please paste your tunnel token first.'); return; }
+  if (!token) { showToast('Paste your tunnel token first.', 'error'); return; }
   // The token goes in a POST body; putting it in the stream URL logged it.
   var body = new URLSearchParams({ token: token });
   fetch(stageUrl, {
@@ -15,7 +15,7 @@ function setupTunnel(stageUrl, streamUrl) {
       throw new Error(data.error || ('HTTP ' + r.status));
     });
   }).catch(function(err) {
-    alert('Could not send the tunnel token: ' + err.message);
+    showToast('Could not send the tunnel token: ' + err.message, 'failed');
   });
 }
 
@@ -103,7 +103,7 @@ function startTailscale(btn, url, statusUrl) {
     btn.replaceWith(signIn);
     waitForTailscale(statusUrl);
   }).catch(function(err) {
-    alert('Failed to connect: ' + err.message);
+    showToast('Failed to connect: ' + err.message, 'failed');
     btn.disabled = false;
     btn.textContent = 'Connect';
   });
@@ -164,6 +164,6 @@ function tunnelAction(action, btn, url) {
       btn.disabled = false;
       btn.innerHTML = label;
     }
-    alert('Failed to ' + action + ' tunnel: ' + err.message);
+    showToast('Failed to ' + action + ' tunnel: ' + err.message, 'failed');
   });
 }

@@ -90,7 +90,7 @@ function fixCheck(name, btn, fixUrl) {
     if (data.status === 'ok') {
       window.location.reload();
     } else {
-      alert('Fix failed for: ' + name + (data.error ? '\n\n' + data.error : ''));
+      showToast('Fix failed for ' + name + (data.error ? ': ' + data.error : ''), 'failed');
       btn.disabled = false;
       btn.textContent = 'Fix';
     }

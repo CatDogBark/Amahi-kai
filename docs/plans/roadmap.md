@@ -70,13 +70,13 @@ networking build and router mode, the release machinery, and the 1.0 review's fi
 
 ## 1.0
 
-What's left is the release candidate, tried on a fresh install, then 1.0
-([`release-1.0.md`](release-1.0.md) §7). 1.0 is for other people to install; bitShare is a project
-of its own and doesn't hold it.
+1.0.0 came out on 2026-10-25, for other people to install ([`release-1.0.md`](release-1.0.md) was its
+plan); the releases since are in [`CHANGELOG.md`](../../CHANGELOG.md). bitShare is a project of its own
+and didn't hold it.
 
 ## After 1.0
 
-Decided with CatDogBark along the way; when each is built is his call.
+Decided with CatDogBark along the way; when each is built is CatDogBark's call.
 
 ### Signed updates
 
@@ -166,23 +166,9 @@ Amahi-kai and every app stays the optional front door above, for when users ask:
 certificate authority as the default (Caddy does one, and fetches Tailscale's certificates
 too), Let's Encrypt through a DNS challenge for those with a domain.
 
-### The debug pages as a Settings tab
-
-The debug pages (`/tab/debug`: App Logs, Logs and System Info) are from the original Amahi. They
-have their own old layout, outside the October look, read logs through shell strings, and their
-"Submit for Debug" button only counts log lines (the report service it sent to is gone). CatDogBark
-wants them rebuilt as a tab in Settings (2026-10-08); until then they stay as they are. To do:
-
-- A tab on Settings in the current look, for admins, replacing `/tab/debug` and
-  `layouts/debug.html.slim`.
-- Amahi-kai's log, the helper's log and the system journal, read without a shell (the Logs page
-  reads `/var/log/syslog`, which a journald-only system doesn't have).
-- System info from System Status's sources rather than raw `/proc/cpuinfo` and `/proc/meminfo`.
-- Drop Submit for Debug, or make it a download of the logs to attach to an issue.
-
 ### The phone layout
 
-CatDogBark will use Amahi-kai on his phone (2026-10-08). The October refresh (dark, mint, Space Grotesk)
+CatDogBark will use Amahi-kai on a phone (2026-10-08). The October refresh (dark, mint, Space Grotesk)
 stacks at phone width: the header's sections fold into a menu, cards and panels go one column,
 and the file browser's list drops its dates. It hasn't been designed for a phone yet. To do:
 
@@ -230,6 +216,17 @@ folder, and deleting a user removes one an older version made. To decide:
 
 The Content-Security-Policy forbids inline scripts and handlers, but still allows inline styles;
 taking them out is a later pass.
+
+### Pages that wait on a check
+
+A few pages run a check before they show (measured on a test install, 2026-10-29). Network → DNS
+asks the NAS's own DNS for `example.com` (its "Answered in N ms" line), with a 2-second limit, and
+reads Unbound's counts through the root helper (0.4 s): about half a second, but up to 2.5 s while
+the DNS provider doesn't answer. Network → Security and Remote Access run the security check and
+read Docker's ports (0.7 s). Every other page takes under 0.4 s. Not worth changing now (a slow
+DNS page while DNS is down tells its own story); if it is later, the rule would be that a page
+never waits on something that can hang, and anything over about half a second loads after the page
+appears (as Settings → Help's journal tab does).
 
 ## Design records
 

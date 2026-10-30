@@ -28,6 +28,16 @@ history.
 Once 1.0 is out, every merge into `main` is a release. Changes to the website alone (`site/`,
 deployed from `main`) are the usual exception.
 
+## Issues and pull requests
+
+Anyone can open an issue: a problem (the form asks for the version and what happened), or an
+idea. A security problem goes privately instead, as [SECURITY.md](SECURITY.md) says.
+
+Pull requests come from collaborators. To work on something, open an issue about it first; the
+maintainer invites contributors as collaborators. Collaborators push branches of their own and
+open pull requests into `dev`; only the maintainer merges into `dev` and `main` and makes
+release tags (`v*`).
+
 ## Tests
 
 Tests use SQLite and never change the system: outside production `Privileged.call` records

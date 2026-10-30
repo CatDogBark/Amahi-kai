@@ -84,8 +84,10 @@ start, stop and restart where that's safe.
 
 ## Getting help
 
+- **Report a problem**: in the web UI, **Settings → Help → Report a problem** (or **Report this
+  problem** on a red flag) puts the report together for you: see
+  [Reporting a problem](getting-started#reporting-a-problem).
 - **GitHub Issues**: [github.com/CatDogBark/Amahi-kai/issues](https://github.com/CatDogBark/Amahi-kai/issues)
 - **Email**: [catdogbark@pm.me](mailto:catdogbark@pm.me)
-- **Logs**: `journalctl -u amahi-kai -f`
-- **Debug pages**: in the web UI at `/tab/debug`, for admins: Amahi-kai's log, the system log and
-  system info
+- **Logs**: **Settings → Help** shows Amahi-kai's, the root helper's, System Update's, the system
+  journal and each app's, and **Download logs** saves them; over SSH, `journalctl -u amahi-kai -f`

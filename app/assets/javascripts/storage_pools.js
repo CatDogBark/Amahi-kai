@@ -74,10 +74,11 @@
     if (!confirm('Create the ' + layoutName + ' pool "' + name + '" on ' + labels.join(', ') +
                  '?\n\nEverything on these drives is erased.')) return;
 
-    var fail = function(message) {
+    var fail = function(message, failed) {
       error.textContent = message;
       button.textContent = 'Create pool';
       update(form);
+      if (failed) showToast(message, 'failed');
     };
     error.textContent = '';
     button.disabled = true;
@@ -89,9 +90,10 @@
     }).then(function(r) { return r.json().catch(function() { return {}; }); })
       .then(function(data) {
         if (data.status === 'ok') { window.location.reload(); return; }
-        fail(data.error || 'No answer from Amahi-kai');
+        // failed: something broke, not a choice to change (StoragePools::Error#failed?)
+        fail(data.error || 'No answer from Amahi-kai', data.failed === true || !data.error);
       })
-      .catch(function(err) { fail(err.message); });
+      .catch(function(err) { fail(err.message, true); });
   }
 
   // Posts JSON to +url+ and reloads the page, or passes the error to +fail+.
@@ -103,9 +105,10 @@
     }).then(function(r) { return r.json().catch(function() { return {}; }); })
       .then(function(data) {
         if (data.status === 'ok') { window.location.reload(); return; }
-        fail(data.error || 'No answer from Amahi-kai');
+        // failed: something broke, not a choice to change (StoragePools::Error#failed?)
+        fail(data.error || 'No answer from Amahi-kai', data.failed === true || !data.error);
       })
-      .catch(function(err) { fail(err.message); });
+      .catch(function(err) { fail(err.message, true); });
   }
 
   // --- The pool dialogs ---
@@ -174,10 +177,11 @@
     button.disabled = true;
     button.textContent = 'Working…';
     dialog.querySelector('[data-dialog-error]').textContent = '';
-    postJSON(dialog.dataset.url, body, function(message) {
+    postJSON(dialog.dataset.url, body, function(message, failed) {
       dialog.querySelector('[data-dialog-error]').textContent = message;
       button.textContent = label;
       updateDialog(dialog);
+      if (failed) showToast(message, 'failed');
     });
   }
 
@@ -205,7 +209,7 @@
         name: policy.dataset.name,
         hourly: parseInt(policy.elements.hourly.value, 10),
         daily: parseInt(policy.elements.daily.value, 10)
-      }, function(message) { alert(message); save.disabled = false; });
+      }, function(message, failed) { showToast(message, failed ? 'failed' : 'error'); save.disabled = false; });
       return;
     }
     var form = event.target.closest('#pool-form');
@@ -225,8 +229,8 @@
     if (button.dataset.poolId) body.id = button.dataset.poolId;
     button.disabled = true;
     button.textContent = 'Working…';
-    postJSON(button.dataset.storagePost, body, function(message) {
-      alert(message);
+    postJSON(button.dataset.storagePost, body, function(message, failed) {
+      showToast(message, failed ? 'failed' : 'error');
       button.disabled = false;
       button.textContent = label;
     });

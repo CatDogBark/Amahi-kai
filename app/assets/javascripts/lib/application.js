@@ -1,25 +1,3 @@
-// Forms whose button says data-confirm (button_to's data: { confirm: }) ask before they're
-// sent, and a data-disable-with button shows that text while the request runs: Rails' own
-// script for these isn't loaded (nor Turbo), so without this they did neither (and
-// Initialize erased a drive without asking).
-document.addEventListener('submit', function(event) {
-  var form = event.target;
-  var button = event.submitter || form.querySelector('[type=submit]');
-  var message = (button && button.dataset.confirm) || form.dataset.confirm;
-  if (message && !window.confirm(message)) {
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    return;
-  }
-  if (button && button.dataset.disableWith) {
-    // After this event, so the button's own name and value are still sent.
-    setTimeout(function() {
-      button.disabled = true;
-      button.textContent = button.dataset.disableWith;
-    }, 0);
-  }
-}, true);
-
 // The header's wrench and Settings' checkbox: Advanced mode on or off, then the page again.
 window.toggleAdvanced = function(url) {
   fetch(url, { method: 'POST', headers: csrfHeaders(), credentials: 'same-origin' })
