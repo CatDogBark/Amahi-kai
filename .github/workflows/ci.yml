@@ -10,6 +10,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# The jobs only read the code: saving and fetching test results needs no more.
+permissions:
+  contents: read
+
 # Every job stops after 20 minutes: a step that hangs (an apt mirror that stopped answering
 # held three jobs for 18 minutes on 2026-10-27) fails then, instead of after GitHub's 6 hours.
 jobs:
