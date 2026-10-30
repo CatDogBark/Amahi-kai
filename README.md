@@ -1,9 +1,9 @@
 # Amahi-kai
 
 [![CI](https://github.com/CatDogBark/Amahi-kai/actions/workflows/ci.yml/badge.svg)](https://github.com/CatDogBark/Amahi-kai/actions/workflows/ci.yml)
-[![Latest release](https://img.shields.io/github/v/release/CatDogBark/Amahi-kai?label=release&color=4fe0b0)](https://github.com/CatDogBark/Amahi-kai/releases/latest)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](COPYING)
 [![Ubuntu 24.04](https://img.shields.io/badge/Ubuntu-24.04-E95420?logo=ubuntu&logoColor=white)](https://amahi-kai.com/wiki/getting-started)
+[![Latest release](https://img.shields.io/github/v/release/CatDogBark/Amahi-kai?label=release&color=4fe0b0)](https://github.com/CatDogBark/Amahi-kai/releases/latest)
 
 A web-based home server for Ubuntu 24.04: users, file shares, storage pooling, Docker apps,
 networking and remote access, managed from your browser.
