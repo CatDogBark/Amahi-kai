@@ -177,15 +177,19 @@ halves, and `bin/amahi-install-helper` installs it as `/etc/amahi-kai/allowed_si
 update check finds a newer release, the helper checks its tag against that file: `git verify-tag`
 needs a signature by a key the file names, made with ssh-keygen (git gets no GPG or X.509 program
 to run), and the tag must call itself by its own name, so an old release's tag can't be offered as
-a newer one. System Status and the System Update dialog show the result. An unsigned release still
-installs for now; refusing one is the next step. The release workflow already refuses to publish a
-tag that isn't signed with one of the keys.
+a newer one. On the `releases` and `candidates` channels, a newer release that isn't signed so is
+refused: the helper offers nothing, System Update installs nothing, and System Status and the System
+Update dialog say why. A signed one says which key signed it. `bin/amahi-update` takes the helper
+for one from before update channels (and pulls `main` unchecked) only when its whole answer is
+that it doesn't know `system.update_target`, never when a refusal's reason happens to say so: that
+reason can quote a tag's own name. The release workflow also refuses to publish a tag that isn't
+signed with one of the keys.
 
 There are two keys, kept apart. Losing one changes nothing for a server: the next release is
 signed with the other, and its `config/allowed_signers` swaps in a new key for the lost one. Losing
-both: make a new key and put its line in `config/allowed_signers`. A server that refuses unsigned
-releases also needs that line added to its `/etc/amahi-kai/allowed_signers`, as root, before it
-takes the next release.
+both: make a new key and put its line in `config/allowed_signers`, and add the same line to each
+server's `/etc/amahi-kai/allowed_signers`, as root, before it takes the next release; until then it
+refuses that release.
 
 ## Known gaps
 
@@ -193,9 +197,10 @@ takes the next release.
 - **The app catalog isn't signed.** It's fetched from GitHub over HTTPS, and its manifests are
   checked as above, but whoever can change the catalog's repository decides which image an
   install or an update runs, within what those checks allow.
-- **System Update doesn't refuse an unsigned release yet.** It checks a release tag's signature
-  against the release keys (above) and shows the result, but still installs a release that isn't
-  signed: until it refuses one, whoever controls the repository controls what a NAS installs.
+- **The `development` channel and a new install aren't checked.** `development` follows the `dev`
+  branch, which has no signed tags, so whoever controls the repository controls what a server on
+  that channel installs; a server changes channel only when an admin picks one. A new install gets
+  the code over HTTPS from GitHub as it is, and checks every release after that.
 - **The database isn't rolled back** with the code: migrations must keep working with the
   previous version's code. System Update dumps the database first (`/var/lib/amahi-kai/backups`,
   root-only, the last 3); restoring one is a manual step.

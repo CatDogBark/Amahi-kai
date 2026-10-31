@@ -50,12 +50,16 @@ shows when Amahi-kai last checked, with **Check now** and **Repair**.
 
 It also says which channel the server follows.
 
-A release on offer also says whether it's signed. Each release is signed with one of Amahi-kai's
-release keys, and the server checks the signature when it finds the release: under the version,
-**✓ Signed with release key A.**, or **⚠** and why not (for example, the tag has no signature).
-What's new shows the same line. For now an unsigned release still installs; a later version will
-refuse one. The keys a server trusts are in `/etc/amahi-kai/allowed_signers`, which System Update
-keeps up to date. The `development` channel has no releases, so it shows no signature.
+A release on offer also says who signed it. Each release is signed with one of Amahi-kai's release
+keys, and the server checks the signature when it finds the release: under the version, **✓ Signed
+with release key A.** A release that isn't signed with a release key is refused: nothing is offered,
+and in place of **Up to date** the card says **⚠ Refused v1.6.0: it isn't signed with a release
+key**, why, and that the server stays on the version it has. What's new shows the same lines. A
+refused release means something is wrong with it (or with where it came from), so
+[report it](https://github.com/CatDogBark/Amahi-kai/security/advisories/new) rather than looking for a
+way around it. The keys a server trusts are in `/etc/amahi-kai/allowed_signers`, which System
+Update keeps up to date. The `development` channel follows the dev branch, which has no releases, so
+it shows no signature and refuses nothing.
 
 Amahi-kai checks 10 minutes after the server starts and then every 6 hours (the
 `amahi-kai-update-check.timer` systemd timer). **Check now** checks straight away. The card says

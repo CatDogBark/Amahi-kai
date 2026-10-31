@@ -183,7 +183,9 @@ calls the pages make.
 ## 3. Signed updates
 
 **Deferred, not in 1.0** (CatDogBark, 2026-10-24): see *Not in 1.0*. The design below is kept
-for when other people run Amahi-kai.
+for when other people run Amahi-kai. **Since done for releases** (1.5.1 signs them, and the
+version after it refuses an unsigned one), with two keys in place of one; the catalog isn't signed
+yet (the roadmap's Signed updates).
 
 Today the updater installs whatever the GitHub Release tag points at, and the helper fetches the
 app catalog's `main` the same way. Nothing is checked against a key the NAS holds, so control of

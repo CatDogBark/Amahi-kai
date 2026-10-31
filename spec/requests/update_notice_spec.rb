@@ -113,14 +113,23 @@ RSpec.describe 'Update notice', type: :request do
       expect(page.at_css('#whats-new .release-signature').text).to eq('✓ Signed with release key A.')
     end
 
-    it "says why a release isn't signed, in the dialog and on System Status, and still offers it" do
-      update_status(release.merge('signature' => { 'trusted' => false, 'why' => 'the tag v0.9.2 has no SSH signature' }))
+    it "says a release was refused, and why, in the dialog and on System Status, with nothing to install" do
+      why = 'the tag v0.9.2 calls itself "<b>v0.9.9</b>" inside'
+      update_status(up_to_date.merge('channel' => 'releases', 'current_version' => '0.9.1', 'refused' => { 'tag' => 'v0.9.2', 'why' => why },
+                                     'error' => "v0.9.2 is refused: it isn't signed with a release key (#{why})"))
+      said = %(⚠ Refused v0.9.2: it isn't signed with a release key (#{why}). Amahi-kai stays on 0.9.1.)
       get root_path
-      expect(page.at_css('#whats-new .release-signature').text).to eq('⚠ The tag v0.9.2 has no SSH signature. It still installs for now.')
-      expect(page.at_css('#whats-new-install')).not_to be_nil
+      dialog = page.at_css('#whats-new')
+      expect(dialog.at_css('.release-refused').text).to eq(said)
+      expect(dialog.at_css('.release-refused b')).to be_nil # the tag's own words, shown as text
+      expect(dialog.text).not_to include('Up to date', 'Last check:')
+      expect(dialog.at_css('#whats-new-install')).to be_nil
+      expect(page.at_css('#update-btn .update-dot')).to be_nil
       get settings_system_status_path
-      expect(page.at_css('.system-status .release-signature').text).to eq('⚠ The tag v0.9.2 has no SSH signature. It still installs for now.')
-      expect(page.at_css('#update-now-btn')).not_to be_nil
+      card = page.at_css('.system-status')
+      expect(card.at_css('.release-refused').text).to eq(said)
+      expect(card.text).not_to include('Up to date', 'Last check:')
+      expect(page.at_css('#update-now-btn')).to be_nil
     end
   end
 

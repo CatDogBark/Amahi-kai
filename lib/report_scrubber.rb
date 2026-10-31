@@ -5,8 +5,9 @@ require 'ipaddr'
 # each becomes a stand-in like <share-1>, and the same name gets the same stand-in everywhere in
 # the report, so it still reads as one story. Out: this server's name, users, shares and what's in
 # them, the server's accounts, ZFS pools, devices' and DNS names, addresses (IPv4, IPv6, MAC),
-# email addresses, a tailnet's names, SSH keys' fingerprints, and anything that looks like a key or
-# token. Kept: what's needed to find the
+# email addresses, a tailnet's names, SSH keys' fingerprints and public keys, armoured key text (a
+# private key, a release tag's signature), and anything that looks like a key or token. Kept: a
+# release key's name (release-key-a, as config/allowed_signers has it), and what's needed to find the
 # fault (versions, commit and image hashes, loopback addresses, times, the apps' names).
 class ReportScrubber
   MAC = /\b(?:[0-9a-f]{2}:){5}[0-9a-f]{2}\b/i
@@ -24,6 +25,16 @@ class ReportScrubber
   UUID = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
   # An SSH key's fingerprint (sshd logs the key each login used); an image digest is sha256: in hex.
   KEY_FINGERPRINT = %r{\bSHA256:[A-Za-z0-9+/]{40,}=*}
+  MD5_FINGERPRINT = /\bMD5:(?:\h{2}:){15}\h{2}\b/
+  # An SSH public key, as an allowed_signers, authorized_keys or known_hosts line has it. Its base64
+  # has slashes, where SECRET stops, so half of it stayed.
+  SSH_PUBLIC_KEY = %r{\b(ssh-(?:ed25519|rsa|dss)|ecdsa-sha2-nistp\d{3}|sk-(?:ssh-ed25519|ecdsa-sha2-nistp256)@openssh\.com) [A-Za-z0-9+/]{16,}={0,3}}
+  # Armoured key text: a private key, an SSH signature (a signed tag holds one), PGP. Its lines up
+  # to the END line, or to the first line that isn't key text, when a log's cut left the end off.
+  ARMOR = %r{-----BEGIN ([A-Z0-9 ]{1,40})-----(?:[ \t]*\n(?:[A-Za-z0-9+/=]+|(?:Version|Comment|Hash|Charset): [^\n]*)?(?=[ \t]*(?:\n|\z)))*(?:[ \t]*\n[ \t]*-----END \1-----)?}
+  # Key text in a line that starts with something else (a journal line's prefix): 60 or more base64
+  # characters with a slash or a plus, a digit and both cases. Not a path, which starts with a slash.
+  BASE64_RUN = %r{(?<![\w/+.\-])(?!/)(?=[A-Za-z0-9+/]*[+/])(?=[A-Za-z0-9+/]*\d)(?=[A-Za-z0-9+/]*[a-z])(?=[A-Za-z0-9+/]*[A-Z])[A-Za-z0-9+/]{60,}={0,2}(?![\w/+.\-])}
   # The server's own accounts (ssh, sudo and logind name them in the journal), as /etc/passwd has them.
   LOGIN_UIDS = 1000...65_534
   # Where a share's files are: a share's folder (named here when it isn't one the NAS has now),
@@ -63,7 +74,14 @@ class ReportScrubber
 
   def scrub(text)
     text = text.to_s.dup
+    text = text.gsub(ARMOR) do |block|
+      kind = Regexp.last_match(1)
+      block.end_with?("-----END #{kind}-----") ? "-----BEGIN #{kind}----- <key-text> -----END #{kind}-----" : "-----BEGIN #{kind}----- <key-text>"
+    end
+    text = text.gsub(SSH_PUBLIC_KEY) { "#{Regexp.last_match(1)} <ssh-key>" }
     text = text.gsub(KEY_FINGERPRINT, 'SHA256:<key-fingerprint>')
+    text = text.gsub(MD5_FINGERPRINT, 'MD5:<key-fingerprint>')
+    text = text.gsub(BASE64_RUN, '<key-text>')
     text = text.gsub(SECRET) { |token| token.match?(HEX_HASH) || token.match?(UUID) ? token : '<secret>' }
     text = text.gsub(EMAIL) { |email| standin('email', email) }
     text = text.gsub(TAILNET) { |name| standin('tailnet-name', name.downcase) }

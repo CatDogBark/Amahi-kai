@@ -42,6 +42,29 @@ RSpec.describe ReportScrubber do
       .to eq('Accepted publickey for <user-1> from <lan-address-1> port 45426 ssh2: ED25519 SHA256:<key-fingerprint>')
   end
 
+  # A release key's line in /etc/amahi-kai/allowed_signers, say, quoted in a report: base64 with
+  # slashes, which the secret rule stopped at, so half the key stayed
+  it "takes out SSH public keys whole, keeping a release key's name" do
+    expect(scrubber.scrub('release-key-a namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFakeKeyX9/OnlyForTheSpec+NotReal0123456'))
+      .to eq('release-key-a namespaces="git" ssh-ed25519 <ssh-key>')
+    expect(scrubber.scrub('ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7fake/key+text= troy@laptop; MD5:3b:8e:01:2a:44:9c:d0:11:5e:6f:70:81:92:a3:b4:c5'))
+      .to eq('ssh-rsa <ssh-key> <user-1>@laptop; MD5:<key-fingerprint>')
+  end
+
+  it 'takes out armoured key text: a signature or a private key, whole or with its end cut off' do
+    signed = "tag v1.5.1\n\nv1.5.1 — signed releases\n-----BEGIN SSH SIGNATURE-----\n" \
+             "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgFakeSignatureTextForTheSpecOnly0123456789ab\n" \
+             "Zm9vYmFy+/xyz=\n-----END SSH SIGNATURE-----\n2026-10-30T01:02:03Z next line"
+    expect(scrubber.scrub(signed))
+      .to eq("tag v1.5.1\n\nv1.5.1 — signed releases\n-----BEGIN SSH SIGNATURE----- <key-text> -----END SSH SIGNATURE-----\n2026-10-30T01:02:03Z next line")
+    cut = "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQ=\n2026-10-30T01:02:03Z helper: next"
+    expect(scrubber.scrub(cut)).to eq("-----BEGIN OPENSSH PRIVATE KEY----- <key-text>\n2026-10-30T01:02:03Z helper: next")
+    journal = 'Oct 30 01:02:03 nas app[12]: U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgFake/SignatureText+ForTheSpec01'
+    expect(scrubber.scrub(journal)).to eq('Oct 30 01:02:03 <server-name> app[12]: <key-text>')
+    path = '/srv/pools/data/media/Pictures/2024/Rhonda/ChristmasMorning/IMG20241225Tree/Family'
+    expect(scrubber.scrub(path)).not_to include('<key-text>') # a path, even a long one, isn't key text
+  end
+
   it 'takes out email addresses, tailnet names and keys, keeping commit and image hashes' do
     text = 'mail catdogbark@pm.me; serve amahi-kai.tail1234.ts.net; ADMIN_TOKEN=Kq8sD9fL2mN4pR7tV1wX3yZ5aB6cE0gH; ' \
            "commit 82767a8a1b2c3d4e5f60718293a4b5c6d7e8f901, image sha256:#{'4813745e' * 8}"

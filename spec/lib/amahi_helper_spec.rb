@@ -630,7 +630,7 @@ RSpec.describe 'AmahiHelper' do
         git('tag', 'v0.9.1')
         commit('Drive temperatures (#2)', "# Changelog\n\n- **Old entry.**\n- **Temperatures.** Detail.\n", '0.9.1')
         @latest = commit('Update window (#3)', "# Changelog\n\n- **Old entry.**\n- **Temperatures.** Detail.\n- **Window.**\n", '0.9.2')
-        git('tag', 'v0.9.2')
+        signed_tag('v0.9.2', key('a'), @latest)
         git('checkout', '-q', @running)
         stub_const('AmahiHelper::GIT_OPTIONS', ['-c', 'core.hooksPath=/dev/null', '-C', repo])
         stub_const('AmahiHelper::GIT', ENV['PATH'].split(':').map { |d| File.join(d, 'git') }.find { |f| File.executable?(f) })
@@ -653,8 +653,8 @@ RSpec.describe 'AmahiHelper' do
 
       it "goes to the newest release, listing its merged changes and changelog entries" do
         expect(helper.do_update_target['target']).to eq('channel' => 'releases', 'commit' => @latest, 'version' => '0.9.2',
-                                                        'tag' => 'v0.9.2', 'error' => nil,
-                                                        'signature' => { 'trusted' => false, 'why' => 'the tag v0.9.2 is a plain one, with no signature' })
+                                                        'tag' => 'v0.9.2', 'error' => nil, 'refused' => nil,
+                                                        'signature' => { 'trusted' => true, 'signer' => 'release-key-a' })
         status = helper.update_status
         expect(status).to include('channel' => 'releases', 'current' => @running, 'current_version' => '0.9.1',
                                   'latest' => @latest, 'latest_version' => '0.9.2', 'tag' => 'v0.9.2',
@@ -665,14 +665,15 @@ RSpec.describe 'AmahiHelper' do
 
       it 'never goes back: a release no newer than the running version is nothing to install' do
         git('checkout', '-q', @latest)
-        releases('v0.9.1')
-        expect(helper.update_target).to include('commit' => @latest, 'version' => '0.9.2', 'tag' => nil, 'signature' => nil, 'error' => nil)
+        releases('v0.9.1') # a plain tag, and older: nothing to check or refuse
+        expect(helper.update_target).to include('commit' => @latest, 'version' => '0.9.2', 'tag' => nil, 'signature' => nil,
+                                                'refused' => nil, 'error' => nil)
         expect(helper.update_status).to include('available' => false, 'behind' => 0, 'commits' => [], 'changelog' => [])
       end
 
       it 'takes release candidates only on the candidates channel, after their release' do
         rc = commit('Candidate (#4)', "# Changelog\n", '0.9.3rc1')
-        git('tag', 'v0.9.3rc1')
+        signed_tag('v0.9.3rc1', key('a'), rc)
         git('checkout', '-q', @running)
         releases('v0.9.2', 'v0.9.3rc1')
         expect(helper.update_target['tag']).to eq('v0.9.2')
@@ -721,15 +722,31 @@ RSpec.describe 'AmahiHelper' do
           expect(helper.update_status['signature']).to eq('trusted' => true, 'signer' => 'release-key-a')
         end
 
-        it "says why a release isn't signed with a release key, and offers it all the same for now" do
+        it "refuses a newer release that isn't signed with a release key, saying why, and offers nothing" do
           signed_tag('v0.9.2', key('other'), @latest)
-          expect(helper.do_update_target['target']).to include(
-            'commit' => @latest, 'error' => nil,
-            'signature' => { 'trusted' => false, 'why' => "the tag v0.9.2's signature doesn't match a release key" }
-          )
+          why = "the tag v0.9.2's signature doesn't match a release key"
+          message = "v0.9.2 is refused: it isn't signed with a release key (#{why})"
+          expect(helper.update_target).to include('commit' => @running, 'version' => '0.9.1', 'tag' => nil, 'signature' => nil,
+                                                  'refused' => { 'tag' => 'v0.9.2', 'why' => why }, 'error' => message)
+          expect { helper.do_update_target }.to raise_error(AmahiHelper::Failed, message)
+          expect(helper.update_status).to include('available' => false, 'behind' => 0, 'error' => message,
+                                                  'refused' => { 'tag' => 'v0.9.2', 'why' => why })
+
           git('tag', '-d', 'v0.9.2')
           git('tag', '-a', '-m', 'v0.9.2 — not signed', 'v0.9.2', @latest)
-          expect(helper.update_target['signature']).to eq('trusted' => false, 'why' => 'the tag v0.9.2 has no SSH signature')
+          expect(helper.update_target['refused']).to eq('tag' => 'v0.9.2', 'why' => 'the tag v0.9.2 has no SSH signature')
+          git('tag', '-d', 'v0.9.2')
+          git('tag', 'v0.9.2', @latest)
+          expect(helper.update_target['refused']).to eq('tag' => 'v0.9.2', 'why' => 'the tag v0.9.2 is a plain one, with no signature')
+          channel('candidates')
+          expect(helper.update_target).to include('commit' => @running, 'refused' => { 'tag' => 'v0.9.2', 'why' => 'the tag v0.9.2 is a plain one, with no signature' })
+        end
+
+        it "cuts a long name a tag calls itself, which comes from whoever made the tag" do
+          git('-c', 'gpg.format=ssh', '-c', "user.signingkey=#{key('a')}", 'tag', '-s', '-m', 'x', "v#{'9' * 200}", @latest)
+          git('update-ref', 'refs/tags/v0.9.2', git('rev-parse', "refs/tags/v#{'9' * 200}"))
+          why = helper.tag_signature('v0.9.2')['why']
+          expect(why).to eq("the tag v0.9.2 calls itself #{"v#{'9' * 79}".inspect} inside")
         end
 
         it "won't take an old release's signed tag offered under a newer name" do

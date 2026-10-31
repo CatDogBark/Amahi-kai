@@ -275,13 +275,15 @@ REPO_URL="https://github.com/CatDogBark/Amahi-kai.git"
 # The version to install, as the root helper decides it from the update channel: lines of
 # state (ok, legacy or error), channel, commit, version, tag and why it failed. "legacy" is an
 # installed helper from before update channels; this update installs the new one (step 3a).
+# It's legacy only when the helper's whole answer is that refusal: why a release was refused can
+# hold text from GitHub (a tag's own name), and a legacy update pulls main unchecked.
 update_target() {
   /usr/local/sbin/amahi-helper system.update_target </dev/null 2>/dev/null \
     | env -i PATH=/usr/bin:/bin /usr/bin/ruby -rjson -e '
         reply = (JSON.parse(STDIN.read) rescue {})
         target = reply["target"].is_a?(Hash) ? reply["target"] : {}
         error = reply["error"].to_s
-        state = reply["ok"] ? "ok" : (error.include?("unknown operation") ? "legacy" : "error")
+        state = reply["ok"] ? "ok" : (error == %q(unknown operation "system.update_target") ? "legacy" : "error")
         puts state, target["channel"], target["commit"], target["version"], target["tag"], error.empty? ? "no answer from the root helper" : error'
 }
 
