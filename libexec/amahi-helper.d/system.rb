@@ -39,6 +39,11 @@ module AmahiHelper
   # release), and the update check checks the release it offers against them (tag_signature).
   ALLOWED_SIGNERS = '/etc/amahi-kai/allowed_signers'
 
+  # The development channel isn't signature-checked (the dev branch has no signed tags), so a server
+  # switches to it only when root allows that, with this file (update_channel_choice).
+  # bin/amahi-install-helper makes it on a server that follows the dev branch already.
+  ALLOW_DEVELOPMENT = '/etc/amahi-kai/allow-development'
+
   SSH_KEYGEN = '/usr/bin/ssh-keygen'
 
   SWAPFILE = '/swapfile'
@@ -181,7 +186,7 @@ module AmahiHelper
     # shows what the new channel offers. Only that line of ENV_FILE changes.
     'system.set_update_channel' => {
       params: %w[channel],
-      validate: ->(a) { { channel: listed(a['channel'], 'channel', UPDATE_CHANNELS) } },
+      validate: ->(a) { { channel: update_channel_choice(a['channel']) } },
       plan: ->(v) { [[:set_update_channel, v[:channel]], [:check_update]] }
     },
     'system.create_swap' => {
@@ -741,6 +746,16 @@ module AmahiHelper
       nil
     rescue SystemCallError, ArgumentError => e
       raise Failed, "couldn't change #{ENV_FILE}: #{e.message}"
+    end
+
+    # The channel System Status asks for. Switching to development needs ALLOW_DEVELOPMENT, root's
+    # to make, so the web app (or anything acting as it) can't move a server off signed releases; a
+    # server that follows it already may save it again, and any server may leave it.
+    def update_channel_choice(value)
+      channel = listed(value, 'channel', UPDATE_CHANNELS)
+      return channel unless channel == 'development' && update_channel != 'development' && !File.file?(ALLOW_DEVELOPMENT)
+
+      raise Refused, "the dev branch isn't signature-checked, so this server switches to it only when root allows that: sudo touch #{ALLOW_DEVELOPMENT}"
     end
 
     def update_channel

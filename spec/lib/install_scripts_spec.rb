@@ -271,6 +271,30 @@ RSpec.describe 'install and update scripts' do
       expect(signed).to be < workflow.index('gh release create')
     end
 
+    # The root helper switches a server to the dev branch only with this file; the installer writes the
+    # channel before it runs the helper's installer, so a development install gets it too
+    it 'allows the dev branch on a server that follows it already, reading the channel as the helper does' do
+      text = File.read(Rails.root.join('bin/amahi-install-helper'))
+      expect(text).to include(%(if [[ "$channel" == development && ! -e /etc/amahi-kai/allow-development ]]; then),
+                              'install -o root -g root -m 0644 /dev/null /etc/amahi-kai/allow-development')
+      line = text[/^channel=\$\(.*\)$/]
+      Dir.mktmpdir do |dir|
+        env = "#{dir}/amahi.env"
+        read = lambda do |content|
+          content ? File.write(env, content) : FileUtils.rm_f(env)
+          out, status = Open3.capture2('bash', '-c', "set -euo pipefail\n#{line.sub('/etc/amahi-kai/amahi.env', env)}\necho \"$channel\"")
+          expect(status).to be_success
+          out.strip
+        end
+        expect(read.call("SECRET_KEY_BASE=x\nAMAHI_UPDATE_CHANNEL=development\n")).to eq('development')
+        expect(read.call(%(AMAHI_UPDATE_CHANNEL="Development"\nAMAHI_UPDATE_CHANNEL=releases\n))).to eq('development')
+        expect(read.call("AMAHI_UPDATE_CHANNEL=releases\n")).to eq('releases')
+        expect(read.call("# AMAHI_UPDATE_CHANNEL=development\n")).to eq('')
+        expect(read.call(nil)).to eq('') # no env file: nothing, and the script goes on
+      end
+      expect(install.index('AMAHI_UPDATE_CHANNEL=$UPDATE_CHANNEL')).to be < install.index('"$APP_DIR/bin/amahi-install-helper"')
+    end
+
     it 'lists two release keys, each once, which every server gets as a root-owned file' do
       keys = File.readlines(Rails.root.join('config/allowed_signers'), chomp: true).reject { |l| l.start_with?('#') || l.strip.empty? }
       expect(keys.size).to eq(2)

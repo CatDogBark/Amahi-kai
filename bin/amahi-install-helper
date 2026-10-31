@@ -6,6 +6,7 @@
 #   /var/log/amahi-kai/helper.log   the helper's audit log, root:amahi 0640
 #   /etc/logrotate.d/amahi-kai      from config/logrotate-amahi-kai.conf
 #   /etc/amahi-kai/allowed_signers  the release keys, from config/allowed_signers, root:root 0644
+#   /etc/amahi-kai/allow-development   on a server that follows the dev branch (see below)
 #   /etc/systemd/system/amahi-kai.service          the web UI (enabled; bin/amahi-install and
 #                                                   bin/amahi-update start and restart it)
 #   /etc/systemd/system/amahi-kai-indexer.{service,timer}   the file search index, every 10 minutes
@@ -64,6 +65,14 @@ if [[ -d /etc/logrotate.d ]]; then
 fi
 # The release keys: the update check checks the tag of the release it offers against them.
 install -o root -g root -m 0644 "$APP_DIR/config/allowed_signers" /etc/amahi-kai/allowed_signers
+# The dev branch isn't signature-checked, so the root helper switches a server to it only when
+# this file allows that. A server that follows it already (a development install included: the
+# installer writes the channel before it runs this) keeps being allowed to.
+channel=$(sed -n 's/^AMAHI_UPDATE_CHANNEL=//p' /etc/amahi-kai/amahi.env 2>/dev/null | head -1 | tr -d "\"' " | tr '[:upper:]' '[:lower:]' || true)
+if [[ "$channel" == development && ! -e /etc/amahi-kai/allow-development ]]; then
+  install -o root -g root -m 0644 /dev/null /etc/amahi-kai/allow-development
+  echo "Allowed the development channel (/etc/amahi-kai/allow-development): this server follows it"
+fi
 for unit in amahi-kai.service amahi-kai-indexer.service amahi-kai-indexer.timer \
             amahi-kai-update.service amahi-kai-update-check.service amahi-kai-update-check.timer \
             amahi-kai-storage-check.service amahi-kai-storage-check.timer \

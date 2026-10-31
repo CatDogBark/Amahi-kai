@@ -776,8 +776,22 @@ RSpec.describe 'AmahiHelper' do
         expect(helper.update_channel).to eq('releases')
       end
 
-      it 'changes the channel from System Status: only that line, the file kept as it was, then a check' do
+      it "switches to the dev branch, which isn't signature-checked, only with root's permission" do
+        allow_file = "#{repo}/allow-development"
+        stub_const('AmahiHelper::ALLOW_DEVELOPMENT', allow_file)
+        expect(refusal('system.set_update_channel', 'channel' => 'development'))
+          .to eq("the dev branch isn't signature-checked, so this server switches to it only when root allows that: sudo touch #{allow_file}")
+        expect(refusal('system.set_update_channel', 'channel' => 'candidates')).to be_nil
+        File.write(allow_file, '')
         expect(steps('system.set_update_channel', 'channel' => 'development')).to eq([[:set_update_channel, 'development'], [:check_update]])
+        FileUtils.rm_f(allow_file)
+        channel('development') # one that follows it already may save it again, and leave it
+        expect(refusal('system.set_update_channel', 'channel' => 'development')).to be_nil
+        expect(refusal('system.set_update_channel', 'channel' => 'releases')).to be_nil
+      end
+
+      it 'changes the channel from System Status: only that line, the file kept as it was, then a check' do
+        expect(steps('system.set_update_channel', 'channel' => 'candidates')).to eq([[:set_update_channel, 'candidates'], [:check_update]])
         expect(refusal('system.set_update_channel', 'channel' => 'nightly')).to include("isn't one Amahi-kai uses")
         written = []
         allow(helper).to receive(:do_install) { |target, content, _check, mode, group| File.write(target, content) && written << [mode, group] }

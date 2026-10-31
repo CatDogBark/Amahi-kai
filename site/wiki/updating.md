@@ -17,9 +17,9 @@ What counts as an update depends on the server's **update channel**:
 
 | Channel | Installs |
 |---------|----------|
-| `releases` (the default) | The newest release published on [GitHub](https://github.com/CatDogBark/Amahi-kai/releases) |
-| `candidates` | Releases and release candidates (pre-releases such as `1.0.0rc1`), to try one before it's out |
-| `development` | The newest code on the `dev` branch, for testing what's being built |
+| `releases` (the default) | The newest release published on [GitHub](https://github.com/CatDogBark/Amahi-kai/releases), signed with a release key |
+| `candidates` | Releases and release candidates (pre-releases such as `1.0.0rc1`), to try one before it's out, signed the same way |
+| `development` | The newest code on the `dev` branch, for testing what's being built. **Not signature-checked** |
 
 An update never takes the server back to an older version: a server on `development` that's ahead
 of the newest release stays where it is until a newer one comes out.
@@ -29,6 +29,20 @@ one and **Save**. The server checks the new channel straight away, so the card s
 offers. A server installed with `AMAHI_BRANCH=dev` starts on `development`; every other one on
 `releases`. Underneath, the channel is the line `AMAHI_UPDATE_CHANNEL=releases` in
 `/etc/amahi-kai/amahi.env` (root's), which Save changes and nothing else in that file.
+
+**The dev branch isn't signature-checked.** Whoever controls Amahi-kai's repository decides what a
+server on `development` installs, and it installs as root, so switching back to `releases` later
+doesn't make such a server trustworthy again (only a reinstall does). That's why a server switches to
+`development` only with root's permission, given on the server itself:
+
+```bash
+sudo touch /etc/amahi-kai/allow-development
+```
+
+Until then, **Follows** greys it out and says so; nobody signed in to the web UI, nor anything acting
+as them, can move the server off signed releases. A server installed with `AMAHI_BRANCH=dev`, or one
+already on `development`, has the file. Leaving `development` needs nothing. For an early look that
+stays signed, follow `candidates`.
 
 ---
 
