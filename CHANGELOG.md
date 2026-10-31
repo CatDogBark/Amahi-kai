@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.5.2] — 2026-10-30
+
+Amahi-kai installs a new release only when it's signed with one of its release keys, and a problem's report leaves out keys.
+
 ### 🔒 Security & Fixes
 
 - **Unsigned releases are refused** — On the releases and release candidates channels, Amahi-kai now installs a new release only when it's signed with one of the release keys. One that isn't is never offered: Settings → System Status and the System Update dialog say **Refused**, with why, and the server stays on the version it has. The development channel, which follows the dev branch, works as before: it has no releases to sign. Before this, a refusal's reason could have been mistaken for a very old root helper, which updates without the check; now only that helper's own answer is.
