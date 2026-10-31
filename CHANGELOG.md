@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.5.3] — 2026-10-30
+
+Following the dev branch, which isn't signature-checked, takes root's permission on the server, and System Status says which updates are signed.
+
 ### 🔒 Security & Fixes
 
 - **Following the dev branch takes root's permission** (Settings → System Status) — The development channel installs the newest code on the dev branch, which isn't signature-checked: whoever controls Amahi-kai's repository decides what such a server installs. So a server now switches to it only when root allows that on the server itself (`sudo touch /etc/amahi-kai/allow-development`); until then **Follows** greys it out and says how. Nobody signed in to the web UI, nor anything acting as them, can move a server off signed releases. A server installed for development, or already following the dev branch, keeps it, and any server can leave it. **Follows** also says plainly that releases are signed and checked, and the dev branch isn't.
