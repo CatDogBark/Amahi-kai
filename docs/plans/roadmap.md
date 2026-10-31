@@ -80,10 +80,13 @@ Decided with CatDogBark along the way; when each is built is CatDogBark's call.
 
 ### Signed updates
 
-System Update installs a release tag from GitHub, checked by its `VERSION` file but not signed.
-Deferred until other people run Amahi-kai (CatDogBark, 2026-10-24: one user doesn't justify a key
-to keep); the design (SSH-signed tags, verified against keys pinned on the NAS, the catalog's
-commits too) is in [`release-1.0.md`](release-1.0.md) §3.
+Releases are signed since 1.5.1, and a server refuses one that isn't since the version after it:
+two release keys (SSH, kept apart), their public halves in `config/allowed_signers`, checked by the
+root helper before System Update installs anything (`docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`,
+Release keys). Still to do: **the app catalog**, which is fetched and checked but not signed. It's
+fetched apart from System Update and stays that way, so an app's change never updates the server
+itself; how it's signed may change with how apps are served (CatDogBark's call). The first design
+is in [`release-1.0.md`](release-1.0.md) §3.
 
 ### Backups
 

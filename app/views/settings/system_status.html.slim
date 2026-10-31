@@ -25,6 +25,8 @@
             li = update_change_link(change['subject'])
           - if @update.commits.size > 10
             li.text-muted = "and #{@update.commits.size - 10} more"
+      - elsif @update.refused?
+        = refused_release(@update)
       - elsif @update.checked?
         p.mb-0
           span.text-success ✓
@@ -33,7 +35,7 @@
         p.mb-0.text-muted Not checked yet. Check now looks for an update.
       - if @update.checked?
         p.small.text-muted.mb-0.mt-2 = safe_join(['Checked ', relative_time_tag(@update.checked_at, clock: true), '. Amahi-kai checks every 6 hours', (" and follows #{@update.channel_label}" if @update.channel_label), '.'].compact)
-      - if @update.error
+      - if @update.error && !@update.refused?
         p.small.text-warning.mb-0.mt-1 = "Last check: #{@update.error}"
       /! The update channel: releases (the default), candidates, or the dev branch
       form.d-flex.flex-wrap.align-items-center.gap-2.mt-3#update-channel action=settings_update_channel_path method="post"

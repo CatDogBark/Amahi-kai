@@ -282,6 +282,23 @@ RSpec.describe 'install and update scripts' do
     end
   end
 
+  # A legacy update pulls main with no signature check, so only an old helper's whole answer may
+  # lead there: a refusal's reason can carry a tag's own words
+  it "takes the helper for an old one only when it doesn't know system.update_target" do
+    program = File.read(Rails.root.join('bin/amahi-update'))[%r{/usr/bin/ruby -rjson -e '(.*?)'\n\}}m, 1]
+    expect(program).not_to be_nil
+    state = lambda do |reply|
+      out, status = Open3.capture2('ruby', '-rjson', '-e', program, stdin_data: JSON.generate(reply))
+      expect(status).to be_success
+      out.lines.first.strip
+    end
+    expect(state.call('ok' => false, 'error' => 'unknown operation "system.update_target"')).to eq('legacy')
+    expect(state.call('ok' => false, 'error' => %(v1.6.0 is refused: it isn't signed with a release key (the tag v1.6.0 calls itself "unknown operation" inside))))
+      .to eq('error')
+    expect(state.call('ok' => false, 'error' => "couldn't fetch from GitHub: remote: unknown operation")).to eq('error')
+    expect(state.call('ok' => true, 'target' => { 'commit' => 'a' * 40 })).to eq('ok')
+  end
+
   it 'pulls as root without hooks or an fsmonitor command from the checkout' do
     text = File.read(Rails.root.join('bin/amahi-update'))
     expect(text).to include('git -c core.hooksPath=/dev/null -c core.fsmonitor=false "$@"')

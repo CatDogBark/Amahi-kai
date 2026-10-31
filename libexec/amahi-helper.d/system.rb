@@ -702,15 +702,17 @@ module AmahiHelper
       { 'checked_at' => Time.now.utc.iso8601, 'channel' => target['channel'],
         'current' => current, 'current_version' => version_at(current),
         'latest' => latest, 'latest_version' => target['version'], 'tag' => target['tag'],
-        'signature' => target['signature'], 'available' => behind.positive?, 'behind' => behind,
+        'signature' => target['signature'], 'refused' => target['refused'], 'available' => behind.positive?, 'behind' => behind,
         'commits' => behind.positive? ? update_commits("#{current}..#{latest}") : [],
         'changelog' => behind.positive? ? update_changelog(current, latest) : [],
         'error' => target['error'] }
     end
 
     # The channel's newest version, fetched: { 'channel', 'commit', 'version', 'tag', 'signature',
-    # 'error' }. 'commit' is the running one when nothing is newer, and nil only when what runs is
-    # unknown; 'signature' is a newer release's (tag_signature), nil for the dev branch.
+    # 'refused', 'error' }. 'commit' is the running one when nothing is newer, and nil only when what
+    # runs is unknown; 'signature' is a newer release's (tag_signature), nil for the dev branch;
+    # 'refused' ({ 'tag', 'why' }) names a newer release that isn't signed with a release key, which
+    # is an error too, so System Update installs nothing.
     def update_target
       channel = update_channel
       current = git_output('rev-parse', 'HEAD')
@@ -718,7 +720,7 @@ module AmahiHelper
       newer = found[:commit] && found[:commit] != current && found[:newer]
       { 'channel' => channel, 'commit' => newer ? found[:commit] : current,
         'version' => newer ? found[:version] : version_at(current), 'tag' => newer ? found[:tag] : nil,
-        'signature' => newer ? found[:signature] : nil, 'error' => found[:error] }
+        'signature' => newer ? found[:signature] : nil, 'refused' => found[:refused], 'error' => found[:error] }
     end
 
     # Writes AMAHI_UPDATE_CHANNEL into ENV_FILE (that line replaced, or added at the end), keeping
@@ -761,7 +763,8 @@ module AmahiHelper
 
     # The newest release published on GitHub (with pre-releases, for candidates), its tag fetched;
     # newer when its version is above the running one's (or, with no VERSION running, when it
-    # isn't already in what runs).
+    # isn't already in what runs). A newer one is offered only when its tag is signed with a release
+    # key; otherwise it's refused, and nothing is offered.
     def release_target(prereleases, current)
       release, error = newest_release(prereleases)
       return { error: error || 'no release is published yet' } unless release
@@ -774,8 +777,14 @@ module AmahiHelper
 
       running = version_at(current)
       newer = running ? (release_key(release[:version]) <=> release_key(running)).positive? : current && !git_ancestor?(commit, current)
-      { commit: commit, version: release[:version], tag: tag, error: nil, newer: newer,
-        signature: newer ? tag_signature(tag) : nil }
+      return { commit: commit, version: release[:version], tag: tag, error: nil, newer: false } unless newer
+
+      signature = tag_signature(tag)
+      unless signature['trusted']
+        return { error: "#{tag} is refused: it isn't signed with a release key (#{signature['why']})",
+                 refused: { 'tag' => tag, 'why' => signature['why'] } }
+      end
+      { commit: commit, version: release[:version], tag: tag, error: nil, newer: true, signature: signature }
     end
 
     # Whether release tag +tag+, fetched, is signed with a release key (ALLOWED_SIGNERS):
@@ -790,7 +799,7 @@ module AmahiHelper
 
       object = git_output('cat-file', 'tag', ref).to_s
       name = object[/^tag (.*)$/, 1]
-      return untrusted("the tag #{tag} calls itself #{name.inspect} inside") unless name == tag
+      return untrusted("the tag #{tag} calls itself #{name.to_s[0, 80].inspect} inside") unless name == tag
       return untrusted("the tag #{tag} has no SSH signature") unless object.include?("\n-----BEGIN SSH SIGNATURE-----\n")
 
       _out, err, status = Open3.capture3(ENV_MIN, [GIT, GIT], *GIT_OPTIONS, *signature_options, 'verify-tag', '--raw', ref,

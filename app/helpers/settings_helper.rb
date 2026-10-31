@@ -18,17 +18,22 @@ module SettingsHelper
     job.next_run ? relative_time_tag(job.next_run, future: true) : 'not scheduled'
   end
 
-  # Whether the release on offer is signed with a release key, for the System Update card and
-  # dialog; nothing for the dev branch, which has no tags. An unsigned release still installs
-  # for now.
+  # The release key that signed the release on offer, for the System Update card and dialog; nothing
+  # for the dev branch, which has no tags. A release that isn't signed is never on offer
+  # (refused_release).
   def release_signature(update)
-    return unless update.available? && update.tag && update.signature_checked?
+    return unless update.available? && update.tag && update.signed?
 
-    if update.signed?
-      content_tag(:p, "✓ Signed with #{update.signer_label}.", class: 'small mb-2 release-signature text-success')
-    else
-      why = update.unsigned_why || 'it has no signature from a release key'
-      content_tag(:p, "⚠ #{why.upcase_first}. It still installs for now.", class: 'small mb-2 release-signature text-warning')
+    content_tag(:p, "✓ Signed with #{update.signer_label}.", class: 'small mb-2 release-signature text-success')
+  end
+
+  # Why the check refused a newer release, in place of "Up to date": it isn't signed with a release
+  # key, so System Update won't install it.
+  def refused_release(update)
+    why = " (#{update.refused_why})" if update.refused_why
+    staying = update.current_version || update.short(update.current)
+    content_tag(:p, class: 'mb-0 text-warning release-refused') do
+      "⚠ Refused #{update.refused_tag}: it isn't signed with a release key#{why}. Amahi-kai stays on #{staying}."
     end
   end
 

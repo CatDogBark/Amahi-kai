@@ -27,19 +27,25 @@ RSpec.describe UpdateStatus do
   it "reads whether the release on offer is signed, and the release key's name" do
     write('available' => true, 'behind' => 1, 'tag' => 'v0.9.2', 'signature' => { 'trusted' => true, 'signer' => 'release-key-b' })
     status = described_class.load(path)
-    expect(status).to be_signature_checked
     expect(status).to be_signed
     expect(status.signer_label).to eq('release key B')
 
-    write('available' => true, 'behind' => 1, 'tag' => 'v0.9.2',
-          'signature' => { 'trusted' => 'yes', 'signer' => 'release-key-a', 'why' => 'the tag v0.9.2 has no SSH signature' })
-    status = described_class.load(path)
-    expect(status).not_to be_signed
-    expect(status.signer).to be_nil
-    expect(status.unsigned_why).to eq('the tag v0.9.2 has no SSH signature')
-
+    write('available' => true, 'behind' => 1, 'tag' => 'v0.9.2', 'signature' => { 'trusted' => 'yes', 'signer' => 'release-key-a' })
+    expect(described_class.load(path)).not_to be_signed
     write('available' => true, 'behind' => 1, 'signature' => 'junk')
-    expect(described_class.load(path)).not_to be_signature_checked
+    expect(described_class.load(path)).not_to be_signed
+  end
+
+  it 'reads a release the check refused, and why' do
+    write('available' => false, 'behind' => 0, 'refused' => { 'tag' => 'v0.9.2', 'why' => 'the tag v0.9.2 has no SSH signature' })
+    status = described_class.load(path)
+    expect(status).to be_refused
+    expect([status.refused_tag, status.refused_why]).to eq(['v0.9.2', 'the tag v0.9.2 has no SSH signature'])
+
+    write('refused' => { 'tag' => %w[v0.9.2], 'why' => 3 })
+    expect(described_class.load(path)).not_to be_refused
+    write('refused' => nil)
+    expect(described_class.load(path)).not_to be_refused
   end
 
   it 'is up to date when nothing is behind, whatever the file claims' do

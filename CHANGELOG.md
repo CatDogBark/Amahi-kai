@@ -4,6 +4,11 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+### 🔒 Security & Fixes
+
+- **Unsigned releases are refused** — On the releases and release candidates channels, Amahi-kai now installs a new release only when it's signed with one of the release keys. One that isn't is never offered: Settings → System Status and the System Update dialog say **Refused**, with why, and the server stays on the version it has. The development channel, which follows the dev branch, works as before: it has no releases to sign. Before this, a refusal's reason could have been mistaken for a very old root helper, which updates without the check; now only that helper's own answer is.
+- **Reports leave out keys** (Settings → Help → Report a problem) — An SSH public key quoted in a report kept half of itself: its slashes stopped the rule that takes out keys. Now whole public keys, a signature or private key's armoured text, and long runs of key text in a log line are replaced by stand-ins, as SSH fingerprints already were. A release key's name (like `release-key-a`) stays, since it's public and helps find a fault.
+
 ## [1.5.1] — 2026-10-30
 
 Releases are signed now: when Amahi-kai finds a new release, it checks which release key signed it and says so on System Status and in What's new.

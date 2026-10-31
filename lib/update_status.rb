@@ -15,7 +15,7 @@ class UpdateStatus
                'development' => 'the dev branch' }.freeze
 
   attr_reader :checked_at, :channel, :current, :current_version, :latest, :latest_version, :tag,
-              :behind, :commits, :changelog, :error, :signer, :unsigned_why
+              :behind, :commits, :changelog, :error, :signer, :refused_tag, :refused_why
 
   # The status on this machine; an empty one if nothing has been checked yet.
   def self.load(path = default_path)
@@ -43,21 +43,22 @@ class UpdateStatus
     @commits = Array(data['commits']).select { |c| c.is_a?(Hash) && c['subject'].is_a?(String) }
     @changelog = Array(data['changelog']).grep(String)
     @error = data['error'].presence
-    signature = data['signature'].is_a?(Hash) ? data['signature'] : nil
-    @signature_checked = !signature.nil?
-    @signed = signature&.dig('trusted') == true
-    @signer = @signed ? signature['signer'].presence : nil
-    @unsigned_why = signature && !@signed ? signature['why'].presence : nil
+    signature = data['signature'].is_a?(Hash) ? data['signature'] : {}
+    @signer = signature['signer'].presence if signature['trusted'] == true && signature['signer'].is_a?(String)
+    refused = data['refused'].is_a?(Hash) ? data['refused'] : {}
+    @refused_tag = refused['tag'].presence if refused['tag'].is_a?(String)
+    @refused_why = refused['why'].presence if refused['why'].is_a?(String)
   end
 
-  # Whether the release on offer was checked for a release key's signature (a release or a
-  # candidate: the dev branch has no tags), and whether it has one.
-  def signature_checked?
-    @signature_checked
-  end
-
+  # Whether the release on offer is signed with a release key (the dev branch's changes have no
+  # tags to be signed).
   def signed?
-    @signed
+    !signer.nil?
+  end
+
+  # Whether the check refused a newer release, which isn't signed with a release key.
+  def refused?
+    !refused_tag.nil?
   end
 
   # The key that signed it, the way a person says it: "release key A" for release-key-a.
