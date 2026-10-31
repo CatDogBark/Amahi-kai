@@ -5,6 +5,7 @@
 #   /usr/local/sbin/amahi-helper    libexec/amahi-helper and its parts as one file, root:root 0755
 #   /var/log/amahi-kai/helper.log   the helper's audit log, root:amahi 0640
 #   /etc/logrotate.d/amahi-kai      from config/logrotate-amahi-kai.conf
+#   /etc/amahi-kai/allowed_signers  the release keys, from config/allowed_signers, root:root 0644
 #   /etc/systemd/system/amahi-kai.service          the web UI (enabled; bin/amahi-install and
 #                                                   bin/amahi-update start and restart it)
 #   /etc/systemd/system/amahi-kai-indexer.{service,timer}   the file search index, every 10 minutes
@@ -61,6 +62,8 @@ install -d -o root -g "$APP_GROUP" -m 0750 /var/log/amahi-kai
 if [[ -d /etc/logrotate.d ]]; then
   install -o root -g root -m 0644 "$APP_DIR/config/logrotate-amahi-kai.conf" /etc/logrotate.d/amahi-kai
 fi
+# The release keys: the update check checks the tag of the release it offers against them.
+install -o root -g root -m 0644 "$APP_DIR/config/allowed_signers" /etc/amahi-kai/allowed_signers
 for unit in amahi-kai.service amahi-kai-indexer.service amahi-kai-indexer.timer \
             amahi-kai-update.service amahi-kai-update-check.service amahi-kai-update-check.timer \
             amahi-kai-storage-check.service amahi-kai-storage-check.timer \

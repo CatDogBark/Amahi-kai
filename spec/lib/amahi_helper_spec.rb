@@ -602,6 +602,28 @@ RSpec.describe 'AmahiHelper' do
         end
       end
 
+      let(:keys) { Dir.mktmpdir }
+
+      # A throwaway SSH key without a passphrase, made the first time an example asks: its private file.
+      def key(name)
+        path = "#{keys}/#{name}"
+        unless File.exist?(path)
+          _out, err, status = Open3.capture3('ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-C', name, '-f', path)
+          raise err unless status.success?
+        end
+        path
+      end
+
+      # The key's line in a list of release keys (config/allowed_signers).
+      def signer_line(principal, path)
+        "#{principal} namespaces=\"git\" #{File.read("#{path}.pub").split[0, 2].join(' ')}\n"
+      end
+
+      # A tag on +commit+ signed with the key at +path+.
+      def signed_tag(name, path, commit)
+        git('-c', 'gpg.format=ssh', '-c', "user.signingkey=#{path}", 'tag', '-s', '-m', "#{name} — a release", name, commit)
+      end
+
       before do
         git('init', '-q', '-b', 'main')
         @running = commit('Old (#1)', "# Changelog\n\n- **Old entry.**\n", '0.9.1')
@@ -613,12 +635,14 @@ RSpec.describe 'AmahiHelper' do
         stub_const('AmahiHelper::GIT_OPTIONS', ['-c', 'core.hooksPath=/dev/null', '-C', repo])
         stub_const('AmahiHelper::GIT', ENV['PATH'].split(':').map { |d| File.join(d, 'git') }.find { |f| File.executable?(f) })
         stub_const('AmahiHelper::ENV_FILE', env_file)
+        stub_const('AmahiHelper::ALLOWED_SIGNERS', "#{keys}/allowed_signers")
+        File.write(AmahiHelper::ALLOWED_SIGNERS, "# The release keys\n#{signer_line('release-key-a', key('a'))}")
         allow(helper).to receive(:git_fetch).and_return(nil) # the tags and branches are already here
         channel('releases')
         releases('v0.9.1', 'v0.9.2')
       end
 
-      after { FileUtils.rm_rf(repo) }
+      after { FileUtils.rm_rf([repo, keys]) }
 
       it 'plans one action each, with no arguments' do
         expect(steps('system.check_update', {})).to eq([[:check_update], [:refresh_catalog], [:check_security_updates]])
@@ -629,7 +653,8 @@ RSpec.describe 'AmahiHelper' do
 
       it "goes to the newest release, listing its merged changes and changelog entries" do
         expect(helper.do_update_target['target']).to eq('channel' => 'releases', 'commit' => @latest, 'version' => '0.9.2',
-                                                        'tag' => 'v0.9.2', 'error' => nil)
+                                                        'tag' => 'v0.9.2', 'error' => nil,
+                                                        'signature' => { 'trusted' => false, 'why' => 'the tag v0.9.2 is a plain one, with no signature' })
         status = helper.update_status
         expect(status).to include('channel' => 'releases', 'current' => @running, 'current_version' => '0.9.1',
                                   'latest' => @latest, 'latest_version' => '0.9.2', 'tag' => 'v0.9.2',
@@ -641,7 +666,7 @@ RSpec.describe 'AmahiHelper' do
       it 'never goes back: a release no newer than the running version is nothing to install' do
         git('checkout', '-q', @latest)
         releases('v0.9.1')
-        expect(helper.update_target).to include('commit' => @latest, 'version' => '0.9.2', 'tag' => nil, 'error' => nil)
+        expect(helper.update_target).to include('commit' => @latest, 'version' => '0.9.2', 'tag' => nil, 'signature' => nil, 'error' => nil)
         expect(helper.update_status).to include('available' => false, 'behind' => 0, 'commits' => [], 'changelog' => [])
       end
 
@@ -660,7 +685,8 @@ RSpec.describe 'AmahiHelper' do
       it "follows the dev branch on the development channel, nothing new while it's already in what runs" do
         channel('development')
         git('update-ref', 'refs/remotes/origin/dev', @latest)
-        expect(helper.update_target).to include('channel' => 'development', 'commit' => @latest, 'version' => '0.9.2', 'tag' => nil)
+        expect(helper.update_target).to include('channel' => 'development', 'commit' => @latest, 'version' => '0.9.2', 'tag' => nil,
+                                                'signature' => nil)
         expect(helper.update_status).to include('available' => true, 'behind' => 2, 'tag' => nil)
         git('update-ref', 'refs/remotes/origin/dev', @running)
         git('checkout', '-q', @latest)
@@ -683,6 +709,44 @@ RSpec.describe 'AmahiHelper' do
         git('checkout', '-q', @running)
         releases('v0.9.5')
         expect(helper.update_target['error']).to eq('v0.9.5\'s VERSION file says "0.9.9", not 0.9.5')
+      end
+
+      describe "a release's signature" do
+        before { git('tag', '-d', 'v0.9.2') }
+
+        it 'names the release key that signed the release on offer' do
+          signed_tag('v0.9.2', key('a'), @latest)
+          expect(helper.update_target).to include('commit' => @latest, 'tag' => 'v0.9.2',
+                                                  'signature' => { 'trusted' => true, 'signer' => 'release-key-a' })
+          expect(helper.update_status['signature']).to eq('trusted' => true, 'signer' => 'release-key-a')
+        end
+
+        it "says why a release isn't signed with a release key, and offers it all the same for now" do
+          signed_tag('v0.9.2', key('other'), @latest)
+          expect(helper.do_update_target['target']).to include(
+            'commit' => @latest, 'error' => nil,
+            'signature' => { 'trusted' => false, 'why' => "the tag v0.9.2's signature doesn't match a release key" }
+          )
+          git('tag', '-d', 'v0.9.2')
+          git('tag', '-a', '-m', 'v0.9.2 — not signed', 'v0.9.2', @latest)
+          expect(helper.update_target['signature']).to eq('trusted' => false, 'why' => 'the tag v0.9.2 has no SSH signature')
+        end
+
+        it "won't take an old release's signed tag offered under a newer name" do
+          signed_tag('v0.9.2', key('a'), @latest)
+          git('update-ref', 'refs/tags/v0.9.3', git('rev-parse', 'refs/tags/v0.9.2'))
+          expect(helper.tag_signature('v0.9.3')).to eq('trusted' => false, 'why' => 'the tag v0.9.3 calls itself "v0.9.2" inside')
+          expect(helper.tag_signature('v0.9.2')).to eq('trusted' => true, 'signer' => 'release-key-a')
+        end
+
+        it 'takes either key on the list, and needs the list' do
+          File.write(AmahiHelper::ALLOWED_SIGNERS, signer_line('release-key-a', key('a')) + signer_line('release-key-b', key('b')))
+          signed_tag('v0.9.2', key('b'), @latest)
+          expect(helper.tag_signature('v0.9.2')).to eq('trusted' => true, 'signer' => 'release-key-b')
+          FileUtils.rm_f(AmahiHelper::ALLOWED_SIGNERS)
+          expect(helper.tag_signature('v0.9.2'))
+            .to eq('trusted' => false, 'why' => "no list of release keys to check the tag v0.9.2 against (#{AmahiHelper::ALLOWED_SIGNERS})")
+        end
       end
 
       it 'reads the channel from amahi.env, releases unless it names another' do

@@ -1,0 +1,6 @@
+# Amahi-kai's release keys. A release tag (vX.Y.Z, or vX.Y.ZrcN) is signed with one of them
+# (CONTRIBUTING.md, Cutting a release). bin/amahi-install-helper installs this file as
+# /etc/amahi-kai/allowed_signers, and the update check checks the tag of the release it offers
+# against it. A line per key: its name, the namespace it signs in, and its public key.
+release-key-a namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOr1RB6/OfoVXMUGIfvE+hJc5JSD1JkeEAeIcbEsxUEs
+release-key-b namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIM7BtiytHyeS+YqJA9mx+8oRZg39VhsCxAg0xvOHBFK4

@@ -12,6 +12,7 @@
     p
       strong = update.summary
       = " ready to install. Amahi-kai restarts at the end."
+    = release_signature(update)
     - if update.changelog.any?
       ul.whats-new-changelog
         - update.changelog.each do |entry|

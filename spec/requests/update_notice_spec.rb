@@ -95,9 +95,11 @@ RSpec.describe 'Update notice', type: :request do
   end
 
   context 'as an admin, with a release waiting on the releases channel' do
+    let(:release) { available.merge('channel' => 'releases', 'current_version' => '0.9.1', 'latest_version' => '0.9.2', 'tag' => 'v0.9.2') }
+
     before do
       login_as_admin
-      update_status(available.merge('channel' => 'releases', 'current_version' => '0.9.1', 'latest_version' => '0.9.2', 'tag' => 'v0.9.2'))
+      update_status(release.merge('signature' => { 'trusted' => true, 'signer' => 'release-key-a' }))
       get root_path
     end
 
@@ -105,6 +107,20 @@ RSpec.describe 'Update notice', type: :request do
       expect(page.at_css('#update-btn')['data-tip']).to eq('Update available: Amahi-kai 0.9.2 (you have 0.9.1)')
       dialog = page.at_css('#whats-new')
       expect(dialog.text).to include('Amahi-kai 0.9.2 (you have 0.9.1) ready to install', 'and follows releases.')
+    end
+
+    it 'names the release key that signed it' do
+      expect(page.at_css('#whats-new .release-signature').text).to eq('✓ Signed with release key A.')
+    end
+
+    it "says why a release isn't signed, in the dialog and on System Status, and still offers it" do
+      update_status(release.merge('signature' => { 'trusted' => false, 'why' => 'the tag v0.9.2 has no SSH signature' }))
+      get root_path
+      expect(page.at_css('#whats-new .release-signature').text).to eq('⚠ The tag v0.9.2 has no SSH signature. It still installs for now.')
+      expect(page.at_css('#whats-new-install')).not_to be_nil
+      get settings_system_status_path
+      expect(page.at_css('.system-status .release-signature').text).to eq('⚠ The tag v0.9.2 has no SSH signature. It still installs for now.')
+      expect(page.at_css('#update-now-btn')).not_to be_nil
     end
   end
 
@@ -115,9 +131,10 @@ RSpec.describe 'Update notice', type: :request do
       get root_path
     end
 
-    it 'counts the changes on the dev branch' do
+    it 'counts the changes on the dev branch, which has no signatures to show' do
       expect(page.at_css('.update-notice').text).to include('Update available: 2 changes on the dev branch (aaaaaaa → bbbbbbb)')
       expect(page.at_css('#whats-new').text).to include('and follows the dev branch.')
+      expect(page.at_css('.release-signature')).to be_nil
     end
   end
 

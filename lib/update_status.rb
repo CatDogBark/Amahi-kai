@@ -15,7 +15,7 @@ class UpdateStatus
                'development' => 'the dev branch' }.freeze
 
   attr_reader :checked_at, :channel, :current, :current_version, :latest, :latest_version, :tag,
-              :behind, :commits, :changelog, :error
+              :behind, :commits, :changelog, :error, :signer, :unsigned_why
 
   # The status on this machine; an empty one if nothing has been checked yet.
   def self.load(path = default_path)
@@ -43,6 +43,27 @@ class UpdateStatus
     @commits = Array(data['commits']).select { |c| c.is_a?(Hash) && c['subject'].is_a?(String) }
     @changelog = Array(data['changelog']).grep(String)
     @error = data['error'].presence
+    signature = data['signature'].is_a?(Hash) ? data['signature'] : nil
+    @signature_checked = !signature.nil?
+    @signed = signature&.dig('trusted') == true
+    @signer = @signed ? signature['signer'].presence : nil
+    @unsigned_why = signature && !@signed ? signature['why'].presence : nil
+  end
+
+  # Whether the release on offer was checked for a release key's signature (a release or a
+  # candidate: the dev branch has no tags), and whether it has one.
+  def signature_checked?
+    @signature_checked
+  end
+
+  def signed?
+    @signed
+  end
+
+  # The key that signed it, the way a person says it: "release key A" for release-key-a.
+  def signer_label
+    letter = signer.to_s[/\Arelease-key-([a-z])\z/, 1]
+    letter ? "release key #{letter.upcase}" : signer
   end
 
   def checked?
