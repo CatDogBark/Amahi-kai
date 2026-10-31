@@ -266,6 +266,19 @@ RSpec.describe 'install and update scripts' do
       expect(File.read(Rails.root.join('VERSION')).strip).to match(/\A\d+\.\d+\.\d+(rc\d+)?\z/)
       workflow = File.read(Rails.root.join('.github/workflows/release.yml'))
       expect(workflow).to include('test "v$version" = "$GITHUB_REF_NAME"', 'gh release create', '--prerelease')
+      signed = workflow.index('gpg.ssh.allowedSignersFile="$PWD/config/allowed_signers" -c gpg.minTrustLevel=fully')
+      expect(signed).not_to be_nil
+      expect(signed).to be < workflow.index('gh release create')
+    end
+
+    it 'lists two release keys, each once, which every server gets as a root-owned file' do
+      keys = File.readlines(Rails.root.join('config/allowed_signers'), chomp: true).reject { |l| l.start_with?('#') || l.strip.empty? }
+      expect(keys.size).to eq(2)
+      expect(keys).to all(match(%r{\Arelease-key-[a-z] namespaces="git" ssh-ed25519 [A-Za-z0-9+/]+={0,2}\z}))
+      expect(keys.map { |k| k.split.first }.uniq.size).to eq(2)
+      expect(keys.map { |k| k.split.last }.uniq.size).to eq(2)
+      expect(File.read(Rails.root.join('bin/amahi-install-helper')))
+        .to include('install -o root -g root -m 0644 "$APP_DIR/config/allowed_signers" /etc/amahi-kai/allowed_signers')
     end
   end
 

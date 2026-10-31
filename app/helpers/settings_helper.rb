@@ -18,6 +18,20 @@ module SettingsHelper
     job.next_run ? relative_time_tag(job.next_run, future: true) : 'not scheduled'
   end
 
+  # Whether the release on offer is signed with a release key, for the System Update card and
+  # dialog; nothing for the dev branch, which has no tags. An unsigned release still installs
+  # for now.
+  def release_signature(update)
+    return unless update.available? && update.tag && update.signature_checked?
+
+    if update.signed?
+      content_tag(:p, "✓ Signed with #{update.signer_label}.", class: 'small mb-2 release-signature text-success')
+    else
+      why = update.unsigned_why || 'it has no signature from a release key'
+      content_tag(:p, "⚠ #{why.upcase_first}. It still installs for now.", class: 'small mb-2 release-signature text-warning')
+    end
+  end
+
   # A change's title from the update check, its "(#NN)" linked to the pull request.
   def update_change_link(subject)
     match = subject.to_s.match(/\A(.*)\(#(\d+)\)\s*\z/)

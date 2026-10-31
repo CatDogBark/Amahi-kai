@@ -1,7 +1,7 @@
 # Privilege model
 
 How Amahi-kai gets root access on a NAS, and what keeps the web app from turning a bug into
-root. Last updated 2026-10-25 (the 1.0 review). Design and history: [`docs/plans/privileged-helper.md`](../plans/privileged-helper.md).
+root. Last updated 2026-10-30 (release keys). Design and history: [`docs/plans/privileged-helper.md`](../plans/privileged-helper.md).
 
 ## Summary
 
@@ -30,6 +30,7 @@ updater run everything that loads the app or its gems as `amahi`.
 | `/etc/sudoers.d/amahi-kai` | root:root 0440 | From `config/sudoers/amahi-kai`, installed only if `visudo -cf` accepts it |
 | `/etc/amahi-kai/amahi.env` | root:amahi 0640 | Database password and `SECRET_KEY_BASE`; the app reads it |
 | `/etc/amahi-kai/tunnel.token` | root:root 0600 | Only `cloudflared` (as root) reads it |
+| `/etc/amahi-kai/allowed_signers` | root:root 0644 | The release keys' public halves, from `config/allowed_signers`: the update check checks a release's tag against them |
 | `/etc/greyhole.conf` | root:amahi 0640 | Holds the database password |
 | `/var/log/amahi-kai/helper.log` | root:amahi 0640 | The helper's audit log; the app can read it, not write it |
 | `/var/log/amahi-kai/update.log` | root, in a root:amahi 0750 folder | The last System Update's output; the update page reads it |
@@ -168,15 +169,33 @@ copies the app's folders (`cp -a`) into a root-only folder first, and puts them 
 folder names it checks against the manifest's pattern. A version older than the one an app runs
 is refused.
 
+## Release keys
+
+A release tag is signed with a release key: an SSH key the maintainer keeps, with a passphrase,
+never on a server (`CONTRIBUTING.md`, Release keys). `config/allowed_signers` lists the keys' public
+halves, and `bin/amahi-install-helper` installs it as `/etc/amahi-kai/allowed_signers`. When the
+update check finds a newer release, the helper checks its tag against that file: `git verify-tag`
+needs a signature by a key the file names, made with ssh-keygen (git gets no GPG or X.509 program
+to run), and the tag must call itself by its own name, so an old release's tag can't be offered as
+a newer one. System Status and the System Update dialog show the result. An unsigned release still
+installs for now; refusing one is the next step. The release workflow already refuses to publish a
+tag that isn't signed with one of the keys.
+
+There are two keys, kept apart. Losing one changes nothing for a server: the next release is
+signed with the other, and its `config/allowed_signers` swaps in a new key for the lost one. Losing
+both: make a new key and put its line in `config/allowed_signers`. A server that refuses unsigned
+releases also needs that line added to its `/etc/amahi-kai/allowed_signers`, as root, before it
+takes the next release.
+
 ## Known gaps
 
 - **Docker itself** runs as root: an app's container is as contained as Docker makes it.
 - **The app catalog isn't signed.** It's fetched from GitHub over HTTPS, and its manifests are
   checked as above, but whoever can change the catalog's repository decides which image an
   install or an update runs, within what those checks allow.
-- **System Update isn't signed either.** It installs a release tag from GitHub over HTTPS and
-  checks the tag's `VERSION`, not a signature: whoever controls the repository controls what a
-  NAS installs. Signed tags, checked against a key pinned on the NAS, come after 1.0.
+- **System Update doesn't refuse an unsigned release yet.** It checks a release tag's signature
+  against the release keys (above) and shows the result, but still installs a release that isn't
+  signed: until it refuses one, whoever controls the repository controls what a NAS installs.
 - **The database isn't rolled back** with the code: migrations must keep working with the
   previous version's code. System Update dumps the database first (`/var/lib/amahi-kai/backups`,
   root-only, the last 3); restoring one is a manual step.

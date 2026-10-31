@@ -19,6 +19,7 @@
         p.mb-2
           strong Update available:
           = " #{@update.summary}"
+        = release_signature(@update)
         ul.small.mb-0
           - @update.commits.first(10).each do |change|
             li = update_change_link(change['subject'])

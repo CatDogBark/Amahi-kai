@@ -96,20 +96,42 @@ Status shows it, and System Update reads it so it never goes back to an older ve
 2. **`VERSION`:** `X.Y.Z` (or `X.Y.ZrcN`).
 3. **A pull request from `dev` into `main`:** merge it once CI is green, with a merge commit, and
    wait for CI to go green again on `main`.
-4. **Tag the merge commit and push the tag:**
+4. **Sign a tag on the merge commit with a release key, and push it:**
 
    ```bash
-   git tag -a vX.Y.Z -m "vX.Y.Z — one line on what it is"
+   git tag -s vX.Y.Z -m "vX.Y.Z — one line on what it is"
+   git tag -v vX.Y.Z
    git push origin vX.Y.Z
    ```
 
-   The tag starts `.github/workflows/release.yml`, which refuses a tag that doesn't match
-   `VERSION` or isn't on `main`, waits for CI's run on that commit to pass (up to 30 minutes,
-   and refuses if it failed), then publishes the GitHub Release with the changelog section as
-   its notes (a pre-release for an `rc` tag).
+   `git tag -s` asks for the release key's passphrase, and `git tag -v` should say
+   `Good "git" signature for release-key-…` (Release keys, below). The tag starts
+   `.github/workflows/release.yml`, which refuses a tag that isn't signed with a key in
+   `config/allowed_signers`, doesn't match `VERSION` or isn't on `main`, waits for CI's run on
+   that commit to pass (up to 30 minutes, and refuses if it failed), then publishes the GitHub
+   Release with the changelog section as its notes (a pre-release for an `rc` tag).
 
 Servers on the `releases` channel offer the new version at their next check (every 6 hours, or
 **Check now**); `candidates` servers offer release candidates too.
+
+### Release keys
+
+A release key is an SSH key made only for signing releases, with a passphrase, and kept out of
+ssh-agent, so nothing signs a release without the person who knows the passphrase.
+`config/allowed_signers` lists the keys' public halves; every server keeps a copy
+(`/etc/amahi-kai/allowed_signers`) and checks the tag of the release it offers against it. Once in
+each clone you tag from:
+
+```bash
+git config gpg.format ssh
+git config user.signingkey ~/.ssh/amahi-release-<letter>
+git config gpg.ssh.allowedSignersFile "$PWD/config/allowed_signers"
+```
+
+`user.signingkey` names the private key file, not its `.pub`, so git asks for the passphrase at
+each tag instead of looking in ssh-agent. A new key is a line in `config/allowed_signers`
+(`release-key-<letter> namespaces="git" <its public key>`), released like any other change. Losing
+one is covered in `docs/security/PRIVILEGE-ESCALATION-MITIGATION.md` (Release keys).
 
 ## Update channels
 

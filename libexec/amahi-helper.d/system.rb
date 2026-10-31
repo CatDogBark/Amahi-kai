@@ -34,6 +34,13 @@ module AmahiHelper
 
   RELEASE_VERSION = /\A\d{1,4}\.\d{1,4}\.\d{1,4}(?:rc\d{1,4})?\z/
 
+  # The release keys' public halves, a line each (config/allowed_signers, installed by
+  # bin/amahi-install-helper). A release tag is signed with one of them (CONTRIBUTING.md, Cutting a
+  # release), and the update check checks the release it offers against them (tag_signature).
+  ALLOWED_SIGNERS = '/etc/amahi-kai/allowed_signers'
+
+  SSH_KEYGEN = '/usr/bin/ssh-keygen'
+
   SWAPFILE = '/swapfile'
 
   OS_RELEASE = '/etc/os-release'
@@ -695,14 +702,15 @@ module AmahiHelper
       { 'checked_at' => Time.now.utc.iso8601, 'channel' => target['channel'],
         'current' => current, 'current_version' => version_at(current),
         'latest' => latest, 'latest_version' => target['version'], 'tag' => target['tag'],
-        'available' => behind.positive?, 'behind' => behind,
+        'signature' => target['signature'], 'available' => behind.positive?, 'behind' => behind,
         'commits' => behind.positive? ? update_commits("#{current}..#{latest}") : [],
         'changelog' => behind.positive? ? update_changelog(current, latest) : [],
         'error' => target['error'] }
     end
 
-    # The channel's newest version, fetched: { 'channel', 'commit', 'version', 'tag', 'error' }.
-    # 'commit' is the running one when nothing is newer, and nil only when what runs is unknown.
+    # The channel's newest version, fetched: { 'channel', 'commit', 'version', 'tag', 'signature',
+    # 'error' }. 'commit' is the running one when nothing is newer, and nil only when what runs is
+    # unknown; 'signature' is a newer release's (tag_signature), nil for the dev branch.
     def update_target
       channel = update_channel
       current = git_output('rev-parse', 'HEAD')
@@ -710,7 +718,7 @@ module AmahiHelper
       newer = found[:commit] && found[:commit] != current && found[:newer]
       { 'channel' => channel, 'commit' => newer ? found[:commit] : current,
         'version' => newer ? found[:version] : version_at(current), 'tag' => newer ? found[:tag] : nil,
-        'error' => found[:error] }
+        'signature' => newer ? found[:signature] : nil, 'error' => found[:error] }
     end
 
     # Writes AMAHI_UPDATE_CHANNEL into ENV_FILE (that line replaced, or added at the end), keeping
@@ -766,7 +774,45 @@ module AmahiHelper
 
       running = version_at(current)
       newer = running ? (release_key(release[:version]) <=> release_key(running)).positive? : current && !git_ancestor?(commit, current)
-      { commit: commit, version: release[:version], tag: tag, error: nil, newer: newer }
+      { commit: commit, version: release[:version], tag: tag, error: nil, newer: newer,
+        signature: newer ? tag_signature(tag) : nil }
+    end
+
+    # Whether release tag +tag+, fetched, is signed with a release key (ALLOWED_SIGNERS):
+    # { 'trusted' => true, 'signer' => 'release-key-a' }, or { 'trusted' => false, 'why' => ... }.
+    # The tag must also call itself +tag+, so an old release's signed tag can't be offered under a
+    # newer name. Only ssh-keygen checks it: git gets no GPG or X.509 program, so nothing else runs
+    # as root on what the tag holds.
+    def tag_signature(tag)
+      ref = "refs/tags/#{tag}"
+      return untrusted("no list of release keys to check the tag #{tag} against (#{ALLOWED_SIGNERS})") unless File.file?(ALLOWED_SIGNERS)
+      return untrusted("the tag #{tag} is a plain one, with no signature") unless git_output('cat-file', '-t', ref) == 'tag'
+
+      object = git_output('cat-file', 'tag', ref).to_s
+      name = object[/^tag (.*)$/, 1]
+      return untrusted("the tag #{tag} calls itself #{name.inspect} inside") unless name == tag
+      return untrusted("the tag #{tag} has no SSH signature") unless object.include?("\n-----BEGIN SSH SIGNATURE-----\n")
+
+      _out, err, status = Open3.capture3(ENV_MIN, [GIT, GIT], *GIT_OPTIONS, *signature_options, 'verify-tag', '--raw', ref,
+                                         unsetenv_others: true, chdir: '/')
+      signer = err.dup.force_encoding('UTF-8').scrub('?')[/^Good "git" signature for (\S+) with /, 1]
+      return { 'trusted' => true, 'signer' => signer } if status.success? && signer
+
+      untrusted("the tag #{tag}'s signature doesn't match a release key")
+    rescue SystemCallError => e
+      untrusted("couldn't check the tag #{tag}'s signature: #{e.message}")
+    end
+
+    def untrusted(why)
+      { 'trusted' => false, 'why' => why }
+    end
+
+    # git's settings for tag_signature: an SSH signature by a key ALLOWED_SIGNERS names
+    # (gpg.minTrustLevel=fully takes the signer's name from it), and no program for other kinds.
+    def signature_options
+      ['-c', 'gpg.format=ssh', '-c', "gpg.ssh.program=#{SSH_KEYGEN}", '-c', "gpg.ssh.allowedSignersFile=#{ALLOWED_SIGNERS}",
+       '-c', 'gpg.minTrustLevel=fully', '-c', 'gpg.program=/usr/bin/false', '-c', 'gpg.openpgp.program=/usr/bin/false',
+       '-c', 'gpg.x509.program=/usr/bin/false']
     end
 
     # [{ tag:, version: }, error]: the highest version among the releases GitHub lists (drafts never;

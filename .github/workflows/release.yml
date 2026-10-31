@@ -52,6 +52,17 @@ jobs:
           test "v$version" = "$GITHUB_REF_NAME" \
             || { echo "The tag is $GITHUB_REF_NAME but VERSION says $version"; exit 1; }
 
+      # A release tag is signed with a release key (config/allowed_signers; CONTRIBUTING.md), so a
+      # tag made without -s is never published. Servers check the same signature before they offer it.
+      - name: The tag is signed with a release key
+        run: |
+          git fetch --quiet --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          test "$(git cat-file -t "refs/tags/$GITHUB_REF_NAME")" = tag \
+            || { echo "$GITHUB_REF_NAME is a plain tag: make it with git tag -s"; exit 1; }
+          git -c gpg.format=ssh -c gpg.ssh.allowedSignersFile="$PWD/config/allowed_signers" -c gpg.minTrustLevel=fully \
+            verify-tag "refs/tags/$GITHUB_REF_NAME" \
+            || { echo "$GITHUB_REF_NAME isn't signed with a key in config/allowed_signers"; exit 1; }
+
       - name: The notes, from CHANGELOG.md
         run: |
           version=$(tr -d '[:space:]' < VERSION)

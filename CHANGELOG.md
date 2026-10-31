@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+### 🔒 Security & Fixes
+
+- **Signed releases** — Each release is now signed with a release key, and every server keeps the list of those keys (`/etc/amahi-kai/allowed_signers`). When Amahi-kai finds a new release, it checks the signature, and Settings → System Status and the System Update dialog say which key signed it, or why it isn't signed. For now an unsigned release still installs; a later version will refuse one. A release tag that isn't signed is never published.
+
 ### 🔧 Architecture & Code Quality
 
 - **The repository's front page** — GitHub now recognizes the license: `COPYING` holds the GNU AGPL v3 on its own, and the original Amahi notice that came before it is kept word for word in `NOTICE.md`. The README shows the latest release, the license and a screenshot. `SECURITY.md` says how to report a security problem privately and what happens next, `CODE_OF_CONDUCT.md` says what's expected in issues and pull requests, pull requests start from a template, and GitHub's code scanning (CodeQL) checks the code.
