@@ -28,6 +28,23 @@ RSpec.describe "SettingsController more", type: :request do
       post '/settings/update_channel', params: { channel: 'nightly' }
       expect(flash[:error]).to eq('channel "nightly" isn\'t one Amahi-kai uses')
     end
+
+    it "greys out the dev branch, which isn't signature-checked, until root allows it, and says how" do
+      allow(UpdateStatus).to receive_messages(load: UpdateStatus.new('channel' => 'releases', 'checked_at' => Time.now.iso8601),
+                                              development_allowed?: false)
+      get '/settings/system_status'
+      page = Nokogiri::HTML(response.body)
+      expect(page.at_css('#update-channel-select option[value="development"]')['disabled']).not_to be_nil
+      expect(page.at_css('#update-channel-select option[value="candidates"]')['disabled']).to be_nil
+      expect(page.at_css('.dev-branch-locked code').text).to eq('sudo touch /etc/amahi-kai/allow-development')
+      expect(page.at_css('#update-channel').text).to include("it can break, and it isn't signature-checked")
+
+      allow(UpdateStatus).to receive(:development_allowed?).and_return(true)
+      get '/settings/system_status'
+      page = Nokogiri::HTML(response.body)
+      expect(page.at_css('#update-channel-select option[value="development"]')['disabled']).to be_nil
+      expect(page.at_css('.dev-branch-locked')).to be_nil
+    end
   end
 
   # --- Update system ---

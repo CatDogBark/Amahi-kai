@@ -14,6 +14,14 @@ class UpdateStatus
   CHANNELS = { 'releases' => 'releases', 'candidates' => 'releases and release candidates',
                'development' => 'the dev branch' }.freeze
 
+  # Root's permission for this server to switch to the dev branch, which isn't signature-checked;
+  # the root helper refuses the switch without it (system.set_update_channel).
+  ALLOW_DEVELOPMENT = '/etc/amahi-kai/allow-development'
+
+  def self.development_allowed?
+    File.file?(ALLOW_DEVELOPMENT)
+  end
+
   attr_reader :checked_at, :channel, :current, :current_version, :latest, :latest_version, :tag,
               :behind, :commits, :changelog, :error, :signer, :refused_tag, :refused_why
 

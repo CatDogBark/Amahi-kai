@@ -141,8 +141,11 @@ Each server follows one channel, chosen on Settings → System Status (Follows) 
 
 - `releases`, the default: published releases.
 - `candidates`: releases and release candidates.
-- `development`: the newest commit on `dev`, for testing. A server installed with
-  `AMAHI_BRANCH=dev` starts here.
+- `development`: the newest commit on `dev`, for testing. It isn't signature-checked, so the root
+  helper switches a server to it only when `/etc/amahi-kai/allow-development` exists (root makes
+  it: `sudo touch /etc/amahi-kai/allow-development`). A server installed with `AMAHI_BRANCH=dev`
+  starts here and has the file, as does one that followed `dev` when it took the version that
+  brought this rule.
 
 The site's wiki has the details for owners: [Updating](https://amahi-kai.com/wiki/updating).
 

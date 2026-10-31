@@ -31,6 +31,7 @@ updater run everything that loads the app or its gems as `amahi`.
 | `/etc/amahi-kai/amahi.env` | root:amahi 0640 | Database password and `SECRET_KEY_BASE`; the app reads it |
 | `/etc/amahi-kai/tunnel.token` | root:root 0600 | Only `cloudflared` (as root) reads it |
 | `/etc/amahi-kai/allowed_signers` | root:root 0644 | The release keys' public halves, from `config/allowed_signers`: the update check checks a release's tag against them |
+| `/etc/amahi-kai/allow-development` | root:root 0644, empty, on some servers | Root's permission to switch to the `development` channel, which isn't signature-checked; the root helper refuses the switch without it |
 | `/etc/greyhole.conf` | root:amahi 0640 | Holds the database password |
 | `/var/log/amahi-kai/helper.log` | root:amahi 0640 | The helper's audit log; the app can read it, not write it |
 | `/var/log/amahi-kai/update.log` | root, in a root:amahi 0750 folder | The last System Update's output; the update page reads it |
@@ -199,8 +200,12 @@ refuses that release.
   install or an update runs, within what those checks allow.
 - **The `development` channel and a new install aren't checked.** `development` follows the `dev`
   branch, which has no signed tags, so whoever controls the repository controls what a server on
-  that channel installs; a server changes channel only when an admin picks one. A new install gets
-  the code over HTTPS from GitHub as it is, and checks every release after that.
+  that channel installs, as root; switching back to `releases` doesn't undo what it installed. So
+  the root helper switches a server to `development` only when root's file
+  `/etc/amahi-kai/allow-development` exists: neither the web app nor anything acting as it can
+  move a server off signed releases. `bin/amahi-install-helper` makes the file on a server that
+  follows `development` already (a development install included). A new install gets the code
+  over HTTPS from GitHub as it is, and checks every release after that.
 - **The database isn't rolled back** with the code: migrations must keep working with the
   previous version's code. System Update dumps the database first (`/var/lib/amahi-kai/backups`,
   root-only, the last 3); restoring one is a manual step.
