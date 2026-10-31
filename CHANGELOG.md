@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.5.1] — 2026-10-30
+
+Releases are signed now: when Amahi-kai finds a new release, it checks which release key signed it and says so on System Status and in What's new.
+
 ### 🔒 Security & Fixes
 
 - **Signed releases** — Each release is now signed with a release key, and every server keeps the list of those keys (`/etc/amahi-kai/allowed_signers`). When Amahi-kai finds a new release, it checks the signature, and Settings → System Status and the System Update dialog say which key signed it, or why it isn't signed. For now an unsigned release still installs; a later version will refuse one. A release tag that isn't signed is never published.

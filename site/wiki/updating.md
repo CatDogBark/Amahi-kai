@@ -46,9 +46,16 @@ shows when Amahi-kai last checked, with **Check now** and **Repair**.
   request on GitHub, and an **Update now** button.
 - **Up to date (0.9.1, abc1234)**: the version and the commit that runs, with a **Repair** button
   (see below).
+- **Not checked yet**, right after installing.
 
 It also says which channel the server follows.
-- **Not checked yet**, right after installing.
+
+A release on offer also says whether it's signed. Each release is signed with one of Amahi-kai's
+release keys, and the server checks the signature when it finds the release: under the version,
+**✓ Signed with release key A.**, or **⚠** and why not (for example, the tag has no signature).
+What's new shows the same line. For now an unsigned release still installs; a later version will
+refuse one. The keys a server trusts are in `/etc/amahi-kai/allowed_signers`, which System Update
+keeps up to date. The `development` channel has no releases, so it shows no signature.
 
 Amahi-kai checks 10 minutes after the server starts and then every 6 hours (the
 `amahi-kai-update-check.timer` systemd timer). **Check now** checks straight away. The card says
