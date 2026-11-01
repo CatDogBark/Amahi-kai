@@ -510,6 +510,7 @@ fi
 if [[ -x /usr/bin/cloudflared ]]; then
   reply=$(/usr/local/sbin/amahi-helper tunnel.refresh_unit </dev/null 2>/dev/null) \
     || log "⚠ Couldn't check the Cloudflare Tunnel's unit: $reply"
-  [[ "$reply" == *'"tunnel":"as it is"'* || "$reply" == *'"tunnel":"none here"'* || -z "$reply" ]] || log "Cloudflare Tunnel: $reply"
+  tunnel=$(sed -n 's/.*"tunnel":"\([^"]*\)".*/\1/p' <<<"$reply")
+  [[ -z "$tunnel" || "$tunnel" == 'as it is' || "$tunnel" == 'none here' ]] || log "Cloudflare Tunnel: $tunnel"
 fi
 log "✓ Amahi-kai updated and running!"
