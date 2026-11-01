@@ -86,8 +86,8 @@ sudo systemctl daemon-reload
 ### Troubleshooting
 
 - **Tunnel won't connect:** `journalctl -u cloudflared -n 30 --no-pager` usually says why (an
-  expired or mistyped token, for example). To enter a new token, remove the old one with
-  `sudo rm /etc/amahi-kai/tunnel.token`, and the Remote Access page asks for one again.
+  expired or mistyped token, for example). To enter a new token, remove the tunnel from the server
+  as above, and the Remote Access page asks for one again.
 - **"Bad gateway":** Amahi-kai isn't answering. Check `systemctl is-active amahi-kai`, and that the
   tunnel's hostname points at `http://localhost:3000`.
 - **"ICMP proxy feature is disabled" in the log:** expected. The tunnel doesn't run as root, so it
