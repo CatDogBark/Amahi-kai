@@ -13,6 +13,7 @@ All notable changes to Amahi-kai are documented here.
   - The update and catalog locks are root's alone, and hostnames and the names in DNS configs are plain ASCII.
   - Device names from DHCP reach DNS after 5 seconds, so a burst of them is one reload of Unbound.
 - **The System journal is narrower** (Settings → Help, Download logs and a problem's report) — Amahi-kai's services, the ones it runs and the kernel's errors, not the whole of the system's log, which also names sudo's commands and SSH logins.
+- **Rack updated** for published advisories, among them a High one (a denial of service through multipart uploads).
 
 ## [1.5.3] — 2026-10-30
 
