@@ -29,7 +29,7 @@ updater run everything that loads the app or its gems as `amahi`.
 | `/usr/local/sbin/amahi-helper` | root:root 0755 | Installed from the root-owned tree by `bin/amahi-install-helper` |
 | `/etc/sudoers.d/amahi-kai` | root:root 0440 | From `config/sudoers/amahi-kai`, installed only if `visudo -cf` accepts it |
 | `/etc/amahi-kai/amahi.env` | root:amahi 0640 | Database password and `SECRET_KEY_BASE`; the app reads it |
-| `/etc/amahi-kai/tunnel.token` | root:root 0600 | Only `cloudflared` (as root) reads it |
+| `/etc/amahi-kai/tunnel.token` | root:root 0600 | systemd reads it and hands it to `cloudflared`, which runs as a user made for it (`DynamicUser`), since whoever holds a token decides from Cloudflare's side where the tunnel connects |
 | `/etc/amahi-kai/allowed_signers` | root:root 0644 | The release keys' public halves, from `config/allowed_signers`: the update check checks a release's tag against them |
 | `/etc/amahi-kai/allow-development` | root:root 0644, empty, on some servers | Root's permission to switch to the `development` channel, which isn't signature-checked; the root helper refuses the switch without it |
 | `/etc/greyhole.conf` | root:amahi 0640 | Holds the database password |

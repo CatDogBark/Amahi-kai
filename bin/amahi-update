@@ -505,4 +505,11 @@ if [[ -x /usr/bin/docker ]]; then
     || log "⚠ Couldn't move the apps' shares to the new mounts: $reply"
   [[ "$reply" == *'"apps":{}'* || -z "$reply" ]] || log "Apps' share mounts: $reply"
 fi
+# The tunnel on the unit this version writes. It can be how this update is being watched: the page
+# reconnects after the restart, and if it doesn't come up, its old unit goes back.
+if [[ -x /usr/bin/cloudflared ]]; then
+  reply=$(/usr/local/sbin/amahi-helper tunnel.refresh_unit </dev/null 2>/dev/null) \
+    || log "⚠ Couldn't check the Cloudflare Tunnel's unit: $reply"
+  [[ "$reply" == *'"tunnel":"as it is"'* || "$reply" == *'"tunnel":"none here"'* || -z "$reply" ]] || log "Cloudflare Tunnel: $reply"
+fi
 log "✓ Amahi-kai updated and running!"

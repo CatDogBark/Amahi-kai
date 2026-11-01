@@ -3288,8 +3288,68 @@ RSpec.describe 'AmahiHelper' do
                               %w[/usr/bin/systemctl enable cloudflared.service],
                               %w[/usr/bin/systemctl restart cloudflared.service]
                             ])
-      expect(AmahiHelper::TUNNEL_UNIT_CONTENT).to include('run --token-file /etc/amahi-kai/tunnel.token')
+      expect(AmahiHelper::TUNNEL_UNIT_CONTENT).to include('LoadCredential=token:/etc/amahi-kai/tunnel.token', 'run --token-file %d/token')
       expect(planned.map { |step| helper.describe(step) }.to_s).not_to include(token)
+    end
+
+    # Whoever holds a token decides from Cloudflare's side where the tunnel connects, local sockets
+    # included, so it doesn't run as root.
+    it 'runs the tunnel as a user made for it, with nothing it does not need' do
+      unit = AmahiHelper::TUNNEL_UNIT_CONTENT
+      expect(unit).to include('DynamicUser=yes', 'NoNewPrivileges=yes', "CapabilityBoundingSet=\n", 'PrivateDevices=yes')
+      expect(unit).not_to match(/^User=root|--token /)
+    end
+
+    # tunnel.refresh_unit, System Update's last step: the owner may be reaching the server through it.
+    describe 'moving a tunnel that is set up to the unit this version writes' do
+      let(:dir) { Dir.mktmpdir }
+      let(:unit) { "#{dir}/cloudflared.service" }
+      let(:ran) { [] }
+      let(:clock) { [0] }
+
+      before do
+        stub_const('AmahiHelper::TUNNEL_UNIT', unit)
+        stub_const('AmahiHelper::TUNNEL_TOKEN', "#{dir}/tunnel.token")
+        File.write(unit, "the old unit\n")
+        File.write("#{dir}/tunnel.token", 'x')
+        allow(helper).to receive(:run_command) { |argv| ran << argv && nil }
+        allow(helper).to receive(:do_install) { |path, content, *| File.write(path, content) }
+        allow(helper).to receive(:unit_state).and_return('active')
+        allow(helper).to receive(:monotonic_now) { clock[0] }
+        allow(helper).to receive(:pause) { |seconds| clock[0] += seconds }
+      end
+
+      after { FileUtils.rm_rf(dir) }
+
+      it 'restarts a running one and waits until a new process is up' do
+        allow(helper).to receive(:tunnel_process).and_return(111, 111, 222) # as before, then the old one still, then the new
+        expect(helper.do_tunnel_unit).to eq('tunnel' => 'restarted, no longer as root')
+        expect(File.read(unit)).to eq(AmahiHelper::TUNNEL_UNIT_CONTENT)
+        expect(ran).to eq([%w[/usr/bin/systemctl daemon-reload], %w[/usr/bin/systemctl restart --no-block cloudflared.service]])
+      end
+
+      it "puts the old unit back when the new one doesn't come up" do
+        allow(helper).to receive(:unit_state).and_return('active', 'activating')
+        allow(helper).to receive(:tunnel_process).and_return(111)
+        expect(helper.do_tunnel_unit['tunnel']).to include("didn't come up", "back on the one it had")
+        expect(File.read(unit)).to eq("the old unit\n")
+        expect(ran.count(%w[/usr/bin/systemctl restart --no-block cloudflared.service])).to eq(2)
+      end
+
+      it "writes the unit but doesn't start a tunnel the owner stopped" do
+        allow(helper).to receive(:unit_state).and_return('inactive')
+        expect(helper.do_tunnel_unit['tunnel']).to include('not started')
+        expect(File.read(unit)).to eq(AmahiHelper::TUNNEL_UNIT_CONTENT)
+        expect(ran).to eq([%w[/usr/bin/systemctl daemon-reload]])
+      end
+
+      it "leaves one on this unit as it is, and does nothing where there's no tunnel" do
+        File.write(unit, AmahiHelper::TUNNEL_UNIT_CONTENT)
+        expect(helper.do_tunnel_unit).to eq('tunnel' => 'as it is')
+        File.delete("#{dir}/tunnel.token")
+        expect(helper.do_tunnel_unit).to eq('tunnel' => 'none here')
+        expect(ran).to eq([])
+      end
     end
 
     it 'refuses tokens that are not one, and works only once cloudflared is installed' do

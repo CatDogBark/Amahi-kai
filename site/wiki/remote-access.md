@@ -45,8 +45,9 @@ Your server is then at `https://home.yourdomain.com`. No other setting is needed
 the tunnel come from the server itself, so Amahi-kai accepts them for any hostname you route to
 it.
 
-The token is saved in `/etc/amahi-kai/tunnel.token`, which only root can read, and `cloudflared`
-reads it from there. It isn't kept in a service file or shown on a command line.
+The token is saved in `/etc/amahi-kai/tunnel.token`, which only root can read. It isn't kept in a
+service file or shown on a command line. `cloudflared` doesn't run as root: it runs as a user made
+for it, and systemd hands it the token when it starts.
 
 ### Protect the hostname
 

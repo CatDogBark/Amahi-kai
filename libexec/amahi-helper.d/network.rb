@@ -105,6 +105,10 @@ module AmahiHelper
 
   TUNNEL_UNIT = '/etc/systemd/system/cloudflared.service'
 
+  # How long the tunnel gets to come up on a new unit (do_tunnel_unit), its old connections' grace
+  # period to end included.
+  TUNNEL_START_WAIT = 120
+
   TUNNEL_UNIT_CONTENT = <<~UNIT
     [Unit]
     Description=Cloudflare Tunnel
@@ -113,7 +117,18 @@ module AmahiHelper
 
     [Service]
     Type=notify
-    ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate run --token-file #{TUNNEL_TOKEN}
+    # Not as root: whoever holds the token decides from Cloudflare's side where the tunnel connects,
+    # local sockets included. A user made for it, and nothing it doesn't need; systemd reads the
+    # token, root's only, and hands it over.
+    DynamicUser=yes
+    LoadCredential=token:#{TUNNEL_TOKEN}
+    ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate run --token-file %d/token
+    NoNewPrivileges=yes
+    CapabilityBoundingSet=
+    PrivateDevices=yes
+    ProtectKernelTunables=yes
+    ProtectKernelModules=yes
+    ProtectControlGroups=yes
     Restart=on-failure
     RestartSec=5s
     TimeoutStartSec=0
@@ -246,6 +261,13 @@ module AmahiHelper
     'tunnel.start' => unit_operation('start', 'cloudflared.service', CLOUDFLARED),
     'tunnel.stop' => unit_operation('stop', 'cloudflared.service', CLOUDFLARED),
     'tunnel.restart' => unit_operation('restart', 'cloudflared.service', CLOUDFLARED),
+    # The tunnel's unit as this version writes it, where one is set up (do_tunnel_unit). Run by
+    # bin/amahi-update as one of its last steps. Takes nothing from the app.
+    'tunnel.refresh_unit' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:tunnel_unit]] }
+    },
     # tailscaled on now and at boot.
     'tailscale.start' => {
       params: [],
@@ -408,6 +430,49 @@ module AmahiHelper
       value = string(value, 'token', max: 4096).strip
       raise Refused, "the tunnel token doesn't look like one Cloudflare gives" unless value.match?(TUNNEL_TOKEN_FORMAT)
       value
+    end
+
+    # A tunnel that runs is restarted on the new unit and watched: it can be how the owner reaches
+    # this server, so if it doesn't come up, the unit it had goes back. { 'tunnel' => what happened }.
+    def do_tunnel_unit
+      return { 'tunnel' => 'none here' } unless File.exist?(TUNNEL_UNIT) && File.exist?(TUNNEL_TOKEN)
+
+      before = File.read(TUNNEL_UNIT)
+      return { 'tunnel' => 'as it is' } if before == TUNNEL_UNIT_CONTENT
+
+      running = unit_state('is-active', 'cloudflared.service') == 'active'
+      install_tunnel_unit(TUNNEL_UNIT_CONTENT)
+      return { 'tunnel' => 'unit written; it was not running, so it was not started' } unless running
+
+      process = tunnel_process
+      run_command([SYSTEMCTL, 'restart', '--no-block', 'cloudflared.service'])
+      return { 'tunnel' => 'restarted, no longer as root' } if tunnel_came_up?(process)
+
+      install_tunnel_unit(before)
+      run_command([SYSTEMCTL, 'restart', '--no-block', 'cloudflared.service'])
+      { 'tunnel' => "it didn't come up on the new unit within #{TUNNEL_START_WAIT} seconds, so it's back on the one it had" }
+    end
+
+    def install_tunnel_unit(content)
+      do_install(TUNNEL_UNIT, content, nil)
+      run_command([SYSTEMCTL, 'daemon-reload'])
+    end
+
+    # The tunnel's main process, as a number; 0 for none.
+    def tunnel_process
+      capture([SYSTEMCTL, 'show', 'cloudflared.service', '--property=MainPID', '--value']).to_i
+    end
+
+    # Active with another process than +before+: just after a restart is asked for, the old one can
+    # still read as active.
+    def tunnel_came_up?(before)
+      deadline = monotonic_now + TUNNEL_START_WAIT
+      loop do
+        return true if unit_state('is-active', 'cloudflared.service') == 'active' && ![0, before].include?(tunnel_process)
+        return false if monotonic_now > deadline
+
+        pause(1)
+      end
     end
 
     # Router mode on. The internet side is shut first, before its interface gets an address and

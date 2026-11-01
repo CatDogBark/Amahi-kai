@@ -601,6 +601,12 @@ RSpec.describe 'install and update scripts' do
       expect(script.index('amahi-helper apps.follow_shares')).to be < script.index('✓ Amahi-kai updated and running!')
     end
 
+    it "moves the tunnel to its new unit past where it could roll back, and only where cloudflared is" do
+      expect(script.index('amahi-helper tunnel.refresh_unit')).to be > script.rindex('FINISHED=true')
+      expect(script.index('amahi-helper tunnel.refresh_unit')).to be < script.index('✓ Amahi-kai updated and running!')
+      expect(script[0...script.index('amahi-helper tunnel.refresh_unit')].lines.last(2).join).to include('-x /usr/bin/cloudflared')
+    end
+
     it 'keeps its lock for root alone' do
       expect(script).to include('chmod 0600 /run/amahi-kai-update.lock')
       expect(script.index('chmod 0600 /run/amahi-kai-update.lock')).to be < script.index('exec 9>/run/amahi-kai-update.lock')
