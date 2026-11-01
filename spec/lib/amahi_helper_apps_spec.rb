@@ -406,6 +406,7 @@ RSpec.describe 'AmahiHelper apps' do
     it "refuses environment names that would have the image download more code (linuxserver.io's mods)" do
       expect(failure('environment' => { 'DOCKER_MODS' => 'linuxserver/mods:universal-package-install' }))
         .to include('DOCKER_MODS would have the image download more code')
+      expect(failure('environment' => { 'FILE__DOCKER_MODS' => '/x' })).to include('would have the image download more code')
       expect(failure('secrets' => [{ 'env' => 'DOCKER_MODS' }])).to include('DOCKER_MODS would have the image download more code')
     end
 
@@ -966,6 +967,15 @@ RSpec.describe 'AmahiHelper apps' do
         expect(helper.app_announcement('vault')).to be_nil
       end
 
+      it "announces no app whose manifest isn't one, or whose port can't be" do
+        stub_const('AmahiHelper::APP_PORTS', "#{dir}/app-ports.json")
+        File.write("#{dir}/odd.yml", "- a list\n")
+        allow(helper).to receive(:app_manifest_path).and_return("#{dir}/odd.yml")
+        expect(helper.app_announcement('odd')).to be_nil
+        File.write("#{dir}/odd.yml", "web_port: 70000\n")
+        expect(helper.app_announcement('odd')).to be_nil
+      end
+
       it 'leaves an app on the LAN as it was' do
         helper.do_install_app('gitea', helper.app_manifest('gitea'))
         create = ran.find { |argv| argv[1] == 'create' }
@@ -978,12 +988,13 @@ RSpec.describe 'AmahiHelper apps' do
     it "lets what an app writes into a share stay editable over SMB, installing acl if needed" do
       FileUtils.mkdir_p("#{dir}/downloads")
       share = { name: 'Downloads', path: "#{dir}/downloads", pooled: false, write: true }
+      allow(helper).to receive(:app_share_binds_make).and_return([{}, nil])
       allow(helper).to receive(:app_share_mounts).and_return([])
       allow(File).to receive(:executable?).with('/usr/bin/setfacl').and_return(false)
       helper.do_install_app('transmission', helper.app_manifest('transmission'), [share])
       acl = ran.index { |argv| argv.first == '/usr/bin/find' }
       expect(ran[acl - 1]).to include('/usr/bin/apt-get', 'install', 'acl')
-      expect(ran[acl]).to eq(['/usr/bin/find', "#{dir}/downloads", '-xdev', '-type', 'd', '-exec',
+      expect(ran[acl]).to eq(['/usr/bin/find', "#{dir}/downloads", '-xdev', '-type', 'd', '-execdir',
                               '/usr/bin/setfacl', '-P', '-d', '-m', 'u::rwx,g::rwx,o::rx', '{}', '+'])
       expect(ran.index { |argv| argv[1] == 'start' }).to be > acl
       expect(ran.flatten).not_to include('/usr/sbin/zfs')
@@ -1022,6 +1033,7 @@ RSpec.describe 'AmahiHelper apps' do
         expect(File.binread(copy)).to eq("\x7fELF ping".b)
         expect(File.stat(copy).mode & 0o777).to eq(0o755)
         expect(Dir.children("#{pings}/uptimekuma")).to eq([File.basename(copy)]) # the docker cp is gone
+        expect([pings, "#{pings}/uptimekuma"].map { |folder| File.stat(folder).mode & 0o777 }).to eq([0o700, 0o700])
       end
 
       it 'reuses the copy for the same image, and drops the old one when the image changes' do
@@ -1052,6 +1064,7 @@ RSpec.describe 'AmahiHelper apps' do
     # the --group-add users was lost: Transmission was denied writing into the share it was given
     describe "the group of an image that drops to the app's user" do
       def pgid(shares)
+        allow(helper).to receive(:app_share_binds_make).and_return([{}, nil])
         allow(helper).to receive(:app_share_mounts).and_return([])
         allow(helper).to receive(:group_id).with('users').and_return(100)
         helper.do_install_app('transmission', helper.app_manifest('transmission'), shares)
@@ -1071,6 +1084,7 @@ RSpec.describe 'AmahiHelper apps' do
 
       it "leaves a run_as: app container the app's group, with users added" do
         allow(helper).to receive(:group_id).with('users').and_return(100)
+        allow(helper).to receive(:app_share_binds_make).and_return([{}, nil])
         allow(helper).to receive(:app_share_mounts).and_return(['--group-add', '100'])
         helper.do_install_app('gitea', helper.app_manifest('gitea'), [{ name: 'Downloads', path: "#{dir}/downloads", pooled: false, write: true }])
         create = ran.find { |argv| argv[1] == 'create' }
@@ -1091,6 +1105,7 @@ RSpec.describe 'AmahiHelper apps' do
 
       before do
         FileUtils.mkdir_p(folder)
+        allow(helper).to receive(:app_share_binds_make).and_return([{}, nil])
         allow(helper).to receive(:app_share_mounts).and_return([])
         allow(File).to receive(:executable?).with('/usr/bin/setfacl').and_return(true)
       end
@@ -1209,6 +1224,26 @@ RSpec.describe 'AmahiHelper apps' do
         end
         expect(helper.do_update_app('vaultwarden', manifest, [])).to include('updated' => false, 'problem' => 'docker exited 125: invalid mount')
         expect(running['vaultwarden']).to eq(old_image)
+      end
+
+      # Tailscale gone meanwhile, say: a refusal this late, or a file that can't be read, went past
+      # the way back and left the app stopped.
+      it 'goes back whatever kind of failure stopped the new version' do
+        [AmahiHelper::Refused.new('Tailscale is off'), Errno::EIO.new].each do |failure|
+          allow(helper).to receive(:run_command) do |argv|
+            raise failure if argv[1] == 'create' && argv.last == manifest[:image]
+            fake_docker.call(argv)
+          end
+          expect(helper.do_update_app('vaultwarden', manifest, [])).to include('updated' => false, 'problem' => failure.message)
+          expect(running['vaultwarden']).to eq(old_image)
+        end
+      end
+
+      it "doesn't put a copy back over folders while Docker still has the container" do
+        allow(helper).to receive(:app_backup_info).and_return({ 'folders' => ['data'] })
+        allow(helper).to receive(:docker_output).with('inspect', '--format', '{{.Id}}', 'amahi-vaultwarden').and_return('abc123')
+        expect { helper.app_restore('vaultwarden', manifest, old_image, []) }.to raise_error(AmahiHelper::Failed, /wasn't put back/)
+        expect(File.read("#{data}/db.sqlite3")).to eq('before')
       end
 
       it "refuses before stopping anything when the copy wouldn't fit, or there's nothing to update" do
@@ -1444,6 +1479,7 @@ RSpec.describe 'AmahiHelper apps' do
       expect(refused(transmission, [{ 'name' => 'homes' }])).to eq('"homes" isn\'t one of the NAS\'s shares')
       expect(refused(transmission, [{ 'name' => 'Outside' }])).to include("isn't in the share root")
       expect(refused(transmission, [{ 'name' => 'Odd, Name' }])).to include("name can't be a folder in an app")
+      expect { helper.app_share('..', '..' => { name: '..', path: "#{files}/downloads", pooled: false }) }.to raise_error(AmahiHelper::Refused, /name can't be a folder in an app/)
       expect(refused(transmission, [{ 'name' => 'Movies', 'write' => true }])).to eq('share Movies is pooled by Greyhole, so apps can only read it')
       expect(refused(jellyfin, [{ 'name' => 'Downloads', 'write' => true }])).to eq('transmission only reads shares')
       expect(refused(transmission, [{ 'name' => 'Downloads', 'path' => '/etc' }])).to include('each share must be')
@@ -1461,25 +1497,39 @@ RSpec.describe 'AmahiHelper apps' do
       expect(refused(transmission, [{ 'name' => 'USB' }])).to include("isn't in the share root or on a mounted data drive")
     end
 
-    it "mounts shares at /shares/<name>, a pooled share with its copy folders, and lets a writer join the users group" do
+    it "mounts shares at /shares/<name>, a pooled share with its copy folders, each from the helper's own mount, and lets a writer join the users group" do
       allow(helper).to receive(:mount_point?) { |path| path == "#{drives}/storage-1" } # storage-2 isn't mounted
       allow(helper).to receive(:group_id).and_call_original
       allow(helper).to receive(:group_id).with('users').and_return(100)
-      mounts = helper.app_share_mounts(choose(transmission, [{ 'name' => 'Movies' }, { 'name' => 'Downloads', 'write' => true }]))
+      binds = { ['Movies', nil] => '/run/shares/0', ['Movies', nil, "#{drives}/storage-1/Movies"] => '/run/shares/1', ['Downloads', nil] => '/run/shares/2' }
+      mounts = helper.app_share_mounts(choose(transmission, [{ 'name' => 'Movies' }, { 'name' => 'Downloads', 'write' => true }]), binds)
       expect(mounts).to eq(['--group-add', '100',
-                            '--mount', "type=bind,source=#{files}/movies,target=/shares/Movies,readonly",
-                            '--mount', "type=bind,source=#{drives}/storage-1/Movies,target=#{drives}/storage-1/Movies,readonly",
-                            '--mount', "type=bind,source=#{files}/downloads,target=/shares/Downloads"])
-      expect(helper.app_share_mounts(choose(transmission, [{ 'name' => 'Downloads' }])))
-        .to eq(['--mount', "type=bind,source=#{files}/downloads,target=/shares/Downloads,readonly"])
+                            '--mount', 'type=bind,source=/run/shares/0,target=/shares/Movies,readonly',
+                            '--mount', "type=bind,source=/run/shares/1,target=#{drives}/storage-1/Movies,readonly",
+                            '--mount', 'type=bind,source=/run/shares/2,target=/shares/Downloads'])
+      expect(helper.app_share_mounts(choose(transmission, [{ 'name' => 'Downloads' }]), binds))
+        .to eq(['--mount', 'type=bind,source=/run/shares/2,target=/shares/Downloads,readonly'])
+      expect { helper.app_share_mounts(choose(transmission, [{ 'name' => 'Downloads' }]), {}) }.to raise_error(AmahiHelper::Failed, "Downloads isn't mounted for the app")
+    end
+
+    # A share inside another, say: Docker would follow a link there each time it starts the container.
+    it 'never hands Docker a path from a share' do
+      allow(helper).to receive(:mount_point?).and_return(true)
+      allow(helper).to receive(:real_root?).and_return(true)
+      allow(helper).to receive(:do_own_dir)
+      allow(helper).to receive(:bind_share_folder)
+      chosen = choose(transmission, [{ 'name' => 'Movies' }, { 'name' => 'Downloads', 'write' => true }])
+      binds, set = helper.app_share_binds_make('transmission', chosen)
+      sources = helper.app_share_mounts(chosen, binds).grep(/\Atype=bind/).map { |mount| mount[/source=([^,]+)/, 1] }
+      expect(sources).not_to be_empty
+      expect(sources).to all(start_with("#{set}/"))
     end
 
     it "makes a pooled share's folder on a mounted pool drive that has none yet, so the app sees the copies made there" do
       allow(helper).to receive(:mount_point?).and_return(true)
       allow(helper).to receive(:real_root?).and_return(true) # the drives are mounted
       allow(helper).to receive(:do_own_dir)
-      mounts = helper.app_share_mounts(choose(transmission, [{ 'name' => 'Movies' }]))
-      expect(mounts).to include("type=bind,source=#{drives}/storage-2/Movies,target=#{drives}/storage-2/Movies,readonly")
+      expect(helper.greyhole_copies('Movies')).to include("#{drives}/storage-2/Movies")
       expect(File.directory?("#{drives}/storage-2/Movies")).to be true
       expect(helper).to have_received(:do_own_dir).with("#{drives}/storage-2/Movies", 'amahi', 'users', '2775').once
       expect(helper).not_to have_received(:do_own_dir).with("#{drives}/storage-1/Movies", anything, anything, anything)
@@ -1487,7 +1537,7 @@ RSpec.describe 'AmahiHelper apps' do
       # A link where the folder would be is left alone, and not mounted
       FileUtils.rm_rf("#{drives}/storage-2/Movies")
       File.symlink('/etc', "#{drives}/storage-2/Movies")
-      expect(helper.app_share_mounts(choose(transmission, [{ 'name' => 'Movies' }])).join(' ')).not_to include('storage-2')
+      expect(helper.greyhole_copies('Movies').join(' ')).not_to include('storage-2')
       expect { helper.greyhole_copies('..') }.to raise_error(AmahiHelper::Failed, /can't be a folder/)
     end
 
@@ -1535,12 +1585,13 @@ RSpec.describe 'AmahiHelper apps' do
         allow(helper).to receive(:group_id).and_call_original
         allow(helper).to receive(:group_id).with('users').and_return(100)
         chosen = choose(transmission, [{ 'name' => 'Downloads', 'folder' => 'tv/new', 'write' => true }, { 'name' => 'Movies', 'folder' => 'Kids' }])
-        binds = { %w[Downloads tv/new] => "#{bind_root}/transmission/1/0", %w[Movies Kids] => "#{bind_root}/transmission/1/1" }
+        binds = { %w[Downloads tv/new] => "#{bind_root}/transmission/1/0", %w[Movies Kids] => "#{bind_root}/transmission/1/1",
+                  ['Movies', 'Kids', "#{drives}/storage-1/Movies/Kids"] => "#{bind_root}/transmission/1/2" }
         expect(helper.app_share_mounts(chosen, binds)).to eq(
           ['--group-add', '100',
            '--mount', "type=bind,source=#{bind_root}/transmission/1/0,target=/shares/Downloads/tv/new",
            '--mount', "type=bind,source=#{bind_root}/transmission/1/1,target=/shares/Movies/Kids,readonly",
-           '--mount', "type=bind,source=#{drives}/storage-1/Movies/Kids,target=#{drives}/storage-1/Movies/Kids,readonly"]
+           '--mount', "type=bind,source=#{bind_root}/transmission/1/2,target=#{drives}/storage-1/Movies/Kids,readonly"]
         )
         expect(File.directory?("#{drives}/storage-1/Movies/Kids")).to be true # made on the drive, as Greyhole would
         expect { helper.app_share_mounts(chosen, {}) }.to raise_error(AmahiHelper::Failed, "Downloads/tv/new isn't mounted for the app")
@@ -1554,7 +1605,13 @@ RSpec.describe 'AmahiHelper apps' do
         expect(set).to match(%r{\A#{bind_root}/transmission/\d{14}-\h{6}\z})
         expect(binds).to eq(%w[Downloads tv/new] => "#{set}/0", %w[Downloads music] => "#{set}/1")
         expect(mounted).to eq([["#{files}/downloads", 'tv/new', "#{set}/0"], ["#{files}/downloads", 'music', "#{set}/1"]])
-        expect(helper.app_share_binds_make('transmission', choose(transmission, [{ 'name' => 'Downloads' }]))).to eq([{}, nil])
+        expect(helper.app_share_binds_make('transmission', [])).to eq([{}, nil])
+
+        mounted.clear
+        allow(helper).to receive(:mount_point?) { |path| path == "#{drives}/storage-1" }
+        binds, set = helper.app_share_binds_make('transmission', choose(transmission, [{ 'name' => 'Downloads' }, { 'name' => 'Movies' }]))
+        expect(binds).to eq(['Downloads', nil] => "#{set}/0", ['Movies', nil] => "#{set}/1", ['Movies', nil, "#{drives}/storage-1/Movies"] => "#{set}/2")
+        expect(mounted).to eq([["#{files}/downloads", nil, "#{set}/0"], ["#{files}/movies", nil, "#{set}/1"], ["#{drives}/storage-1/Movies", nil, "#{set}/2"]])
 
         allow(helper).to receive(:bind_share_folder).and_raise(AmahiHelper::Failed, 'mount exited 32')
         allow(helper).to receive(:app_share_binds_remove)
@@ -1566,14 +1623,16 @@ RSpec.describe 'AmahiHelper apps' do
         allow(helper).to receive(:do_install) { |path, content, *| File.write(path, content) }
         allow(helper).to receive(:app_share_binds_remove)
         FileUtils.mkdir_p(%W[#{bind_root}/transmission/20261026000000-aaaaaa #{bind_root}/transmission/20261027000000-bbbbbb])
-        chosen = choose(transmission, [{ 'name' => 'Downloads', 'folder' => 'tv/new' }])
-        helper.app_share_binds_keep('transmission', "#{bind_root}/transmission/20261027000000-bbbbbb", chosen)
+        set = "#{bind_root}/transmission/20261027000000-bbbbbb"
+        helper.app_share_binds_keep('transmission', set, { %w[Downloads tv/new] => "#{set}/0", ['Movies', nil] => "#{set}/1",
+                                                           ['Movies', nil, "#{drives}/storage-1/Movies"] => "#{set}/2" })
         expect(JSON.parse(File.read("#{dir}/app-share-binds.json"))).to eq(
-          'transmission' => [{ 'path' => "#{bind_root}/transmission/20261027000000-bbbbbb/0", 'share' => 'Downloads', 'folder' => 'tv/new' }]
+          'transmission' => [{ 'path' => "#{set}/0", 'share' => 'Downloads', 'folder' => 'tv/new' }, { 'path' => "#{set}/1", 'share' => 'Movies' },
+                             { 'path' => "#{set}/2", 'share' => 'Movies', 'copy' => "#{drives}/storage-1/Movies" }]
         )
         expect(helper).to have_received(:app_share_binds_remove).with("#{bind_root}/transmission/20261026000000-aaaaaa").once
 
-        helper.app_share_binds_keep('transmission', nil, []) # given whole shares again, or uninstalled
+        helper.app_share_binds_keep('transmission', nil, {}) # given nothing now, or uninstalled
         expect(JSON.parse(File.read("#{dir}/app-share-binds.json"))).to eq({})
         expect(helper).to have_received(:app_share_binds_remove).with("#{bind_root}/transmission/20261027000000-bbbbbb")
       end
@@ -1585,8 +1644,13 @@ RSpec.describe 'AmahiHelper apps' do
           'transmission' => [{ 'path' => "#{set}/0", 'share' => 'Downloads', 'folder' => 'tv/new' },
                              { 'path' => "#{set}/1", 'share' => 'Downloads', 'folder' => 'gone' },
                              { 'path' => '/etc/passwd', 'share' => 'Downloads', 'folder' => 'tv/new' },
-                             { 'path' => "#{set}/3", 'share' => 'Photos', 'folder' => 'x' }]
+                             { 'path' => "#{set}/3", 'share' => 'Photos', 'folder' => 'x' },
+                             { 'path' => "#{set}/4", 'share' => 'Downloads' },
+                             { 'path' => "#{set}/5", 'share' => 'Movies', 'copy' => "#{drives}/storage-1/Movies" },
+                             { 'path' => "#{set}/6", 'share' => 'Movies', 'copy' => '/etc' },
+                             { 'path' => "#{set}/7", 'share' => 'Downloads', 'copy' => "#{drives}/storage-1/Movies" }]
         }.to_json)
+        allow(helper).to receive(:mount_point?) { |path| path == "#{drives}/storage-1" }
         mounted = []
         allow(helper).to receive(:bind_share_folder).and_call_original
         allow(helper).to receive(:with_dir).and_call_original
@@ -1599,9 +1663,13 @@ RSpec.describe 'AmahiHelper apps' do
           "#{set}/0" => 'mounted',
           "#{set}/1" => "#{files}/downloads/gone doesn't exist",
           '/etc/passwd' => "/etc/passwd isn't one of the helper's",
-          "#{set}/3" => '"Photos" isn\'t one of the NAS\'s shares'
+          "#{set}/3" => '"Photos" isn\'t one of the NAS\'s shares',
+          "#{set}/4" => 'mounted',
+          "#{set}/5" => 'mounted',
+          "#{set}/6" => "\"/etc\" isn't one of Movies's copy folders now",
+          "#{set}/7" => "\"#{drives}/storage-1/Movies\" isn't one of Downloads's copy folders now"
         })
-        expect(mounted).to eq(["#{set}/0"])
+        expect(mounted).to eq(["#{set}/0", "#{set}/4", "#{set}/5"])
         expect(File.directory?("#{set}/1")).to be false # no empty folder for Docker to mount in its place
       end
 
@@ -1631,6 +1699,22 @@ RSpec.describe 'AmahiHelper apps' do
         expect(File.exist?(target)).to be false
       end
 
+      it "keeps a whole share's mount on the folder it checked when the path is swapped for a link, as root" do
+        skip 'needs root' unless Process.euid.zero?
+
+        target = "#{bind_root}/t/1/0"
+        File.write("#{files}/downloads/file", 'x')
+        FileUtils.mkdir_p("#{dir}/elsewhere")
+        File.write("#{dir}/elsewhere/other", 'x')
+        helper.bind_share_folder("#{files}/downloads", nil, target)
+        File.rename("#{files}/downloads", "#{files}/downloads.old")
+        File.symlink("#{dir}/elsewhere", "#{files}/downloads")
+        expect(Dir.children(target)).to include('file')
+        expect(Dir.children(target)).not_to include('other')
+        helper.app_share_binds_remove("#{bind_root}/t/1")
+        expect { helper.bind_share_folder("#{files}/downloads", nil, target) }.to raise_error(AmahiHelper::Failed, /symbolic link|moved|not a folder/)
+      end
+
       it "mounts the folders for a container, and mounts them again from the record after a restart, as root" do
         skip 'needs root' unless Process.euid.zero?
 
@@ -1638,7 +1722,7 @@ RSpec.describe 'AmahiHelper apps' do
         File.write("#{files}/downloads/music/song.flac", 'x')
         chosen = choose(transmission, [{ 'name' => 'Downloads', 'folder' => 'music' }])
         binds, set = helper.app_share_binds_make('transmission', chosen)
-        helper.app_share_binds_keep('transmission', set, chosen)
+        helper.app_share_binds_keep('transmission', set, binds)
         expect(Dir.children(binds[%w[Downloads music]])).to eq(['song.flac'])
 
         helper.app_share_binds_remove(set) # /run, emptied by a restart
@@ -1647,7 +1731,7 @@ RSpec.describe 'AmahiHelper apps' do
         expect(Dir.children("#{set}/0")).to eq(['song.flac'])
         expect(helper.do_share_binds).to eq('transmission' => { "#{set}/0" => 'mounted' }) # once
         expect(File.foreach('/proc/self/mountinfo').count { |line| line.split(' ')[4] == "#{set}/0" }).to eq(1)
-        helper.app_share_binds_keep('transmission', nil, [])
+        helper.app_share_binds_keep('transmission', nil, {})
         expect(File.exist?(set)).to be false
       end
 
@@ -1692,6 +1776,62 @@ RSpec.describe 'AmahiHelper apps' do
         expect(helper.app_dns_options).to eq(['--dns', '172.17.0.1', '--dns-search', 'home.arpa'])
         allow(helper).to receive(:docker_bridge_address).and_return(nil) # Docker down
         expect(helper.app_dns_options).to eq([])
+      end
+    end
+
+    # apps.follow_shares, System Update's last step: a container from before the helper mounted shares
+    # itself is made again, once, keeping its shares, version and data.
+    describe 'following the shares to the helper\'s own mounts' do
+      def containers(states)
+        allow(helper).to receive(:docker_output) do |*args|
+          if args.first == 'ps' then states.keys.join("\n")
+          elsif args.include?('{{.Config.Image}}') then "example/app:1.0@sha256:#{'a' * 64}"
+          else
+            id = args.last.delete_prefix('amahi-')
+            [{ 'Mounts' => states[id][:mounts], 'State' => states[id][:state] }].to_json
+          end
+        end
+      end
+
+      let(:by_path) { [{ 'Destination' => '/shares/Downloads', 'Source' => "#{files}/downloads", 'RW' => false }] }
+      let(:by_bind) { [{ 'Destination' => '/shares/Downloads', 'Source' => "#{AmahiHelper::APP_SHARE_BIND_ROOT}/x/1/0", 'RW' => false }] }
+
+      before do
+        allow(helper).to receive(:do_install_app)
+        allow(helper).to receive(:run_command)
+        allow(helper).to receive(:do_app_firewall)
+        allow(helper).to receive(:app_manifest).and_return({})
+      end
+
+      it 'makes again those mounting a share or a copy folder by its path, a stopped one stopped, and leaves the rest' do
+        containers('jellyfin' => { state: { 'Running' => true }, mounts: by_path },
+                   'gitea' => { state: { 'Running' => true }, mounts: by_bind },
+                   'emby' => { state: { 'Running' => false }, mounts: by_path },
+                   'plain' => { state: { 'Running' => true }, mounts: [{ 'Destination' => '/config', 'Source' => '/var/lib/amahi-kai/apps/plain/config' }] })
+        expect(helper.do_follow_share_apps).to eq('apps' => { 'jellyfin' => 'remade', 'emby' => 'remade, stopped' })
+        expect(helper).to have_received(:do_install_app).with('jellyfin', anything, [hash_including(name: 'Downloads')], true)
+        expect(helper).to have_received(:run_command).with(['/usr/bin/docker', 'stop', '--time', '30', 'amahi-emby']).once
+        expect(helper).to have_received(:do_app_firewall)
+      end
+
+      it 'does nothing a second time, or without Docker, and says when an app can\'t be made again' do
+        containers('gitea' => { state: { 'Running' => true }, mounts: by_bind })
+        expect(helper.do_follow_share_apps).to eq('apps' => {})
+        expect(helper).not_to have_received(:do_app_firewall)
+        containers('gitea' => { state: { 'Running' => true }, mounts: by_path })
+        allow(helper).to receive(:do_install_app).and_raise(Errno::EIO)
+        expect(helper.do_follow_share_apps).to eq('apps' => { 'gitea' => 'Input/output error' })
+        allow(helper).to receive(:docker_output).and_return(nil)
+        expect(helper.do_follow_share_apps).to eq('apps' => {})
+      end
+
+      # With no record of its definition, the catalog's entry could name a newer image.
+      it "keeps an app with no record of its definition on the image it runs" do
+        allow(helper).to receive(:app_manifest).and_return({ image: "example/app:2.0@sha256:#{'b' * 64}", name: 'x' })
+        allow(helper).to receive(:app_definition).and_return(nil)
+        allow(helper).to receive(:docker_output).with('inspect', '--format', '{{.Config.Image}}', 'amahi-gitea').and_return("example/app:1.0@sha256:#{'a' * 64}")
+        helper.app_remake('gitea', { 'State' => { 'Running' => true } }, [])
+        expect(helper).to have_received(:do_install_app).with('gitea', hash_including(image: "example/app:1.0@sha256:#{'a' * 64}"), [], true)
       end
     end
 
@@ -2142,9 +2282,10 @@ RSpec.describe 'AmahiHelper apps' do
 
     it "reads each app container's state from its label" do
       docker_says(<<~OUT)
-        {"Names":"amahi-gitea","State":"running","Status":"Up 2 hours","Image":"gitea/gitea:1.27.3-rootless","Labels":"amahi.app=gitea,maintainer=x"}
-        {"Names":"amahi-jellyfin","State":"exited","Status":"Exited (1) 3 minutes ago","Image":"jellyfin/jellyfin:12.1","Labels":"org.opencontainers.image.title=Jellyfin,amahi.app=jellyfin"}
-        not json
+        gitea\t{"Names":"amahi-gitea","State":"running","Status":"Up 2 hours","Image":"gitea/gitea:1.27.3-rootless","Labels":"amahi.app=gitea,maintainer=x"}
+        jellyfin\t{"Names":"amahi-jellyfin","State":"exited","Status":"Exited (1) 3 minutes ago","Image":"jellyfin/jellyfin:12.1","Labels":"note=x,amahi.app=fake,amahi.app=jellyfin"}
+        \t{"Names":"no-label"}
+        gitea2\tnot json
       OUT
       allow(helper).to receive(:app_jobs_running).and_return(['gitea'])
       expect(helper.do_apps_status).to eq(

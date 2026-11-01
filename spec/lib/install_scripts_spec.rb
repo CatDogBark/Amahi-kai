@@ -594,6 +594,13 @@ RSpec.describe 'install and update scripts' do
       expect(script).not_to match(/git clone|root_git clone|rsync/)
     end
 
+    # An older helper can't mount these again after a restart, so this comes past where an update
+    # can roll back.
+    it "moves the apps' shares to the helper's own mounts last, past where it could roll back" do
+      expect(script.index('amahi-helper apps.follow_shares')).to be > script.rindex('FINISHED=true')
+      expect(script.index('amahi-helper apps.follow_shares')).to be < script.index('✓ Amahi-kai updated and running!')
+    end
+
     it 'keeps its lock for root alone' do
       expect(script).to include('chmod 0600 /run/amahi-kai-update.lock')
       expect(script.index('chmod 0600 /run/amahi-kai-update.lock')).to be < script.index('exec 9>/run/amahi-kai-update.lock')

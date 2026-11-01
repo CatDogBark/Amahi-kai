@@ -497,4 +497,12 @@ restart_app || rollback "Starting the new version" restarted
 record_deployed "$NEW"
 FINISHED=true
 refresh_update_status
+# Apps that still mount a share by its path, from before the helper mounted shares itself, are
+# made again once, so each restarts. Last, past where an update can roll back: an older helper
+# can't mount these again after a restart. An app that can't be stays as it was, and says why.
+if [[ -x /usr/bin/docker ]]; then
+  reply=$(/usr/local/sbin/amahi-helper apps.follow_shares </dev/null 2>/dev/null) \
+    || log "⚠ Couldn't move the apps' shares to the new mounts: $reply"
+  [[ "$reply" == *'"apps":{}'* || -z "$reply" ]] || log "Apps' share mounts: $reply"
+fi
 log "✓ Amahi-kai updated and running!"

@@ -178,8 +178,8 @@ jobs:
       - name: Specs that need root
         shell: bash
         run: |
-          sudo -E env "PATH=$PATH" bundle exec rspec spec/lib/install_scripts_spec.rb spec/lib/amahi_helper_spec.rb \
-            -e 'bin/amahi-set-ownership' -e 'installs files with the mode and group asked for' --format documentation \
+          sudo -E env "PATH=$PATH" bundle exec rspec spec/lib/install_scripts_spec.rb spec/lib/amahi_helper_spec.rb spec/lib/amahi_helper_apps_spec.rb \
+            -e 'bin/amahi-set-ownership' -e 'installs files with the mode and group asked for' -e ', as root' --format documentation \
             | tee tmp/root-specs.log
           grep -qE '^[1-9][0-9]* examples?, 0 failures$' tmp/root-specs.log
 

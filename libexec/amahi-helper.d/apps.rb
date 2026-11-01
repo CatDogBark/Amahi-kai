@@ -15,6 +15,9 @@ module AmahiHelper
   # mods): no manifest sets them.
   APP_REFUSED_ENV = %w[DOCKER_MODS].freeze
 
+  # linuxserver.io's images also set a variable from a file in the container, FILE__<name>.
+  APP_ENV_FROM_FILE = 'FILE__'
+
   # Each part of a folder's path in an app's container: a plain name, with nothing Docker's mount
   # options read as a separator (, : =).
   APP_PATH_PART = /\A[A-Za-z0-9._-]{1,64}\z/
@@ -100,12 +103,13 @@ module AmahiHelper
   # --mount takes those as its own), and none of them . or ..
   APP_SHARE_FOLDER_PART = /\A[^\/\x00-\x1f\x7f,"]+\z/
 
-  # Unlike a share's own folder, made by the helper, a folder in it can be swapped for a link by
-  # an app that writes there, and Docker follows a link in a mount's source each time it starts a
-  # container (at boot too). So the helper mounts each folder given to an app itself, here, from a
-  # handle on the folder that it checked (with_dir), and the app's container mounts that. /run is
-  # empty after a restart: amahi-kai-app-shares.service mounts them again before Docker starts
-  # (apps.share_binds), from APP_SHARE_BINDS ({ id => [{ 'path', 'share', 'folder' }] }, root only).
+  # A folder that holds what an app is given can be changed by that app or another (a folder in a
+  # share, a share inside another, a pool drive's copies), and Docker follows a link in a mount's
+  # source each time it starts a container (at boot too). So the helper mounts everything an app
+  # is given itself, here, from a handle on the folder that it checked (with_dir), and the app's
+  # container mounts that. /run is empty after a restart: amahi-kai-app-shares.service mounts them
+  # again before Docker starts (apps.share_binds), from APP_SHARE_BINDS ({ id => [{ 'path', 'share',
+  # and for a folder of it 'folder', for a pooled share's copy 'copy' }] }, root only).
   APP_SHARE_BIND_ROOT = '/run/amahi-kai-app-shares'
 
   MOUNT = '/usr/bin/mount'
@@ -217,8 +221,15 @@ module AmahiHelper
       validate: ->(_a) { installed!(DOCKER) && {} },
       plan: ->(_v) { [[:follow_dns_apps]] }
     },
-    # Mounts again the folders in shares that apps are given (do_share_binds): /run is empty
-    # after a restart. Run by amahi-kai-app-shares.service before Docker starts.
+    # Makes again the containers still mounting a share by its path (do_follow_share_apps), once.
+    # Run by bin/amahi-update as its last step. Takes nothing from the app.
+    'apps.follow_shares' => {
+      params: [],
+      validate: ->(_a) { installed!(DOCKER) && {} },
+      plan: ->(_v) { [[:follow_share_apps]] }
+    },
+    # Mounts again what apps are given in shares (do_share_binds): /run is empty after a restart.
+    # Run by amahi-kai-app-shares.service before Docker starts.
     'apps.share_binds' => {
       params: [],
       validate: ->(_a) { {} },
@@ -500,7 +511,7 @@ module AmahiHelper
           bad.call("environment name #{key.inspect} isn't valid") unless name.match?(APP_ENV_NAME_SPELLED)
           bad.call("environment name #{name} needs requires: 4 (names as the app spells them)") if format < 4
         end
-        bad.call("#{name} would have the image download more code as it starts") if APP_REFUSED_ENV.include?(name.upcase)
+        bad.call("#{name} would have the image download more code as it starts") if APP_REFUSED_ENV.include?(name.upcase.delete_prefix(APP_ENV_FROM_FILE))
         bad.call("#{name} must be one line of text") unless value.is_a?(String) && value.length <= 1000 && !value.match?(/[\r\n\0]/)
         bad.call("#{name} has a secret in its value, which needs requires: 4") if format < 4 && value.match?(APP_SECRET_PLACEHOLDER)
         [name, value]
@@ -554,7 +565,7 @@ module AmahiHelper
     # The share named +name+ in smb.conf (+shares+, samba_shares), if an app may be given it.
     def app_share(name, shares)
       share = shares[name.downcase] or raise Refused, "#{name.inspect} isn't one of the NAS's shares"
-      raise Refused, "share #{share[:name]}'s name can't be a folder in an app" unless share[:name].match?(APP_SHARE_NAME)
+      raise Refused, "share #{share[:name]}'s name can't be a folder in an app" unless share[:name].match?(APP_SHARE_NAME) && !%w[. ..].include?(share[:name])
       path = share[:path]
       unless normalized_path?(path) && !path.include?(',') && (share_root_of(path) || drive_mount_point?(path))
         raise Refused, "share #{share[:name]}'s folder #{path} isn't in the share root or on a mounted data drive"
@@ -666,7 +677,7 @@ module AmahiHelper
                        *ports.flat_map { |p| ['--publish', "#{bind}:#{p[:host]}:#{p[:container]}/#{p[:protocol]}"] },
                        *app_folder_mounts(manifest, dir, storage), *share_mounts, *ping, manifest[:image]])
         end
-      rescue Failed, Refused
+      rescue Failed, Refused, SystemCallError
         run_command([DOCKER, 'rm', '--force', fresh, { allow_failure: true }])
         app_share_binds_remove(set) if set
         if running
@@ -678,7 +689,7 @@ module AmahiHelper
       run_command([DOCKER, 'rm', '--force', container, { allow_failure: true }])
       run_command([DOCKER, 'rename', fresh, container])
       app_record_definition(id, manifest)
-      app_share_binds_keep(id, set, shares)
+      app_share_binds_keep(id, set, binds)
       app_ping_prune(id, manifest)
       app_tailscale_serve(web) if tailnet
       ports
@@ -696,6 +707,7 @@ module AmahiHelper
       return [] unless manifest[:ping]
 
       path = app_ping_path(id, manifest[:image])
+      app_ping_folders(path)
       app_ping_copy(id, manifest, path) unless File.file?(path) && !File.symlink?(path)
       ['--mount', "type=bind,source=#{path},target=#{manifest[:ping]},readonly"]
     end
@@ -704,17 +716,23 @@ module AmahiHelper
       "#{APP_PINGS}/#{id}/ping-#{image[/@sha256:(\h{16})/, 1]}"
     end
 
-    # docker cp out of a container made from the image and never started, then its bytes into a
-    # new file, which has no extended attributes (the capability is one).
-    def app_ping_copy(id, manifest, path)
-      say("Copying #{manifest[:ping]} out of the image, to ping without raw sockets...")
+    # Root's only, on the system disk: docker cp keeps an image's special modes (a setuid-root file
+    # stays one), and Docker reaches the copy as root.
+    def app_ping_folders(path)
       [APP_PINGS, File.dirname(path)].each do |dir|
         raise Failed, "#{dir} isn't a folder" if File.symlink?(dir)
 
-        Dir.mkdir(dir, 0o755) unless File.directory?(dir)
+        Dir.mkdir(dir, 0o700) unless File.directory?(dir)
+        File.chmod(0o700, dir)
       end
+    end
+
+    # docker cp out of a container made from the image and never started, then its bytes into a
+    # new file, which has no extended attributes (the capability is one) or special modes.
+    def app_ping_copy(id, manifest, path)
+      say("Copying #{manifest[:ping]} out of the image, to ping without raw sockets...")
       taken = "#{path}.image"
-      FileUtils.rm_f([taken, "#{path}.new"])
+      FileUtils.rm_rf([taken, "#{path}.new"])
       scratch = "#{app_container(id)}-ping"
       run_command([DOCKER, 'rm', '--force', scratch, { allow_failure: true }])
       run_command([DOCKER, 'create', '--name', scratch, manifest[:image]])
@@ -731,7 +749,7 @@ module AmahiHelper
       File.chmod(0o755, "#{path}.new")
       File.rename("#{path}.new", path)
     ensure
-      FileUtils.rm_f(taken) if taken
+      FileUtils.rm_rf(taken) if taken # a folder, if that's what the image has at the name
     end
 
     # Once the container is swapped in, the copies for other images go.
@@ -821,30 +839,35 @@ module AmahiHelper
       end
     end
 
-    # Mounts each folder +shares+ gives the app (those with a folder) in a new set of its own under
-    # APP_SHARE_BIND_ROOT/<id>, for its next container: [{ [share, folder] => where it's mounted },
-    # that set's folder]. The ones made are taken down again if one can't be.
+    # Mounts what +shares+ gives the app (each share or folder of one, and a pooled share's copy
+    # folders) in a new set of its own under APP_SHARE_BIND_ROOT/<id>, for its next container:
+    # [{ [share, folder] or [share, folder, copy] => where it's mounted }, that set's folder]. The
+    # ones made are taken down again if one can't be.
     def app_share_binds_make(id, shares)
-      given = shares.select { |share| share[:folder] }
-      return [{}, nil] if given.empty?
+      sources = shares.flat_map do |share|
+        given = [share[:name], share[:folder]]
+        copies = share[:pooled] ? greyhole_copies(share[:name], *share[:folder]) : []
+        [[given, share[:path], share[:folder]], *copies.map { |copy| [[*given, copy], copy, nil] }]
+      end
+      return [{}, nil] if sources.empty?
 
       set = "#{APP_SHARE_BIND_ROOT}/#{id}/#{Time.now.utc.strftime('%Y%m%d%H%M%S')}-#{SecureRandom.hex(3)}"
-      binds = given.each_with_index.to_h do |share, index|
+      binds = sources.each_with_index.to_h do |(key, root, folder), index|
         target = "#{set}/#{index}"
-        bind_share_folder(share[:path], share[:folder], target)
-        [[share[:name], share[:folder]], target]
+        bind_share_folder(root, folder, target)
+        [key, target]
       end
       [binds, set]
-    rescue Failed, Refused
+    rescue Failed, Refused, SystemCallError
       app_share_binds_remove(set) if set
       raise
     end
 
-    # Mounts the folder +folder+ of the share whose folder is +root+ on +target+ (made, root's
-    # only): the folder is opened without following a link and checked to be that path (with_dir),
-    # then mounted through the handle, so nothing swapped in meanwhile is mounted instead.
+    # Mounts the folder +root+, or its folder +folder+, on +target+ (made, root's only): the folder
+    # is opened without following a link and checked to be that path (with_dir), then mounted
+    # through the handle, so nothing swapped in meanwhile is mounted instead.
     def bind_share_folder(root, folder, target)
-      path = "#{root}/#{folder}"
+      path = [root, folder].compact.join('/')
       # Made by the helper in /run, which only root writes: a folder of its own, not a link
       FileUtils.mkdir_p(APP_SHARE_BIND_ROOT, mode: 0o700)
       own = File.lstat(APP_SHARE_BIND_ROOT)
@@ -877,12 +900,11 @@ module AmahiHelper
       say("#{set} stays: #{e.message}")
     end
 
-    # Records the folders the app's container now mounts (+set+, from app_share_binds_make; nil
+    # Records what the app's container now mounts (+binds+ and +set+, from app_share_binds_make; nil
     # for none) in APP_SHARE_BINDS for amahi-kai-app-shares.service, and takes down its other sets.
-    def app_share_binds_keep(id, set, shares)
-      given = shares.select { |share| share[:folder] }
-      kept = (given.each_with_index.map { |share, index| { 'path' => "#{set}/#{index}", 'share' => share[:name], 'folder' => share[:folder] } } if set)
-      unless (read_json(APP_SHARE_BINDS) || {})[id] == kept # an app given no folder, as before, takes no lock
+    def app_share_binds_keep(id, set, binds)
+      kept = (binds.map { |(share, folder, copy), path| { 'path' => path, 'share' => share, 'folder' => folder, 'copy' => copy }.compact } if set)
+      unless (read_json(APP_SHARE_BINDS) || {})[id] == kept # an app given nothing, as before, takes no lock
         with_records_lock do
           records = read_json(APP_SHARE_BINDS) || {}
           records = kept ? records.merge(id => kept) : records.except(id)
@@ -900,7 +922,7 @@ module AmahiHelper
       Dir.children(dir).sort.map { |name| "#{dir}/#{name}" }
     end
 
-    # Mounts again, at the paths their containers mount, the folders apps are given in shares
+    # Mounts again, at the paths their containers mount, what apps are given in shares
     # (APP_SHARE_BINDS): /run is empty after a restart. amahi-kai-app-shares.service runs it before
     # Docker starts. Each is mounted from its share's folder as smb.conf has it now, checked as at
     # an install; one that can't be (its folder renamed or gone, say) is left out, so its app can't
@@ -913,21 +935,29 @@ module AmahiHelper
 
         done[id] = binds.grep(Hash).to_h do |bind|
           path = bind['path'].to_s
-          [path, app_share_bind_again(id, path, bind['share'], bind['folder'], shares)]
+          [path, app_share_bind_again(id, path, bind, shares)]
         end
       end
     end
 
-    def app_share_bind_again(id, path, name, folder, shares)
+    def app_share_bind_again(id, path, bind, shares)
       unless normalized_path?(path) && path.match?(%r{\A#{Regexp.escape(APP_SHARE_BIND_ROOT)}/#{id}/[0-9]{14}-[0-9a-f]{6}/[0-9]+\z})
         return "#{path} isn't one of the helper's"
       end
       return 'mounted' if mounted_at?(path)
 
-      share = app_share(string(name, 'share name', max: 64), shares)
-      bind_share_folder(share[:path], app_share_folder(folder), path)
+      share = app_share(string(bind['share'], 'share name', max: 64), shares)
+      folder = bind['folder'].nil? ? nil : app_share_folder(bind['folder'])
+      if bind['copy'].nil?
+        bind_share_folder(share[:path], folder, path)
+      else
+        unless share[:pooled] && greyhole_copies(share[:name], *folder).include?(bind['copy'])
+          raise Refused, "#{bind['copy'].inspect} isn't one of #{share[:name]}'s copy folders now"
+        end
+        bind_share_folder(bind['copy'], nil, path)
+      end
       'mounted'
-    rescue Failed, Refused => e
+    rescue Failed, Refused, SystemCallError => e
       say("#{id}: #{e.message}")
       e.message
     end
@@ -980,7 +1010,7 @@ module AmahiHelper
           checked, stopped = app_remake(id, info, chosen, failed: failed)
           given[id] = checked.map { |share| { 'name' => share[:name], 'folder' => share[:folder], 'write' => share[:write] }.compact }
           [id, stopped ? 'remade, stopped' : 'remade']
-        rescue Failed, Refused => e
+        rescue Failed, Refused, SystemCallError => e
           [id, e.message]
         end
       rescue JSON::ParserError
@@ -1004,13 +1034,15 @@ module AmahiHelper
       end
     end
 
-    # Makes an app's container again from its definition, with the shares it has (+chosen+,
-    # app_container_shares; written to only where its definition writes shares, and checked as
-    # apps.install checks them), keeping its version and data, and stopped again if it was
-    # stopped (not if it +failed+ to start). Returns [the shares given, whether it's stopped].
+    # Makes an app's container again from its definition (one made before these were kept: the
+    # catalog's, on the image it runs, which is never moved to a newer one here), with the shares it
+    # has (+chosen+, app_container_shares; written to only where its definition writes shares, and
+    # checked as apps.install checks them), keeping its version and data, and stopped again if it
+    # was stopped (not if it +failed+ to start). Returns [the shares given, whether it's stopped].
     def app_remake(id, info, chosen, failed: false)
       stopped = !info.dig('State', 'Running') && !failed
-      manifest = app_definition(id) || app_manifest(id)
+      running = app_image(id)
+      manifest = app_definition(id) || app_manifest(id).then { |catalog| running ? catalog.merge(image: running) : catalog }
       wanted = chosen.map do |share|
         { 'name' => share[:name], 'folder' => share[:folder], 'write' => share[:write] && manifest[:writes_shares] == true }.compact
       end
@@ -1038,7 +1070,7 @@ module AmahiHelper
         begin
           _checked, stopped = app_remake(id, info, app_container_shares(info, shares))
           [id, stopped ? 'remade, stopped' : 'remade']
-        rescue Failed, Refused => e
+        rescue Failed, Refused, SystemCallError => e
           [id, e.message]
         end
       rescue JSON::ParserError
@@ -1046,6 +1078,43 @@ module AmahiHelper
       end
       do_app_firewall if done.any?
       { 'apps' => done.to_h }
+    end
+
+    # apps.follow_shares, from bin/amahi-update: each app container still mounting something from
+    # a share by its path (made before the helper mounted them itself, APP_SHARE_BIND_ROOT) is made
+    # again, once, keeping its shares, version and data. One the owner stopped stays stopped.
+    def do_follow_share_apps
+      out = docker_output('ps', '--all', '--filter', 'label=amahi.app', '--format', '{{.Label "amahi.app"}}')
+      return { 'apps' => {} } unless out
+
+      shares = samba_shares
+      done = out.lines.map(&:strip).grep(APP_ID).uniq.filter_map do |id|
+        next if app_job_running?(id) # the job makes its container with the mounts as they are now
+
+        info = JSON.parse(docker_output('inspect', app_container(id)) || '[]').first or next
+        next unless app_shares_by_path?(info)
+
+        say("#{id}: making its container again, with its shares through the helper's own mounts")
+        begin
+          _checked, stopped = app_remake(id, info, app_container_shares(info, shares))
+          [id, stopped ? 'remade, stopped' : 'remade']
+        rescue Failed, Refused, SystemCallError => e
+          [id, e.message]
+        end
+      rescue JSON::ParserError
+        nil
+      end
+      do_app_firewall if done.any?
+      { 'apps' => done.to_h }
+    end
+
+    # Whether +info+'s container (docker inspect's) mounts a share or a copy folder from anywhere
+    # but the helper's own mount of it.
+    def app_shares_by_path?(info)
+      Array(info['Mounts']).any? do |mount|
+        inside = mount['Destination'].to_s
+        (inside.start_with?("#{APP_SHARE_TARGET}/") || inside.start_with?("#{drives_root}/")) && !mount['Source'].to_s.start_with?("#{APP_SHARE_BIND_ROOT}/")
+      end
     end
 
     # The NAS's DNS for an app's container while Unbound answers on Docker's bridge
@@ -1125,7 +1194,7 @@ module AmahiHelper
         reply = do_install_app(id, manifest, shares)
         say('Waiting for it to come up healthy (up to 5 minutes)...')
         app_health_problem(id, manifest)
-      rescue Failed => e
+      rescue Failed, Refused, SystemCallError => e
         e.message
       end
       if problem
@@ -1232,6 +1301,9 @@ module AmahiHelper
     def app_restore(id, manifest, image, shares)
       backup = app_backup_info(id) or raise Failed, "there's no copy of #{id}'s data to go back to"
       run_command([DOCKER, 'rm', '--force', app_container(id), { allow_failure: true }])
+      # Its folders are deleted next: not while a container could still be writing to them.
+      raise Failed, "Docker didn't remove #{app_container(id)}, so #{id}'s data wasn't put back" if docker_output('inspect', '--format', '{{.Id}}', app_container(id))
+
       Array(backup['folders']).each do |name|
         raise Failed, "the copy lists a folder #{name.inspect}" unless name.is_a?(String) && name.match?(APP_FOLDER)
         target = "#{APPS_ROOT}/#{id}/#{name}"
@@ -1359,19 +1431,18 @@ module AmahiHelper
     end
 
     # --mount (not --volume, which would make a missing folder) for each share, at /shares/<name>,
-    # read only unless chosen otherwise; a folder given of a share at /shares/<name>/<folder>, from
-    # the helper's own mount of it (+binds+, app_share_binds_make); a pooled share's copy folders
-    # (or that folder in each), read only, at their own paths. An app that writes into a share joins
-    # the users group, which shares belong to.
-    def app_share_mounts(shares, binds = {})
+    # read only unless chosen otherwise; a folder given of a share at /shares/<name>/<folder>; a
+    # pooled share's copy folders (or that folder in each), read only, at their own paths. Each from
+    # the helper's own mount of it (+binds+, app_share_binds_make), never by its path. A drive that
+    # joined the pool since those were made is left to apps.follow_pool. An app that writes into a
+    # share joins the users group, which shares belong to.
+    def app_share_mounts(shares, binds)
       mounts = shares.flat_map do |share|
-        copies = share[:pooled] ? greyhole_copies(share[:name], *share[:folder]).map { |copy| [copy, copy, true] } : []
-        if share[:folder]
-          source = binds[[share[:name], share[:folder]]] or raise Failed, "#{share[:name]}/#{share[:folder]} isn't mounted for the app"
-          [[source, "#{APP_SHARE_TARGET}/#{share[:name]}/#{share[:folder]}", !share[:write]], *copies]
-        else
-          [[share[:path], "#{APP_SHARE_TARGET}/#{share[:name]}", !share[:write]], *copies]
-        end
+        given = [share[:name], share[:folder]]
+        source = binds[given] or raise Failed, "#{given.compact.join('/')} isn't mounted for the app"
+        copies = share[:pooled] ? greyhole_copies(share[:name], *share[:folder]) : []
+        [[source, [APP_SHARE_TARGET, *given.compact].join('/'), !share[:write]],
+         *copies.filter_map { |copy| binds[[*given, copy]]&.then { |from| [from, copy, true] } }]
       end
       args = mounts.uniq { |_source, target, _ro| target }.flat_map do |source, target, readonly|
         ['--mount', "type=bind,source=#{source},target=#{target}#{',readonly' if readonly}"]
@@ -1393,9 +1464,9 @@ module AmahiHelper
       end
       share_posix_acls(path)
       say("Letting what it writes in #{path} stay editable over SMB...")
-      # setfacl -P takes a physical walk: a folder swapped for a link since find listed it is
-      # skipped, never followed.
-      run_command(['/usr/bin/find', path, '-xdev', '-type', 'd', '-exec', SETFACL, '-P', '-d', '-m', 'u::rwx,g::rwx,o::rx', '{}', '+'])
+      # -execdir, from inside each folder's parent, and -P there, a physical walk: a folder swapped
+      # for a link since find listed it is skipped, never followed, and so is one on the way to it.
+      run_command(['/usr/bin/find', path, '-xdev', '-type', 'd', '-execdir', SETFACL, '-P', '-d', '-m', 'u::rwx,g::rwx,o::rx', '{}', '+'])
     end
 
     # ZFS on Linux leaves POSIX ACLs off (acltype=off) unless asked, and setfacl then fails with
@@ -1708,7 +1779,7 @@ module AmahiHelper
       container = app_container(id)
       run_command([DOCKER, 'rm', '--force', container, { allow_failure: true }])
       raise Failed, "Docker didn't remove #{container}; nothing else of #{id} was touched" if docker_output('inspect', '--format', '{{.Id}}', container)
-      app_share_binds_keep(id, nil, [])
+      app_share_binds_keep(id, nil, {})
       app_unserve_uninstalled(id, definition)
       run_command([DOCKER, 'image', 'rm', image, { allow_failure: true }]) if image
       FileUtils.rm_rf("#{APP_PINGS}/#{id}") # made again from the image at the next install
@@ -1747,12 +1818,15 @@ module AmahiHelper
     end
 
     def do_apps_status
-      out = docker_output('ps', '--all', '--filter', 'label=amahi.app', '--format', '{{json .}}')
+      # The label by itself: joined with the image's own labels, a value there could read like it.
+      out = docker_output('ps', '--all', '--filter', 'label=amahi.app', '--format', "{{.Label \"amahi.app\"}}\t{{json .}}")
       return { 'docker' => false, 'apps' => {}, 'jobs' => app_jobs_running } unless out
 
       apps = out.lines.filter_map do |line|
-        row = JSON.parse(line)
-        id = row['Labels'].to_s[/(?:\A|,)amahi\.app=([a-z0-9]+)/, 1] or next
+        id, json = line.chomp.split("\t", 2)
+        next unless id.to_s.match?(APP_ID) && json
+
+        row = JSON.parse(json)
         [id, { 'state' => row['State'], 'status' => row['Status'], 'image' => row['Image'] }]
       rescue JSON::ParserError
         nil
@@ -1822,8 +1896,10 @@ module AmahiHelper
       return nil unless id.match?(APP_ID) && (path = app_manifest_path(id))
 
       data = YAML.safe_load(File.read(path))
+      return nil unless data.is_a?(Hash)
+
       web = data['web_port']
-      return nil unless data.is_a?(Hash) && web.is_a?(Integer) && data['access'] != 'tailscale'
+      return nil unless web.is_a?(Integer) && web.between?(1, 65_535) && data['access'] != 'tailscale'
 
       given = Array((read_json(APP_PORTS) || {})[id]).grep(Hash).find { |port| port['preferred'] == web }
       port = given && given['host'].is_a?(Integer) ? given['host'] : web
