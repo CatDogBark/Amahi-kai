@@ -667,7 +667,7 @@ module AmahiHelper
     # flat, and a disk would seem to have nothing on it. The drive checks depend on the
     # nesting, so a flat list is refused rather than read.
     def block_tree
-      tree = JSON.parse(capture(['/usr/bin/lsblk', '-J', '-o', 'NAME,PATH,TYPE,FSTYPE,MOUNTPOINTS']))['blockdevices'] || []
+      tree = JSON.parse(capture(['/usr/bin/lsblk', '-J', '-o', 'NAME,PATH,TYPE,FSTYPE,PARTTYPE,MOUNTPOINTS']))['blockdevices'] || []
       flat = tree.find { |node| node['type'] == 'part' || node['type'] == 'lvm' || node['type'].to_s.start_with?('raid', 'crypt') }
       raise Failed, "lsblk listed #{flat['path']} on its own, not under its disk" if flat
       tree

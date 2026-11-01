@@ -123,7 +123,9 @@ operations with their own validation and logging.
   pool, and neither side can take the other's drives. A drive with any ZFS label is never
   formatted or mounted as share storage. One whose pool `zpool import` finds (not imported, not
   taken offline here) is kept for it: the page offers **Import** by GUID (only a pool whose every
-  dataset mounts under `/srv/pools/<name>` is mounted; any other is exported again), and Erase
+  dataset mounts in the folder its name gives under `/srv/pools` is mounted, one dataset at a time,
+  and bringing back a pool taken offline here is checked the same way; any other is exported
+  again), and Erase
   only with that pool's name typed. One with a leftover label from no pool it can find can go
   into a new pool, which erases it.
 

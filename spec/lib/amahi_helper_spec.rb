@@ -2278,7 +2278,7 @@ RSpec.describe 'AmahiHelper' do
     it 'refuses a flat list rather than read it' do
       flat = { 'blockdevices' => [{ 'path' => '/dev/sda', 'type' => 'disk', 'mountpoints' => [nil] },
                                   { 'path' => '/dev/sda1', 'type' => 'part', 'mountpoints' => ['/'] }] }.to_json
-      allow(helper).to receive(:capture).with(%w[/usr/bin/lsblk -J -o NAME,PATH,TYPE,FSTYPE,MOUNTPOINTS]).and_return(flat)
+      allow(helper).to receive(:capture).with(%w[/usr/bin/lsblk -J -o NAME,PATH,TYPE,FSTYPE,PARTTYPE,MOUNTPOINTS]).and_return(flat)
       expect { helper.block_tree }.to raise_error(AmahiHelper::Failed, 'lsblk listed /dev/sda1 on its own, not under its disk')
     end
   end

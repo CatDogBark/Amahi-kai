@@ -44,7 +44,7 @@ RSpec.describe 'AmahiHelper ZFS pools' do
                         'children' => [{ 'path' => '/dev/mapper/vg-data', 'type' => 'lvm', 'mountpoints' => [nil] }] }] },
      { 'path' => '/dev/sdh', 'type' => 'disk', 'mountpoints' => [nil],
        'children' => [{ 'path' => '/dev/sdh1', 'type' => 'part', 'fstype' => 'zfs_member', 'mountpoints' => [nil] },
-                      { 'path' => '/dev/sdh9', 'type' => 'part', 'mountpoints' => [nil] }] },
+                      { 'path' => '/dev/sdh9', 'type' => 'part', 'parttype' => AmahiHelper::ZFS_RESERVED_PARTITION, 'mountpoints' => [nil] }] },
      { 'path' => '/dev/nvme0n1', 'type' => 'disk', 'mountpoints' => [nil] }]
   end
 
@@ -63,6 +63,7 @@ RSpec.describe 'AmahiHelper ZFS pools' do
     allow(helper).to receive(:probe).and_return({})
     allow(helper).to receive(:pool_names).and_return(['old'])
     allow(helper).to receive(:pooled_devices).and_return('/dev/sdh1' => 'old')
+    allow(helper).to receive(:pool_drives).and_return([{ 'name' => '/dev/disk/by-id/ata-SSD_h-part1', 'state' => 'ONLINE', 'device' => '/dev/sdh1', 'children' => [] }])
     allow(helper).to receive(:stable_path) { |disk| "/dev/disk/by-id/ata-SSD_#{File.basename(disk)}" }
     allow(helper).to receive(:ssd?).and_return(true)
     allow(helper).to receive(:other_mount_views).and_return([])
@@ -404,6 +405,47 @@ RSpec.describe 'AmahiHelper ZFS pools' do
       expect(third).to include('device' => '/dev/sde1', 'cksum' => '3')
     end
 
+    # As zpool 2.2.2 prints a pool with every kind of drive (a real one's output).
+    let(:every_kind) do
+      <<~STATUS
+          pool: tank
+         state: ONLINE
+        config:
+
+        \tNAME           STATE     READ WRITE CKSUM
+        \ttank           ONLINE       0     0     0
+        \t  mirror-0     ONLINE       0     0     0
+        \t    /dev/sdd1  ONLINE       0     0     0
+        \t    /dev/sde1  ONLINE       0     0     0
+        \tspecial\t
+        \t  mirror-1     ONLINE       0     0     0
+        \t    /dev/sdf1  ONLINE       0     0     0
+        \t    /dev/sdg1  ONLINE       0     0     0
+        \tlogs\t
+        \t  /dev/sdh1    ONLINE       0     0     0
+        \tcache
+        \t  /dev/sdj1    ONLINE       0     0     0
+        \tspares
+        \t  /dev/sdi1    AVAIL   
+
+        errors: No known data errors
+      STATUS
+    end
+
+    it "keeps a pool's special, log, cache and spare drives apart from its data groups, and counts them as in use" do
+      allow(File).to receive(:realpath) { |path| path }
+      reply = helper.parse_pool_status(every_kind)
+      expect(reply['vdevs'].map { |vdev| vdev['name'] }).to eq(['mirror-0'])
+      expect(reply['extras'].map { |group| group['name'] }).to eq(%w[special logs cache spares])
+      expect(reply['extras'].last['children'].sole).to include('name' => '/dev/sdi1', 'state' => 'AVAIL', 'device' => '/dev/sdi1')
+
+      allow(helper).to receive(:pool_drives).and_call_original
+      allow(helper).to receive(:pooled_devices).and_call_original
+      allow(helper).to receive(:pool_names).and_return(['tank'])
+      allow(helper).to receive(:capture).with(%w[/usr/sbin/zpool status -P tank]).and_return(every_kind)
+      expect(helper.pooled_devices.keys).to eq(%w[/dev/sdd1 /dev/sde1 /dev/sdf1 /dev/sdg1 /dev/sdh1 /dev/sdj1 /dev/sdi1])
+    end
+
     it 'lists the pools with their sizes, mount points and status, and which are Amahi-kai\'s' do
       allow(helper).to receive(:capture) do |argv|
         case argv
@@ -456,6 +498,7 @@ RSpec.describe 'AmahiHelper ZFS pools' do
 
     it 'maps every device in an imported pool to its pool' do
       allow(helper).to receive(:pooled_devices).and_call_original
+      allow(helper).to receive(:pool_drives).and_call_original
       allow(helper).to receive(:pool_names).and_return(['tank'])
       allow(helper).to receive(:capture).with(%w[/usr/sbin/zpool status -P tank]).and_return(degraded)
       expect(helper.pooled_devices).to eq('/dev/sdc1' => 'tank', '/dev/sde1' => 'tank')
@@ -609,9 +652,19 @@ RSpec.describe 'AmahiHelper ZFS pools' do
       allow(helper).to receive(:capture).with(%w[/usr/sbin/zpool export old]).and_return('')
       helper.do_export_pool('old', '987654321')
       expect(helper.offline_records).to eq('old' => '987654321')
-      allow(helper).to receive(:capture).with(['/usr/sbin/zpool', 'import', '-d', '/dev/disk/by-id', '987654321']).and_return('')
+      allow(helper).to receive(:import_checked_pool)
       helper.do_import_pool('old', '987654321')
+      expect(helper).to have_received(:import_checked_pool).with('old', '987654321')
       expect(helper.offline_records).to eq({})
+    end
+
+    it 'keeps the record of a pool that fails its checks, and needs its folder free' do
+      File.write(offline_file, { 'away' => '1234' }.to_json)
+      allow(helper).to receive(:import_checked_pool).and_raise(AmahiHelper::Failed, 'no')
+      expect { helper.do_import_pool('away', '1234') }.to raise_error(AmahiHelper::Failed, 'no')
+      expect(helper.offline_records).to eq('away' => '1234')
+      FileUtils.mkdir_p("#{dir}/pools/away/stuff")
+      expect(refusal('pools.import', { 'name' => 'away' })).to include('is in the way')
     end
 
     it "keeps an offline pool's drives out of new pools" do
@@ -683,7 +736,7 @@ RSpec.describe 'AmahiHelper ZFS pools' do
         allow(helper).to receive(:run_command) { |argv| ran << argv }
         sdi = { 'path' => '/dev/sdi', 'type' => 'disk', 'mountpoints' => [nil],
                 'children' => [{ 'path' => '/dev/sdi1', 'type' => 'part', 'fstype' => 'zfs_member', 'label' => 'tank', 'mountpoints' => [nil] },
-                               { 'path' => '/dev/sdi9', 'type' => 'part', 'mountpoints' => [nil] }] }
+                               { 'path' => '/dev/sdi9', 'type' => 'part', 'parttype' => AmahiHelper::ZFS_RESERVED_PARTITION, 'mountpoints' => [nil] }] }
         allow(helper).to receive(:block_tree).and_return(tree + [sdi])
       end
 
@@ -711,38 +764,159 @@ RSpec.describe 'AmahiHelper ZFS pools' do
         expect(found.call('5678')).to include("isn't one Amahi-kai gives pools")
       end
 
-      def datasets(lines)
-        allow(helper).to receive(:capture).with(%w[/usr/sbin/zfs list -H -o name,mountpoint,canmount,setuid,devices -r -t filesystem tank])
-                                          .and_return(lines.map { |fields| "#{fields.join("\t")}\n" }.join)
-      end
+      describe 'the checks on the way in' do
+        let(:root) { "#{dir}/pools/tank" }
+        let(:import) { ['/usr/sbin/zpool', 'import', '-N', '-o', 'cachefile=none', '-d', '/dev/disk/by-id', '5678'] }
+        let(:left) { "so it's left on its drives, not imported: import it from the command line" }
+        let(:export) { ['/usr/sbin/zpool', 'export', 'tank', { allow_failure: true }] }
 
-      it "imports it with nothing mounted, then mounts it if everything of it mounts in its own folder" do
-        allow(helper).to receive(:capture).with(['/usr/sbin/zpool', 'import', '-N', '-f', '-d', '/dev/disk/by-id', '5678']).and_return('')
-        datasets([['tank', "#{dir}/pools/tank", 'on', 'off', 'off'], ['tank/shares', "#{dir}/pools/tank/shares", 'on', 'on', 'off'],
-                  ['tank/apps', 'none', 'on', 'off', 'off']])
-        helper.do_import_found_pool('tank', '5678', true)
-        expect(ran).to eq([%w[/usr/sbin/zfs set setuid=off devices=off tank/shares], %w[/usr/sbin/zfs mount -a]])
-      end
+        def row(name, mountpoint, canmount: 'on', setuid: 'off', devices: 'off', sharenfs: 'off', sharesmb: 'off')
+          [name, mountpoint, canmount, setuid, devices, sharenfs, sharesmb]
+        end
 
-      it "exports it again, as it was, when it isn't Amahi-kai's" do
-        allow(helper).to receive(:capture).with(['/usr/sbin/zpool', 'import', '-N', '-d', '/dev/disk/by-id', '5678']).and_return('')
-        datasets([['tank', "#{dir}/pools/tank", 'on', 'off', 'off'], ['tank/root', '/', 'on', 'off', 'off']])
-        expect { helper.do_import_found_pool('tank', '5678', false) }.to raise_error(
-          AmahiHelper::Failed, "tank isn't one of Amahi-kai's pools (tank/root mounts at /), so it's left on its drives, not imported: import it from the command line"
-        )
-        expect(ran).to eq([['/usr/sbin/zpool', 'export', 'tank', { allow_failure: true }]])
-        ran.clear
-        datasets([['tank', '/data', 'on', 'off', 'off']])
-        expect { helper.do_import_found_pool('tank', '5678', false) }.to raise_error(AmahiHelper::Failed, /tank mounts at \/data/)
-        ran.clear
-        datasets([['tank', "#{dir}/pools/tank", 'off', 'off', 'off'], ['tank/x', '/x', 'noauto', 'off', 'off']]) # noauto can still be mounted
-        expect { helper.do_import_found_pool('tank', '5678', false) }.to raise_error(AmahiHelper::Failed, %r{tank/x mounts at /x})
-        ran.clear
-        datasets([['tank', '/', 'off', 'off', 'off']]) # not mounted itself, but not in its own folder: not Amahi-kai's
-        expect { helper.do_import_found_pool('tank', '5678', false) }.to raise_error(AmahiHelper::Failed, %r{tank mounts at /\)})
-        datasets([['tank', "#{dir}/pools/tank", 'on', 'off', 'off'], ['tank/old', 'legacy', 'on', 'off', 'off'],
-                  ['tank/off', '/elsewhere', 'off', 'off', 'off']]) # neither is mounted by ZFS
-        expect { helper.do_import_found_pool('tank', '5678', false) }.not_to raise_error
+        def datasets(*rows)
+          allow(helper).to receive(:capture).with(%w[/usr/sbin/zfs list -H -o name,mountpoint,canmount,setuid,devices,sharenfs,sharesmb -r -t filesystem tank])
+                                            .and_return(rows.map { |fields| "#{fields.join("\t")}\n" }.join)
+        end
+
+        def import_it
+          helper.do_import_found_pool('tank', '5678', false)
+        end
+
+        before do
+          FileUtils.mkdir_p("#{dir}/pools")
+          allow(helper).to receive(:capture).with(import).and_return('')
+          allow(helper).to receive(:capture).with(%w[/usr/sbin/zpool get -H -o value guid tank]).and_return("5678\n")
+          # zfs mount: makes the folder as ZFS would, and says it's mounted
+          allow(helper).to receive(:dataset_mounted?).and_return(true)
+          allow(helper).to receive(:do_own_dir)
+          allow(helper).to receive(:run_command) do |argv|
+            ran << argv
+            FileUtils.mkdir_p("#{dir}/pools/#{argv.last}") if argv[0..1] == %w[/usr/sbin/zfs mount]
+            nil
+          end
+        end
+
+        it "imports it with nothing mounted and out of ZFS's cache file, and adds it there once it has passed" do
+          allow(helper).to receive(:capture).with(['/usr/sbin/zpool', 'import', '-N', '-o', 'cachefile=none', '-f', '-d', '/dev/disk/by-id', '5678']).and_return('')
+          datasets(row('tank', root), row('tank/shares', "#{root}/shares"), row('tank/apps', 'none'))
+          helper.do_import_found_pool('tank', '5678', true)
+          expect(ran).to eq([%w[/usr/sbin/zfs mount tank], %w[/usr/sbin/zfs mount tank/shares], %w[/usr/sbin/zpool set cachefile= tank]])
+        end
+
+        it 'mounts parents first, whatever order ZFS lists them in, and only those that mount by themselves' do
+          datasets(row('tank/apps/foo', "#{root}/apps/foo"), row('tank/apps', "#{root}/apps"), row('tank', root),
+                   row('tank/later', "#{root}/later", canmount: 'noauto'), row('tank/legacy', 'legacy'))
+          import_it
+          expect(ran.select { |argv| argv[1] == 'mount' }.map(&:last)).to eq(%w[tank tank/apps tank/apps/foo])
+        end
+
+        it 'makes every folder on the way root\'s, top down, and the pool\'s own; not the folder a dataset mounts on' do
+          datasets(row('tank', root), row('tank/apps', "#{root}/apps"), row('tank/apps/foo', "#{root}/apps/foo"))
+          import_it
+          owned = []
+          expect(helper).to have_received(:do_own_dir).exactly(4).times do |path, user, group, mode|
+            owned << path
+            expect([user, group, mode]).to eq(%w[root root 0755])
+          end
+          expect(owned).to eq([root, root, "#{root}/apps", root]) # for tank/apps; for tank/apps/foo; at the end
+        end
+
+        it 'sets off whatever isn\'t, sharing too, on datasets that stay unmounted as well; a normal pool isn\'t written to' do
+          datasets(row('tank', root), row('tank/loose', "#{root}/loose", setuid: 'on'), row('tank/nfs', "#{root}/nfs", sharenfs: 'rw=@10.0.0.0/8'),
+                   row('tank/smb', "#{root}/smb", sharesmb: 'on'), row('tank/off', "#{root}/off", canmount: 'off', devices: 'on'))
+          import_it
+          set = ran.select { |argv| argv[0..1] == %w[/usr/sbin/zfs set] }
+          expect(set.map(&:last)).to eq(%w[tank/loose tank/nfs tank/smb tank/off])
+          expect(set.first.first(6)).to eq(%w[/usr/sbin/zfs set setuid=off devices=off sharenfs=off sharesmb=off])
+          ran.clear
+          datasets(row('tank', root), row('tank/shares', "#{root}/shares"))
+          import_it
+          expect(ran.select { |argv| argv[0..1] == %w[/usr/sbin/zfs set] }).to eq([])
+        end
+
+        it "exports it again when a dataset that can mount isn't in the folder its name gives" do
+          {
+            [row('tank', root), row('tank/root', '/')] => 'tank/root mounts at /',
+            [row('tank', '/data')] => 'tank mounts at /data',
+            [row('tank', root, canmount: 'off'), row('tank/x', '/x', canmount: 'noauto')] => 'tank/x mounts at /x', # noauto can still be mounted
+            [row('tank', '/', canmount: 'off')] => 'tank mounts at /', # not mounted itself, but not in its own folder
+            [row('tank', root), row('tank/up', "#{root}/../../etc")] => "tank/up mounts at #{root}/../../etc",
+            [row('tank', root), row('tank/x', "#{root}/elsewhere")] => "tank/x mounts at #{root}/elsewhere",
+            [row('tank', root), row('tank/../../x', "#{root}/../../x")] => "tank/../../x mounts at #{root}/../../x"
+          }.each do |rows, why|
+            ran.clear
+            datasets(*rows)
+            expect { import_it }.to raise_error(AmahiHelper::Failed, "tank isn't one of Amahi-kai's pools (#{why}), #{left}")
+            expect(ran).to eq([export])
+          end
+        end
+
+        it "doesn't read a row with a tab in a value" do
+          datasets(row('tank', root), row('tank/tab', "#{root}/tab\t/elsewhere"))
+          expect { import_it }.to raise_error(AmahiHelper::Failed, /ZFS lists a dataset oddly/)
+          expect(ran).to eq([export])
+        end
+
+        it 'leaves alone what ZFS doesn\'t mount' do
+          datasets(row('tank', root), row('tank/old', 'legacy'), row('tank/none', 'none'), row('tank/off', '/elsewhere', canmount: 'off'))
+          expect { import_it }.not_to raise_error
+          expect(ran.select { |argv| argv[1] == 'mount' }.map(&:last)).to eq(['tank'])
+        end
+
+        it 'exports it when ZFS lists nothing, or the pool imported is another one' do
+          datasets
+          expect { import_it }.to raise_error(AmahiHelper::Failed, "tank isn't one of Amahi-kai's pools (ZFS lists nothing in it), #{left}")
+          expect(ran).to eq([export])
+          ran.clear
+          allow(helper).to receive(:capture).with(%w[/usr/sbin/zpool get -H -o value guid tank]).and_return("9999\n")
+          expect { import_it }.to raise_error(AmahiHelper::Failed, "tank isn't the pool that was asked for, #{left}")
+          expect(ran).to eq([export])
+        end
+
+        it "won't mount over a link on the pool, and exports it" do
+          FileUtils.mkdir_p(root)
+          File.symlink('/etc', "#{root}/link")
+          allow(helper).to receive(:do_own_dir).and_call_original
+          allow(helper).to receive(:with_dir).and_call_original
+          allow(Etc).to receive(:getpwnam).and_call_original
+          allow(Etc).to receive(:getpwnam).with('root').and_return(instance_double(Etc::Passwd, uid: Process.euid))
+          allow(helper).to receive(:group_id).with('root').and_return(Process.egid)
+          datasets(row('tank', root), row('tank/link', "#{root}/link"))
+          expect { import_it }.to raise_error(AmahiHelper::Failed, "tank isn't one of Amahi-kai's pools (#{root}/link is a link), #{left}")
+          expect(ran).to eq([%w[/usr/sbin/zfs mount tank], export])
+        end
+
+        it "won't go through a link on the way to a dataset's folder" do
+          FileUtils.mkdir_p(root)
+          File.symlink('/etc', "#{root}/apps")
+          allow(helper).to receive(:do_own_dir).and_call_original
+          allow(Etc).to receive(:getpwnam).and_call_original
+          allow(Etc).to receive(:getpwnam).with('root').and_return(instance_double(Etc::Passwd, uid: Process.euid))
+          allow(helper).to receive(:group_id).with('root').and_return(Process.egid)
+          datasets(row('tank', root), row('tank/apps', 'none', canmount: 'off'), row('tank/apps/foo', "#{root}/apps/foo"))
+          expect { import_it }.to raise_error(AmahiHelper::Failed, /#{Regexp.escape("#{root}/apps is not a folder")}, #{left}/)
+          expect(ran.last).to eq(export)
+          expect(ran).not_to include(%w[/usr/sbin/zfs mount tank/apps/foo])
+        end
+
+        it "exports it when a dataset doesn't mount, or doesn't mount where it should" do
+          datasets(row('tank', root), row('tank/locked', "#{root}/locked"))
+          allow(helper).to receive(:run_command) do |argv|
+            ran << argv
+            raise AmahiHelper::Failed, 'zfs exited 1: encryption key not loaded' if argv.last == 'tank/locked'
+          end
+          expect { import_it }.to raise_error(AmahiHelper::Failed, "zfs exited 1: encryption key not loaded, #{left}")
+          expect(ran.last).to eq(export)
+          expect(ran).not_to include(%w[/usr/sbin/zpool set cachefile= tank])
+
+          ran.clear
+          allow(helper).to receive(:run_command) { |argv| ran << argv && nil }
+          allow(helper).to receive(:dataset_mounted?).and_return(false)
+          datasets(row('tank', root))
+          expect { import_it }.to raise_error(AmahiHelper::Failed, "tank didn't mount at #{root}, #{left}")
+          expect(ran.last).to eq(export)
+        end
       end
 
       it "keeps its drives for it: Erase needs the pool's name typed" do
@@ -953,13 +1127,18 @@ RSpec.describe 'AmahiHelper ZFS pools' do
       expect(refusal('pools.replace', { 'name' => 'old', 'old' => '1234567890123456789', 'new' => '/dev/sdd' })).to include('/dev/sdd holds the pool tank')
     end
 
+    # What's on a drive, as blkid reads it from the drive itself.
+    def labels_from_the_tree
+      allow(helper).to receive(:probe) { |device| { 'TYPE' => helper.locate_device(tree, device).last&.dig('fstype') } }
+    end
+
     it 'destroys a pool only when its name is typed again, then frees its drives' do
+      labels_from_the_tree
       expect(refusal('pools.destroy', { 'name' => 'old', 'confirm' => 'OLD' })).to eq("type the pool's name (old) to destroy it")
       expect(steps('pools.destroy', { 'name' => 'old', 'confirm' => 'old' })).to eq(
         [[:release_pool, 'old'], # SMB sessions holding it end first
          %w[/usr/sbin/zpool destroy old],
          ['/usr/sbin/zpool', 'labelclear', '-f', '/dev/sdh1', { allow_failure: true }],
-         ['/usr/sbin/zpool', 'labelclear', '-f', '/dev/sdz1', { allow_failure: true }],
          ['/usr/sbin/wipefs', '-a', '/dev/sdh1', { allow_failure: true }],
          ['/usr/sbin/wipefs', '-a', '/dev/sdh9', { allow_failure: true }],
          ['/usr/sbin/wipefs', '-a', '/dev/sdh', { allow_failure: true }],
@@ -975,8 +1154,82 @@ RSpec.describe 'AmahiHelper ZFS pools' do
                  'children' => [{ 'path' => '/dev/sdh1', 'type' => 'part', 'fstype' => 'zfs_member', 'mountpoints' => [nil] },
                                 { 'path' => '/dev/sdh2', 'type' => 'part', 'fstype' => 'vfat', 'mountpoints' => [nil] }] }
       allow(helper).to receive(:block_tree).and_return(tree.reject { |disk| disk['path'] == '/dev/sdh' } + [shared])
+      allow(helper).to receive(:probe).and_return('TYPE' => 'zfs_member')
       wiped = steps('pools.destroy', { 'name' => 'old', 'confirm' => 'old' }).select { |step| step[0] == '/usr/sbin/wipefs' }.map { |step| step[2] }
       expect(wiped).to eq(['/dev/sdh1']) # the EFI partition beside it stays
+    end
+
+    describe 'which drives go with a deleted pool' do
+      before { labels_from_the_tree }
+
+      def drive(device, state = 'ONLINE')
+        { 'name' => device, 'state' => state, 'device' => device, 'children' => [] }
+      end
+
+      def cleared
+        steps('pools.destroy', { 'name' => 'old', 'confirm' => 'old' }).select { |step| %w[/usr/sbin/wipefs /usr/sbin/zpool].include?(step[0]) && step[1] != 'destroy' }
+                                                                       .map { |step| [File.basename(step[0]), step.last.is_a?(Hash) ? step[-2] : step.last] }
+      end
+
+      # A failed drive's name can belong to another drive by now: it's that drive's data.
+      it 'clears only drives ZFS has open: a name a drive that left the pool last had may be another drive by now' do
+        %w[FAULTED UNAVAIL REMOVED OFFLINE DEGRADED].each do |state|
+          allow(helper).to receive(:pool_drives).and_return([drive('/dev/sdh1'), drive('/dev/sdc1', state)])
+          expect(cleared.map(&:last)).to eq(%w[/dev/sdh1 /dev/sdh1 /dev/sdh9 /dev/sdh])
+        end
+      end
+
+      it 'clears a drive only if it carries ZFS\'s label, and only on a disk with nothing mounted' do
+        allow(helper).to receive(:pool_drives).and_return([drive('/dev/sdc1')]) # ext4, open or not
+        expect(cleared).to eq([])
+        allow(helper).to receive(:pool_drives).and_return([drive('/dev/sdh1')])
+        allow(helper).to receive(:probe).and_return({}) # lsblk says ZFS; the drive itself doesn't
+        expect(cleared).to eq([])
+        labels_from_the_tree
+        tree.find { |disk| disk['path'] == '/dev/sdh' }['children'] << { 'path' => '/dev/sdh2', 'type' => 'part', 'fstype' => 'ext4', 'mountpoints' => ['/data'] }
+        allow(helper).to receive(:pool_drives).and_return([drive('/dev/sdh1')])
+        expect(cleared).to eq([])
+      end
+
+      it 'clears the spares waiting and those standing in, and a drive named twice once' do
+        tree << { 'path' => '/dev/sdi', 'type' => 'disk', 'mountpoints' => [nil],
+                  'children' => [{ 'path' => '/dev/sdi1', 'type' => 'part', 'fstype' => 'zfs_member', 'mountpoints' => [nil] },
+                                 { 'path' => '/dev/sdi9', 'type' => 'part', 'parttype' => AmahiHelper::ZFS_RESERVED_PARTITION.upcase, 'mountpoints' => [nil] }] }
+        allow(helper).to receive(:pool_drives).and_return([drive('/dev/sdh1'), drive('/dev/sdi1'), drive('/dev/sdi1', 'INUSE'), drive('/dev/sdh1', 'AVAIL')])
+        expect(cleared.map(&:last)).to eq(%w[/dev/sdh1 /dev/sdi1 /dev/sdh1 /dev/sdh9 /dev/sdh /dev/sdi1 /dev/sdi9 /dev/sdi])
+      end
+
+      # blkid can't name everything: a partition with no filesystem it knows may still hold data.
+      it 'wipes the whole disk only beside ZFS\'s reserved partition, not beside one it can\'t name' do
+        tree.find { |disk| disk['path'] == '/dev/sdh' }['children'] << { 'path' => '/dev/sdh2', 'type' => 'part', 'mountpoints' => [nil] }
+        expect(cleared.map(&:last)).to eq(%w[/dev/sdh1 /dev/sdh1])
+      end
+
+      it 'doesn\'t take a partition for the reserved one by its type alone' do
+        reserved = tree.find { |disk| disk['path'] == '/dev/sdh' }['children'].last
+        reserved['fstype'] = 'ext4'
+        expect(cleared.map(&:last)).to eq(%w[/dev/sdh1 /dev/sdh1])
+        reserved['fstype'] = nil
+        reserved['mountpoints'] = ['/data']
+        expect(cleared).to eq([])
+      end
+
+      it 'reads the pool\'s drives from every group' do
+        allow(helper).to receive(:pool_drives).and_call_original
+        allow(File).to receive(:realpath) { |path| path }
+        allow(helper).to receive(:capture).with(%w[/usr/sbin/zpool status -P old]).and_return(<<~STATUS)
+          config:
+
+          \tNAME           STATE     READ WRITE CKSUM
+          \told            ONLINE       0     0     0
+          \t  /dev/sdh1    ONLINE       0     0     0
+          \tspares
+          \t  /dev/sdc1    AVAIL   
+
+          errors: No known data errors
+        STATUS
+        expect(helper.pool_drives('old').map { |leaf| leaf['device'] }).to eq(%w[/dev/sdh1 /dev/sdc1])
+      end
     end
 
     it "removes the pool's mount point only when it's an empty folder" do

@@ -63,6 +63,9 @@ module AmahiHelper
   # another server is never mounted here with a click.
   OFFLINE_POOLS = '/var/lib/amahi-kai/offline-pools.json'
 
+  # The type ZFS gives the small partition it reserves beside a member on a whole disk.
+  ZFS_RESERVED_PARTITION = '6a945a3b-1dd2-11b2-99a6-080020736631'
+
 
   add_operations(
     # Loads ZFS and caps its memory cache (see ARC_LIMIT), now and at every boot, replying with
@@ -199,7 +202,8 @@ module AmahiHelper
       validate: ->(a) { installed!(ZFS) && { name: managed_pool(a['name']) } },
       plan: ->(v) { [[:pool_shares_root, v[:name]]] }
     },
-    # Brings back a pool taken offline here, by the GUID recorded then, at its own mount point.
+    # Brings back a pool taken offline here, by the GUID recorded then, at its own mount point. It's
+    # checked as a pool found on the drives is: it may have been somewhere else since.
     'pools.import' => {
       params: %w[name],
       validate: ->(a) { installed!(ZPOOL) && import_request(a['name']) },
@@ -207,9 +211,8 @@ module AmahiHelper
     },
     # Imports a pool found on the drives (pools.status's 'found'), by its id: this server's from
     # before it was installed again, or one whose drives came too late at boot. It's imported
-    # without mounting anything, then mounted only if it's one of Amahi-kai's (everything of it
-    # mounts under POOL_ROOT/<name>); otherwise it's exported again, left as it was. Its folders
-    # get setuid=off and devices=off, as pools.create makes them.
+    # without mounting anything, then mounted only if it's one of Amahi-kai's (import_checked_pool);
+    # otherwise it's exported again.
     'pools.import_found' => {
       params: %w[id],
       validate: ->(a) { installed!(ZPOOL) && found_import_request(a['id']) },
@@ -448,21 +451,40 @@ module AmahiHelper
       no_shares_on!(name)
       no_apps_on!(name, 'deleted')
       pool_not_held!(name, 'delete it')
-      members = pool_leaves(pool_vdevs(name)).filter_map { |leaf| leaf['device'] }
       tree = block_tree
-      disks = members.filter_map { |part| tree.find { |disk| subtree(disk).any? { |n| n['path'] == part } } }.uniq
+      members = drives_to_clear(name, tree)
+      disks = members.map { |part| locate_device(tree, part).first }.uniq
       { name: name, members: members, wipe: disks.flat_map { |disk| pool_wipe_targets(disk, members) },
         kept: apps_on_pool(name).map(&:first) }
     end
 
+    # The states of a drive ZFS has open (a spare waits AVAIL, and is INUSE when it stands in).
+    DRIVE_IN_USE = %w[ONLINE AVAIL INUSE].freeze
+
+    # The drives of a pool going away that are certainly its own, cleared with it: open in ZFS,
+    # with ZFS's label (read from the drive: lsblk's can lag), on a disk with nothing mounted. A
+    # drive out of the pool (failed, removed) is only the name it last had, which can belong to
+    # another drive by now. It keeps its label, which Disks → ZFS Pools can erase.
+    def drives_to_clear(name, tree)
+      open = pool_drives(name).select { |leaf| DRIVE_IN_USE.include?(leaf['state']) }.filter_map { |leaf| leaf['device'] }.uniq
+      open.select do |part|
+        disk, node = locate_device(tree, part)
+        node && mountpoints(disk).empty? && probe(part)['TYPE'] == 'zfs_member'
+      end
+    end
+
     # What of +disk+ goes with a deleted pool: the whole disk when all of it was the pool's (its
-    # members, and the small partition ZFS keeps beside each, which has no filesystem), else only
-    # the members on it, so a disk shared with anything else (a system's boot partition) keeps that.
+    # members, and ZFS's reserved partition beside each), else only the members on it, so a disk
+    # shared with anything else (a system's boot partition, a partition blkid can't name) keeps that.
     def pool_wipe_targets(disk, members)
       others = subtree(disk).drop(1).reject { |n| members.include?(n['path']) }
-      return wipe_targets(disk) if others.all? { |n| n['fstype'].nil? && (n['children'] || []).empty? && mountpoints(n).empty? }
+      return wipe_targets(disk) if others.all? { |n| zfs_reserved?(n) }
 
       subtree(disk).select { |n| members.include?(n['path']) }.flat_map { |n| wipe_targets(n) }
+    end
+
+    def zfs_reserved?(node)
+      node['parttype'].to_s.downcase == ZFS_RESERVED_PARTITION && node['fstype'].nil? && (node['children'] || []).empty? && mountpoints(node).empty?
     end
 
     # A pool an installed app keeps its data on isn't taken offline or deleted: the app would lose
@@ -503,6 +525,7 @@ module AmahiHelper
       guid = offline_records[value]
       raise Refused, "#{value.inspect} isn't a pool taken offline here" unless value.match?(POOL_NAME) && guid
       raise Refused, "a pool named #{value} is already online" if pool_names.include?(value)
+      free_pool_dir!(value)
       { name: value, guid: guid.to_s }
     end
 
@@ -644,6 +667,12 @@ module AmahiHelper
       rows.flat_map { |row| row['children'].empty? ? [row] : pool_leaves(row['children']) }
     end
 
+    # Every drive of a pool, those of its special, log, cache and spare groups too.
+    def pool_drives(name)
+      status = parse_pool_status(capture([ZPOOL, 'status', '-P', name]))
+      pool_leaves(status['vdevs'] + status['extras'])
+    end
+
     def existing_pool(value)
       value = string(value, 'name', max: 32)
       raise Refused, "there's no pool named #{value.inspect}" unless value.match?(POOL_NAME) && pool_names.include?(value)
@@ -723,13 +752,7 @@ module AmahiHelper
     def pooled_devices
       return {} unless File.executable?(ZPOOL)
       pool_names.each_with_object({}) do |pool, found|
-        each_leaf(parse_pool_status(capture([ZPOOL, 'status', '-P', pool]))['vdevs']) { |leaf| found[leaf['device']] = pool }
-      end
-    end
-
-    def each_leaf(rows, &block)
-      rows.each do |row|
-        row['children'].empty? ? (yield row if row['device']) : each_leaf(row['children'], &block)
+        pool_drives(pool).each { |leaf| found[leaf['device']] = pool if leaf['device'] }
       end
     end
 
@@ -906,36 +929,103 @@ module AmahiHelper
     end
 
     def do_import_pool(name, guid)
-      capture([ZPOOL, 'import', '-d', BY_ID, guid])
+      import_checked_pool(name, guid)
       records = offline_records.except(name)
       do_install(OFFLINE_POOLS, "#{JSON.pretty_generate(records)}\n", nil, '0640', APP_USER)
       nil
     end
 
-    # -N imports it with nothing mounted, so a pool that isn't Amahi-kai's never covers a folder of
-    # the system: its datasets' mount points are checked first. (force: ZFS asks for -f, the pool
-    # last used by another system, such as this one before it was installed again.)
+    # (force: ZFS asks for -f, the pool last used by another system, such as this one before it was
+    # installed again.)
     def do_import_found_pool(name, id, force)
-      capture([ZPOOL, 'import', '-N', *(force ? ['-f'] : []), '-d', BY_ID, id])
-      root = "#{POOL_ROOT}/#{name}"
-      datasets = capture([ZFS, 'list', '-H', '-o', 'name,mountpoint,canmount,setuid,devices', '-r', '-t', 'filesystem', name])
-                 .lines(chomp: true).map { |line| line.split("\t") }
-      # The pool's own folder at POOL_ROOT/<name> (managed?), and everything that can mount inside it
-      stray = datasets.find do |dataset, mountpoint, canmount|
-        if dataset == name then mountpoint != root
-        else canmount != 'off' && !%w[none legacy].include?(mountpoint) && !on_path?(mountpoint, root)
-        end
-      end
-      if stray || datasets.empty?
-        run_command([ZPOOL, 'export', name, { allow_failure: true }])
-        where = stray ? "#{stray[0]} mounts at #{stray[1]}" : 'ZFS lists nothing in it'
-        raise Failed, "#{name} isn't one of Amahi-kai's pools (#{where}), so it's left on its drives, not imported: import it from the command line"
-      end
-      datasets.each do |dataset, _mountpoint, _canmount, setuid, devices|
-        run_command([ZFS, 'set', 'setuid=off', 'devices=off', dataset]) if setuid == 'on' || devices == 'on'
-      end
-      run_command([ZFS, 'mount', '-a'])
+      import_checked_pool(name, id, force)
       nil
+    end
+
+    # A pool coming onto this server, whose drives may have been anywhere. -N imports it with nothing
+    # mounted, so a pool that isn't Amahi-kai's never covers a folder of the system, and it stays out
+    # of ZFS's cache file until it has passed, so that a failure, or a power cut, leaves nothing for
+    # the next boot to mount unchecked.
+    def import_checked_pool(name, id, force = false)
+      capture([ZPOOL, 'import', '-N', '-o', 'cachefile=none', *(force ? ['-f'] : []), '-d', BY_ID, id])
+      begin
+        raise Failed, "#{name} isn't the pool that was asked for" unless capture([ZPOOL, 'get', '-H', '-o', 'value', 'guid', name]).strip == id
+
+        datasets = pool_datasets(name)
+        all_in_their_folders!(name, datasets)
+        datasets.each { |row| tighten_dataset(row) }
+        mount_pool_datasets(name, datasets)
+        run_command([ZPOOL, 'set', 'cachefile=', name])
+      rescue Failed, SystemCallError => e
+        run_command([ZPOOL, 'export', name, { allow_failure: true }])
+        raise Failed, "#{e.message}, so it's left on its drives, not imported: import it from the command line"
+      end
+    end
+
+    POOL_DATASET_COLUMNS = %w[name mountpoint canmount setuid devices sharenfs sharesmb].freeze
+
+    # A pool's datasets as rows of POOL_DATASET_COLUMNS. A value with a tab in it would shift the
+    # columns after it, and a row like that isn't read.
+    def pool_datasets(name)
+      capture([ZFS, 'list', '-H', '-o', POOL_DATASET_COLUMNS.join(','), '-r', '-t', 'filesystem', name]).lines(chomp: true).map do |line|
+        fields = line.split("\t", -1)
+        raise Failed, "#{name} isn't one of Amahi-kai's pools (ZFS lists a dataset oddly: #{line.inspect})" unless fields.size == POOL_DATASET_COLUMNS.size
+
+        POOL_DATASET_COLUMNS.zip(fields).to_h
+      end
+    end
+
+    def mounts_itself?(row)
+      row['canmount'] != 'off' && !%w[none legacy].include?(row['mountpoint'])
+    end
+
+    # The pool's own folder at POOL_ROOT/<name> (managed?), and each dataset that can mount in the
+    # folder its name gives, as it inherits from the pool: the only place Amahi-kai's mount.
+    def all_in_their_folders!(name, datasets)
+      raise Failed, "#{name} isn't one of Amahi-kai's pools (ZFS lists nothing in it)" if datasets.empty?
+
+      stray = datasets.find do |row|
+        home = "#{POOL_ROOT}/#{row['name']}"
+        row['name'] == name ? row['mountpoint'] != home : mounts_itself?(row) && !(row['mountpoint'] == home && normalized_path?(home))
+      end
+      raise Failed, "#{name} isn't one of Amahi-kai's pools (#{stray['name']} mounts at #{stray['mountpoint']})" if stray
+    end
+
+    # As pools.create makes them: setuid and devices off. Nor does it share itself with anyone (at
+    # the next boot zfs-share.service would do what its properties say).
+    def tighten_dataset(row)
+      return if %w[setuid devices sharenfs sharesmb].all? { |property| row[property] == 'off' }
+
+      run_command([ZFS, 'set', 'setuid=off', 'devices=off', 'sharenfs=off', 'sharesmb=off', row['name']])
+    end
+
+    # One at a time, parents first, each only after every folder on its way is known to be real and
+    # root's: a link on the pool in place of a folder would mount it wherever the link points.
+    def mount_pool_datasets(name, datasets)
+      root = "#{POOL_ROOT}/#{name}"
+      mounting = datasets.select { |row| row['canmount'] == 'on' && mounts_itself?(row) }
+      mounting.sort_by { |row| row['mountpoint'].count('/') }.each do |row|
+        folder = row['mountpoint']
+        own_folders_above(folder, root)
+        raise Failed, "#{name} isn't one of Amahi-kai's pools (#{folder} is a link)" if File.symlink?(folder)
+
+        run_command([ZFS, 'mount', row['name']])
+        raise Failed, "#{row['name']} didn't mount at #{folder}" unless dataset_mounted?(row['name'], folder)
+      end
+      do_own_dir(root, 'root', 'root', '0755') if File.directory?(root)
+    end
+
+    # From the pool's folder down to just above +folder+, as far as they exist (ZFS makes the rest,
+    # as root). Top down: a folder that only root can change can't become a link afterwards.
+    def own_folders_above(folder, root)
+      return if folder == root
+
+      above = folder.delete_prefix("#{root}/").split('/')[0...-1]
+      [root, *above.each_index.map { |i| File.join(root, *above[0..i]) }].each do |path|
+        break unless File.exist?(path) || File.symlink?(path)
+
+        do_own_dir(path, 'root', 'root', '0755')
+      end
     end
 
     # Sets the running module's cap, and replies with the one ZFS uses (its c_max), or the cap
@@ -988,7 +1078,8 @@ module AmahiHelper
     # One pool's `zpool status -P`: its state, the status and action notes (shown when
     # something is wrong), the last scrub or resilver, the errors line, and its vdevs as a
     # tree: [{ 'name' => 'raidz1-0', 'state' => 'ONLINE', 'children' => [{ 'name' =>
-    # '/dev/disk/by-id/ata-...-part1', 'device' => '/dev/sdb1', 'read' => '0', ... }] }].
+    # '/dev/disk/by-id/ata-...-part1', 'device' => '/dev/sdb1', 'read' => '0', ... }] }]. Its special,
+    # log, cache and spare groups come apart, as 'extras', the same way.
     def parse_pool_status(text)
       fields = {}
       config = []
@@ -1008,9 +1099,9 @@ module AmahiHelper
           fields[key] = "#{fields[key]} #{line.strip}".strip # a note continued on the next line
         end
       end
-      pool = pool_tree(config).first
+      pool, *extras = pool_tree(config)
       { 'state' => fields['state'], 'status' => fields['status'], 'action' => fields['action'], 'scan' => fields['scan'],
-        'errors' => fields['errors'], 'vdevs' => pool ? pool['children'] : [] }
+        'errors' => fields['errors'], 'vdevs' => pool ? pool['children'] : [], 'extras' => extras }
     end
 
     # The config section's rows, nested by their indent (two spaces a level, after a tab).

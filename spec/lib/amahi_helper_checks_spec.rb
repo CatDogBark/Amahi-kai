@@ -250,6 +250,7 @@ RSpec.describe 'AmahiHelper: the checks on every argument' do
       [{ 'name' => 'mirror-0', 'children' => [{ 'name' => by_id, 'state' => 'OFFLINE', 'device' => '/dev/sdz1', 'children' => [] },
                                               { 'name' => '/dev/disk/by-id/ata-SSD_8-part1', 'state' => 'ONLINE', 'device' => '/dev/sdy1', 'children' => [] }] }]
     )
+    allow(helper).to receive(:pool_drives).and_return([{ 'name' => '/dev/disk/by-id/ata-SSD_8-part1', 'state' => 'ONLINE', 'device' => '/dev/sdy1', 'children' => [] }])
     allow(helper).to receive(:pool_snapshots).and_return([{ 'name' => 'amahi-daily-2026-10-03-0010' }])
     allow(helper).to receive(:no_shares_on!)
     allow(helper).to receive(:no_apps_on!)
