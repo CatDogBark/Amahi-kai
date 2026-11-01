@@ -272,10 +272,11 @@ module AmahiHelper
   )
 
   class << self
-    # One DNS label (RFC 1123): letters, digits and hyphens, at most 63 characters.
+    # One DNS label (RFC 1123): letters, digits and hyphens, at most 63 characters. Plain ASCII: /i
+    # alone also takes the two non-ASCII letters that fold to k and s.
     def hostname(value)
       value = string(value, 'hostname', max: 63)
-      raise Refused, "hostname #{value.inspect} must be letters, digits and hyphens, not starting or ending with a hyphen" unless value.match?(/\A[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\z/i)
+      raise Refused, "hostname #{value.inspect} must be letters, digits and hyphens, not starting or ending with a hyphen" unless value.ascii_only? && value.match?(/\A[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\z/i)
       value
     end
 
@@ -372,9 +373,10 @@ module AmahiHelper
     def dnsmasq_conf(value, allowed)
       value = string(value, 'content', max: 64 * 1024)
       value.each_line do |line|
+        raise Refused, "a dnsmasq line is longer than #{DNSMASQ_LINE_MAX} characters" if line.bytesize > DNSMASQ_LINE_MAX
         line = line.strip
         next if line.empty? || line.start_with?('#')
-        raise Refused, "dnsmasq line #{line.inspect} is not one Amahi-kai writes" unless allowed.any? { |re| line.match?(re) }
+        raise Refused, "dnsmasq line #{line.inspect} is not one Amahi-kai writes" unless line.ascii_only? && allowed.any? { |re| line.match?(re) }
       end
       raise Refused, "dnsmasq's config must answer no DNS (port=0)" unless value.each_line.any? { |line| line.strip == 'port=0' }
       value

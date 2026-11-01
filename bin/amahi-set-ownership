@@ -13,9 +13,13 @@
 # since the app user can't write .bundle/ any more.
 set -euo pipefail
 
+# find's -execdir, below, refuses a PATH with a relative folder in it.
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+
 APP_DIR="${APP_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
 APP_USER="${APP_USER:-amahi}"
 APP_GROUP="${APP_GROUP:-amahi}"
+STATE_DIR="${STATE_DIR:-/var/lib/amahi-kai}"
 WRITABLE=(tmp log public/assets vendor/bundle)
 
 if [[ $EUID -ne 0 ]]; then
@@ -35,19 +39,26 @@ unset 'prune[${#prune[@]}-1]'
 find "$APP_DIR" -xdev \( "${prune[@]}" \) -prune -o -exec chown -h root:root {} +
 find "$APP_DIR" -xdev \( "${prune[@]}" \) -prune -o ! -type l -perm /022 -exec chmod go-w {} +
 
+# Root's records live here, and only tmp/ below it is the app's.
+install -d -o root -g root -m 0755 "$STATE_DIR"
+
 # The app's folders. Their parents are root's now, so only root can have put something
 # other than a real folder at these paths; it's replaced. Files root left inside them
-# (an older update ran the asset build as root) go back to the app user.
+# (an older update ran the asset build as root) go back to the app user: each from inside its
+# folder (-execdir), since the app user can swap a folder on the way for a link, and only with
+# no other name (-links), since another name can be a file of someone else's.
 for dir in "${WRITABLE[@]}"; do
   path="$APP_DIR/$dir"
   if [[ -L "$path" || ( -e "$path" && ! -d "$path" ) ]]; then
     rm -rf -- "$path"
   fi
   install -d -o "$APP_USER" -g "$APP_GROUP" -m 0755 "$path"
-  find "$path" -xdev ! -user "$APP_USER" -exec chown -h "$APP_USER:$APP_GROUP" {} +
+  find "$path" -xdev ! -user "$APP_USER" \( -type d -o -links 1 \) -execdir chown -h "$APP_USER:$APP_GROUP" {} +
 done
+# Inside tmp/, which is the app user's, only the app user makes folders: as root, a link at one
+# of these names would give away what it points to. A name it can't make is the app's to sort out.
 for dir in tmp/pids tmp/cache tmp/sockets; do
-  install -d -o "$APP_USER" -g "$APP_GROUP" -m 0755 "$APP_DIR/$dir"
+  sudo -u "$APP_USER" mkdir -p -- "$APP_DIR/$dir" || echo "amahi-set-ownership: couldn't make $dir" >&2
 done
 
 # Gems go to vendor/bundle, production groups only, and the lockfile is never rewritten

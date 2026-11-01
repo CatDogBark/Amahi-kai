@@ -314,13 +314,21 @@ RSpec.describe 'AmahiHelper' do
       [
         'root preexec = /bin/sh', 'ROOT  PREEXEC = /bin/sh', 'root_preexec = x', 'exec = x', 'postexec = x',
         'print command = x', 'add user script = x', 'magic script = x', 'passwd program = x',
-        'idmap config * : script = x', 'include = /tmp/x', "inc\\\nlude = /tmp/x", 'config file = /tmp/x',
+        'idmap config * : script = x', 'include = /tmp/x', 'config file = /tmp/x',
         'admin users = admin', 'username map = /tmp/map', 'panic action = x', 'wins hook = x', 'root directory = /',
         'preload modules = /var/lib/amahi-kai/files/x/m.so', 'perfcount module = x', 'force user = nobody',
         'force group = users', 'shadow:basedir = /', 'copy = global', 'smb ports = 4445', 'made up = x'
       ].each do |line|
-        expect(helper.samba_problems(share_with(line))).to eq(["[bad] #{line.split('=').first.strip.gsub(/\\\n/, ' ')} is not allowed"]), line
+        expect(helper.samba_problems(share_with(line))).to eq(["[bad] #{line.split('=').first.strip} is not allowed"]), line
       end
+    end
+
+    # Samba takes the line after a comment like that as live, and a reader of the file as part of it.
+    it 'refuses a line ending in a backslash, a comment or not, with or without spaces after it' do
+      ["inc\\\nlude = /tmp/x", "# a note \\\nroot preexec = /bin/sh", "; a note \\  \nroot preexec = /bin/sh", "veto files = /x/ \\\r\n"].each do |line|
+        expect(helper.samba_problems(share_with(line)).first).to include('a line ends in a backslash'), line.inspect
+      end
+      expect(helper.samba_problems(share_with('veto files = /a\\b/'))).to eq([])
     end
 
     it "takes global parameters only in [global]" do
@@ -866,13 +874,42 @@ RSpec.describe 'AmahiHelper' do
       [0, 501, '150', nil].each do |lines|
         expect(refusal('system.journal', { 'lines' => lines })).to include('whole number from 1 to 500'), lines.inspect
       end
-      long = 'x' * 3000
-      allow(helper).to receive(:capture).with(['/usr/bin/journalctl', '--no-pager', '--quiet', '-o', 'short-iso', '-n', '2'])
-                                        .and_return("Oct 29 one\n#{long}\nOct 29 \xFF three\n".b)
+      long = "2026-10-29T10:00:00 #{'x' * 3000}"
+      allow(helper).to receive(:capture).and_return("2026-10-29T10:00:00 one\n#{long}\n2026-10-29T10:00:01 \xFF three\n".b, '')
       reply = helper.do_journal(2)
       expect(reply['lines'].size).to eq(2) # the last two
       expect(reply['lines'].first.length).to eq(2000)
-      expect(reply['lines'].last).to eq('Oct 29 ? three') # not UTF-8, and still a line to show
+      expect(reply['lines'].last).to eq('2026-10-29T10:00:01 ? three') # not UTF-8, and still a line to show
+    end
+
+    it "asks the journal only for Amahi-kai's units, the services it runs and the kernel's errors" do
+      asked = []
+      allow(helper).to receive(:capture) { |argv| asked << argv && '' }
+      helper.do_journal(5)
+      base = ['/usr/bin/journalctl', '--no-pager', '--quiet', '-o', 'short-iso', '-n', '5']
+      expect(asked.map { |argv| argv.first(base.size) }).to all(eq(base))
+      expect(asked.first.drop(base.size).each_slice(2).map(&:first).uniq).to eq(['-u'])
+      expect(asked.first.drop(base.size).each_slice(2).map(&:last)).to include('amahi-kai*', 'smbd.service', 'docker.service')
+      expect(asked.last.drop(base.size)).to eq(['-k', '-p', 'err'])
+    end
+
+    it "puts the journal's answers in order by time, an entry's further lines with it, same times as they came" do
+      allow(helper).to receive(:capture).and_return(
+        "2026-10-29T10:00:01 first\n    its second line\n2026-10-29T10:00:03 third\n2026-10-29T10:00:03 fourth\n",
+        "2026-10-29T10:00:02 kernel\n"
+      )
+      expect(helper.do_journal(10)['lines']).to eq(['2026-10-29T10:00:01 first', '    its second line', '2026-10-29T10:00:02 kernel',
+                                                    '2026-10-29T10:00:03 third', '2026-10-29T10:00:03 fourth'])
+    end
+
+    it 'keeps its lock files for root alone, one already there too' do
+      Dir.mktmpdir do |dir|
+        lock = "#{dir}/lock"
+        expect(helper.with_lock(lock) { File.stat(lock).mode & 0o777 }).to eq(0o600)
+        File.chmod(0o644, lock)
+        helper.with_lock(lock) { nil }
+        expect(File.stat(lock).mode & 0o777).to eq(0o600)
+      end
     end
 
     it 'reboots and powers off through systemd' do
@@ -952,7 +989,7 @@ RSpec.describe 'AmahiHelper' do
       )
       File.write(hosts.path, '127.0.0.1 localhost') # no 127.0.1.1 line, nor a final newline
       expect(helper.hosts_naming('kai')).to eq("127.0.0.1 localhost\n127.0.1.1 kai\n")
-      ['my nas', '-nas', 'nas-', 'nas.lan', 'x' * 64, "nas\n"].each do |name|
+      ['my nas', '-nas', 'nas-', 'nas.lan', 'x' * 64, "nas\n", "Kab", "sſb"].each do |name|
         expect(refusal('network.set_hostname', { 'hostname' => name })).not_to be_nil, name.inspect
       end
     end
@@ -983,6 +1020,15 @@ RSpec.describe 'AmahiHelper' do
        "local=/x/\nuser=root"].each do |line|
         expect(refusal('network.write_dnsmasq_config', { 'content' => "#{line}\n" })).to include('not one Amahi-kai writes'), line
       end
+    end
+
+    # dnsmasq would take what's past about 1 KB as a line of its own, unchecked here if it's a comment.
+    it 'refuses a dnsmasq line longer than dnsmasq reads whole, a comment too, and any letter outside ASCII' do
+      expect(refusal('network.write_dnsmasq_config', { 'content' => "port=0\n# #{'a' * 509}\n" })).to be_nil
+      expect(refusal('network.write_dnsmasq_config', { 'content' => "port=0\n# #{'a' * 510}\n" })).to include('longer than 512')
+      expect(refusal('network.write_dnsmasq_config', { 'content' => "port=0\n#{' ' * 600}bind-interfaces\n" })).to include('longer than 512')
+      expect(refusal('network.write_dnsmasq_config', { 'content' => "port=0\ndomain=Kab\n" })).to include('not one Amahi-kai writes')
+      expect(refusal('network.write_dnsmasq_config', { 'content' => "port=0\n# Auto-generated — by Amahi-kai\n" })).to be_nil
     end
 
     it 'refuses a dnsmasq config that would answer DNS: Unbound does' do

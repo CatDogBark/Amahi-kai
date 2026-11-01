@@ -44,6 +44,9 @@ module AmahiHelper
 
     [Service]
     Type=oneshot
+    # A wait first, so a burst is one run, and Unbound reloads at most this often whatever a device
+    # on the LAN does with its name.
+    ExecStartPre=/usr/bin/sleep 5
     ExecStart=/usr/local/sbin/amahi-helper dns.sync_leases
     StandardInputText={}
   UNIT
@@ -333,6 +336,7 @@ module AmahiHelper
 
     def unbound_line?(line)
       return true if UNBOUND_CLAUSES.include?(line)
+      return false unless line.ascii_only? # the /i below alone also takes two letters that fold to k and s
       key, value = line.split(/:\s+/, 2)
       return false unless value
       case key

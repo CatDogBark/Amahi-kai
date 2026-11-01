@@ -4,6 +4,16 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+### 🔒 Security & Fixes
+
+- **Tighter around what runs as root** — From a review of the root helper and the scripts around it:
+  - System Update makes the app's working folders as the app user, and hands files back to it only from inside their own folder.
+  - A dnsmasq config line too long for dnsmasq to read whole is refused, and so is a Samba line ending in a backslash (on a share's Advanced settings too).
+  - A server with no git history stops at System Update instead of fetching code it can't check.
+  - The update and catalog locks are root's alone, and hostnames and the names in DNS configs are plain ASCII.
+  - Device names from DHCP reach DNS after 5 seconds, so a burst of them is one reload of Unbound.
+- **The System journal is narrower** (Settings → Help, Download logs and a problem's report) — Amahi-kai's services, the ones it runs and the kernel's errors, not the whole of the system's log, which also names sudo's commands and SSH logins.
+
 ## [1.5.3] — 2026-10-30
 
 Following the dev branch, which isn't signature-checked, takes root's permission on the server, and System Status says which updates are signed.

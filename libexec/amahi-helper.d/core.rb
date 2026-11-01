@@ -335,6 +335,11 @@ module AmahiHelper
   # order (ignore: no address for it; infinite: a lease that never ends).
   DHCP_NAME = '(?!(?:ignore|infinite)\\b(?!-))[a-z][a-z0-9-]{0,62}'
 
+  # dnsmasq reads its config in pieces of about 1 KB and takes what's past the first as a line of
+  # its own, in a comment too. Each line is checked whole here, so it must fit in one piece (the
+  # longest the app writes is about 270 characters).
+  DNSMASQ_LINE_MAX = 512
+
   DNSMASQ_LINES = [
     /\Adhcp-range=#{IPV4},#{IPV4},\d{1,7}s\z/,
     /\Adhcp-option=option:router,#{IPV4}\z/,

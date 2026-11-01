@@ -237,7 +237,7 @@ module AmahiHelper
     def samba_shares
       shares = {}
       current = nil
-      File.read(SMB_CONF).gsub(/\\\r?\n/, ' ').each_line do |line|
+      File.read(SMB_CONF).each_line do |line|
         line = line.strip
         next if line.empty? || line.start_with?('#', ';')
         if (header = line[/\A\[([^\]]*)\]/, 1])
@@ -314,8 +314,14 @@ module AmahiHelper
     end
 
     # Problems with a Samba config (raw text, or testparm's canonical output): a parameter
-    # that isn't listed, or a listed one with a value that points somewhere it shouldn't.
+    # that isn't listed, or a listed one with a value that points somewhere it shouldn't. A line
+    # ending in a backslash is refused first: Samba and a reader of the file disagree on what
+    # follows it (after a comment, Samba takes the next line as live), and each line is checked
+    # on its own.
     def samba_problems(text)
+      continued = text.each_line.find { |line| line.match?(/\\\s*\z/) }
+      return ["a line ends in a backslash: #{continued.strip[0, 60]}"] if continued
+
       params = samba_params(text)
       problems = params.filter_map do |section, name, value|
         key = name.downcase.delete(" \t")
@@ -390,11 +396,10 @@ module AmahiHelper
          value.match?(%r{\A#{Regexp.escape(pool_root)}/[a-z][a-z0-9_-]{0,31}/shares/[^/]+}))
     end
 
-    # [section, name, value] for each parameter. Samba joins a line ending in a
-    # backslash with the next one.
+    # [section, name, value] for each parameter.
     def samba_params(text)
       section = 'global'
-      text.gsub(/\\\r?\n/, ' ').each_line.filter_map do |line|
+      text.each_line.filter_map do |line|
         line = line.strip
         next if line.empty? || line.start_with?('#', ';')
         if (header = line[/\A\[([^\]]*)\]/, 1])
