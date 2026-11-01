@@ -573,6 +573,13 @@ module AmahiHelper
       value
     end
 
+    # A line of a config, for checking it, without what its tool takes as space around a line: spaces,
+    # tabs and the line's end. Not the rest of what strip removes: Unbound takes a form feed as text,
+    # so to it a line starting with one and then # is no comment.
+    def config_line(line)
+      line.sub(/\A[ \t]+/, '').sub(/[ \t\r\n]+\z/, '')
+    end
+
     def normalized_path?(path)
       path.valid_encoding? && !path.match?(/[[:cntrl:]]/) &&
         path.start_with?('/') && path.length > 1 && !path.end_with?('/') &&

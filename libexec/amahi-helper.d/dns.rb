@@ -284,7 +284,7 @@ module AmahiHelper
       depth = 0
       no_router = false
       value.each_line do |line|
-        line = line.strip
+        line = config_line(line)
         next if line.empty? || line.start_with?('#')
         raise Refused, "radvd line #{line.inspect} is not one Amahi-kai writes" unless radvd_line?(line)
         no_router = false if depth.zero?
@@ -311,7 +311,7 @@ module AmahiHelper
       value = string(value, 'content', max: 256 * 1024)
       allowed = []
       value.each_line do |line|
-        line = line.strip
+        line = config_line(line)
         next if line.empty? || line.start_with?('#')
         raise Refused, "Unbound line #{line.inspect} is not one Amahi-kai writes" unless unbound_line?(line)
         key, rest = line.split(/:\s+/, 2)

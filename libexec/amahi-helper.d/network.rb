@@ -374,11 +374,11 @@ module AmahiHelper
       value = string(value, 'content', max: 64 * 1024)
       value.each_line do |line|
         raise Refused, "a dnsmasq line is longer than #{DNSMASQ_LINE_MAX} characters" if line.bytesize > DNSMASQ_LINE_MAX
-        line = line.strip
+        line = config_line(line)
         next if line.empty? || line.start_with?('#')
         raise Refused, "dnsmasq line #{line.inspect} is not one Amahi-kai writes" unless line.ascii_only? && allowed.any? { |re| line.match?(re) }
       end
-      raise Refused, "dnsmasq's config must answer no DNS (port=0)" unless value.each_line.any? { |line| line.strip == 'port=0' }
+      raise Refused, "dnsmasq's config must answer no DNS (port=0)" unless value.each_line.any? { |line| config_line(line) == 'port=0' }
       value
     end
 

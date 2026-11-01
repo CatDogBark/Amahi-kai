@@ -279,7 +279,7 @@ module AmahiHelper
     def greyhole_conf(value)
       value = string(value, 'content', max: 64 * 1024)
       value.each_line do |line|
-        line = line.strip
+        line = config_line(line)
         next if line.empty? || line.start_with?('#')
         match = GREYHOLE_LINES.lazy.map { |re| line.match(re) }.find(&:itself)
         raise Refused, "greyhole.conf line #{line.sub(/\Adb_pass = .*/, 'db_pass = ...').inspect} is not one Amahi-kai writes" unless match

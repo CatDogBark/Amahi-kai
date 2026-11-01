@@ -48,8 +48,8 @@ RSpec.describe 'AmahiHelper: what its checks approve, read by the real tools' do
     end
 
     it 'passes over each comment the check passes over, up to the longest line it approves' do
-      ["# #{word}", "   # #{word}", "\t# #{word}", "\f# #{word}", "\v# #{word}", "\r# #{word}", "# #{word}\r", "# \\ #{word}", "# \" #{word}",
-       "# #{'é' * 200}#{word}", "# #{'a' * (AmahiHelper::DNSMASQ_LINE_MAX - 3 - word.size)}#{word}"].each do |line|
+      ["# #{word}", "   # #{word}", "\t# #{word}", "# #{word}\r", "# \\ #{word}", "# \" #{word}", "# #{'é' * 200}#{word}",
+       "# #{'a' * (AmahiHelper::DNSMASQ_LINE_MAX - 3 - word.size)}#{word}"].each do |line|
         text = "port=0\n#{line}\n"
         expect { approved(text) }.not_to raise_error, line.inspect
         expect { read_by_dnsmasq(text) }.not_to raise_error, line.inspect
@@ -57,9 +57,15 @@ RSpec.describe 'AmahiHelper: what its checks approve, read by the real tools' do
     end
 
     it 'reads a line the same with space around it' do
-      ['port=0 ', "\tport=0", "port=0\r", "\fport=0"].each do |line|
+      ['port=0 ', "\tport=0", "port=0\r"].each do |line|
         expect { approved("#{line}\n") }.not_to raise_error, line.inspect
         expect { read_by_dnsmasq("#{line}\n") }.not_to raise_error, line.inspect
+      end
+    end
+
+    it 'refuses a comment or a line after anything but a space or a tab' do
+      ["\f# #{word}", "\v# #{word}", "\r# #{word}", "\fport=0", "\vbind-interfaces"].each do |line|
+        expect { approved("port=0\n#{line}\n") }.to raise_error(AmahiHelper::Refused), line.inspect
       end
     end
   end
@@ -111,10 +117,19 @@ RSpec.describe 'AmahiHelper: what its checks approve, read by the real tools' do
     before { tool!(AmahiHelper::UNBOUND_CHECKCONF) }
 
     it 'passes over each comment the check passes over, however long' do
-      ["# #{word}", "  # #{word}", "\t# #{word}", "\f# #{word}", "# \" #{word}", "# ' #{word}", "# \\ #{word}", "# #{'a' * 5000} #{word}"].each do |line|
+      ["# #{word}", "  # #{word}", "\t# #{word}", "# #{word}\r", "# \" #{word}", "# ' #{word}", "# \\ #{word}", "# #{'a' * 5000} #{word}"].each do |line|
         text = "server:\n#{line}\n  access-control: 10.0.0.0/8 allow\n"
         expect { helper.unbound_conf(text) }.not_to raise_error, line.inspect
         expect { in_a_file(text) { |path| helper.check_unbound_conf(path) } }.not_to raise_error, line.inspect
+      end
+    end
+
+    # Unbound takes a form feed as text, so "\f#" isn't a comment to it.
+    it 'refuses a comment after anything but a space or a tab, as Unbound would read it' do
+      ["\f# #{word}", "\v# #{word}"].each do |line|
+        text = "server:\n#{line}\n  access-control: 10.0.0.0/8 allow\n"
+        expect { helper.unbound_conf(text) }.to raise_error(AmahiHelper::Refused), line.inspect
+        expect { in_a_file(text) { |path| helper.check_unbound_conf(path) } }.to raise_error(AmahiHelper::Refused), line.inspect
       end
     end
   end
@@ -123,10 +138,17 @@ RSpec.describe 'AmahiHelper: what its checks approve, read by the real tools' do
     before { tool!(AmahiHelper::RADVD) }
 
     it 'passes over each comment the check passes over, however long' do
-      ["# #{word}", "  # #{word}", "\t# #{word}", "# \" #{word}", "# \\ #{word}", "# #{'a' * 3000} #{word}"].each do |line|
+      ["# #{word}", "  # #{word}", "\t# #{word}", "# #{word}\r", "# \" #{word}", "# \\ #{word}", "# #{'a' * 3000} #{word}"].each do |line|
         text = "#{line}\ninterface lo {\n  AdvSendAdvert on;\n  AdvDefaultLifetime 0;\n};\n"
         expect { helper.radvd_conf(text) }.not_to raise_error, line.inspect
         expect { in_a_file(text) { |path| helper.check_radvd_conf(path) } }.not_to raise_error, line.inspect
+      end
+    end
+
+    it 'refuses a comment after anything but a space or a tab' do
+      ["\f# #{word}", "\v# #{word}", "\r# #{word}"].each do |line|
+        text = "#{line}\ninterface lo {\n  AdvSendAdvert on;\n  AdvDefaultLifetime 0;\n};\n"
+        expect { helper.radvd_conf(text) }.to raise_error(AmahiHelper::Refused), line.inspect
       end
     end
   end
