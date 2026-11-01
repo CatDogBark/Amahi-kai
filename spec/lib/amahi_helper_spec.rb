@@ -3590,5 +3590,28 @@ RSpec.describe 'AmahiHelper' do
       expect(lines.last['args']['content']).to include('bytes' => 27)
       expect(File.read(AmahiHelper::LOG_FILE)).not_to include('hunter2')
     end
+
+    # A request with bytes JSON can't write used to leave no line, whoever sent it.
+    it 'logs a request whatever bytes are in it' do
+      bad = "a\xFFb"
+      expect { helper.execute('users.delete', { 'login' => bad, bad => bad }) }.to raise_error(AmahiHelper::Refused)
+      expect { helper.execute("users.\xFF", {}) }.to raise_error(AmahiHelper::Refused)
+
+      lines = File.readlines(AmahiHelper::LOG_FILE).map { |l| JSON.parse(l) }
+      expect(lines.size).to eq(2)
+      expect(lines.first['args']).to eq('login' => 'a?b', 'a?b' => 'a?b')
+      expect(lines.last['op']).to eq('users.?')
+    end
+
+    it 'filters a secret however deep it is, and cuts long lists and text' do
+      logged = helper.filtered('forwards' => [{ 'password' => 'hunter2', 'keep' => 'x' }], 'list' => ['x'] * 200, 'text' => 'x' * 300,
+                               'nested' => { 'api_token' => 'hunter2', 'content' => 'y' })
+      expect(logged['forwards']).to eq([{ 'password' => '[FILTERED]', 'keep' => 'x' }])
+      expect(logged['list'].size).to eq(AmahiHelper::LOG_LIST_MAX)
+      expect(logged['text']).to eq("#{'x' * 256}...")
+      expect(logged['nested']['api_token']).to eq('[FILTERED]')
+      expect(logged['nested']['content']).to include('bytes' => 1)
+      expect(logged.to_s).not_to include('hunter2')
+    end
   end
 end

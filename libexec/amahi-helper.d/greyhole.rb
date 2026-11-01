@@ -282,7 +282,7 @@ module AmahiHelper
         line = config_line(line)
         next if line.empty? || line.start_with?('#')
         match = GREYHOLE_LINES.lazy.map { |re| line.match(re) }.find(&:itself)
-        raise Refused, "greyhole.conf line #{line.sub(/\Adb_pass = .*/, 'db_pass = ...').inspect} is not one Amahi-kai writes" unless match
+        raise Refused, "greyhole.conf line #{line.sub(/\Adb_pass\s*=.*/, 'db_pass = ...').inspect} is not one Amahi-kai writes" unless match
         pool = match[1] if match.size > 1 # storage_pool_drive's path
         raise Refused, "pool drive #{pool} must be a normalized path" if pool && !normalized_path?(pool)
       end

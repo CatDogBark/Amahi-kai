@@ -300,6 +300,17 @@ RSpec.describe 'AmahiHelper: the checks on every argument' do
     end
   end
 
+  it 'can log every one of these requests, and answer it' do
+    requests.each do |op, request|
+      request[:good].each do |param, value|
+        alterations.call(value).each do |name, other|
+          altered = request[:good].merge(param => other)
+          expect { JSON.generate(helper.filtered(altered)) }.not_to raise_error, "#{op} #{param} #{name}"
+        end
+      end
+    end
+  end
+
   requests.each do |op, request|
     describe op do
       it 'takes the request the rest start from' do

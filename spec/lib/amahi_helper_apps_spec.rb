@@ -2049,6 +2049,13 @@ RSpec.describe 'AmahiHelper apps' do
       expect(runs).to be_empty
     end
 
+    it 'logs the second job it refuses' do
+      allow(helper).to receive(:app_job_running?).with('gitea').and_return(true)
+      allow(helper).to receive(:log)
+      call('apps.update', '{"app":"gitea"}')
+      expect(helper).to have_received(:log).with('apps.update', { 'app' => 'gitea' }, 'refused', a_string_including('is being changed'), an_instance_of(Time))
+    end
+
     it 'runs the job itself inside its unit, and logs who asked for it' do
       allow(helper).to receive(:execute).and_return('ok' => true)
       expect(call('apps.install', '{"app":"gitea"}', 'AMAHI_APP_JOB' => 'gitea')).to eq([0, { 'ok' => true }])

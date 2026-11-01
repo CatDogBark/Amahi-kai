@@ -15,6 +15,7 @@ All notable changes to Amahi-kai are documented here.
 - **The System journal is narrower** (Settings → Help, Download logs and a problem's report) — Amahi-kai's services, the ones it runs and the kernel's errors, not the whole of the system's log, which also names sudo's commands and SSH logins.
 - **Rack updated** for published advisories, among them a High one (a denial of service through multipart uploads).
 - **Stricter paths and names** — Share paths with control characters, and `lmhosts` names outside what a hostname can hold, are refused. Bad text in a list of addresses or domains is a refusal now, not an internal error.
+- **The root helper's log misses nothing** — A request with bytes JSON can't write used to leave no line in `helper.log`, and neither did a second job refused for an app. Secrets are filtered however deep they are in a request, and long lists are cut.
 
 ### 🔧 Architecture & Code Quality
 
