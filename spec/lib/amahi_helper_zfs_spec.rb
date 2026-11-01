@@ -1180,10 +1180,13 @@ RSpec.describe 'AmahiHelper ZFS pools' do
                                                                        .map { |step| [File.basename(step[0]), step.last.is_a?(Hash) ? step[-2] : step.last] }
       end
 
-      # A failed drive's name can belong to another drive by now: it's that drive's data.
+      # A failed drive's name can belong to another drive by now: it's that drive's data, and that
+      # drive can carry ZFS's label too, from a pool of its own.
       it 'clears only drives ZFS has open: a name a drive that left the pool last had may be another drive by now' do
+        tree << { 'path' => '/dev/sdi', 'type' => 'disk', 'mountpoints' => [nil],
+                  'children' => [{ 'path' => '/dev/sdi1', 'type' => 'part', 'fstype' => 'zfs_member', 'mountpoints' => [nil] }] }
         %w[FAULTED UNAVAIL REMOVED OFFLINE DEGRADED].each do |state|
-          allow(helper).to receive(:pool_drives).and_return([drive('/dev/sdh1'), drive('/dev/sdc1', state)])
+          allow(helper).to receive(:pool_drives).and_return([drive('/dev/sdh1'), drive('/dev/sdi1', state)])
           expect(cleared.map(&:last)).to eq(%w[/dev/sdh1 /dev/sdh1 /dev/sdh9 /dev/sdh])
         end
       end
