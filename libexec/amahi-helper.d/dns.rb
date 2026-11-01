@@ -263,7 +263,7 @@ module AmahiHelper
 
     # Domains never blocked (Network → DNS, DHCP and Internet's allowlist).
     def allowlist(value)
-      raise Refused, 'allow must be a list of domains' unless value.is_a?(Array) && value.all?(String)
+      raise Refused, 'allow must be a list of domains' unless value.is_a?(Array) && value.all? { |name| name.is_a?(String) && name.valid_encoding? }
       raise Refused, "the allowlist holds at most #{ALLOWLIST_MAX} domains" if value.size > ALLOWLIST_MAX
       bad = value.reject { |name| name.match?(BLOCK_DOMAIN) }
       raise Refused, "#{bad.first.inspect} isn't a domain" if bad.any?

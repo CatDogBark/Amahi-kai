@@ -29,6 +29,19 @@ RSpec.describe 'install and update scripts' do
       expect(offenders).to eq([])
     end
 
+    # A folder the app user owns can hold a link at any name, so a path through one can lead anywhere.
+    # Root may ask what's there, and the app user does the rest (bin/amahi-set-ownership's are below).
+    it "#{script} changes nothing by a path through the app's folders, as root" do
+      offenders = File.readlines(Rails.root.join(script)).each_with_index.filter_map do |line, i|
+        code = line.strip
+        next if code.start_with?('#', 'echo ', 'log ') || !code.match?(%r{\$APP_DIR/(?:tmp|log|public/assets|vendor/bundle)/})
+        next if code.match?(/\bas_app "/) || code.match?(/\[\[ -[def] "/)
+
+        "#{i + 1}: #{code}"
+      end
+      expect(offenders).to eq([])
+    end
+
     it "#{script} doesn't give the code back to the app user" do
       text = File.read(Rails.root.join(script))
       expect(text).not_to match(/chown -R "\$APP_USER/)
@@ -448,6 +461,24 @@ RSpec.describe 'install and update scripts' do
   it 'rotates the app log as the app user' do
     stanza = File.read(Rails.root.join('config/logrotate-amahi-kai.conf'))[/production\.log \{[^}]*\}/]
     expect(stanza).to include('su amahi amahi')
+  end
+
+  it "bin/amahi-set-ownership, as root, works only on the app's top folders, and from inside their folders" do
+    text = File.read(Rails.root.join('bin/amahi-set-ownership'))
+    expect(text).to include('WRITABLE=(tmp log public/assets vendor/bundle)') # none inside another
+    expect(text.scan(/^\s*install -d .*$/).map(&:strip)).to contain_exactly(
+      'install -d -o root -g root -m 0755 "$STATE_DIR"', 'install -d -o "$APP_USER" -g "$APP_GROUP" -m 0755 "$path"',
+      'install -d -o root -g root -m 0755 "$APP_DIR/.bundle"'
+    )
+    expect(text).to include('-execdir chown -h "$APP_USER:$APP_GROUP"')
+    expect(text).not_to include('-exec chown -h "$APP_USER')
+    expect(text).to include('sudo -u "$APP_USER" mkdir -p --')
+  end
+
+  it "the root helper names nothing inside the app's folders" do
+    Dir[Rails.root.join('libexec/amahi-helper.d/*.rb')].each do |part|
+      expect(File.read(part)).not_to match(%r{APP_DIR\}?/(?:tmp|log|public/assets|vendor/bundle)}), part
+    end
   end
 
   describe 'bin/amahi-set-ownership' do

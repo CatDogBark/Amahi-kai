@@ -183,6 +183,41 @@ jobs:
             | tee tmp/root-specs.log
           grep -qE '^[1-9][0-9]* examples?, 0 failures$' tmp/root-specs.log
 
+  # What the root helper's config checks approve, read by the tools that read it on a server:
+  # Ubuntu 24.04's versions, what Amahi-kai installs on. REAL_TOOLS=required fails a spec whose
+  # tool is missing, instead of skipping it. Only the tools' commands are used, so their services
+  # are kept from starting (policy-rc.d).
+  tools:
+    name: Real Tools
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      RAILS_ENV: test
+      BUNDLE_JOBS: 4
+      BUNDLE_WITHOUT: production
+      REAL_TOOLS: required
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies and the tools
+        run: |
+          printf '#!/bin/sh\nexit 101\n' | sudo tee /usr/sbin/policy-rc.d >/dev/null
+          sudo chmod 755 /usr/sbin/policy-rc.d
+          sudo apt-get update
+          sudo apt-get install -y libsqlite3-dev libmariadb-dev dnsmasq-base samba-common-bin unbound radvd
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+      - name: Prepare DB
+        run: |
+          mkdir -p tmp/cache/tmpfiles tmp/pids log
+          bundle exec rails db:schema:load
+      - name: Specs with the real tools
+        shell: bash
+        run: |
+          bundle exec rspec spec/lib/amahi_helper_real_tools_spec.rb --format documentation | tee tmp/real-tools.log
+          grep -qE '^[1-9][0-9]* examples?, 0 failures$' tmp/real-tools.log
+
   coverage:
     name: Coverage Report
     needs: [models, requests, lib]

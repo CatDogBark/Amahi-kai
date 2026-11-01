@@ -384,7 +384,7 @@ module AmahiHelper
 
     # A plain IPv4 or IPv6 address (+family+ :ipv4? or :ipv6?), with no prefix or zone.
     def ip_address?(value, family = nil)
-      return false unless value.match?(/\A[0-9a-f.:]{2,39}\z/i)
+      return false unless value.valid_encoding? && value.match?(/\A[0-9a-f.:]{2,39}\z/i)
       ip = IPAddr.new(value)
       family ? ip.public_send(family) : true
     rescue IPAddr::Error

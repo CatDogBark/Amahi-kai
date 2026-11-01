@@ -308,7 +308,7 @@ module AmahiHelper
         line = line.strip
         next if line.empty?
         next if line.start_with?('#') && !line.match?(/\A#\s*(include|begin_alternate|end_alternate)/i)
-        raise Refused, "lmhosts line #{line.inspect} is not an address and a name" unless line.match?(/\A[0-9A-Fa-f.:]+\s+[^\s#]+\z/)
+        raise Refused, "lmhosts line #{line.inspect} is not an address and a name" unless line.match?(/\A[0-9A-Fa-f.:]+\s+[A-Za-z0-9_][A-Za-z0-9_.-]{0,254}\z/)
       end
       value
     end

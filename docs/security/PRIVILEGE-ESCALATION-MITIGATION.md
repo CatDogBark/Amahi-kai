@@ -228,4 +228,11 @@ Add an operation to its area's part in `libexec/amahi-helper.d/` (arguments, val
 contract spec in `spec/lib/privileged_spec.rb` fails if the app calls an operation the helper
 doesn't have, or the helper has one nothing calls. Never run app code as root in
 `bin/amahi-install` or `bin/amahi-update`; use `as_app` (`spec/lib/install_scripts_spec.rb`
-checks).
+checks). Nor change anything as root by a path through a folder the app owns (the same spec): the
+app user can put a link at any name in it.
+
+Each new operation or argument goes in the table in `spec/lib/amahi_helper_checks_spec.rb`, which
+fails until it's there: a request that's accepted, and what each argument may hold besides. Every
+argument is tried with about 30 kinds of bad value, with the helper's own checks running. If the
+operation writes a config a tool reads, add what the check passes over to
+`spec/lib/amahi_helper_real_tools_spec.rb`, where the real tool reads it (CI's Real Tools job).

@@ -574,7 +574,8 @@ module AmahiHelper
     end
 
     def normalized_path?(path)
-      path.start_with?('/') && path.length > 1 && !path.end_with?('/') &&
+      path.valid_encoding? && !path.match?(/[[:cntrl:]]/) &&
+        path.start_with?('/') && path.length > 1 && !path.end_with?('/') &&
         path.split('/').drop(1).none? { |part| part.empty? || part == '.' || part == '..' }
     end
 

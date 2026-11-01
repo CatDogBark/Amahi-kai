@@ -14,6 +14,12 @@ All notable changes to Amahi-kai are documented here.
   - Device names from DHCP reach DNS after 5 seconds, so a burst of them is one reload of Unbound.
 - **The System journal is narrower** (Settings → Help, Download logs and a problem's report) — Amahi-kai's services, the ones it runs and the kernel's errors, not the whole of the system's log, which also names sudo's commands and SSH logins.
 - **Rack updated** for published advisories, among them a High one (a denial of service through multipart uploads).
+- **Stricter paths and names** — Share paths with control characters, and `lmhosts` names outside what a hostname can hold, are refused. Bad text in a list of addresses or domains is a refusal now, not an internal error.
+
+### 🔧 Architecture & Code Quality
+
+- **Every argument of the root helper is tried with bad values** — A table of all its operations, with their own checks running, that fails CI until a new operation is listed.
+- **Real tools read what the checks approve** — A CI job with Ubuntu 24.04's dnsmasq, Samba, Unbound and radvd, so a difference between a check and the tool shows up as a failed job.
 
 ## [1.5.3] — 2026-10-30
 
