@@ -768,7 +768,7 @@ RSpec.describe 'AmahiHelper ZFS pools' do
         let(:root) { "#{dir}/pools/tank" }
         let(:import) { ['/usr/sbin/zpool', 'import', '-N', '-o', 'cachefile=none', '-d', '/dev/disk/by-id', '5678'] }
         let(:left) { "so it's left on its drives, not imported: import it from the command line" }
-        let(:export) { ['/usr/sbin/zpool', 'export', 'tank', { allow_failure: true }] }
+        let(:export) { %w[/usr/sbin/zpool export tank] }
 
         def row(name, mountpoint, canmount: 'on', setuid: 'off', devices: 'off', sharenfs: 'off', sharesmb: 'off')
           [name, mountpoint, canmount, setuid, devices, sharenfs, sharesmb]
@@ -787,6 +787,7 @@ RSpec.describe 'AmahiHelper ZFS pools' do
           FileUtils.mkdir_p("#{dir}/pools")
           allow(helper).to receive(:capture).with(import).and_return('')
           allow(helper).to receive(:capture).with(%w[/usr/sbin/zpool get -H -o value guid tank]).and_return("5678\n")
+          allow(helper).to receive(:capture).with(export) { ran << export && '' }
           # zfs mount: makes the folder as ZFS would, and says it's mounted
           allow(helper).to receive(:dataset_mounted?).and_return(true)
           allow(helper).to receive(:do_own_dir)
@@ -898,6 +899,14 @@ RSpec.describe 'AmahiHelper ZFS pools' do
           expect { import_it }.to raise_error(AmahiHelper::Failed, /#{Regexp.escape("#{root}/apps is not a folder")}, #{left}/)
           expect(ran.last).to eq(export)
           expect(ran).not_to include(%w[/usr/sbin/zfs mount tank/apps/foo])
+        end
+
+        it "says so when ZFS won't let go of it, and it's still not in ZFS's cache file" do
+          stub_const('AmahiHelper::POOL_BUSY_WAIT', 0)
+          datasets(row('tank', '/data'))
+          allow(helper).to receive(:capture).with(export).and_raise(AmahiHelper::Failed, "zpool exited 1: cannot export 'tank': pool is busy")
+          expect { import_it }.to raise_error(AmahiHelper::Failed, /tank mounts at \/data\), and ZFS wouldn't let go of it \(.*pool is busy\)\. It won't be imported again after a restart/)
+          expect(ran).not_to include(%w[/usr/sbin/zpool set cachefile= tank])
         end
 
         it "exports it when a dataset doesn't mount, or doesn't mount where it should" do
@@ -1137,7 +1146,7 @@ RSpec.describe 'AmahiHelper ZFS pools' do
       expect(refusal('pools.destroy', { 'name' => 'old', 'confirm' => 'OLD' })).to eq("type the pool's name (old) to destroy it")
       expect(steps('pools.destroy', { 'name' => 'old', 'confirm' => 'old' })).to eq(
         [[:release_pool, 'old'], # SMB sessions holding it end first
-         %w[/usr/sbin/zpool destroy old],
+         [:destroy_pool, 'old'],
          ['/usr/sbin/zpool', 'labelclear', '-f', '/dev/sdh1', { allow_failure: true }],
          ['/usr/sbin/wipefs', '-a', '/dev/sdh1', { allow_failure: true }],
          ['/usr/sbin/wipefs', '-a', '/dev/sdh9', { allow_failure: true }],
@@ -1229,6 +1238,43 @@ RSpec.describe 'AmahiHelper ZFS pools' do
           errors: No known data errors
         STATUS
         expect(helper.pool_drives('old').map { |leaf| leaf['device'] }).to eq(%w[/dev/sdh1 /dev/sdc1])
+      end
+    end
+
+    describe 'a moment when ZFS says a pool is busy' do
+      let(:busy) { AmahiHelper::Failed.new("zpool exited 1: cannot destroy 'old': pool is busy") }
+      let(:asked) { [] }
+
+      before { allow(helper).to receive(:pause) }
+
+      def refused_times(times, error = busy)
+        allow(helper).to receive(:capture) do |argv|
+          asked << argv
+          raise error if asked.size <= times
+
+          ''
+        end
+      end
+
+      it 'asks again, deleting a pool or taking it offline' do
+        refused_times(2)
+        helper.do_destroy_pool('old')
+        expect(asked).to eq([%w[/usr/sbin/zpool destroy old]] * 3)
+        expect(helper).to have_received(:pause).with(1).twice
+      end
+
+      it 'stops asking after a while, and passes the refusal on: what really holds a pool goes on holding it' do
+        now = 0
+        allow(helper).to receive(:monotonic_now) { now += 4 }
+        refused_times(100)
+        expect { helper.do_destroy_pool('old') }.to raise_error(AmahiHelper::Failed, /pool is busy/)
+        expect(asked.size).to eq(4)
+      end
+
+      it "doesn't ask again for anything else" do
+        refused_times(100, AmahiHelper::Failed.new("zpool exited 1: cannot destroy 'old': no such pool"))
+        expect { helper.do_destroy_pool('old') }.to raise_error(AmahiHelper::Failed, /no such pool/)
+        expect(asked.size).to eq(1)
       end
     end
 

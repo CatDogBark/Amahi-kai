@@ -161,7 +161,7 @@ module AmahiHelper
       validate: ->(a) { destroy_request(a['name'], a['confirm']) },
       plan: lambda { |v|
         [[:release_pool, v[:name]],
-         [ZPOOL, 'destroy', v[:name]],
+         [:destroy_pool, v[:name]],
          *v[:members].map { |part| [ZPOOL, 'labelclear', '-f', part, { allow_failure: true }] },
          *v[:wipe].map { |device| [WIPEFS, '-a', device, { allow_failure: true }] },
          ['/usr/bin/udevadm', 'settle', { allow_failure: true }],
@@ -919,9 +919,32 @@ module AmahiHelper
       nil
     end
 
+    def do_destroy_pool(name)
+      pool_when_free('destroy', name)
+      nil
+    end
+
+    # How long ZFS gets to stop saying a pool is busy, in seconds.
+    POOL_BUSY_WAIT = 15
+
+    # zpool export or destroy. ZFS can refuse either ("pool is busy") for a moment with nothing
+    # mounted or open: measured at a second or so, after a change on the pool or with a drive out of
+    # it. What really holds a pool goes on holding it, and that refusal is passed on.
+    def pool_when_free(action, name)
+      deadline = monotonic_now + POOL_BUSY_WAIT
+      begin
+        capture([ZPOOL, action, name])
+      rescue Failed => e
+        raise unless e.message.include?('pool is busy') && monotonic_now < deadline
+
+        pause(1)
+        retry
+      end
+    end
+
     def do_export_pool(name, guid)
       do_release_pool(name)
-      capture([ZPOOL, 'export', name])
+      pool_when_free('export', name)
       records = offline_records.merge(name => guid)
       do_make_dir(File.dirname(OFFLINE_POOLS), '0755')
       do_install(OFFLINE_POOLS, "#{JSON.pretty_generate(records)}\n", nil, '0640', APP_USER)
@@ -957,7 +980,11 @@ module AmahiHelper
         mount_pool_datasets(name, datasets)
         run_command([ZPOOL, 'set', 'cachefile=', name])
       rescue Failed, SystemCallError => e
-        run_command([ZPOOL, 'export', name, { allow_failure: true }])
+        begin
+          pool_when_free('export', name)
+        rescue Failed => stuck
+          raise Failed, "#{e.message}, and ZFS wouldn't let go of it (#{stuck.message}). It won't be imported again after a restart"
+        end
         raise Failed, "#{e.message}, so it's left on its drives, not imported: import it from the command line"
       end
     end
