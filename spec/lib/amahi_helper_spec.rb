@@ -314,13 +314,21 @@ RSpec.describe 'AmahiHelper' do
       [
         'root preexec = /bin/sh', 'ROOT  PREEXEC = /bin/sh', 'root_preexec = x', 'exec = x', 'postexec = x',
         'print command = x', 'add user script = x', 'magic script = x', 'passwd program = x',
-        'idmap config * : script = x', 'include = /tmp/x', "inc\\\nlude = /tmp/x", 'config file = /tmp/x',
+        'idmap config * : script = x', 'include = /tmp/x', 'config file = /tmp/x',
         'admin users = admin', 'username map = /tmp/map', 'panic action = x', 'wins hook = x', 'root directory = /',
         'preload modules = /var/lib/amahi-kai/files/x/m.so', 'perfcount module = x', 'force user = nobody',
         'force group = users', 'shadow:basedir = /', 'copy = global', 'smb ports = 4445', 'made up = x'
       ].each do |line|
-        expect(helper.samba_problems(share_with(line))).to eq(["[bad] #{line.split('=').first.strip.gsub(/\\\n/, ' ')} is not allowed"]), line
+        expect(helper.samba_problems(share_with(line))).to eq(["[bad] #{line.split('=').first.strip} is not allowed"]), line
       end
+    end
+
+    # Samba takes the line after a comment like that as live, and a reader of the file as part of it.
+    it 'refuses a line ending in a backslash, a comment or not, with or without spaces after it' do
+      ["inc\\\nlude = /tmp/x", "# a note \\\nroot preexec = /bin/sh", "; a note \\  \nroot preexec = /bin/sh", "veto files = /x/ \\\r\n"].each do |line|
+        expect(helper.samba_problems(share_with(line)).first).to include('a line ends in a backslash'), line.inspect
+      end
+      expect(helper.samba_problems(share_with('veto files = /a\\b/'))).to eq([])
     end
 
     it "takes global parameters only in [global]" do
@@ -506,6 +514,46 @@ RSpec.describe 'AmahiHelper' do
       expect(helper.do_rmdir("#{root}/full")).to include("isn't empty")
       expect(Dir.exist?("#{root}/full")).to be true
       expect(helper.do_rmdir("#{root}/gone")).to include("doesn't exist")
+    end
+
+    # A share's folder is removed when its share is deleted, and the path is walked again then.
+    it 'removes a folder through the one above it, never through a link in the path' do
+      Dir.mkdir("#{@tmp}/elsewhere")
+      Dir.mkdir("#{@tmp}/elsewhere/movies")
+      FileUtils.mkdir_p("#{root}/media/movies")
+      removed = []
+      allow(Dir).to receive(:rmdir).and_wrap_original { |m, path| removed << path; m.call(path) }
+      expect(helper.do_rmdir("#{root}/media/movies")).to be_nil
+      expect(removed).to all(match(%r{\A/proc/self/fd/\d+/movies\z}))
+
+      Dir.rmdir("#{root}/media")
+      File.symlink("#{@tmp}/elsewhere", "#{root}/media")
+      expect { helper.do_rmdir("#{root}/media/movies") }.to raise_error(AmahiHelper::Failed, /is a symbolic link/)
+      File.symlink("#{@tmp}/elsewhere/movies", "#{root}/link")
+      expect { helper.do_rmdir("#{root}/link") }.to raise_error(AmahiHelper::Failed, /is not a folder/)
+      expect(Dir.exist?("#{@tmp}/elsewhere/movies")).to be true
+    end
+
+    # Greyhole's folders on a pool drive, and the Trash's: a share folder made at one of those
+    # names would be the app's, 2775, where root puts files it then copies into a share.
+    it "refuses a folder at a name Greyhole or the Trash keeps, at any depth" do
+      drive = "#{@tmp}/mnt/storage-1"
+      allow(File).to receive(:stat).and_call_original
+      allow(File).to receive(:stat).with(drive).and_return(instance_double(File::Stat, dev: -1))
+      ['.gh_trash', '.gh_metastore', '.gh_metastore_backup', '.amahi-restore', '.recycle'].each do |name|
+        expect(refusal('shares.create_dir', { 'path' => "#{drive}/#{name}" })).to include('keeps for itself'), name
+        expect(refusal('shares.create_dir', { 'path' => "#{drive}/#{name}/Photos" })).to include('keeps for itself'), name
+        expect(refusal('shares.remove_dir', { 'path' => "#{drive}/#{name}" })).to include('keeps for itself'), name
+      end
+      expect(refusal('shares.create_dir', { 'path' => "#{drive}/.ghost" })).to be_nil
+      expect(refusal('shares.create_dir', { 'path' => "#{drive}/Photos" })).to be_nil
+    end
+
+    it 'keeps the reserved names in step with the folders they stand for' do
+      [AmahiHelper::GREYHOLE_TRASH, AmahiHelper::GREYHOLE_METASTORE_BACKUP, AmahiHelper::TRASH_STAGING,
+       AmahiHelper::RECYCLE_BIN].each do |name|
+        expect(AmahiHelper::RESERVED_SHARE_NAMES).to include(a_kind_of(Regexp).and(satisfy { |re| name.match?(re) })), name
+      end
     end
 
     it 'installs a file atomically and leaves no temp files' do
@@ -866,13 +914,42 @@ RSpec.describe 'AmahiHelper' do
       [0, 501, '150', nil].each do |lines|
         expect(refusal('system.journal', { 'lines' => lines })).to include('whole number from 1 to 500'), lines.inspect
       end
-      long = 'x' * 3000
-      allow(helper).to receive(:capture).with(['/usr/bin/journalctl', '--no-pager', '--quiet', '-o', 'short-iso', '-n', '2'])
-                                        .and_return("Oct 29 one\n#{long}\nOct 29 \xFF three\n".b)
+      long = "2026-10-29T10:00:00 #{'x' * 3000}"
+      allow(helper).to receive(:capture).and_return("2026-10-29T10:00:00 one\n#{long}\n2026-10-29T10:00:01 \xFF three\n".b, '')
       reply = helper.do_journal(2)
       expect(reply['lines'].size).to eq(2) # the last two
       expect(reply['lines'].first.length).to eq(2000)
-      expect(reply['lines'].last).to eq('Oct 29 ? three') # not UTF-8, and still a line to show
+      expect(reply['lines'].last).to eq('2026-10-29T10:00:01 ? three') # not UTF-8, and still a line to show
+    end
+
+    it "asks the journal only for Amahi-kai's units, the services it runs and the kernel's errors" do
+      asked = []
+      allow(helper).to receive(:capture) { |argv| asked << argv && '' }
+      helper.do_journal(5)
+      base = ['/usr/bin/journalctl', '--no-pager', '--quiet', '-o', 'short-iso', '-n', '5']
+      expect(asked.map { |argv| argv.first(base.size) }).to all(eq(base))
+      expect(asked.first.drop(base.size).each_slice(2).map(&:first).uniq).to eq(['-u'])
+      expect(asked.first.drop(base.size).each_slice(2).map(&:last)).to include('amahi-kai*', 'smbd.service', 'docker.service')
+      expect(asked.last.drop(base.size)).to eq(['-k', '-p', 'err'])
+    end
+
+    it "puts the journal's answers in order by time, an entry's further lines with it, same times as they came" do
+      allow(helper).to receive(:capture).and_return(
+        "2026-10-29T10:00:01 first\n    its second line\n2026-10-29T10:00:03 third\n2026-10-29T10:00:03 fourth\n",
+        "2026-10-29T10:00:02 kernel\n"
+      )
+      expect(helper.do_journal(10)['lines']).to eq(['2026-10-29T10:00:01 first', '    its second line', '2026-10-29T10:00:02 kernel',
+                                                    '2026-10-29T10:00:03 third', '2026-10-29T10:00:03 fourth'])
+    end
+
+    it 'keeps its lock files for root alone, one already there too' do
+      Dir.mktmpdir do |dir|
+        lock = "#{dir}/lock"
+        expect(helper.with_lock(lock) { File.stat(lock).mode & 0o777 }).to eq(0o600)
+        File.chmod(0o644, lock)
+        helper.with_lock(lock) { nil }
+        expect(File.stat(lock).mode & 0o777).to eq(0o600)
+      end
     end
 
     it 'reboots and powers off through systemd' do
@@ -952,7 +1029,7 @@ RSpec.describe 'AmahiHelper' do
       )
       File.write(hosts.path, '127.0.0.1 localhost') # no 127.0.1.1 line, nor a final newline
       expect(helper.hosts_naming('kai')).to eq("127.0.0.1 localhost\n127.0.1.1 kai\n")
-      ['my nas', '-nas', 'nas-', 'nas.lan', 'x' * 64, "nas\n"].each do |name|
+      ['my nas', '-nas', 'nas-', 'nas.lan', 'x' * 64, "nas\n", "Kab", "sſb"].each do |name|
         expect(refusal('network.set_hostname', { 'hostname' => name })).not_to be_nil, name.inspect
       end
     end
@@ -983,6 +1060,15 @@ RSpec.describe 'AmahiHelper' do
        "local=/x/\nuser=root"].each do |line|
         expect(refusal('network.write_dnsmasq_config', { 'content' => "#{line}\n" })).to include('not one Amahi-kai writes'), line
       end
+    end
+
+    # dnsmasq would take what's past about 1 KB as a line of its own, unchecked here if it's a comment.
+    it 'refuses a dnsmasq line longer than dnsmasq reads whole, a comment too, and any letter outside ASCII' do
+      expect(refusal('network.write_dnsmasq_config', { 'content' => "port=0\n# #{'a' * 509}\n" })).to be_nil
+      expect(refusal('network.write_dnsmasq_config', { 'content' => "port=0\n# #{'a' * 510}\n" })).to include('longer than 512')
+      expect(refusal('network.write_dnsmasq_config', { 'content' => "port=0\n#{' ' * 600}bind-interfaces\n" })).to include('longer than 512')
+      expect(refusal('network.write_dnsmasq_config', { 'content' => "port=0\ndomain=Kab\n" })).to include('not one Amahi-kai writes')
+      expect(refusal('network.write_dnsmasq_config', { 'content' => "port=0\n# Auto-generated — by Amahi-kai\n" })).to be_nil
     end
 
     it 'refuses a dnsmasq config that would answer DNS: Unbound does' do
@@ -1441,10 +1527,27 @@ RSpec.describe 'AmahiHelper' do
       expect(helper).to have_received(:fetch_blocklist).once
     end
 
+    it 'refuses a second blocklist change while one is running' do
+      choose(%w[hagezi-normal])
+      expect(helper.do_refresh_blocklists).to include('blocked')
+      allow(helper).to receive(:with_lock).and_return(nil) # another holds it
+      [-> { helper.do_refresh_blocklists }, -> { helper.do_pause_blocking }, -> { helper.do_resume_blocking }].each do |change|
+        expect { change.call }.to raise_error(AmahiHelper::Refused, /another blocklist change/)
+      end
+    end
+
+    it 'reads a list as bytes: a bad byte in it is one line skipped, not a refusal' do
+      choose(%w[hagezi-normal])
+      File.binwrite("#{AmahiHelper::BLOCKLIST_DIR}/hagezi-normal.txt", "ads.example.com\nb\xffad.example.com\ntrackers.example.org\n")
+      expect(helper.do_refresh_blocklists).to eq('blocked' => 2)
+      expect(blocklist).to include('ads.example.com', 'trackers.example.org')
+      expect(blocklist.encoding).to eq(Encoding::UTF_8)
+    end
+
     it 'refuses more domains than fit, and keeps the blocklist it had when Unbound refuses the new one' do
       choose(%w[hagezi-normal])
       stub_const('AmahiHelper::BLOCKLIST_MAX_DOMAINS', 2)
-      expect { helper.do_refresh_blocklists }.to raise_error(AmahiHelper::Failed, /at most 2/)
+      expect { helper.do_refresh_blocklists }.to raise_error(AmahiHelper::Failed, /more than 2 domains/)
       stub_const('AmahiHelper::BLOCKLIST_MAX_DOMAINS', 1_000_000)
       File.write(AmahiHelper::UNBOUND_BLOCKLIST, "server:\n")
       allow(helper).to receive(:check_unbound_conf) { |path| raise AmahiHelper::Refused, 'duplicate local-zone' if path == AmahiHelper::UNBOUND_MAIN }
@@ -1620,12 +1723,21 @@ RSpec.describe 'AmahiHelper' do
     it 'takes two different real interfaces, the firewall on, and forwards to private addresses' do
       allow(helper).to receive(:installed!).and_call_original
       allow(helper).to receive(:installed!).with(AmahiHelper::NETPLAN).and_return(true)
-      args = { 'lan' => 'lo', 'wan' => 'lo', 'forwards' => [] }
+      allow(File).to receive(:exist?).and_call_original
+      %w[ens18 ens19 lo docker0 br-9f veth7 tailscale0].each do |name|
+        allow(File).to receive(:exist?).with("/sys/class/net/#{name}").and_return(true)
+      end
+      args = { 'lan' => 'ens18', 'wan' => 'ens18', 'forwards' => [] }
       expect(refusal('network.router_on', args)).to include('must differ')
-      real = Socket.getifaddrs.map(&:name).uniq.find { |n| n != 'lo' } or skip 'no second interface here'
-      args['wan'] = real
-      expect(steps('network.router_on', args)).to eq([[:router_on, 'lo', real, [], nil, []]])
-      expect(steps('network.router_on', args.merge('dns' => '127.0.0.1'))).to eq([[:router_on, 'lo', real, [], '127.0.0.1', []]])
+      # Neither side can be the loopback, Docker's, a container's or Tailscale's
+      %w[lo docker0 br-9f veth7 tailscale0].each do |name|
+        expect(refusal('network.router_on', args.merge('lan' => name, 'wan' => 'ens19'))).to eq("#{name} can't be the LAN")
+        expect(refusal('network.router_on', args.merge('wan' => name))).to eq("#{name} can't be the internet side")
+      end
+      expect(refusal('network.router_on', args.merge('lan' => 'nope0', 'wan' => 'ens19'))).to include("isn't a network interface here")
+      args['wan'] = 'ens19'
+      expect(steps('network.router_on', args)).to eq([[:router_on, 'ens18', 'ens19', [], nil, []]])
+      expect(steps('network.router_on', args.merge('dns' => '127.0.0.1'))).to eq([[:router_on, 'ens18', 'ens19', [], '127.0.0.1', []]])
       expect(refusal('network.router_on', args.merge('dns' => '10.9.9.9'))).to include("isn't an IPv4 address of the NAS's")
       File.write("#{dir}/ufw.conf", "ENABLED=no\n")
       expect(refusal('network.router_on', args)).to include('firewall must be on')
@@ -2232,7 +2344,7 @@ RSpec.describe 'AmahiHelper' do
     it 'refuses a flat list rather than read it' do
       flat = { 'blockdevices' => [{ 'path' => '/dev/sda', 'type' => 'disk', 'mountpoints' => [nil] },
                                   { 'path' => '/dev/sda1', 'type' => 'part', 'mountpoints' => ['/'] }] }.to_json
-      allow(helper).to receive(:capture).with(%w[/usr/bin/lsblk -J -o NAME,PATH,TYPE,FSTYPE,MOUNTPOINTS]).and_return(flat)
+      allow(helper).to receive(:capture).with(%w[/usr/bin/lsblk -J -o NAME,PATH,TYPE,FSTYPE,PARTTYPE,MOUNTPOINTS]).and_return(flat)
       expect { helper.block_tree }.to raise_error(AmahiHelper::Failed, 'lsblk listed /dev/sda1 on its own, not under its disk')
     end
   end
@@ -3242,8 +3354,68 @@ RSpec.describe 'AmahiHelper' do
                               %w[/usr/bin/systemctl enable cloudflared.service],
                               %w[/usr/bin/systemctl restart cloudflared.service]
                             ])
-      expect(AmahiHelper::TUNNEL_UNIT_CONTENT).to include('run --token-file /etc/amahi-kai/tunnel.token')
+      expect(AmahiHelper::TUNNEL_UNIT_CONTENT).to include('LoadCredential=token:/etc/amahi-kai/tunnel.token', 'run --token-file %d/token')
       expect(planned.map { |step| helper.describe(step) }.to_s).not_to include(token)
+    end
+
+    # Whoever holds a token decides from Cloudflare's side where the tunnel connects, local sockets
+    # included, so it doesn't run as root.
+    it 'runs the tunnel as a user made for it, with nothing it does not need' do
+      unit = AmahiHelper::TUNNEL_UNIT_CONTENT
+      expect(unit).to include('DynamicUser=yes', 'NoNewPrivileges=yes', "CapabilityBoundingSet=\n", 'PrivateDevices=yes')
+      expect(unit).not_to match(/^User=root|--token /)
+    end
+
+    # tunnel.refresh_unit, System Update's last step: the owner may be reaching the server through it.
+    describe 'moving a tunnel that is set up to the unit this version writes' do
+      let(:dir) { Dir.mktmpdir }
+      let(:unit) { "#{dir}/cloudflared.service" }
+      let(:ran) { [] }
+      let(:clock) { [0] }
+
+      before do
+        stub_const('AmahiHelper::TUNNEL_UNIT', unit)
+        stub_const('AmahiHelper::TUNNEL_TOKEN', "#{dir}/tunnel.token")
+        File.write(unit, "the old unit\n")
+        File.write("#{dir}/tunnel.token", 'x')
+        allow(helper).to receive(:run_command) { |argv| ran << argv && nil }
+        allow(helper).to receive(:do_install) { |path, content, *| File.write(path, content) }
+        allow(helper).to receive(:unit_state).and_return('active')
+        allow(helper).to receive(:monotonic_now) { clock[0] }
+        allow(helper).to receive(:pause) { |seconds| clock[0] += seconds }
+      end
+
+      after { FileUtils.rm_rf(dir) }
+
+      it 'restarts a running one and waits until a new process is up' do
+        allow(helper).to receive(:tunnel_process).and_return(111, 111, 222) # as before, then the old one still, then the new
+        expect(helper.do_tunnel_unit).to eq('tunnel' => 'restarted, no longer as root')
+        expect(File.read(unit)).to eq(AmahiHelper::TUNNEL_UNIT_CONTENT)
+        expect(ran).to eq([%w[/usr/bin/systemctl daemon-reload], %w[/usr/bin/systemctl restart --no-block cloudflared.service]])
+      end
+
+      it "puts the old unit back when the new one doesn't come up" do
+        allow(helper).to receive(:unit_state).and_return('active', 'activating')
+        allow(helper).to receive(:tunnel_process).and_return(111)
+        expect(helper.do_tunnel_unit['tunnel']).to include("didn't come up", "back on the one it had")
+        expect(File.read(unit)).to eq("the old unit\n")
+        expect(ran.count(%w[/usr/bin/systemctl restart --no-block cloudflared.service])).to eq(2)
+      end
+
+      it "writes the unit but doesn't start a tunnel the owner stopped" do
+        allow(helper).to receive(:unit_state).and_return('inactive')
+        expect(helper.do_tunnel_unit['tunnel']).to include('not started')
+        expect(File.read(unit)).to eq(AmahiHelper::TUNNEL_UNIT_CONTENT)
+        expect(ran).to eq([%w[/usr/bin/systemctl daemon-reload]])
+      end
+
+      it "leaves one on this unit as it is, and does nothing where there's no tunnel" do
+        File.write(unit, AmahiHelper::TUNNEL_UNIT_CONTENT)
+        expect(helper.do_tunnel_unit).to eq('tunnel' => 'as it is')
+        File.delete("#{dir}/tunnel.token")
+        expect(helper.do_tunnel_unit).to eq('tunnel' => 'none here')
+        expect(ran).to eq([])
+      end
     end
 
     it 'refuses tokens that are not one, and works only once cloudflared is installed' do
@@ -3543,6 +3715,29 @@ RSpec.describe 'AmahiHelper' do
                                      'args' => { 'login' => 'root', 'password' => '[FILTERED]' })
       expect(lines.last['args']['content']).to include('bytes' => 27)
       expect(File.read(AmahiHelper::LOG_FILE)).not_to include('hunter2')
+    end
+
+    # A request with bytes JSON can't write used to leave no line, whoever sent it.
+    it 'logs a request whatever bytes are in it' do
+      bad = "a\xFFb"
+      expect { helper.execute('users.delete', { 'login' => bad, bad => bad }) }.to raise_error(AmahiHelper::Refused)
+      expect { helper.execute("users.\xFF", {}) }.to raise_error(AmahiHelper::Refused)
+
+      lines = File.readlines(AmahiHelper::LOG_FILE).map { |l| JSON.parse(l) }
+      expect(lines.size).to eq(2)
+      expect(lines.first['args']).to eq('login' => 'a?b', 'a?b' => 'a?b')
+      expect(lines.last['op']).to eq('users.?')
+    end
+
+    it 'filters a secret however deep it is, and cuts long lists and text' do
+      logged = helper.filtered('forwards' => [{ 'password' => 'hunter2', 'keep' => 'x' }], 'list' => ['x'] * 200, 'text' => 'x' * 300,
+                               'nested' => { 'api_token' => 'hunter2', 'content' => 'y' })
+      expect(logged['forwards']).to eq([{ 'password' => '[FILTERED]', 'keep' => 'x' }])
+      expect(logged['list'].size).to eq(AmahiHelper::LOG_LIST_MAX)
+      expect(logged['text']).to eq("#{'x' * 256}...")
+      expect(logged['nested']['api_token']).to eq('[FILTERED]')
+      expect(logged['nested']['content']).to include('bytes' => 1)
+      expect(logged.to_s).not_to include('hunter2')
     end
   end
 end

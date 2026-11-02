@@ -44,6 +44,9 @@ module AmahiHelper
 
     [Service]
     Type=oneshot
+    # A wait first, so a burst is one run, and Unbound reloads at most this often whatever a device
+    # on the LAN does with its name.
+    ExecStartPre=/usr/bin/sleep 5
     ExecStart=/usr/local/sbin/amahi-helper dns.sync_leases
     StandardInputText={}
   UNIT
@@ -57,6 +60,8 @@ module AmahiHelper
   BLOCKLIST_STATUS = "#{BLOCKLIST_DIR}/status.json".freeze
 
   BLOCKLIST_PAUSED = "#{BLOCKLIST_DIR}/blocklist.paused".freeze
+
+  BLOCKLIST_LOCK_NAME = 'blocklist.lock'
 
   # When the helper last reloaded Unbound: its counters start again then (Network → DNS, DHCP and Internet's
   # totals say since when).
@@ -260,7 +265,7 @@ module AmahiHelper
 
     # Domains never blocked (Network → DNS, DHCP and Internet's allowlist).
     def allowlist(value)
-      raise Refused, 'allow must be a list of domains' unless value.is_a?(Array) && value.all?(String)
+      raise Refused, 'allow must be a list of domains' unless value.is_a?(Array) && value.all? { |name| name.is_a?(String) && name.valid_encoding? }
       raise Refused, "the allowlist holds at most #{ALLOWLIST_MAX} domains" if value.size > ALLOWLIST_MAX
       bad = value.reject { |name| name.match?(BLOCK_DOMAIN) }
       raise Refused, "#{bad.first.inspect} isn't a domain" if bad.any?
@@ -281,7 +286,7 @@ module AmahiHelper
       depth = 0
       no_router = false
       value.each_line do |line|
-        line = line.strip
+        line = config_line(line)
         next if line.empty? || line.start_with?('#')
         raise Refused, "radvd line #{line.inspect} is not one Amahi-kai writes" unless radvd_line?(line)
         no_router = false if depth.zero?
@@ -308,7 +313,7 @@ module AmahiHelper
       value = string(value, 'content', max: 256 * 1024)
       allowed = []
       value.each_line do |line|
-        line = line.strip
+        line = config_line(line)
         next if line.empty? || line.start_with?('#')
         raise Refused, "Unbound line #{line.inspect} is not one Amahi-kai writes" unless unbound_line?(line)
         key, rest = line.split(/:\s+/, 2)
@@ -333,6 +338,7 @@ module AmahiHelper
 
     def unbound_line?(line)
       return true if UNBOUND_CLAUSES.include?(line)
+      return false unless line.ascii_only? # the /i below alone also takes two letters that fold to k and s
       key, value = line.split(/:\s+/, 2)
       return false unless value
       case key
@@ -481,7 +487,12 @@ module AmahiHelper
       advert
     end
 
-    # The domain names in DNSSL's wire format (labels, each name ending in a zero byte).
+    # One label of a name a device advertises: at most 63 bytes, letters, digits and hyphens. The
+    # advertisement comes from whatever is on the LAN and its names are shown on a page.
+    ADVERTISED_LABEL = /\A[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\z/
+
+    # The domain names in DNSSL's wire format (labels, each name ending in a zero byte). A name
+    # with a label that isn't one is left out, rather than shown as it came.
     def dns_names(bytes)
       names = []
       labels = []
@@ -490,7 +501,7 @@ module AmahiHelper
         length = bytes.getbyte(i)
         i += 1
         if length.zero?
-          names << labels.join('.') if labels.any?
+          names << labels.join('.') if labels.any? && labels.all? { |label| label.match?(ADVERTISED_LABEL) }
           labels = []
         else
           labels << bytes.byteslice(i, length).to_s
@@ -637,6 +648,10 @@ module AmahiHelper
     # answers 0.0.0.0 and ::, with its subdomains, except the allowlist's and Amahi-kai's own
     # zones (the local domain, Firefox's canary). Written where it's paused, while it is.
     def do_refresh_blocklists
+      with_blocklist_lock { refresh_blocklists }
+    end
+
+    def refresh_blocklists
       chosen = read_json(BLOCKLIST_CHOSEN) or return 'blocking is off'
       return 'DNS is off' unless File.exist?(UNBOUND_CONF)
       own = File.read(UNBOUND_CONF).scan(/^\s*local-zone: "([^"]+)\." /).flatten
@@ -648,10 +663,13 @@ module AmahiHelper
         error = fetch_blocklist(key, copy) unless File.exist?(copy) && Time.now - File.mtime(copy) < BLOCKLIST_FRESH
         count = 0
         if File.exist?(copy)
-          File.foreach(copy) do |line|
+          # As bytes: a list is whatever was downloaded, and one bad byte would otherwise stop the
+          # refresh part-way. The cap is reached while reading, so a huge list can't fill memory.
+          File.foreach(copy, mode: 'rb') do |line|
             name = blocklist_domain(line) or next
             domains[name] = true
             count += 1
+            raise Failed, "the lists chosen block more than #{BLOCKLIST_MAX_DOMAINS} domains" if domains.size > BLOCKLIST_MAX_DOMAINS
           end
         end
         status['lists'][key] = { 'domains' => count, 'downloaded_at' => (File.mtime(copy).to_i if File.exist?(copy)), 'error' => error }.compact
@@ -659,7 +677,6 @@ module AmahiHelper
       allow.each { |name| domains.delete(name) }
       # A domain blocks the names under it, so those needn't be listed too.
       blocked = domains.keys.reject { |name| under?(name, own) || parent_listed?(name, domains) }.sort
-      raise Failed, "the lists chosen block #{blocked.size} domains; at most #{BLOCKLIST_MAX_DOMAINS} fit" if blocked.size > BLOCKLIST_MAX_DOMAINS
       lines = ['# DNS blocklist (Network → DNS, DHCP and Internet): written by Amahi-kai, changes here are lost', 'server:']
       lines.concat(blocked.map { |name| %(  local-zone: "#{name}." always_null) })
       lines.concat(allow.map { |name| %(  local-zone: "#{name}." transparent) })
@@ -689,8 +706,26 @@ module AmahiHelper
 
     # The domain a list's line blocks, or nil (a comment, a blank, an address, a name that isn't one).
     def blocklist_domain(line)
-      name = line.sub(/#.*/, '').strip.downcase.delete_prefix('*.').delete_suffix('.')
-      name if name.match?(BLOCK_DOMAIN) && name != 'localhost.localdomain'
+      name = line.b.sub(/#.*/, '').strip.downcase.delete_prefix('*.').delete_suffix('.')
+      return nil unless name.match?(BLOCK_DOMAIN) && name != 'localhost.localdomain'
+
+      name.force_encoding(Encoding::UTF_8) # the pattern passes ASCII only, so it is one
+    end
+
+    # The blocklist changes, one at a time: the daily refresh, a pause and a resume all move the
+    # list in and out of Unbound's config, and two at once could leave the paused copy as the live
+    # one. A second one is refused rather than left waiting: each is a page's click or the daily
+    # timer, and both come again.
+    def with_blocklist_lock
+      Dir.mkdir(BLOCKLIST_DIR, 0o755) unless File.directory?(BLOCKLIST_DIR)
+      held = true
+      result = with_lock(File.join(BLOCKLIST_DIR, BLOCKLIST_LOCK_NAME)) do
+        held = false
+        yield
+      end
+      raise Refused, 'another blocklist change is still running; try again in a moment' if held
+
+      result
     end
 
     def under?(name, zones)
@@ -720,6 +755,10 @@ module AmahiHelper
     # Blocking stops for BLOCKING_PAUSE seconds: the blocklist moves out of Unbound's config, and
     # a transient systemd timer runs dns.resume_blocking (a new pause starts the time again).
     def do_pause_blocking
+      with_blocklist_lock { pause_blocking }
+    end
+
+    def pause_blocking
       return 'blocking is off' unless File.exist?(UNBOUND_BLOCKLIST) || File.exist?(BLOCKLIST_PAUSED)
       if File.exist?(UNBOUND_BLOCKLIST)
         do_install(BLOCKLIST_PAUSED, File.read(UNBOUND_BLOCKLIST), nil)
@@ -734,6 +773,10 @@ module AmahiHelper
     end
 
     def do_resume_blocking
+      with_blocklist_lock { resume_blocking }
+    end
+
+    def resume_blocking
       if File.exist?(BLOCKLIST_PAUSED)
         install_blocklist(File.read(BLOCKLIST_PAUSED))
         do_remove_files(BLOCKLIST_PAUSED)

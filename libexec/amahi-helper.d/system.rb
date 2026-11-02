@@ -11,6 +11,12 @@ module AmahiHelper
     'greyhole' => 'greyhole.service', 'docker' => 'docker.service', 'avahi-daemon' => 'avahi-daemon.service'
   }.freeze
 
+  # What system.journal hands the app (Settings → Help, a problem's report): Amahi-kai's own units
+  # and the services it runs. The rest of the journal stays root's: sudo's and sshd's lines name
+  # commands and logins the app has no use for.
+  JOURNAL_UNITS = ['amahi-kai*', *SERVICES.values, 'cloudflared.service', 'tailscaled.service', 'mariadb.service',
+                   'smartmontools.service', 'zfs*'].freeze
+
   UPDATE_UNIT = '/etc/systemd/system/amahi-kai-update.service'
 
   GIT = '/usr/bin/git'
@@ -663,9 +669,16 @@ module AmahiHelper
 
     # --- Checking for updates ---
 
-    # { 'lines' => [...] }: the journal's last +lines+, oldest first, each cut to LOG_LINE_MAX.
+    # { 'lines' => [...] }: the newest +lines+ from JOURNAL_UNITS and the kernel's errors (a failing
+    # drive shows there), oldest first, each cut to LOG_LINE_MAX. journalctl can't ask for either
+    # of the two at once, so they're put in order here by each entry's time; an entry's further
+    # lines are indented, and stay with it.
     def do_journal(lines)
-      { 'lines' => log_lines(capture([JOURNALCTL, '--no-pager', '--quiet', '-o', 'short-iso', '-n', lines.to_s]), lines) }
+      ask = [JOURNALCTL, '--no-pager', '--quiet', '-o', 'short-iso', '-n', lines.to_s]
+      answers = [capture([*ask, *JOURNAL_UNITS.flat_map { |unit| ['-u', unit] }]), capture([*ask, '-k', '-p', 'err'])]
+      entries = answers.flat_map { |text| text.dup.force_encoding('UTF-8').scrub('?').lines.slice_before(/\A\S/).to_a }
+      ordered = entries.each_with_index.sort_by { |entry, index| [entry.first[/\A\S+/].to_s, index] }.map(&:first)
+      { 'lines' => log_lines(ordered.join, lines) }
     end
 
     def do_check_update
@@ -681,8 +694,11 @@ module AmahiHelper
       with_lock(UPDATE_LOCK, &block)
     end
 
+    # Root's only: anyone who could open the file could hold the lock, and keep what needs it from
+    # ever running.
     def with_lock(path)
-      File.open(path, File::RDWR | File::CREAT, 0o644) do |lock|
+      File.open(path, File::RDWR | File::CREAT, 0o600) do |lock|
+        lock.chmod(0o600)
         return nil unless lock.flock(File::LOCK_EX | File::LOCK_NB)
 
         yield

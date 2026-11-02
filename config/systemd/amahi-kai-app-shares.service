@@ -1,10 +1,10 @@
-# The folders in shares that apps are given (rather than whole shares), mounted again before Docker
-# starts the apps (the root helper's apps.share_binds): the helper mounts each one itself, under
-# /run, which is empty after a restart, and the apps' containers mount those. One whose folder is
-# gone isn't mounted, so its app doesn't start without it. After the drives and ZFS pools, which
-# shares live on. Installed and enabled by bin/amahi-install-helper.
+# The shares and share folders apps are given, mounted again before Docker starts the apps (the root
+# helper's apps.share_binds): the helper mounts each one itself, under /run, which is empty after a
+# restart, and the apps' containers mount those. One whose folder is gone isn't mounted, so its app
+# doesn't start without it. After the drives and ZFS pools, which shares live on. Installed and
+# enabled by bin/amahi-install-helper.
 [Unit]
-Description=Amahi-kai: mount the share folders apps are given
+Description=Amahi-kai: mount the shares apps are given
 After=local-fs.target zfs-mount.service
 Before=docker.service
 

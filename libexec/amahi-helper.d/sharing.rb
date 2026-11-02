@@ -237,7 +237,7 @@ module AmahiHelper
     def samba_shares
       shares = {}
       current = nil
-      File.read(SMB_CONF).gsub(/\\\r?\n/, ' ').each_line do |line|
+      File.read(SMB_CONF).each_line do |line|
         line = line.strip
         next if line.empty? || line.start_with?('#', ';')
         if (header = line[/\A\[([^\]]*)\]/, 1])
@@ -264,6 +264,8 @@ module AmahiHelper
       value = string(value, 'path', max: 4096)
       raise Refused, "path #{value.inspect} must be absolute, without . or .. or //" unless normalized_path?(value)
       raise Refused, "path #{value} contains a line break" if value.match?(/[\r\n]/)
+      reserved = value.split('/').drop(1).find { |part| RESERVED_SHARE_NAMES.any? { |name| part.match?(name) } }
+      raise Refused, "path #{value} holds #{reserved}, a name Greyhole or the Trash keeps for itself" if reserved
       share_root_of(value) or raise Refused, "path #{value} is not inside #{SHARE_ROOT}, a data drive under #{DRIVES_ROOT} or a ZFS pool's shares folder"
       value
     end
@@ -308,14 +310,20 @@ module AmahiHelper
         line = line.strip
         next if line.empty?
         next if line.start_with?('#') && !line.match?(/\A#\s*(include|begin_alternate|end_alternate)/i)
-        raise Refused, "lmhosts line #{line.inspect} is not an address and a name" unless line.match?(/\A[0-9A-Fa-f.:]+\s+[^\s#]+\z/)
+        raise Refused, "lmhosts line #{line.inspect} is not an address and a name" unless line.match?(/\A[0-9A-Fa-f.:]+\s+[A-Za-z0-9_][A-Za-z0-9_.-]{0,254}\z/)
       end
       value
     end
 
     # Problems with a Samba config (raw text, or testparm's canonical output): a parameter
-    # that isn't listed, or a listed one with a value that points somewhere it shouldn't.
+    # that isn't listed, or a listed one with a value that points somewhere it shouldn't. A line
+    # ending in a backslash is refused first: Samba and a reader of the file disagree on what
+    # follows it (after a comment, Samba takes the next line as live), and each line is checked
+    # on its own.
     def samba_problems(text)
+      continued = text.each_line.find { |line| line.match?(/\\\s*\z/) }
+      return ["a line ends in a backslash: #{continued.strip[0, 60]}"] if continued
+
       params = samba_params(text)
       problems = params.filter_map do |section, name, value|
         key = name.downcase.delete(" \t")
@@ -390,11 +398,10 @@ module AmahiHelper
          value.match?(%r{\A#{Regexp.escape(pool_root)}/[a-z][a-z0-9_-]{0,31}/shares/[^/]+}))
     end
 
-    # [section, name, value] for each parameter. Samba joins a line ending in a
-    # backslash with the next one.
+    # [section, name, value] for each parameter.
     def samba_params(text)
       section = 'global'
-      text.gsub(/\\\r?\n/, ' ').each_line.filter_map do |line|
+      text.each_line.filter_map do |line|
         line = line.strip
         next if line.empty? || line.start_with?('#', ';')
         if (header = line[/\A\[([^\]]*)\]/, 1])
@@ -415,15 +422,29 @@ module AmahiHelper
       nil
     end
 
+    # Removes the folder through a handle on the folder above it (as do_mkdir_p makes it), so a
+    # part of the path swapped for a link while this runs can't send the removal somewhere else.
     def do_rmdir(path)
-      stat = File.lstat(path)
-      raise Failed, "#{path} is not a folder" unless stat.directory?
-      Dir.rmdir(path)
+      root = share_root_of(path) or raise Failed, "#{path} is no longer inside a share root"
+      parts = path.delete_prefix("#{root}/").split('/')
+      name = parts.pop
+      dir = open_dir(root)
+      current = root
+      parts.each do |part|
+        current = "#{current}/#{part}"
+        dir = open_dir("#{fd_path(dir)}/#{part}", dir, current)
+      end
+      child = "#{fd_path(dir)}/#{name}"
+      raise Failed, "#{path} is not a folder" unless File.lstat(child).directory?
+
+      Dir.rmdir(child)
       nil
     rescue Errno::ENOENT
       "#{path} doesn't exist"
     rescue Errno::ENOTEMPTY, Errno::EEXIST
       "#{path} isn't empty; left in place"
+    ensure
+      dir&.close
     end
 
     # testparm loads the file the way smbd would, and prints what it understood with

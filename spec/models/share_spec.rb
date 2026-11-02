@@ -24,6 +24,9 @@ describe Share do
     share = build(:share, extras: "veto files = /x/\n[homes]\npath = /etc")
     expect(share).not_to be_valid
     expect(share.errors[:extras]).to eq(["can't open another section ([homes])"])
+    share = build(:share, extras: "# a note \\\r\nveto files = /x/")
+    expect(share).not_to be_valid
+    expect(share.errors[:extras]).to eq(["can't have a line ending in a backslash"])
   end
 
   it "should be invalid without a valid path" do

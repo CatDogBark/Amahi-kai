@@ -37,7 +37,7 @@ You can use either or both.
 
 ### Connect Amahi-kai
 
-1. On **Network → Remote Access**, paste the token and click **Save**.
+1. On **Network → Remote Access**, paste the token and click **Connect**.
 2. The progress window shows Amahi-kai installing `cloudflared` (if needed), saving the token,
    and starting the tunnel.
 
@@ -45,8 +45,9 @@ Your server is then at `https://home.yourdomain.com`. No other setting is needed
 the tunnel come from the server itself, so Amahi-kai accepts them for any hostname you route to
 it.
 
-The token is saved in `/etc/amahi-kai/tunnel.token`, which only root can read, and `cloudflared`
-reads it from there. It isn't kept in a service file or shown on a command line.
+The token is saved in `/etc/amahi-kai/tunnel.token`, which only root can read. It isn't kept in a
+service file or shown on a command line. `cloudflared` doesn't run as root: it runs as a user made
+for it, and systemd hands it the token when it starts.
 
 ### Protect the hostname
 
@@ -85,9 +86,12 @@ sudo systemctl daemon-reload
 ### Troubleshooting
 
 - **Tunnel won't connect:** `journalctl -u cloudflared -n 30 --no-pager` usually says why (an
-  expired or mistyped token, for example). Paste a new token and **Save**.
+  expired or mistyped token, for example). To enter a new token, remove the tunnel from the server
+  as above, and the Remote Access page asks for one again.
 - **"Bad gateway":** Amahi-kai isn't answering. Check `systemctl is-active amahi-kai`, and that the
   tunnel's hostname points at `http://localhost:3000`.
+- **"ICMP proxy feature is disabled" in the log:** expected. The tunnel doesn't run as root, so it
+  can't carry ping through WARP's private networks. Web pages aren't affected.
 
 ---
 

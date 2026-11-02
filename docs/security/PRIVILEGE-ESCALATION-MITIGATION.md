@@ -29,7 +29,7 @@ updater run everything that loads the app or its gems as `amahi`.
 | `/usr/local/sbin/amahi-helper` | root:root 0755 | Installed from the root-owned tree by `bin/amahi-install-helper` |
 | `/etc/sudoers.d/amahi-kai` | root:root 0440 | From `config/sudoers/amahi-kai`, installed only if `visudo -cf` accepts it |
 | `/etc/amahi-kai/amahi.env` | root:amahi 0640 | Database password and `SECRET_KEY_BASE`; the app reads it |
-| `/etc/amahi-kai/tunnel.token` | root:root 0600 | Only `cloudflared` (as root) reads it |
+| `/etc/amahi-kai/tunnel.token` | root:root 0600 | systemd reads it and hands it to `cloudflared`, which runs as a user made for it (`DynamicUser`), since whoever holds a token decides from Cloudflare's side where the tunnel connects |
 | `/etc/amahi-kai/allowed_signers` | root:root 0644 | The release keys' public halves, from `config/allowed_signers`: the update check checks a release's tag against them |
 | `/etc/amahi-kai/allow-development` | root:root 0644, empty, on some servers | Root's permission to switch to the `development` channel, which isn't signature-checked; the root helper refuses the switch without it |
 | `/etc/greyhole.conf` | root:amahi 0640 | Holds the database password |
@@ -152,17 +152,18 @@ copy folder on each Greyhole drive, read only. For a share an app writes into, t
 `users` group in its container, and the share's folders get a default ACL (`setfacl -d`, applied to
 folders only, through `find`, which doesn't follow links) so what the app makes stays group-writable.
 
-An app can be given only some folders of a share instead (`/shares/<name>/<folder>`). A share's own
-folder is made by the helper, but a folder inside it can be swapped for a link by an app that writes
-there, and Docker follows a link in a mount's source each time it starts a container, at boot
-included. So the helper never gives Docker the folder's path: it opens the folder without following
-a link, checks that what it opened is that path (no link anywhere on the way), and bind-mounts it
+An app can be given only some folders of a share instead (`/shares/<name>/<folder>`). Whatever it's
+given, a share, a folder of one or a pooled share's copy folder, could be swapped for a link by
+something that writes in the folder above it (a folder in a share, a share inside another, a pool
+drive's copies), and Docker follows a link in a mount's source each time it starts a container, at
+boot included. So the helper never gives Docker the path: it opens the folder without following a
+link, checks that what it opened is that path (no link anywhere on the way), and bind-mounts it
 through that handle (`/proc/self/fd/<n>`, `mount --no-canonicalize`) under
 `/run/amahi-kai-app-shares`, root's only; the container mounts that. `/run` is empty after a
-restart, and `amahi-kai-app-shares.service` (`apps.share_binds`) mounts the recorded folders again,
-checked the same way, before Docker starts; a folder that's gone isn't mounted, so its app doesn't
-start rather than starting without it. Folder names are refused with `..`, a comma, a quote or a
-control character.
+restart, and `amahi-kai-app-shares.service` (`apps.share_binds`) mounts the recorded ones again,
+checked the same way, before Docker starts; one that's gone isn't mounted, so its app doesn't start
+rather than starting without it. Folder names are refused with `..`, a comma, a quote or a control
+character. System Update makes an app container from before this again once (`apps.follow_shares`).
 
 Updates (`apps.update`) run the version the catalog pins; the web app names the app. The helper
 copies the app's folders (`cp -a`) into a root-only folder first, and puts them back
@@ -206,6 +207,23 @@ refuses that release.
   move a server off signed releases. `bin/amahi-install-helper` makes the file on a server that
   follows `development` already (a development install included). A new install gets the code
   over HTTPS from GitHub as it is, and checks every release after that.
+- **Greyhole's own work queue is open to every local account.** Greyhole's daemon runs as root and
+  takes its work from `/var/spool/greyhole`, which has to be writable by everyone who can write to
+  a pooled share (Samba's module writes there as the connecting user), and it doesn't hold the
+  share and path it finds there to the pool's folders. So on a server with Greyhole installed,
+  anything running as a local account, the web app's user included, can have root's Greyhole daemon
+  work outside the pool. This is Greyhole's design, upstream; Amahi-kai neither creates that spool
+  nor can shut it without stopping pooling. **On a server with Greyhole installed, take the claim
+  above that the app's user can only reach root through this helper as holding for everything
+  except Greyhole.** A pool of ZFS drives has nothing of the kind, and the storage plan prefers one
+  (`docs/plans/storage.md`); Greyhole stays for basic SMB storage on mixed drives.
+- **A setuid file can run as root from a ZFS snapshot.** A pool and its datasets are mounted
+  `nosuid` (`setuid=off`, `devices=off`, and the share root and data drives are mounted `nosuid,nodev`),
+  but the automatic mounts under a dataset's `.zfs/snapshot` aren't: a setuid-root file in a
+  snapshot runs as root from there, measured on ZFS 2.2.2, which has no setting for it. It takes
+  root writing such a file to a pool first (an app's image that starts as root, or a drive prepared
+  elsewhere), plus a way to run it. The catalog rule against images that start as root covers the
+  first; re-check when Ubuntu's ZFS has the setting.
 - **The database isn't rolled back** with the code: migrations must keep working with the
   previous version's code. System Update dumps the database first (`/var/lib/amahi-kai/backups`,
   root-only, the last 3); restoring one is a manual step.
@@ -228,4 +246,11 @@ Add an operation to its area's part in `libexec/amahi-helper.d/` (arguments, val
 contract spec in `spec/lib/privileged_spec.rb` fails if the app calls an operation the helper
 doesn't have, or the helper has one nothing calls. Never run app code as root in
 `bin/amahi-install` or `bin/amahi-update`; use `as_app` (`spec/lib/install_scripts_spec.rb`
-checks).
+checks). Nor change anything as root by a path through a folder the app owns (the same spec): the
+app user can put a link at any name in it.
+
+Each new operation or argument goes in the table in `spec/lib/amahi_helper_checks_spec.rb`, which
+fails until it's there: a request that's accepted, and what each argument may hold besides. Every
+argument is tried with about 30 kinds of bad value, with the helper's own checks running. If the
+operation writes a config a tool reads, add what the check passes over to
+`spec/lib/amahi_helper_real_tools_spec.rb`, where the real tool reads it (CI's Real Tools job).

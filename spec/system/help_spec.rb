@@ -16,7 +16,7 @@ RSpec.describe 'Settings → Help', type: :system do
     expect(page).to have_css('#help-log', text: 'Completed 200 OK')
     click_button 'System journal'
     expect(page).to have_css('#help-log', text: 'Started amahi-kai.service.')
-    expect(page).to have_css('#help-log-about', text: "The system's own log")
+    expect(page).to have_css('#help-log-about', text: "Amahi-kai's services and the ones it runs")
     expect(page).to have_css('[data-log-source="journal"][aria-selected="true"]')
     click_button 'Amahi-kai'
     expect(page).to have_css('#help-log', text: 'Completed 200 OK')

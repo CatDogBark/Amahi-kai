@@ -224,6 +224,9 @@ cd "$APP_DIR"
 if [[ -n "${AMAHI_UPDATE_REEXEC:-}" ]] && { true >&9; } 2>/dev/null; then
   flock -n 9 || error "Another update is already running."
 else
+  # Root's only: anyone who could open it could hold the lock, and no update would run.
+  ( umask 077; : >> /run/amahi-kai-update.lock )
+  chmod 0600 /run/amahi-kai-update.lock
   exec 9>/run/amahi-kai-update.lock
   flock -w 90 9 || error "Another update is already running."
 fi
@@ -270,7 +273,6 @@ fi
 BACKUP_FILE=""
 
 SCRIPT_SUM_BEFORE=$(sha256sum < "$APP_DIR/bin/amahi-update")
-REPO_URL="https://github.com/CatDogBark/Amahi-kai.git"
 
 # The version to install, as the root helper decides it from the update channel: lines of
 # state (ok, legacy or error), channel, commit, version, tag and why it failed. "legacy" is an
@@ -314,19 +316,9 @@ elif [[ -d ".git" ]]; then
       ;;
   esac
 else
-  # No .git — clone to temp and sync files over
-  log "No git history found — cloning fresh..."
-  CLONE_DIR=$(mktemp -d)
-  if root_git clone "$REPO_URL" "$CLONE_DIR/repo" 2>&1; then
-    rsync -a --exclude='.git' --exclude='vendor/bundle' --exclude='tmp' --exclude='log' --exclude='public/assets' \
-      "$CLONE_DIR/repo/" "$APP_DIR/"
-    # Preserve .git for future pulls
-    cp -r "$CLONE_DIR/repo/.git" "$APP_DIR/.git"
-    log "Code synced from repository"
-  else
-    log "⚠ Git clone failed — using files on disk"
-  fi
-  rm -rf "$CLONE_DIR"
+  # What System Update installs is checked in git (a release's signed tag), so with no git history
+  # there's nothing it could check. Nothing changes.
+  error "$APP_DIR has no git history, so a new version can't be checked. Nothing changed; to update, install Amahi-kai again."
 fi
 
 # bash keeps running the copy of this script it opened, so after the pull a step added
@@ -505,4 +497,20 @@ restart_app || rollback "Starting the new version" restarted
 record_deployed "$NEW"
 FINISHED=true
 refresh_update_status
+# Apps that still mount a share by its path, from before the helper mounted shares itself, are
+# made again once, so each restarts. Last, past where an update can roll back: an older helper
+# can't mount these again after a restart. An app that can't be stays as it was, and says why.
+if [[ -x /usr/bin/docker ]]; then
+  reply=$(/usr/local/sbin/amahi-helper apps.follow_shares </dev/null 2>/dev/null) \
+    || log "⚠ Couldn't move the apps' shares to the new mounts: $reply"
+  [[ "$reply" == *'"apps":{}'* || -z "$reply" ]] || log "Apps' share mounts: $reply"
+fi
+# The tunnel on the unit this version writes. It can be how this update is being watched: the page
+# reconnects after the restart, and if it doesn't come up, its old unit goes back.
+if [[ -x /usr/bin/cloudflared ]]; then
+  reply=$(/usr/local/sbin/amahi-helper tunnel.refresh_unit </dev/null 2>/dev/null) \
+    || log "⚠ Couldn't check the Cloudflare Tunnel's unit: $reply"
+  tunnel=$(sed -n 's/.*"tunnel":"\([^"]*\)".*/\1/p' <<<"$reply")
+  [[ -z "$tunnel" || "$tunnel" == 'as it is' || "$tunnel" == 'none here' ]] || log "Cloudflare Tunnel: $tunnel"
+fi
 log "✓ Amahi-kai updated and running!"

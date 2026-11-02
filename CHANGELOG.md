@@ -4,6 +4,40 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.6.0] — 2026-11-01
+
+A pass over everything Amahi-kai does as root: the Cloudflare Tunnel runs as a user of its own, deleting a pool wipes only the drives ZFS says are its own, what an app is given in a share comes through root's own mount, share folders and blocking's lists are handled more carefully, and every argument the root helper takes is now tried with bad values in CI.
+
+### 🔒 Security & Fixes
+
+- **Tighter around what runs as root** — From a review of the root helper and the scripts around it:
+  - System Update makes the app's working folders as the app user, and hands files back to it only from inside their own folder.
+  - A dnsmasq config line too long for dnsmasq to read whole is refused, and so is a Samba line ending in a backslash (on a share's Advanced settings too).
+  - A server with no git history stops at System Update instead of fetching code it can't check.
+  - The update and catalog locks are root's alone, and hostnames and the names in DNS configs are plain ASCII.
+  - Device names from DHCP reach DNS after 5 seconds, so a burst of them is one reload of Unbound.
+- **The System journal is narrower** (Settings → Help, Download logs and a problem's report) — Amahi-kai's services, the ones it runs and the kernel's errors, not the whole of the system's log, which also names sudo's commands and SSH logins.
+- **Rack updated** for published advisories, among them a High one (a denial of service through multipart uploads).
+- **Deleting a pool wipes only the drives it's really using** — A drive that had failed or been pulled was wiped by the name it last had, and that name can belong to another drive by now, with that drive's data on it. Now only drives ZFS has open, with ZFS's own label, are wiped; a partition beside them that Amahi-kai can't identify stays; and a pool's log, cache, spare and special drives count as in use, so they can't be picked for something else.
+- **Every pool coming onto the server gets the same checks** — Bringing a pool back online skipped the checks Import has, and it may have been anywhere since. Both now mount a pool's datasets one at a time, only in the folder each one's name gives and never through a link on the pool, make the pool's own folder root's whatever the drive says, and turn off setuid, device files and ZFS's sharing settings. A pool stays off ZFS's boot list until it has passed, so a failure, or a power cut, leaves nothing for the next boot to mount.
+- **A share's folder can't be made at a name Greyhole or the Trash owns** — A share folder is made as the app's user, and at one of those names (Greyhole's trash, its metadata store and backups, the folder a Trash restore stages a file in, Samba's recycle bin) it would stand where root puts files it later copies into a share. Those names are refused now, and a share's folder is removed through the folder above it, so a link put in the path can't move the removal somewhere else.
+- **Blocking's lists are read as bytes, capped as they're read, and changed one at a time** — A list is whatever was downloaded: one bad byte used to stop a whole refresh part-way, and a huge list was read into memory before its size was checked. A refresh, a pause and a resume can no longer cross each other and leave the paused list as the live one.
+- **Smaller network fixes** — Router mode refuses the loopback, Docker's and Tailscale's interfaces for either side, as This NAS already did. A netplan file holding something YAML won't load is passed over instead of failing the change. Search domains a device advertises are shown only when they really are domain names. Firewall rules are taken apart as words only when that's what they are, and the interface names in the router's saved state are read as names or not at all.
+- **Two known gaps written down** (`docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`) — Greyhole's work queue has to stay open to every local account and its root daemon doesn't hold itself to the pool's folders, which is Greyhole's own design; and a setuid file can run as root from a ZFS snapshot, which this version of ZFS has no setting against. Neither is something Amahi-kai can close, so both are stated plainly instead.
+- **ZFS saying a pool is busy for a second no longer fails Delete or Take offline** — ZFS can refuse either for a moment with nothing using the pool. Amahi-kai now asks again for up to 15 seconds; what really holds a pool still gets you the reason.
+- **The Cloudflare Tunnel no longer runs as root** — `cloudflared` runs as a user made for it, and systemd hands it the token. Whoever holds a token decides from Cloudflare's side where a tunnel connects, so it shouldn't be able to reach what root can. System Update moves a tunnel that's set up, restarting it once, and puts its old unit back if it doesn't come up.
+- **Everything an app is given in a share goes through the root helper's own mount** — A whole share or a pooled share's copy folder used to be handed to Docker by its path, as folders of a share no longer were, and Docker follows a link there each time it starts a container. System Update makes each app's container again once for this, so **an app given a share restarts once**, keeping its version and data. One that's stopped stays stopped.
+- **Making an app's container again never moves it to a newer image** — An app with no record of its definition (installed before those were kept) could be moved to the catalog's version, with no copy of its data first.
+- **An app's copy of its ping is made in a folder only root can reach**, since Docker keeps an image's special file modes when it copies a file out. A manifest can't set `FILE__DOCKER_MODS` either, and a share named only with dots can't be given to an app.
+- **An app's update goes back to the version it ran after any kind of failure**, not only some, and putting a copy of its data back waits until Docker has really removed its container. One app's trouble no longer stops the others when the pool's drives or the DNS change.
+- **Stricter paths and names** — Share paths with control characters, and `lmhosts` names outside what a hostname can hold, are refused. Bad text in a list of addresses or domains is a refusal now, not an internal error.
+- **The root helper's log misses nothing** — A request with bytes JSON can't write used to leave no line in `helper.log`, and neither did a second job refused for an app. Secrets are filtered however deep they are in a request, and long lists are cut.
+
+### 🔧 Architecture & Code Quality
+
+- **Every argument of the root helper is tried with bad values** — A table of all its operations, with their own checks running, that fails CI until a new operation is listed.
+- **Real tools read what the checks approve** — A CI job with Ubuntu 24.04's dnsmasq, Samba, Unbound and radvd, so a difference between a check and the tool shows up as a failed job.
+
 ## [1.5.3] — 2026-10-30
 
 Following the dev branch, which isn't signature-checked, takes root's permission on the server, and System Status says which updates are signed.

@@ -29,6 +29,19 @@ RSpec.describe 'install and update scripts' do
       expect(offenders).to eq([])
     end
 
+    # A folder the app user owns can hold a link at any name, so a path through one can lead anywhere.
+    # Root may ask what's there, and the app user does the rest (bin/amahi-set-ownership's are below).
+    it "#{script} changes nothing by a path through the app's folders, as root" do
+      offenders = File.readlines(Rails.root.join(script)).each_with_index.filter_map do |line, i|
+        code = line.strip
+        next if code.start_with?('#', 'echo ', 'log ') || !code.match?(%r{\$APP_DIR/(?:tmp|log|public/assets|vendor/bundle)/})
+        next if code.match?(/\bas_app "/) || code.match?(/\[\[ -[def] "/)
+
+        "#{i + 1}: #{code}"
+      end
+      expect(offenders).to eq([])
+    end
+
     it "#{script} doesn't give the code back to the app user" do
       text = File.read(Rails.root.join(script))
       expect(text).not_to match(/chown -R "\$APP_USER/)
@@ -450,6 +463,24 @@ RSpec.describe 'install and update scripts' do
     expect(stanza).to include('su amahi amahi')
   end
 
+  it "bin/amahi-set-ownership, as root, works only on the app's top folders, and from inside their folders" do
+    text = File.read(Rails.root.join('bin/amahi-set-ownership'))
+    expect(text).to include('WRITABLE=(tmp log public/assets vendor/bundle)') # none inside another
+    expect(text.scan(/^\s*install -d .*$/).map(&:strip)).to contain_exactly(
+      'install -d -o root -g root -m 0755 "$STATE_DIR"', 'install -d -o "$APP_USER" -g "$APP_GROUP" -m 0755 "$path"',
+      'install -d -o root -g root -m 0755 "$APP_DIR/.bundle"'
+    )
+    expect(text).to include('-execdir chown -h "$APP_USER:$APP_GROUP"')
+    expect(text).not_to include('-exec chown -h "$APP_USER')
+    expect(text).to include('sudo -u "$APP_USER" mkdir -p --')
+  end
+
+  it "the root helper names nothing inside the app's folders" do
+    Dir[Rails.root.join('libexec/amahi-helper.d/*.rb')].each do |part|
+      expect(File.read(part)).not_to match(%r{APP_DIR\}?/(?:tmp|log|public/assets|vendor/bundle)}), part
+    end
+  end
+
   describe 'bin/amahi-set-ownership' do
     let(:dir) { Dir.mktmpdir }
     let(:app) { "#{dir}/app" }
@@ -459,21 +490,22 @@ RSpec.describe 'install and update scripts' do
 
     before do
       skip 'needs root' unless Process.euid.zero?
-      FileUtils.mkdir_p(["#{app}/bin", "#{app}/.git", "#{app}/tmp/cache", "#{app}/vendor", outside])
+      File.chmod(0o755, dir) # the app user makes folders inside it
+      FileUtils.mkdir_p(["#{app}/bin", "#{app}/.git", "#{app}/tmp/cache", "#{app}/vendor", outside, "#{dir}/state"])
       File.write("#{app}/bin/amahi-update", 'echo hi')
       File.chmod(0o775, "#{app}/bin/amahi-update")
       File.write("#{app}/tmp/cache/old", 'left by root')
       File.write("#{outside}/secret", 'x')
       File.symlink("#{outside}/secret", "#{app}/bin/link")
       File.symlink(outside, "#{app}/log")
-      FileUtils.chown_R(user.uid, user.gid, [app, outside])
+      FileUtils.chown_R(user.uid, user.gid, [app, outside, "#{dir}/state"])
       FileUtils.chown(0, 0, "#{app}/tmp/cache/old")
     end
 
     after { FileUtils.rm_rf(dir) if Process.euid.zero? }
 
     def run_script
-      env = { 'APP_DIR' => app, 'APP_USER' => user.name, 'APP_GROUP' => group.name,
+      env = { 'APP_DIR' => app, 'APP_USER' => user.name, 'APP_GROUP' => group.name, 'STATE_DIR' => "#{dir}/state",
               'GIT_CONFIG_SYSTEM' => "#{dir}/gitconfig" }
       Open3.capture3(env, Rails.root.join('bin/amahi-set-ownership').to_s)
     end
@@ -510,6 +542,74 @@ RSpec.describe 'install and update scripts' do
       _out, err, status = run_script
       expect(status).to be_success, err
       expect(File.read("#{dir}/gitconfig").scan("directory = #{app}").size).to eq(1)
+    end
+
+    # tmp/ is the app user's, so a link there can point anywhere.
+    %w[pids cache sockets].each do |name|
+      it "leaves what a link at tmp/#{name} points to as it was" do
+        target = "#{dir}/roots"
+        FileUtils.mkdir_p(target, mode: 0o700)
+        FileUtils.rm_rf("#{app}/tmp/#{name}")
+        File.symlink(target, "#{app}/tmp/#{name}")
+
+        _out, err, status = run_script
+        expect(status).to be_success, err
+        expect(owner(target)).to eq(0)
+        expect(File.stat(target).mode & 0o777).to eq(0o700)
+        expect(File.symlink?("#{app}/tmp/#{name}")).to be(true)
+      end
+    end
+
+    it "leaves a file in the app's folders that has another name: it can be someone else's" do
+      File.write("#{dir}/roots-file", 'x')
+      File.chown(0, 0, "#{dir}/roots-file")
+      File.link("#{dir}/roots-file", "#{app}/tmp/another-name")
+
+      _out, err, status = run_script
+      expect(status).to be_success, err
+      expect(owner("#{dir}/roots-file")).to eq(0)
+    end
+
+    it "says a name it couldn't make, and goes on" do
+      File.symlink("#{dir}/nothing-there", "#{app}/tmp/pids")
+      out, err, status = run_script
+      expect(status).to be_success, err
+      expect(err).to include("couldn't make tmp/pids")
+      expect(out).to include('Set ownership of')
+    end
+
+    it 'keeps the folder of root\'s records root\'s' do
+      _out, err, status = run_script
+      expect(status).to be_success, err
+      expect(owner("#{dir}/state")).to eq(0)
+      expect(File.stat("#{dir}/state").mode & 0o777).to eq(0o755)
+    end
+  end
+
+  describe 'bin/amahi-update' do
+    let(:script) { File.read(Rails.root.join('bin/amahi-update')) }
+
+    it 'never installs code it has no way to check: with no git history, it stops' do
+      expect(script).to include('has no git history, so a new version')
+      expect(script).not_to match(/git clone|root_git clone|rsync/)
+    end
+
+    # An older helper can't mount these again after a restart, so this comes past where an update
+    # can roll back.
+    it "moves the apps' shares to the helper's own mounts last, past where it could roll back" do
+      expect(script.index('amahi-helper apps.follow_shares')).to be > script.rindex('FINISHED=true')
+      expect(script.index('amahi-helper apps.follow_shares')).to be < script.index('✓ Amahi-kai updated and running!')
+    end
+
+    it "moves the tunnel to its new unit past where it could roll back, and only where cloudflared is" do
+      expect(script.index('amahi-helper tunnel.refresh_unit')).to be > script.rindex('FINISHED=true')
+      expect(script.index('amahi-helper tunnel.refresh_unit')).to be < script.index('✓ Amahi-kai updated and running!')
+      expect(script[0...script.index('amahi-helper tunnel.refresh_unit')].lines.last(2).join).to include('-x /usr/bin/cloudflared')
+    end
+
+    it 'keeps its lock for root alone' do
+      expect(script).to include('chmod 0600 /run/amahi-kai-update.lock')
+      expect(script.index('chmod 0600 /run/amahi-kai-update.lock')).to be < script.index('exec 9>/run/amahi-kai-update.lock')
     end
   end
 end

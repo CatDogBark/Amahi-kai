@@ -279,10 +279,10 @@ module AmahiHelper
     def greyhole_conf(value)
       value = string(value, 'content', max: 64 * 1024)
       value.each_line do |line|
-        line = line.strip
+        line = config_line(line)
         next if line.empty? || line.start_with?('#')
         match = GREYHOLE_LINES.lazy.map { |re| line.match(re) }.find(&:itself)
-        raise Refused, "greyhole.conf line #{line.sub(/\Adb_pass = .*/, 'db_pass = ...').inspect} is not one Amahi-kai writes" unless match
+        raise Refused, "greyhole.conf line #{line.sub(/\Adb_pass\s*=.*/, 'db_pass = ...').inspect} is not one Amahi-kai writes" unless match
         pool = match[1] if match.size > 1 # storage_pool_drive's path
         raise Refused, "pool drive #{pool} must be a normalized path" if pool && !normalized_path?(pool)
       end
@@ -303,7 +303,12 @@ module AmahiHelper
       drive = greyhole_drives.find { |d| source.start_with?("#{d}/#{GREYHOLE_TRASH}/") } or raise Failed, "#{source} isn't in a pool drive's trash"
       root = "#{drive}/#{TRASH_STAGING}"
       Dir.mkdir(root, 0o700) unless File.exist?(root) || File.symlink?(root)
-      raise Failed, "#{root} isn't a folder" if File.symlink?(root) || !File.directory?(root)
+      # The helper's own folder, reachable by nobody else: the file is staged here before Greyhole
+      # copies it into the share, and anything else that could write here could swap it meanwhile.
+      staging = File.lstat(root)
+      unless staging.directory? && staging.uid == Process.euid && (staging.mode & 0o077).zero?
+        raise Failed, "#{root} isn't the helper's own folder: move it aside, then restore again"
+      end
       stage = "#{root}/#{SecureRandom.hex(8)}"
       Dir.mkdir(stage, 0o700)
       staged = "#{stage}/#{File.basename(path)}"

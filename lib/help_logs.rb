@@ -24,7 +24,7 @@ module HelpLogs
       Source.new(key: 'helper', label: 'Root helper',
                  about: 'Every change made as root, each with what it was asked. Passwords and keys are never written here.'),
       Source.new(key: 'update', label: 'System Update', about: 'The last System Update, step by step.'),
-      Source.new(key: 'journal', label: 'System journal', about: "The system's own log: services starting, stopping and failing."),
+      Source.new(key: 'journal', label: 'System journal', about: "Amahi-kai's services and the ones it runs, starting, stopping and failing, and the kernel's errors."),
       *apps.map { |app| Source.new(key: "app:#{app.identifier}", label: app.name, about: "#{app.name}'s own output, from its container.") }
     ]
   end

@@ -150,6 +150,14 @@ module AmahiHelper
   # being restored is staged.
   GREYHOLE_TRASH = '.gh_trash'
 
+  # Names other programs own in a share folder or on a drive: Greyhole's own folders (its trash,
+  # its metadata store and that store's backups), the folder a trash restore stages a file in
+  # (TRASH_STAGING), and Samba's recycle bin (RECYCLE_BIN). A share folder is never one of these,
+  # and never sits inside one: made as the app's, 2775, it would stand in for what owns the name.
+  # (Those two constants come later in the helper's source, so the names are written out here; a
+  # spec checks they still agree.)
+  RESERVED_SHARE_NAMES = [/\A\.gh_/, /\A\.amahi-restore\z/, /\A\.recycle\z/].freeze
+
   # greyhole.conf without its database lines, for amahi-dfree: anyone may read it.
   GREYHOLE_POOL_CONF = '/etc/amahi-kai/greyhole-pool.conf'
 
@@ -217,6 +225,9 @@ module AmahiHelper
   JOURNALCTL = '/usr/bin/journalctl'
   # A log line handed to the app (system.journal, apps.logs) is cut at this many characters.
   LOG_LINE_MAX = 2000
+
+  # The items of a list, or fields of an object, that a helper.log line keeps.
+  LOG_LIST_MAX = 50
 
   APP_MANIFESTS = "#{APP_DIR}/config/apps".freeze
 
@@ -335,6 +346,11 @@ module AmahiHelper
   # order (ignore: no address for it; infinite: a lease that never ends).
   DHCP_NAME = '(?!(?:ignore|infinite)\\b(?!-))[a-z][a-z0-9-]{0,62}'
 
+  # dnsmasq reads its config in pieces of about 1 KB and takes what's past the first as a line of
+  # its own, in a comment too. Each line is checked whole here, so it must fit in one piece (the
+  # longest the app writes is about 270 characters).
+  DNSMASQ_LINE_MAX = 512
+
   DNSMASQ_LINES = [
     /\Adhcp-range=#{IPV4},#{IPV4},\d{1,7}s\z/,
     /\Adhcp-option=option:router,#{IPV4}\z/,
@@ -448,7 +464,7 @@ module AmahiHelper
       end
       id = args.is_a?(Hash) ? args['app'] : nil
       return respond(output) { execute(op, args) } unless id.is_a?(String) && id.match?(APP_ID)
-      return respond(output) { not_in_a_job!(id) } if app_job_running?(id)
+      return respond(output) { refuse_second_job(op, args, id) } if app_job_running?(id)
 
       job_input = File.open(File.join(RUN_DIR, "amahi-app-job-#{SecureRandom.hex(8)}"), File::RDWR | File::CREAT | File::EXCL, 0o600)
       job_input.write(raw)
@@ -459,6 +475,14 @@ module AmahiHelper
                                 HELPER_PATH, op], in: job_input)
     rescue SystemCallError => e
       respond(output) { raise Failed, "#{id}'s job couldn't be started (#{e.message})" }
+    end
+
+    # Refused here, before execute, so it's logged here.
+    def refuse_second_job(op, args, id)
+      not_in_a_job!(id)
+    rescue Refused => e
+      log(op, args, 'refused', e.message, Time.now)
+      raise
     end
 
     # exec, as a method a spec can stand in for.
@@ -568,8 +592,16 @@ module AmahiHelper
       value
     end
 
+    # A line of a config, for checking it, without what its tool takes as space around a line: spaces,
+    # tabs and the line's end. Not the rest of what strip removes: Unbound takes a form feed as text,
+    # so to it a line starting with one and then # is no comment.
+    def config_line(line)
+      line.sub(/\A[ \t]+/, '').sub(/[ \t\r\n]+\z/, '')
+    end
+
     def normalized_path?(path)
-      path.start_with?('/') && path.length > 1 && !path.end_with?('/') &&
+      path.valid_encoding? && !path.match?(/[[:cntrl:]]/) &&
+        path.start_with?('/') && path.length > 1 && !path.end_with?('/') &&
         path.split('/').drop(1).none? { |part| part.empty? || part == '.' || part == '..' }
     end
 
@@ -654,7 +686,7 @@ module AmahiHelper
       current = root
       path.delete_prefix("#{root}/").split('/').each do |part|
         current = "#{current}/#{part}"
-        child = "/proc/self/fd/#{dir.fileno}/#{part}"
+        child = "#{fd_path(dir)}/#{part}"
         begin
           Dir.mkdir(child, 0o755)
         rescue Errno::EEXIST
@@ -662,10 +694,15 @@ module AmahiHelper
         end
         dir = open_dir(child, dir, current)
       end
-      raise Failed, "#{path} moved while it was being made" unless File.readlink("/proc/self/fd/#{dir.fileno}") == path
+      raise Failed, "#{path} moved while it was being made" unless File.readlink(fd_path(dir)) == path
       nil
     ensure
       dir&.close
+    end
+
+    # The open folder's own path, to reach what's in it without walking the path again.
+    def fd_path(dir)
+      "/proc/self/fd/#{dir.fileno}"
     end
 
     # A handle on the folder at +path+, not following a link there; +parent+ is closed once
@@ -800,11 +837,11 @@ module AmahiHelper
       output.puts JSON.generate(yield)
       0
     rescue Refused => e
-      output.puts JSON.generate('ok' => false, 'error' => e.message)
+      output.puts JSON.generate('ok' => false, 'error' => valid_text(e.message))
       1
     rescue StandardError => e
       message = e.is_a?(Failed) ? e.message : "internal error: #{e.class}: #{e.message}"
-      output.puts JSON.generate('ok' => false, 'error' => message)
+      output.puts JSON.generate('ok' => false, 'error' => valid_text(message))
       2
     end
 
@@ -827,9 +864,9 @@ module AmahiHelper
     # One JSON line per call. A log that can't be written doesn't stop the operation.
     def log(op, args, result, error, started)
       entry = {
-        'time' => Time.now.utc.iso8601(3), 'op' => op, 'args' => filtered(args),
+        'time' => Time.now.utc.iso8601(3), 'op' => valid_text(op), 'args' => filtered(args),
         'caller' => ENV['SUDO_USER'] || app_job_caller || Etc.getpwuid(Process.uid)&.name,
-        'result' => result, 'error' => error, 'ms' => ((Time.now - started) * 1000).round
+        'result' => result, 'error' => error && valid_text(error), 'ms' => ((Time.now - started) * 1000).round
       }.compact
       write_log(JSON.generate(entry))
     rescue StandardError => e
@@ -857,17 +894,31 @@ module AmahiHelper
 
     def filtered(args)
       return '(not a JSON object)' unless args.is_a?(Hash)
-      args.to_h do |key, value|
-        if key.to_s.match?(/pass|secret|token|key/i)
-          [key, '[FILTERED]']
-        elsif key == 'content' && value.is_a?(String)
-          [key, { 'bytes' => value.bytesize, 'sha256' => Digest::SHA256.hexdigest(value) }]
-        elsif value.is_a?(String) && value.length > 256
-          [key, "#{value[0, 256]}..."]
-        else
-          [key, value]
+      filtered_value(args)
+    end
+
+    # A request's values as logged: secrets filtered wherever they are, a config by its size and
+    # hash, long text and lists cut, and text JSON can write, so a bad request is logged like any other.
+    def filtered_value(value, key = nil)
+      case value
+      when Hash
+        value.first(LOG_LIST_MAX).to_h do |name, inner|
+          name = valid_text(name)
+          [name, name.match?(/pass|secret|token|key/i) ? '[FILTERED]' : filtered_value(inner, name)]
         end
+      when Array then value.first(LOG_LIST_MAX).map { |item| filtered_value(item, key) }
+      when String
+        text = valid_text(value)
+        if key == 'content' then { 'bytes' => value.bytesize, 'sha256' => Digest::SHA256.hexdigest(value) }
+        elsif text.length > 256 then "#{text[0, 256]}..."
+        else text
+        end
+      else value
       end
+    end
+
+    def valid_text(value)
+      value.to_s.dup.force_encoding('UTF-8').scrub('?')
     end
   end
 end

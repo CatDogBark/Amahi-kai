@@ -156,7 +156,8 @@ taken in UTC (the list shows the time in your time zone).
   files open over the network are disconnected first. **Bring online** on its card opens it again.
 - **Delete pool** destroys the pool and everything on it, snapshots included. Its drives are wiped
   and become free for share storage or a new pool. Type the pool's name to confirm. This can't be
-  undone.
+  undone. A drive that had already left the pool (failed or pulled) isn't wiped, since the name it
+  last had may belong to another drive by now: it keeps its ZFS label until you **Erase** it.
 
 Neither works while shares are on the pool, or an installed app keeps its data there: delete the
 shares on **Shares**, or uninstall the app on **Apps**, first.
@@ -169,9 +170,11 @@ A pool on drives connected to the server that isn't open (imported) gets a card 
 the drives, not imported**: the server's own pool after Amahi-kai was installed again, one whose
 drives came too late when the server started, or a pool from another server.
 
-- **Import** opens it again at `/srv/pools/<name>`, if it's a pool Amahi-kai made. Any other is
-  left on its drives as it was: import it from the command line. ZFS can't import a pool with too
-  many of its drives missing; connect them first.
+- **Import** opens it again at `/srv/pools/<name>`, if it's a pool Amahi-kai made: every dataset
+  that mounts does so in the folder its name gives, which is where datasets go unless someone moved
+  them. Any other is left on its drives: import it from the command line. Its datasets come in with
+  setuid, device files and ZFS's own sharing turned off. ZFS can't import a pool with too many of
+  its drives missing; connect them first.
 - Its drives are kept for it: nothing can format them or put them in another pool. To use one for
   something else, click **Erase…** on its row and type the pool's name. With too many of its drives
   erased, the pool and everything on it are gone.

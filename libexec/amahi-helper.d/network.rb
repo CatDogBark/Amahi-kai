@@ -105,6 +105,10 @@ module AmahiHelper
 
   TUNNEL_UNIT = '/etc/systemd/system/cloudflared.service'
 
+  # How long the tunnel gets to come up on a new unit (do_tunnel_unit), its old connections' grace
+  # period to end included.
+  TUNNEL_START_WAIT = 120
+
   TUNNEL_UNIT_CONTENT = <<~UNIT
     [Unit]
     Description=Cloudflare Tunnel
@@ -113,7 +117,18 @@ module AmahiHelper
 
     [Service]
     Type=notify
-    ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate run --token-file #{TUNNEL_TOKEN}
+    # Not as root: whoever holds the token decides from Cloudflare's side where the tunnel connects,
+    # local sockets included. A user made for it, and nothing it doesn't need; systemd reads the
+    # token, root's only, and hands it over.
+    DynamicUser=yes
+    LoadCredential=token:#{TUNNEL_TOKEN}
+    ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate run --token-file %d/token
+    NoNewPrivileges=yes
+    CapabilityBoundingSet=
+    PrivateDevices=yes
+    ProtectKernelTunables=yes
+    ProtectKernelModules=yes
+    ProtectControlGroups=yes
     Restart=on-failure
     RestartSec=5s
     TimeoutStartSec=0
@@ -165,8 +180,8 @@ module AmahiHelper
     'network.router_on' => {
       params: %w[lan wan forwards dns lan_only],
       validate: lambda { |a|
-        lan = network_interface(a['lan'])
-        wan = network_interface(a['wan'])
+        lan = lan_interface(a['lan'], 'the LAN')
+        wan = lan_interface(a['wan'], 'the internet side')
         raise Refused, 'the LAN and the internet interfaces must differ' if lan == wan
         raise Refused, "the firewall must be on first (Network → Security, the firewall's Fix)" unless ufw_enabled?
         dns = a['dns']
@@ -246,6 +261,13 @@ module AmahiHelper
     'tunnel.start' => unit_operation('start', 'cloudflared.service', CLOUDFLARED),
     'tunnel.stop' => unit_operation('stop', 'cloudflared.service', CLOUDFLARED),
     'tunnel.restart' => unit_operation('restart', 'cloudflared.service', CLOUDFLARED),
+    # The tunnel's unit as this version writes it, where one is set up (do_tunnel_unit). Run by
+    # bin/amahi-update as one of its last steps. Takes nothing from the app.
+    'tunnel.refresh_unit' => {
+      params: [],
+      validate: ->(_a) { {} },
+      plan: ->(_v) { [[:tunnel_unit]] }
+    },
     # tailscaled on now and at boot.
     'tailscale.start' => {
       params: [],
@@ -272,10 +294,11 @@ module AmahiHelper
   )
 
   class << self
-    # One DNS label (RFC 1123): letters, digits and hyphens, at most 63 characters.
+    # One DNS label (RFC 1123): letters, digits and hyphens, at most 63 characters. Plain ASCII: /i
+    # alone also takes the two non-ASCII letters that fold to k and s.
     def hostname(value)
       value = string(value, 'hostname', max: 63)
-      raise Refused, "hostname #{value.inspect} must be letters, digits and hyphens, not starting or ending with a hyphen" unless value.match?(/\A[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\z/i)
+      raise Refused, "hostname #{value.inspect} must be letters, digits and hyphens, not starting or ending with a hyphen" unless value.ascii_only? && value.match?(/\A[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\z/i)
       value
     end
 
@@ -359,6 +382,15 @@ module AmahiHelper
       value
     end
 
+    # One of the machine's real network interfaces: not the loopback, Docker's, a container's or
+    # Tailscale's, none of which can carry a LAN or the internet side.
+    def lan_interface(value, what)
+      value = network_interface(value)
+      raise Refused, "#{value} can't be #{what}" if value.match?(NOT_LAN_INTERFACES)
+
+      value
+    end
+
     # A network interface this machine has, by name ("ens18").
     def network_interface(value)
       value = string(value, 'interface', max: 15)
@@ -372,17 +404,18 @@ module AmahiHelper
     def dnsmasq_conf(value, allowed)
       value = string(value, 'content', max: 64 * 1024)
       value.each_line do |line|
-        line = line.strip
+        raise Refused, "a dnsmasq line is longer than #{DNSMASQ_LINE_MAX} characters" if line.bytesize > DNSMASQ_LINE_MAX
+        line = config_line(line)
         next if line.empty? || line.start_with?('#')
-        raise Refused, "dnsmasq line #{line.inspect} is not one Amahi-kai writes" unless allowed.any? { |re| line.match?(re) }
+        raise Refused, "dnsmasq line #{line.inspect} is not one Amahi-kai writes" unless line.ascii_only? && allowed.any? { |re| line.match?(re) }
       end
-      raise Refused, "dnsmasq's config must answer no DNS (port=0)" unless value.each_line.any? { |line| line.strip == 'port=0' }
+      raise Refused, "dnsmasq's config must answer no DNS (port=0)" unless value.each_line.any? { |line| config_line(line) == 'port=0' }
       value
     end
 
     # A plain IPv4 or IPv6 address (+family+ :ipv4? or :ipv6?), with no prefix or zone.
     def ip_address?(value, family = nil)
-      return false unless value.match?(/\A[0-9a-f.:]{2,39}\z/i)
+      return false unless value.valid_encoding? && value.match?(/\A[0-9a-f.:]{2,39}\z/i)
       ip = IPAddr.new(value)
       family ? ip.public_send(family) : true
     rescue IPAddr::Error
@@ -406,6 +439,49 @@ module AmahiHelper
       value = string(value, 'token', max: 4096).strip
       raise Refused, "the tunnel token doesn't look like one Cloudflare gives" unless value.match?(TUNNEL_TOKEN_FORMAT)
       value
+    end
+
+    # A tunnel that runs is restarted on the new unit and watched: it can be how the owner reaches
+    # this server, so if it doesn't come up, the unit it had goes back. { 'tunnel' => what happened }.
+    def do_tunnel_unit
+      return { 'tunnel' => 'none here' } unless File.exist?(TUNNEL_UNIT) && File.exist?(TUNNEL_TOKEN)
+
+      before = File.read(TUNNEL_UNIT)
+      return { 'tunnel' => 'as it is' } if before == TUNNEL_UNIT_CONTENT
+
+      running = unit_state('is-active', 'cloudflared.service') == 'active'
+      install_tunnel_unit(TUNNEL_UNIT_CONTENT)
+      return { 'tunnel' => 'unit written; it was not running, so it was not started' } unless running
+
+      process = tunnel_process
+      run_command([SYSTEMCTL, 'restart', '--no-block', 'cloudflared.service'])
+      return { 'tunnel' => 'restarted, no longer as root' } if tunnel_came_up?(process)
+
+      install_tunnel_unit(before)
+      run_command([SYSTEMCTL, 'restart', '--no-block', 'cloudflared.service'])
+      { 'tunnel' => "it didn't come up on the new unit within #{TUNNEL_START_WAIT} seconds, so it's back on the one it had" }
+    end
+
+    def install_tunnel_unit(content)
+      do_install(TUNNEL_UNIT, content, nil)
+      run_command([SYSTEMCTL, 'daemon-reload'])
+    end
+
+    # The tunnel's main process, as a number; 0 for none.
+    def tunnel_process
+      capture([SYSTEMCTL, 'show', 'cloudflared.service', '--property=MainPID', '--value']).to_i
+    end
+
+    # Active with another process than +before+: just after a restart is asked for, the old one can
+    # still read as active.
+    def tunnel_came_up?(before)
+      deadline = monotonic_now + TUNNEL_START_WAIT
+      loop do
+        return true if unit_state('is-active', 'cloudflared.service') == 'active' && ![0, before].include?(tunnel_process)
+        return false if monotonic_now > deadline
+
+        pause(1)
+      end
     end
 
     # Router mode on. The internet side is shut first, before its interface gets an address and
@@ -516,7 +592,7 @@ module AmahiHelper
     # internet side's deny and Tailscale's port, the LAN's way out, each forward in, devices'
     # own encrypted DNS kept in, and devices kept off the internet.
     def router_rules(state)
-      lan, wan = state.values_at('lan', 'wan')
+      lan, wan = state_interfaces(state)
       return [] unless lan && wan
       rules = [['deny', 'in', 'on', wan]]
       rules << ['allow', 'in', 'on', wan, 'to', 'any', 'port', TAILSCALE_PORT, 'proto', 'udp'] if state['tailscale']
@@ -527,6 +603,15 @@ module AmahiHelper
       %w[tcp udp].each { |proto| rules << ['route', 'deny', 'in', 'on', lan, 'out', 'on', wan, 'to', 'any', 'port', '853', 'proto', proto] } if state['dns']
       Array(state['lan_only']).each { |address| rules << ['route', 'deny', 'in', 'on', lan, 'out', 'on', wan, 'from', address.to_s] }
       rules
+    end
+
+    # The interface names a state file holds, as [lan, wan], or [nil, nil]: they go into the
+    # firewall's rules, and a file that isn't what the helper wrote is read no further.
+    def state_interfaces(state)
+      names = Hash(state).values_at('lan', 'wan')
+      return [nil, nil] unless names.all? { |name| name.is_a?(String) && name.match?(/\A#{IFNAME}\z/o) }
+
+      names
     end
 
     def ufw_delete(words)
@@ -617,8 +702,8 @@ module AmahiHelper
     def netplan_yaml(path)
       data = YAML.safe_load(File.read(path))
       data.is_a?(Hash) && data['network'].is_a?(Hash) ? data : nil
-    rescue Psych::SyntaxError, SystemCallError
-      nil
+    rescue Psych::Exception, SystemCallError
+      nil # not YAML, or YAML with something safe_load won't make (a date, an alias, an object)
     end
 
     # netplan apply, recorded in NETPLAN_APPLIED, and the NAS's own IPv6 address for DNS put back
@@ -670,7 +755,7 @@ module AmahiHelper
     end
 
     def ufw_router_rules_off(state)
-      lan, wan = state.values_at('lan', 'wan')
+      lan, wan = state_interfaces(state)
       return unless lan && wan
       run_command([UFW, 'delete', 'allow', 'in', 'on', wan, 'to', 'any', 'port', TAILSCALE_PORT, 'proto', 'udp', { allow_failure: true }]) if state['tailscale']
       run_command([UFW, 'delete', 'deny', 'in', 'on', wan, { allow_failure: true }])
@@ -792,8 +877,10 @@ module AmahiHelper
       if state['applied']
         netplan_apply(allow_failure: true)
         address = state['address'].to_s
-        if state['mode'] == 'fixed' && !Array(state['before']).include?(address.split('/').first)
-          run_command([IP, '-4', 'addr', 'del', address, 'dev', state['interface'], { allow_failure: true }])
+        interface = state['interface'].to_s
+        if state['mode'] == 'fixed' && !Array(state['before']).include?(address.split('/').first) &&
+           interface.match?(/\A#{IFNAME}\z/o) && address.match?(%r{\A[0-9.]{7,15}/\d{1,2}\z})
+          run_command([IP, '-4', 'addr', 'del', address, 'dev', interface, { allow_failure: true }])
         end
         refresh_app_firewall
       end
@@ -1031,7 +1118,7 @@ module AmahiHelper
         run_command([IPTABLES, '-w', '-t', 'nat', '-F', own, { allow_failure: true }])
         run_command([IPTABLES, '-w', '-t', 'nat', '-X', own, { allow_failure: true }])
       end
-      sweep_inline_nat(state['lan'], state['wan']) if state
+      sweep_inline_nat(*state_interfaces(state)) if state
     end
 
     # Deletes the jump from +builtin+ into +own+ until none is left (each delete takes one copy).
@@ -1049,6 +1136,10 @@ module AmahiHelper
         capture([IPTABLES, '-w', '-t', 'nat', '-S', builtin]).each_line do |line|
           spec = line.strip.delete_prefix("-A #{builtin} ")
           next if spec == line.strip || !spec.match?(pattern)
+          # Given back as words: a rule iptables prints with a quoted part (a comment) doesn't
+          # come apart that way, and it isn't one of ours.
+          next unless spec.match?(/\A[\w\s.:\/!-]+\z/)
+
           run_command([IPTABLES, '-w', '-t', 'nat', '-D', builtin, *spec.split(' '), { allow_failure: true }])
         end
       end

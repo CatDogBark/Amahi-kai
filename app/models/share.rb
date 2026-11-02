@@ -133,6 +133,7 @@ class Share < ApplicationRecord
     return if extras.blank?
     bad = extras.lines.map(&:strip).find { |line| line.start_with?('[') }
     errors.add(:extras, "can't open another section (#{bad})") if bad
+    errors.add(:extras, "can't have a line ending in a backslash") if extras.lines.any? { |line| line.rstrip.end_with?('\\') }
   end
 
   # A pooled share's files are on the pool drives, with links to them in its folder. Deleted
