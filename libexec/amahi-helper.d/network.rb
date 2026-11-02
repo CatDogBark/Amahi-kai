@@ -877,8 +877,10 @@ module AmahiHelper
       if state['applied']
         netplan_apply(allow_failure: true)
         address = state['address'].to_s
-        if state['mode'] == 'fixed' && !Array(state['before']).include?(address.split('/').first)
-          run_command([IP, '-4', 'addr', 'del', address, 'dev', state['interface'], { allow_failure: true }])
+        interface = state['interface'].to_s
+        if state['mode'] == 'fixed' && !Array(state['before']).include?(address.split('/').first) &&
+           interface.match?(/\A#{IFNAME}\z/o) && address.match?(%r{\A[0-9.]{7,15}/\d{1,2}\z})
+          run_command([IP, '-4', 'addr', 'del', address, 'dev', interface, { allow_failure: true }])
         end
         refresh_app_firewall
       end
