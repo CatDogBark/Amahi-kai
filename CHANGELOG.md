@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.6.0] — 2026-11-01
+
+A pass over everything Amahi-kai does as root: the Cloudflare Tunnel runs as a user of its own, deleting a pool wipes only the drives ZFS says are its own, what an app is given in a share comes through root's own mount, share folders and blocking's lists are handled more carefully, and every argument the root helper takes is now tried with bad values in CI.
+
 ### 🔒 Security & Fixes
 
 - **Tighter around what runs as root** — From a review of the root helper and the scripts around it:
