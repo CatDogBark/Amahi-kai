@@ -150,6 +150,14 @@ module AmahiHelper
   # being restored is staged.
   GREYHOLE_TRASH = '.gh_trash'
 
+  # Names other programs own in a share folder or on a drive: Greyhole's own folders (its trash,
+  # its metadata store and that store's backups), the folder a trash restore stages a file in
+  # (TRASH_STAGING), and Samba's recycle bin (RECYCLE_BIN). A share folder is never one of these,
+  # and never sits inside one: made as the app's, 2775, it would stand in for what owns the name.
+  # (Those two constants come later in the helper's source, so the names are written out here; a
+  # spec checks they still agree.)
+  RESERVED_SHARE_NAMES = [/\A\.gh_/, /\A\.amahi-restore\z/, /\A\.recycle\z/].freeze
+
   # greyhole.conf without its database lines, for amahi-dfree: anyone may read it.
   GREYHOLE_POOL_CONF = '/etc/amahi-kai/greyhole-pool.conf'
 
@@ -678,7 +686,7 @@ module AmahiHelper
       current = root
       path.delete_prefix("#{root}/").split('/').each do |part|
         current = "#{current}/#{part}"
-        child = "/proc/self/fd/#{dir.fileno}/#{part}"
+        child = "#{fd_path(dir)}/#{part}"
         begin
           Dir.mkdir(child, 0o755)
         rescue Errno::EEXIST
@@ -686,10 +694,15 @@ module AmahiHelper
         end
         dir = open_dir(child, dir, current)
       end
-      raise Failed, "#{path} moved while it was being made" unless File.readlink("/proc/self/fd/#{dir.fileno}") == path
+      raise Failed, "#{path} moved while it was being made" unless File.readlink(fd_path(dir)) == path
       nil
     ensure
       dir&.close
+    end
+
+    # The open folder's own path, to reach what's in it without walking the path again.
+    def fd_path(dir)
+      "/proc/self/fd/#{dir.fileno}"
     end
 
     # A handle on the folder at +path+, not following a link there; +parent+ is closed once

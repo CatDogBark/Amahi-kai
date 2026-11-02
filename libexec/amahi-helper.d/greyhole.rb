@@ -303,7 +303,12 @@ module AmahiHelper
       drive = greyhole_drives.find { |d| source.start_with?("#{d}/#{GREYHOLE_TRASH}/") } or raise Failed, "#{source} isn't in a pool drive's trash"
       root = "#{drive}/#{TRASH_STAGING}"
       Dir.mkdir(root, 0o700) unless File.exist?(root) || File.symlink?(root)
-      raise Failed, "#{root} isn't a folder" if File.symlink?(root) || !File.directory?(root)
+      # The helper's own folder, reachable by nobody else: the file is staged here before Greyhole
+      # copies it into the share, and anything else that could write here could swap it meanwhile.
+      staging = File.lstat(root)
+      unless staging.directory? && staging.uid == Process.euid && (staging.mode & 0o077).zero?
+        raise Failed, "#{root} isn't the helper's own folder: move it aside, then restore again"
+      end
       stage = "#{root}/#{SecureRandom.hex(8)}"
       Dir.mkdir(stage, 0o700)
       staged = "#{stage}/#{File.basename(path)}"

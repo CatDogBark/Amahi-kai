@@ -516,6 +516,46 @@ RSpec.describe 'AmahiHelper' do
       expect(helper.do_rmdir("#{root}/gone")).to include("doesn't exist")
     end
 
+    # A share's folder is removed when its share is deleted, and the path is walked again then.
+    it 'removes a folder through the one above it, never through a link in the path' do
+      Dir.mkdir("#{@tmp}/elsewhere")
+      Dir.mkdir("#{@tmp}/elsewhere/movies")
+      FileUtils.mkdir_p("#{root}/media/movies")
+      removed = []
+      allow(Dir).to receive(:rmdir).and_wrap_original { |m, path| removed << path; m.call(path) }
+      expect(helper.do_rmdir("#{root}/media/movies")).to be_nil
+      expect(removed).to all(match(%r{\A/proc/self/fd/\d+/movies\z}))
+
+      Dir.rmdir("#{root}/media")
+      File.symlink("#{@tmp}/elsewhere", "#{root}/media")
+      expect { helper.do_rmdir("#{root}/media/movies") }.to raise_error(AmahiHelper::Failed, /is a symbolic link/)
+      File.symlink("#{@tmp}/elsewhere/movies", "#{root}/link")
+      expect { helper.do_rmdir("#{root}/link") }.to raise_error(AmahiHelper::Failed, /is not a folder/)
+      expect(Dir.exist?("#{@tmp}/elsewhere/movies")).to be true
+    end
+
+    # Greyhole's folders on a pool drive, and the Trash's: a share folder made at one of those
+    # names would be the app's, 2775, where root puts files it then copies into a share.
+    it "refuses a folder at a name Greyhole or the Trash keeps, at any depth" do
+      drive = "#{@tmp}/mnt/storage-1"
+      allow(File).to receive(:stat).and_call_original
+      allow(File).to receive(:stat).with(drive).and_return(instance_double(File::Stat, dev: -1))
+      ['.gh_trash', '.gh_metastore', '.gh_metastore_backup', '.amahi-restore', '.recycle'].each do |name|
+        expect(refusal('shares.create_dir', { 'path' => "#{drive}/#{name}" })).to include('keeps for itself'), name
+        expect(refusal('shares.create_dir', { 'path' => "#{drive}/#{name}/Photos" })).to include('keeps for itself'), name
+        expect(refusal('shares.remove_dir', { 'path' => "#{drive}/#{name}" })).to include('keeps for itself'), name
+      end
+      expect(refusal('shares.create_dir', { 'path' => "#{drive}/.ghost" })).to be_nil
+      expect(refusal('shares.create_dir', { 'path' => "#{drive}/Photos" })).to be_nil
+    end
+
+    it 'keeps the reserved names in step with the folders they stand for' do
+      [AmahiHelper::GREYHOLE_TRASH, AmahiHelper::GREYHOLE_METASTORE_BACKUP, AmahiHelper::TRASH_STAGING,
+       AmahiHelper::RECYCLE_BIN].each do |name|
+        expect(AmahiHelper::RESERVED_SHARE_NAMES).to include(a_kind_of(Regexp).and(satisfy { |re| name.match?(re) })), name
+      end
+    end
+
     it 'installs a file atomically and leaves no temp files' do
       target = "#{@tmp}/smb.conf"
       File.write(target, 'old')

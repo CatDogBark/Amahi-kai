@@ -264,6 +264,8 @@ module AmahiHelper
       value = string(value, 'path', max: 4096)
       raise Refused, "path #{value.inspect} must be absolute, without . or .. or //" unless normalized_path?(value)
       raise Refused, "path #{value} contains a line break" if value.match?(/[\r\n]/)
+      reserved = value.split('/').drop(1).find { |part| RESERVED_SHARE_NAMES.any? { |name| part.match?(name) } }
+      raise Refused, "path #{value} holds #{reserved}, a name Greyhole or the Trash keeps for itself" if reserved
       share_root_of(value) or raise Refused, "path #{value} is not inside #{SHARE_ROOT}, a data drive under #{DRIVES_ROOT} or a ZFS pool's shares folder"
       value
     end
@@ -420,15 +422,29 @@ module AmahiHelper
       nil
     end
 
+    # Removes the folder through a handle on the folder above it (as do_mkdir_p makes it), so a
+    # part of the path swapped for a link while this runs can't send the removal somewhere else.
     def do_rmdir(path)
-      stat = File.lstat(path)
-      raise Failed, "#{path} is not a folder" unless stat.directory?
-      Dir.rmdir(path)
+      root = share_root_of(path) or raise Failed, "#{path} is no longer inside a share root"
+      parts = path.delete_prefix("#{root}/").split('/')
+      name = parts.pop
+      dir = open_dir(root)
+      current = root
+      parts.each do |part|
+        current = "#{current}/#{part}"
+        dir = open_dir("#{fd_path(dir)}/#{part}", dir, current)
+      end
+      child = "#{fd_path(dir)}/#{name}"
+      raise Failed, "#{path} is not a folder" unless File.lstat(child).directory?
+
+      Dir.rmdir(child)
       nil
     rescue Errno::ENOENT
       "#{path} doesn't exist"
     rescue Errno::ENOTEMPTY, Errno::EEXIST
       "#{path} isn't empty; left in place"
+    ensure
+      dir&.close
     end
 
     # testparm loads the file the way smbd would, and prints what it understood with

@@ -207,6 +207,23 @@ refuses that release.
   move a server off signed releases. `bin/amahi-install-helper` makes the file on a server that
   follows `development` already (a development install included). A new install gets the code
   over HTTPS from GitHub as it is, and checks every release after that.
+- **Greyhole's own work queue is open to every local account.** Greyhole's daemon runs as root and
+  takes its work from `/var/spool/greyhole`, which has to be writable by everyone who can write to
+  a pooled share (Samba's module writes there as the connecting user), and it doesn't hold the
+  share and path it finds there to the pool's folders. So on a server with Greyhole installed,
+  anything running as a local account, the web app's user included, can have root's Greyhole daemon
+  work outside the pool. This is Greyhole's design, upstream; Amahi-kai neither creates that spool
+  nor can shut it without stopping pooling. **On a server with Greyhole installed, take the claim
+  above that the app's user can only reach root through this helper as holding for everything
+  except Greyhole.** A pool of ZFS drives has nothing of the kind, and the storage plan prefers one
+  (`docs/plans/storage.md`); Greyhole stays for basic SMB storage on mixed drives.
+- **A setuid file can run as root from a ZFS snapshot.** A pool and its datasets are mounted
+  `nosuid` (`setuid=off`, `devices=off`, and the share root and data drives are mounted `nosuid,nodev`),
+  but the automatic mounts under a dataset's `.zfs/snapshot` aren't: a setuid-root file in a
+  snapshot runs as root from there, measured on ZFS 2.2.2, which has no setting for it. It takes
+  root writing such a file to a pool first (an app's image that starts as root, or a drive prepared
+  elsewhere), plus a way to run it. The catalog rule against images that start as root covers the
+  first; re-check when Ubuntu's ZFS has the setting.
 - **The database isn't rolled back** with the code: migrations must keep working with the
   previous version's code. System Update dumps the database first (`/var/lib/amahi-kai/backups`,
   root-only, the last 3); restoring one is a manual step.
