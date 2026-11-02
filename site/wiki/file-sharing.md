@@ -125,6 +125,12 @@ The global settings include:
 - **Printer sharing off**
 - **Greyhole settings** when Greyhole is installed (see [Storage Pooling](storage-pooling))
 
+A computer on your LAN can ask the server for the **list of share names** without signing in, as it
+can of any SMB server. Opening a share still needs an account, unless the share is one guests may
+open. Blocking the list as well (`restrict anonymous`) would stop guests connecting at all, so
+Amahi-kai doesn't: keep guest access off for anything private, and remember that a share's name is
+visible to anyone the `hosts allow` list lets reach the server.
+
 ### Advanced Samba settings
 
 With Advanced mode on, a share's **Advanced** section takes extra Samba settings for that share,

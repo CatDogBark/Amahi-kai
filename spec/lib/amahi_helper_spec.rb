@@ -1527,10 +1527,27 @@ RSpec.describe 'AmahiHelper' do
       expect(helper).to have_received(:fetch_blocklist).once
     end
 
+    it 'refuses a second blocklist change while one is running' do
+      choose(%w[hagezi-normal])
+      expect(helper.do_refresh_blocklists).to include('blocked')
+      allow(helper).to receive(:with_lock).and_return(nil) # another holds it
+      [-> { helper.do_refresh_blocklists }, -> { helper.do_pause_blocking }, -> { helper.do_resume_blocking }].each do |change|
+        expect { change.call }.to raise_error(AmahiHelper::Refused, /another blocklist change/)
+      end
+    end
+
+    it 'reads a list as bytes: a bad byte in it is one line skipped, not a refusal' do
+      choose(%w[hagezi-normal])
+      File.binwrite("#{AmahiHelper::BLOCKLIST_DIR}/hagezi-normal.txt", "ads.example.com\nb\xffad.example.com\ntrackers.example.org\n")
+      expect(helper.do_refresh_blocklists).to eq('blocked' => 2)
+      expect(blocklist).to include('ads.example.com', 'trackers.example.org')
+      expect(blocklist.encoding).to eq(Encoding::UTF_8)
+    end
+
     it 'refuses more domains than fit, and keeps the blocklist it had when Unbound refuses the new one' do
       choose(%w[hagezi-normal])
       stub_const('AmahiHelper::BLOCKLIST_MAX_DOMAINS', 2)
-      expect { helper.do_refresh_blocklists }.to raise_error(AmahiHelper::Failed, /at most 2/)
+      expect { helper.do_refresh_blocklists }.to raise_error(AmahiHelper::Failed, /more than 2 domains/)
       stub_const('AmahiHelper::BLOCKLIST_MAX_DOMAINS', 1_000_000)
       File.write(AmahiHelper::UNBOUND_BLOCKLIST, "server:\n")
       allow(helper).to receive(:check_unbound_conf) { |path| raise AmahiHelper::Refused, 'duplicate local-zone' if path == AmahiHelper::UNBOUND_MAIN }
@@ -1706,12 +1723,21 @@ RSpec.describe 'AmahiHelper' do
     it 'takes two different real interfaces, the firewall on, and forwards to private addresses' do
       allow(helper).to receive(:installed!).and_call_original
       allow(helper).to receive(:installed!).with(AmahiHelper::NETPLAN).and_return(true)
-      args = { 'lan' => 'lo', 'wan' => 'lo', 'forwards' => [] }
+      allow(File).to receive(:exist?).and_call_original
+      %w[ens18 ens19 lo docker0 br-9f veth7 tailscale0].each do |name|
+        allow(File).to receive(:exist?).with("/sys/class/net/#{name}").and_return(true)
+      end
+      args = { 'lan' => 'ens18', 'wan' => 'ens18', 'forwards' => [] }
       expect(refusal('network.router_on', args)).to include('must differ')
-      real = Socket.getifaddrs.map(&:name).uniq.find { |n| n != 'lo' } or skip 'no second interface here'
-      args['wan'] = real
-      expect(steps('network.router_on', args)).to eq([[:router_on, 'lo', real, [], nil, []]])
-      expect(steps('network.router_on', args.merge('dns' => '127.0.0.1'))).to eq([[:router_on, 'lo', real, [], '127.0.0.1', []]])
+      # Neither side can be the loopback, Docker's, a container's or Tailscale's
+      %w[lo docker0 br-9f veth7 tailscale0].each do |name|
+        expect(refusal('network.router_on', args.merge('lan' => name, 'wan' => 'ens19'))).to eq("#{name} can't be the LAN")
+        expect(refusal('network.router_on', args.merge('wan' => name))).to eq("#{name} can't be the internet side")
+      end
+      expect(refusal('network.router_on', args.merge('lan' => 'nope0', 'wan' => 'ens19'))).to include("isn't a network interface here")
+      args['wan'] = 'ens19'
+      expect(steps('network.router_on', args)).to eq([[:router_on, 'ens18', 'ens19', [], nil, []]])
+      expect(steps('network.router_on', args.merge('dns' => '127.0.0.1'))).to eq([[:router_on, 'ens18', 'ens19', [], '127.0.0.1', []]])
       expect(refusal('network.router_on', args.merge('dns' => '10.9.9.9'))).to include("isn't an IPv4 address of the NAS's")
       File.write("#{dir}/ufw.conf", "ENABLED=no\n")
       expect(refusal('network.router_on', args)).to include('firewall must be on')

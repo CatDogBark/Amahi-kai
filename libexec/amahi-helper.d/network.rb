@@ -180,8 +180,8 @@ module AmahiHelper
     'network.router_on' => {
       params: %w[lan wan forwards dns lan_only],
       validate: lambda { |a|
-        lan = network_interface(a['lan'])
-        wan = network_interface(a['wan'])
+        lan = lan_interface(a['lan'], 'the LAN')
+        wan = lan_interface(a['wan'], 'the internet side')
         raise Refused, 'the LAN and the internet interfaces must differ' if lan == wan
         raise Refused, "the firewall must be on first (Network → Security, the firewall's Fix)" unless ufw_enabled?
         dns = a['dns']
@@ -379,6 +379,15 @@ module AmahiHelper
 
     def port_number(value, name)
       raise Refused, "#{name} must be a port number (1 to 65535)" unless value.is_a?(Integer) && value.between?(1, 65_535)
+      value
+    end
+
+    # One of the machine's real network interfaces: not the loopback, Docker's, a container's or
+    # Tailscale's, none of which can carry a LAN or the internet side.
+    def lan_interface(value, what)
+      value = network_interface(value)
+      raise Refused, "#{value} can't be #{what}" if value.match?(NOT_LAN_INTERFACES)
+
       value
     end
 
@@ -583,7 +592,7 @@ module AmahiHelper
     # internet side's deny and Tailscale's port, the LAN's way out, each forward in, devices'
     # own encrypted DNS kept in, and devices kept off the internet.
     def router_rules(state)
-      lan, wan = state.values_at('lan', 'wan')
+      lan, wan = state_interfaces(state)
       return [] unless lan && wan
       rules = [['deny', 'in', 'on', wan]]
       rules << ['allow', 'in', 'on', wan, 'to', 'any', 'port', TAILSCALE_PORT, 'proto', 'udp'] if state['tailscale']
@@ -594,6 +603,15 @@ module AmahiHelper
       %w[tcp udp].each { |proto| rules << ['route', 'deny', 'in', 'on', lan, 'out', 'on', wan, 'to', 'any', 'port', '853', 'proto', proto] } if state['dns']
       Array(state['lan_only']).each { |address| rules << ['route', 'deny', 'in', 'on', lan, 'out', 'on', wan, 'from', address.to_s] }
       rules
+    end
+
+    # The interface names a state file holds, as [lan, wan], or [nil, nil]: they go into the
+    # firewall's rules, and a file that isn't what the helper wrote is read no further.
+    def state_interfaces(state)
+      names = Hash(state).values_at('lan', 'wan')
+      return [nil, nil] unless names.all? { |name| name.is_a?(String) && name.match?(/\A#{IFNAME}\z/o) }
+
+      names
     end
 
     def ufw_delete(words)
@@ -684,8 +702,8 @@ module AmahiHelper
     def netplan_yaml(path)
       data = YAML.safe_load(File.read(path))
       data.is_a?(Hash) && data['network'].is_a?(Hash) ? data : nil
-    rescue Psych::SyntaxError, SystemCallError
-      nil
+    rescue Psych::Exception, SystemCallError
+      nil # not YAML, or YAML with something safe_load won't make (a date, an alias, an object)
     end
 
     # netplan apply, recorded in NETPLAN_APPLIED, and the NAS's own IPv6 address for DNS put back
@@ -737,7 +755,7 @@ module AmahiHelper
     end
 
     def ufw_router_rules_off(state)
-      lan, wan = state.values_at('lan', 'wan')
+      lan, wan = state_interfaces(state)
       return unless lan && wan
       run_command([UFW, 'delete', 'allow', 'in', 'on', wan, 'to', 'any', 'port', TAILSCALE_PORT, 'proto', 'udp', { allow_failure: true }]) if state['tailscale']
       run_command([UFW, 'delete', 'deny', 'in', 'on', wan, { allow_failure: true }])
@@ -1098,7 +1116,7 @@ module AmahiHelper
         run_command([IPTABLES, '-w', '-t', 'nat', '-F', own, { allow_failure: true }])
         run_command([IPTABLES, '-w', '-t', 'nat', '-X', own, { allow_failure: true }])
       end
-      sweep_inline_nat(state['lan'], state['wan']) if state
+      sweep_inline_nat(*state_interfaces(state)) if state
     end
 
     # Deletes the jump from +builtin+ into +own+ until none is left (each delete takes one copy).
@@ -1116,6 +1134,10 @@ module AmahiHelper
         capture([IPTABLES, '-w', '-t', 'nat', '-S', builtin]).each_line do |line|
           spec = line.strip.delete_prefix("-A #{builtin} ")
           next if spec == line.strip || !spec.match?(pattern)
+          # Given back as words: a rule iptables prints with a quoted part (a comment) doesn't
+          # come apart that way, and it isn't one of ours.
+          next unless spec.match?(/\A[\w\s.:\/!-]+\z/)
+
           run_command([IPTABLES, '-w', '-t', 'nat', '-D', builtin, *spec.split(' '), { allow_failure: true }])
         end
       end
