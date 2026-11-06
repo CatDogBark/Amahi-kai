@@ -100,6 +100,8 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
   its code beside it; a new area is a new part, listed in `libexec/amahi-helper`), and list it in
   `spec/lib/amahi_helper_checks_spec.rb`, which tries every argument with bad values.
   `bin/amahi-join-helper` puts the parts together, and the one file it makes is what's installed.
+  Docker is given commands only from `libexec/amahi-helper.d/engine.rb` (`docs/container-engine.md`;
+  a spec fails on one anywhere else).
   The helper's is the only sudoers rule left (since P4.1), in `config/sudoers/amahi-kai`;
   `bin/amahi-install-helper` installs it and the helper (the installer and the updater both run
   it) only after `visudo -cf` passes.

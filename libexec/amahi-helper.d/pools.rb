@@ -824,7 +824,7 @@ module AmahiHelper
       running = apps_on_pool(pool).select { |id, installed| installed && app_running?(id) }.map(&:first)
       running.each do |id|
         say("Stopping #{id} while the pool rolls back...")
-        run_command([DOCKER, 'stop', '--time', '30', app_container(id)])
+        engine_stop(app_container(id))
       end
       datasets = capture([ZFS, 'list', '-H', '-o', 'name', '-r', '-t', 'filesystem,volume', pool]).lines(chomp: true)
       snaps = capture([ZFS, 'list', '-H', '-o', 'name', '-r', '-t', 'snapshot', pool]).lines(chomp: true)
@@ -832,7 +832,7 @@ module AmahiHelper
       rolled.each { |ds| run_command([ZFS, 'rollback', '-r', "#{ds}@#{snapshot}"]) }
       { 'rolled_back' => rolled, 'apps_stopped' => running }
     ensure
-      Array(running).each { |id| run_command([DOCKER, 'start', app_container(id), { allow_failure: true }]) }
+      Array(running).each { |id| engine_start(app_container(id), allow_failure: true) }
     end
 
     def do_forget_app_storage(ids)

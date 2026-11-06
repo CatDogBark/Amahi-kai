@@ -8,7 +8,7 @@ module AmahiHelper
   SERVICES = {
     'smbd' => 'smbd.service', 'nmbd' => 'nmbd.service', 'dnsmasq' => 'dnsmasq.service', 'unbound' => 'unbound.service',
     'radvd' => 'radvd.service',
-    'greyhole' => 'greyhole.service', 'docker' => 'docker.service', 'avahi-daemon' => 'avahi-daemon.service'
+    'greyhole' => 'greyhole.service', 'docker' => ENGINE_UNIT, 'avahi-daemon' => 'avahi-daemon.service'
   }.freeze
 
   # What system.journal hands the app (Settings → Help, a problem's report): Amahi-kai's own units

@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+### 🔧 Architecture & Code Quality
+
+- **Every Docker command is in one place** — The root helper's commands to Docker, and what it reads back, moved into one part of its own (`libexec/amahi-helper.d/engine.rb`); the rest decides what an app's container gets and asks that part to make it. Nothing an app runs with changes. It's the ground for tightening what apps can reach and do, and lets a fork run apps on another engine by replacing that one file (`docs/container-engine.md`). A spec fails if a Docker command turns up anywhere else.
+
 ## [1.6.0] — 2026-11-01
 
 A pass over everything Amahi-kai does as root: the Cloudflare Tunnel runs as a user of its own, deleting a pool wipes only the drives ZFS says are its own, what an app is given in a share comes through root's own mount, share folders and blocking's lists are handled more carefully, and every argument the root helper takes is now tried with bad values in CI.

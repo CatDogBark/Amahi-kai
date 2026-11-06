@@ -221,7 +221,6 @@ module AmahiHelper
   # names an app. Each app gets a system user (app-<id>, a uid below UID_MIN, so the users.*
   # operations can't touch it) owning its folders under APPS_ROOT, and secrets generated at
   # install in APP_SECRETS (root:amahi 0640, shown to admins).
-  DOCKER = '/usr/bin/docker'
   JOURNALCTL = '/usr/bin/journalctl'
   # A log line handed to the app (system.journal, apps.logs) is cut at this many characters.
   LOG_LINE_MAX = 2000

@@ -275,7 +275,7 @@ RSpec.describe 'AmahiHelper: the checks on every argument' do
 
     allow(helper).to receive(:app_job_running?).and_return(false)
     allow(helper).to receive(:docker_output).and_return('id')
-    allow(helper).to receive(:docker_running!).and_return(true)
+    allow(helper).to receive(:engine_running!).and_return(true)
     allow(helper).to receive(:tailscale_https_name).and_return('nas.tail1234.ts.net')
     allow(helper).to receive(:app_backup_info).and_return(nil)
 
