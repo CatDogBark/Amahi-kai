@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+### 🔒 Security & Fixes
+
+- **Rails 8.1.4.1, and HTML sanitizing updated** (Loofah, Nokogiri, rails-html-sanitizer) for published advisories, among them High ones: a way past Strong Parameters' checks, a forged client address in RemoteIp, a denial of service in Active Support, and cross-site scripting through Action View's helpers and the HTML sanitizers. The Critical one is in Active Storage, which Amahi-kai doesn't load.
+
 ### 🔧 Architecture & Code Quality
 
 - **Every Docker command is in one place** — The root helper's commands to Docker, and what it reads back, moved into one part of its own (`libexec/amahi-helper.d/engine.rb`); the rest decides what an app's container gets and asks that part to make it. Nothing an app runs with changes. It's the ground for tightening what apps can reach and do, and lets a fork run apps on another engine by replacing that one file (`docs/container-engine.md`). A spec fails if a Docker command turns up anywhere else.
