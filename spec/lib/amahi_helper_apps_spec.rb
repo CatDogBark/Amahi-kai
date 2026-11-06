@@ -43,6 +43,8 @@ RSpec.describe 'AmahiHelper apps' do
     # Containers get Docker's own DNS unless a test says the NAS's answers on the bridge: CI's
     # runner has a Docker bridge, a laptop may not
     allow(helper).to receive(:app_dns).and_return({})
+    # The processors an app gets follow the machine's (app_cpus): runners and laptops differ
+    allow(helper).to receive(:app_cpus).and_return(3)
     # A share's folder is on ext4 unless a test puts it on ZFS, whatever the runner's /tmp is
     allow(helper).to receive(:capture).and_call_original
     allow(helper).to receive(:capture).with(['/usr/bin/findmnt', '-n', '-o', 'FSTYPE', '-T', anything]).and_return("ext4\n")
@@ -621,7 +623,7 @@ RSpec.describe 'AmahiHelper apps' do
       expect(create).to eq(['/usr/bin/docker', 'create', '--name', 'amahi-vaultwarden-next', '--restart', 'unless-stopped',
                             '--security-opt', 'no-new-privileges', '--cap-drop', 'NET_RAW', '--cap-drop', 'MKNOD',
                             '--pids-limit', '2048', '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3',
-                            '--memory', '512m', '--label', 'amahi.app=vaultwarden', '--env-file', env_files.sole[0],
+                            '--memory', '512m', '--cpus', '3', '--label', 'amahi.app=vaultwarden', '--env-file', env_files.sole[0],
                             '--user', '996:996', '--publish', '127.0.0.1:8880:8080/tcp',
                             '--mount', "type=bind,source=#{apps_root}/vaultwarden/data,target=/data", manifest[:image]])
       expect(ran[-3]).to eq(%w[/usr/bin/docker rename amahi-vaultwarden-next amahi-vaultwarden])
@@ -1272,6 +1274,16 @@ RSpec.describe 'AmahiHelper apps' do
         expect { helper.do_undo_app_update('vaultwarden', manifest, []) }.to raise_error(AmahiHelper::Failed, 'vaultwarden has no update to undo')
       end
 
+      # It went on taking room on the system disk, run by nothing.
+      it "removes the version the update brought once it's undone" do
+        helper.do_update_app('vaultwarden', manifest, [])
+        newer = running['vaultwarden']
+        ran.clear
+        helper.do_undo_app_update('vaultwarden', manifest, [])
+        expect(ran).to include(['/usr/bin/docker', 'image', 'rm', newer, { allow_failure: true }])
+        expect(ran).not_to include(['/usr/bin/docker', 'image', 'rm', old_image, { allow_failure: true }])
+      end
+
       it 'keeps one copy per app, the newest, and deletes it after 30 days' do
         helper.do_update_app('vaultwarden', manifest, [])
         File.write("#{backups}/vaultwarden.json", backup_info.merge('taken_at' => (Time.now - 31 * 86_400).utc.iso8601).to_json)
@@ -1635,6 +1647,16 @@ RSpec.describe 'AmahiHelper apps' do
         helper.app_share_binds_keep('transmission', nil, {}) # given nothing now, or uninstalled
         expect(JSON.parse(File.read("#{dir}/app-share-binds.json"))).to eq({})
         expect(helper).to have_received(:app_share_binds_remove).with("#{bind_root}/transmission/20261027000000-bbbbbb")
+        expect(File.directory?("#{bind_root}/transmission")).to be true # a set it couldn't take down stays, and its folder
+      end
+
+      it "leaves no folder of the app's own behind once it's given nothing" do
+        allow(helper).to receive(:do_install) { |path, content, *| File.write(path, content) }
+        allow(helper).to receive(:app_share_binds_remove) { |set| Dir.rmdir(set) }
+        FileUtils.mkdir_p("#{bind_root}/transmission/20261027000000-bbbbbb")
+        helper.app_share_binds_keep('transmission', nil, {})
+        expect(File.exist?("#{bind_root}/transmission")).to be false
+        expect(File.directory?(bind_root)).to be true
       end
 
       # apps.share_binds, from amahi-kai-app-shares.service before Docker starts: /run is empty after a restart.
@@ -1832,6 +1854,54 @@ RSpec.describe 'AmahiHelper apps' do
         allow(helper).to receive(:docker_output).with('inspect', '--format', '{{.Config.Image}}', 'amahi-gitea').and_return("example/app:1.0@sha256:#{'a' * 64}")
         helper.app_remake('gitea', { 'State' => { 'Running' => true } }, [])
         expect(helper).to have_received(:do_install_app).with('gitea', hash_including(image: "example/app:1.0@sha256:#{'a' * 64}"), [], true)
+      end
+    end
+
+    # apps.follow_limits, at an update and at Docker's start: an app made before had no ceiling on
+    # the processors it used, and a NAS can be given more or fewer.
+    describe 'following the limits' do
+      let(:cpus) { { 'jellyfin' => 0, 'gitea' => 3_000_000_000, 'emby' => 1_500_000_000 } }
+      let(:ran) { [] }
+
+      before do
+        allow(helper).to receive(:docker_output) do |*args|
+          if args.first == 'ps' then "#{cpus.keys.join("\n")}\nnot an id!\n"
+          else [{ 'HostConfig' => { 'NanoCpus' => cpus[args.last.delete_prefix('amahi-')] } }].to_json
+          end
+        end
+        allow(helper).to receive(:app_job_running?).and_return(false)
+        allow(helper).to receive(:run_command) { |argv| ran << argv && nil }
+      end
+
+      it "gives each app container the processors this version gives, in place, and lists only those it changed" do
+        expect(helper.do_follow_app_limits).to eq('cpus' => 3, 'apps' => { 'jellyfin' => 'set', 'emby' => 'set' })
+        expect(ran).to eq([['/usr/bin/docker', 'update', '--cpus', '3', 'amahi-jellyfin', { allow_failure: true }],
+                           ['/usr/bin/docker', 'update', '--cpus', '3', 'amahi-emby', { allow_failure: true }]])
+        expect(steps('apps.follow_limits', {})).to eq([[:follow_app_limits]])
+      end
+
+      it "says why for one Docker won't change, leaves one whose job runs to it, and does nothing without Docker" do
+        allow(helper).to receive(:run_command) { |argv| 'ignored: docker exited 1: No such container' if argv.include?('amahi-emby') }
+        allow(helper).to receive(:app_job_running?).with('jellyfin').and_return(true)
+        expect(helper.do_follow_app_limits['apps']).to eq('emby' => 'ignored: docker exited 1: No such container')
+        allow(helper).to receive(:docker_output).and_return(nil)
+        expect(helper.do_follow_app_limits).to eq('cpus' => 3, 'apps' => {})
+      end
+
+      it 'is all but one of the processors, and one on a NAS with one' do
+        allow(helper).to receive(:app_cpus).and_call_original
+        allow(Etc).to receive(:nprocessors).and_return(4)
+        expect(helper.app_cpus).to eq(3)
+        allow(Etc).to receive(:nprocessors).and_return(1)
+        expect(helper.app_cpus).to eq(1)
+      end
+
+      it 'runs at each update, past the rollback, and each time Docker starts' do
+        update = File.read(Rails.root.join('bin/amahi-update'))
+        expect(update).to include('amahi-helper apps.follow_limits', 'amahi-helper apps.firewall')
+        expect(update.index('apps.follow_limits')).to be > update.index('apps.follow_shares')
+        unit = File.read(Rails.root.join('config/systemd/amahi-kai-app-firewall.service'))
+        expect(unit).to include('ExecStart=-/usr/local/sbin/amahi-helper apps.follow_limits')
       end
     end
 
@@ -2099,14 +2169,14 @@ RSpec.describe 'AmahiHelper apps' do
     # Rebuilt rule by rule, the chain was empty for a moment, which let everything through: its
     # rules go in in one iptables-restore.
     it "lets in only the NAS's private subnets and Tailscale, and drops the rest, the rules swapped in whole" do
-      expect(helper.do_app_firewall).to eq('lan' => ['192.168.1.0/24', '10.20.0.0/16'])
+      expect(helper.do_app_firewall).to eq('lan' => ['192.168.1.0/24', '10.20.0.0/16'], 'nas' => 'DNS and ping only')
       rules = ran.map { |argv| argv.reject { |arg| arg.is_a?(Hash) } }
-      expect(rules).to eq([
-                            %w[/usr/sbin/iptables -w -N DOCKER-USER], %w[/usr/sbin/iptables -w -N AMAHI-APPS],
-                            %w[/usr/sbin/iptables-restore -w --noflush],
-                            %w[/usr/sbin/iptables -w -C DOCKER-USER -j AMAHI-APPS],
-                            %w[/usr/sbin/iptables -w -I DOCKER-USER 1 -j AMAHI-APPS]
-                          ])
+      expect(rules.first(5)).to eq([
+                                     %w[/usr/sbin/iptables -w -N DOCKER-USER], %w[/usr/sbin/iptables -w -N AMAHI-APPS],
+                                     %w[/usr/sbin/iptables-restore -w --noflush],
+                                     %w[/usr/sbin/iptables -w -C DOCKER-USER -j AMAHI-APPS],
+                                     %w[/usr/sbin/iptables -w -I DOCKER-USER 1 -j AMAHI-APPS]
+                                   ])
       expect(ran[2].last[:stdin]).to eq(<<~RULES)
         *filter
         :AMAHI-APPS - [0:0]
@@ -2119,6 +2189,43 @@ RSpec.describe 'AmahiHelper apps' do
         -A AMAHI-APPS -j DROP
         COMMIT
       RULES
+    end
+
+    # An app could open the NAS's SSH, its admin page and Samba (UFW lets them in from anywhere,
+    # and an app's traffic is anywhere's): it reaches the NAS only for DNS and a ping now.
+    it "keeps the apps off the NAS's own services, for IPv4 and IPv6, but for DNS and a ping" do
+      helper.do_app_firewall
+      rules = ran.map { |argv| argv.reject { |arg| arg.is_a?(Hash) } }
+      expect(rules.drop(5)).to eq([
+                                    %w[/usr/sbin/iptables -w -N AMAHI-APPS-NAS], %w[/usr/sbin/iptables-restore -w --noflush],
+                                    %w[/usr/sbin/iptables -w -C INPUT -i docker0 -j AMAHI-APPS-NAS],
+                                    %w[/usr/sbin/iptables -w -I INPUT 1 -i docker0 -j AMAHI-APPS-NAS],
+                                    %w[/usr/sbin/ip6tables -w -N AMAHI-APPS-NAS], %w[/usr/sbin/ip6tables-restore -w --noflush],
+                                    %w[/usr/sbin/ip6tables -w -C INPUT -i docker0 -j AMAHI-APPS-NAS],
+                                    %w[/usr/sbin/ip6tables -w -I INPUT 1 -i docker0 -j AMAHI-APPS-NAS]
+                                  ])
+      expect(ran[6].last[:stdin]).to eq(<<~RULES)
+        *filter
+        :AMAHI-APPS-NAS - [0:0]
+        -A AMAHI-APPS-NAS -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
+        -A AMAHI-APPS-NAS -p udp --dport 53 -j RETURN
+        -A AMAHI-APPS-NAS -p tcp --dport 53 -j RETURN
+        -A AMAHI-APPS-NAS -p icmp --icmp-type echo-request -j RETURN
+        -A AMAHI-APPS-NAS -p tcp -j REJECT --reject-with tcp-reset
+        -A AMAHI-APPS-NAS -j REJECT --reject-with icmp-port-unreachable
+        COMMIT
+      RULES
+      expect(ran[10].last[:stdin]).to include("-A AMAHI-APPS-NAS -p ipv6-icmp -j RETURN\n",
+                                              "-A AMAHI-APPS-NAS -j REJECT --reject-with icmp6-port-unreachable\nCOMMIT\n")
+    end
+
+    it "keeps to IPv4 on a NAS without IPv6, and says so" do
+      allow(helper).to receive(:run_command) do |argv|
+        ran << argv
+        raise AmahiHelper::Failed, 'ip6tables-restore exited 3: table does not exist' if argv.first == '/usr/sbin/ip6tables-restore'
+      end
+      expect(helper.do_app_firewall['nas']).to eq('IPv4 only (ip6tables-restore exited 3: table does not exist)')
+      expect(ran.map(&:first)).to include('/usr/sbin/iptables-restore')
     end
 
     # Docker starts the apps' containers, ports and all, before amahi-kai-app-firewall.service runs.
@@ -2134,16 +2241,21 @@ RSpec.describe 'AmahiHelper apps' do
 
       it 'rebuilds the chain without adding a second jump' do
         helper.do_app_firewall
-        expect(ran.map { |argv| argv[2..3] }).not_to include(%w[-I DOCKER-USER])
+        expect(ran.map { |argv| argv[2..3] }).not_to include(%w[-I DOCKER-USER], %w[-I INPUT])
       end
     end
 
     it 'reports whether the rules are in place, for the security audit' do
       allow(helper).to receive(:capture).with(%w[/usr/sbin/iptables -w -S AMAHI-APPS])
                                         .and_return("-N AMAHI-APPS\n-A AMAHI-APPS -i tailscale0 -j RETURN\n-A AMAHI-APPS -j DROP\n")
+      allow(helper).to receive(:capture).with(%w[/usr/sbin/iptables -w -S AMAHI-APPS-NAS])
+                                        .and_return("-N AMAHI-APPS-NAS\n-A AMAHI-APPS-NAS -j REJECT --reject-with icmp-port-unreachable\n")
       expect(helper.app_firewall_active?).to be false # DOCKER-USER doesn't jump to it
       allow(helper).to receive(:run_command).and_return(nil)
       expect(helper.app_firewall_active?).to be true
+      allow(helper).to receive(:run_command) { |argv| 'ignored: Bad rule' if argv.include?('INPUT') }
+      expect(helper.app_firewall_active?).to be false # INPUT doesn't jump to the NAS's own
+      allow(helper).to receive(:run_command).and_return(nil)
       allow(helper).to receive(:capture).with(%w[/usr/sbin/iptables -w -S AMAHI-APPS]).and_raise(AmahiHelper::Failed, 'No chain')
       expect(helper.app_firewall_active?).to be false
     end

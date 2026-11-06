@@ -35,7 +35,7 @@ RSpec.describe 'AmahiHelper container engine' do
 
     def spec(**changes)
       { image: "example/app:1.0@sha256:#{'a' * 64}", restart: 'unless-stopped', no_new_privileges: true,
-        cap_drop: %w[NET_RAW MKNOD], pids_limit: 2048, log: { size: '10m', files: 3 }, memory: '1g', label: 'transmission',
+        cap_drop: %w[NET_RAW MKNOD], pids_limit: 2048, log: { size: '10m', files: 3 }, memory: '1g', cpus: 3, label: 'transmission',
         dns: { servers: ['172.17.0.1'], search: ['home.arpa'] }, env_file: '/run/amahi-kai/env.1', user: nil, group_add: [100],
         publish: [{ address: '0.0.0.0', host: 9091, container: 9091, protocol: 'tcp' }, { address: '0.0.0.0', host: 51_413, container: 51_413, protocol: 'udp' }],
         mounts: [{ source: '/srv/apps/transmission/config', target: '/config' },
@@ -48,7 +48,7 @@ RSpec.describe 'AmahiHelper container engine' do
       expect(ran.sole).to eq(['/usr/bin/docker', 'create', '--name', 'amahi-transmission-next', '--restart', 'unless-stopped',
                               '--security-opt', 'no-new-privileges', '--cap-drop', 'NET_RAW', '--cap-drop', 'MKNOD',
                               '--pids-limit', '2048', '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3',
-                              '--memory', '1g', '--label', 'amahi.app=transmission',
+                              '--memory', '1g', '--cpus', '3', '--label', 'amahi.app=transmission',
                               '--dns', '172.17.0.1', '--dns-search', 'home.arpa', '--env-file', '/run/amahi-kai/env.1',
                               '--group-add', '100',
                               '--publish', '0.0.0.0:9091:9091/tcp', '--publish', '0.0.0.0:51413:51413/udp',
@@ -59,11 +59,17 @@ RSpec.describe 'AmahiHelper container engine' do
     end
 
     it "leaves out the user, the extra groups and the DNS when there are none, so the image's and the engine's own apply" do
-      helper.engine_create('amahi-transmission-next', spec(user: nil, group_add: [], dns: {}))
-      expect(ran.sole).not_to include('--user', '--group-add', '--dns', '--dns-search')
+      helper.engine_create('amahi-transmission-next', spec(user: nil, group_add: [], dns: {}, cpus: nil))
+      expect(ran.sole).not_to include('--user', '--group-add', '--dns', '--dns-search', '--cpus')
       helper.engine_create('amahi-gitea-next', spec(user: '987:987'))
       expect(ran.last.each_cons(2).to_a).to include(['--user', '987:987'])
     end
+  end
+
+  it "reads a container's processors back as engine_create takes them, so the two compare" do
+    expect(helper.engine_container_cpus('HostConfig' => { 'NanoCpus' => 3_000_000_000 })).to eq(3)
+    expect(helper.engine_container_cpus('HostConfig' => { 'NanoCpus' => 1_500_000_000 })).to eq(1.5)
+    expect(helper.engine_container_cpus('HostConfig' => { 'NanoCpus' => 0 })).to be_nil
   end
 
   it "reads a container's DNS back as engine_create takes it, so the two compare" do

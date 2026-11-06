@@ -613,3 +613,21 @@ RSpec.describe 'install and update scripts' do
     end
   end
 end
+
+# Docker comes from Docker's own repository, which Ubuntu's automatic security updates passed
+# over: a fix to Docker reached a server only when someone updated by hand.
+RSpec.describe 'automatic updates for Docker' do
+  let(:conf) { File.read(Rails.root.join('config/apt/51amahi-kai-docker-updates')) }
+
+  it "lets unattended-upgrades take Docker's packages, from its repository for the server's release only" do
+    expect(conf).to include('Unattended-Upgrade::Origins-Pattern {',
+                            '"origin=Docker,label=Docker CE,archive=${distro_codename},component=stable";')
+    expect(conf.lines.grep_v(%r{\A\s*//}).join).not_to include('Allowed-Origins') # added to, nothing of Ubuntu's replaced
+  end
+
+  it 'is installed with the helper, at installs and updates' do
+    expect(File.read(Rails.root.join('bin/amahi-install-helper')))
+      .to include('install -o root -g root -m 0644 "$APP_DIR/config/apt/51amahi-kai-docker-updates" /etc/apt/apt.conf.d/51amahi-kai-docker-updates')
+  end
+end
+

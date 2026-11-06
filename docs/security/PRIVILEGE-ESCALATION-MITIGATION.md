@@ -110,8 +110,10 @@ folder (plain names, never where shares go), environment values on one line, and
 mode, devices, capabilities, host networking, host folders or extra Docker arguments, so a
 manifest can't ask for them. Each app gets a system user (`app-<app>`), and the container runs as
 that user unless the image drops to it itself (the manifest says which), with a memory limit, at
-most 2,048 processes, 30 MB of logs, and without raw sockets or device files. Generated secrets
-reach the container through a root-only `--env-file`, never a command line.
+most 2,048 processes, all of the NAS's processors but one (`apps.follow_limits` sets that in place
+on containers made before, at each update and each time Docker starts), 30 MB of logs, and without
+raw sockets or device files. Generated secrets reach the container through a root-only
+`--env-file`, never a command line.
 
 An install, update, undo or uninstall runs as a systemd unit of its own
 (`amahi-kai-appjob-<app>`), so a restart of the web app can't cut it off, one job per app at a
@@ -125,6 +127,16 @@ connections into a container (`docker0`) pass only from `tailscale0` or the NAS'
 subnets, and the rest are dropped. `amahi-kai-app-firewall.service` (`apps.firewall`) rebuilds it
 after Docker starts or restarts, and every install does too. There is no host networking, so an
 app can't open ports of its own on the NAS.
+
+An app reaches the NAS itself only for DNS (Unbound answers apps on Docker's bridge) and a ping.
+UFW lets SSH, the admin page and Samba in from anywhere, and traffic from a container counts as
+anywhere, so the same chain does: `AMAHI-APPS-NAS`, jumped to first from `INPUT` for `docker0`, for
+IPv4 and IPv6, refuses everything else from an app, and lets back the replies to what the NAS asks
+of an app. It's the helper's own chain (UFW keeps a rule there through its reloads), so it holds
+with UFW off too, and `apps.firewall` builds it with `AMAHI-APPS`, before Docker starts as well.
+Another app's port through the NAS's own address was already refused (UFW has no rule for app
+ports in `INPUT`). Apps can still reach each other directly on `docker0`; a network of each app's
+own is the next step.
 
 An app whose manifest says `access: tailscale` (catalog format 5, P4.7) is published on
 `127.0.0.1` only, so nothing reaches its ports from the LAN or the internet. The helper puts its

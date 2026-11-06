@@ -27,9 +27,9 @@ module AmahiHelper
   APP_DEFAULT_MEMORY = '1g'
 
   # What each app's container may do beyond its memory: a ceiling on its processes, a cap on its
-  # logs (Docker keeps them on the system disk), and none of raw sockets (forging traffic to the
-  # other containers) or device nodes. Ping works without raw sockets: Docker lets containers use
-  # ICMP datagram sockets.
+  # logs (Docker keeps them on the system disk), all of the NAS's processors but one (app_cpus),
+  # and none of raw sockets (forging traffic to the other containers) or device nodes. Ping works
+  # without raw sockets: Docker lets containers use ICMP datagram sockets.
   APP_PIDS_LIMIT = 2048
 
   APP_LOG_LIMIT = { size: '10m', files: 3 }.freeze
@@ -86,6 +86,17 @@ module AmahiHelper
   # APP_CHAIN's rules are swapped in whole, in one step: rebuilt rule by rule, the chain was
   # empty for a moment, and an empty chain lets everything through.
   IPTABLES_RESTORE = '/usr/sbin/iptables-restore'
+
+  IP6TABLES = '/usr/sbin/ip6tables'
+
+  IP6TABLES_RESTORE = '/usr/sbin/ip6tables-restore'
+
+  # What apps may reach on the NAS itself: its DNS (Unbound answers them on the bridge) and a
+  # ping, and nothing else it runs: not SSH, the admin page or Samba. A chain of its own, jumped
+  # to first from INPUT for the apps' bridge, for IPv4 and IPv6 (UFW leaves a rule there through
+  # its reloads, so it holds with UFW off too); replies to what the NAS itself asks of an app come
+  # back through it. Another app's port through the NAS's own address was already refused (UFW).
+  APP_NAS_CHAIN = 'AMAHI-APPS-NAS'
 
   # Shares an app is given (P4.4) appear in it at /shares/<name>. The web app names shares; the
   # helper finds their folders in smb.conf, which only it writes. Shares Greyhole pools are read
@@ -225,6 +236,13 @@ module AmahiHelper
       params: [],
       validate: ->(_a) { engine_installed! && {} },
       plan: ->(_v) { [[:follow_share_apps]] }
+    },
+    # Each app's container gets the limits this version gives (app_cpus), in place, without a
+    # restart: from bin/amahi-update, and at Docker's start (a NAS given more processors or fewer).
+    'apps.follow_limits' => {
+      params: [],
+      validate: ->(_a) { engine_installed! && {} },
+      plan: ->(_v) { [[:follow_app_limits]] }
     },
     # Mounts again what apps are given in shares (do_share_binds): /run is empty after a restart.
     # Run by amahi-kai-app-shares.service before Docker starts.
@@ -662,7 +680,7 @@ module AmahiHelper
           engine_create(fresh, image: manifest[:image], restart: 'unless-stopped',
                                no_new_privileges: true, # nothing in it gains privileges, setuid files included
                                cap_drop: APP_CAP_DROP, pids_limit: APP_PIDS_LIMIT, log: APP_LOG_LIMIT,
-                               memory: manifest[:memory], label: id, dns: app_dns, env_file: env_file,
+                               memory: manifest[:memory], cpus: app_cpus, label: id, dns: app_dns, env_file: env_file,
                                user: manifest[:run_as] == 'app' ? "#{uid}:#{gid}" : nil, group_add: share_access[:group_add],
                                publish: ports.map { |p| { address: bind, host: p[:host], container: p[:container], protocol: p[:protocol] } },
                                mounts: [*app_folder_mounts(manifest, dir, storage), *share_access[:mounts], *ping])
@@ -902,6 +920,16 @@ module AmahiHelper
         end
       end
       app_share_binds_sets(id).reject { |other| other == set }.each { |other| app_share_binds_remove(other) }
+      app_share_binds_tidy(id) if set.nil?
+    end
+
+    # An app given nothing now (an uninstall, say) leaves no folder of its own behind: an empty
+    # one goes, anything else stays as it is.
+    def app_share_binds_tidy(id)
+      dir = "#{APP_SHARE_BIND_ROOT}/#{id}"
+      Dir.rmdir(dir) if File.directory?(dir) && !File.symlink?(dir) && Dir.empty?(dir)
+    rescue SystemCallError
+      nil
     end
 
     # The sets of the helper's mounts made for the app (APP_SHARE_BIND_ROOT/<id>/*).
@@ -1104,6 +1132,31 @@ module AmahiHelper
       end
     end
 
+    # apps.follow_limits: each app container whose processors aren't app_cpus gets them, in place
+    # (no restart); one a job is changing is left to it. { 'cpus' => n, 'apps' => { id => 'set' |
+    # why not } }, listing only the ones changed.
+    def do_follow_app_limits
+      cpus = app_cpus
+      labels = engine_app_labels
+      return { 'cpus' => cpus, 'apps' => {} } unless labels
+
+      done = labels.grep(APP_ID).uniq.filter_map do |id|
+        next if app_job_running?(id)
+
+        info = engine_inspect(app_container(id)) or next
+        next if engine_container_cpus(info) == cpus
+
+        [id, engine_set_cpus(app_container(id), cpus) || 'set']
+      end
+      { 'cpus' => cpus, 'apps' => done.to_h }
+    end
+
+    # The processors an app may use: all of the NAS's but one, so the NAS itself (Samba, the
+    # admin page, its database) always has one an app can't take, however busy the app is.
+    def app_cpus
+      [Etc.nprocessors - 1, 1].max
+    end
+
     # The NAS's DNS for an app's container while Unbound answers on Docker's bridge
     # (DnsService's config writes the bridge's address while Docker runs): the bridge's address,
     # and the local domain to look short names up in, so an app reaches a device by the name it
@@ -1196,11 +1249,14 @@ module AmahiHelper
         say("Downloading #{image_tag(from)} again...")
         engine_pull(from)
       end
-      say("Stopping it (#{image_tag(app_image(id) || manifest[:image])})...")
+      newer = app_image(id)
+      say("Stopping it (#{image_tag(newer || manifest[:image])})...")
       engine_stop(app_container(id), allow_failure: true)
       say("Going back to #{image_tag(from)}, with its data from before the update...")
       reply = app_restore(id, manifest, from, shares)
       app_forget_backup(id)
+      # The version the update brought, which nothing runs now (Docker keeps one another container uses)
+      engine_remove_image(newer) if newer && newer != from
       { 'app' => id, 'image' => from, 'ports' => reply['ports'] }
     end
 
@@ -1529,7 +1585,41 @@ module AmahiHelper
       unless run_command([IPTABLES, '-w', '-C', ENGINE_FIREWALL_HOOK, '-j', APP_CHAIN, { allow_failure: true }]).nil?
         run_command([IPTABLES, '-w', '-I', ENGINE_FIREWALL_HOOK, '1', '-j', APP_CHAIN])
       end
-      { 'lan' => subnets }
+      app_nas_wall(IPTABLES, IPTABLES_RESTORE, app_nas_rules(:v4))
+      # IPv6 the same, but a kernel without it isn't one to stop the apps' firewall for
+      ipv6 = begin
+        app_nas_wall(IP6TABLES, IP6TABLES_RESTORE, app_nas_rules(:v6))
+        nil
+      rescue Failed => e
+        e.message
+      end
+      { 'lan' => subnets, 'nas' => ipv6 ? "IPv4 only (#{ipv6})" : 'DNS and ping only' }
+    end
+
+    # APP_NAS_CHAIN filled with +rules+ in one step, and jumped to first thing from INPUT for the
+    # apps' bridge (once: a jump that's there already stays where it is).
+    def app_nas_wall(iptables, restore, rules)
+      run_command([iptables, '-w', '-N', APP_NAS_CHAIN, { allow_failure: true }])
+      lines = rules.map { |rule| "-A #{APP_NAS_CHAIN} #{rule.join(' ')}" }
+      run_command([restore, '-w', '--noflush', { stdin: "*filter\n:#{APP_NAS_CHAIN} - [0:0]\n#{lines.join("\n")}\nCOMMIT\n" }])
+      return if run_command([iptables, '-w', '-C', *app_nas_hook, { allow_failure: true }]).nil?
+
+      run_command([iptables, '-w', '-I', 'INPUT', '1', *app_nas_hook.drop(1)])
+    end
+
+    def app_nas_hook
+      ['INPUT', '-i', ENGINE_BRIDGE, '-j', APP_NAS_CHAIN]
+    end
+
+    # Replies, DNS and a ping go on to the NAS's own rules (UFW's, which decide as for anyone);
+    # anything else from an app is refused at once, so the app hears no instead of waiting.
+    def app_nas_rules(family)
+      v6 = family == :v6
+      [%w[-m conntrack --ctstate RELATED,ESTABLISHED -j RETURN],
+       %w[-p udp --dport 53 -j RETURN], %w[-p tcp --dport 53 -j RETURN],
+       v6 ? %w[-p ipv6-icmp -j RETURN] : %w[-p icmp --icmp-type echo-request -j RETURN],
+       %w[-p tcp -j REJECT --reject-with tcp-reset],
+       ['-j', 'REJECT', '--reject-with', v6 ? 'icmp6-port-unreachable' : 'icmp-port-unreachable']]
     end
 
     def app_chain_rules(subnets)
@@ -1541,12 +1631,16 @@ module AmahiHelper
        %w[-j DROP]]
     end
 
-    # APP_CHAIN is in place: DOCKER-USER jumps to it, and it ends by dropping.
+    # APP_CHAIN is in place (DOCKER-USER jumps to it, and it ends by dropping), and so is
+    # APP_NAS_CHAIN for IPv4 (INPUT jumps to it for the apps' bridge, and it ends by refusing).
     def app_firewall_active?
       return false unless File.executable?(IPTABLES)
       rules = capture([IPTABLES, '-w', '-S', APP_CHAIN])
+      nas = capture([IPTABLES, '-w', '-S', APP_NAS_CHAIN])
       rules.lines.last.to_s.strip == "-A #{APP_CHAIN} -j DROP" &&
-        run_command([IPTABLES, '-w', '-C', ENGINE_FIREWALL_HOOK, '-j', APP_CHAIN, { allow_failure: true }]).nil?
+        run_command([IPTABLES, '-w', '-C', ENGINE_FIREWALL_HOOK, '-j', APP_CHAIN, { allow_failure: true }]).nil? &&
+        nas.lines.last.to_s.strip == "-A #{APP_NAS_CHAIN} -j REJECT --reject-with icmp-port-unreachable" &&
+        run_command([IPTABLES, '-w', '-C', *app_nas_hook, { allow_failure: true }]).nil?
     rescue Failed
       false
     end

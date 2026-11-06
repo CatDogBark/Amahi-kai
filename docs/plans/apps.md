@@ -146,6 +146,10 @@ Decisions (CatDogBark, 2026-10-04):
   `amahi-kai-app-firewall.service` runs it each time Docker starts or restarts, and every install
   runs it too. Traffic from the NAS itself (cloudflared) isn't filtered. Apps are published on IPv4
   only. This keeps router mode possible: an internet-facing port would never reach apps.
+- [x] **What an app reaches on the NAS: DNS and a ping only** (1.6.2). A second chain,
+  `AMAHI-APPS-NAS`, jumped to from `INPUT` for the apps' bridge (IPv4 and IPv6), refuses the
+  rest: SSH, the admin page and Samba were open to apps, as to anyone UFW lets in. Next: a network
+  of each app's own, so apps can't reach each other either, and what each may reach out to.
 - [x] **Tunnel-only apps: not built.** Tailscale is the default way to reach apps from outside;
   a per-app Cloudflare hostname is a specialty case (P4.3, later).
 - [x] **Ports: automatic.** An app gets its catalog port when it's free, otherwise the next free

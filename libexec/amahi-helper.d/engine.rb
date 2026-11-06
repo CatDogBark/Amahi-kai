@@ -9,7 +9,7 @@
 #
 # What the rest of the helper reads from a container (engine_inspect) is Docker's inspect, and
 # only these keys of it: Id, State (Running, Status, ExitCode, Error, Health.Status), Config.Image,
-# HostConfig (Dns, DnsSearch), Mounts (Type, Source, Destination, RW) and RestartCount.
+# HostConfig (Dns, DnsSearch, NanoCpus), Mounts (Type, Source, Destination, RW) and RestartCount.
 module AmahiHelper
   DOCKER = '/usr/bin/docker'
 
@@ -86,6 +86,15 @@ module AmahiHelper
 
     def engine_restart_count(name)
       docker_output('inspect', '--format', '{{.RestartCount}}', name).to_i
+    end
+
+    # The processors a container may use (+info+, engine_inspect's), as engine_create takes them;
+    # nil for no limit.
+    def engine_container_cpus(info)
+      nano = info.dig('HostConfig', 'NanoCpus').to_i
+      return nil unless nano.positive?
+
+      (nano % 1_000_000_000).zero? ? nano / 1_000_000_000 : nano / 1_000_000_000.0
     end
 
     # The DNS a container was made with (+info+, engine_inspect's), as engine_create takes it.
@@ -189,6 +198,12 @@ module AmahiHelper
       run_command([DOCKER, 'rename', name, new_name])
     end
 
+    # The processors a container may use, changed in place, running or not (no restart): nil, or
+    # why not.
+    def engine_set_cpus(name, cpus)
+      run_command([DOCKER, 'update', '--cpus', cpus.to_s, name, { allow_failure: true }])
+    end
+
     # A container made from +image+ and never started, to copy a file out of it (engine_copy_out).
     def engine_create_scratch(name, image)
       run_command([DOCKER, 'create', '--name', name, image])
@@ -207,6 +222,7 @@ module AmahiHelper
     #   pids_limit:        the most processes it may have
     #   log:               { size:, files: } kept of its output
     #   memory:            '512m', '2g'
+    #   cpus:              the most processors it may use, or nil for no limit
     #   label:             its app id, as the amahi.app label
     #   dns:               { servers: [address], search: [domain] }, either left out for the engine's own
     #   env_file:          the file its environment is read from (secrets stay off the command line)
@@ -222,7 +238,8 @@ module AmahiHelper
                    *spec.fetch(:cap_drop).flat_map { |cap| ['--cap-drop', cap] },
                    '--pids-limit', spec.fetch(:pids_limit).to_s,
                    '--log-opt', "max-size=#{log.fetch(:size)}", '--log-opt', "max-file=#{log.fetch(:files)}",
-                   '--memory', spec.fetch(:memory), '--label', "amahi.app=#{spec.fetch(:label)}",
+                   '--memory', spec.fetch(:memory), *(spec[:cpus] ? ['--cpus', spec[:cpus].to_s] : []),
+                   '--label', "amahi.app=#{spec.fetch(:label)}",
                    *Array(dns[:servers]).flat_map { |server| ['--dns', server] },
                    *Array(dns[:search]).flat_map { |domain| ['--dns-search', domain] },
                    '--env-file', spec.fetch(:env_file),

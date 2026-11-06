@@ -504,6 +504,12 @@ if [[ -x /usr/bin/docker ]]; then
   reply=$(/usr/local/sbin/amahi-helper apps.follow_shares </dev/null 2>/dev/null) \
     || log "⚠ Couldn't move the apps' shares to the new mounts: $reply"
   [[ "$reply" == *'"apps":{}'* || -z "$reply" ]] || log "Apps' share mounts: $reply"
+  # The apps' firewall as this version has it, and their limits, in place: neither restarts an app
+  reply=$(/usr/local/sbin/amahi-helper apps.firewall </dev/null 2>/dev/null) \
+    || log "⚠ Couldn't rebuild the apps' firewall: $reply"
+  reply=$(/usr/local/sbin/amahi-helper apps.follow_limits </dev/null 2>/dev/null) \
+    || log "⚠ Couldn't set the apps' limits: $reply"
+  [[ "$reply" == *'"apps":{}'* || -z "$reply" ]] || log "Apps' limits: $reply"
 fi
 # The tunnel on the unit this version writes. It can be how this update is being watched: the page
 # reconnects after the restart, and if it doesn't come up, its old unit goes back.

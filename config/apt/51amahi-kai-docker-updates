@@ -1,0 +1,7 @@
+// Amahi-kai: Docker's own packages (docker-ce, containerd.io and the rest, from Docker's
+// repository) are updated with Ubuntu's security updates while automatic updates are on
+// (Settings → System Dependencies), so a fix to Docker reaches the server on its own. Docker
+// restarts for it, and with it each running app, once. Installed by bin/amahi-install-helper.
+Unattended-Upgrade::Origins-Pattern {
+        "origin=Docker,label=Docker CE,archive=${distro_codename},component=stable";
+};

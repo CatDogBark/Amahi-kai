@@ -32,13 +32,16 @@ When someone clicks **Install**, Amahi-kai's root helper:
    - as the app's user (`--user <uid>:<gid>`) when the manifest says `run_as: app`;
    - with `no-new-privileges`, so nothing in it can gain privileges (setuid programs in the
      image included), and without raw sockets (`NET_RAW`) or device files (`MKNOD`);
-   - with a memory limit (`1g` unless the manifest sets another), restarted unless stopped;
+   - with a memory limit (`1g` unless the manifest sets another), and all of the server's
+     processors but one, so the server itself always has one; restarted unless stopped;
    - with your environment settings and the generated secrets;
    - with each of your folders mounted at the path you gave;
    - with the shares the admin chose at `/shares/<name>`, read only unless your app writes
      into shares and the admin allowed it;
    - with your ports published on the server, the usual ones when they're free, the next free
      ones if not. Only the server's LAN and Tailscale can reach them;
+   - kept off the server's own services: your app can ask the server's DNS and ping it, but not
+     reach its SSH, admin page or file sharing (it gets its files through the shares it's given);
    - asking the server's DNS while it's on (Network → DNS), so your app reaches the LAN's
      devices by their names (Network → Devices), not addresses that change.
 6. Starts it, and announces it on the LAN as "<Name> on <server>", so devices can find it.

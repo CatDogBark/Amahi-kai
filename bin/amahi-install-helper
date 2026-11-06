@@ -5,6 +5,7 @@
 #   /usr/local/sbin/amahi-helper    libexec/amahi-helper and its parts as one file, root:root 0755
 #   /var/log/amahi-kai/helper.log   the helper's audit log, root:amahi 0640
 #   /etc/logrotate.d/amahi-kai      from config/logrotate-amahi-kai.conf
+#   /etc/apt/apt.conf.d/51amahi-kai-docker-updates   Docker's packages in automatic updates
 #   /etc/amahi-kai/allowed_signers  the release keys, from config/allowed_signers, root:root 0644
 #   /etc/amahi-kai/allow-development   on a server that follows the dev branch (see below)
 #   /etc/systemd/system/amahi-kai.service          the web UI (enabled; bin/amahi-install and
@@ -62,6 +63,10 @@ install -d -o root -g "$APP_GROUP" -m 0750 /var/log/amahi-kai
 [[ -e /var/log/amahi-kai/helper.log ]] || install -o root -g "$APP_GROUP" -m 0640 /dev/null /var/log/amahi-kai/helper.log
 if [[ -d /etc/logrotate.d ]]; then
   install -o root -g root -m 0644 "$APP_DIR/config/logrotate-amahi-kai.conf" /etc/logrotate.d/amahi-kai
+fi
+# Docker's packages updated with Ubuntu's security updates, while those are on
+if [[ -d /etc/apt/apt.conf.d ]]; then
+  install -o root -g root -m 0644 "$APP_DIR/config/apt/51amahi-kai-docker-updates" /etc/apt/apt.conf.d/51amahi-kai-docker-updates
 fi
 # The release keys: the update check checks the tag of the release it offers against them.
 install -o root -g root -m 0644 "$APP_DIR/config/allowed_signers" /etc/amahi-kai/allowed_signers
