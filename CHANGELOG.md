@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+### 🔒 Security & Fixes
+
+- **A router's boot no longer waits for the internet** — In router mode the boot waited for the internet side to get its address from the provider, and file sharing and the apps waited with it: after a power cut, a modem slower than the server held them back two minutes, and a provider that's down would at every restart. The internet side is optional for the boot now; the LAN's services start once the LAN is up, and the tunnel and the update check go on trying until the internet is there. A router set up before takes this at the update without its connection being touched.
+
 ## [1.6.1] — 2026-11-06
 
 Security updates for Rails and the HTML sanitizers, and every command Amahi-kai gives Docker now in one place, the ground for tightening what apps can reach and do.

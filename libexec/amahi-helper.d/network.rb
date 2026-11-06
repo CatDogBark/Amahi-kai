@@ -54,7 +54,7 @@ module AmahiHelper
 
   # The shape of the router's rules, kept in ROUTER_STATE: bumped whenever it changes, so the
   # app's resync after an update (DnsService.resync!) puts the new shape in place.
-  ROUTER_RULES_VERSION = 4
+  ROUTER_RULES_VERSION = 5
 
   # The router's kernel settings besides forwarding, for all interfaces and for the internet
   # side: strict reverse-path filtering there (Ubuntu sets every interface loose, 2, and the
@@ -498,8 +498,14 @@ module AmahiHelper
       previous_pinned = previous && previous['pinned'].is_a?(Hash) ? previous['pinned'] : {}
       pinned = pin_lan_netplan(lan, wan, previous_pinned.keys)
       working = File.exist?(WAN_NETPLAN) ? File.read(WAN_NETPLAN) : nil
+      # A file as router mode wrote it before it was optional changes nothing but what the boot
+      # waits for: generated, not applied, since an apply takes the provider's address again.
+      boot_only = working == wan_netplan(wan, optional: false) && netplan_applied?
       do_install(WAN_NETPLAN, wan_netplan(wan), nil, '0600') unless working == wan_netplan(wan)
-      unless netplan_applied?
+      if boot_only
+        run_command([NETPLAN, 'generate'])
+        netplan_mark_applied
+      elsif !netplan_applied?
         begin
           run_command([NETPLAN, 'generate'])
         rescue Failed
@@ -711,13 +717,15 @@ module AmahiHelper
     # +allow_failure+ returns the note.
     def netplan_apply(allow_failure: false)
       note = run_command([NETPLAN, 'apply', { allow_failure: allow_failure }])
-      unless note
-        state_dir!(NETPLAN_APPLIED)
-        do_install(NETPLAN_APPLIED, "#{netplan_digest}\n", nil, '0644')
-      end
+      netplan_mark_applied unless note
       note
     ensure
       run_command(['/usr/bin/systemctl', 'try-restart', File.basename(ULA_UNIT), { allow_failure: true }]) if File.exist?(ULA_UNIT)
+    end
+
+    def netplan_mark_applied
+      state_dir!(NETPLAN_APPLIED)
+      do_install(NETPLAN_APPLIED, "#{netplan_digest}\n", nil, '0644')
     end
 
     # The netplan files are as the helper last applied them.
@@ -773,8 +781,12 @@ module AmahiHelper
     end
 
     # The internet interface takes an address from the provider; its route beats any other
-    # default route the NAS has (DHCP's usual metric is 100). IPv6 waits for its own slice.
-    def wan_netplan(wan)
+    # default route the NAS has (DHCP's usual metric is 100). IPv6 waits for its own slice. It's
+    # optional: the boot doesn't wait for it (systemd-networkd-wait-online, which Samba and the
+    # apps start after), so a modem slower than the NAS after a power cut, or a provider that's
+    # down, doesn't hold the LAN's services two minutes. +optional+ false is how it was written
+    # before 1.6.2, to know a file of then.
+    def wan_netplan(wan, optional: true)
       <<~YAML
         # Amahi-kai (Network → DNS, DHCP and Internet, router): the internet interface, with an address from the provider
         network:
@@ -784,9 +796,11 @@ module AmahiHelper
               dhcp4: true
               dhcp6: false
               accept-ra: false
+        #{'      optional: true' if optional}
               dhcp4-overrides:
                 route-metric: 50
       YAML
+        .gsub(/^\n/, '')
     end
 
     # The NAS's own address on +interface+: the last netplan file naming it (netplan lets a later
