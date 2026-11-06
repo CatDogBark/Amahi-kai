@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.6.1] — 2026-11-06
+
+Security updates for Rails and the HTML sanitizers, and every command Amahi-kai gives Docker now in one place, the ground for tightening what apps can reach and do.
+
 ### 🔒 Security & Fixes
 
 - **Rails 8.1.4.1, and HTML sanitizing updated** (Loofah, Nokogiri, rails-html-sanitizer) for published advisories, among them High ones: a way past Strong Parameters' checks, a forged client address in RemoteIp, a denial of service in Active Support, and cross-site scripting through Action View's helpers and the HTML sanitizers. The Critical one is in Active Storage, which Amahi-kai doesn't load.
