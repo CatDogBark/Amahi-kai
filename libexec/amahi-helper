@@ -44,10 +44,12 @@ require 'ipaddr'
 require 'socket'
 
 # The helper's parts, in this order: core (the operation table, the entry points and what every
-# area uses), then one part per area, each with its operations and their code. For the one file
-# installed as /usr/local/sbin/amahi-helper, bin/amahi-join-helper puts each part in place of the
-# line that loads it here: run as root, the helper loads nothing but Ruby's standard library.
+# area uses), engine (the container engine: every command Docker is given), then one part per
+# area, each with its operations and their code. For the one file installed as
+# /usr/local/sbin/amahi-helper, bin/amahi-join-helper puts each part in place of the line that
+# loads it here: run as root, the helper loads nothing but Ruby's standard library.
 require_relative 'amahi-helper.d/core'
+require_relative 'amahi-helper.d/engine'
 require_relative 'amahi-helper.d/sharing'
 require_relative 'amahi-helper.d/disks'
 require_relative 'amahi-helper.d/pools'

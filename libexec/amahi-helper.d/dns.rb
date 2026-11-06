@@ -528,7 +528,7 @@ module AmahiHelper
       end
       after = content ? unbound_listening(content) : []
       # The apps' containers follow when Unbound starts or stops answering on Docker's bridge
-      bridge = docker_bridge_address
+      bridge = engine_bridge_address
       follow_dns_apps_later if bridge && before.include?(bridge) != after.include?(bridge)
       return unless File.executable?(UFW)
       (before - after).each { |address| run_command([UFW, 'delete', 'allow', 'to', address, 'port', '53', { allow_failure: true }]) }

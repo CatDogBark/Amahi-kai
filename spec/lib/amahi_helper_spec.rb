@@ -1182,7 +1182,7 @@ RSpec.describe 'AmahiHelper' do
         allow(File).to receive(:executable?).and_call_original
         allow(File).to receive(:executable?).with(AmahiHelper::UFW).and_return(true)
         allow(helper).to receive(:run_command) { |argv| ran << argv.dup && nil }
-        allow(helper).to receive(:docker_bridge_address).and_return(nil) # no Docker unless a test says so
+        allow(helper).to receive(:engine_bridge_address).and_return(nil) # no Docker unless a test says so
       end
 
       after { FileUtils.rm_rf(dir) }
@@ -1190,7 +1190,7 @@ RSpec.describe 'AmahiHelper' do
       def ufw_rules = ran.select { |argv| argv.first == AmahiHelper::UFW }.map { |argv| argv.drop(1).reject { |a| a.is_a?(Hash) }.join(' ') }
 
       it "has the apps' containers follow, in the background, when Unbound starts or stops answering on Docker's bridge" do
-        allow(helper).to receive(:docker_bridge_address).and_return('172.17.0.1')
+        allow(helper).to receive(:engine_bridge_address).and_return('172.17.0.1')
         allow(File).to receive(:executable?).with(AmahiHelper::DOCKER).and_return(true)
         allow(File).to receive(:executable?).with(AmahiHelper::SYSTEMD_RUN).and_return(true)
         follow = [AmahiHelper::SYSTEMD_RUN, '--unit=amahi-kai-apps-follow-dns', '--no-block', '--collect', '--quiet',
@@ -1356,7 +1356,7 @@ RSpec.describe 'AmahiHelper' do
         allow(helper).to receive(:check_unbound_conf)
         allow(File).to receive(:executable?).and_call_original
         allow(File).to receive(:executable?).with(AmahiHelper::UFW).and_return(false)
-        allow(helper).to receive(:docker_bridge_address).and_return(nil)
+        allow(helper).to receive(:engine_bridge_address).and_return(nil)
         File.write(AmahiHelper::DNSMASQ_CONF, "port=0\ninterface=ens19\ndhcp-range=10.99.0.100,10.99.0.199,14400s\ndhcp-host=bc:24:11:c1:dc:cf,client\n")
         fixed = %(server:\n  local-zone: "home.arpa." static\n  local-data: "client.home.arpa. IN A 10.99.0.150"\n)
         # dnsmasq's config written first: client was still a fixed host in Unbound's, so its lease went without the name

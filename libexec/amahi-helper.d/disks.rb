@@ -288,14 +288,6 @@ module AmahiHelper
       end
     end
 
-    # { full id => name } for the running containers; {} without Docker.
-    def container_names
-      return {} unless File.executable?(DOCKER)
-
-      capture([DOCKER, 'ps', '--no-trunc', '--format', '{{.ID}} {{.Names}}']).lines.to_h { |line| line.split(' ', 2).map(&:strip) }
-    rescue Failed
-      {}
-    end
 
     def mountable_fstype(device, info)
       fstype = info['TYPE'] or raise Refused, "#{device} has no filesystem; format it first"

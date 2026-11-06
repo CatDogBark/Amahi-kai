@@ -573,7 +573,7 @@ module AmahiHelper
     # change: it's rebuilt after them, where Docker runs. Left as it was, devices on a new subnet
     # couldn't reach the apps, and an old one stayed let in. A failure is a note, not the change's.
     def refresh_app_firewall
-      return nil unless File.executable?(DOCKER) && File.executable?(IPTABLES) && docker_output('info', '--format', '{{.ServerVersion}}')
+      return nil unless engine_installed? && File.executable?(IPTABLES) && engine_running?
 
       do_app_firewall
       nil

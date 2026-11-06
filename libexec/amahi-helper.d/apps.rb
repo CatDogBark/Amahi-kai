@@ -32,7 +32,7 @@ module AmahiHelper
   # ICMP datagram sockets.
   APP_PIDS_LIMIT = 2048
 
-  APP_LOG_OPTIONS = %w[--log-opt max-size=10m --log-opt max-file=3].freeze
+  APP_LOG_LIMIT = { size: '10m', files: 3 }.freeze
 
   APP_CAP_DROP = %w[NET_RAW MKNOD].freeze
 
@@ -87,8 +87,6 @@ module AmahiHelper
   # empty for a moment, and an empty chain lets everything through.
   IPTABLES_RESTORE = '/usr/sbin/iptables-restore'
 
-  DOCKER_BRIDGE = 'docker0'
-
   # Shares an app is given (P4.4) appear in it at /shares/<name>. The web app names shares; the
   # helper finds their folders in smb.conf, which only it writes. Shares Greyhole pools are read
   # only (their files change over SMB), and come with their copy folders on each pool drive at
@@ -139,7 +137,7 @@ module AmahiHelper
     'apps.install' => {
       params: %w[app shares pool],
       validate: lambda { |a|
-        installed!(DOCKER) && app_install_request(a['app']).then do |v|
+        engine_installed! && app_install_request(a['app']).then do |v|
           v.merge(shares: app_share_choices(a['shares'], v[:id], v[:manifest]), pool: app_pool_choice(v[:id], v[:manifest], a['pool']))
         end
       },
@@ -148,25 +146,25 @@ module AmahiHelper
     # Start, stop and restart go by the app's container, whatever the catalog says now.
     'apps.start' => {
       params: %w[app],
-      validate: ->(a) { installed!(DOCKER) && installed_app_request(a['app']) },
-      plan: ->(v) { [[DOCKER, 'start', app_container(v[:id])]] }
+      validate: ->(a) { engine_installed! && installed_app_request(a['app']) },
+      plan: ->(v) { [engine_start_command(app_container(v[:id]))] }
     },
     'apps.stop' => {
       params: %w[app],
-      validate: ->(a) { installed!(DOCKER) && installed_app_request(a['app']) },
-      plan: ->(v) { [[DOCKER, 'stop', '--time', '30', app_container(v[:id])]] }
+      validate: ->(a) { engine_installed! && installed_app_request(a['app']) },
+      plan: ->(v) { [engine_stop_command(app_container(v[:id]))] }
     },
     'apps.restart' => {
       params: %w[app],
-      validate: ->(a) { installed!(DOCKER) && installed_app_request(a['app']) },
-      plan: ->(v) { [[DOCKER, 'restart', '--time', '30', app_container(v[:id])]] }
+      validate: ->(a) { engine_installed! && installed_app_request(a['app']) },
+      plan: ->(v) { [engine_restart_command(app_container(v[:id]))] }
     },
     # Updates an installed app to its manifest's version: a copy of its data first, the new
     # version started, and the old version and the copy put back if it isn't healthy in time.
     'apps.update' => {
       params: %w[app shares],
       validate: lambda { |a|
-        installed!(DOCKER) && app_request(a['app']).then { |v| v.merge(shares: app_share_choices(a['shares'], v[:id], v[:manifest])) }
+        engine_installed! && app_request(a['app']).then { |v| v.merge(shares: app_share_choices(a['shares'], v[:id], v[:manifest])) }
       },
       plan: ->(v) { [[:update_app, v[:id], v[:manifest], v[:shares]]] }
     },
@@ -175,7 +173,7 @@ module AmahiHelper
     'apps.undo_update' => {
       params: %w[app shares],
       validate: lambda { |a|
-        installed!(DOCKER) && app_undo_request(a['app']).then { |v| v.merge(shares: app_share_choices(a['shares'], v[:id], v[:manifest])) }
+        engine_installed! && app_undo_request(a['app']).then { |v| v.merge(shares: app_share_choices(a['shares'], v[:id], v[:manifest])) }
       },
       plan: ->(v) { [[:undo_app_update, v[:id], v[:manifest], v[:shares]]] }
     },
@@ -192,7 +190,7 @@ module AmahiHelper
     'apps.uninstall' => {
       params: %w[app delete_data],
       validate: lambda { |a|
-        installed!(DOCKER) && docker_running! && { id: app_id(a['app']), delete_data: a.key?('delete_data') ? boolean(a, 'delete_data') : false }
+        engine_installed! && engine_running! && { id: app_id(a['app']), delete_data: a.key?('delete_data') ? boolean(a, 'delete_data') : false }
       },
       plan: ->(v) { [[:uninstall_app, v[:id], v[:delete_data]], [:announce_apps]] }
     },
@@ -209,7 +207,7 @@ module AmahiHelper
     # when a drive missing at boot would keep an app from starting. Takes nothing from the app.
     'apps.follow_pool' => {
       params: [],
-      validate: ->(_a) { installed!(DOCKER) && {} },
+      validate: ->(_a) { engine_installed! && {} },
       plan: ->(_v) { [[:follow_pool_apps]] }
     },
     # Remakes the containers of the apps whose DNS isn't the NAS's as it is now (app_dns_options):
@@ -218,14 +216,14 @@ module AmahiHelper
     # the app.
     'apps.follow_dns' => {
       params: [],
-      validate: ->(_a) { installed!(DOCKER) && {} },
+      validate: ->(_a) { engine_installed! && {} },
       plan: ->(_v) { [[:follow_dns_apps]] }
     },
     # Makes again the containers still mounting a share by its path (do_follow_share_apps), once.
     # Run by bin/amahi-update as its last step. Takes nothing from the app.
     'apps.follow_shares' => {
       params: [],
-      validate: ->(_a) { installed!(DOCKER) && {} },
+      validate: ->(_a) { engine_installed! && {} },
       plan: ->(_v) { [[:follow_share_apps]] }
     },
     # Mounts again what apps are given in shares (do_share_binds): /run is empty after a restart.
@@ -239,7 +237,7 @@ module AmahiHelper
     # amahi-kai-app-firewall.service each time Docker starts, and at every install.
     'apps.firewall' => {
       params: [],
-      validate: ->(_a) { installed!(DOCKER) && installed!(IPTABLES) && {} },
+      validate: ->(_a) { engine_installed! && installed!(IPTABLES) && {} },
       plan: ->(_v) { [[:app_firewall]] }
     },
     # Every app container's state, and whether Docker is running. Read-only.
@@ -252,7 +250,7 @@ module AmahiHelper
     # Read only; an app without a container has none.
     'apps.logs' => {
       params: %w[app lines],
-      validate: ->(a) { installed!(DOCKER) && { id: app_id(a['app']), lines: integer(a, 'lines', 1..500) } },
+      validate: ->(a) { engine_installed! && { id: app_id(a['app']), lines: integer(a, 'lines', 1..500) } },
       plan: ->(v) { [[:app_logs, v[:id], v[:lines]]] }
     },
     # Every container's published ports, and whether APP_CHAIN limits them, for the security
@@ -318,16 +316,8 @@ module AmahiHelper
     def installed_app_request(value)
       id = app_id(value)
       not_in_a_job!(id)
-      raise Refused, "#{id} has no container: install it again" unless docker_output('inspect', '--format', '{{.Id}}', app_container(id))
+      raise Refused, "#{id} has no container: install it again" unless engine_container?(app_container(id))
       { id: id }
-    end
-
-    # Docker answers: an uninstall while it's stopped left the container, which came back when it
-    # started, unlisted.
-    def docker_running!
-      raise Refused, "Docker isn't running: start it (Apps), then try again" unless docker_output('info', '--format', '{{.ServerVersion}}')
-
-      true
     end
 
     def app_container(id)
@@ -613,7 +603,7 @@ module AmahiHelper
     end
 
     def app_running?(id)
-      docker_output('inspect', '--format', '{{.State.Running}}', app_container(id)).to_s.strip == 'true'
+      engine_container_running?(app_container(id))
     end
 
     def do_install_app(id, manifest, shares = [], keep_version = false, pool = nil)
@@ -628,18 +618,18 @@ module AmahiHelper
       manifest[:folders].each { |folder| app_folder("#{dir}/#{folder[:name]}", uid, gid) if folder[:kind] == :state }
       storage = app_storage(id, manifest, pool, uid, gid)
       secrets = app_secrets(id, manifest[:secrets])
-      if image_present?(manifest[:image])
+      if engine_image_present?(manifest[:image])
         say("Using #{manifest[:image].sub(/@.*/, '')}, downloaded already")
       else
         say("Pulling #{manifest[:image].sub(/@.*/, '')}...")
-        run_command([DOCKER, 'pull', manifest[:image], { stream: true }])
+        engine_pull(manifest[:image])
       end
       container = app_container(id)
       ports = app_create_container(id, manifest, shares, uid, gid, dir, storage, secrets)
       shares.select { |share| share[:write] }.each { |share| app_share_writable([share[:path], share[:folder]].compact.join('/')) }
       do_app_firewall
       say('Starting it...')
-      run_command([DOCKER, 'start', container])
+      engine_start(container)
       { 'app' => id, 'container' => container, 'image' => manifest[:image], 'ports' => ports.map { |p| p.transform_keys(&:to_s) } }
     end
 
@@ -652,9 +642,9 @@ module AmahiHelper
       container = app_container(id)
       fresh = "#{container}-next"
       tailnet = manifest[:access] == 'tailscale'
-      run_command([DOCKER, 'rm', '--force', fresh, { allow_failure: true }]) # one a job cut off left
+      engine_remove(fresh) # one a job cut off left
       running = Hash(app_state(id))['Running'] == true
-      run_command([DOCKER, 'stop', '--time', '30', container, { allow_failure: true }]) if running
+      engine_stop(container, allow_failure: true) if running
       begin
         bind = tailnet ? '127.0.0.1' : '0.0.0.0'
         ports = with_records_lock { app_assign_ports(id, manifest[:ports], bind).tap { |given| app_record_ports(id, given) } }
@@ -664,30 +654,30 @@ module AmahiHelper
         web = app_web_host_port(ports, manifest)
         url = "https://#{tailscale_https_name}:#{web}" if tailnet
         binds, set = app_share_binds_make(id, shares)
-        share_mounts = app_share_mounts(shares, binds)
+        share_access = app_share_mounts(shares, binds)
         app_share_sources!(shares)
         ping = app_ping_mount(id, manifest)
         say('Creating the container...')
         with_env_file(app_environment(manifest, uid, app_env_gid(manifest, gid, shares), secrets, url)) do |env_file|
-          run_command([DOCKER, 'create', '--name', fresh, '--restart', 'unless-stopped',
-                       '--security-opt', 'no-new-privileges', # nothing in it gains privileges, setuid files included
-                       *APP_CAP_DROP.flat_map { |cap| ['--cap-drop', cap] }, '--pids-limit', APP_PIDS_LIMIT.to_s, *APP_LOG_OPTIONS,
-                       '--memory', manifest[:memory], '--label', "amahi.app=#{id}", *app_dns_options, '--env-file', env_file,
-                       *(manifest[:run_as] == 'app' ? ['--user', "#{uid}:#{gid}"] : []),
-                       *ports.flat_map { |p| ['--publish', "#{bind}:#{p[:host]}:#{p[:container]}/#{p[:protocol]}"] },
-                       *app_folder_mounts(manifest, dir, storage), *share_mounts, *ping, manifest[:image]])
+          engine_create(fresh, image: manifest[:image], restart: 'unless-stopped',
+                               no_new_privileges: true, # nothing in it gains privileges, setuid files included
+                               cap_drop: APP_CAP_DROP, pids_limit: APP_PIDS_LIMIT, log: APP_LOG_LIMIT,
+                               memory: manifest[:memory], label: id, dns: app_dns, env_file: env_file,
+                               user: manifest[:run_as] == 'app' ? "#{uid}:#{gid}" : nil, group_add: share_access[:group_add],
+                               publish: ports.map { |p| { address: bind, host: p[:host], container: p[:container], protocol: p[:protocol] } },
+                               mounts: [*app_folder_mounts(manifest, dir, storage), *share_access[:mounts], *ping])
         end
       rescue Failed, Refused, SystemCallError
-        run_command([DOCKER, 'rm', '--force', fresh, { allow_failure: true }])
+        engine_remove(fresh)
         app_share_binds_remove(set) if set
         if running
           say('Starting the container it had again...')
-          run_command([DOCKER, 'start', container, { allow_failure: true }])
+          engine_start(container, allow_failure: true)
         end
         raise
       end
-      run_command([DOCKER, 'rm', '--force', container, { allow_failure: true }])
-      run_command([DOCKER, 'rename', fresh, container])
+      engine_remove(container)
+      engine_rename(fresh, container)
       app_record_definition(id, manifest)
       app_share_binds_keep(id, set, binds)
       app_ping_prune(id, manifest)
@@ -709,7 +699,7 @@ module AmahiHelper
       path = app_ping_path(id, manifest[:image])
       app_ping_folders(path)
       app_ping_copy(id, manifest, path) unless File.file?(path) && !File.symlink?(path)
-      ['--mount', "type=bind,source=#{path},target=#{manifest[:ping]},readonly"]
+      [{ source: path, target: manifest[:ping], readonly: true }]
     end
 
     def app_ping_path(id, image)
@@ -734,12 +724,12 @@ module AmahiHelper
       taken = "#{path}.image"
       FileUtils.rm_rf([taken, "#{path}.new"])
       scratch = "#{app_container(id)}-ping"
-      run_command([DOCKER, 'rm', '--force', scratch, { allow_failure: true }])
-      run_command([DOCKER, 'create', '--name', scratch, manifest[:image]])
+      engine_remove(scratch)
+      engine_create_scratch(scratch, manifest[:image])
       begin
-        run_command([DOCKER, 'cp', '--follow-link', "#{scratch}:#{manifest[:ping]}", taken])
+        engine_copy_out(scratch, manifest[:ping], taken)
       ensure
-        run_command([DOCKER, 'rm', '--force', scratch, { allow_failure: true }])
+        engine_remove(scratch)
       end
       raise Failed, "#{manifest[:ping]} isn't a file in #{manifest[:image]}" unless File.file?(taken) && !File.symlink?(taken)
 
@@ -962,9 +952,6 @@ module AmahiHelper
       e.message
     end
 
-    def image_present?(image)
-      !docker_output('image', 'inspect', '--format', '{{.Id}}', image.sub(%r{:[^:@/]+@}, '@')).nil?
-    end
 
     # Runs the block holding APP_RECORDS_LOCK, waiting for it; inside a block that holds it
     # already, the block just runs.
@@ -989,15 +976,15 @@ module AmahiHelper
     # { 'apps' => { id => 'remade' | 'remade, stopped' | its reason }, 'shares' => { id => the
     # shares it has now, [{ 'name', 'folder' (for a folder of the share), 'write' }] } }.
     def do_follow_pool_apps
-      out = docker_output('ps', '--all', '--filter', 'label=amahi.app', '--format', '{{.Label "amahi.app"}}')
-      return { 'apps' => {}, 'shares' => {} } unless out
+      labels = engine_app_labels
+      return { 'apps' => {}, 'shares' => {} } unless labels
 
       shares = samba_shares
       given = {}
-      done = out.lines.map(&:strip).grep(APP_ID).uniq.filter_map do |id|
+      done = labels.grep(APP_ID).uniq.filter_map do |id|
         next if app_job_running?(id) # the job makes its container with the pool as it is
 
-        info = JSON.parse(docker_output('inspect', app_container(id)) || '[]').first or next
+        info = engine_inspect(app_container(id)) or next
         mounts = Array(info['Mounts'])
         chosen = app_container_shares(info, shares)
         have = mounts.map { |mount| mount['Destination'].to_s }.select { |dest| dest.start_with?("#{drives_root}/") }.sort
@@ -1048,23 +1035,23 @@ module AmahiHelper
       end
       checked = app_share_choices(wanted, id, manifest)
       do_install_app(id, manifest, checked, true)
-      run_command([DOCKER, 'stop', '--time', '30', app_container(id)]) if stopped
+      engine_stop(app_container(id)) if stopped
       [checked, stopped]
     end
 
     # apps.follow_dns: each app container made with other DNS than app_dns_options gives now is
     # made again, keeping its shares, version and data.
     def do_follow_dns_apps
-      out = docker_output('ps', '--all', '--filter', 'label=amahi.app', '--format', '{{.Label "amahi.app"}}')
-      return { 'apps' => {} } unless out
+      labels = engine_app_labels
+      return { 'apps' => {} } unless labels
 
-      want = app_dns_options
+      want = app_dns
       shares = samba_shares
-      done = out.lines.map(&:strip).grep(APP_ID).uniq.filter_map do |id|
+      done = labels.grep(APP_ID).uniq.filter_map do |id|
         next if app_job_running?(id) # the job makes its container with the DNS as it is
 
-        info = JSON.parse(docker_output('inspect', app_container(id)) || '[]').first or next
-        next if app_dns_of(info) == want
+        info = engine_inspect(app_container(id)) or next
+        next if engine_container_dns(info) == want
 
         say("#{id}: making its container again with #{want.empty? ? "Docker's own DNS" : "the NAS's DNS"}")
         begin
@@ -1084,14 +1071,14 @@ module AmahiHelper
     # a share by its path (made before the helper mounted them itself, APP_SHARE_BIND_ROOT) is made
     # again, once, keeping its shares, version and data. One the owner stopped stays stopped.
     def do_follow_share_apps
-      out = docker_output('ps', '--all', '--filter', 'label=amahi.app', '--format', '{{.Label "amahi.app"}}')
-      return { 'apps' => {} } unless out
+      labels = engine_app_labels
+      return { 'apps' => {} } unless labels
 
       shares = samba_shares
-      done = out.lines.map(&:strip).grep(APP_ID).uniq.filter_map do |id|
+      done = labels.grep(APP_ID).uniq.filter_map do |id|
         next if app_job_running?(id) # the job makes its container with the mounts as they are now
 
-        info = JSON.parse(docker_output('inspect', app_container(id)) || '[]').first or next
+        info = engine_inspect(app_container(id)) or next
         next unless app_shares_by_path?(info)
 
         say("#{id}: making its container again, with its shares through the helper's own mounts")
@@ -1121,39 +1108,29 @@ module AmahiHelper
     # (DnsService's config writes the bridge's address while Docker runs): the bridge's address,
     # and the local domain to look short names up in, so an app reaches a device by the name it
     # has on Network → Devices. Nothing otherwise: Docker's own, the NAS's upstream servers.
-    def app_dns_options
-      return [] unless File.exist?(UNBOUND_CONF)
-      bridge = docker_bridge_address or return []
+    # As engine_create takes it ({ servers:, search: }), compared with engine_container_dns's for a
+    # container made before; {} for the engine's own.
+    def app_dns
+      return {} unless File.exist?(UNBOUND_CONF)
+      bridge = engine_bridge_address or return {}
       config = File.read(UNBOUND_CONF)
-      return [] unless unbound_listening(config).include?(bridge)
+      return {} unless unbound_listening(config).include?(bridge)
       domain = config[/^\s*local-zone: "(#{UNBOUND_NAME})" static$/o, 1]
-      ['--dns', bridge, *(['--dns-search', domain.chomp('.')] if domain)]
-    end
-
-    # The IPv4 address of Docker's bridge (its containers' gateway), or nil while Docker isn't up.
-    def docker_bridge_address
-      Socket.getifaddrs.find { |ifaddr| ifaddr.name == DOCKER_BRIDGE && ifaddr.addr&.ipv4? }&.addr&.ip_address
-    end
-
-    # The DNS options a container was made with (+info+, docker inspect's), as app_dns_options
-    # gives them.
-    def app_dns_of(info)
-      [*Array(info.dig('HostConfig', 'Dns')).flat_map { |server| ['--dns', server] },
-       *Array(info.dig('HostConfig', 'DnsSearch')).flat_map { |domain| ['--dns-search', domain] }]
+      { servers: [bridge], search: [domain&.chomp('.')].compact }.reject { |_key, list| list.empty? }
     end
 
     # apps.follow_dns in the background, once Unbound has started or stopped answering on Docker's
     # bridge: remaking every app's container takes minutes, longer than a page waits. One already
     # running (the same unit) does it with the config as it then is.
     def follow_dns_apps_later
-      return unless File.executable?(DOCKER) && File.executable?(SYSTEMD_RUN)
+      return unless engine_installed? && File.executable?(SYSTEMD_RUN)
       run_command([SYSTEMD_RUN, "--unit=#{APPS_FOLLOW_DNS_UNIT}", '--no-block', '--collect', '--quiet', HELPER_PATH, 'apps.follow_dns',
                    { allow_failure: true }])
     end
 
     # The image an app's container runs (name:tag@sha256:...), or nil without a container.
     def app_image(id)
-      image = docker_output('inspect', '--format', '{{.Config.Image}}', app_container(id)).to_s.strip
+      image = engine_container_image(app_container(id))
       image.match?(APP_IMAGE) ? image : nil
     end
 
@@ -1174,18 +1151,18 @@ module AmahiHelper
       # (one made before these were kept: the catalog's, on the image it runs)
       before = app_definition(id) || manifest.merge(image: from)
       app_backup_room!(id, before)
-      unless image_present?(manifest[:image])
+      unless engine_image_present?(manifest[:image])
         say("Pulling #{manifest[:image].sub(/@.*/, '')}...")
-        run_command([DOCKER, 'pull', manifest[:image], { stream: true }])
+        engine_pull(manifest[:image])
       end
       say("Stopping it (#{image_tag(from)})...")
-      run_command([DOCKER, 'stop', '--time', '30', app_container(id)])
+      engine_stop(app_container(id))
       say('Copying its data first, so the update can be undone...')
       begin
         app_backup(id, before, from, manifest[:image])
       rescue Failed, SystemCallError => e
         say("The copy didn't work, so it starts again on #{image_tag(from)}")
-        run_command([DOCKER, 'start', app_container(id), { allow_failure: true }])
+        engine_start(app_container(id), allow_failure: true)
         raise Failed, "#{id}'s data couldn't be copied before the update (#{e.message}); it runs #{image_tag(from)} as before"
       end
       say("Starting #{image_tag(manifest[:image])}...")
@@ -1204,7 +1181,7 @@ module AmahiHelper
         app_forget_backup(id)
         return { 'app' => id, 'updated' => false, 'image' => from, 'problem' => problem }
       end
-      run_command([DOCKER, 'image', 'rm', from, { allow_failure: true }])
+      engine_remove_image(from)
       { 'app' => id, 'updated' => true, 'image' => manifest[:image], 'from' => from, 'ports' => reply['ports'] }
     end
 
@@ -1215,12 +1192,12 @@ module AmahiHelper
       raise Failed, "the copy from before #{id}'s update doesn't say which version it was" unless from.match?(APP_IMAGE)
 
       # The old version's image first (an update removes it): nothing changes if it can't be had
-      unless image_present?(from)
+      unless engine_image_present?(from)
         say("Downloading #{image_tag(from)} again...")
-        run_command([DOCKER, 'pull', from, { stream: true }])
+        engine_pull(from)
       end
       say("Stopping it (#{image_tag(app_image(id) || manifest[:image])})...")
-      run_command([DOCKER, 'stop', '--time', '30', app_container(id), { allow_failure: true }])
+      engine_stop(app_container(id), allow_failure: true)
       say("Going back to #{image_tag(from)}, with its data from before the update...")
       reply = app_restore(id, manifest, from, shares)
       app_forget_backup(id)
@@ -1300,9 +1277,9 @@ module AmahiHelper
     # Puts the copied folders back and recreates the container on +image+.
     def app_restore(id, manifest, image, shares)
       backup = app_backup_info(id) or raise Failed, "there's no copy of #{id}'s data to go back to"
-      run_command([DOCKER, 'rm', '--force', app_container(id), { allow_failure: true }])
+      engine_remove(app_container(id))
       # Its folders are deleted next: not while a container could still be writing to them.
-      raise Failed, "Docker didn't remove #{app_container(id)}, so #{id}'s data wasn't put back" if docker_output('inspect', '--format', '{{.Id}}', app_container(id))
+      raise Failed, "Docker didn't remove #{app_container(id)}, so #{id}'s data wasn't put back" if engine_container?(app_container(id))
 
       Array(backup['folders']).each do |name|
         raise Failed, "the copy lists a folder #{name.inspect}" unless name.is_a?(String) && name.match?(APP_FOLDER)
@@ -1373,14 +1350,11 @@ module AmahiHelper
     end
 
     def app_state(id)
-      out = docker_output('inspect', '--format', '{{json .State}}', app_container(id))
-      out ? JSON.parse(out) : nil
-    rescue JSON::ParserError
-      nil
+      engine_container_state(app_container(id))
     end
 
     def app_restart_count(id)
-      docker_output('inspect', '--format', '{{.RestartCount}}', app_container(id)).to_i
+      engine_restart_count(app_container(id))
     end
 
     # The app's web page answers on its port (the one it was given, P4.2), with any HTTP reply;
@@ -1444,13 +1418,11 @@ module AmahiHelper
         [[source, [APP_SHARE_TARGET, *given.compact].join('/'), !share[:write]],
          *copies.filter_map { |copy| binds[[*given, copy]]&.then { |from| [from, copy, true] } }]
       end
-      args = mounts.uniq { |_source, target, _ro| target }.flat_map do |source, target, readonly|
-        ['--mount', "type=bind,source=#{source},target=#{target}#{',readonly' if readonly}"]
-      end
-      return args unless shares.any? { |share| share[:write] }
+      mounts = mounts.uniq { |_source, target, _ro| target }.map { |source, target, readonly| { source: source, target: target, readonly: readonly } }
+      return { group_add: [], mounts: mounts } unless shares.any? { |share| share[:write] }
 
       users = group_id(USERS_GROUP) or raise Failed, "there's no #{USERS_GROUP} group"
-      ['--group-add', users.to_s, *args]
+      { group_add: [users], mounts: mounts }
     end
 
     # A share an app writes into gets a default ACL on each of its folders, so what the app makes
@@ -1550,20 +1522,20 @@ module AmahiHelper
     # (amahi-kai-app-firewall-early.service), so the apps' ports are never open in between.
     def do_app_firewall
       subnets = lan_subnets
-      run_command([IPTABLES, '-w', '-N', 'DOCKER-USER', { allow_failure: true }])
+      run_command([IPTABLES, '-w', '-N', ENGINE_FIREWALL_HOOK, { allow_failure: true }])
       run_command([IPTABLES, '-w', '-N', APP_CHAIN, { allow_failure: true }])
       rules = app_chain_rules(subnets).map { |rule| "-A #{APP_CHAIN} #{rule.join(' ')}" }
       run_command([IPTABLES_RESTORE, '-w', '--noflush', { stdin: "*filter\n:#{APP_CHAIN} - [0:0]\n#{rules.join("\n")}\nCOMMIT\n" }])
-      unless run_command([IPTABLES, '-w', '-C', 'DOCKER-USER', '-j', APP_CHAIN, { allow_failure: true }]).nil?
-        run_command([IPTABLES, '-w', '-I', 'DOCKER-USER', '1', '-j', APP_CHAIN])
+      unless run_command([IPTABLES, '-w', '-C', ENGINE_FIREWALL_HOOK, '-j', APP_CHAIN, { allow_failure: true }]).nil?
+        run_command([IPTABLES, '-w', '-I', ENGINE_FIREWALL_HOOK, '1', '-j', APP_CHAIN])
       end
       { 'lan' => subnets }
     end
 
     def app_chain_rules(subnets)
       [%w[-m conntrack --ctstate RELATED,ESTABLISHED -j RETURN],
-       ['!', '-o', DOCKER_BRIDGE, '-j', 'RETURN'],
-       ['-i', DOCKER_BRIDGE, '-j', 'RETURN'],
+       ['!', '-o', ENGINE_BRIDGE, '-j', 'RETURN'],
+       ['-i', ENGINE_BRIDGE, '-j', 'RETURN'],
        %w[-i tailscale0 -j RETURN],
        *subnets.map { |net| ['-s', net, '-j', 'RETURN'] },
        %w[-j DROP]]
@@ -1574,7 +1546,7 @@ module AmahiHelper
       return false unless File.executable?(IPTABLES)
       rules = capture([IPTABLES, '-w', '-S', APP_CHAIN])
       rules.lines.last.to_s.strip == "-A #{APP_CHAIN} -j DROP" &&
-        run_command([IPTABLES, '-w', '-C', 'DOCKER-USER', '-j', APP_CHAIN, { allow_failure: true }]).nil?
+        run_command([IPTABLES, '-w', '-C', ENGINE_FIREWALL_HOOK, '-j', APP_CHAIN, { allow_failure: true }]).nil?
     rescue Failed
       false
     end
@@ -1607,9 +1579,9 @@ module AmahiHelper
     def app_folder_mounts(manifest, dir, storage)
       manifest[:folders].flat_map do |folder|
         if folder[:kind] == :state
-          ['--mount', "type=bind,source=#{dir}/#{folder[:name]},target=#{folder[:path]}"]
+          [{ source: "#{dir}/#{folder[:name]}", target: folder[:path] }]
         elsif storage
-          ['--mount', "type=bind,source=#{storage}/#{folder[:name]},target=#{folder[:path]}"]
+          [{ source: "#{storage}/#{folder[:name]}", target: folder[:path] }]
         else
           []
         end
@@ -1777,11 +1749,11 @@ module AmahiHelper
       definition = app_definition(id)
       image = app_image(id) || definition&.dig(:image)
       container = app_container(id)
-      run_command([DOCKER, 'rm', '--force', container, { allow_failure: true }])
-      raise Failed, "Docker didn't remove #{container}; nothing else of #{id} was touched" if docker_output('inspect', '--format', '{{.Id}}', container)
+      engine_remove(container)
+      raise Failed, "Docker didn't remove #{container}; nothing else of #{id} was touched" if engine_container?(container)
       app_share_binds_keep(id, nil, {})
       app_unserve_uninstalled(id, definition)
-      run_command([DOCKER, 'image', 'rm', image, { allow_failure: true }]) if image
+      engine_remove_image(image) if image
       FileUtils.rm_rf("#{APP_PINGS}/#{id}") # made again from the image at the next install
       return { 'app' => id, 'data_kept' => true } unless delete_data
 
@@ -1808,30 +1780,16 @@ module AmahiHelper
     # logs gives them), each cut to LOG_LINE_MAX; 'missing' when the app has no container.
     def do_app_logs(id, lines)
       container = app_container(id)
-      return { 'lines' => [], 'missing' => true } unless docker_output('inspect', '--format', '{{.Id}}', container)
+      return { 'lines' => [], 'missing' => true } unless engine_container?(container)
 
-      out, status = Open3.capture2e(ENV_MIN, [DOCKER, DOCKER], 'logs', '--tail', lines.to_s, '--timestamps', container,
-                                    unsetenv_others: true, chdir: '/')
-      raise Failed, "docker logs exited #{status.exitstatus}: #{last_lines(out, 3)}" unless status.success?
-
-      { 'lines' => log_lines(out, lines) }
+      { 'lines' => log_lines(engine_logs(container, lines), lines) }
     end
 
     def do_apps_status
-      # The label by itself: joined with the image's own labels, a value there could read like it.
-      out = docker_output('ps', '--all', '--filter', 'label=amahi.app', '--format', "{{.Label \"amahi.app\"}}\t{{json .}}")
-      return { 'docker' => false, 'apps' => {}, 'jobs' => app_jobs_running } unless out
+      rows = engine_app_rows
+      return { 'docker' => false, 'apps' => {}, 'jobs' => app_jobs_running } unless rows
 
-      apps = out.lines.filter_map do |line|
-        id, json = line.chomp.split("\t", 2)
-        next unless id.to_s.match?(APP_ID) && json
-
-        row = JSON.parse(json)
-        [id, { 'state' => row['State'], 'status' => row['Status'], 'image' => row['Image'] }]
-      rescue JSON::ParserError
-        nil
-      end
-      { 'docker' => true, 'apps' => apps.to_h, 'jobs' => app_jobs_running }
+      { 'docker' => true, 'apps' => rows.select { |id, _row| id.match?(APP_ID) }.to_h, 'jobs' => app_jobs_running }
     end
 
     def app_jobs_running
@@ -1848,17 +1806,7 @@ module AmahiHelper
     # { 'ports' => ["amahi-jellyfin\t0.0.0.0:8096->8096/tcp", ...], 'limited' => true } for every
     # running container; limited when APP_CHAIN keeps them to the LAN and Tailscale.
     def do_docker_ports
-      out = docker_output('ps', '--format', "{{.Names}}\t{{.Ports}}")
-      { 'ports' => out.to_s.lines(chomp: true).reject(&:empty?), 'limited' => app_firewall_active? }
-    end
-
-    # docker's output, or nil when it isn't installed or isn't running.
-    def docker_output(*args)
-      return nil unless File.executable?(DOCKER)
-      out, _err, status = Open3.capture3(ENV_MIN, [DOCKER, DOCKER], *args, unsetenv_others: true, chdir: '/')
-      status.success? ? out : nil
-    rescue SystemCallError
-      nil
+      { 'ports' => engine_port_rows, 'limited' => app_firewall_active? }
     end
 
     # --- Apps on the LAN (see AVAHI_SERVICES) ---

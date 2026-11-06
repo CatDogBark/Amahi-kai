@@ -42,7 +42,7 @@ RSpec.describe 'AmahiHelper apps' do
     allow(helper).to receive(:argon2_hash) { |secret| "$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$#{secret.reverse}" }
     # Containers get Docker's own DNS unless a test says the NAS's answers on the bridge: CI's
     # runner has a Docker bridge, a laptop may not
-    allow(helper).to receive(:app_dns_options).and_return([])
+    allow(helper).to receive(:app_dns).and_return({})
     # A share's folder is on ext4 unless a test puts it on ZFS, whatever the runner's /tmp is
     allow(helper).to receive(:capture).and_call_original
     allow(helper).to receive(:capture).with(['/usr/bin/findmnt', '-n', '-o', 'FSTYPE', '-T', anything]).and_return("ext4\n")
@@ -638,7 +638,7 @@ RSpec.describe 'AmahiHelper apps' do
     end
 
     it "gives the container the NAS's DNS while Unbound answers on Docker's bridge" do
-      allow(helper).to receive(:app_dns_options).and_return(['--dns', '172.17.0.1', '--dns-search', 'home.arpa'])
+      allow(helper).to receive(:app_dns).and_return({ servers: ['172.17.0.1'], search: ['home.arpa'] })
       helper.do_install_app('vaultwarden', helper.app_manifest('vaultwarden'))
       create = ran.find { |argv| argv[1] == 'create' }
       expect(create.each_cons(6).to_a).to include(['--label', 'amahi.app=vaultwarden', '--dns', '172.17.0.1', '--dns-search', 'home.arpa'])
@@ -989,7 +989,7 @@ RSpec.describe 'AmahiHelper apps' do
       FileUtils.mkdir_p("#{dir}/downloads")
       share = { name: 'Downloads', path: "#{dir}/downloads", pooled: false, write: true }
       allow(helper).to receive(:app_share_binds_make).and_return([{}, nil])
-      allow(helper).to receive(:app_share_mounts).and_return([])
+      allow(helper).to receive(:app_share_mounts).and_return({ group_add: [], mounts: [] })
       allow(File).to receive(:executable?).with('/usr/bin/setfacl').and_return(false)
       helper.do_install_app('transmission', helper.app_manifest('transmission'), [share])
       acl = ran.index { |argv| argv.first == '/usr/bin/find' }
@@ -1065,7 +1065,7 @@ RSpec.describe 'AmahiHelper apps' do
     describe "the group of an image that drops to the app's user" do
       def pgid(shares)
         allow(helper).to receive(:app_share_binds_make).and_return([{}, nil])
-        allow(helper).to receive(:app_share_mounts).and_return([])
+        allow(helper).to receive(:app_share_mounts).and_return({ group_add: [], mounts: [] })
         allow(helper).to receive(:group_id).with('users').and_return(100)
         helper.do_install_app('transmission', helper.app_manifest('transmission'), shares)
         env_files.last[1][/^PGID=(\d+)$/, 1]
@@ -1085,7 +1085,7 @@ RSpec.describe 'AmahiHelper apps' do
       it "leaves a run_as: app container the app's group, with users added" do
         allow(helper).to receive(:group_id).with('users').and_return(100)
         allow(helper).to receive(:app_share_binds_make).and_return([{}, nil])
-        allow(helper).to receive(:app_share_mounts).and_return(['--group-add', '100'])
+        allow(helper).to receive(:app_share_mounts).and_return({ group_add: [100], mounts: [] })
         helper.do_install_app('gitea', helper.app_manifest('gitea'), [{ name: 'Downloads', path: "#{dir}/downloads", pooled: false, write: true }])
         create = ran.find { |argv| argv[1] == 'create' }
         expect(create.each_cons(2).find { |flag, _| flag == '--user' }.last).to eq('996:996')
@@ -1106,7 +1106,7 @@ RSpec.describe 'AmahiHelper apps' do
       before do
         FileUtils.mkdir_p(folder)
         allow(helper).to receive(:app_share_binds_make).and_return([{}, nil])
-        allow(helper).to receive(:app_share_mounts).and_return([])
+        allow(helper).to receive(:app_share_mounts).and_return({ group_add: [], mounts: [] })
         allow(File).to receive(:executable?).with('/usr/bin/setfacl').and_return(true)
       end
 
@@ -1503,12 +1503,12 @@ RSpec.describe 'AmahiHelper apps' do
       allow(helper).to receive(:group_id).with('users').and_return(100)
       binds = { ['Movies', nil] => '/run/shares/0', ['Movies', nil, "#{drives}/storage-1/Movies"] => '/run/shares/1', ['Downloads', nil] => '/run/shares/2' }
       mounts = helper.app_share_mounts(choose(transmission, [{ 'name' => 'Movies' }, { 'name' => 'Downloads', 'write' => true }]), binds)
-      expect(mounts).to eq(['--group-add', '100',
-                            '--mount', 'type=bind,source=/run/shares/0,target=/shares/Movies,readonly',
-                            '--mount', "type=bind,source=/run/shares/1,target=#{drives}/storage-1/Movies,readonly",
-                            '--mount', 'type=bind,source=/run/shares/2,target=/shares/Downloads'])
+      expect(mounts).to eq(group_add: [100],
+                           mounts: [{ source: '/run/shares/0', target: '/shares/Movies', readonly: true },
+                                    { source: '/run/shares/1', target: "#{drives}/storage-1/Movies", readonly: true },
+                                    { source: '/run/shares/2', target: '/shares/Downloads', readonly: false }])
       expect(helper.app_share_mounts(choose(transmission, [{ 'name' => 'Downloads' }]), binds))
-        .to eq(['--mount', 'type=bind,source=/run/shares/2,target=/shares/Downloads,readonly'])
+        .to eq(group_add: [], mounts: [{ source: '/run/shares/2', target: '/shares/Downloads', readonly: true }])
       expect { helper.app_share_mounts(choose(transmission, [{ 'name' => 'Downloads' }]), {}) }.to raise_error(AmahiHelper::Failed, "Downloads isn't mounted for the app")
     end
 
@@ -1520,7 +1520,7 @@ RSpec.describe 'AmahiHelper apps' do
       allow(helper).to receive(:bind_share_folder)
       chosen = choose(transmission, [{ 'name' => 'Movies' }, { 'name' => 'Downloads', 'write' => true }])
       binds, set = helper.app_share_binds_make('transmission', chosen)
-      sources = helper.app_share_mounts(chosen, binds).grep(/\Atype=bind/).map { |mount| mount[/source=([^,]+)/, 1] }
+      sources = helper.app_share_mounts(chosen, binds)[:mounts].map { |mount| mount[:source] }
       expect(sources).not_to be_empty
       expect(sources).to all(start_with("#{set}/"))
     end
@@ -1588,10 +1588,10 @@ RSpec.describe 'AmahiHelper apps' do
         binds = { %w[Downloads tv/new] => "#{bind_root}/transmission/1/0", %w[Movies Kids] => "#{bind_root}/transmission/1/1",
                   ['Movies', 'Kids', "#{drives}/storage-1/Movies/Kids"] => "#{bind_root}/transmission/1/2" }
         expect(helper.app_share_mounts(chosen, binds)).to eq(
-          ['--group-add', '100',
-           '--mount', "type=bind,source=#{bind_root}/transmission/1/0,target=/shares/Downloads/tv/new",
-           '--mount', "type=bind,source=#{bind_root}/transmission/1/1,target=/shares/Movies/Kids,readonly",
-           '--mount', "type=bind,source=#{bind_root}/transmission/1/2,target=#{drives}/storage-1/Movies/Kids,readonly"]
+          group_add: [100],
+          mounts: [{ source: "#{bind_root}/transmission/1/0", target: '/shares/Downloads/tv/new', readonly: false },
+                   { source: "#{bind_root}/transmission/1/1", target: '/shares/Movies/Kids', readonly: true },
+                   { source: "#{bind_root}/transmission/1/2", target: "#{drives}/storage-1/Movies/Kids", readonly: true }]
         )
         expect(File.directory?("#{drives}/storage-1/Movies/Kids")).to be true # made on the drive, as Greyhole would
         expect { helper.app_share_mounts(chosen, {}) }.to raise_error(AmahiHelper::Failed, "Downloads/tv/new isn't mounted for the app")
@@ -1763,19 +1763,19 @@ RSpec.describe 'AmahiHelper apps' do
     # writes it while Docker runs), with the local domain to search.
     describe "the NAS's DNS for an app" do
       before do
-        allow(helper).to receive(:app_dns_options).and_call_original
+        allow(helper).to receive(:app_dns).and_call_original
         stub_const('AmahiHelper::UNBOUND_CONF', "#{dir}/amahi-kai.conf")
-        allow(helper).to receive(:docker_bridge_address).and_return('172.17.0.1')
+        allow(helper).to receive(:engine_bridge_address).and_return('172.17.0.1')
       end
 
       it "is the bridge's address and the local domain while Unbound answers there, else Docker's own" do
-        expect(helper.app_dns_options).to eq([]) # DNS off: no config
+        expect(helper.app_dns).to eq({}) # DNS off: no config
         File.write(AmahiHelper::UNBOUND_CONF, %(server:\n  interface: 127.0.0.1\n  interface: 192.168.1.1\n  local-zone: "home.arpa." static\n))
-        expect(helper.app_dns_options).to eq([]) # not on the bridge (Docker started after the last save)
+        expect(helper.app_dns).to eq({}) # not on the bridge (Docker started after the last save)
         File.write(AmahiHelper::UNBOUND_CONF, %(server:\n  interface: 192.168.1.1\n  interface: 172.17.0.1\n  local-zone: "home.arpa." static\n))
-        expect(helper.app_dns_options).to eq(['--dns', '172.17.0.1', '--dns-search', 'home.arpa'])
-        allow(helper).to receive(:docker_bridge_address).and_return(nil) # Docker down
-        expect(helper.app_dns_options).to eq([])
+        expect(helper.app_dns).to eq({ servers: ['172.17.0.1'], search: ['home.arpa'] })
+        allow(helper).to receive(:engine_bridge_address).and_return(nil) # Docker down
+        expect(helper.app_dns).to eq({})
       end
     end
 
@@ -1856,7 +1856,7 @@ RSpec.describe 'AmahiHelper apps' do
         allow(helper).to receive(:run_command)
         allow(helper).to receive(:do_app_firewall)
         allow(helper).to receive(:app_manifest).and_return({})
-        allow(helper).to receive(:app_dns_options).and_return(['--dns', '172.17.0.1', '--dns-search', 'home.arpa'])
+        allow(helper).to receive(:app_dns).and_return({ servers: ['172.17.0.1'], search: ['home.arpa'] })
       end
 
       it "makes again the apps made with other DNS, keeping their shares, and a stopped one stopped" do
@@ -1870,7 +1870,7 @@ RSpec.describe 'AmahiHelper apps' do
       end
 
       it "gives back Docker's own DNS once the NAS's stops answering on the bridge, and leaves an app whose job runs to it" do
-        allow(helper).to receive(:app_dns_options).and_return([])
+        allow(helper).to receive(:app_dns).and_return({})
         containers('gitea' => { state: { 'Running' => true }, dns: nas_dns }, 'jellyfin' => { state: { 'Running' => true }, dns: nas_dns })
         allow(helper).to receive(:app_job_running?).with('jellyfin').and_return(true)
         expect(helper.do_follow_dns_apps).to eq('apps' => { 'gitea' => 'remade' })
