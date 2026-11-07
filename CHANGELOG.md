@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.8.0] — 2026-11-06
+
+The app catalog is signed: a server takes only its newest version signed with a release key, never an older one. At this update it takes the first signed version, catalog-1, which has the same apps and versions as before.
+
 ### 🔒 Security & Fixes
 
 - **The app catalog is signed** — A server fetched the catalog's main branch, so whoever could change the catalog's repository on GitHub decided which image an install or an update ran. Now the catalog's versions are signed with the same release keys as Amahi-kai's own releases, and a server takes only the newest signed one, never an older one than it has: anything else is refused, and it keeps the catalog it has. The Apps page names the version and the key that signed it.
