@@ -235,10 +235,24 @@ installing what they can't read.
 
 ---
 
+## On your own server only
+
+An app doesn't have to be in the catalog to run on your server: **Add your own app** on the Apps
+page takes the same manifest (**I have an app file**), or makes one from a form, and checks it the
+way the catalog's are. It's for your server only, nobody else's, and nobody reviews it: see
+[Docker Apps](docker-apps#apps-of-your-own). It's also the way to try an app on a server, exactly
+as Amahi-kai will run it, before it goes to the catalog. A few things differ:
+
+- Its `image` can name a tag only (`ghcr.io/you/app:1.0`): Amahi-kai pins the digest when it reads
+  the file. The image has to be public, for now.
+- Its id is its name's letters and digits (`My App` is `myapp`), and can't be one the catalog has.
+- One that starts as root (`run_as: image`) keeps its folders on the system disk: `kind: dataset`
+  needs `run_as: app`. The catalog holds to the same by review.
+
 ## Not yet
 
-- **A catalog of your own.** Servers install from the one catalog only. To try an app on your
-  server before it's in the catalog, run it with `docker run` as above.
+- **Other people's catalogs.** Servers fetch the one catalog only; an app of your own is added on
+  its server, by hand.
 - **HTTPS on the LAN.** Apps are reached over plain HTTP on the LAN, like Amahi-kai's own pages;
   HTTPS for both is planned. An app that can't work without HTTPS can be reached only through
   Tailscale, over HTTPS, today (`access: tailscale`).

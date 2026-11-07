@@ -128,6 +128,38 @@ RSpec.describe AppCatalog do
     end
   end
 
+  # Apps of your own (the helper's APP_CUSTOM; tmp/custom-apps outside production)
+  describe "apps of your own" do
+    let(:custom) { Rails.root.join("tmp", "custom-apps").to_s }
+
+    before { FileUtils.mkdir_p(custom) }
+    after { FileUtils.rm_rf(custom) }
+
+    it "lists them with the catalog's, marked custom, yours first for an id the catalog has too" do
+      File.write("#{custom}/mealie.yml", "name: Mealie\ncategory: home\nimage: ghcr.io/x/mealie:1@sha256:#{'a' * 64}\n")
+      File.write("#{custom}/gitea.yml", "name: My Gitea\n")
+      File.write("#{custom}/Bad_Id.yml", "name: Bad\n")
+      AppCatalog.reload!
+      expect(AppCatalog.find("mealie")).to include(custom: true, name: "Mealie", category: "home")
+      expect(AppCatalog.find("gitea")).to include(custom: true, name: "My Gitea")
+      expect(AppCatalog.find("jellyfin")).to include(custom: false)
+      expect(AppCatalog.all.map { |app| app[:identifier] }.tally.values.uniq).to eq([1])
+      expect(AppCatalog.all.map { |app| app[:identifier] }).not_to include("Bad_Id")
+      expect(AppCatalog.custom_file("mealie")).to start_with("name: Mealie")
+      expect(AppCatalog.custom_file("../etc/passwd")).to be_nil
+    end
+
+    it "sees one saved, or removed, without a restart" do
+      expect(AppCatalog.find("mealie")).to be_nil
+      sleep 0.01
+      File.write("#{custom}/mealie.yml", "name: Mealie\n")
+      expect(AppCatalog.find("mealie")).to include(custom: true)
+      sleep 0.01
+      File.delete("#{custom}/mealie.yml")
+      expect(AppCatalog.find("mealie")).to be_nil
+    end
+  end
+
   describe ".find" do
     it "returns nil for an app that isn't in the catalog" do
       expect(AppCatalog.find("portainer")).to be_nil

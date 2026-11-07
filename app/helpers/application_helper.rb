@@ -75,7 +75,7 @@ module ApplicationHelper
     case controller_name
     when 'front' then :dashboard
     when 'file_browser', 'trash', 'search' then :files
-    when 'apps' then :apps
+    when 'apps', 'custom_apps' then :apps
     else :setup
     end
   end

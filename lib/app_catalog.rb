@@ -30,15 +30,56 @@ class AppCatalog
   BACKUP_DAYS = 30
   # The ZFS pool each app keeps its dataset folders on (the helper's APP_STORAGE), { id => pool }.
   STORAGE_PATH = '/var/lib/amahi-kai/app-storage.json'.freeze
+  # The owner's own apps (the helper's APP_CUSTOM, custom.rb): app files kept on this NAS only,
+  # written by the root helper, listed with the catalog's and marked custom. One with the id of a
+  # catalog app comes first, as the helper installs it, so the catalog's isn't listed.
+  CUSTOM_DIR = '/var/lib/amahi-kai/custom-apps'.freeze
+  # The definition each app's container was made from (the helper's APP_DEFINITIONS): a custom
+  # app's file saved since shows as changes waiting.
+  DEFINITIONS_DIR = '/var/lib/amahi-kai/app-definitions'.freeze
+  ID = /\A[a-z][a-z0-9]{1,23}\z/
 
   class << self
     # Read again whenever the helper swaps in a newly fetched catalog (a new folder).
     def all
       dir = source_dir
-      stamp = [dir, (stat = File.stat(dir)).ino, stat.mtime]
+      stamp = [dir, (stat = File.stat(dir)).ino, stat.mtime, custom_stamp]
       @all = nil unless @stamp == stamp
       @stamp = stamp
-      @all ||= Dir[File.join(dir, '*.yml')].filter_map { |path| entry(path) }.sort_by { |app| app[:name].downcase }
+      @all ||= begin
+        custom = Dir[File.join(custom_dir, '*.yml')].select { |path| File.basename(path, '.yml').match?(ID) }
+                                                    .filter_map { |path| entry(path)&.merge(custom: true) }
+        ids = custom.map { |app| app[:identifier] }
+        official = Dir[File.join(dir, '*.yml')].filter_map { |path| entry(path) }.reject { |app| ids.include?(app[:identifier]) }
+        (official + custom).sort_by { |app| app[:name].downcase }
+      end
+    end
+
+    def custom_dir
+      production? ? CUSTOM_DIR : Rails.root.join('tmp', 'custom-apps').to_s
+    end
+
+    # A custom app's file as it was saved, or nil.
+    def custom_file(id)
+      return nil unless id.to_s.match?(ID)
+
+      File.read(File.join(custom_dir, "#{id}.yml"))
+    rescue SystemCallError
+      nil
+    end
+
+    # The fields of the definition the app's container was made from, or nil.
+    def definition(id)
+      return nil unless id.to_s.match?(ID)
+
+      data = JSON.parse(File.read(File.join(definitions_dir, "#{id}.json")))
+      data.is_a?(Hash) ? data : nil
+    rescue SystemCallError, JSON::ParserError
+      nil
+    end
+
+    def definitions_dir
+      production? ? DEFINITIONS_DIR : Rails.root.join('tmp', 'app-definitions').to_s
     end
 
     # The fetched catalog once there is one, else the copy in the code.
@@ -98,6 +139,14 @@ class AppCatalog
     def reload!
       @all = nil
       @stamp = nil
+    end
+
+    # Whether the custom apps' folder changed (an app file saved or removed renames into it)
+    def custom_stamp
+      stat = File.stat(custom_dir)
+      [stat.ino, stat.mtime]
+    rescue SystemCallError
+      nil
     end
 
     # The app's folders are still there from an earlier install (uninstall keeps them).
@@ -194,7 +243,7 @@ class AppCatalog
       requires = data['requires'].is_a?(Integer) ? data['requires'] : 1
       { identifier: File.basename(path, '.yml'), name: data['name'].to_s, description: data['description'],
         sign_in: (data['sign_in'].strip.presence if data['sign_in'].is_a?(String)),
-        requires: requires, installable: requires <= FORMAT,
+        requires: requires, installable: requires <= FORMAT, custom: false,
         category: data['category'], logo_url: data['logo'], image: data['image'], web_port: data['web_port'],
         web_tls: data['web_tls'] == true, access: data['access'] == 'tailscale' ? 'tailscale' : 'lan',
         writes_shares: data['writes_shares'] == true, releases: data['releases'],

@@ -1,0 +1,10 @@
+/ A folder of a custom app's form: its name, and where the app has it.
+.kai-custom-row.kai-custom-row-folder data-custom-row=""
+  .kai-custom-field
+    label.form-label for="custom-folder-name-#{key}" Folder
+    input.form-control.kai-mono id="custom-folder-name-#{key}" type="text" name="app[folders][#{key}][name]" value=folder['name'] placeholder="data" spellcheck="false" autocapitalize="off"
+  .kai-custom-field
+    label.form-label for="custom-folder-path-#{key}" In the app at
+    input.form-control.kai-mono id="custom-folder-path-#{key}" type="text" name="app[folders][#{key}][path]" value=folder['path'] placeholder="/app/data" spellcheck="false" autocapitalize="off"
+  button.btn.btn-outline-secondary.btn-sm.kai-custom-remove type="button" data-custom-remove="" aria-label="Remove this folder"
+    = lucide_icon('x', size: 16)

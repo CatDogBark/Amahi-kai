@@ -32,6 +32,24 @@ class DockerApp < ApplicationRecord
     AppCatalog.tag(AppCatalog.find(identifier)&.dig(:image))
   end
 
+  # An app of the owner's own (CustomApp), not the catalog's.
+  def custom?
+    AppCatalog.find(identifier)&.dig(:custom) == true
+  end
+
+  # A custom app's file was saved with changes its container doesn't have yet, on the version it
+  # runs (a new version is update_available?): the update that applies them didn't run, or
+  # didn't come up healthy and went back.
+  def changes_waiting?
+    return false unless custom?
+
+    made = AppCatalog.definition(identifier) or return false
+    saved = YAML.safe_load(AppCatalog.custom_file(identifier).to_s)
+    saved.is_a?(Hash) && made.except('image') != saved.except('image')
+  rescue Psych::Exception
+    false
+  end
+
   # The catalog's logo, which may have changed (or arrived) since the install, else the one
   # saved then.
   def logo_url

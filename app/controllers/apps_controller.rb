@@ -121,9 +121,17 @@ class AppsController < ApplicationController
     @installed_apps = DockerApp.all.sort_by { |app| app.name.to_s.downcase }
     installed = @installed_apps.map(&:identifier)
     @categories = AppCatalog.categories
-    @current_category = params[:category].presence_in(@categories)
+    # Apps of your own (CustomAppsController) have a filter of their own
+    @custom_apps = AppCatalog.all.any? { |entry| entry[:custom] }
+    @current_category = params[:category].presence_in(@categories + (@custom_apps ? ['custom'] : []))
     @catalog_apps = AppCatalog.all.reject { |entry| installed.include?(entry[:identifier]) }
-    @catalog_apps = @catalog_apps.select { |entry| entry[:category] == @current_category } if @current_category
+    if @current_category == 'custom'
+      @catalog_apps = @catalog_apps.select { |entry| entry[:custom] }
+    elsif @current_category
+      @catalog_apps = @catalog_apps.select { |entry| entry[:category] == @current_category }
+    end
+    # Install opens by itself for an app of your own just added
+    @install_now = params[:install].presence
     @shares = Share.by_name
     @storage_pools = storage_pools
   end
@@ -177,7 +185,12 @@ class AppsController < ApplicationController
   # to the old one if it isn't healthy within 5 minutes.
   def docker_update_stream
     app_stream('apps.update') do |app, entry, reply, sse|
-      if reply['updated']
+      if reply['updated'] && reply['image'] == reply['from']
+        # An app of your own changed on the same version (CustomAppsController#update)
+        sse.emit("✓ #{entry[:name]} runs with your changes")
+        sse.emit("  Undo update, on its page, goes back to how it was for #{AppCatalog::BACKUP_DAYS} days.")
+        true
+      elsif reply['updated']
         sse.emit("✓ #{entry[:name]} is updated to #{AppCatalog.tag(reply['image'])} and running")
         sse.emit("  Undo update, on its page, goes back to #{AppCatalog.tag(reply['from'])} for #{AppCatalog::BACKUP_DAYS} days.")
         true

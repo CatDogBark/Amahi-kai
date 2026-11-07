@@ -16,8 +16,13 @@ article.kai-app-card id="docker_app_#{identifier}"
     = render 'app_logo', name: name, logo: entry[:logo_url]
     .kai-app-card-title
       h3 = name
+      - if entry[:custom]
+        .kai-app-pills
+          span.kai-pill.kai-pill-amber Custom
       .kai-app-card-meta = [entry[:category].to_s.capitalize, AppCatalog.tag(entry[:image])].compact_blank.join(' · ')
   p.kai-app-card-text = entry[:description].presence || t('no_description_supplied')
+  - if entry[:custom]
+    p.kai-app-card-note Added by you: Amahi-kai hasn't checked it.
   - if entry[:access] == 'tailscale'
     p.kai-app-card-note id="app-tailscale-#{identifier}"
       - if tailnet
@@ -39,5 +44,10 @@ article.kai-app-card id="docker_app_#{identifier}"
     - elsif entry[:access] == 'tailscale' && !tailnet
       span.kai-app-card-note.text-warning Needs Tailscale ready first
     - else
-      button.btn.btn-outline-primary type="button" data=share_dialog.merge('verb' => 'Install')
+      button.btn.btn-outline-primary type="button" data=share_dialog.merge('verb' => 'Install').merge(@install_now == identifier ? { 'auto-open' => '' } : {})
         = t('install', default: 'Install')
+    / An app of your own: Edit, and Remove once its data is gone too (the helper's apps.custom_remove)
+    - if entry[:custom]
+      a.btn.btn-outline-secondary href=custom_apps_edit_path(identifier) Edit
+      - unless AppCatalog.data_kept?(identifier)
+        button.btn.btn-outline-danger type="button" data-confirm="Remove #{name}? Its app file is deleted: to have it again, you'd add it again." data-call="dockerAppAction" data-args='["#{custom_apps_remove_path(identifier)}", "@el"]' Remove

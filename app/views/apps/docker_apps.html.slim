@@ -41,14 +41,29 @@
         - @categories.each do |category|
           = link_to category.capitalize, apps_index_path(category: category, anchor: 'add'), class: 'kai-chip',
                     aria: { current: ('page' if category == @current_category) }
-    - if @catalog_apps.any?
-      .kai-apps-grid
-        - @catalog_apps.each do |entry|
-          = render 'catalog_card', entry: entry
-    - elsif @current_category
-      p.kai-apps-empty = "Every #{@current_category.capitalize} app in the catalog is already one of yours, above."
-    - else
-      p.kai-apps-empty Every app in the catalog is one of yours, above.
+        - if @custom_apps
+          = link_to 'Custom', apps_index_path(category: 'custom', anchor: 'add'), class: 'kai-chip',
+                    aria: { current: ('page' if @current_category == 'custom') }
+    - if @catalog_apps.empty?
+      - if @current_category == 'custom'
+        p.kai-apps-empty Every app of your own is installed, above.
+      - elsif @current_category
+        p.kai-apps-empty = "Every #{@current_category.capitalize} app in the catalog is already one of yours, above."
+      - else
+        p.kai-apps-empty Every app in the catalog is one of yours, above.
+    .kai-apps-grid
+      - @catalog_apps.each do |entry|
+        = render 'catalog_card', entry: entry
+      / An app of your own (CustomAppsController), on All and Custom
+      - if @current_category.nil? || @current_category == 'custom'
+        article.kai-app-card.kai-app-card-add#add-your-own
+          .kai-app-card-head
+            span.kai-app-logo.kai-app-initial aria-hidden="true" = lucide_icon('plus', size: 22)
+            .kai-app-card-title
+              h3 Add your own app
+          p.kai-app-card-text Any app from a container image, described by you and boxed in like the catalog's.
+          .kai-app-card-actions
+            a.btn.btn-outline-primary href=custom_apps_new_path Add your own app
 
 == render 'shared/install_terminal', id: 'app', title: 'Installing App', stream_url: ''
 == render 'shares_dialog', shares: @shares, pools: @storage_pools

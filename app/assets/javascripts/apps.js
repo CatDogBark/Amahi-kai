@@ -350,3 +350,17 @@ document.addEventListener('DOMContentLoaded', function() {
     cb.closest('.docker-toggle-switch').querySelector('.docker-slider').style.background = 'var(--kai-success, #68d391)';
   }
 });
+
+// What opens by itself (data-auto-open): Install, for an app of your own just added, and the
+// update to an app of your own's changes just saved. The address then loses its ?install or
+// ?apply, so a reload doesn't open it again.
+document.addEventListener('DOMContentLoaded', function() {
+  var el = document.querySelector('[data-auto-open]');
+  if (!el) return;
+  history.replaceState(null, '', window.location.pathname + window.location.hash);
+  if (el.dataset.appStream) {
+    openAppInstall(el.dataset.appStream, el.dataset.url, null, el.dataset.title);
+  } else {
+    el.click();
+  }
+});

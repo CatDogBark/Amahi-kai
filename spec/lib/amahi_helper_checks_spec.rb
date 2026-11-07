@@ -35,6 +35,11 @@ RSpec.describe 'AmahiHelper: the checks on every argument' do
   # shares: a share given whole has no folder, and the argument can be left out.
   shares_may_hold = ['null', 'item folder null'].freeze
 
+  # An app of your own's file (custom.rb), ending on a line that whatever is added to it breaks.
+  custom_file = "name: Mine\ndescription: An app of my own\ncategory: home\n" \
+                "image: ghcr.io/catdogbark/mine:1.0@sha256:#{'a' * 64}\nrun_as: app\nports:\n  - { host: 9925, container: 9000 }\n" \
+                'web_port: 9925'
+
   # The operations with arguments: a request that's accepted, and what each argument may hold
   # beyond it.
   requests = {
@@ -114,6 +119,10 @@ RSpec.describe 'AmahiHelper: the checks on every argument' do
     'apps.undo_update' => { good: { 'app' => 'gitea', 'shares' => [{ 'name' => 'vault', 'folder' => 'media', 'write' => true }] }, may_hold: { 'shares' => shares_may_hold } },
     'apps.uninstall' => { good: { 'app' => 'gitea', 'delete_data' => true } },
     'apps.logs' => { good: { 'app' => 'gitea', 'lines' => 150 } },
+    # An app file is YAML: a blank line before or after it reads the same.
+    'apps.custom_check' => { good: { 'app' => 'mine', 'manifest' => custom_file }, may_hold: { 'manifest' => blank_lines } },
+    'apps.custom_save' => { good: { 'app' => 'mine', 'manifest' => custom_file }, may_hold: { 'manifest' => blank_lines } },
+    'apps.custom_remove' => { good: { 'app' => 'mine' } },
 
     'services.start' => { good: { 'service' => 'smbd' } },
     'services.stop' => { good: { 'service' => 'smbd' } },
@@ -188,7 +197,8 @@ RSpec.describe 'AmahiHelper: the checks on every argument' do
 
   before(:all) do
     Privileged.operations # loads the helper's source once
-    FileUtils.mkdir_p(["#{files}/vault/media", "#{mnt}/storage-1/.gh_trash/Photos", "#{fake}/definitions"])
+    FileUtils.mkdir_p(["#{files}/vault/media", "#{mnt}/storage-1/.gh_trash/Photos", "#{fake}/definitions", "#{fake}/custom-apps"])
+    File.write("#{fake}/custom-apps/mine.yml", 'name: Mine')
     File.write("#{mnt}/storage-1/.gh_trash/Photos/a.jpg", 'x')
   end
 
@@ -207,6 +217,9 @@ RSpec.describe 'AmahiHelper: the checks on every argument' do
     stub_const('AmahiHelper::APP_DEFINITIONS', "#{fake}/definitions")
     stub_const('AmahiHelper::APP_CATALOG', "#{fake}/catalog")
     stub_const('AmahiHelper::APP_MANIFESTS', Rails.root.join('config/apps').to_s)
+    # mine: an app of your own, not installed (no container), its data gone
+    stub_const('AmahiHelper::APP_CUSTOM', "#{fake}/custom-apps")
+    stub_const('AmahiHelper::APPS_ROOT', "#{fake}/apps")
     File.write("#{fake}/fstab", "UUID=os / ext4 defaults 0 1\n")
 
     allow(helper).to receive(:installed!).and_return(true)
@@ -275,6 +288,7 @@ RSpec.describe 'AmahiHelper: the checks on every argument' do
 
     allow(helper).to receive(:app_job_running?).and_return(false)
     allow(helper).to receive(:docker_output).and_return('id')
+    allow(helper).to receive(:docker_output).with('inspect', '--type', 'container', '--format', '{{.Id}}', 'amahi-mine').and_return(nil)
     allow(helper).to receive(:engine_running!).and_return(true)
     allow(helper).to receive(:tailscale_https_name).and_return('nas.tail1234.ts.net')
     allow(helper).to receive(:app_backup_info).and_return(nil)

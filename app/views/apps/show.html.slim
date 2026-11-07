@@ -29,6 +29,12 @@
 - sign_in = entry[:sign_in]
 - missing = app.missing_folders
 - versioned = %w[running stopped].include?(status)
+/ An app of your own (CustomAppsController): Edit, Check for a newer version, and its changes saved
+/ but not in its container yet (Apply them); apply=1 after a save runs the update by itself.
+- custom = entry[:custom] == true
+- waiting = custom && versioned && !app.update_available? && app.changes_waiting?
+- newer = flash[:custom_version] if custom
+- apply_now = custom && versioned && params[:apply].present? && (app.update_available? || waiting)
 
 p.kai-apps-back
   a href=apps_index_path
@@ -45,6 +51,8 @@ section.kai-app-panel.kai-app-hero id="docker_app_#{identifier}" aria-label=name
           span.kai-pill.kai-pill-outline = app.category.capitalize
         - if app.tailscale_only?
           span.kai-pill.kai-pill-outline Tailscale only
+        - if custom
+          span.kai-pill.kai-pill-amber Custom
     .kai-app-hero-actions
       - case status
       - when 'running'
@@ -60,6 +68,10 @@ section.kai-app-panel.kai-app-hero id="docker_app_#{identifier}" aria-label=name
       - when 'error'
         button.btn.btn-primary type="button" data=share_dialog.merge('verb' => 'Install again') Install again
   p.kai-app-hero-text = app.description.presence || t('no_description_supplied')
+  - if custom
+    p.kai-notice.kai-notice-warn id="app-custom-#{identifier}"
+      | Added by you. It isn't from the Amahi-kai catalog: nobody checks its new versions for you, and it
+        changes only when you change it.
   - if status == 'error' && app.error_message.present?
     p.kai-notice.kai-notice-alert id="app-error-#{identifier}" = app.error_message
   / A folder it was given that's gone (renamed or moved): it can't start until it's given its folders again
@@ -114,6 +126,16 @@ section.kai-app-panel.kai-app-hero id="docker_app_#{identifier}" aria-label=name
         dd
           code = data_path
 
+    - if custom
+      section.kai-app-panel.kai-app-panel-custom aria-labelledby="app-custom-head"
+        h2#app-custom-head Change it
+        p.kai-app-panel-text
+          | Edit opens what you described, filled in. Saving asks for your password, then updates it: its
+            data is copied first, and it goes back if it doesn't come up.
+        a.btn.btn-outline-secondary id="app-edit-#{identifier}" href=custom_apps_edit_path(identifier)
+          = lucide_icon('pencil', size: 15)
+          |  Edit
+
   .kai-app-column
     section.kai-app-panel.kai-app-panel-details aria-labelledby="app-details-head"
       h2#app-details-head Details
@@ -145,9 +167,38 @@ section.kai-app-panel.kai-app-hero id="docker_app_#{identifier}" aria-label=name
               - releases = AppCatalog.releases_url(identifier, entry[:image])
               - if releases
                 a.ms-2 href=releases target="_blank" rel="noopener" What's new
+            - if waiting
+              span.text-warning.ms-2 Your changes aren't in it yet:
+              button.btn.btn-link.p-0.ms-1.align-baseline.fw-semibold type="button" style="font-size: inherit" data-app-stream=identifier data-url=apps_docker_update_stream_path(identifier) data-title="Updating #{name} to your changes..." data-confirm="Update #{name} to your changes? It stops for a minute or two. A copy of its data is kept for #{AppCatalog::BACKUP_DAYS} days, and if it doesn't come up, #{name} goes back by itself." Apply them
+            - if apply_now
+              span hidden=true data-auto-open="" data-app-stream=identifier data-url=apps_docker_update_stream_path(identifier) data-title="Updating #{name}..."
             - if backup
               button.btn.btn-link.p-0.ms-2.align-baseline type="button" style="font-size: inherit" data-app-stream=identifier data-url=apps_docker_undo_update_stream_path(identifier) data-title="Undoing #{name}'s update..." data-confirm="Undo the update? #{name} goes back to #{AppCatalog.tag(backup[:from])} with its data from #{time_ago_in_words(backup[:taken_at])} ago. Anything changed in #{name} since then is lost#{backup[:snapshot] ? ", and so are the ZFS pool's own snapshots of its data taken since" : ''}." Undo update
               span.text-secondary.ms-1 = safe_join(['(until ', local_time_tag(backup[:until], 'month-day'), ')'])
+      / Check for a newer version (CustomAppsController#check_version): asked of its image's registry,
+      / only when you ask
+      - if custom && versioned
+        .kai-app-panel-note.kai-custom-version id="app-newer-#{identifier}"
+          - if newer && newer['kind'] != 'current'
+            - tag = newer['tag']
+            p.kai-custom-newer
+              - if newer['kind'] == 'rebuilt'
+                = "A newer build of #{tag} is out, from the same image."
+              - else
+                = "#{tag} is out, from the same image#{newer['major'] ? ': a new major version, so read what changed first' : ''}."
+              br
+              | Its data is copied first, so you can undo it for #{AppCatalog::BACKUP_DAYS} days.
+            = form_tag custom_apps_version_path(identifier), class: 'd-inline' do
+              input type="hidden" name="tag" value=tag
+              button.btn.btn-primary.btn-sm type="submit" data-disable-with="Saving…" = newer['kind'] == 'rebuilt' ? 'Update to the newer build' : "Update to #{tag}"
+          - else
+            - if newer
+              p.kai-custom-newer = "#{app.version} is its newest version."
+            = form_tag custom_apps_check_path(identifier), class: 'd-inline' do
+              button.btn.btn-outline-primary.btn-sm type="submit" data-disable-with="Asking its registry…"
+                = lucide_icon('refresh-cw', size: 14)
+                |  Check for a newer version
+            p.mb-0.mt-2 Amahi-kai looks only when you ask, and only at the image it came from. It never updates an app of your own by itself.
       - if entry[:access] == 'tailscale'
         .kai-app-panel-note id="app-tailscale-#{identifier}"
           - if !tailnet

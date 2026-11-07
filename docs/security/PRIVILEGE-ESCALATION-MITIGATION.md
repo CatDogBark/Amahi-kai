@@ -193,6 +193,16 @@ checked the same way, before Docker starts; one that's gone isn't mounted, so it
 rather than starting without it. Folder names are refused with `..`, a comma, a quote or a control
 character. System Update makes an app container from before this again once (`apps.follow_shares`).
 
+An app of the owner's own (`custom.rb`) is a manifest the web app hands the helper
+(`apps.custom_save`), kept as `/var/lib/amahi-kai/custom-apps/<id>.yml`, root's. It gets every check
+above, and the helper installs and runs it exactly as the catalog's: what a manifest can't ask
+for, it can't either. Its id must be new to the NAS (not the catalog's, and no container, data,
+definition, secrets, storage or `app-<id>` user from an app before), so it can't take over another
+app's folders, secrets or user, and one that starts as root keeps its folders off ZFS pools. The
+web app asks for the owner's password again before it saves one, and the image is pinned by
+digest from the registry the owner named (`AppVersions`, https only, never the NAS itself or a
+link-local address). Nobody reviews its image.
+
 Updates (`apps.update`) run the version the catalog pins; the web app names the app. The helper
 copies the app's folders (`cp -a`) into a root-only folder first, and puts them back
 (`apps.undo_update`, or by itself when the new version isn't healthy) only from that copy, by
@@ -224,6 +234,12 @@ refuses that release.
 ## Known gaps
 
 - **Docker itself** runs as root: an app's container is as contained as Docker makes it.
+- **The web app can add an app of its own choosing.** The password asked before an app of your
+  own is saved is the web app's check, so something running as the web app's user could save one
+  without it, and install it: any image, boxed in as above, with what it's given (its folders,
+  the shares chosen, the internet). Before apps of your own, it could install only the catalog's.
+  It still gets nothing past the box: no other app's data, no host folder, no capability Docker
+  wouldn't give.
 - **The app catalog isn't signed.** It's fetched from GitHub over HTTPS, and its manifests are
   checked as above, but whoever can change the catalog's repository decides which image an
   install or an update runs, within what those checks allow.

@@ -11,6 +11,8 @@ article.kai-app-card id="docker_app_#{app.identifier}"
         = render 'app_status', app: app
         - if app.tailscale_only?
           span.kai-pill.kai-pill-outline Tailscale only
+        - if entry[:custom]
+          span.kai-pill.kai-pill-amber Custom
         - if app.update_available? && entry[:installable] != false
           span.kai-pill.kai-pill-amber Update ready
         - if app.missing_folders.any?
