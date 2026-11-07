@@ -26,6 +26,15 @@ RSpec.describe 'Apps of your own', type: :system do
     AppCatalog.reload!
   end
 
+  # As production checks them: each form's token is for its own address, so a button that sends
+  # another form's fields elsewhere is refused (Back did, found on the test VM)
+  around do |example|
+    ActionController::Base.allow_forgery_protection = true
+    example.run
+  ensure
+    ActionController::Base.allow_forgery_protection = false
+  end
+
   it 'describes an app, reviews it, and adds it with your password' do
     sign_in_as_admin
     visit '/apps'
@@ -63,6 +72,12 @@ RSpec.describe 'Apps of your own', type: :system do
     expect(page).to have_text('What it will be able to do')
     expect(page).to have_text('As its own user, with no kernel permissions')
     expect(page).to have_text("It isn't from the Amahi-kai catalog")
+    # Back to the form, as it was described, and on to the review again
+    click_button 'Back to describing it'
+    expect(page).to have_field('Name', with: 'Mealie')
+    expect(page).to have_field('Setting', with: 'ALLOW_SIGNUP')
+    click_button 'Review'
+    expect(page).to have_text('What it will be able to do')
     fill_in 'Your password, to add an app of your own', with: User::SEED_ADMIN_PASSWORD
     click_button 'Add it'
 

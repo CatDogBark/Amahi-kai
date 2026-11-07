@@ -6,9 +6,15 @@
 - repo_tag, digest = app.image_parts
 - errors = app.errors
 
-/ Back sends the file back to the form (CustomAppsController#review with back), as it was described
+/ Back sends the file back to the form (CustomAppsController#review with back), as it was described:
+/ a form of its own, as a form's token is for its own address (per-form CSRF tokens)
+= form_tag custom_apps_review_path, id: 'custom-app-back' do
+  input type="hidden" name="back" value="1"
+  input type="hidden" name="source" value="file"
+  input type="hidden" name="editing" value=editing
+  input type="hidden" name="manifest" value=app.text
 p.kai-apps-back
-  button.btn.btn-link.p-0.kai-custom-back type="submit" form="custom-app-confirm" formaction=custom_apps_review_path formnovalidate=true name="back" value="1" data-busy="false"
+  button.btn.btn-link.p-0.kai-custom-back type="submit" form="custom-app-back"
     = lucide_icon('chevron-left', size: 16)
     | Back to describing it
 
@@ -52,8 +58,6 @@ p.kai-apps-back
     h2#custom-confirm-head = editing ? 'Save the changes' : 'Add it'
     = form_tag (editing ? custom_apps_save_path(editing) : custom_apps_create_path), id: 'custom-app-confirm' do
       input type="hidden" name="id" value=app.id
-      input type="hidden" name="editing" value=editing
-      input type="hidden" name="source" value="file"
       input type="hidden" name="manifest" value=app.text
       .kai-custom-field.kai-custom-narrow
         label.form-label for="custom-password" = editing ? 'Your password, to change an app of your own' : 'Your password, to add an app of your own'
@@ -67,5 +71,5 @@ p.kai-apps-back
         - else
           |  Install then asks which shares to give it, if any, and opens the install window.
       .kai-custom-actions
-        button.btn.btn-outline-secondary type="submit" formaction=custom_apps_review_path formnovalidate=true name="back" value="1" data-busy="false" Back
+        button.btn.btn-outline-secondary type="submit" form="custom-app-back" Back
         button.btn.btn-primary type="submit" data-disable-with="Saving…" = editing ? 'Save and update' : 'Add it'
