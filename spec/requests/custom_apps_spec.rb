@@ -326,6 +326,15 @@ describe 'Apps of your own', type: :request do
       expect(DockerApp.find_by(identifier: 'mealie').port_summary).to eq('9925 (web) · 8554 (RTSP)')
     end
 
+    it 'says "web" for its web page\'s port, in place of a label, and a label is optional' do
+      get '/apps/custom/mealie/edit'
+      row = Nokogiri::HTML(response.body).at_css('[data-custom-rows="ports"] [data-custom-row]')
+      expect(row.at_css('[data-custom-port-label]')).to have_attributes(attributes: include('hidden'))
+      expect(row.at_css('[data-custom-port-label]')['placeholder']).to eq('Optional')
+      expect(row.at_css('[data-custom-port-web]').attributes).not_to include('hidden')
+      expect(row.at_css('[data-custom-port-web]').text).to eq('web')
+    end
+
     it 'opens Edit on the form, filled in, or on its file when it says more than the form shows' do
       get '/apps/custom/mealie/edit'
       expect(response.body).to include('Edit Mealie', 'value="Mealie"', 'value="SECRET_KEY"', 'name="editing" type="hidden" value="mealie"',

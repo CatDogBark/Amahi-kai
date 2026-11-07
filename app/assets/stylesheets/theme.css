@@ -1446,6 +1446,8 @@ table.settings tbody tr { border-bottom-color: var(--kai-line); }
 .kai-custom-row-folder, .kai-custom-row-secret { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; }
 .kai-custom-row-setting { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto; }
 .kai-custom-row-setting:has([data-custom-value][hidden]) { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; }
+.kai-custom-port-web { display: flex; align-items: center; min-height: 38px; padding: 0 12px; color: var(--kai-muted); }
+.kai-custom-port-web[hidden] { display: none; }
 .kai-custom-web { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; margin: 0; white-space: nowrap; }
 .kai-custom-remove { min-width: 38px; min-height: 38px; display: inline-flex; align-items: center; justify-content: center; }
 .kai-custom-buttons { display: flex; flex-wrap: wrap; gap: 8px; }

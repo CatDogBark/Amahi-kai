@@ -4,6 +4,14 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.8.3] — 2026-11-07
+
+A port's label box on the form for an app of your own reads as empty when it is, and the web page's port says "web".
+
+### 🔒 Security & Fixes
+
+- **A port's label box says it's optional** — Each port's "Its page calls it" box showed RTSP as its example, in grey, so an empty box looked filled in. Now an empty one says Optional, and the port marked as the app's web page shows "web" in place of the box, since its page always calls it that (a label it had is kept).
+
 ## [1.8.2] — 2026-11-07
 
 Apps whose images their owners keep private can run, with a token the server keeps; Edit keeps a port's label.
