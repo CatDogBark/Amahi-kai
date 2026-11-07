@@ -112,7 +112,7 @@ RSpec.describe AppVersions do
     ok = Net::HTTPOK.new('1.1', '200', '')
     ok.instance_variable_set(:@body, '{"token":"t"}')
     ok.instance_variable_set(:@read, true)
-    allow(hub).to receive(:answer) { |url, **| url.include?('auth.docker.io') ? ok : Net::HTTPUnauthorized.new('1.1', '401', '') }
+    allow(hub).to receive(:answer) { |url, **| URI(url).host == 'auth.docker.io' ? ok : Net::HTTPUnauthorized.new('1.1', '401', '') }
     expect { hub.digest('me/app', '1') }.to raise_error(AppVersions::Private) { |e| expect(e.place).to eq('docker.io/me') }
   end
 
