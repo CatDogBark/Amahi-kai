@@ -254,8 +254,9 @@ module AmahiHelper
 
   # The catalog has a repo of its own (docs/plans/apps.md), so app versions don't wait for an
   # Amahi-kai update. The update check (system.check_update, every 6 hours and on Check now)
-  # fetches its main branch too, over https only, into CATALOG_SRC (a bare repo, root's), and keeps
-  # the manifests that pass every check below in APP_CATALOG/apps, which comes first;
+  # fetches its newest signed version too (CATALOG_TAG: a catalog-N tag signed with a release key,
+  # never one lower than the catalog's), over https only, into CATALOG_SRC (a bare repo, root's),
+  # and keeps the manifests that pass every check below in APP_CATALOG/apps, which comes first;
   # APP_MANIFESTS, the copy in the code, is the fallback (before the first fetch, and for an app
   # the catalog no longer lists). A manifest's `requires` is the catalog format it needs: one
   # above CATALOG_FORMAT is listed but can't be installed until System Update brings an
@@ -266,6 +267,10 @@ module AmahiHelper
   CATALOG_REPO = 'https://github.com/CatDogBark/amahi-kai-apps.git'
 
   CATALOG_SRC = '/var/lib/amahi-kai/catalog-src'
+
+  # A signed version of the catalog: the tag refs/tags/catalog-N (N from 1, no leading zero), made
+  # with `git tag -s` and a release key on a commit of its main branch (the catalog's README).
+  CATALOG_TAG = %r{\Arefs/tags/catalog-([1-9][0-9]{0,5})\z}
 
   APP_CATALOG = '/var/lib/amahi-kai/catalog'
 

@@ -101,9 +101,15 @@ P4.1 put it in.
 
 The web app only names an app (`apps.install`, `app: "jellyfin"`). The helper reads the app's
 manifest from the app catalog, [CatDogBark/amahi-kai-apps](https://github.com/CatDogBark/amahi-kai-apps):
-the update check fetches it as root over HTTPS into a bare repository (`/var/lib/amahi-kai/catalog-src`),
-and keeps only the manifests that pass every check below (`/var/lib/amahi-kai/catalog`); the copy
-in the code (`config/apps`) is the fallback. It checks every field: an image pinned by tag and
+the update check fetches its newest signed version as root over HTTPS into a bare repository
+(`/var/lib/amahi-kai/catalog-src`), and keeps only the manifests that pass every check below
+(`/var/lib/amahi-kai/catalog`); the copy in the code (`config/apps`) is the fallback. A version is
+a `catalog-N` tag signed with a release key, checked as a release's tag is (Release keys, below):
+an SSH signature by a key in `/etc/amahi-kai/allowed_signers`, and the tag naming itself. The
+highest N is taken, never one lower than the version the server has, and `main` is never
+fetched, so whoever controls the catalog's repository can neither offer manifests nobody signed
+nor take a server back to an older version's images. A version that fails any of this leaves the
+catalog as it was. It checks every field: an image pinned by tag and
 digest, published ports from 1024 up and none of the NAS's own, folders only under the app's own
 folder (plain names, never where shares go), environment values on one line, and no
 `DOCKER_MODS` (it makes an image download more code at start). There is no field for privileged
@@ -240,9 +246,6 @@ refuses that release.
   the shares chosen, the internet). Before apps of your own, it could install only the catalog's.
   It still gets nothing past the box: no other app's data, no host folder, no capability Docker
   wouldn't give.
-- **The app catalog isn't signed.** It's fetched from GitHub over HTTPS, and its manifests are
-  checked as above, but whoever can change the catalog's repository decides which image an
-  install or an update runs, within what those checks allow.
 - **The `development` channel and a new install aren't checked.** `development` follows the `dev`
   branch, which has no signed tags, so whoever controls the repository controls what a server on
   that channel installs, as root; switching back to `releases` doesn't undo what it installed. So

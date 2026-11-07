@@ -83,10 +83,10 @@ Decided with CatDogBark along the way; when each is built is CatDogBark's call.
 Releases are signed since 1.5.1, and a server refuses one that isn't since the version after it:
 two release keys (SSH, kept apart), their public halves in `config/allowed_signers`, checked by the
 root helper before System Update installs anything (`docs/security/PRIVILEGE-ESCALATION-MITIGATION.md`,
-Release keys). Still to do: **the app catalog**, which is fetched and checked but not signed. It's
-fetched apart from System Update and stays that way, so an app's change never updates the server
-itself; how it's signed may change with how apps are served (CatDogBark's call). The first design
-is in [`release-1.0.md`](release-1.0.md) §3.
+Release keys). **The app catalog is signed too, since 1.8.0**: its versions are `catalog-N` tags
+signed with the same keys, and a server takes only the newest signed one, never going back
+(`docs/plans/apps.md`, P4.8). It's still fetched apart from System Update, so an app's change never
+updates the server itself.
 
 ### Backups
 

@@ -149,7 +149,9 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
   optional front door, with plain HTTP staying fully working (CatDogBark, 2026-10-06; roadmap), and it
   depends on this.
 - **App versions and new apps are PRs on the catalog's repo** (`amahi-kai-apps`), not here:
-  `script/app-versions --catalog ../amahi-kai-apps/apps --update <app>`. `config/apps` is only the
+  `script/app-versions --catalog ../amahi-kai-apps/apps --update <app>`. Servers fetch only its
+  signed `catalog-N` tags (the maintainer signs the next one after merging; its README says how),
+  never `main`. `config/apps` is only the
   copy that comes with Amahi-kai (`config/apps/README.md`); the wiki's `site/wiki/making-apps.md`
   is the guide to making one.
 - `lib/system_services.rb` is the one list of system services (dashboard, System Status and

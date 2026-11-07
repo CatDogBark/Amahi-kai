@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+### 🔒 Security & Fixes
+
+- **The app catalog is signed** — A server fetched the catalog's main branch, so whoever could change the catalog's repository on GitHub decided which image an install or an update ran. Now the catalog's versions are signed with the same release keys as Amahi-kai's own releases, and a server takes only the newest signed one, never an older one than it has: anything else is refused, and it keeps the catalog it has. The Apps page names the version and the key that signed it.
+
 ## [1.7.0] — 2026-11-06
 
 Apps of your own: an app that isn't in the catalog can run on your server, boxed in the same way as the catalog's, after a review of what it will be able to do and your password.
