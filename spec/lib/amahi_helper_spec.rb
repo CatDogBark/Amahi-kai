@@ -1957,6 +1957,34 @@ RSpec.describe 'AmahiHelper' do
       expect(ran).not_to include('/usr/sbin/ufw delete deny in on ens20', '/usr/sbin/ufw route delete allow in on ens19 out on ens20')
     end
 
+    # The boot waited two minutes for the provider after a power cut (the modem came up after the
+    # NAS), and Samba and the apps with it: the internet side is optional for the boot now.
+    it "doesn't keep the boot waiting for the internet side, and moves a file of before to it without an apply" do
+      helper.do_router_on('ens19', 'ens20', [])
+      expect(File.read(AmahiHelper::WAN_NETPLAN)).to include("    ens20:\n      dhcp4: true\n      dhcp6: false\n      accept-ra: false\n      optional: true\n")
+      expect(YAML.safe_load(File.read(AmahiHelper::WAN_NETPLAN)).dig('network', 'ethernets', 'ens20', 'optional')).to be true
+
+      # As 1.6.1 and earlier wrote it, and applied: an apply would take the provider's address again
+      File.write(AmahiHelper::WAN_NETPLAN, helper.wan_netplan('ens20', optional: false))
+      helper.netplan_mark_applied
+      ran.clear
+      helper.do_router_on('ens19', 'ens20', [])
+      expect(ran.grep(/netplan/)).to eq(["#{AmahiHelper::NETPLAN} generate"])
+      expect(File.read(AmahiHelper::WAN_NETPLAN)).to eq(helper.wan_netplan('ens20'))
+      expect(helper.netplan_applied?).to be true
+
+      # Something else changed too: applied, as any change is
+      File.write(AmahiHelper::WAN_NETPLAN, helper.wan_netplan('ens20', optional: false))
+      File.write("#{dir}/netplan/60-island.yaml", "network:\n  version: 2\n")
+      ran.clear
+      helper.do_router_on('ens19', 'ens20', [])
+      expect(ran.grep(/netplan/)).to eq(["#{AmahiHelper::NETPLAN} generate", "#{AmahiHelper::NETPLAN} apply"])
+    end
+
+    it "gives the router's rules a new version, so an update's resync moves a router of before" do
+      expect(AmahiHelper::ROUTER_RULES_VERSION).to eq(5)
+    end
+
     # An apply has networkd set up every interface it manages again: the internet side asks the
     # provider for its lease again, and the NAS's own IPv6 address for DNS (made by its unit, not
     # networkd) goes.

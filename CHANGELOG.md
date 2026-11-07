@@ -4,6 +4,19 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.6.2] — 2026-11-06
+
+The apps, hardened: each on a network of its own, reaching out only as far as it says, kept off the server's own services and from taking all of its processors; Docker updated with the automatic security updates; and a router's boot no longer waits for the internet. **Each app restarts once at this update**, as it moves to its own network.
+
+### 🔒 Security & Fixes
+
+- **Each app on a network of its own, reaching out only as far as it says** — The apps shared one network, so an app could reach any other app directly (Vaultwarden's own server, say) and every device on the LAN. Now each app has a network of its own: no app reaches another, and an app reaches the internet only, unless its manifest asks for the devices on the LAN too (Uptime Kuma and bitStream do: the Apps page says so on an app's card and its page) or for nothing at all. The update moves each installed app to its own network, so **each app restarts once**, keeping its version, its data and its shares.
+- **Apps can't reach the server's own services** — An app could connect to the server's SSH, its admin page and Samba, as anything on the LAN can. Now an app reaches the server only to look names up (its DNS) and to ping it; everything else is refused at once. An app still gets its files through the shares it's given, and reaches the internet and the LAN as before.
+- **Docker is updated with the automatic security updates** — Docker comes from Docker's own repository, which Ubuntu's automatic updates passed over, so a fix to Docker reached a server only when someone updated it by hand. While automatic updates are on (Settings → System Dependencies), Docker's packages come with them now. Docker restarts for such an update, and each running app with it, once.
+- **An app can't take all of the server's processors** — Each app may use all of them but one, so file sharing, the admin page and the database always have one, however busy an app gets. Apps installed before get the same at the update, in place, without restarting.
+- **Undo removes the version the update brought** — It stayed on the system disk, run by nothing. And an uninstalled app leaves no empty folder of its own behind among the share mounts.
+- **A router's boot no longer waits for the internet** — In router mode the boot waited for the internet side to get its address from the provider, and file sharing and the apps waited with it: after a power cut, a modem slower than the server held them back two minutes, and a provider that's down would at every restart. The internet side is optional for the boot now; the LAN's services start once the LAN is up, and the tunnel and the update check go on trying until the internet is there. A router set up before takes this at the update without its connection being touched.
+
 ## [1.6.1] — 2026-11-06
 
 Security updates for Rails and the HTML sanitizers, and every command Amahi-kai gives Docker now in one place, the ground for tightening what apps can reach and do.

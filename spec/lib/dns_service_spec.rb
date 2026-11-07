@@ -51,10 +51,11 @@ RSpec.describe DnsService do
       end
     end
 
-    it "listens on Docker's bridge while Docker runs, and answers the apps' containers there" do
+    it "listens on Docker's bridge while Docker runs, and answers the apps' containers there, on their own networks too" do
+      expect(lines).not_to include('access-control: 172.30.0.0/16 allow') # no Docker, no apps
       bridge = NetworkInterfaces::Address.new(ip: IPAddr.new('172.17.0.1'), prefix: 16)
       allow(NetworkInterfaces).to receive(:addresses).with('docker0').and_return([bridge])
-      expect(lines).to include('interface: 172.17.0.1', 'access-control: 172.17.0.0/16 allow')
+      expect(lines).to include('interface: 172.17.0.1', 'access-control: 172.17.0.0/16 allow', 'access-control: 172.30.0.0/16 allow')
       Privileged.operations # loads libexec/amahi-helper
       expect { AmahiHelper.unbound_conf(described_class.config) }.not_to raise_error
     end

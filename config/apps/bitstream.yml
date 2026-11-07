@@ -8,6 +8,8 @@ image: ghcr.io/catdogbark/bitstream:0.2.0@sha256:119d3af90edde92fa5d85db52a0175d
 # (HLS) and other players. Cameras are reached by their names on Network → Devices, through the
 # NAS's DNS. One password, made here, for its pages, its API and its RTSP.
 run_as: app
+# Its cameras are on the LAN.
+network: lan
 web_port: 1984
 memory: 512m
 ports:

@@ -43,6 +43,13 @@ RSpec.describe 'AmahiHelper apps' do
     # Containers get Docker's own DNS unless a test says the NAS's answers on the bridge: CI's
     # runner has a Docker bridge, a laptop may not
     allow(helper).to receive(:app_dns).and_return({})
+    # The processors an app gets follow the machine's (app_cpus): runners and laptops differ
+    allow(helper).to receive(:app_cpus).and_return(3)
+    # Each app's own network: recorded here, chosen from no addresses of the machine's, and made
+    # by nothing (Docker isn't run); their own specs below
+    stub_const('AmahiHelper::APP_NETWORKS', "#{dir}/app-networks.json")
+    allow(helper).to receive(:app_networks_in_use).and_return([])
+    allow(helper).to receive(:engine_network_ensure)
     # A share's folder is on ext4 unless a test puts it on ZFS, whatever the runner's /tmp is
     allow(helper).to receive(:capture).and_call_original
     allow(helper).to receive(:capture).with(['/usr/bin/findmnt', '-n', '-o', 'FSTYPE', '-T', anything]).and_return("ext4\n")
@@ -302,18 +309,18 @@ RSpec.describe 'AmahiHelper apps' do
       expect(refusal('apps.logs', { 'app' => '../etc', 'lines' => 150 })).to include("isn't one Amahi-kai knows")
       expect(refusal('apps.logs', { 'app' => 'gitea', 'lines' => 9999 })).to include('whole number from 1 to 500')
 
-      allow(helper).to receive(:docker_output).with('inspect', '--format', '{{.Id}}', 'amahi-gitea').and_return("abc\n")
+      allow(helper).to receive(:docker_output).with('inspect', '--type', 'container', '--format', '{{.Id}}', 'amahi-gitea').and_return("abc\n")
       allow(Open3).to receive(:capture2e).and_return(["2026-10-29T03:41:07Z one\n2026-10-29T03:41:08Z two\n", instance_double(Process::Status, success?: true)])
       expect(helper.do_app_logs('gitea', 150)).to eq('lines' => ['2026-10-29T03:41:07Z one', '2026-10-29T03:41:08Z two'])
       expect(Open3).to have_received(:capture2e).with(anything, %w[/usr/bin/docker /usr/bin/docker], 'logs', '--tail', '150', '--timestamps',
                                                       'amahi-gitea', unsetenv_others: true, chdir: '/')
 
-      allow(helper).to receive(:docker_output).with('inspect', '--format', '{{.Id}}', 'amahi-gitea').and_return(nil)
+      allow(helper).to receive(:docker_output).with('inspect', '--type', 'container', '--format', '{{.Id}}', 'amahi-gitea').and_return(nil)
       expect(helper.do_app_logs('gitea', 150)).to eq('lines' => [], 'missing' => true)
     end
 
     it 'starts, stops and restarts only the app container' do
-      allow(helper).to receive(:docker_output).with('inspect', '--format', '{{.Id}}', 'amahi-gitea').and_return("abc\n")
+      allow(helper).to receive(:docker_output).with('inspect', '--type', 'container', '--format', '{{.Id}}', 'amahi-gitea').and_return("abc\n")
       expect(steps('apps.start', { 'app' => 'gitea' })).to eq([%w[/usr/bin/docker start amahi-gitea]])
       expect(steps('apps.stop', { 'app' => 'gitea' })).to eq([%w[/usr/bin/docker stop --time 30 amahi-gitea]])
       expect(steps('apps.restart', { 'app' => 'gitea' })).to eq([%w[/usr/bin/docker restart --time 30 amahi-gitea]])
@@ -321,11 +328,11 @@ RSpec.describe 'AmahiHelper apps' do
 
     # The catalog moved on or dropped the app: it was stuck until System Update.
     it 'starts, stops and uninstalls an app by its container, whatever the catalog says, and not while a job changes it' do
-      allow(helper).to receive(:docker_output).with('inspect', '--format', '{{.Id}}', 'amahi-gone').and_return("abc\n")
+      allow(helper).to receive(:docker_output).with('inspect', '--type', 'container', '--format', '{{.Id}}', 'amahi-gone').and_return("abc\n")
       allow(helper).to receive(:docker_output).with('info', '--format', '{{.ServerVersion}}').and_return("27.3.1\n")
       expect(steps('apps.stop', { 'app' => 'gone' })).to eq([%w[/usr/bin/docker stop --time 30 amahi-gone]])
       expect(steps('apps.uninstall', { 'app' => 'gone' })).to eq([[:uninstall_app, 'gone', false], [:announce_apps]])
-      allow(helper).to receive(:docker_output).with('inspect', '--format', '{{.Id}}', 'amahi-gone').and_return(nil)
+      allow(helper).to receive(:docker_output).with('inspect', '--type', 'container', '--format', '{{.Id}}', 'amahi-gone').and_return(nil)
       expect(refusal('apps.start', { 'app' => 'gone' })).to eq('gone has no container: install it again')
       allow(helper).to receive(:app_job_running?).with('gitea').and_return(true)
       expect(refusal('apps.restart', { 'app' => 'gitea' })).to eq("gitea is being changed (an install, update or uninstall runs): try again when it's done")
@@ -377,6 +384,16 @@ RSpec.describe 'AmahiHelper apps' do
       expect(helper.app_manifest('test')).to include(memory: '1g', run_as: 'app',
                                                      ports: [{ host: 8500, container: 80, protocol: 'tcp' }],
                                                      secrets: ['TOKEN'])
+    end
+
+    it 'takes what the app reaches out to: the internet, the LAN too, or nothing; left out, it says nothing' do
+      expect(helper.app_manifest('vaultwarden')[:network]).to be_nil
+      %w[internet lan none].each do |network|
+        expect(failure('network' => network)).to be_nil
+        expect(helper.app_manifest('test')[:network]).to eq(network)
+      end
+      expect(failure('network' => 'host')).to include('network must be one of internet, lan, none')
+      expect(failure('network' => true)).to include('network must be one of')
     end
 
     # ping goes into a --mount like a folder's path, so it's held to the same plain names
@@ -621,7 +638,8 @@ RSpec.describe 'AmahiHelper apps' do
       expect(create).to eq(['/usr/bin/docker', 'create', '--name', 'amahi-vaultwarden-next', '--restart', 'unless-stopped',
                             '--security-opt', 'no-new-privileges', '--cap-drop', 'NET_RAW', '--cap-drop', 'MKNOD',
                             '--pids-limit', '2048', '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3',
-                            '--memory', '512m', '--label', 'amahi.app=vaultwarden', '--env-file', env_files.sole[0],
+                            '--memory', '512m', '--cpus', '3', '--label', 'amahi.app=vaultwarden', '--network', 'amahi-vaultwarden',
+                            '--env-file', env_files.sole[0],
                             '--user', '996:996', '--publish', '127.0.0.1:8880:8080/tcp',
                             '--mount', "type=bind,source=#{apps_root}/vaultwarden/data,target=/data", manifest[:image]])
       expect(ran[-3]).to eq(%w[/usr/bin/docker rename amahi-vaultwarden-next amahi-vaultwarden])
@@ -641,7 +659,7 @@ RSpec.describe 'AmahiHelper apps' do
       allow(helper).to receive(:app_dns).and_return({ servers: ['172.17.0.1'], search: ['home.arpa'] })
       helper.do_install_app('vaultwarden', helper.app_manifest('vaultwarden'))
       create = ran.find { |argv| argv[1] == 'create' }
-      expect(create.each_cons(6).to_a).to include(['--label', 'amahi.app=vaultwarden', '--dns', '172.17.0.1', '--dns-search', 'home.arpa'])
+      expect(create.each_cons(8).to_a).to include(['--label', 'amahi.app=vaultwarden', '--network', 'amahi-vaultwarden', '--dns', '172.17.0.1', '--dns-search', 'home.arpa'])
     end
 
     it 'fills in a secret inside a value, under the name the app spells (format 4), and keeps it out of the definition' do
@@ -871,6 +889,7 @@ RSpec.describe 'AmahiHelper apps' do
       it 'removes the container and the image its definition names, and keeps the data and the definition' do
         expect(helper.do_uninstall_app('gitea', false)).to eq('app' => 'gitea', 'data_kept' => true)
         expect(ran).to eq([['/usr/bin/docker', 'rm', '--force', 'amahi-gitea', { allow_failure: true }],
+                           ['/usr/bin/docker', 'network', 'rm', 'amahi-gitea', { allow_failure: true }],
                            ['/usr/bin/docker', 'image', 'rm', image, { allow_failure: true }]])
         expect(File.directory?("#{apps_root}/gitea/data")).to be true
         expect(File.exist?("#{dir}/app-definitions/gitea.json")).to be true # installed again, it runs this version
@@ -893,7 +912,7 @@ RSpec.describe 'AmahiHelper apps' do
       end
 
       it "stops when Docker didn't remove the container, before anything else goes" do
-        allow(helper).to receive(:docker_output).with('inspect', '--format', '{{.Id}}', 'amahi-gitea').and_return("abc\n")
+        allow(helper).to receive(:docker_output).with('inspect', '--type', 'container', '--format', '{{.Id}}', 'amahi-gitea').and_return("abc\n")
         expect { helper.do_uninstall_app('gitea', true) }.to raise_error(AmahiHelper::Failed, "Docker didn't remove amahi-gitea; nothing else of gitea was touched")
         expect(File.directory?("#{apps_root}/gitea/data")).to be true
       end
@@ -1136,7 +1155,7 @@ RSpec.describe 'AmahiHelper apps' do
     # The old container went first: a create that failed left the app none, and Install again then
     # upgraded it with no copy.
     it 'makes the new container beside the old one, and gives the app its old one back, started, when that fails' do
-      allow(helper).to receive(:docker_output).with('inspect', '--format', '{{json .State}}', 'amahi-gitea').and_return('{"Running":true}')
+      allow(helper).to receive(:docker_output).with('inspect', '--type', 'container', '--format', '{{json .State}}', 'amahi-gitea').and_return('{"Running":true}')
       allow(helper).to receive(:run_command) do |argv|
         ran << argv
         accounts[argv.last] = account(argv.last, 996) if argv.first == '/usr/sbin/useradd'
@@ -1241,7 +1260,7 @@ RSpec.describe 'AmahiHelper apps' do
 
       it "doesn't put a copy back over folders while Docker still has the container" do
         allow(helper).to receive(:app_backup_info).and_return({ 'folders' => ['data'] })
-        allow(helper).to receive(:docker_output).with('inspect', '--format', '{{.Id}}', 'amahi-vaultwarden').and_return('abc123')
+        allow(helper).to receive(:docker_output).with('inspect', '--type', 'container', '--format', '{{.Id}}', 'amahi-vaultwarden').and_return('abc123')
         expect { helper.app_restore('vaultwarden', manifest, old_image, []) }.to raise_error(AmahiHelper::Failed, /wasn't put back/)
         expect(File.read("#{data}/db.sqlite3")).to eq('before')
       end
@@ -1270,6 +1289,16 @@ RSpec.describe 'AmahiHelper apps' do
         expect(running['vaultwarden']).to eq(old_image)
         expect(File.exist?("#{backups}/vaultwarden")).to be false
         expect { helper.do_undo_app_update('vaultwarden', manifest, []) }.to raise_error(AmahiHelper::Failed, 'vaultwarden has no update to undo')
+      end
+
+      # It went on taking room on the system disk, run by nothing.
+      it "removes the version the update brought once it's undone" do
+        helper.do_update_app('vaultwarden', manifest, [])
+        newer = running['vaultwarden']
+        ran.clear
+        helper.do_undo_app_update('vaultwarden', manifest, [])
+        expect(ran).to include(['/usr/bin/docker', 'image', 'rm', newer, { allow_failure: true }])
+        expect(ran).not_to include(['/usr/bin/docker', 'image', 'rm', old_image, { allow_failure: true }])
       end
 
       it 'keeps one copy per app, the newest, and deletes it after 30 days' do
@@ -1353,7 +1382,8 @@ RSpec.describe 'AmahiHelper apps' do
       allow(File).to receive(:open).and_call_original
       allow(File).to receive(:open).with("#{dir}/app-records.lock", anything, anything) { |*args, &block| locks << args.first && File.open(*args.first(1), File::RDWR | File::CREAT, &block) }
       helper.do_install_app('gitea', helper.app_manifest('gitea'))
-      expect(locks).to eq(["#{dir}/app-records.lock"]) # the record inside the choice takes no second lock
+      # Once for its network's record, once for its ports: the record inside the choice takes no second lock
+      expect(locks).to eq(["#{dir}/app-records.lock"] * 2)
       expect(helper.with_records_lock { helper.with_records_lock { :inner } }).to eq(:inner)
     end
 
@@ -1635,6 +1665,16 @@ RSpec.describe 'AmahiHelper apps' do
         helper.app_share_binds_keep('transmission', nil, {}) # given nothing now, or uninstalled
         expect(JSON.parse(File.read("#{dir}/app-share-binds.json"))).to eq({})
         expect(helper).to have_received(:app_share_binds_remove).with("#{bind_root}/transmission/20261027000000-bbbbbb")
+        expect(File.directory?("#{bind_root}/transmission")).to be true # a set it couldn't take down stays, and its folder
+      end
+
+      it "leaves no folder of the app's own behind once it's given nothing" do
+        allow(helper).to receive(:do_install) { |path, content, *| File.write(path, content) }
+        allow(helper).to receive(:app_share_binds_remove) { |set| Dir.rmdir(set) }
+        FileUtils.mkdir_p("#{bind_root}/transmission/20261027000000-bbbbbb")
+        helper.app_share_binds_keep('transmission', nil, {})
+        expect(File.exist?("#{bind_root}/transmission")).to be false
+        expect(File.directory?(bind_root)).to be true
       end
 
       # apps.share_binds, from amahi-kai-app-shares.service before Docker starts: /run is empty after a restart.
@@ -1829,9 +1869,156 @@ RSpec.describe 'AmahiHelper apps' do
       it "keeps an app with no record of its definition on the image it runs" do
         allow(helper).to receive(:app_manifest).and_return({ image: "example/app:2.0@sha256:#{'b' * 64}", name: 'x' })
         allow(helper).to receive(:app_definition).and_return(nil)
-        allow(helper).to receive(:docker_output).with('inspect', '--format', '{{.Config.Image}}', 'amahi-gitea').and_return("example/app:1.0@sha256:#{'a' * 64}")
+        allow(helper).to receive(:docker_output).with('inspect', '--type', 'container', '--format', '{{.Config.Image}}', 'amahi-gitea').and_return("example/app:1.0@sha256:#{'a' * 64}")
         helper.app_remake('gitea', { 'State' => { 'Running' => true } }, [])
         expect(helper).to have_received(:do_install_app).with('gitea', hash_including(image: "example/app:1.0@sha256:#{'a' * 64}"), [], true)
+      end
+    end
+
+    # P4.8: an app on Docker's own bridge reached every other app there directly, and the firewall
+    # couldn't tell one app's traffic from another's.
+    describe "each app's own network" do
+      let(:records) { "#{dir}/app-networks.json" }
+
+      before { allow(helper).to receive(:do_install) { |path, content, *| File.write(path, content) } }
+
+      it 'gives each app the lowest /24 that nothing on the NAS overlaps, and keeps it, its access as given now' do
+        allow(helper).to receive(:app_networks_in_use).and_return([IPAddr.new('172.30.1.0/24'), IPAddr.new('172.30.3.128/25')])
+        expect(helper.app_network('gitea', 'internet')).to eq(name: 'amahi-gitea', bridge: 'amahi2', subnet: '172.30.2.0/24', gateway: '172.30.2.1')
+        expect(helper.app_network('uptimekuma', 'lan')).to include(subnet: '172.30.4.0/24', bridge: 'amahi4') # 3 overlaps a route
+        expect(helper.app_network('gitea', 'none')).to include(subnet: '172.30.2.0/24') # the same again
+        expect(JSON.parse(File.read(records))).to eq(
+          'gitea' => { 'n' => 2, 'subnet' => '172.30.2.0/24', 'bridge' => 'amahi2', 'access' => 'none' },
+          'uptimekuma' => { 'n' => 4, 'subnet' => '172.30.4.0/24', 'bridge' => 'amahi4', 'access' => 'lan' }
+        )
+        helper.app_forget_network('gitea')
+        expect(JSON.parse(File.read(records)).keys).to eq(['uptimekuma'])
+      end
+
+      it 'says so when the pool is full' do
+        allow(helper).to receive(:app_networks_in_use).and_return([IPAddr.new('172.30.0.0/16')])
+        expect { helper.app_network('gitea', 'internet') }.to raise_error(AmahiHelper::Failed, /no network free in 172.30.0.0\/16/)
+      end
+
+      it "reads the NAS's addresses and routes, but its apps' own bridges' and the default route" do
+        allow(helper).to receive(:app_networks_in_use).and_call_original
+        allow(helper).to receive(:capture).with(%w[/usr/sbin/ip -j -4 addr show]).and_return([
+          { 'ifname' => 'ens18', 'addr_info' => [{ 'local' => '172.30.9.5', 'prefixlen' => 24 }] },
+          { 'ifname' => 'amahi2', 'addr_info' => [{ 'local' => '172.30.2.1', 'prefixlen' => 24 }] }
+        ].to_json)
+        allow(helper).to receive(:capture).with(%w[/usr/sbin/ip -j -4 route show]).and_return([
+          { 'dst' => 'default', 'dev' => 'ens18' }, { 'dst' => '10.8.0.0/16', 'dev' => 'wg0' },
+          { 'dst' => '172.30.2.0/24', 'dev' => 'amahi2' }, { 'dst' => '203.0.113.9', 'dev' => 'ens19' }
+        ].to_json)
+        expect(helper.app_networks_in_use.map { |net| "#{net}/#{net.prefix}" }).to eq(%w[172.30.9.0/24 10.8.0.0/16 203.0.113.9/32])
+      end
+
+      it "takes the manifest's access, else the catalog's for an app made before the field, else the internet" do
+        expect(helper.app_network_access('gitea', { network: 'none' })).to eq('none')
+        allow(helper).to receive(:app_manifest).with('uptimekuma').and_return({ network: 'lan' })
+        expect(helper.app_network_access('uptimekuma', {})).to eq('lan') # a definition of before: what the catalog says now
+        allow(helper).to receive(:app_manifest).with('gitea').and_return({ network: nil })
+        expect(helper.app_network_access('gitea', {})).to eq('internet')
+        allow(helper).to receive(:app_manifest).with('gone').and_raise(AmahiHelper::Refused, "app \"gone\" isn't in Amahi-kai's catalog")
+        expect(helper.app_network_access('gone', {})).to eq('internet')
+      end
+
+      it "makes the app's network with the access its manifest gives, on record for the firewall" do
+        expect(helper.app_network_ready('uptimekuma', helper.app_manifest('uptimekuma')))
+          .to eq(name: 'amahi-uptimekuma', bridge: 'amahi1', subnet: '172.30.1.0/24', gateway: '172.30.1.1')
+        expect(helper).to have_received(:engine_network_ensure)
+          .with('amahi-uptimekuma', subnet: '172.30.1.0/24', gateway: '172.30.1.1', bridge: 'amahi1', label: 'uptimekuma')
+        expect(JSON.parse(File.read(records))['uptimekuma']).to include('access' => 'lan') # the manifest asks for the LAN
+        helper.app_network_ready('vaultwarden', helper.app_manifest('vaultwarden'))
+        expect(JSON.parse(File.read(records))['vaultwarden']).to include('access' => 'internet', 'n' => 2)
+      end
+    end
+
+    # apps.follow_networks, at the update that brings it: each app container on Docker's bridge
+    # is made again on its own network, once, keeping its shares, version and data.
+    describe 'following the networks' do
+      before do
+        allow(helper).to receive(:docker_output) do |*args|
+          if args.first == 'ps' then "gitea\nemby\njellyfin\n"
+          else
+            id = args.last.delete_prefix('amahi-')
+            [{ 'HostConfig' => { 'NetworkMode' => id == 'jellyfin' ? 'amahi-jellyfin' : 'bridge' },
+               'State' => { 'Running' => id != 'emby' }, 'Mounts' => [] }].to_json
+          end
+        end
+        allow(helper).to receive(:app_job_running?).and_return(false)
+        allow(helper).to receive(:samba_shares).and_return([])
+        allow(helper).to receive(:do_app_firewall)
+      end
+
+      it 'moves each app still on Docker\'s bridge, a stopped one staying stopped, and leaves the rest' do
+        allow(helper).to receive(:app_remake) { |id, info, _shares| [[], !info.dig('State', 'Running')] }
+        expect(helper.do_follow_network_apps).to eq('apps' => { 'gitea' => 'moved', 'emby' => 'moved, stopped' })
+        expect(helper).to have_received(:app_remake).twice
+        expect(helper).to have_received(:do_app_firewall)
+        expect(steps('apps.follow_networks', {})).to eq([[:follow_network_apps]])
+      end
+
+      it "says why for one it can't move, leaves one whose job runs to it, and does nothing without Docker" do
+        allow(helper).to receive(:app_remake) { |id, *| id == 'emby' ? raise(AmahiHelper::Failed, 'no such image') : [[], false] }
+        allow(helper).to receive(:app_job_running?).with('gitea').and_return(true)
+        expect(helper.do_follow_network_apps).to eq('apps' => { 'emby' => 'no such image' })
+        allow(helper).to receive(:docker_output).and_return(nil)
+        expect(helper.do_follow_network_apps).to eq('apps' => {})
+      end
+
+      it 'runs at the update, past the rollback, before the firewall is rebuilt' do
+        update = File.read(Rails.root.join('bin/amahi-update'))
+        expect(update.index('apps.follow_shares')).to be < update.index('apps.follow_networks')
+        expect(update.index('apps.follow_networks')).to be < update.index('amahi-helper apps.firewall')
+      end
+    end
+
+    # apps.follow_limits, at an update and at Docker's start: an app made before had no ceiling on
+    # the processors it used, and a NAS can be given more or fewer.
+    describe 'following the limits' do
+      let(:cpus) { { 'jellyfin' => 0, 'gitea' => 3_000_000_000, 'emby' => 1_500_000_000 } }
+      let(:ran) { [] }
+
+      before do
+        allow(helper).to receive(:docker_output) do |*args|
+          if args.first == 'ps' then "#{cpus.keys.join("\n")}\nnot an id!\n"
+          else [{ 'HostConfig' => { 'NanoCpus' => cpus[args.last.delete_prefix('amahi-')] } }].to_json
+          end
+        end
+        allow(helper).to receive(:app_job_running?).and_return(false)
+        allow(helper).to receive(:run_command) { |argv| ran << argv && nil }
+      end
+
+      it "gives each app container the processors this version gives, in place, and lists only those it changed" do
+        expect(helper.do_follow_app_limits).to eq('cpus' => 3, 'apps' => { 'jellyfin' => 'set', 'emby' => 'set' })
+        expect(ran).to eq([['/usr/bin/docker', 'update', '--cpus', '3', 'amahi-jellyfin', { allow_failure: true }],
+                           ['/usr/bin/docker', 'update', '--cpus', '3', 'amahi-emby', { allow_failure: true }]])
+        expect(steps('apps.follow_limits', {})).to eq([[:follow_app_limits]])
+      end
+
+      it "says why for one Docker won't change, leaves one whose job runs to it, and does nothing without Docker" do
+        allow(helper).to receive(:run_command) { |argv| 'ignored: docker exited 1: No such container' if argv.include?('amahi-emby') }
+        allow(helper).to receive(:app_job_running?).with('jellyfin').and_return(true)
+        expect(helper.do_follow_app_limits['apps']).to eq('emby' => 'ignored: docker exited 1: No such container')
+        allow(helper).to receive(:docker_output).and_return(nil)
+        expect(helper.do_follow_app_limits).to eq('cpus' => 3, 'apps' => {})
+      end
+
+      it 'is all but one of the processors, and one on a NAS with one' do
+        allow(helper).to receive(:app_cpus).and_call_original
+        allow(Etc).to receive(:nprocessors).and_return(4)
+        expect(helper.app_cpus).to eq(3)
+        allow(Etc).to receive(:nprocessors).and_return(1)
+        expect(helper.app_cpus).to eq(1)
+      end
+
+      it 'runs at each update, past the rollback, and each time Docker starts' do
+        update = File.read(Rails.root.join('bin/amahi-update'))
+        expect(update).to include('amahi-helper apps.follow_limits', 'amahi-helper apps.firewall')
+        expect(update.index('apps.follow_limits')).to be > update.index('apps.follow_shares')
+        unit = File.read(Rails.root.join('config/systemd/amahi-kai-app-firewall.service'))
+        expect(unit).to include('ExecStart=-/usr/local/sbin/amahi-helper apps.follow_limits')
       end
     end
 
@@ -2097,28 +2284,95 @@ RSpec.describe 'AmahiHelper apps' do
     end
 
     # Rebuilt rule by rule, the chain was empty for a moment, which let everything through: its
-    # rules go in in one iptables-restore.
+    # rules go in in one iptables-restore, the three chains together.
     it "lets in only the NAS's private subnets and Tailscale, and drops the rest, the rules swapped in whole" do
-      expect(helper.do_app_firewall).to eq('lan' => ['192.168.1.0/24', '10.20.0.0/16'])
+      expect(helper.do_app_firewall).to eq('lan' => ['192.168.1.0/24', '10.20.0.0/16'], 'nas' => 'DNS and ping only')
       rules = ran.map { |argv| argv.reject { |arg| arg.is_a?(Hash) } }
-      expect(rules).to eq([
-                            %w[/usr/sbin/iptables -w -N DOCKER-USER], %w[/usr/sbin/iptables -w -N AMAHI-APPS],
-                            %w[/usr/sbin/iptables-restore -w --noflush],
-                            %w[/usr/sbin/iptables -w -C DOCKER-USER -j AMAHI-APPS],
-                            %w[/usr/sbin/iptables -w -I DOCKER-USER 1 -j AMAHI-APPS]
-                          ])
-      expect(ran[2].last[:stdin]).to eq(<<~RULES)
+      expect(rules.first(7)).to eq([
+                                     %w[/usr/sbin/iptables -w -N DOCKER-USER], %w[/usr/sbin/iptables -w -N AMAHI-APPS],
+                                     %w[/usr/sbin/iptables -w -N AMAHI-APPS-IN], %w[/usr/sbin/iptables -w -N AMAHI-APPS-OUT],
+                                     %w[/usr/sbin/iptables-restore -w --noflush],
+                                     %w[/usr/sbin/iptables -w -C DOCKER-USER -j AMAHI-APPS],
+                                     %w[/usr/sbin/iptables -w -I DOCKER-USER 1 -j AMAHI-APPS]
+                                   ])
+      expect(ran[4].last[:stdin]).to start_with(<<~RULES)
         *filter
         :AMAHI-APPS - [0:0]
+        :AMAHI-APPS-IN - [0:0]
+        :AMAHI-APPS-OUT - [0:0]
         -A AMAHI-APPS -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
-        -A AMAHI-APPS ! -o docker0 -j RETURN
-        -A AMAHI-APPS -i docker0 -j RETURN
-        -A AMAHI-APPS -i tailscale0 -j RETURN
-        -A AMAHI-APPS -s 192.168.1.0/24 -j RETURN
-        -A AMAHI-APPS -s 10.20.0.0/16 -j RETURN
-        -A AMAHI-APPS -j DROP
+        -A AMAHI-APPS -i amahi+ -j AMAHI-APPS-OUT
+        -A AMAHI-APPS -o amahi+ -j AMAHI-APPS-IN
+        -A AMAHI-APPS -o docker0 -j AMAHI-APPS-IN
+        -A AMAHI-APPS -j RETURN
+        -A AMAHI-APPS-IN -i tailscale0 -j RETURN
+        -A AMAHI-APPS-IN -s 192.168.1.0/24 -j RETURN
+        -A AMAHI-APPS-IN -s 10.20.0.0/16 -j RETURN
+        -A AMAHI-APPS-IN -j DROP
+      RULES
+    end
+
+    # Each app on a network of its own (P4.8): none reaches another, and each reaches what its
+    # manifest says: the internet (the default), the internet and the LAN, or nothing.
+    it "keeps each app off the others, and lets it reach out only as far as its network says" do
+      File.write("#{dir}/app-networks.json", {
+        'gitea' => { 'n' => 1, 'subnet' => '172.30.1.0/24', 'bridge' => 'amahi1', 'access' => 'internet' },
+        'uptimekuma' => { 'n' => 2, 'subnet' => '172.30.2.0/24', 'bridge' => 'amahi2', 'access' => 'lan' },
+        'pigallery2' => { 'n' => 3, 'subnet' => '172.30.3.0/24', 'bridge' => 'amahi3', 'access' => 'none' },
+        'jellyfin' => { 'n' => 4, 'subnet' => '10.0.0.0/8', 'bridge' => 'amahi4', 'access' => 'lan' }, # not what the helper writes
+        'Bad id' => { 'n' => 5, 'subnet' => '172.30.5.0/24', 'bridge' => 'amahi5', 'access' => 'lan' },
+        'emby' => { 'n' => 6, 'subnet' => '172.30.6.0/24', 'bridge' => 'amahi6', 'access' => '-j ACCEPT' }
+      }.to_json)
+      helper.do_app_firewall
+      out = ran[4].last[:stdin].lines.grep(/\A-A AMAHI-APPS-OUT /).map { |line| line.delete_prefix('-A AMAHI-APPS-OUT ').chomp }
+      refuse = '-j REJECT --reject-with icmp-admin-prohibited'
+      expect(out).to eq(["-o amahi+ #{refuse}", "-o docker0 #{refuse}",
+                         '-s 172.30.2.0/24 -j RETURN', "-s 172.30.3.0/24 #{refuse}",
+                         '-p udp --dport 53 -j RETURN', '-p tcp --dport 53 -j RETURN',
+                         *%w[10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 169.254.0.0/16 224.0.0.0/4 192.168.1.0/24 10.20.0.0/16]
+                           .map { |net| "-d #{net} #{refuse}" },
+                         '-j RETURN'])
+    end
+
+    # An app could open the NAS's SSH, its admin page and Samba (UFW lets them in from anywhere,
+    # and an app's traffic is anywhere's): it reaches the NAS only for DNS and a ping now.
+    it "keeps the apps off the NAS's own services, for IPv4 and IPv6, but for DNS and a ping" do
+      helper.do_app_firewall
+      rules = ran.map { |argv| argv.reject { |arg| arg.is_a?(Hash) } }
+      expect(rules.drop(7)).to eq([
+                                    %w[/usr/sbin/iptables -w -N AMAHI-APPS-NAS], %w[/usr/sbin/iptables-restore -w --noflush],
+                                    %w[/usr/sbin/iptables -w -C INPUT -i docker0 -j AMAHI-APPS-NAS],
+                                    %w[/usr/sbin/iptables -w -I INPUT 1 -i docker0 -j AMAHI-APPS-NAS],
+                                    %w[/usr/sbin/iptables -w -C INPUT -i amahi+ -j AMAHI-APPS-NAS],
+                                    %w[/usr/sbin/iptables -w -I INPUT 1 -i amahi+ -j AMAHI-APPS-NAS],
+                                    %w[/usr/sbin/ip6tables -w -N AMAHI-APPS-NAS], %w[/usr/sbin/ip6tables-restore -w --noflush],
+                                    %w[/usr/sbin/ip6tables -w -C INPUT -i docker0 -j AMAHI-APPS-NAS],
+                                    %w[/usr/sbin/ip6tables -w -I INPUT 1 -i docker0 -j AMAHI-APPS-NAS],
+                                    %w[/usr/sbin/ip6tables -w -C INPUT -i amahi+ -j AMAHI-APPS-NAS],
+                                    %w[/usr/sbin/ip6tables -w -I INPUT 1 -i amahi+ -j AMAHI-APPS-NAS]
+                                  ])
+      expect(ran[8].last[:stdin]).to eq(<<~RULES)
+        *filter
+        :AMAHI-APPS-NAS - [0:0]
+        -A AMAHI-APPS-NAS -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
+        -A AMAHI-APPS-NAS -p udp --dport 53 -j RETURN
+        -A AMAHI-APPS-NAS -p tcp --dport 53 -j RETURN
+        -A AMAHI-APPS-NAS -p icmp --icmp-type echo-request -j RETURN
+        -A AMAHI-APPS-NAS -p tcp -j REJECT --reject-with tcp-reset
+        -A AMAHI-APPS-NAS -j REJECT --reject-with icmp-port-unreachable
         COMMIT
       RULES
+      expect(ran[14].last[:stdin]).to include("-A AMAHI-APPS-NAS -p ipv6-icmp -j RETURN\n",
+                                              "-A AMAHI-APPS-NAS -j REJECT --reject-with icmp6-port-unreachable\nCOMMIT\n")
+    end
+
+    it "keeps to IPv4 on a NAS without IPv6, and says so" do
+      allow(helper).to receive(:run_command) do |argv|
+        ran << argv
+        raise AmahiHelper::Failed, 'ip6tables-restore exited 3: table does not exist' if argv.first == '/usr/sbin/ip6tables-restore'
+      end
+      expect(helper.do_app_firewall['nas']).to eq('IPv4 only (ip6tables-restore exited 3: table does not exist)')
+      expect(ran.map(&:first)).to include('/usr/sbin/iptables-restore')
     end
 
     # Docker starts the apps' containers, ports and all, before amahi-kai-app-firewall.service runs.
@@ -2134,16 +2388,23 @@ RSpec.describe 'AmahiHelper apps' do
 
       it 'rebuilds the chain without adding a second jump' do
         helper.do_app_firewall
-        expect(ran.map { |argv| argv[2..3] }).not_to include(%w[-I DOCKER-USER])
+        expect(ran.map { |argv| argv[2..3] }).not_to include(%w[-I DOCKER-USER], %w[-I INPUT])
       end
     end
 
     it 'reports whether the rules are in place, for the security audit' do
       allow(helper).to receive(:capture).with(%w[/usr/sbin/iptables -w -S AMAHI-APPS])
-                                        .and_return("-N AMAHI-APPS\n-A AMAHI-APPS -i tailscale0 -j RETURN\n-A AMAHI-APPS -j DROP\n")
+                                        .and_return("-N AMAHI-APPS\n-A AMAHI-APPS -o amahi+ -j AMAHI-APPS-IN\n-A AMAHI-APPS -j RETURN\n")
+      allow(helper).to receive(:capture).with(%w[/usr/sbin/iptables -w -S AMAHI-APPS-IN])
+                                        .and_return("-N AMAHI-APPS-IN\n-A AMAHI-APPS-IN -i tailscale0 -j RETURN\n-A AMAHI-APPS-IN -j DROP\n")
+      allow(helper).to receive(:capture).with(%w[/usr/sbin/iptables -w -S AMAHI-APPS-NAS])
+                                        .and_return("-N AMAHI-APPS-NAS\n-A AMAHI-APPS-NAS -j REJECT --reject-with icmp-port-unreachable\n")
       expect(helper.app_firewall_active?).to be false # DOCKER-USER doesn't jump to it
       allow(helper).to receive(:run_command).and_return(nil)
       expect(helper.app_firewall_active?).to be true
+      allow(helper).to receive(:run_command) { |argv| 'ignored: Bad rule' if argv.include?('INPUT') }
+      expect(helper.app_firewall_active?).to be false # INPUT doesn't jump to the NAS's own
+      allow(helper).to receive(:run_command).and_return(nil)
       allow(helper).to receive(:capture).with(%w[/usr/sbin/iptables -w -S AMAHI-APPS]).and_raise(AmahiHelper::Failed, 'No chain')
       expect(helper.app_firewall_active?).to be false
     end

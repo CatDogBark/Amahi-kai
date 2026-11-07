@@ -33,6 +33,16 @@ RSpec.describe AppCatalog do
                          "transmission" => true, "uptimekuma" => false, "vaultwarden" => false)
     end
 
+    # P4.8: each app reaches the internet unless its manifest says the LAN too, or nothing
+    it "says what each app reaches out to, in words for the Apps page" do
+      reach = AppCatalog.all.to_h { |app| [app[:identifier], app[:network]] }
+      expect(reach.values_at('bitstream', 'uptimekuma')).to eq(%w[lan lan])
+      expect(reach.except('bitstream', 'uptimekuma').values.uniq).to eq(['internet'])
+      expect(AppCatalog.network_words('lan')).to eq('Reaches the internet and the devices on your network')
+      expect(AppCatalog.network_words('none')).to eq('Reaches nothing past the NAS')
+      expect(AppCatalog.network_words(nil)).to eq('Reaches the internet, not the devices on your network')
+    end
+
     it "has a logo for each app, on https" do
       AppCatalog.all.each { |app| expect(app[:logo_url]).to start_with("https://"), app[:identifier] }
     end

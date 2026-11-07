@@ -5,12 +5,15 @@ require 'ipaddr'
 require 'socket'
 
 module NetworkInterfaces
-  # Not the LAN: loopback, Docker's bridges and their veth ends, Tailscale, VPNs and virtual
-  # bridges.
-  NOT_LAN = /\A(lo|docker|br-|veth|tailscale|virbr|wg|tun|tap|zt)/
+  # Not the LAN: loopback, Docker's bridges (the apps' own, amahi<n>, among them) and their veth
+  # ends, Tailscale, VPNs and virtual bridges.
+  NOT_LAN = /\A(lo|docker|br-|veth|tailscale|virbr|wg|tun|tap|zt|amahi\d)/
   TAILSCALE = 'tailscale0'
-  # Docker's default bridge: the apps' containers' gateway
+  # Docker's default bridge: Unbound answers the apps there
   DOCKER = 'docker0'
+  # Where each app's own network comes from (the root helper's APP_NETWORK_POOL): Unbound answers
+  # the apps from there too
+  APPS_POOL = '172.30.0.0/16'
   # Tailscale gives each device an address from these.
   TAILSCALE_NETS = %w[100.64.0.0/10 fd7a:115c:a1e0::/48].freeze
   ROUTES = '/proc/net/route'

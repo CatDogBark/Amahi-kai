@@ -92,6 +92,14 @@ describe "Docker Apps", type: :request do
       expect(response.body).to include('id="app-shares-dialog"')
     end
 
+    # What an app reaches out to is on its card before Install (P4.8), the LAN when it asks for it
+    it "says on each card what the app reaches out to" do
+      get "/apps/docker_apps"
+      page = Nokogiri::HTML(response.body)
+      expect(page.at_css('#app-network-uptimekuma').text).to eq('Reaches the internet and the devices on your network')
+      expect(page.at_css('#app-network-jellyfin').text).to eq('Reaches the internet, not the devices on your network')
+    end
+
     it "asks Docker for the apps' states, and links a running app to its own port" do
       gitea
       get "/apps/docker_apps", headers: { 'Host' => '192.168.1.111' }
@@ -219,6 +227,8 @@ describe "Docker Apps", type: :request do
       page = Nokogiri::HTML(response.body)
       expect(page.at_css('#app-ports-gitea').text).to eq('3300 (web) · 2222 (Git over SSH)')
       expect(page.at_css('#app-ports-gitea').previous_element.text).to eq('Ports')
+      expect(page.at_css('#app-network-gitea').text).to eq('Reaches the internet, not the devices on your network')
+      expect(page.at_css('#app-network-gitea').previous_element.text).to eq('Network')
     end
 
     it "says to open apps on the LAN or Tailscale when the page came through the Cloudflare Tunnel" do

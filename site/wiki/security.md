@@ -32,7 +32,7 @@ Go to **Network → Security** (Advanced mode) and run the audit. Each check is 
 | SSH password login disabled | Warning | SSH accepts keys only |
 | Fail2ban | Warning | Repeated failed SSH logins get blocked |
 | Security updates | Warning | No security update has waited more than a week (Settings → System Dependencies installs them) |
-| Automatic security updates | Warning | Ubuntu installs security fixes by itself while the NAS is the router (off is your choice otherwise; the switch is on Settings → System Dependencies) |
+| Automatic security updates | Warning | Ubuntu installs security fixes by itself while the NAS is the router (off is your choice otherwise; the switch is on Settings → System Dependencies). Docker's own packages come with them, from Docker's repository; Docker restarts for it, and each running app with it, once |
 | Docker ports | Warning | Lists Docker app ports reachable from the network (see below) |
 | Open ports | Info | Lists the ports the server listens on |
 

@@ -20,6 +20,9 @@ Outside the engine part, these are tied to Docker and would change with it:
 | --- | --- |
 | `libexec/amahi-helper.d/core.rb` (`APT_SOURCES['docker']`) | Docker's apt repository and its signing key's fingerprints |
 | `libexec/amahi-helper.d/system.rb` (the package list) | `docker-ce`, `docker-ce-cli`, `containerd.io` as packages the helper may install |
+| `config/apt/51amahi-kai-docker-updates` | Docker's repository in Ubuntu's automatic updates |
+| `libexec/amahi-helper.d/apps.rb` (`APP_NAS_CHAIN`) | What apps reach on the NAS, by the bridge they come in on (`ENGINE_BRIDGE`) |
+| `libexec/amahi-helper.d/apps.rb` (`APP_NETWORK_POOL`, `APP_OUT_CHAIN`) | Each app's own network and its bridge's name (`amahi<n>`), which the firewall knows its traffic by |
 | `libexec/amahi-helper.d/apps.rb` (`do_app_firewall`) | The app firewall hangs off the chain Docker leaves for it (`ENGINE_FIREWALL_HOOK`): Docker publishes ports with its own rules, ahead of UFW's |
 | `lib/docker_service.rb`, `lib/system_services.rb` | Whether Docker is installed and running (its packages, its `docker` service) |
 | `lib/network_interfaces.rb`, `lib/dns_service.rb` | Docker's bridge (`docker0`), where Unbound answers the apps |

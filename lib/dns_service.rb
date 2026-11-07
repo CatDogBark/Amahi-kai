@@ -638,14 +638,16 @@ module DnsService
       (%w[127.0.0.1 ::1] + lan + tailscale.reject(&:link_local?).map(&:to_s) + apps.map(&:to_s)).uniq
     end
 
-    # The networks on the interface, Tailscale's when it's on, and the apps' containers' on
-    # Docker's bridge. (Unbound always answers the NAS itself.)
+    # The networks on the interface, Tailscale's when it's on, and, while Docker runs, the apps':
+    # Docker's bridge and the networks of their own (APPS_POOL), which ask Unbound on Docker's
+    # bridge. (Unbound always answers the NAS itself.)
     def allowed(own, tailscale, apps = [])
       networks = own.reject(&:link_local?).map(&:network)
       networks << own_ipv6_network if ipv6_advertise?
       networks << 'fe80::/10' if own.any?(&:link_local?)
       networks.concat(NetworkInterfaces::TAILSCALE_NETS) if tailscale.any?
       networks.concat(apps.map(&:network))
+      networks << NetworkInterfaces::APPS_POOL if apps.any?
       networks.uniq
     end
 
