@@ -1,5 +1,6 @@
 / A port of a custom app's form: on the NAS, in the app, its protocol, what its page calls it, and
-/ whether it's the web page.
+/ whether it's the web page, which its page always calls "web" (the box is hidden then, keeping
+/ what it holds: custom_apps.js).
 .kai-custom-row.kai-custom-row-port data-custom-row=""
   .kai-custom-field
     label.form-label for="custom-port-host-#{key}" On the NAS
@@ -14,7 +15,8 @@
       option value="udp" selected=(port['protocol'] == 'udp') UDP
   .kai-custom-field
     label.form-label for="custom-port-label-#{key}" Its page calls it
-    input.form-control id="custom-port-label-#{key}" type="text" name="app[ports][#{key}][label]" value=port['label'] placeholder="RTSP"
+    input.form-control id="custom-port-label-#{key}" type="text" name="app[ports][#{key}][label]" value=port['label'] placeholder="Optional" hidden=web data-custom-port-label=""
+    span.kai-custom-port-web data-custom-port-web="" hidden=!web web
   label.kai-custom-web
     input.form-check-input type="radio" name="app[web]" value=key checked=web
     span Its web page

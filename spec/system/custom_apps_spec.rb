@@ -62,6 +62,16 @@ RSpec.describe 'Apps of your own', type: :system do
     port.fill_in('On the NAS', with: '9926')
     port.fill_in('In the app', with: '9001')
     port.fill_in('Its page calls it', with: 'API')
+    # The web page's row says "web" in place of its label box, and a label kept there stays
+    web_row = first('[data-custom-rows="ports"] [data-custom-row]')
+    expect(web_row).to have_css('[data-custom-port-web]', text: 'web')
+    expect(web_row).to have_field('Its page calls it', visible: :hidden)
+    expect(port).to have_field('Its page calls it', placeholder: 'Optional')
+    port.choose('Its web page')
+    expect(port).to have_field('Its page calls it', visible: :hidden)
+    expect(web_row).to have_field('Its page calls it', visible: :visible)
+    web_row.choose('Its web page')
+    expect(port).to have_field('Its page calls it', with: 'API')
     click_button '+ Add a setting'
     setting = all('[data-custom-rows="settings"] [data-custom-row]').last
     setting.fill_in('Setting', with: 'ALLOW_SIGNUP')

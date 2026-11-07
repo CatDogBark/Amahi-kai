@@ -70,7 +70,18 @@
     reader.readAsDataURL(file);
   }
 
+  // The port marked as its web page: its page calls it "web", so its label box is hidden (keeping
+  // what it holds) and "web" shown in its place
+  function showWebPort() {
+    form.querySelectorAll('[data-custom-rows="ports"] [data-custom-row]').forEach(function(row) {
+      var web = row.querySelector('input[name="app[web]"]').checked;
+      row.querySelector('[data-custom-port-label]').hidden = web;
+      row.querySelector('[data-custom-port-web]').hidden = !web;
+    });
+  }
+
   form.addEventListener('change', function(event) {
+    if (event.target.matches('input[name="app[web]"]')) showWebPort();
     if (event.target.matches('[data-custom-runs]')) showCapabilities();
     if (event.target.matches('[data-custom-kind]')) showValue(event.target);
     if (event.target.matches('[data-custom-logo]')) showLogo(event.target);
