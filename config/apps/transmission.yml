@@ -6,6 +6,9 @@ logo: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/transmission.png
 releases: https://github.com/transmission/transmission/releases/tag/{version}
 image: linuxserver/transmission:4.1.3-r0-ls363@sha256:4813745e2c721997d8849f5718786fd4406b3c656fbef479f87a161e51383cbd
 run_as: image
+# It starts as root to set up its folders and switch to the app's user (PUID, PGID), which takes
+# these; the daemon itself runs as that user with none.
+capabilities: [CHOWN, DAC_OVERRIDE, SETUID, SETGID]
 # It downloads into a share given read and write (a share Greyhole doesn't pool).
 writes_shares: true
 web_port: 9091
