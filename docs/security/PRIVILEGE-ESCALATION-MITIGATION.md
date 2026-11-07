@@ -111,9 +111,13 @@ mode, devices, capabilities, host networking, host folders or extra Docker argum
 manifest can't ask for them. Each app gets a system user (`app-<app>`), and the container runs as
 that user unless the image drops to it itself (the manifest says which), with a memory limit, at
 most 2,048 processes, all of the NAS's processors but one (`apps.follow_limits` sets that in place
-on containers made before, at each update and each time Docker starts), 30 MB of logs, and without
-raw sockets or device files. Generated secrets reach the container through a root-only
-`--env-file`, never a command line.
+on containers made before, at each update and each time Docker starts), 30 MB of logs, and every
+kernel capability dropped (`--cap-drop ALL`) but those its manifest's `capabilities` gives back,
+from Docker's own default set less `NET_RAW` and `MKNOD` (so never more than Docker would give):
+none for an app running as its own user, and Transmission's four (`CHOWN`, `DAC_OVERRIDE`,
+`SETUID`, `SETGID`) for its root setup, its daemon running as its user with none.
+`apps.follow_capabilities` remakes a container made otherwise, once, at the update. Generated
+secrets reach the container through a root-only `--env-file`, never a command line.
 
 An install, update, undo or uninstall runs as a systemd unit of its own
 (`amahi-kai-appjob-<app>`), so a restart of the web app can't cut it off, one job per app at a

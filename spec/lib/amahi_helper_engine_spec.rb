@@ -35,7 +35,7 @@ RSpec.describe 'AmahiHelper container engine' do
 
     def spec(**changes)
       { image: "example/app:1.0@sha256:#{'a' * 64}", restart: 'unless-stopped', no_new_privileges: true,
-        cap_drop: %w[NET_RAW MKNOD], pids_limit: 2048, log: { size: '10m', files: 3 }, memory: '1g', cpus: 3, label: 'transmission',
+        cap_drop: %w[ALL], cap_add: %w[CHOWN SETUID], pids_limit: 2048, log: { size: '10m', files: 3 }, memory: '1g', cpus: 3, label: 'transmission',
         dns: { servers: ['172.17.0.1'], search: ['home.arpa'] }, env_file: '/run/amahi-kai/env.1', user: nil, group_add: [100],
         network: 'amahi-transmission',
         publish: [{ address: '0.0.0.0', host: 9091, container: 9091, protocol: 'tcp' }, { address: '0.0.0.0', host: 51_413, container: 51_413, protocol: 'udp' }],
@@ -47,7 +47,7 @@ RSpec.describe 'AmahiHelper container engine' do
     it "spells what the apps part decided in Docker's flags, in one command" do
       helper.engine_create('amahi-transmission-next', spec)
       expect(ran.sole).to eq(['/usr/bin/docker', 'create', '--name', 'amahi-transmission-next', '--restart', 'unless-stopped',
-                              '--security-opt', 'no-new-privileges', '--cap-drop', 'NET_RAW', '--cap-drop', 'MKNOD',
+                              '--security-opt', 'no-new-privileges', '--cap-drop', 'ALL', '--cap-add', 'CHOWN', '--cap-add', 'SETUID',
                               '--pids-limit', '2048', '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3',
                               '--memory', '1g', '--cpus', '3', '--label', 'amahi.app=transmission', '--network', 'amahi-transmission',
                               '--dns', '172.17.0.1', '--dns-search', 'home.arpa', '--env-file', '/run/amahi-kai/env.1',
@@ -60,11 +60,18 @@ RSpec.describe 'AmahiHelper container engine' do
     end
 
     it "leaves out the user, the extra groups and the DNS when there are none, so the image's and the engine's own apply" do
-      helper.engine_create('amahi-transmission-next', spec(user: nil, group_add: [], dns: {}, cpus: nil))
-      expect(ran.sole).not_to include('--user', '--group-add', '--dns', '--dns-search', '--cpus')
+      helper.engine_create('amahi-transmission-next', spec(user: nil, group_add: [], dns: {}, cpus: nil, cap_add: []))
+      expect(ran.sole).not_to include('--user', '--group-add', '--dns', '--dns-search', '--cpus', '--cap-add')
       helper.engine_create('amahi-gitea-next', spec(user: '987:987'))
       expect(ran.last.each_cons(2).to_a).to include(['--user', '987:987'])
     end
+  end
+
+  it "reads a container's capabilities back as engine_create takes them, Docker's CAP_ taken off" do
+    expect(helper.engine_container_capabilities('HostConfig' => { 'CapDrop' => ['ALL'], 'CapAdd' => %w[CAP_SETUID CAP_CHOWN] }))
+      .to eq(drop: ['ALL'], add: %w[CHOWN SETUID])
+    expect(helper.engine_container_capabilities('HostConfig' => { 'CapDrop' => %w[CAP_MKNOD CAP_NET_RAW], 'CapAdd' => nil }))
+      .to eq(drop: %w[MKNOD NET_RAW], add: [])
   end
 
   it "reads a container's processors back as engine_create takes them, so the two compare" do

@@ -9,8 +9,8 @@
 #
 # What the rest of the helper reads from a container (engine_inspect) is Docker's inspect, and
 # only these keys of it: Id, State (Running, Status, ExitCode, Error, Health.Status), Config.Image,
-# HostConfig (Dns, DnsSearch, NanoCpus, NetworkMode), Mounts (Type, Source, Destination, RW) and
-# RestartCount.
+# HostConfig (Dns, DnsSearch, NanoCpus, NetworkMode, CapDrop, CapAdd), Mounts (Type, Source,
+# Destination, RW) and RestartCount.
 module AmahiHelper
   DOCKER = '/usr/bin/docker'
 
@@ -100,6 +100,15 @@ module AmahiHelper
       return nil unless nano.positive?
 
       (nano % 1_000_000_000).zero? ? nano / 1_000_000_000 : nano / 1_000_000_000.0
+    end
+
+    # The capabilities a container was made without and with (+info+, engine_inspect's), as
+    # engine_create takes them: { drop: [...], add: [...] }, sorted (Docker writes CAP_CHOWN for
+    # CHOWN, and all but ALL that way).
+    def engine_container_capabilities(info)
+      { drop: 'CapDrop', add: 'CapAdd' }.transform_values do |key|
+        Array(info.dig('HostConfig', key)).map { |cap| cap.to_s.upcase.delete_prefix('CAP_') }.sort
+      end
     end
 
     # The network a container is on (+info+, engine_inspect's): its name.
@@ -253,7 +262,8 @@ module AmahiHelper
     #   image:             name:tag@sha256:... (APP_IMAGE)
     #   restart:           when the engine starts it again ('unless-stopped')
     #   no_new_privileges: true: nothing in it gains privileges, setuid files included
-    #   cap_drop:          capabilities it doesn't get
+    #   cap_drop:          capabilities it doesn't get (ALL for all)
+    #   cap_add:           capabilities it gets back
     #   pids_limit:        the most processes it may have
     #   log:               { size:, files: } kept of its output
     #   memory:            '512m', '2g'
@@ -272,6 +282,7 @@ module AmahiHelper
       run_command([DOCKER, 'create', '--name', name, '--restart', spec.fetch(:restart),
                    *(spec[:no_new_privileges] ? ['--security-opt', 'no-new-privileges'] : []),
                    *spec.fetch(:cap_drop).flat_map { |cap| ['--cap-drop', cap] },
+                   *Array(spec[:cap_add]).flat_map { |cap| ['--cap-add', cap] },
                    '--pids-limit', spec.fetch(:pids_limit).to_s,
                    '--log-opt', "max-size=#{log.fetch(:size)}", '--log-opt', "max-file=#{log.fetch(:files)}",
                    '--memory', spec.fetch(:memory), *(spec[:cpus] ? ['--cpus', spec[:cpus].to_s] : []),

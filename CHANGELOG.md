@@ -4,6 +4,14 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.6.3] — 2026-11-06
+
+Each app keeps only the kernel permissions it needs: all of them but Transmission need none. **Each app restarts once at this update**, as its container is made again with them.
+
+### 🔒 Security & Fixes
+
+- **Each app keeps only the kernel permissions it needs** — An app's container had the dozen kernel capabilities Docker gives by default but two (changing any file's owner, reading past file permissions, switching users and so on). Now it has none, and gets back only what its manifest lists: nothing for an app that runs as its own user, which is all of them but Transmission, whose setup (it starts as root and switches to its own user) needs four; its download service runs with none. No manifest can give an app more than Docker would. The update makes each installed app's container again with them, so **each app restarts once**.
+
 ## [1.6.2] — 2026-11-06
 
 The apps, hardened: each on a network of its own, reaching out only as far as it says, kept off the server's own services and from taking all of its processors; Docker updated with the automatic security updates; and a router's boot no longer waits for the internet. **Each app restarts once at this update**, as it moves to its own network.

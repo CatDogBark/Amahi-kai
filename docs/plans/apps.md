@@ -154,6 +154,10 @@ Decisions (CatDogBark, 2026-10-04):
   manifest's `network` (`internet`, the default, `lan` or `none`) decides the rest, shown on the
   app's card and page. Existing apps move at the update (`apps.follow_networks`), restarting once.
   Later: letting the admin give an app less than it asks for at install.
+- [x] **The rest of AP16: each app with only the kernel capabilities it needs** (1.6.3). Every
+  container drops them all; a manifest's `capabilities` gives back what its app needs, from
+  Docker's default set less `NET_RAW` and `MKNOD`. Only Transmission (root setup, linuxserver.io)
+  needs any. Existing apps are made again once at the update (`apps.follow_capabilities`).
 - [x] **Tunnel-only apps: not built.** Tailscale is the default way to reach apps from outside;
   a per-app Cloudflare hostname is a specialty case (P4.3, later).
 - [x] **Ports: automatic.** An app gets its catalog port when it's free, otherwise the next free

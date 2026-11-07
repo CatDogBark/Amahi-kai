@@ -386,6 +386,20 @@ RSpec.describe 'AmahiHelper apps' do
                                                      secrets: ['TOKEN'])
     end
 
+    # Round 3: every container drops all of Docker's capabilities and gets back only these, which
+    # are Docker's own default set but raw sockets and device nodes: never more than before, only less
+    it 'takes the capabilities the app needs back, only from Docker\'s own set but raw sockets and device nodes' do
+      expect(helper.app_manifest('vaultwarden')[:capabilities]).to be_nil
+      expect(failure('capabilities' => %w[CHOWN SETUID SETGID])).to be_nil
+      expect(helper.app_manifest('test')[:capabilities]).to eq(%w[CHOWN SETUID SETGID])
+      expect(failure('capabilities' => [])).to be_nil
+      %w[NET_RAW MKNOD SYS_ADMIN NET_ADMIN chown CAP_CHOWN].each do |cap|
+        expect(failure('capabilities' => [cap])).to include('capabilities must be a list, each once, of AUDIT_WRITE, CHOWN'), cap
+      end
+      expect(failure('capabilities' => %w[CHOWN CHOWN])).to include('each once')
+      expect(failure('capabilities' => 'CHOWN')).to include('capabilities must be a list')
+    end
+
     it 'takes what the app reaches out to: the internet, the LAN too, or nothing; left out, it says nothing' do
       expect(helper.app_manifest('vaultwarden')[:network]).to be_nil
       %w[internet lan none].each do |network|
@@ -636,7 +650,7 @@ RSpec.describe 'AmahiHelper apps' do
       expect(ran[1]).to eq(['/usr/bin/docker', 'pull', manifest[:image], { stream: true }])
       create = ran.find { |argv| argv[1] == 'create' }
       expect(create).to eq(['/usr/bin/docker', 'create', '--name', 'amahi-vaultwarden-next', '--restart', 'unless-stopped',
-                            '--security-opt', 'no-new-privileges', '--cap-drop', 'NET_RAW', '--cap-drop', 'MKNOD',
+                            '--security-opt', 'no-new-privileges', '--cap-drop', 'ALL',
                             '--pids-limit', '2048', '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3',
                             '--memory', '512m', '--cpus', '3', '--label', 'amahi.app=vaultwarden', '--network', 'amahi-vaultwarden',
                             '--env-file', env_files.sole[0],
@@ -1931,6 +1945,51 @@ RSpec.describe 'AmahiHelper apps' do
         expect(JSON.parse(File.read(records))['uptimekuma']).to include('access' => 'lan') # the manifest asks for the LAN
         helper.app_network_ready('vaultwarden', helper.app_manifest('vaultwarden'))
         expect(JSON.parse(File.read(records))['vaultwarden']).to include('access' => 'internet', 'n' => 2)
+      end
+    end
+
+    # apps.follow_capabilities, at the update that brings it: each container made with Docker's
+    # capabilities is made again with only its manifest's back.
+    describe 'following the capabilities' do
+      let(:made_with) { { 'gitea' => [['CAP_MKNOD', 'CAP_NET_RAW'], nil], 'transmission' => [['ALL'], %w[CAP_CHOWN CAP_SETGID CAP_SETUID]],
+                          'jellyfin' => [['ALL'], nil], 'emby' => [['CAP_MKNOD', 'CAP_NET_RAW'], nil] } }
+
+      before do
+        allow(helper).to receive(:docker_output) do |*args|
+          if args.first == 'ps' then "#{made_with.keys.join("\n")}\n"
+          else
+            id = args.last.delete_prefix('amahi-')
+            [{ 'HostConfig' => { 'CapDrop' => made_with[id][0], 'CapAdd' => made_with[id][1] },
+               'State' => { 'Running' => id != 'emby' }, 'Mounts' => [] }].to_json
+          end
+        end
+        allow(helper).to receive(:app_job_running?).and_return(false)
+        allow(helper).to receive(:samba_shares).and_return([])
+        allow(helper).to receive(:do_app_firewall)
+        allow(helper).to receive(:app_definition) { |id| { 'transmission' => { capabilities: %w[SETUID CHOWN SETGID] } }[id] }
+        allow(helper).to receive(:app_manifest).and_return({ capabilities: nil }) # the catalog gives none back
+        allow(helper).to receive(:app_remake) { |_id, info, _shares| [[], !info.dig('State', 'Running')] }
+      end
+
+      it "remakes each container made with Docker's own, a stopped one staying stopped, and leaves the ones as they should be" do
+        expect(helper.do_follow_capability_apps).to eq('apps' => { 'gitea' => 'remade', 'emby' => 'remade, stopped' })
+        expect(helper).to have_received(:app_remake).twice
+        expect(steps('apps.follow_capabilities', {})).to eq([[:follow_capability_apps]])
+      end
+
+      it "takes the catalog's capabilities for an app whose definition is from before the field" do
+        allow(helper).to receive(:app_manifest).with('jellyfin').and_return({ capabilities: %w[CHOWN] })
+        expect(helper.do_follow_capability_apps['apps']).to include('jellyfin' => 'remade')
+        expect(helper.app_capabilities('jellyfin', {})).to eq(%w[CHOWN])
+        expect(helper.app_capabilities('jellyfin', { capabilities: [] })).to eq([]) # its own, even none
+        allow(helper).to receive(:app_manifest).with('gone').and_raise(AmahiHelper::Refused, 'not in the catalog')
+        expect(helper.app_capabilities('gone', {})).to eq([])
+      end
+
+      it 'runs at the update, after the networks, before the firewall' do
+        update = File.read(Rails.root.join('bin/amahi-update'))
+        expect(update.index('apps.follow_networks')).to be < update.index('apps.follow_capabilities')
+        expect(update.index('apps.follow_capabilities')).to be < update.index('amahi-helper apps.firewall')
       end
     end
 

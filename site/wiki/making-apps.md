@@ -31,7 +31,8 @@ When someone clicks **Install**, Amahi-kai's root helper:
 5. Creates the container:
    - as the app's user (`--user <uid>:<gid>`) when the manifest says `run_as: app`;
    - with `no-new-privileges`, so nothing in it can gain privileges (setuid programs in the
-     image included), and without raw sockets (`NET_RAW`) or device files (`MKNOD`);
+     image included), and with every kernel capability dropped but the ones your manifest's
+     `capabilities` gives back (below);
    - with a memory limit (`1g` unless the manifest sets another), and all of the server's
      processors but one, so the server itself always has one; restarted unless stopped;
    - with your environment settings and the generated secrets;
@@ -166,6 +167,14 @@ environment:
   your app needs it: the Apps page says so on its card, before anyone installs it. No setting
   lets an app reach another app, or the server's own services. An older Amahi-kai ignores the
   field and lets the app reach everything, as it always did, so it needs no `requires`.
+
+- **`capabilities`** gives back the kernel capabilities your app needs; every container starts
+  with none. An app that runs as its own user (`run_as: app`) needs none, so leave it out. An image
+  that starts as root and switches to the app's user itself (linuxserver.io's, `run_as: image`)
+  needs the few its setup takes: Transmission's are `[CHOWN, DAC_OVERRIDE, SETUID, SETGID]`. They
+  come from Docker's own default set, but `NET_RAW` and `MKNOD`, so no manifest gives an app more
+  than Docker would. Find the fewest that work by trying your image with `--cap-drop ALL` and
+  adding them back one at a time. An older Amahi-kai ignores the field and gives Docker's set.
 
 Every field is in the catalog's [README](https://github.com/CatDogBark/amahi-kai-apps#readme).
 
