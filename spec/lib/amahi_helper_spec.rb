@@ -3759,12 +3759,13 @@ RSpec.describe 'AmahiHelper' do
 
     it 'filters a secret however deep it is, and cuts long lists and text' do
       logged = helper.filtered('forwards' => [{ 'password' => 'hunter2', 'keep' => 'x' }], 'list' => ['x'] * 200, 'text' => 'x' * 300,
-                               'nested' => { 'api_token' => 'hunter2', 'content' => 'y' })
+                               'nested' => { 'api_token' => 'hunter2', 'content' => 'y' }, 'manifest' => "environment:\n  API: k3y\n")
       expect(logged['forwards']).to eq([{ 'password' => '[FILTERED]', 'keep' => 'x' }])
       expect(logged['list'].size).to eq(AmahiHelper::LOG_LIST_MAX)
       expect(logged['text']).to eq("#{'x' * 256}...")
       expect(logged['nested']['api_token']).to eq('[FILTERED]')
       expect(logged['nested']['content']).to include('bytes' => 1)
+      expect(logged['manifest']).to include('bytes' => 24) # an app of your own's file, with what was typed in it
       expect(logged.to_s).not_to include('hunter2')
     end
   end

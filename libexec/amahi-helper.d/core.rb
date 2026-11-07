@@ -896,8 +896,9 @@ module AmahiHelper
       filtered_value(args)
     end
 
-    # A request's values as logged: secrets filtered wherever they are, a config by its size and
-    # hash, long text and lists cut, and text JSON can write, so a bad request is logged like any other.
+    # A request's values as logged: secrets filtered wherever they are, a config or an app file (a
+    # key typed into its settings) by its size and hash, long text and lists cut, and text JSON can
+    # write, so a bad request is logged like any other.
     def filtered_value(value, key = nil)
       case value
       when Hash
@@ -908,7 +909,7 @@ module AmahiHelper
       when Array then value.first(LOG_LIST_MAX).map { |item| filtered_value(item, key) }
       when String
         text = valid_text(value)
-        if key == 'content' then { 'bytes' => value.bytesize, 'sha256' => Digest::SHA256.hexdigest(value) }
+        if %w[content manifest].include?(key) then { 'bytes' => value.bytesize, 'sha256' => Digest::SHA256.hexdigest(value) }
         elsif text.length > 256 then "#{text[0, 256]}..."
         else text
         end
