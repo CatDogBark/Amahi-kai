@@ -85,6 +85,17 @@ RSpec.describe 'AmahiHelper container engine' do
     expect(helper.engine_container_network('HostConfig' => { 'NetworkMode' => 'amahi-gitea' })).to eq('amahi-gitea')
   end
 
+  # An app's network has its container's name, and docker inspect of a name finds a network too:
+  # an uninstall saw the container it had just removed as still there, and stopped.
+  it "asks Docker for containers only, whatever else has the container's name" do
+    asked = []
+    allow(helper).to receive(:docker_output) { |*args| asked << args && nil }
+    %i[engine_container? engine_inspect engine_container_running? engine_container_image engine_container_state engine_restart_count]
+      .each { |method| helper.public_send(method, 'amahi-gitea') }
+    expect(asked.size).to eq(6)
+    expect(asked).to all(start_with('inspect', '--type', 'container'))
+  end
+
   it "reads a container's DNS back as engine_create takes it, so the two compare" do
     expect(helper.engine_container_dns('HostConfig' => { 'Dns' => ['172.17.0.1'], 'DnsSearch' => ['home.arpa'] }))
       .to eq(servers: ['172.17.0.1'], search: ['home.arpa'])

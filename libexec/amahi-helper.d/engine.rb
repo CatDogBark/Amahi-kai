@@ -56,37 +56,41 @@ module AmahiHelper
     end
 
     # --- Containers: what's there ---
+    #
+    # Each asks for a container only (--type container): an app's network has the name its
+    # container has, and docker inspect of a name finds whatever has it, so a container gone read
+    # as one still there (an uninstall stopped at "Docker didn't remove it").
 
     def engine_container?(name)
-      !docker_output('inspect', '--format', '{{.Id}}', name).nil?
+      !docker_output('inspect', '--type', 'container', '--format', '{{.Id}}', name).nil?
     end
 
     # The container's inspect (see the keys above), or nil when there's none.
     def engine_inspect(name)
-      JSON.parse(docker_output('inspect', name) || '[]').first
+      JSON.parse(docker_output('inspect', '--type', 'container', name) || '[]').first
     rescue JSON::ParserError
       nil
     end
 
     def engine_container_running?(name)
-      docker_output('inspect', '--format', '{{.State.Running}}', name).to_s.strip == 'true'
+      docker_output('inspect', '--type', 'container', '--format', '{{.State.Running}}', name).to_s.strip == 'true'
     end
 
     # The image the container was made from, as it was given (name:tag@sha256:...); '' without one.
     def engine_container_image(name)
-      docker_output('inspect', '--format', '{{.Config.Image}}', name).to_s.strip
+      docker_output('inspect', '--type', 'container', '--format', '{{.Config.Image}}', name).to_s.strip
     end
 
     # The container's State (see the keys above), or nil.
     def engine_container_state(name)
-      out = docker_output('inspect', '--format', '{{json .State}}', name)
+      out = docker_output('inspect', '--type', 'container', '--format', '{{json .State}}', name)
       out ? JSON.parse(out) : nil
     rescue JSON::ParserError
       nil
     end
 
     def engine_restart_count(name)
-      docker_output('inspect', '--format', '{{.RestartCount}}', name).to_i
+      docker_output('inspect', '--type', 'container', '--format', '{{.RestartCount}}', name).to_i
     end
 
     # The processors a container may use (+info+, engine_inspect's), as engine_create takes them;

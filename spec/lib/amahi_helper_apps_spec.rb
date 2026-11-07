@@ -309,18 +309,18 @@ RSpec.describe 'AmahiHelper apps' do
       expect(refusal('apps.logs', { 'app' => '../etc', 'lines' => 150 })).to include("isn't one Amahi-kai knows")
       expect(refusal('apps.logs', { 'app' => 'gitea', 'lines' => 9999 })).to include('whole number from 1 to 500')
 
-      allow(helper).to receive(:docker_output).with('inspect', '--format', '{{.Id}}', 'amahi-gitea').and_return("abc\n")
+      allow(helper).to receive(:docker_output).with('inspect', '--type', 'container', '--format', '{{.Id}}', 'amahi-gitea').and_return("abc\n")
       allow(Open3).to receive(:capture2e).and_return(["2026-10-29T03:41:07Z one\n2026-10-29T03:41:08Z two\n", instance_double(Process::Status, success?: true)])
       expect(helper.do_app_logs('gitea', 150)).to eq('lines' => ['2026-10-29T03:41:07Z one', '2026-10-29T03:41:08Z two'])
       expect(Open3).to have_received(:capture2e).with(anything, %w[/usr/bin/docker /usr/bin/docker], 'logs', '--tail', '150', '--timestamps',
                                                       'amahi-gitea', unsetenv_others: true, chdir: '/')
 
-      allow(helper).to receive(:docker_output).with('inspect', '--format', '{{.Id}}', 'amahi-gitea').and_return(nil)
+      allow(helper).to receive(:docker_output).with('inspect', '--type', 'container', '--format', '{{.Id}}', 'amahi-gitea').and_return(nil)
       expect(helper.do_app_logs('gitea', 150)).to eq('lines' => [], 'missing' => true)
     end
 
     it 'starts, stops and restarts only the app container' do
-      allow(helper).to receive(:docker_output).with('inspect', '--format', '{{.Id}}', 'amahi-gitea').and_return("abc\n")
+      allow(helper).to receive(:docker_output).with('inspect', '--type', 'container', '--format', '{{.Id}}', 'amahi-gitea').and_return("abc\n")
       expect(steps('apps.start', { 'app' => 'gitea' })).to eq([%w[/usr/bin/docker start amahi-gitea]])
       expect(steps('apps.stop', { 'app' => 'gitea' })).to eq([%w[/usr/bin/docker stop --time 30 amahi-gitea]])
       expect(steps('apps.restart', { 'app' => 'gitea' })).to eq([%w[/usr/bin/docker restart --time 30 amahi-gitea]])
@@ -328,11 +328,11 @@ RSpec.describe 'AmahiHelper apps' do
 
     # The catalog moved on or dropped the app: it was stuck until System Update.
     it 'starts, stops and uninstalls an app by its container, whatever the catalog says, and not while a job changes it' do
-      allow(helper).to receive(:docker_output).with('inspect', '--format', '{{.Id}}', 'amahi-gone').and_return("abc\n")
+      allow(helper).to receive(:docker_output).with('inspect', '--type', 'container', '--format', '{{.Id}}', 'amahi-gone').and_return("abc\n")
       allow(helper).to receive(:docker_output).with('info', '--format', '{{.ServerVersion}}').and_return("27.3.1\n")
       expect(steps('apps.stop', { 'app' => 'gone' })).to eq([%w[/usr/bin/docker stop --time 30 amahi-gone]])
       expect(steps('apps.uninstall', { 'app' => 'gone' })).to eq([[:uninstall_app, 'gone', false], [:announce_apps]])
-      allow(helper).to receive(:docker_output).with('inspect', '--format', '{{.Id}}', 'amahi-gone').and_return(nil)
+      allow(helper).to receive(:docker_output).with('inspect', '--type', 'container', '--format', '{{.Id}}', 'amahi-gone').and_return(nil)
       expect(refusal('apps.start', { 'app' => 'gone' })).to eq('gone has no container: install it again')
       allow(helper).to receive(:app_job_running?).with('gitea').and_return(true)
       expect(refusal('apps.restart', { 'app' => 'gitea' })).to eq("gitea is being changed (an install, update or uninstall runs): try again when it's done")
@@ -912,7 +912,7 @@ RSpec.describe 'AmahiHelper apps' do
       end
 
       it "stops when Docker didn't remove the container, before anything else goes" do
-        allow(helper).to receive(:docker_output).with('inspect', '--format', '{{.Id}}', 'amahi-gitea').and_return("abc\n")
+        allow(helper).to receive(:docker_output).with('inspect', '--type', 'container', '--format', '{{.Id}}', 'amahi-gitea').and_return("abc\n")
         expect { helper.do_uninstall_app('gitea', true) }.to raise_error(AmahiHelper::Failed, "Docker didn't remove amahi-gitea; nothing else of gitea was touched")
         expect(File.directory?("#{apps_root}/gitea/data")).to be true
       end
@@ -1155,7 +1155,7 @@ RSpec.describe 'AmahiHelper apps' do
     # The old container went first: a create that failed left the app none, and Install again then
     # upgraded it with no copy.
     it 'makes the new container beside the old one, and gives the app its old one back, started, when that fails' do
-      allow(helper).to receive(:docker_output).with('inspect', '--format', '{{json .State}}', 'amahi-gitea').and_return('{"Running":true}')
+      allow(helper).to receive(:docker_output).with('inspect', '--type', 'container', '--format', '{{json .State}}', 'amahi-gitea').and_return('{"Running":true}')
       allow(helper).to receive(:run_command) do |argv|
         ran << argv
         accounts[argv.last] = account(argv.last, 996) if argv.first == '/usr/sbin/useradd'
@@ -1260,7 +1260,7 @@ RSpec.describe 'AmahiHelper apps' do
 
       it "doesn't put a copy back over folders while Docker still has the container" do
         allow(helper).to receive(:app_backup_info).and_return({ 'folders' => ['data'] })
-        allow(helper).to receive(:docker_output).with('inspect', '--format', '{{.Id}}', 'amahi-vaultwarden').and_return('abc123')
+        allow(helper).to receive(:docker_output).with('inspect', '--type', 'container', '--format', '{{.Id}}', 'amahi-vaultwarden').and_return('abc123')
         expect { helper.app_restore('vaultwarden', manifest, old_image, []) }.to raise_error(AmahiHelper::Failed, /wasn't put back/)
         expect(File.read("#{data}/db.sqlite3")).to eq('before')
       end
@@ -1869,7 +1869,7 @@ RSpec.describe 'AmahiHelper apps' do
       it "keeps an app with no record of its definition on the image it runs" do
         allow(helper).to receive(:app_manifest).and_return({ image: "example/app:2.0@sha256:#{'b' * 64}", name: 'x' })
         allow(helper).to receive(:app_definition).and_return(nil)
-        allow(helper).to receive(:docker_output).with('inspect', '--format', '{{.Config.Image}}', 'amahi-gitea').and_return("example/app:1.0@sha256:#{'a' * 64}")
+        allow(helper).to receive(:docker_output).with('inspect', '--type', 'container', '--format', '{{.Config.Image}}', 'amahi-gitea').and_return("example/app:1.0@sha256:#{'a' * 64}")
         helper.app_remake('gitea', { 'State' => { 'Running' => true } }, [])
         expect(helper).to have_received(:do_install_app).with('gitea', hash_including(image: "example/app:1.0@sha256:#{'a' * 64}"), [], true)
       end
