@@ -28,13 +28,19 @@ module AmahiHelper
 
   # What each app's container may do beyond its memory: a ceiling on its processes, a cap on its
   # logs (Docker keeps them on the system disk), all of the NAS's processors but one (app_cpus),
-  # and none of raw sockets (forging traffic to the other containers) or device nodes. Ping works
+  # and only the kernel capabilities its manifest gives back (APP_CAPABILITIES). Ping works
   # without raw sockets: Docker lets containers use ICMP datagram sockets.
   APP_PIDS_LIMIT = 2048
 
   APP_LOG_LIMIT = { size: '10m', files: 3 }.freeze
 
-  APP_CAP_DROP = %w[NET_RAW MKNOD].freeze
+  # The kernel capabilities a manifest's capabilities may give an app back: Docker's own default
+  # set but raw sockets (forging traffic to other containers) and device nodes. Every container
+  # drops them all (--cap-drop ALL) and gets back only what its manifest lists, so no manifest
+  # gives an app more than Docker would have, only less. An app running as its own user (run_as:
+  # app) needs none; an image that starts as root and switches to the app's user itself
+  # (linuxserver.io's) needs the few that switching takes.
+  APP_CAPABILITIES = %w[AUDIT_WRITE CHOWN DAC_OVERRIDE FOWNER FSETID KILL NET_BIND_SERVICE SETFCAP SETGID SETPCAP SETUID SYS_CHROOT].freeze
 
   # The definition each app's container was made from: its manifest as it was then, with the
   # image the container runs (root:amahi 0640, one file an app). A reinstall that keeps the
@@ -271,6 +277,13 @@ module AmahiHelper
       validate: ->(_a) { engine_installed! && {} },
       plan: ->(_v) { [[:follow_network_apps]] }
     },
+    # Each app's container made with other kernel capabilities than it's given now is made again,
+    # once (from bin/amahi-update).
+    'apps.follow_capabilities' => {
+      params: [],
+      validate: ->(_a) { engine_installed! && {} },
+      plan: ->(_v) { [[:follow_capability_apps]] }
+    },
     'apps.follow_limits' => {
       params: [],
       validate: ->(_a) { engine_installed! && {} },
@@ -460,6 +473,10 @@ module AmahiHelper
       access = app_access(data, web_port, web_tls, ports, format, bad)
       network = data['network']
       bad.call("network must be one of #{APP_NETWORK_ACCESS.join(', ')}") unless network.nil? || APP_NETWORK_ACCESS.include?(network)
+      capabilities = data['capabilities']
+      unless capabilities.nil? || (capabilities.is_a?(Array) && capabilities.all? { |cap| APP_CAPABILITIES.include?(cap) } && capabilities.uniq == capabilities)
+        bad.call("capabilities must be a list, each once, of #{APP_CAPABILITIES.join(', ')}")
+      end
       ping = data['ping']
       unless ping.nil? || (ping.is_a?(String) && normalized_path?(ping) && ping.split('/').drop(1).all? { |part| part.match?(APP_PATH_PART) })
         bad.call("ping #{ping.inspect} must be an absolute, normalized path of plain names")
@@ -475,7 +492,7 @@ module AmahiHelper
       { image: image, run_as: run_as, memory: memory, ports: ports, web_port: web_port, web_tls: web_tls, access: access,
         folders: folders, storage: app_storage_need(folders), environment: environment,
         secrets: secrets, hashed_secrets: app_hashed_secrets(data['secrets']), writes_shares: writes_shares, ping: ping,
-        network: network }
+        network: network, capabilities: capabilities }
     end
 
     # Who reaches the app (APP_ACCESS): lan unless it says tailscale. That needs requires: 5 (an
@@ -715,7 +732,7 @@ module AmahiHelper
         with_env_file(app_environment(manifest, uid, app_env_gid(manifest, gid, shares), secrets, url)) do |env_file|
           engine_create(fresh, image: manifest[:image], restart: 'unless-stopped',
                                no_new_privileges: true, # nothing in it gains privileges, setuid files included
-                               cap_drop: APP_CAP_DROP, pids_limit: APP_PIDS_LIMIT, log: APP_LOG_LIMIT,
+                               cap_drop: %w[ALL], cap_add: app_capabilities(id, manifest), pids_limit: APP_PIDS_LIMIT, log: APP_LOG_LIMIT,
                                memory: manifest[:memory], cpus: app_cpus, label: id, dns: app_dns, env_file: env_file,
                                user: manifest[:run_as] == 'app' ? "#{uid}:#{gid}" : nil, group_add: share_access[:group_add],
                                publish: ports.map { |p| { address: bind, host: p[:host], container: p[:container], protocol: p[:protocol] } },
@@ -743,7 +760,7 @@ module AmahiHelper
     # --- An app's ping (the manifest's ping) ---
 
     # An image's ping is often given cap_net_raw as a file capability, which an app's container
-    # doesn't have (APP_CAP_DROP), and the kernel then refuses to run it at all ("Operation not
+    # doesn't have (--cap-drop ALL), and the kernel then refuses to run it at all ("Operation not
     # permitted"). Docker lets a container's users ping without it (net.ipv4.ping_group_range), so
     # an app whose manifest names its ping gets that same file, copied out of the same image
     # without the capability, mounted read only in its place. One copy an image: a container made
@@ -1793,6 +1810,23 @@ module AmahiHelper
     # (on Docker's bridge, as before 1.6.2) is made again on it, once, keeping its shares, version
     # and data. One the owner stopped stays stopped; one a job is changing is left to it.
     def do_follow_network_apps
+      app_remake_where('on a network of its own', 'moved') { |id, info| engine_container_network(info) != app_network_name(id) }
+    end
+
+    # apps.follow_capabilities, from bin/amahi-update: each app container made with other kernel
+    # capabilities than it's given now (all dropped, its manifest's back: app_capabilities; before
+    # 1.6.3, Docker's own but two) is made again, once, keeping its shares, version and data.
+    def do_follow_capability_apps
+      app_remake_where('with only the capabilities it needs', 'remade') do |id, info|
+        wanted = { drop: %w[ALL], add: app_capabilities(id, app_definition(id) || {}).sort }
+        engine_container_capabilities(info) != wanted
+      end
+    end
+
+    # Each app container the block says is out of date is made again (app_remake), once, keeping
+    # its shares, version and data: { 'apps' => { id => +word+ | "+word+, stopped" | why not } }.
+    # One the owner stopped stays stopped; one a job is changing is left to it.
+    def app_remake_where(how, word)
       labels = engine_app_labels
       return { 'apps' => {} } unless labels
 
@@ -1801,18 +1835,31 @@ module AmahiHelper
         next if app_job_running?(id)
 
         info = engine_inspect(app_container(id)) or next
-        next if engine_container_network(info) == app_network_name(id)
+        next unless yield(id, info)
 
-        say("#{id}: making its container again, on a network of its own")
+        say("#{id}: making its container again, #{how}")
         begin
           _checked, stopped = app_remake(id, info, app_container_shares(info, shares))
-          [id, stopped ? 'moved, stopped' : 'moved']
+          [id, stopped ? "#{word}, stopped" : word]
         rescue Failed, Refused, SystemCallError => e
           [id, e.message]
         end
       end
       do_app_firewall if done.any?
       { 'apps' => done.to_h }
+    end
+
+    # The capabilities the app gets back (APP_CAPABILITIES): its manifest's; one made before the
+    # field (a definition without it) takes the catalog's now, else none.
+    def app_capabilities(id, manifest)
+      return manifest[:capabilities] if manifest[:capabilities]
+
+      catalog = begin
+        app_manifest(id)
+      rescue Refused, Failed
+        nil
+      end
+      Array(catalog&.dig(:capabilities))
     end
 
     # APP_CHAIN is in place (DOCKER-USER jumps to it, and what comes into an app goes through
