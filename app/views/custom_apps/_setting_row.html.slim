@@ -1,0 +1,16 @@
+/ A setting of a custom app's form: its name, and a value typed or one Amahi-kai fills in.
+- kind = CustomApp::SETTING_KINDS.key?(setting['kind']) ? setting['kind'] : 'value'
+.kai-custom-row.kai-custom-row-setting data-custom-row=""
+  .kai-custom-field
+    label.form-label for="custom-setting-name-#{key}" Setting
+    input.form-control.kai-mono id="custom-setting-name-#{key}" type="text" name="app[settings][#{key}][name]" value=setting['name'] placeholder="ALLOW_SIGNUP" spellcheck="false" autocapitalize="off"
+  .kai-custom-field
+    label.form-label for="custom-setting-kind-#{key}" Is
+    select.form-select id="custom-setting-kind-#{key}" name="app[settings][#{key}][kind]" data-custom-kind=""
+      - CustomApp::SETTING_KINDS.each do |value, words|
+        option value=value selected=(value == kind) = words
+  .kai-custom-field data-custom-value="" hidden=(kind != 'value')
+    label.form-label for="custom-setting-value-#{key}" Value
+    input.form-control.kai-mono id="custom-setting-value-#{key}" type="text" name="app[settings][#{key}][value]" value=setting['value'] placeholder="false" spellcheck="false" autocapitalize="off"
+  button.btn.btn-outline-secondary.btn-sm.kai-custom-remove type="button" data-custom-remove="" aria-label="Remove this setting"
+    = lucide_icon('x', size: 16)

@@ -1,5 +1,7 @@
+require 'ipaddr'
 require 'json'
 require 'net/http'
+require 'socket'
 require 'uri'
 require 'yaml'
 
@@ -45,15 +47,55 @@ class AppVersions
     end
   end
 
+  # An image as an app file names it: name:tag, pinned or not (@sha256:digest), in the root
+  # helper's spelling (its APP_IMAGE): lowercase names, a registry's host first when it isn't
+  # Docker Hub, and no port.
+  IMAGE = %r{\A(?<repo>[a-z0-9]+(?:[._/-][a-z0-9]+)*):(?<tag>[A-Za-z0-9._-]{1,64})(?:@(?<digest>sha256:\h{64}))?\z}
+
   # +registry+ answers for every image (tests); otherwise each image's own registry: Docker Hub,
-  # or GitHub's (ghcr.io).
+  # GitHub's (ghcr.io), or any other by the registry API (Registry).
   def initialize(registry: nil, dir: CATALOG_DIR)
     @registry = registry
     @dir = dir
   end
 
   def registry_for(repo)
-    @registry || (repo.start_with?('ghcr.io/') ? Ghcr.new : DockerHub.new)
+    return @registry if @registry
+
+    host = repo.split('/').first
+    if !repo.include?('/') || !host.include?('.') || host.match?(/\Adocker\.io\z/) then DockerHub.new
+    elsif host == 'ghcr.io' then Ghcr.new
+    else Registry.new(host)
+    end
+  end
+
+  # +image+ (name:tag) pinned to the build its tag names now: name:tag@sha256:digest. One pinned
+  # already is kept as it is (Docker checks the digest when it pulls it).
+  def pin(image)
+    match = image.to_s.match(IMAGE) or raise ArgumentError, "#{image} isn't name:tag (an image with its tag, like mealie-recipes/mealie:v2.4.1)"
+    return image if match[:digest]
+
+    "#{match[:repo]}:#{match[:tag]}@#{registry_for(match[:repo]).digest(match[:repo], match[:tag])}"
+  end
+
+  # A newer release of the image +image+ runs (name:tag@sha256:digest), as #check finds one:
+  # Result with kind :newer or :rebuilt, or :current. Raises when the registry can't be asked.
+  def check_image(image, releases: nil, id: nil)
+    match = image.to_s.match(IMAGE)
+    raise ArgumentError, 'its image is not name:tag@sha256:digest' unless match && match[:digest]
+
+    repo, tag = match[:repo], match[:tag]
+    registry = registry_for(repo)
+    latest = self.class.newest(tag, registry.tags(repo))
+    digest = registry.digest(repo, latest || tag)
+    kind = if latest then :newer
+           elsif digest != match[:digest] then :rebuilt
+           else :current
+           end
+    shown = latest || tag
+    Result.new(id: id, repo: repo, tag: tag, latest: shown, image: "#{repo}:#{shown}@#{digest}", kind: kind,
+               notes: self.class.release_notes(releases, shown),
+               major: latest ? self.class.numbers(latest).first != self.class.numbers(tag).first : false)
   end
 
   def ids
@@ -66,23 +108,10 @@ class AppVersions
 
   def check(id)
     manifest = YAML.safe_load(File.read(path(id)))
-    match = manifest['image'].to_s.match(/\A(?<repo>[^:@]+):(?<tag>[^@]+)@(?<digest>sha256:\h{64})\z/)
-    return Result.new(id: id, error: 'its image is not name:tag@sha256:digest') unless match
-
-    repo, tag = match[:repo], match[:tag]
-    registry = registry_for(repo)
-    latest = self.class.newest(tag, registry.tags(repo))
-    digest = registry.digest(repo, latest || tag)
-    kind = if latest then :newer
-           elsif digest != match[:digest] then :rebuilt
-           else :current
-           end
-    shown = latest || tag
-    Result.new(id: id, repo: repo, tag: tag, latest: shown, image: "#{repo}:#{shown}@#{digest}", kind: kind,
-               notes: self.class.release_notes(manifest['releases'], shown),
-               major: latest ? self.class.numbers(latest).first != self.class.numbers(tag).first : false)
+    check_image(manifest['image'], releases: manifest['releases'], id: id)
   rescue StandardError => e
-    Result.new(id: id, repo: repo, tag: tag, error: e.message)
+    match = manifest.is_a?(Hash) && manifest['image'].to_s.match(IMAGE)
+    Result.new(id: id, repo: match && match[:repo], tag: match && match[:tag], error: e.message)
   end
 
   INDEX_TYPES = %w[application/vnd.oci.image.index.v1+json application/vnd.docker.distribution.manifest.list.v2+json
@@ -92,12 +121,18 @@ class AppVersions
     private
 
     def request(url, method: :get, headers: {})
+      response = answer(url, method: method, headers: headers)
+      raise "#{URI(url).host} answered #{response.code}" unless response.is_a?(Net::HTTPSuccess)
+      response
+    end
+
+    # The registry's answer, whatever it is (https only).
+    def answer(url, method: :get, headers: {})
       uri = URI(url)
+      raise "#{url} isn't https" unless uri.is_a?(URI::HTTPS)
       req = (method == :head ? Net::HTTP::Head : Net::HTTP::Get).new(uri)
       headers.each { |key, value| req[key] = value }
-      response = Net::HTTP.start(uri.host, uri.port, use_ssl: true, open_timeout: 15, read_timeout: 30) { |http| http.request(req) }
-      raise "#{uri.host} answered #{response.code}" unless response.is_a?(Net::HTTPSuccess)
-      response
+      Net::HTTP.start(uri.host, uri.port, use_ssl: true, open_timeout: 15, read_timeout: 30) { |http| http.request(req) }
     end
   end
 
@@ -121,14 +156,20 @@ class AppVersions
 
     def digest(repo, tag)
       token = JSON.parse(request("https://auth.docker.io/token?service=registry.docker.io&scope=repository:#{full(repo)}:pull").body)['token']
-      response = request("https://registry-1.docker.io/v2/#{full(repo)}/manifests/#{tag}", method: :head,
-                         headers: { 'Authorization' => "Bearer #{token}", 'Accept' => INDEX_TYPES })
+      response = answer("https://registry-1.docker.io/v2/#{full(repo)}/manifests/#{tag}", method: :head,
+                        headers: { 'Authorization' => "Bearer #{token}", 'Accept' => INDEX_TYPES })
+      # Docker Hub says 401 for a repository it doesn't have, as for a private one
+      raise "Docker Hub has no #{repo}, or it's private" if response.is_a?(Net::HTTPUnauthorized)
+      raise "Docker Hub's #{repo} has no tag #{tag}" if response.is_a?(Net::HTTPNotFound)
+      raise "registry-1.docker.io answered #{response.code}" unless response.is_a?(Net::HTTPSuccess)
+
       response['Docker-Content-Digest'] or raise "the registry gave no digest for #{repo}:#{tag}"
     end
 
     private
 
     def full(repo)
+      repo = repo.sub(%r{\Adocker\.io/}, '')
       repo.include?('/') ? repo : "library/#{repo}"
     end
   end
@@ -145,7 +186,12 @@ class AppVersions
 
     def digest(repo, tag)
       name = repo.delete_prefix('ghcr.io/')
-      response = request("https://ghcr.io/v2/#{name}/manifests/#{tag}", method: :head, headers: auth(name).merge('Accept' => INDEX_TYPES))
+      response = answer("https://ghcr.io/v2/#{name}/manifests/#{tag}", method: :head, headers: auth(name).merge('Accept' => INDEX_TYPES))
+      # ghcr.io says 403 for a package it doesn't have, as for a private one
+      raise "ghcr.io has no #{name}, or it's private (it must be public for a NAS to pull it)" if response.is_a?(Net::HTTPForbidden) || response.is_a?(Net::HTTPUnauthorized)
+      raise "ghcr.io's #{name} has no tag #{tag}" if response.is_a?(Net::HTTPNotFound)
+      raise "ghcr.io answered #{response.code}" unless response.is_a?(Net::HTTPSuccess)
+
       response['Docker-Content-Digest'] or raise "the registry gave no digest for #{repo}:#{tag}"
     end
 
@@ -155,8 +201,100 @@ class AppVersions
       token = JSON.parse(request("https://ghcr.io/token?scope=repository:#{name}:pull").body)['token']
       { 'Authorization' => "Bearer #{token}" }
     rescue RuntimeError => e
-      raise e unless e.message.include?('401')
-      raise "the package is private on ghcr.io (it must be public for a NAS to pull it)"
+      raise e unless e.message.match?(/answered 40[13]\z/)
+      raise "ghcr.io has no #{name}, or it's private (it must be public for a NAS to pull it)"
+    end
+  end
+
+  # Any other registry (quay.io, lscr.io, codeberg.org, one of your own): the registry API (the
+  # OCI distribution spec's), with the anonymous token it asks for (WWW-Authenticate: Bearer).
+  # Public images only: one that needs a sign-in says so. The registry, and where it sends for a
+  # token, mustn't be the NAS itself or a link-local address (a cloud's metadata), so an image's
+  # name can't be used to make Amahi-kai ask those.
+  class Registry
+    include Http
+    PAGES = 10
+
+    def initialize(host)
+      @host = host
+    end
+
+    def tags(repo)
+      name = path(repo)
+      url = registry_url("/v2/#{name}/tags/list", 'n=1000')
+      names = []
+      PAGES.times do
+        break unless url
+
+        response = call(url, name)
+        names.concat(Array(JSON.parse(response.body)['tags']).grep(String))
+        url = next_page(response['Link'])
+      end
+      names
+    end
+
+    def digest(repo, tag)
+      name = path(repo)
+      response = call(registry_url("/v2/#{name}/manifests/#{tag}"), name, method: :head, headers: { 'Accept' => INDEX_TYPES })
+      response['Docker-Content-Digest'] or raise "#{@host} gave no digest for #{repo}:#{tag}"
+    end
+
+    private
+
+    def path(repo)
+      repo.delete_prefix("#{@host}/")
+    end
+
+    def registry_url(path, query = nil)
+      URI::HTTPS.build(host: @host, path: path, query: query).to_s
+    end
+
+    # The request, made again with a token when the registry asks for one.
+    def call(url, name, method: :get, headers: {})
+      reachable!(@host)
+      response = answer(url, method: method, headers: headers.merge(@token ? { 'Authorization' => "Bearer #{@token}" } : {}))
+      if response.is_a?(Net::HTTPUnauthorized) && !@token
+        @token = token(response['WWW-Authenticate'], name)
+        response = answer(url, method: method, headers: headers.merge('Authorization' => "Bearer #{@token}"))
+      end
+      raise "#{@host} has no #{name}, or it's private: only public images can be added" if response.is_a?(Net::HTTPUnauthorized) || response.is_a?(Net::HTTPForbidden)
+      raise "#{@host} has no #{name}, or not that tag" if response.is_a?(Net::HTTPNotFound)
+      raise "#{@host} answered #{response.code}" unless response.is_a?(Net::HTTPSuccess)
+
+      response
+    end
+
+    # An anonymous pull token from the realm the registry names.
+    def token(challenge, name)
+      fields = challenge.to_s.sub(/\ABearer\s+/i, '').scan(/(\w+)="([^"]*)"/).to_h
+      realm = URI(fields['realm'].to_s)
+      raise "#{@host} asks for a sign-in Amahi-kai can't give" unless challenge.to_s.match?(/\ABearer\s/i) && realm.is_a?(URI::HTTPS)
+
+      reachable!(realm.host)
+      query = { 'service' => fields['service'], 'scope' => "repository:#{name}:pull" }.compact
+      realm.query = [realm.query, URI.encode_www_form(query)].compact.join('&')
+      response = answer(realm.to_s)
+      raise "#{@host} has no #{name}, or it's private: only public images can be added" if response.is_a?(Net::HTTPUnauthorized) || response.is_a?(Net::HTTPForbidden)
+      raise "#{realm.host} answered #{response.code}" unless response.is_a?(Net::HTTPSuccess)
+
+      body = JSON.parse(response.body)
+      body['token'] || body['access_token'] or raise "#{realm.host} gave no token"
+    end
+
+    # The next page of tags, from the Link header (on this registry only).
+    def next_page(link)
+      target = link.to_s[/<([^>]+)>;\s*rel="?next"?/, 1] or return nil
+      url = URI.join(registry_url('/'), target)
+      url.host == @host && url.is_a?(URI::HTTPS) ? url.to_s : nil
+    end
+
+    def reachable!(host)
+      addresses = Addrinfo.getaddrinfo(host, 443, nil, :STREAM).map(&:ip_address)
+      raise "#{host} can't be found" if addresses.empty?
+      bad = addresses.map { |address| IPAddr.new(address) }.find { |ip| ip.loopback? || ip.link_local? || ip.to_s == '0.0.0.0' || ip.to_s == '::' }
+      raise "#{host} is #{bad}, which Amahi-kai doesn't ask for images" if bad
+    rescue SocketError
+      raise "#{host} can't be found"
     end
   end
 end

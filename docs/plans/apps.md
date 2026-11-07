@@ -388,6 +388,45 @@ LAN for everything stays a later, optional front door (roadmap, "HTTPS on the LA
   made again (Change → Save and restart): the wiki says so. Following a rename on its own can
   come later.
 
+### P4.8: Apps of your own
+
+**Decided (CatDogBark, 2026-11-06):** the catalog is the official set every NAS gets, and it will be
+signed (signed `catalog-N` tags, the release keys; next). An app that's only for one NAS (a
+private app, an app in the making, the bit apps that aren't for everyone) is added by the owner on
+that NAS: no signing asked of it, but a warning, the owner's password again, and a **Custom**
+label. Docker stays (Podman later or not at all).
+
+- [x] **The helper keeps them** (`libexec/amahi-helper.d/custom.rb`): `apps.custom_check` reads an
+  app file (a manifest, as the catalog's) with the catalog's checks and changes nothing;
+  `apps.custom_save` keeps it as `/var/lib/amahi-kai/custom-apps/<id>.yml` (root's, read by the
+  web app's group); `apps.custom_remove` forgets one that isn't installed and has no data kept.
+  From there an app of your own installs, updates and runs as any other: `app_manifest_path` finds
+  its file first. Its id is its own: one the catalog has, or one any app used on this NAS (a
+  container, data, a definition, secrets, storage, an `app-<id>` user), is refused, so it never
+  takes over another app's data or user; one the catalog adds later stays the owner's (the Apps
+  page lists the owner's). One that starts as root can't keep folders on a pool (`run_as: image`
+  with `kind: dataset`): the catalog's review keeps that out of the catalog (setuid from a
+  snapshot), and nobody reviews these.
+- [x] **Changes go through the update path.** A saved change on the version it runs is an update
+  too (`do_update_app`: its file's fields differ from its definition's): its data copied first,
+  the health check, and back by itself if it doesn't come up; Undo update as for a new version. A
+  reinstall (Change shares) still makes it from its definition, never the file saved since.
+- [x] **The pages** (`CustomAppsController`, `CustomApp`): **Add your own app** on the Apps page,
+  a form (name, image, how it runs and the kernel permissions it gets back, ports and its web
+  page, folders, settings and secrets, shares, what it reaches, memory) or **I have an app file**;
+  **Review** pins the image's tag to its digest (`AppVersions#pin`: Docker Hub, ghcr.io, or any
+  registry by the registry API with its anonymous token; https only, never the NAS itself or a
+  link-local address) and says in words what the app will be able to do, the processors computed
+  from the NAS (all but one); **Add it** takes the owner's password again (five tries a minute),
+  then Install opens by itself. On its page: the Custom label and note, **Edit** (the password
+  again, then the update), **Check for a newer version** (only when asked: a tag of the same
+  shape, or a newer build of its tag; updating to it doesn't ask for the password, as the image's
+  repository is the one the owner chose). **Remove** on its card. Logs filter the file and
+  setting values (a key typed in).
+- [ ] **Signed catalog** (`catalog-N` tags), then the bit apps that aren't for everyone move out
+  of the catalog into apps of their own on CatDogBark's NAS.
+- [ ] **Private images** (a registry sign-in for the NAS, for a closed bitShare): to discuss.
+
 ### Also in Phase 4
 
 - The wiki's Docker Apps page rewritten for the new model, with the plain statement that Docker

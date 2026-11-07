@@ -4,6 +4,14 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.7.0] — 2026-11-06
+
+Apps of your own: an app that isn't in the catalog can run on your server, boxed in the same way as the catalog's, after a review of what it will be able to do and your password.
+
+### 🚀 Major Features
+
+- **Apps of your own** — An app that isn't in the catalog can run on your server now: **Add your own app**, on the Apps page, asks for its image (with its tag, pinned to that build), how it runs, its ports, folders, settings, shares, what it reaches and its memory, or takes an app file written the way the catalog's are. **Review** says what it will be able to do, after the same checks the catalog's apps get, and **Add it** asks for your password again. It runs boxed in exactly as the catalog's apps do, marked **Custom**, and nobody has checked its image: add apps only from people you trust. On its page, **Edit** changes it (its data copied first, and back by itself if it doesn't come up), and **Check for a newer version** asks its registry, only when you ask.
+
 ## [1.6.3] — 2026-11-06
 
 Each app keeps only the kernel permissions it needs: all of them but Transmission need none. **Each app restarts once at this update**, as its container is made again with them.

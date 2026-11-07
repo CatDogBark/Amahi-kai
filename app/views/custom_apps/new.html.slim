@@ -1,0 +1,217 @@
+/ Add your own app (CustomAppsController, docs/plans/apps.md): describe it in the form, or paste
+/ an app file written the way the catalog's are, then Review. Edit opens here too, filled in; on
+/ the file tab when the file says more than the form shows. The rows (ports, folders, settings,
+/ secrets) are added and removed by custom_apps.js from the templates at the end.
+- editing = @editing
+- app = @app
+- errors = app ? app.errors : {}
+- tab = @tab || 'form'
+- fields = (app&.form || {}).to_h.stringify_keys
+- fields = { 'run_as' => 'app', 'network' => 'internet', 'memory' => '1g', 'web' => 'new0',
+             'ports' => { 'new0' => {} }, 'folders' => { 'new0' => {} },
+             'settings' => { 'new0' => { 'name' => 'TZ', 'kind' => 'timezone' } } } if fields.empty?
+- caps = fields.key?('capabilities') ? Array(fields['capabilities']) : CustomApp::LINUXSERVER_CAPABILITIES
+- run_as = fields['run_as'] == 'image' ? 'image' : 'app'
+- network = %w[lan none].include?(fields['network']) ? fields['network'] : 'internet'
+- categories = (CustomApp::CATEGORIES | AppCatalog.categories | [fields['category']].compact_blank)
+- memories = CustomApp::MEMORY.merge(fields['memory'].present? && !CustomApp::MEMORY.key?(fields['memory']) ? { fields['memory'] => fields['memory'] } : {})
+- text = app && (tab == 'file' || !app.form) ? app.text : ''
+- example = "name: Mealie\ndescription: Recipes and meal plans\ncategory: home\nimage: ghcr.io/mealie-recipes/mealie:v2.4.1\n" \
+            "run_as: app\nweb_port: 9925\nports:\n  - { host: 9925, container: 9000 }\nfolders:\n  - { name: data, path: /app/data }\n" \
+            "environment:\n  TZ: \"{{timezone}}\"\n"
+
+p.kai-apps-back
+  a href=(editing ? apps_app_path(editing) : apps_index_path(anchor: 'add'))
+    = lucide_icon('chevron-left', size: 16)
+    = editing ? "Back to #{app.name}" : 'All apps'
+
+.kai-custom
+  p.kai-custom-lede
+    - if editing
+      | Change what you described. Saving asks for your password, then #{app.name} is updated to it:
+        its data is copied first, and it goes back if it doesn't come up.
+    - else
+      | An app that runs from a container image, described by you. It runs the way the catalog's apps
+        do: as its own user, on a network of its own, with only what you give it here.
+
+  = form_tag custom_apps_review_path, id: 'custom-app-form', data: { 'custom-form' => '' } do
+    input type="hidden" name="editing" value=editing
+    input type="hidden" name="source" value=tab data-custom-source=""
+    .kai-custom-tabs role="tablist" aria-label="How to add it"
+      button.kai-custom-tab type="button" role="tab" id="custom-tab-form" aria-controls="custom-panel-form" aria-selected=(tab == 'form').to_s data-custom-tab="form" Describe it
+      button.kai-custom-tab type="button" role="tab" id="custom-tab-file" aria-controls="custom-panel-file" aria-selected=(tab == 'file').to_s data-custom-tab="file" I have an app file
+
+    - if errors[:file]
+      p.kai-notice.kai-notice-alert#custom-app-problem role="alert" = "That doesn't work yet: #{errors[:file]}"
+
+    #custom-panel-form.kai-custom-panels role="tabpanel" aria-labelledby="custom-tab-form" data-custom-panel="form" hidden=(tab != 'form')
+      section.kai-app-panel aria-labelledby="custom-app-head"
+        h2#custom-app-head The app
+        .kai-custom-grid
+          .kai-custom-field
+            label.form-label for="custom-name" Name
+            input.form-control#custom-name type="text" name="app[name]" value=fields['name'] maxlength="60" aria-describedby=("custom-name-problem" if errors[:name])
+            - if errors[:name]
+              p.kai-custom-problem#custom-name-problem = errors[:name]
+            - elsif editing
+              p.kai-custom-hint Its id stays #{editing}.
+          .kai-custom-field
+            label.form-label for="custom-category" Category
+            select.form-select#custom-category name="app[category]"
+              - categories.each do |category|
+                option value=category selected=(category == (fields['category'].presence || 'other')) = category.capitalize
+        .kai-custom-field
+          label.form-label for="custom-description" What it does, in a line
+          input.form-control#custom-description type="text" name="app[description]" value=fields['description'] maxlength="200"
+        .kai-custom-field
+          label.form-label for="custom-image" Image
+          input.form-control.kai-mono#custom-image type="text" name="app[image]" value=fields['image'] placeholder="ghcr.io/mealie-recipes/mealie:v2.4.1" spellcheck="false" autocapitalize="off" aria-describedby="custom-image-hint"
+          - if errors[:image]
+            p.kai-custom-problem#custom-image-hint = errors[:image]
+          - else
+            p.kai-custom-hint#custom-image-hint
+              | Its name and tag, as you'd give docker pull (Docker Hub's, or with its registry first).
+                Amahi-kai pins it to the build that tag names now: it changes only when you change it.
+        .kai-custom-field
+          label.form-label for="custom-sign-in" How to sign in the first time
+          input.form-control#custom-sign-in type="text" name="app[sign_in]" value=fields['sign_in'] maxlength="300" placeholder="Make an account on its page; the first one is its admin"
+          p.kai-custom-hint Said on its page once it's installed. Leave it empty if there's nothing to say.
+
+      section.kai-app-panel aria-labelledby="custom-runs-head"
+        h2#custom-runs-head How it runs
+        .kai-custom-choices role="radiogroup" aria-labelledby="custom-runs-head"
+          label.kai-custom-choice
+            input.form-check-input type="radio" name="app[run_as]" value="app" checked=(run_as == 'app') data-custom-runs=""
+            span
+              span.kai-custom-choice-title
+                | As its own user
+                span.kai-custom-tag  · recommended
+              span.kai-custom-hint The container runs as an account made for this app, with no kernel permissions. Most images work this way.
+          label.kai-custom-choice.kai-custom-choice-risk
+            input.form-check-input type="radio" name="app[run_as]" value="image" checked=(run_as == 'image') data-custom-runs=""
+            span
+              span.kai-custom-choice-title As the image says, usually root at first
+              span.kai-custom-hint
+                | Some images set themselves up as root, then switch to a user: linuxserver.io's do, given
+                  PUID and PGID (add them under its settings, as its user's and group's numbers). They need
+                  a few kernel permissions to do it.
+        #custom-caps.kai-custom-caps data-custom-caps="" hidden=(run_as != 'image')
+          p.kai-notice.kai-notice-warn
+            strong Starting as root is riskier.
+            |  If the image is bad, it starts with more power. Give it only the permissions it needs: the
+               first four are what linuxserver.io's images take.
+          fieldset
+            legend.form-label Kernel permissions it gets back
+            input type="hidden" name="app[capabilities][]" value=""
+            .kai-custom-cap-list
+              - CustomApp::CAPABILITIES.each do |cap, words|
+                label.kai-custom-cap
+                  input.form-check-input type="checkbox" name="app[capabilities][]" value=cap checked=caps.include?(cap)
+                  span
+                    = words
+                    code = cap
+          p.kai-custom-hint Raw sockets, devices, and anything else Docker wouldn't give an app, can't be chosen.
+
+      section.kai-app-panel aria-labelledby="custom-ports-head"
+        h2#custom-ports-head Its web page and ports
+        .kai-custom-rows data-custom-rows="ports"
+          - Hash(fields['ports']).each do |key, port|
+            = render 'port_row', key: key, port: port.to_h.stringify_keys, web: fields['web'].to_s == key.to_s
+        button.btn.btn-outline-secondary.btn-sm type="button" data-custom-add="ports" + Add a port
+        p.kai-custom-hint
+          | On the NAS from 1024 up, and in the app the port it listens on. One already used is given
+            another at install. Only your network and Tailscale reach them.
+
+      section.kai-app-panel aria-labelledby="custom-folders-head"
+        h2#custom-folders-head Its folders
+        .kai-custom-rows data-custom-rows="folders"
+          - Hash(fields['folders']).each do |key, folder|
+            = render 'folder_row', key: key, folder: folder.to_h.stringify_keys
+        button.btn.btn-outline-secondary.btn-sm type="button" data-custom-add="folders" + Add a folder
+        p.kai-custom-hint
+          | What it keeps: a name, and where the app has it. Kept on the system disk in
+            #{File.join(AppCatalog.apps_root, editing || '<its id>')}, owned by its user. Your shares are given at install, not here.
+
+      section.kai-app-panel aria-labelledby="custom-settings-head"
+        h2#custom-settings-head Its settings
+        .kai-custom-rows data-custom-rows="settings"
+          - Hash(fields['settings']).each do |key, setting|
+            = render 'setting_row', key: key, setting: setting.to_h.stringify_keys
+        .kai-custom-rows data-custom-rows="secrets"
+          - Hash(fields['secrets']).each do |key, secret|
+            = render 'secret_row', key: key, secret: secret.to_h.stringify_keys
+        .kai-custom-buttons
+          button.btn.btn-outline-secondary.btn-sm type="button" data-custom-add="settings" + Add a setting
+          button.btn.btn-outline-secondary.btn-sm type="button" data-custom-add="secrets" + Add a secret Amahi-kai makes
+        p.kai-custom-hint
+          | Its environment. A secret is a long random value Amahi-kai makes once, keeps, and shows you on
+            its page.
+
+      section.kai-app-panel aria-labelledby="custom-shares-head"
+        h2#custom-shares-head Files in shares
+        label.kai-custom-check
+          input.form-check-input type="checkbox" name="app[shares]" value="1" checked=(fields['shares'] == '1')
+          span
+            span.kai-custom-choice-title It works with files in shares
+            span.kai-custom-hint Install then asks which shares to give it, read only, at /shares/&lt;name&gt;.
+        label.kai-custom-check
+          input.form-check-input type="checkbox" name="app[writes_shares]" value="1" checked=(fields['writes_shares'] == '1')
+          span
+            span.kai-custom-choice-title It may write in them
+            span.kai-custom-hint
+              | You still choose, share by share, whether it can. It has to run as its own user, or be given
+                PUID and PGID.
+
+      section.kai-app-panel aria-labelledby="custom-reach-head"
+        h2#custom-reach-head What it reaches
+        .kai-custom-choices role="radiogroup" aria-labelledby="custom-reach-head"
+          - [['internet', 'The internet', ' · usual', 'Not the devices on your network, your Tailscale network or other private addresses.'],
+             ['lan', 'The internet and the devices on your network', nil, 'For an app that talks to cameras, printers or other machines at home.'],
+             ['none', 'Nothing past the NAS', nil, "It can still look names up through the NAS, but can't send anything out."]].each do |value, title, tag, hint|
+            label.kai-custom-choice
+              input.form-check-input type="radio" name="app[network]" value=value checked=(network == value)
+              span
+                span.kai-custom-choice-title
+                  = title
+                  - if tag
+                    span.kai-custom-tag = tag
+                span.kai-custom-hint = hint
+        p.kai-custom-hint Whichever you choose, it never reaches other apps, or the NAS's own pages, files or SSH.
+
+      section.kai-app-panel aria-labelledby="custom-memory-head"
+        h2#custom-memory-head Memory
+        .kai-custom-field.kai-custom-narrow
+          label.form-label for="custom-memory" The most it may use
+          select.form-select#custom-memory name="app[memory]"
+            - memories.each do |value, words|
+              option value=value selected=(value == fields['memory']) = words
+        p.kai-custom-hint = "And at most #{CustomApp.processors}, as every app."
+
+    #custom-panel-file.kai-custom-panels role="tabpanel" aria-labelledby="custom-tab-file" data-custom-panel="file" hidden=(tab != 'file')
+      section.kai-app-panel aria-labelledby="custom-file-head"
+        h2#custom-file-head
+          label for="custom-file" The app file
+        p.kai-custom-hint
+          | Written the way the catalog's apps are:
+          =< link_to 'Making apps', 'https://amahi-kai.com/wiki/making-apps', target: '_blank', rel: 'noopener'
+          |  says how. Amahi-kai reads it with the same checks it gives the catalog's. Its image can name a
+            tag only: it's pinned to that tag's build when it's read.
+        textarea.form-control.kai-mono.kai-custom-file#custom-file name="manifest" spellcheck="false" rows="22" placeholder=example = text
+        p.kai-custom-hint
+          | Nothing in one asks for what no app gets: privileged mode, the NAS's own network, devices, or
+            folders outside its own. There's no field for them.
+
+    .kai-custom-actions
+      a.btn.btn-outline-secondary href=(editing ? apps_app_path(editing) : apps_index_path(anchor: 'add')) Cancel
+      button.btn.btn-primary type="submit" data-disable-with="Reading it…" Review
+
+template data-custom-template="ports"
+  = render 'port_row', key: '__KEY__', port: {}, web: false
+template data-custom-template="folders"
+  = render 'folder_row', key: '__KEY__', folder: {}
+template data-custom-template="settings"
+  = render 'setting_row', key: '__KEY__', setting: {}
+template data-custom-template="secrets"
+  = render 'secret_row', key: '__KEY__', secret: {}
+
+= javascript_include_tag 'custom_apps'

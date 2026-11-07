@@ -107,6 +107,19 @@ Rails.application.routes.draw do
     get 'help/report', action: 'report', as: 'help_report'
   end
 
+  # Apps of the owner's own (CustomAppsController): Add your own app, its review, and Edit, Remove
+  # and the version check of one
+  scope '/apps/custom', controller: 'custom_apps', as: 'custom_apps' do
+    get 'new', action: 'new', as: 'new'
+    post 'review', action: 'review', as: 'review'
+    post 'add', action: 'create', as: 'create'
+    get ':id/edit', action: 'edit', as: 'edit', constraints: { id: /[a-z][a-z0-9]{1,23}/ }
+    post ':id/save', action: 'update', as: 'save', constraints: { id: /[a-z][a-z0-9]{1,23}/ }
+    post ':id/remove', action: 'destroy', as: 'remove', constraints: { id: /[a-z][a-z0-9]{1,23}/ }
+    post ':id/check', action: 'check_version', as: 'check', constraints: { id: /[a-z][a-z0-9]{1,23}/ }
+    post ':id/version', action: 'version', as: 'version', constraints: { id: /[a-z][a-z0-9]{1,23}/ }
+  end
+
   # Apps (consolidated from plugin)
   scope '/apps', controller: 'apps', as: 'apps' do
     get '/', action: 'docker_apps', as: 'index'

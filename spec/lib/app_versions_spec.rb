@@ -78,10 +78,13 @@ RSpec.describe AppVersions do
     end
   end
 
-  it "asks each image's own registry: Docker Hub, or GitHub's for ghcr.io" do
+  it "asks each image's own registry: Docker Hub, GitHub's for ghcr.io, or any other by the registry API" do
     versions = described_class.new
     expect(versions.registry_for("ghcr.io/catdogbark/bittube")).to be_a(AppVersions::Ghcr)
     expect(versions.registry_for("gitea/gitea")).to be_a(AppVersions::DockerHub)
+    expect(versions.registry_for("nginx")).to be_a(AppVersions::DockerHub)
+    expect(versions.registry_for("docker.io/library/nginx")).to be_a(AppVersions::DockerHub)
+    expect(versions.registry_for("lscr.io/linuxserver/transmission")).to be_a(AppVersions::Registry)
     expect(described_class.newest("0.1.0", %w[0.1.0 0.2.0 latest main sha-abc1234])).to eq("0.2.0")
   end
 
@@ -94,6 +97,102 @@ RSpec.describe AppVersions do
       next expect(notes).to(be_nil) if %w[bitshare bitstream].include?(id)
 
       expect(notes).to match(%r{\Ahttps://github\.com/.+\{version\}\z}), "#{id} has no releases link"
+    end
+  end
+
+  # An app of your own's image (CustomAppsController): pinned to the build its tag names now, and
+  # checked for a newer one only when asked.
+  describe 'pinning' do
+    let(:versions) { described_class.new(registry: registry) }
+
+    before { registry.digests = { 'mealie-recipes/mealie:v2.4.1' => digest } }
+
+    it "pins name:tag to the build it names now, and keeps one pinned already" do
+      expect(versions.pin('mealie-recipes/mealie:v2.4.1')).to eq("mealie-recipes/mealie:v2.4.1@#{digest}")
+      expect(versions.pin("mealie-recipes/mealie:v2.4.0@sha256:#{'e' * 64}")).to eq("mealie-recipes/mealie:v2.4.0@sha256:#{'e' * 64}")
+      expect { versions.pin('mealie-recipes/mealie') }.to raise_error(ArgumentError, /isn't name:tag/)
+      expect { versions.pin('Mealie:1') }.to raise_error(ArgumentError)
+      expect { versions.pin('registry.local:5000/x:1') }.to raise_error(ArgumentError)
+    end
+
+    it 'finds a newer release of an image, or a newer build of its tag' do
+      registry.tags_by_repo = { 'mealie-recipes/mealie' => %w[v2.4.1 v2.5.0 nightly] }
+      registry.digests['mealie-recipes/mealie:v2.5.0'] = "sha256:#{'c' * 64}"
+      expect(versions.check_image("mealie-recipes/mealie:v2.4.1@#{digest}")).to have_attributes(kind: :newer, latest: 'v2.5.0', major: false)
+      registry.tags_by_repo = { 'mealie-recipes/mealie' => %w[v2.4.1 nightly] }
+      expect(versions.check_image("mealie-recipes/mealie:v2.4.1@#{digest}").kind).to eq(:current)
+      expect(versions.check_image("mealie-recipes/mealie:v2.4.1@sha256:#{'e' * 64}")).to have_attributes(kind: :rebuilt, image: "mealie-recipes/mealie:v2.4.1@#{digest}")
+    end
+  end
+
+  # Any other registry: the registry API with the anonymous token it asks for, never pointed at
+  # the NAS itself or a link-local address.
+  describe AppVersions::Registry do
+    let(:registry) { described_class.new('quay.io') }
+    let(:asked) { [] }
+
+    def answer(kind, body: '', headers: {})
+      response = kind.new('1.1', { Net::HTTPUnauthorized => '401', Net::HTTPForbidden => '403', Net::HTTPNotFound => '404' }.fetch(kind, '200'), '')
+      headers.each { |key, value| response[key] = value }
+      response.instance_variable_set(:@body, body)
+      response.instance_variable_set(:@read, true)
+      response
+    end
+
+    before do
+      allow(Addrinfo).to receive(:getaddrinfo).and_return([Addrinfo.tcp('203.0.113.7', 443)])
+    end
+
+    def answers(map)
+      allow(registry).to receive(:answer) do |url, method: :get, headers: {}|
+        asked << [url, method, headers['Authorization']]
+        map.call(url, headers)
+      end
+    end
+
+    let(:challenge) { 'Bearer realm="https://quay.io/v2/auth",service="quay.io",scope="repository:prometheus/node-exporter:pull"' }
+
+    it "asks once without a token, then with the one the registry's challenge names" do
+      answers(lambda do |url, headers|
+        if url.start_with?('https://quay.io/v2/auth') then answer(Net::HTTPOK, body: '{"token":"t0k"}')
+        elsif headers['Authorization'] == 'Bearer t0k' then answer(Net::HTTPOK, headers: { 'Docker-Content-Digest' => digest })
+        else answer(Net::HTTPUnauthorized, headers: { 'WWW-Authenticate' => challenge })
+        end
+      end)
+      expect(registry.digest('quay.io/prometheus/node-exporter', 'v1.8.2')).to eq(digest)
+      expect(asked.map(&:first)).to eq(['https://quay.io/v2/prometheus/node-exporter/manifests/v1.8.2',
+                                        'https://quay.io/v2/auth?service=quay.io&scope=repository%3Aprometheus%2Fnode-exporter%3Apull',
+                                        'https://quay.io/v2/prometheus/node-exporter/manifests/v1.8.2'])
+    end
+
+    it "reads every page of tags, on this registry only" do
+      answers(lambda do |url, _headers|
+        if url.include?('last=b')
+          answer(Net::HTTPOK, body: '{"tags":["c"]}', headers: { 'Link' => '<https://elsewhere.example/v2/x/tags/list?last=c>; rel="next"' })
+        else
+          answer(Net::HTTPOK, body: '{"tags":["a","b"]}', headers: { 'Link' => '</v2/x/tags/list?n=1000&last=b>; rel="next"' })
+        end
+      end)
+      expect(registry.tags('quay.io/x')).to eq(%w[a b c])
+      expect(asked.size).to eq(2)
+    end
+
+    it "says when the image is private, or isn't there" do
+      answers(lambda do |url, _headers|
+        url.start_with?('https://quay.io/v2/auth') ? answer(Net::HTTPOK, body: '{"token":"t0k"}') : answer(Net::HTTPUnauthorized, headers: { 'WWW-Authenticate' => challenge })
+      end)
+      expect { registry.digest('quay.io/nosuch/thing', '1') }.to raise_error("quay.io has no nosuch/thing, or it's private: only public images can be added")
+      answers(->(_url, _headers) { answer(Net::HTTPNotFound) })
+      expect { registry.digest('quay.io/prometheus/node-exporter', 'v0') }.to raise_error('quay.io has no prometheus/node-exporter, or not that tag')
+    end
+
+    it "won't send for a token anywhere but https, nor ask the NAS itself or a link-local address" do
+      answers(->(_url, _headers) { answer(Net::HTTPUnauthorized, headers: { 'WWW-Authenticate' => 'Bearer realm="http://quay.io/auth"' }) })
+      expect { registry.digest('quay.io/x', '1') }.to raise_error("quay.io asks for a sign-in Amahi-kai can't give")
+      [['127.0.0.1', 'is 127.0.0.1'], ['169.254.169.254', 'is 169.254.169.254'], ['::1', 'is ::1']].each do |address, words|
+        allow(Addrinfo).to receive(:getaddrinfo).and_return([Addrinfo.tcp(address, 443)])
+        expect { described_class.new('evil.example').digest('evil.example/x', '1') }.to raise_error(RuntimeError, /#{Regexp.escape(words)}/)
+      end
     end
   end
 end

@@ -16,4 +16,4 @@ Rails.application.config.assets.paths << Rails.root.join('node_modules')
 Rails.application.config.assets.precompile += %w( login.css )
 
 # Consolidated plugin assets (formerly loaded via plugin glob)
-Rails.application.config.assets.precompile += %w( shares.js apps.js disks.js network.js settings.js )
+Rails.application.config.assets.precompile += %w( shares.js apps.js custom_apps.js disks.js network.js settings.js )

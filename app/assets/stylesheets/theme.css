@@ -1381,3 +1381,100 @@ table.settings tbody tr { border-bottom-color: var(--kai-line); }
 .kai-app-danger { border-color: rgba(255, 143, 143, 0.32); }
 .kai-app-danger .btn-outline-danger { color: #ffb0b0; border-color: #ff8f8f; }
 .kai-app-danger .btn-outline-danger:hover { background: rgba(255, 143, 143, 0.12); color: #ffd0d0; }
+/* Apps of your own (custom_apps): the Add your own app form, its review, and their marks on the
+   Apps page and an app's page */
+.kai-app-card-add { border-style: dashed; }
+.kai-app-panel-custom { order: 3; }
+.kai-custom { max-width: 900px; display: flex; flex-direction: column; gap: 20px; }
+.kai-custom form { display: flex; flex-direction: column; gap: 20px; }
+.kai-custom-panels { display: flex; flex-direction: column; gap: 20px; }
+.kai-custom-panels[hidden] { display: none; }
+.kai-custom-lede { margin: 0; color: var(--kai-muted); font-size: 15px; line-height: 1.5; }
+.kai-custom-tabs { display: inline-flex; align-self: flex-start; gap: 6px; padding: 4px; border-radius: 12px; background: rgba(255, 255, 255, 0.04); }
+.kai-custom-tab {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--kai-muted);
+  font: inherit;
+  font-size: 14px;
+}
+.kai-custom-tab[aria-selected="true"] { background: rgba(255, 255, 255, 0.09); color: var(--kai-title); font-weight: 600; }
+.kai-custom .kai-app-panel { display: flex; flex-direction: column; gap: 14px; }
+.kai-custom .kai-app-panel h2 { margin: 0; }
+.kai-custom-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 14px; }
+.kai-custom-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.kai-custom-field[hidden] { display: none; }
+.kai-custom-field .form-label { margin: 0; font-size: 13.5px; font-weight: 600; }
+.kai-custom-narrow { max-width: 380px; }
+.kai-custom-hint { display: block; margin: 0; color: var(--kai-muted); font-size: 13.5px; line-height: 1.45; }
+.kai-custom-problem { margin: 0; color: #ffb0b0; font-size: 13.5px; line-height: 1.45; }
+.kai-mono { font-family: var(--bs-font-monospace); font-size: 14px; }
+.kai-custom-choices { display: flex; flex-direction: column; gap: 10px; }
+.kai-custom-choice, .kai-custom-check {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+}
+.kai-custom-choice > span, .kai-custom-check > span { display: flex; flex-direction: column; gap: 4px; }
+.kai-custom-choice .form-check-input, .kai-custom-check .form-check-input { flex: none; margin-top: 3px; }
+.kai-custom-choice:has(input:checked) { border-color: var(--kai-mint-ring); background: var(--kai-mint-soft); }
+.kai-custom-choice-risk:has(input:checked) { border-color: rgba(255, 197, 110, 0.6); background: rgba(255, 197, 110, 0.06); }
+.kai-custom-choice-title { color: var(--kai-title); font-weight: 600; }
+.kai-custom-tag { color: var(--kai-muted); font-weight: 400; }
+.kai-custom-caps { display: flex; flex-direction: column; gap: 12px; }
+.kai-custom-caps[hidden] { display: none; }
+.kai-custom-caps .kai-notice { margin: 0; }
+.kai-custom-caps fieldset { min-width: 0; margin: 0; padding: 0; border: 0; background: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.kai-custom-caps legend { float: none; width: auto; margin: 0; }
+.kai-custom-cap-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px 16px; margin-top: 8px; }
+.kai-custom-cap { display: flex; gap: 10px; align-items: flex-start; margin: 0; line-height: 1.4; }
+.kai-custom-cap .form-check-input { flex: none; margin-top: 3px; }
+.kai-custom-cap code { margin-left: 6px; color: var(--kai-muted); font-size: 12px; }
+.kai-custom-rows { display: flex; flex-direction: column; gap: 12px; }
+.kai-custom-rows:empty { display: none; }
+.kai-custom-row { display: grid; gap: 10px; align-items: end; }
+.kai-custom-row-port { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 110px) auto auto; }
+.kai-custom-row-folder, .kai-custom-row-secret { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; }
+.kai-custom-row-setting { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto; }
+.kai-custom-row-setting:has([data-custom-value][hidden]) { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; }
+.kai-custom-web { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; margin: 0; white-space: nowrap; }
+.kai-custom-remove { min-width: 38px; min-height: 38px; display: inline-flex; align-items: center; justify-content: center; }
+.kai-custom-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.kai-custom-buttons .btn, .kai-custom .btn-sm { align-self: flex-start; }
+.kai-custom-file { min-height: 420px; line-height: 1.6; resize: vertical; }
+.kai-custom-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+.kai-custom-review-head { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+.kai-custom-facts { grid-template-columns: minmax(0, 150px) minmax(0, 1fr); }
+.kai-custom-warning {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 18px 20px;
+  border-radius: 16px;
+  background: rgba(255, 197, 110, 0.08);
+  border: 1px solid rgba(255, 197, 110, 0.45);
+  color: #f0e2c8;
+}
+.kai-custom-warning svg { flex: none; margin-top: 2px; color: var(--kai-accent); }
+.kai-custom-warning h2 { margin: 0 0 6px; font-size: 17px; font-weight: 600; color: #ffd79a; }
+.kai-custom-warning p { margin: 0; line-height: 1.5; }
+.kai-custom-back { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; text-decoration: none; }
+.kai-custom-newer { margin: 0 0 10px; color: var(--kai-text); line-height: 1.45; }
+@media (max-width: 767.98px) {
+  .kai-custom-grid, .kai-custom-row-folder, .kai-custom-row-secret, .kai-custom-row-setting,
+  .kai-custom-row-setting:has([data-custom-value][hidden]) { grid-template-columns: minmax(0, 1fr) auto; }
+  .kai-custom-row-folder > .kai-custom-field, .kai-custom-row-secret > .kai-custom-field,
+  .kai-custom-row-setting > .kai-custom-field, .kai-custom-grid > .kai-custom-field { grid-column: 1 / -1; }
+  .kai-custom-row-port { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .kai-custom-row-port .kai-custom-remove { justify-self: end; }
+  .kai-custom-facts { grid-template-columns: minmax(0, 1fr); }
+  .kai-custom-facts dd { margin-bottom: 6px; }
+}

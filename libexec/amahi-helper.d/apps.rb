@@ -387,9 +387,10 @@ module AmahiHelper
       "amahi-#{id}"
     end
 
-    # Where an app's manifest is: the fetched catalog's, else the code's (see CATALOG_REPO).
+    # Where an app's manifest is: the owner's own (APP_CUSTOM), else the fetched catalog's, else
+    # the code's (see CATALOG_REPO).
     def app_manifest_path(id)
-      [File.join(APP_CATALOG, 'apps', "#{id}.yml"), File.join(APP_MANIFESTS, "#{id}.yml")].find { |path| File.file?(path) }
+      [custom_app_path(id), File.join(APP_CATALOG, 'apps', "#{id}.yml"), File.join(APP_MANIFESTS, "#{id}.yml")].find { |path| File.file?(path) }
     end
 
     # An app's manifest, checked field by field. A manifest that fails a check is a bug in the
@@ -1247,16 +1248,22 @@ module AmahiHelper
 
     # --- Updates ---
 
+    # A custom app is also updated to a change of its file on the same version (custom.rb): the
+    # same copy first, health check and way back as a new version gets.
     def do_update_app(id, manifest, shares)
       from = app_image(id) or raise Failed, "#{id} isn't installed"
-      raise Failed, "#{id} runs #{image_tag(from)}, the catalog's version, already" if from == manifest[:image]
+      # What it runs now, for the copy and a way back: the definition its container was made from
+      # (one made before these were kept: the catalog's, on the image it runs)
+      definition = app_definition(id)
+      changed = custom_app?(id) && definition && definition[:source] != manifest[:source]
+      if from == manifest[:image] && !changed
+        raise Failed, custom_app?(id) ? "#{id} runs #{image_tag(from)} as its app file says already" : "#{id} runs #{image_tag(from)}, the catalog's version, already"
+      end
       if version_below?(image_tag(manifest[:image]), image_tag(from))
         raise Failed, "the catalog's #{id} (#{image_tag(manifest[:image])}) is older than the one it runs (#{image_tag(from)}), so there's nothing to update to"
       end
 
-      # What it runs now, for the copy and a way back: the definition its container was made from
-      # (one made before these were kept: the catalog's, on the image it runs)
-      before = app_definition(id) || manifest.merge(image: from)
+      before = definition || manifest.merge(image: from)
       app_backup_room!(id, before)
       unless engine_image_present?(manifest[:image])
         say("Pulling #{manifest[:image].sub(/@.*/, '')}...")
@@ -1288,7 +1295,7 @@ module AmahiHelper
         app_forget_backup(id)
         return { 'app' => id, 'updated' => false, 'image' => from, 'problem' => problem }
       end
-      engine_remove_image(from)
+      engine_remove_image(from) unless from == manifest[:image]
       { 'app' => id, 'updated' => true, 'image' => manifest[:image], 'from' => from, 'ports' => reply['ports'] }
     end
 

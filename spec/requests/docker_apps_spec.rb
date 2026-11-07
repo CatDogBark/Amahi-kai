@@ -129,7 +129,7 @@ describe "Docker Apps", type: :request do
       expect(yours.css('a.btn-outline-secondary').map { |manage| manage['href'] }).to eq(%w[/apps/gitea /apps/jellyfin /apps/transmission /apps/uptimekuma])
       expect(yours.css('[data-app-shares]')).to be_empty # nothing to install up here, and no passwords either
       add = page.at_css('section#add')
-      expect(add.css('article').map { |card| card['id'] }).to eq(%w[docker_app_bitshare docker_app_bitstream docker_app_bittube
+      expect(add.css('article[id^="docker_app_"]').map { |card| card['id'] }).to eq(%w[docker_app_bitshare docker_app_bitstream docker_app_bittube
                                                                    docker_app_pigallery2 docker_app_vaultwarden])
     end
 

@@ -1,3 +1,6 @@
-- if flash.any?
+/ Each message in the flash is a toast; a flash value that isn't text is for the page itself (an
+/ app of your own's version check, say)
+- messages = flash.select { |_name, msg| msg.is_a?(String) }
+- if messages.any?
   script#flash-data[type="application/json"]
-    == flash.map { |name, msg| { type: name, message: msg } }.to_json
+    == messages.map { |name, msg| { type: name, message: msg } }.to_json

@@ -1289,6 +1289,23 @@ RSpec.describe 'AmahiHelper apps' do
         expect(ran).to be_empty
       end
 
+      # An app of your own (custom.rb): its file saved with a change, on the version it runs
+      it "updates an app of your own to its file's changes on the same version, with the same copy and way back" do
+        stub_const('AmahiHelper::APP_CUSTOM', "#{dir}/custom-apps")
+        FileUtils.mkdir_p("#{dir}/custom-apps")
+        changed = manifest[:source].merge('image' => old_image, 'environment' => manifest[:source]['environment'].merge('LOG_LEVEL' => 'warn'))
+        File.write("#{dir}/custom-apps/vaultwarden.yml", changed.to_yaml)
+        mine = helper.app_manifest('vaultwarden')
+        reply = helper.do_update_app('vaultwarden', mine, [])
+        expect(reply).to include('updated' => true, 'image' => old_image, 'from' => old_image)
+        expect(ran.map { |argv| argv.first(2).join(' ') }).to include('/usr/bin/cp -a', '/usr/bin/docker create')
+        expect(ran.map { |argv| argv[1..2] }).not_to include(['image', 'rm']) # the image it still runs
+        expect(JSON.parse(File.read("#{dir}/app-definitions/vaultwarden.json"))['environment']).to include('LOG_LEVEL' => 'warn')
+        expect(backup_info).to include('from' => old_image, 'to' => old_image)
+        # Once it runs them, there's nothing to update to
+        expect { helper.do_update_app('vaultwarden', mine, []) }.to raise_error(AmahiHelper::Failed, "vaultwarden runs 1.37.2 as its app file says already")
+      end
+
       it 'leaves out folders the manifest marks backup: false' do
         jellyfin = helper.app_manifest('jellyfin')
         FileUtils.mkdir_p(%W[#{apps_root}/jellyfin/config #{apps_root}/jellyfin/cache])

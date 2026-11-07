@@ -57,6 +57,7 @@ require_relative 'amahi-helper.d/greyhole'
 require_relative 'amahi-helper.d/dns'
 require_relative 'amahi-helper.d/network'
 require_relative 'amahi-helper.d/apps'
+require_relative 'amahi-helper.d/custom'
 require_relative 'amahi-helper.d/system'
 
 AmahiHelper::OPERATIONS.freeze

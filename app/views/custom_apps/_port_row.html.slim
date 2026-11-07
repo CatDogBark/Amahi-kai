@@ -1,0 +1,18 @@
+/ A port of a custom app's form: on the NAS, in the app, its protocol, and whether it's the web page.
+.kai-custom-row.kai-custom-row-port data-custom-row=""
+  .kai-custom-field
+    label.form-label for="custom-port-host-#{key}" On the NAS
+    input.form-control.kai-mono id="custom-port-host-#{key}" type="text" inputmode="numeric" name="app[ports][#{key}][host]" value=port['host'] placeholder="9925"
+  .kai-custom-field
+    label.form-label for="custom-port-container-#{key}" In the app
+    input.form-control.kai-mono id="custom-port-container-#{key}" type="text" inputmode="numeric" name="app[ports][#{key}][container]" value=port['container'] placeholder="9000"
+  .kai-custom-field
+    label.form-label for="custom-port-protocol-#{key}" Protocol
+    select.form-select id="custom-port-protocol-#{key}" name="app[ports][#{key}][protocol]"
+      option value="tcp" selected=(port['protocol'] != 'udp') TCP
+      option value="udp" selected=(port['protocol'] == 'udp') UDP
+  label.kai-custom-web
+    input.form-check-input type="radio" name="app[web]" value=key checked=web
+    span Its web page
+  button.btn.btn-outline-secondary.btn-sm.kai-custom-remove type="button" data-custom-remove="" aria-label="Remove this port"
+    = lucide_icon('x', size: 16)

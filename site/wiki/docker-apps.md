@@ -30,8 +30,8 @@ Amahi-kai's root helper adds Docker's official apt repository (its signing key i
 against a pinned fingerprint), installs Docker and turns the service on.
 
 > Docker itself is root-level software: an app's container runs with whatever its image does.
-> Amahi-kai only installs the apps in its catalog, each from a version that was checked, but only
-> install apps you trust.
+> Amahi-kai installs the apps in its catalog, each from a version that was checked, and apps of
+> your own (below), which nobody checks. Only install apps you trust.
 
 ---
 
@@ -230,6 +230,51 @@ New versions reach the catalog by hand: someone reads the release notes and chan
 manifest in the catalog (see [Making Apps](making-apps)). An app that needs a newer Amahi-kai than
 yours says "Needs a newer Amahi-kai: run System Update first" instead of offering Install or
 Update.
+
+## Apps of your own
+
+An app that isn't in the catalog (one you made, or one you found) can still run on your server,
+boxed in the same way. On the Apps page, **Add your own app** (the last card under **Add apps**)
+asks for:
+
+- its **name**, a line about it, and a category;
+- its **image**, with its tag, as you'd give `docker pull` (`ghcr.io/mealie-recipes/mealie:v2.4.1`,
+  or `nginx:1.27` for Docker Hub's). Amahi-kai asks the image's registry for the build that tag
+  names now and pins it, so it changes only when you change it. Public images only, for now;
+- **how it runs**: as its own user (most images), or as the image says, usually root at first
+  (linuxserver.io's images, which switch to the user given in `PUID` and `PGID`). One that starts
+  as root gets back only the kernel permissions you tick (linuxserver.io's take four);
+- its **ports** (from 1024 up), which one is its web page, its **folders**, its **settings**
+  (a value, the server's time zone, or its user's or group's number) and **secrets** Amahi-kai
+  makes for it;
+- whether it works with **files in shares**, and may write in them;
+- **what it reaches**: the internet, the internet and your network's devices, or nothing past
+  the server;
+- the most **memory** it may use. Like every app, it may use all of the server's processors but one.
+
+If you have an app file, written the way the catalog's are (see [Making Apps](making-apps)),
+**I have an app file** takes it as it is. **Review** then says what the app will be able to do, in
+words, after the same checks the catalog's apps get. **Add it** asks for your password again, even
+though you're signed in, so a page left open, or a stolen sign-in, can't add an app; then Install
+opens by itself.
+
+An app of your own is marked **Custom**. It runs exactly as the catalog's apps do (its own user,
+its own network, none of the server's services, only what you gave it), but **nobody has checked
+its image**: a bad one could still misuse what you give it (its folders, the shares you choose,
+and the internet). Add apps only from people you trust.
+
+On its page:
+
+- **Edit** opens what you described, filled in (or its file, when it uses fields the form doesn't
+  show). Saving asks for your password, then updates the app to it: its data is copied first, and
+  it goes back by itself if it doesn't come up, as an update does; **Undo update** works the same.
+- **Check for a newer version** asks the image's registry for a newer release of the same image
+  (a tag of the same shape: `v2.4.1` finds `v2.5.0`, not `nightly`), or a newer build of its tag.
+  Amahi-kai looks only when you ask, and never updates an app of your own by itself.
+
+**Remove**, on its card once it's uninstalled and its data deleted, forgets it. Its name is its
+own: one the catalog has, or one an app on the server used before (its data still kept), is
+refused, so an app of your own never takes over another app's data or passwords.
 
 ### From the command line
 
