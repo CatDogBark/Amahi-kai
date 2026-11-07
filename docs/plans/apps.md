@@ -415,7 +415,7 @@ label. Docker stays (Podman later or not at all).
   from its definition, never the file saved since. A change its container doesn't see (its name,
   description, category, sign-in words, or a field written out as its default) isn't one:
   `apps.custom_save` records the file as its definition too, and replies `update: false`, so the
-  page saves it without an update (1.9.0).
+  page saves it without an update (1.8.1).
 - [x] **The pages** (`CustomAppsController`, `CustomApp`): **Add your own app** on the Apps page,
   a form (name, image, how it runs and the kernel permissions it gets back, ports and its web
   page, folders, settings and secrets, shares, what it reaches, memory) or **I have an app file**;
@@ -428,7 +428,7 @@ label. Docker stays (Podman later or not at all).
   shape, or a newer build of its tag; updating to it doesn't ask for the password, as the image's
   repository is the one the owner chose). **Remove** on its card. Logs filter the file and
   setting values (a key typed in).
-- [x] **Its logo is a picture kept on the NAS** (1.9.0): PNG, JPEG, WebP or SVG, 256 KB at most,
+- [x] **Its logo is a picture kept on the NAS** (1.8.1): PNG, JPEG, WebP or SVG, 256 KB at most,
   chosen on the form, carried through the review as base64 and given to `apps.custom_save`
   (`logo`; empty removes it, left out keeps it), which checks it by its bytes (an SVG's first
   element is `<svg>`, with no entities of its own) and keeps it as `custom-apps/<id>.<type>`. The
