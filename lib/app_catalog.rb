@@ -59,11 +59,13 @@ class AppCatalog
       production? ? CUSTOM_DIR : Rails.root.join('tmp', 'custom-apps').to_s
     end
 
-    # A custom app's file as it was saved, or nil.
+    # A custom app's file as it was saved, or nil. Found among the files there, never by a path
+    # made from the id asked for (the pages pass one from the request).
     def custom_file(id)
       return nil unless id.to_s.match?(ID)
 
-      File.read(File.join(custom_dir, "#{id}.yml"))
+      path = Dir[File.join(custom_dir, '*.yml')].find { |file| File.basename(file, '.yml') == id.to_s }
+      path && File.read(path)
     rescue SystemCallError
       nil
     end
