@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.8.1] — 2026-11-07
+
+Apps of your own can have a logo, kept on your server, and a change to how one is listed doesn't restart it.
+
 ### 🚀 Major Features
 
 - **Logos for apps of your own** — An app of your own can have a logo now: a PNG, JPEG, WebP or SVG picture of up to 256 KB, chosen on its form (Add your own app, or Edit). It's kept on your server and shown from there, so the Apps page loads nothing from elsewhere for your apps; a logo link in an app file isn't used.
