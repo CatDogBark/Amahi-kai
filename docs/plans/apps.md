@@ -409,9 +409,13 @@ label. Docker stays (Podman later or not at all).
   with `kind: dataset`): the catalog's review keeps that out of the catalog (setuid from a
   snapshot), and nobody reviews these.
 - [x] **Changes go through the update path.** A saved change on the version it runs is an update
-  too (`do_update_app`: its file's fields differ from its definition's): its data copied first,
-  the health check, and back by itself if it doesn't come up; Undo update as for a new version. A
-  reinstall (Change shares) still makes it from its definition, never the file saved since.
+  too (`do_update_app`: its file's checked manifest differs from its definition's,
+  `app_container_fields`): its data copied first, the health check, and back by itself if it
+  doesn't come up; Undo update as for a new version. A reinstall (Change shares) still makes it
+  from its definition, never the file saved since. A change its container doesn't see (its name,
+  description, category, sign-in words, or a field written out as its default) isn't one:
+  `apps.custom_save` records the file as its definition too, and replies `update: false`, so the
+  page saves it without an update (1.9.0).
 - [x] **The pages** (`CustomAppsController`, `CustomApp`): **Add your own app** on the Apps page,
   a form (name, image, how it runs and the kernel permissions it gets back, ports and its web
   page, folders, settings and secrets, shares, what it reaches, memory) or **I have an app file**;
@@ -424,6 +428,13 @@ label. Docker stays (Podman later or not at all).
   shape, or a newer build of its tag; updating to it doesn't ask for the password, as the image's
   repository is the one the owner chose). **Remove** on its card. Logs filter the file and
   setting values (a key typed in).
+- [x] **Its logo is a picture kept on the NAS** (1.9.0): PNG, JPEG, WebP or SVG, 256 KB at most,
+  chosen on the form, carried through the review as base64 and given to `apps.custom_save`
+  (`logo`; empty removes it, left out keeps it), which checks it by its bytes (an SVG's first
+  element is `<svg>`, with no entities of its own) and keeps it as `custom-apps/<id>.<type>`. The
+  web app serves it (`/apps/custom/<id>/logo`, under `default-src 'none'; sandbox`, so a script
+  in an SVG never runs) at an address naming the picture, cached. A `logo` link in the file isn't
+  used, so the Apps page loads nothing from elsewhere for an app of the owner's.
 - [x] **A signed catalog** (1.8.0, decided with the rest above): the catalog's versions are
   `catalog-N` tags (N from 1) on its `main`, each signed with a release key (`git tag -s`, the
   same keys and `/etc/amahi-kai/allowed_signers` as releases). The update check lists the tags,

@@ -17,25 +17,35 @@
 #
 # The web app asks for the owner's password again before it saves one (CustomAppsController):
 # a page left open, or a stolen sign-in, can't add an app.
+#
+# Its logo is a picture the owner gives with it (PNG, JPEG, WebP or SVG), kept beside its file as
+# APP_CUSTOM/<id>.<type> and served by the NAS itself (an SVG under a sandbox policy, so a script in
+# one can't run), never a link: a logo in the file is ignored, so the Apps page loads nothing
+# from elsewhere for an app of the owner's.
 module AmahiHelper
   # Root's, read by the web app's group (APP_USER), to list them.
   APP_CUSTOM = '/var/lib/amahi-kai/custom-apps'
+  APP_LOGO_TYPES = %w[png jpg webp svg].freeze
+  APP_LOGO_MAX_BYTES = 256 * 1024
 
   add_operations(
-    # Reads +manifest+ (YAML, an app file as the catalog's are written) as apps.custom_save would,
-    # changing nothing: the web app's review page, before it asks for the owner's password.
+    # Reads +manifest+ (YAML, an app file as the catalog's are written) and +logo+ as
+    # apps.custom_save would, changing nothing: the web app's review page, before it asks for the
+    # owner's password.
     'apps.custom_check' => {
-      params: %w[app manifest],
+      params: %w[app manifest logo],
       validate: ->(a) { custom_app_request(a) },
       plan: ->(v) { [[:custom_app_checked, v[:id]]] }
     },
     # Keeps +manifest+ as the custom app +app+, new or changed. A change reaches its container at
-    # its next install or update, which the web app runs right after. Refused while a job changes
-    # the app.
+    # its next install or update, which the web app runs right after when the reply says
+    # update: true. One its container doesn't see (its name, description, category, how to sign
+    # in) needs none: it's recorded as what the container was made from too. Refused while a job
+    # changes the app. +logo+ is its picture, base64 (an empty one removes it; left out, it's kept).
     'apps.custom_save' => {
-      params: %w[app manifest],
+      params: %w[app manifest logo],
       validate: ->(a) { custom_app_request(a).tap { |v| not_in_a_job!(v[:id]) } },
-      plan: ->(v) { [[:custom_app_save, v[:id], v[:content]]] }
+      plan: ->(v) { [[:custom_app_save, v[:id], v[:content], v[:logo_type], v[:logo]]] }
     },
     # Forgets a custom app that isn't installed and has no data kept: uninstall it, and delete
     # its data, first.
@@ -55,15 +65,67 @@ module AmahiHelper
       File.file?(custom_app_path(id))
     end
 
-    # { id:, content:, manifest: } for an app file that passes every check, else Refused with why
-    # not (the owner's own file: what's wrong is theirs to fix, not a bug).
+    # { id:, content:, manifest:, logo_type:, logo: } for an app file (and logo) that passes every
+    # check, else Refused with why not (the owner's own file: what's wrong is theirs to fix, not a
+    # bug). logo_type is nil to keep the logo, 'none' to remove it.
     def custom_app_request(args)
       id = app_id(args['app'])
       content = args['manifest']
       raise Refused, 'the app file must be text' unless content.is_a?(String) && content.valid_encoding? && !content.include?("\0")
       raise Refused, "the app file is over #{CATALOG_MAX_BYTES / 1024} KB" if content.bytesize > CATALOG_MAX_BYTES
+      logo_type = custom_logo_type(args['logo'])
       custom_id_free!(id)
-      { id: id, content: content, manifest: custom_manifest(id, content) }
+      { id: id, content: content, manifest: custom_manifest(id, content), logo_type: logo_type, logo: args['logo'] }
+    end
+
+    # nil (keep it) when +value+ is left out, 'none' (remove it) when it's empty, else the type of
+    # the picture it holds, in base64: a PNG, JPEG, WebP or SVG, up to APP_LOGO_MAX_BYTES.
+    def custom_logo_type(value)
+      return nil if value.nil?
+      return 'none' if value == ''
+      raise Refused, 'the logo must be a picture, in base64' unless value.is_a?(String) && value.match?(%r{\A[A-Za-z0-9+/]+={0,2}\z})
+
+      bytes = value.unpack1('m0')
+      raise Refused, "the logo is over #{APP_LOGO_MAX_BYTES / 1024} KB" if bytes.bytesize > APP_LOGO_MAX_BYTES
+
+      logo_type(bytes) or raise Refused, "the logo isn't a PNG, JPEG, WebP or SVG picture"
+    rescue ArgumentError
+      raise Refused, 'the logo must be a picture, in base64'
+    end
+
+    # What a picture is, by its first bytes ('png', 'jpg', 'webp' or 'svg'), or nil.
+    def logo_type(bytes)
+      bytes = bytes.b
+      return 'png' if bytes.start_with?("\x89PNG\r\n\x1A\n".b)
+      return 'jpg' if bytes.start_with?("\xFF\xD8\xFF".b)
+      return 'webp' if bytes.bytesize > 12 && bytes[0, 4] == 'RIFF' && bytes[8, 4] == 'WEBP'
+
+      'svg' if svg_picture?(bytes)
+    end
+
+    # An SVG: UTF-8 text whose first element is <svg>, after an XML declaration, comments and a
+    # doctype at most, with no entities of its own (a doctype with a [ ] part). Whatever is in it,
+    # it's served under a sandbox, and shown as a picture, where a browser runs no script.
+    def svg_picture?(bytes)
+      text = bytes.dup.force_encoding('UTF-8')
+      return false unless text.valid_encoding? && !text.include?("\0")
+
+      rest = text.delete_prefix("\uFEFF")
+      loop do
+        rest = rest.lstrip
+        ending = { '<?xml' => '?>', '<!--' => '-->', '<!DOCTYPE' => '>' }.find { |start, _| rest.start_with?(start) }&.last
+        break unless ending
+
+        cut = rest.index(ending) or return false
+        return false if rest.start_with?('<!DOCTYPE') && rest[0, cut].include?('[')
+
+        rest = rest[(cut + ending.length)..]
+      end
+      rest.match?(%r{\A<svg[\s>/]})
+    end
+
+    def custom_logo_paths(id)
+      APP_LOGO_TYPES.map { |type| File.join(APP_CUSTOM, "#{id}.#{type}") }
     end
 
     # The checks a catalog manifest gets, and one more: a custom app has to be installable now.
@@ -121,18 +183,28 @@ module AmahiHelper
       { 'app' => id, 'checked' => true }
     end
 
-    def do_custom_app_save(id, content)
+    def do_custom_app_save(id, content, logo_type = nil, logo = nil)
       unless File.directory?(APP_CUSTOM)
         Dir.mkdir(APP_CUSTOM, 0o750)
         File.chown(0, group_id(APP_USER), APP_CUSTOM)
       end
       content = "#{content}\n" unless content.end_with?("\n")
       do_install(custom_app_path(id), content, nil, '0640', APP_USER)
-      { 'app' => id, 'saved' => true }
+      # Installed, and its container would be made the same: what it was made from is this file now
+      definition = app_definition(id)
+      manifest = custom_manifest(id, content).merge(source: YAML.safe_load(content))
+      same = definition && app_container_fields(definition) == app_container_fields(manifest)
+      app_record_definition(id, manifest) if same
+      if logo_type
+        keep = File.join(APP_CUSTOM, "#{id}.#{logo_type}")
+        do_install(keep, logo.unpack1('m0'), nil, '0640', APP_USER) unless logo_type == 'none'
+        FileUtils.rm_f(custom_logo_paths(id) - [keep])
+      end
+      { 'app' => id, 'saved' => true, 'update' => !definition.nil? && !same }
     end
 
     def do_custom_app_remove(id)
-      FileUtils.rm_f(custom_app_path(id))
+      FileUtils.rm_f([custom_app_path(id), *custom_logo_paths(id)])
       { 'app' => id, 'removed' => true }
     end
   end

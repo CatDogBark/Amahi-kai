@@ -173,23 +173,23 @@ good one to try first: they have Docker health checks and small data.
 
 ## 7b. Data on a ZFS pool (P4.6a)
 
-With a ZFS pool online (say `test`) and bitShare's catalog entry marking its folders
-`kind: dataset` (catalog format 3):
+With a ZFS pool online (say `test`) and an app whose folders are marked `kind: dataset` (catalog
+format 3). None of the catalog's apps have one since bitShare left it: add one as an app of your
+own (`run_as: app`, `requires: 3`), here called `pooled`, with a `data` folder:
 
-- [ ] **Install** bitShare: the dialog asks for the pool under **Storage**. Its page says "Its data
-  is on the ZFS pool test", and the pool's card lists bitShare under "Apps keeping their data here".
+- [ ] **Install** it: the dialog asks for the pool under **Storage**. Its page says "Its data
+  is on the ZFS pool test", and the pool's card lists it under "Apps keeping their data here".
 
   ```bash
   zfs list -r test/apps
   ```
 
-- [ ] Its files are in the dataset, not on the system disk: `/srv/pools/test/apps/bitshare/data`
-  and `.../chunks` fill as files sync; `/var/lib/amahi-kai/apps/bitshare` holds no `data` or
-  `chunks`.
-- [ ] **Take offline** and **Delete pool** on `test` are refused, naming bitShare.
-- [ ] **Roll back** `test` to an earlier snapshot: bitShare is stopped while it runs and comes back
+- [ ] Its files are in the dataset, not on the system disk: `/srv/pools/test/apps/pooled/data`
+  fills as it writes; `/var/lib/amahi-kai/apps/pooled` holds no `data`.
+- [ ] **Take offline** and **Delete pool** on `test` are refused, naming it.
+- [ ] **Roll back** `test` to an earlier snapshot: it is stopped while it runs and comes back
   running, with its data as it was then.
-- [ ] Reboot: bitShare comes back running, its data mounted.
+- [ ] Reboot: it comes back running, its data mounted.
 - [ ] **Uninstall** it: the dataset stays (`zfs list -r test/apps`). **Delete it**: the dataset is
   gone.
 - [ ] With no pool online, installing it is refused: "keeps its data on a ZFS pool".

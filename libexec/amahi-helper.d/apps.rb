@@ -1242,6 +1242,12 @@ module AmahiHelper
       image.match?(APP_IMAGE) ? image : nil
     end
 
+    # What a checked manifest makes its container from, defaults filled in: a change to anything
+    # else (how it's listed, a field written out with its default) makes the same container.
+    def app_container_fields(manifest)
+      manifest.except(:source).merge(network: manifest[:network] || 'internet', capabilities: Array(manifest[:capabilities]))
+    end
+
     def image_tag(image)
       image.sub(/@.*/, '').split(':').last
     end
@@ -1255,7 +1261,7 @@ module AmahiHelper
       # What it runs now, for the copy and a way back: the definition its container was made from
       # (one made before these were kept: the catalog's, on the image it runs)
       definition = app_definition(id)
-      changed = custom_app?(id) && definition && definition[:source] != manifest[:source]
+      changed = custom_app?(id) && definition && app_container_fields(definition) != app_container_fields(manifest)
       if from == manifest[:image] && !changed
         raise Failed, custom_app?(id) ? "#{id} runs #{image_tag(from)} as its app file says already" : "#{id} runs #{image_tag(from)}, the catalog's version, already"
       end

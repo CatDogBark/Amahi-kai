@@ -71,7 +71,7 @@ RSpec.describe 'AmahiHelper apps' do
       stub_const('AmahiHelper::UFW', "#{dir}/ufw")
       allow(helper).to receive(:do_install) { |path, content, *| File.write(path, content) }
       allow(helper).to receive(:run_command) { |argv| ran << argv.reject { |a| a.is_a?(Hash) } }
-      allow(helper).to receive(:do_apps_status).and_return('docker' => true, 'apps' => { 'bittube' => {}, 'gitea' => {}, 'transmission' => {} })
+      allow(helper).to receive(:do_apps_status).and_return('docker' => true, 'apps' => { 'gitea' => {}, 'transmission' => {}, 'uptimekuma' => {} })
     end
 
     it 'is its own operation, also run after installing and uninstalling' do
@@ -83,13 +83,13 @@ RSpec.describe 'AmahiHelper apps' do
       File.write("#{dir}/app-ports.json", { 'gitea' => [{ 'preferred' => 3300, 'host' => 3302, 'container' => 3000, 'protocol' => 'tcp' }] }.to_json)
       File.write("#{avahi}/amahi-app-jellyfin.service", 'from an uninstalled app')
       File.write("#{avahi}/ssh.service", 'not ours')
-      expect(helper.do_announce_apps).to eq('announced' => %w[bittube gitea transmission])
-      expect(Dir.children(avahi).sort).to eq(%w[amahi-app-bittube.service amahi-app-gitea.service amahi-app-transmission.service ssh.service])
+      expect(helper.do_announce_apps).to eq('announced' => %w[gitea transmission uptimekuma])
+      expect(Dir.children(avahi).sort).to eq(%w[amahi-app-gitea.service amahi-app-transmission.service amahi-app-uptimekuma.service ssh.service])
 
       gitea = File.read("#{avahi}/amahi-app-gitea.service")
       expect(gitea).to include('<name replace-wildcards="yes">Gitea on %h</name>', '<type>_http._tcp</type>',
                                '<subtype>_gitea._sub._http._tcp</subtype>', '<port>3302</port>', '<txt-record>app=gitea</txt-record>')
-      expect(File.read("#{avahi}/amahi-app-bittube.service")).to include('<port>8484</port>', '<subtype>_bittube._sub._http._tcp</subtype>')
+      expect(File.read("#{avahi}/amahi-app-uptimekuma.service")).to include('<port>3001</port>', '<subtype>_uptimekuma._sub._http._tcp</subtype>')
       expect(ran).to include(['/usr/bin/systemctl', 'try-reload-or-restart', 'avahi-daemon.service'])
 
       ran.clear
@@ -351,7 +351,7 @@ RSpec.describe 'AmahiHelper apps' do
     let(:ids) { Dir[File.join(catalog, '*.yml')].map { |path| File.basename(path, '.yml') } }
 
     it "has the apps chosen for the catalog, each a manifest the helper accepts" do
-      expect(ids).to contain_exactly('jellyfin', 'vaultwarden', 'uptimekuma', 'gitea', 'transmission', 'bittube', 'bitshare', 'pigallery2', 'bitstream')
+      expect(ids).to contain_exactly('jellyfin', 'vaultwarden', 'uptimekuma', 'gitea', 'transmission', 'pigallery2')
       ids.each do |id|
         manifest = helper.app_manifest(id)
         expect(manifest[:image]).to match(/:[^@]+@sha256:\h{64}\z/), "#{id} isn't pinned by tag and digest"
@@ -1385,8 +1385,12 @@ RSpec.describe 'AmahiHelper apps' do
         expect(ran.map { |argv| argv[1..2] }).not_to include(['image', 'rm']) # the image it still runs
         expect(JSON.parse(File.read("#{dir}/app-definitions/vaultwarden.json"))['environment']).to include('LOG_LEVEL' => 'warn')
         expect(backup_info).to include('from' => old_image, 'to' => old_image)
-        # Once it runs them, there's nothing to update to
+        # Once it runs them, there's nothing to update to, nor in a change to how it's listed, or a
+        # field written out as its default
         expect { helper.do_update_app('vaultwarden', mine, []) }.to raise_error(AmahiHelper::Failed, "vaultwarden runs 1.37.2 as its app file says already")
+        listed = changed.merge('description' => 'Passwords, mine', 'network' => changed['network'] || 'internet', 'capabilities' => changed['capabilities'] || [])
+        File.write("#{dir}/custom-apps/vaultwarden.yml", listed.to_yaml)
+        expect { helper.do_update_app('vaultwarden', helper.app_manifest('vaultwarden'), []) }.to raise_error(AmahiHelper::Failed, /as its app file says already/)
       end
 
       it 'leaves out folders the manifest marks backup: false' do

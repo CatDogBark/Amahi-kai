@@ -1,7 +1,7 @@
 // Add your own app (app/views/custom_apps/new): the form's two tabs (Describe it, I have an app
 // file), its rows (ports, folders, settings, secrets) added from the page's templates and
-// removed, the kernel permissions shown only for an app that runs as the image says, and a
-// setting's value only when it's one you type.
+// removed, the kernel permissions shown only for an app that runs as the image says, a
+// setting's value only when it's one you type, and the logo chosen, before it's sent.
 
 (function() {
   var form = document.querySelector('[data-custom-form]');
@@ -52,9 +52,30 @@
     if (remove) remove.closest('[data-custom-row]').remove();
   });
 
+  // The picture chosen for its logo, shown where its logo is (read here, as a data: address: the
+  // page's policy loads pictures from Amahi-kai, data: and https only)
+  function showLogo(input) {
+    var file = input.files && input.files[0];
+    if (!file) return;
+    var remove = form.querySelector('[data-custom-logo-remove]');
+    if (remove) remove.checked = false;
+    var reader = new FileReader();
+    reader.addEventListener('load', function() {
+      var picture = document.createElement('img');
+      picture.className = 'kai-app-logo';
+      picture.alt = '';
+      picture.src = reader.result;
+      form.querySelector('[data-custom-logo-preview]').replaceChildren(picture);
+    });
+    reader.readAsDataURL(file);
+  }
+
   form.addEventListener('change', function(event) {
     if (event.target.matches('[data-custom-runs]')) showCapabilities();
     if (event.target.matches('[data-custom-kind]')) showValue(event.target);
+    if (event.target.matches('[data-custom-logo]')) showLogo(event.target);
+    // Remove its logo: the picture chosen isn't sent either
+    if (event.target.matches('[data-custom-logo-remove]') && event.target.checked) form.querySelector('[data-custom-logo]').value = '';
   });
 
   // The tabs as tabs: arrow keys move between them

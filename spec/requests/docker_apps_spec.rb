@@ -136,19 +136,18 @@ describe "Docker Apps", type: :request do
       expect(yours.css('a.btn-outline-secondary').map { |manage| manage['href'] }).to eq(%w[/apps/gitea /apps/jellyfin /apps/transmission /apps/uptimekuma])
       expect(yours.css('[data-app-shares]')).to be_empty # nothing to install up here, and no passwords either
       add = page.at_css('section#add')
-      expect(add.css('article[id^="docker_app_"]').map { |card| card['id'] }).to eq(%w[docker_app_bitshare docker_app_bitstream docker_app_bittube
-                                                                   docker_app_pigallery2 docker_app_vaultwarden])
+      expect(add.css('article[id^="docker_app_"]').map { |card| card['id'] }).to eq(%w[docker_app_pigallery2 docker_app_vaultwarden])
     end
 
     it "filters only the apps to add, and says when a category has none left" do
-      %w[bittube jellyfin pigallery2].each do |id|
+      %w[jellyfin pigallery2].each do |id|
         DockerApp.create!(identifier: id, name: AppCatalog.find(id)[:name], image: AppCatalog.find(id)[:image], status: 'running')
       end
       get "/apps", params: { category: 'media' }
       page = Nokogiri::HTML(response.body)
       expect(page.at_css('.kai-apps-filters a[aria-current="page"]').text).to eq('Media')
       expect(page.at_css('section#add').text.squish).to include('Every Media app in the catalog is already one of yours, above.')
-      expect(page.css('section[aria-labelledby="apps-yours"] article').size).to eq(3) # yours stay, whatever the filter
+      expect(page.css('section[aria-labelledby="apps-yours"] article').size).to eq(2) # yours stay, whatever the filter
       get "/apps", params: { category: 'nope' }
       expect(Nokogiri::HTML(response.body).at_css('.kai-apps-filters a[aria-current="page"]').text).to eq('All')
     end
