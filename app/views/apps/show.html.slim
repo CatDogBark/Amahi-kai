@@ -128,6 +128,8 @@ section.kai-app-panel.kai-app-hero id="docker_app_#{identifier}" aria-label=name
         - if app.ports.any?
           dt = app.ports.map { |port| port[:host] }.uniq.one? ? 'Port' : 'Ports'
           dd id="app-ports-#{identifier}" = app.port_summary
+        dt Network
+        dd id="app-network-#{identifier}" = AppCatalog.network_words(entry[:network])
         / Versions (P4.5): Update when the catalog has another one, Undo update while the copy from
         / before the last update is kept. Both run in the install window (apps.js).
         - if versioned

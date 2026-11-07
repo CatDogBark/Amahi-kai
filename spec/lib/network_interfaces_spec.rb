@@ -64,3 +64,20 @@ RSpec.describe NetworkInterfaces do
     expect { described_class.all }.not_to raise_error
   end
 end
+
+# The apps' own bridges (amahi<n>, the root helper's) are never the LAN: their subnets would be
+# let into the apps' ports, and offered for DNS and DHCP.
+RSpec.describe 'NetworkInterfaces and the apps\' own networks' do
+  before(:all) { Privileged.operations } # loads libexec/amahi-helper
+
+  it "never takes an app's bridge for the LAN, in the web app or the root helper" do
+    expect('amahi3').to match(NetworkInterfaces::NOT_LAN)
+    expect('amahi3').to match(AmahiHelper::NOT_LAN_INTERFACES)
+    expect('ens18').not_to match(NetworkInterfaces::NOT_LAN)
+  end
+
+  it "has the apps' pool as the root helper does" do
+    expect(NetworkInterfaces::APPS_POOL).to eq(AmahiHelper::APP_NETWORK_POOL)
+  end
+end
+

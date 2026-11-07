@@ -135,8 +135,20 @@ IPv4 and IPv6, refuses everything else from an app, and lets back the replies to
 of an app. It's the helper's own chain (UFW keeps a rule there through its reloads), so it holds
 with UFW off too, and `apps.firewall` builds it with `AMAHI-APPS`, before Docker starts as well.
 Another app's port through the NAS's own address was already refused (UFW has no rule for app
-ports in `INPUT`). Apps can still reach each other directly on `docker0`; a network of each app's
-own is the next step.
+ports in `INPUT`).
+
+Each app is on a Docker network of its own (`amahi-<app>`, bridge `amahi<n>`, a /24 of
+`172.30.0.0/16` that no address or route on the NAS overlaps, kept in `app-networks.json` for its
+next install), so no app reaches another. The same `INPUT` jump covers `amahi+`. `AMAHI-APPS`
+sends what an app sends through `AMAHI-APPS-OUT`: nothing to another app's network or Docker's
+own bridge, then by the app's `network` (its manifest's; an app made before the field takes the
+catalog's): `lan` passes, `none` is refused, and the rest (`internet`, the default) is refused to
+the private ranges, Tailscale's, link-local, multicast and the NAS's LAN subnets, DNS aside. What
+comes into an app goes through `AMAHI-APPS-IN`, as before: only from the NAS's private subnets and
+`tailscale0`. Docker's bridge (`docker0`) has no apps on it once `apps.follow_networks` (the
+update to 1.6.2) has moved them; until then a container there goes out as it always did. The
+apps still ask Unbound on Docker's bridge address, which their networks reach as the NAS's own
+(`INPUT`, DNS allowed), and Unbound answers `172.30.0.0/16`.
 
 An app whose manifest says `access: tailscale` (catalog format 5, P4.7) is published on
 `127.0.0.1` only, so nothing reaches its ports from the LAN or the internet. The helper puts its

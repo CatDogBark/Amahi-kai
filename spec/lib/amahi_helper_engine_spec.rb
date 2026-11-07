@@ -37,6 +37,7 @@ RSpec.describe 'AmahiHelper container engine' do
       { image: "example/app:1.0@sha256:#{'a' * 64}", restart: 'unless-stopped', no_new_privileges: true,
         cap_drop: %w[NET_RAW MKNOD], pids_limit: 2048, log: { size: '10m', files: 3 }, memory: '1g', cpus: 3, label: 'transmission',
         dns: { servers: ['172.17.0.1'], search: ['home.arpa'] }, env_file: '/run/amahi-kai/env.1', user: nil, group_add: [100],
+        network: 'amahi-transmission',
         publish: [{ address: '0.0.0.0', host: 9091, container: 9091, protocol: 'tcp' }, { address: '0.0.0.0', host: 51_413, container: 51_413, protocol: 'udp' }],
         mounts: [{ source: '/srv/apps/transmission/config', target: '/config' },
                  { source: '/run/amahi-kai-app-shares/transmission/1/0', target: '/shares/Downloads', readonly: false },
@@ -48,7 +49,7 @@ RSpec.describe 'AmahiHelper container engine' do
       expect(ran.sole).to eq(['/usr/bin/docker', 'create', '--name', 'amahi-transmission-next', '--restart', 'unless-stopped',
                               '--security-opt', 'no-new-privileges', '--cap-drop', 'NET_RAW', '--cap-drop', 'MKNOD',
                               '--pids-limit', '2048', '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3',
-                              '--memory', '1g', '--cpus', '3', '--label', 'amahi.app=transmission',
+                              '--memory', '1g', '--cpus', '3', '--label', 'amahi.app=transmission', '--network', 'amahi-transmission',
                               '--dns', '172.17.0.1', '--dns-search', 'home.arpa', '--env-file', '/run/amahi-kai/env.1',
                               '--group-add', '100',
                               '--publish', '0.0.0.0:9091:9091/tcp', '--publish', '0.0.0.0:51413:51413/udp',
@@ -70,6 +71,18 @@ RSpec.describe 'AmahiHelper container engine' do
     expect(helper.engine_container_cpus('HostConfig' => { 'NanoCpus' => 3_000_000_000 })).to eq(3)
     expect(helper.engine_container_cpus('HostConfig' => { 'NanoCpus' => 1_500_000_000 })).to eq(1.5)
     expect(helper.engine_container_cpus('HostConfig' => { 'NanoCpus' => 0 })).to be_nil
+  end
+
+  it "makes an app's network once, on its subnet, with a bridge named for it, and again when it's on another" do
+    ran = []
+    allow(helper).to receive(:run_command) { |argv| ran << argv && nil }
+    allow(helper).to receive(:docker_output).with('network', 'inspect', '--format', '{{range .IPAM.Config}}{{.Subnet}} {{end}}', 'amahi-gitea')
+                                            .and_return(nil, "172.30.1.0/24 \n", "172.30.9.0/24 \n")
+    3.times { helper.engine_network_ensure('amahi-gitea', subnet: '172.30.1.0/24', gateway: '172.30.1.1', bridge: 'amahi1', label: 'gitea') }
+    create = ['/usr/bin/docker', 'network', 'create', '--driver', 'bridge', '--subnet', '172.30.1.0/24', '--gateway', '172.30.1.1',
+              '--opt', 'com.docker.network.bridge.name=amahi1', '--label', 'amahi.app=gitea', 'amahi-gitea']
+    expect(ran).to eq([create, ['/usr/bin/docker', 'network', 'rm', 'amahi-gitea', { allow_failure: true }], create])
+    expect(helper.engine_container_network('HostConfig' => { 'NetworkMode' => 'amahi-gitea' })).to eq('amahi-gitea')
   end
 
   it "reads a container's DNS back as engine_create takes it, so the two compare" do

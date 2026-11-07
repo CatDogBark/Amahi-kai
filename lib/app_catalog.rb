@@ -70,6 +70,18 @@ class AppCatalog
       all.find { |app| app[:identifier] == id.to_s }
     end
 
+    # What an app reaches out to, as the Apps page says it (the catalog entry's network). It never
+    # reaches another app, or the NAS but for its DNS.
+    NETWORK_WORDS = {
+      'internet' => 'Reaches the internet, not the devices on your network',
+      'lan' => 'Reaches the internet and the devices on your network',
+      'none' => 'Reaches nothing past the NAS'
+    }.freeze
+
+    def network_words(network)
+      NETWORK_WORDS.fetch(network.to_s, NETWORK_WORDS['internet'])
+    end
+
     def by_category(category)
       all.select { |app| app[:category] == category.to_s }
     end
@@ -186,6 +198,8 @@ class AppCatalog
         category: data['category'], logo_url: data['logo'], image: data['image'], web_port: data['web_port'],
         web_tls: data['web_tls'] == true, access: data['access'] == 'tailscale' ? 'tailscale' : 'lan',
         writes_shares: data['writes_shares'] == true, releases: data['releases'],
+        # What it reaches out to (the helper's APP_NETWORK_ACCESS): the internet unless it says
+        network: %w[lan none].include?(data['network']) ? data['network'] : 'internet',
         # Whether Install asks which shares to give it: an app that works with files in shares
         # says so (`shares: true`), and one that writes in them does too
         uses_shares: data['shares'] == true || data['writes_shares'] == true,

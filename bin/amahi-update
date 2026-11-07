@@ -504,6 +504,10 @@ if [[ -x /usr/bin/docker ]]; then
   reply=$(/usr/local/sbin/amahi-helper apps.follow_shares </dev/null 2>/dev/null) \
     || log "⚠ Couldn't move the apps' shares to the new mounts: $reply"
   [[ "$reply" == *'"apps":{}'* || -z "$reply" ]] || log "Apps' share mounts: $reply"
+  # Each app on a network of its own: a container still on Docker's bridge is made again, once
+  reply=$(/usr/local/sbin/amahi-helper apps.follow_networks </dev/null 2>/dev/null) \
+    || log "⚠ Couldn't move the apps to networks of their own: $reply"
+  [[ "$reply" == *'"apps":{}'* || -z "$reply" ]] || log "Apps' networks: $reply"
   # The apps' firewall as this version has it, and their limits, in place: neither restarts an app
   reply=$(/usr/local/sbin/amahi-helper apps.firewall </dev/null 2>/dev/null) \
     || log "⚠ Couldn't rebuild the apps' firewall: $reply"

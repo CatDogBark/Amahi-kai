@@ -143,7 +143,7 @@ module AmahiHelper
 
   PRIVATE_NETS = %w[10.0.0.0/8 172.16.0.0/12 192.168.0.0/16].map { |net| IPAddr.new(net) }.freeze
 
-  NOT_LAN_INTERFACES = /\A(lo|docker|br-|veth|tailscale)/
+  NOT_LAN_INTERFACES = /\A(lo|docker|br-|veth|tailscale|amahi\d)/
 
   # systemctl <verb> for one fixed unit, once its program is installed.
   def self.unit_operation(verb, unit, program)

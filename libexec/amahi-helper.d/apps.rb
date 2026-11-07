@@ -98,6 +98,31 @@ module AmahiHelper
   # back through it. Another app's port through the NAS's own address was already refused (UFW).
   APP_NAS_CHAIN = 'AMAHI-APPS-NAS'
 
+  # Each app on a network of its own (P4.8), so no app reaches another, and the firewall knows an
+  # app by where its traffic comes from: a /24 of APP_NETWORK_POOL each (the lowest free one no
+  # address or route on the NAS overlaps), kept for its next install in APP_NETWORKS (root:amahi
+  # 0640, { id => { 'n', 'subnet', 'bridge', 'access' } }). The network is amahi-<id>, its bridge
+  # interface amahi<n>, the NAS's address on it <subnet>.1.
+  APP_NETWORK_POOL = '172.30.0.0/16'
+
+  APP_NETWORKS = '/var/lib/amahi-kai/app-networks.json'
+
+  APP_BRIDGE_PREFIX = 'amahi'
+
+  # What an app may reach out to (a manifest's network): the internet (the default), the internet
+  # and the LAN, or nothing past the NAS. None reaches another app, or the NAS but for its DNS
+  # and a ping (APP_NAS_CHAIN). A network not on the internet: the private ranges, Tailscale's
+  # (100.64.0.0/10), link-local and multicast, and the NAS's own LAN subnets besides.
+  APP_NETWORK_ACCESS = %w[internet lan none].freeze
+
+  APP_NOT_INTERNET = %w[10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 169.254.0.0/16 224.0.0.0/4].freeze
+
+  # APP_CHAIN's parts: what comes into an app (only from the LAN and Tailscale), and what an app
+  # sends out (by its access).
+  APP_IN_CHAIN = 'AMAHI-APPS-IN'
+
+  APP_OUT_CHAIN = 'AMAHI-APPS-OUT'
+
   # Shares an app is given (P4.4) appear in it at /shares/<name>. The web app names shares; the
   # helper finds their folders in smb.conf, which only it writes. Shares Greyhole pools are read
   # only (their files change over SMB), and come with their copy folders on each pool drive at
@@ -239,6 +264,13 @@ module AmahiHelper
     },
     # Each app's container gets the limits this version gives (app_cpus), in place, without a
     # restart: from bin/amahi-update, and at Docker's start (a NAS given more processors or fewer).
+    # Each app's container that isn't on a network of its own yet is made again on it, once,
+    # keeping its shares, version and data (from bin/amahi-update).
+    'apps.follow_networks' => {
+      params: [],
+      validate: ->(_a) { engine_installed! && {} },
+      plan: ->(_v) { [[:follow_network_apps]] }
+    },
     'apps.follow_limits' => {
       params: [],
       validate: ->(_a) { engine_installed! && {} },
@@ -426,6 +458,8 @@ module AmahiHelper
       bad.call('web_tls must be true or false') unless [true, false].include?(web_tls)
       bad.call('web_tls needs a web_port') if web_tls && web_port.nil?
       access = app_access(data, web_port, web_tls, ports, format, bad)
+      network = data['network']
+      bad.call("network must be one of #{APP_NETWORK_ACCESS.join(', ')}") unless network.nil? || APP_NETWORK_ACCESS.include?(network)
       ping = data['ping']
       unless ping.nil? || (ping.is_a?(String) && normalized_path?(ping) && ping.split('/').drop(1).all? { |part| part.match?(APP_PATH_PART) })
         bad.call("ping #{ping.inspect} must be an absolute, normalized path of plain names")
@@ -440,7 +474,8 @@ module AmahiHelper
       end
       { image: image, run_as: run_as, memory: memory, ports: ports, web_port: web_port, web_tls: web_tls, access: access,
         folders: folders, storage: app_storage_need(folders), environment: environment,
-        secrets: secrets, hashed_secrets: app_hashed_secrets(data['secrets']), writes_shares: writes_shares, ping: ping }
+        secrets: secrets, hashed_secrets: app_hashed_secrets(data['secrets']), writes_shares: writes_shares, ping: ping,
+        network: network }
     end
 
     # Who reaches the app (APP_ACCESS): lan unless it says tailscale. That needs requires: 5 (an
@@ -671,6 +706,7 @@ module AmahiHelper
         end
         web = app_web_host_port(ports, manifest)
         url = "https://#{tailscale_https_name}:#{web}" if tailnet
+        network = app_network_ready(id, manifest)
         binds, set = app_share_binds_make(id, shares)
         share_access = app_share_mounts(shares, binds)
         app_share_sources!(shares)
@@ -683,7 +719,8 @@ module AmahiHelper
                                memory: manifest[:memory], cpus: app_cpus, label: id, dns: app_dns, env_file: env_file,
                                user: manifest[:run_as] == 'app' ? "#{uid}:#{gid}" : nil, group_add: share_access[:group_add],
                                publish: ports.map { |p| { address: bind, host: p[:host], container: p[:container], protocol: p[:protocol] } },
-                               mounts: [*app_folder_mounts(manifest, dir, storage), *share_access[:mounts], *ping])
+                               mounts: [*app_folder_mounts(manifest, dir, storage), *share_access[:mounts], *ping],
+                               network: network[:name])
         end
       rescue Failed, Refused, SystemCallError
         engine_remove(fresh)
@@ -1570,18 +1607,21 @@ module AmahiHelper
       end
     end
 
-    # Rebuilds APP_CHAIN, jumped to from DOCKER-USER: established connections, traffic not going
-    # into a container, and containers' own traffic pass; new connections into a container pass
-    # only from Tailscale or the NAS's private subnets.
-    # Its rules go in whole, in one iptables-restore (--noflush: the chain named is emptied and
+    # Rebuilds APP_CHAIN, jumped to from DOCKER-USER: established connections pass; what an app on
+    # a network of its own sends goes through APP_OUT_CHAIN (by its access); new connections into
+    # a container pass APP_IN_CHAIN only from Tailscale or the NAS's private subnets; the rest (a
+    # container still on Docker's own bridge going out, the NAS's own traffic) passes as it did.
+    # The three go in whole, in one iptables-restore (--noflush: the chains named are emptied and
     # filled in one step, the rest left as it is). Run before Docker starts too
     # (amahi-kai-app-firewall-early.service), so the apps' ports are never open in between.
     def do_app_firewall
       subnets = lan_subnets
       run_command([IPTABLES, '-w', '-N', ENGINE_FIREWALL_HOOK, { allow_failure: true }])
-      run_command([IPTABLES, '-w', '-N', APP_CHAIN, { allow_failure: true }])
-      rules = app_chain_rules(subnets).map { |rule| "-A #{APP_CHAIN} #{rule.join(' ')}" }
-      run_command([IPTABLES_RESTORE, '-w', '--noflush', { stdin: "*filter\n:#{APP_CHAIN} - [0:0]\n#{rules.join("\n")}\nCOMMIT\n" }])
+      chains = { APP_CHAIN => app_chain_rules, APP_IN_CHAIN => app_in_rules(subnets), APP_OUT_CHAIN => app_out_rules(subnets, app_network_records) }
+      chains.each_key { |chain| run_command([IPTABLES, '-w', '-N', chain, { allow_failure: true }]) }
+      declared = chains.keys.map { |chain| ":#{chain} - [0:0]" }
+      rules = chains.flat_map { |chain, list| list.map { |rule| "-A #{chain} #{rule.join(' ')}" } }
+      run_command([IPTABLES_RESTORE, '-w', '--noflush', { stdin: "*filter\n#{declared.join("\n")}\n#{rules.join("\n")}\nCOMMIT\n" }])
       unless run_command([IPTABLES, '-w', '-C', ENGINE_FIREWALL_HOOK, '-j', APP_CHAIN, { allow_failure: true }]).nil?
         run_command([IPTABLES, '-w', '-I', ENGINE_FIREWALL_HOOK, '1', '-j', APP_CHAIN])
       end
@@ -1596,19 +1636,22 @@ module AmahiHelper
       { 'lan' => subnets, 'nas' => ipv6 ? "IPv4 only (#{ipv6})" : 'DNS and ping only' }
     end
 
-    # APP_NAS_CHAIN filled with +rules+ in one step, and jumped to first thing from INPUT for the
-    # apps' bridge (once: a jump that's there already stays where it is).
+    # APP_NAS_CHAIN filled with +rules+ in one step, and jumped to first thing from INPUT for
+    # Docker's own bridge and the apps' own ones (once each: a jump that's there already stays
+    # where it is).
     def app_nas_wall(iptables, restore, rules)
       run_command([iptables, '-w', '-N', APP_NAS_CHAIN, { allow_failure: true }])
       lines = rules.map { |rule| "-A #{APP_NAS_CHAIN} #{rule.join(' ')}" }
       run_command([restore, '-w', '--noflush', { stdin: "*filter\n:#{APP_NAS_CHAIN} - [0:0]\n#{lines.join("\n")}\nCOMMIT\n" }])
-      return if run_command([iptables, '-w', '-C', *app_nas_hook, { allow_failure: true }]).nil?
+      app_nas_hooks.each do |hook|
+        next if run_command([iptables, '-w', '-C', *hook, { allow_failure: true }]).nil?
 
-      run_command([iptables, '-w', '-I', 'INPUT', '1', *app_nas_hook.drop(1)])
+        run_command([iptables, '-w', '-I', 'INPUT', '1', *hook.drop(1)])
+      end
     end
 
-    def app_nas_hook
-      ['INPUT', '-i', ENGINE_BRIDGE, '-j', APP_NAS_CHAIN]
+    def app_nas_hooks
+      [ENGINE_BRIDGE, "#{APP_BRIDGE_PREFIX}+"].map { |bridge| ['INPUT', '-i', bridge, '-j', APP_NAS_CHAIN] }
     end
 
     # Replies, DNS and a ping go on to the NAS's own rules (UFW's, which decide as for anyone);
@@ -1622,25 +1665,169 @@ module AmahiHelper
        ['-j', 'REJECT', '--reject-with', v6 ? 'icmp6-port-unreachable' : 'icmp-port-unreachable']]
     end
 
-    def app_chain_rules(subnets)
+    def app_chain_rules
+      bridges = "#{APP_BRIDGE_PREFIX}+"
       [%w[-m conntrack --ctstate RELATED,ESTABLISHED -j RETURN],
-       ['!', '-o', ENGINE_BRIDGE, '-j', 'RETURN'],
-       ['-i', ENGINE_BRIDGE, '-j', 'RETURN'],
-       %w[-i tailscale0 -j RETURN],
-       *subnets.map { |net| ['-s', net, '-j', 'RETURN'] },
-       %w[-j DROP]]
+       ['-i', bridges, '-j', APP_OUT_CHAIN],
+       ['-o', bridges, '-j', APP_IN_CHAIN],
+       ['-o', ENGINE_BRIDGE, '-j', APP_IN_CHAIN],
+       %w[-j RETURN]]
     end
 
-    # APP_CHAIN is in place (DOCKER-USER jumps to it, and it ends by dropping), and so is
-    # APP_NAS_CHAIN for IPv4 (INPUT jumps to it for the apps' bridge, and it ends by refusing).
+    def app_in_rules(subnets)
+      [%w[-i tailscale0 -j RETURN], *subnets.map { |net| ['-s', net, '-j', 'RETURN'] }, %w[-j DROP]]
+    end
+
+    # Nothing to another app's network (or Docker's own bridge); then an app reaching the LAN
+    # passes, one reaching nothing is refused, and the rest reach the internet: DNS anywhere (a
+    # NAS without DNS of its own hands the apps its router's), nothing in APP_NOT_INTERNET or the
+    # NAS's LAN subnets. Refused, not dropped, so an app hears no at once.
+    def app_out_rules(subnets, records)
+      refuse = %w[-j REJECT --reject-with icmp-admin-prohibited]
+      by_access = records.values.group_by { |record| record['access'] }
+      [['-o', "#{APP_BRIDGE_PREFIX}+", *refuse], ['-o', ENGINE_BRIDGE, *refuse],
+       *Array(by_access['lan']).map { |record| ['-s', record['subnet'], '-j', 'RETURN'] },
+       *Array(by_access['none']).map { |record| ['-s', record['subnet'], *refuse] },
+       %w[-p udp --dport 53 -j RETURN], %w[-p tcp --dport 53 -j RETURN],
+       *(APP_NOT_INTERNET + subnets).uniq.map { |net| ['-d', net, *refuse] },
+       %w[-j RETURN]]
+    end
+
+    # --- Each app's own network (APP_NETWORKS) ---
+
+    def app_network_name(id)
+      "amahi-#{id}"
+    end
+
+    # The app's network, made if it isn't there, with the access it's given now recorded for the
+    # firewall: { name:, bridge:, subnet:, gateway: }.
+    def app_network_ready(id, manifest)
+      network = app_network(id, app_network_access(id, manifest))
+      engine_network_ensure(network[:name], subnet: network[:subnet], gateway: network[:gateway], bridge: network[:bridge], label: id)
+      network
+    end
+
+    # What the app may reach out to: its manifest's network; one made before the field was (a
+    # definition without it) takes the catalog's now, else the default, the internet.
+    def app_network_access(id, manifest)
+      return manifest[:network] if manifest[:network]
+
+      catalog = begin
+        app_manifest(id)
+      rescue Refused, Failed
+        nil
+      end
+      catalog&.dig(:network) || 'internet'
+    end
+
+    # The app's record, made the first time (the lowest free /24), its access set to +access+.
+    def app_network(id, access)
+      with_records_lock do
+        records = app_network_records
+        record = records[id] || app_network_allocate(records)
+        unless records[id] == record.merge('access' => access)
+          records = records.merge(id => record.merge('access' => access)).sort.to_h
+          do_install(APP_NETWORKS, "#{JSON.pretty_generate(records)}\n", nil, '0640', APP_USER)
+        end
+        n = record['n']
+        { name: app_network_name(id), bridge: record['bridge'], subnet: record['subnet'], gateway: app_network_address(n, 1) }
+      end
+    end
+
+    # The records that are what the helper writes: an app id, n from 1 to 254, its subnet and
+    # bridge, an access it knows (anything else is left out, so the firewall never reads a rule
+    # out of it).
+    def app_network_records
+      (read_json(APP_NETWORKS) || {}).select do |id, record|
+        id.match?(APP_ID) && record.is_a?(Hash) && record['n'].is_a?(Integer) && record['n'].between?(1, 254) &&
+          record['subnet'] == "#{app_network_address(record['n'], 0)}/24" && record['bridge'] == "#{APP_BRIDGE_PREFIX}#{record['n']}" &&
+          APP_NETWORK_ACCESS.include?(record.fetch('access', 'internet'))
+      end
+    end
+
+    def app_network_allocate(records)
+      used = records.values.map { |record| record['n'] }
+      taken = app_networks_in_use
+      n = (1..254).find do |i|
+        subnet = IPAddr.new("#{app_network_address(i, 0)}/24")
+        !used.include?(i) && taken.none? { |net| net.include?(subnet.to_range.first) || subnet.include?(net.to_range.first) }
+      end
+      raise Failed, "there's no network free in #{APP_NETWORK_POOL} for another app" unless n
+
+      { 'n' => n, 'subnet' => "#{app_network_address(n, 0)}/24", 'bridge' => "#{APP_BRIDGE_PREFIX}#{n}" }
+    end
+
+    # The <host>th address of the pool's <n>th /24.
+    def app_network_address(n, host)
+      IPAddr.new(IPAddr.new(APP_NETWORK_POOL).to_i + (n * 256) + host, Socket::AF_INET).to_s
+    end
+
+    # The networks the NAS has an address on or a route to (a LAN of 172.30.x.x, a VPN's), but its
+    # apps' own bridges: an app's /24 overlaps none of them.
+    def app_networks_in_use
+      addresses = JSON.parse(capture([IP, '-j', '-4', 'addr', 'show'])).flat_map do |interface|
+        next [] if interface['ifname'].to_s.start_with?(APP_BRIDGE_PREFIX)
+
+        Array(interface['addr_info']).map { |info| IPAddr.new("#{info['local']}/#{info['prefixlen']}") }
+      end
+      routes = JSON.parse(capture([IP, '-j', '-4', 'route', 'show'])).filter_map do |route|
+        next if route['dev'].to_s.start_with?(APP_BRIDGE_PREFIX) || route['dst'] == 'default'
+
+        IPAddr.new(route['dst'].include?('/') ? route['dst'] : "#{route['dst']}/32")
+      end
+      (addresses + routes).uniq
+    rescue JSON::ParserError, IPAddr::Error
+      raise Failed, "couldn't read the NAS's addresses and routes, to choose a network for the app"
+    end
+
+    def app_forget_network(id)
+      with_records_lock do
+        records = read_json(APP_NETWORKS)
+        next unless records&.key?(id)
+
+        do_install(APP_NETWORKS, "#{JSON.pretty_generate(records.except(id))}\n", nil, '0640', APP_USER)
+      end
+    end
+
+    # apps.follow_networks, from bin/amahi-update: each app container not on its own network yet
+    # (on Docker's bridge, as before 1.6.2) is made again on it, once, keeping its shares, version
+    # and data. One the owner stopped stays stopped; one a job is changing is left to it.
+    def do_follow_network_apps
+      labels = engine_app_labels
+      return { 'apps' => {} } unless labels
+
+      shares = samba_shares
+      done = labels.grep(APP_ID).uniq.filter_map do |id|
+        next if app_job_running?(id)
+
+        info = engine_inspect(app_container(id)) or next
+        next if engine_container_network(info) == app_network_name(id)
+
+        say("#{id}: making its container again, on a network of its own")
+        begin
+          _checked, stopped = app_remake(id, info, app_container_shares(info, shares))
+          [id, stopped ? 'moved, stopped' : 'moved']
+        rescue Failed, Refused, SystemCallError => e
+          [id, e.message]
+        end
+      end
+      do_app_firewall if done.any?
+      { 'apps' => done.to_h }
+    end
+
+    # APP_CHAIN is in place (DOCKER-USER jumps to it, and what comes into an app goes through
+    # APP_IN_CHAIN, which ends by dropping), and so is APP_NAS_CHAIN for IPv4 (INPUT jumps to it for
+    # Docker's bridge and the apps' own, and it ends by refusing).
     def app_firewall_active?
       return false unless File.executable?(IPTABLES)
       rules = capture([IPTABLES, '-w', '-S', APP_CHAIN])
+      incoming = capture([IPTABLES, '-w', '-S', APP_IN_CHAIN])
       nas = capture([IPTABLES, '-w', '-S', APP_NAS_CHAIN])
-      rules.lines.last.to_s.strip == "-A #{APP_CHAIN} -j DROP" &&
+      rules.include?("-A #{APP_CHAIN} -o #{APP_BRIDGE_PREFIX}+ -j #{APP_IN_CHAIN}\n") &&
+        incoming.lines.last.to_s.strip == "-A #{APP_IN_CHAIN} -j DROP" &&
         run_command([IPTABLES, '-w', '-C', ENGINE_FIREWALL_HOOK, '-j', APP_CHAIN, { allow_failure: true }]).nil? &&
         nas.lines.last.to_s.strip == "-A #{APP_NAS_CHAIN} -j REJECT --reject-with icmp-port-unreachable" &&
-        run_command([IPTABLES, '-w', '-C', *app_nas_hook, { allow_failure: true }]).nil?
+        app_nas_hooks.all? { |hook| run_command([IPTABLES, '-w', '-C', *hook, { allow_failure: true }]).nil? }
     rescue Failed
       false
     end
@@ -1845,6 +2032,7 @@ module AmahiHelper
       container = app_container(id)
       engine_remove(container)
       raise Failed, "Docker didn't remove #{container}; nothing else of #{id} was touched" if engine_container?(container)
+      engine_network_remove(app_network_name(id))
       app_share_binds_keep(id, nil, {})
       app_unserve_uninstalled(id, definition)
       engine_remove_image(image) if image
@@ -1858,6 +2046,7 @@ module AmahiHelper
       app_forget_ports(id)
       app_forget_backup(id)
       app_forget_definition(id)
+      app_forget_network(id)
       if pool
         dataset = "#{pool}/#{APP_DATASETS}/#{id}"
         run_command([ZFS, 'destroy', '-r', dataset]) if zfs_dataset?(dataset)

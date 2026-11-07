@@ -9,7 +9,8 @@
 #
 # What the rest of the helper reads from a container (engine_inspect) is Docker's inspect, and
 # only these keys of it: Id, State (Running, Status, ExitCode, Error, Health.Status), Config.Image,
-# HostConfig (Dns, DnsSearch, NanoCpus), Mounts (Type, Source, Destination, RW) and RestartCount.
+# HostConfig (Dns, DnsSearch, NanoCpus, NetworkMode), Mounts (Type, Source, Destination, RW) and
+# RestartCount.
 module AmahiHelper
   DOCKER = '/usr/bin/docker'
 
@@ -97,6 +98,11 @@ module AmahiHelper
       (nano % 1_000_000_000).zero? ? nano / 1_000_000_000 : nano / 1_000_000_000.0
     end
 
+    # The network a container is on (+info+, engine_inspect's): its name.
+    def engine_container_network(info)
+      info.dig('HostConfig', 'NetworkMode').to_s
+    end
+
     # The DNS a container was made with (+info+, engine_inspect's), as engine_create takes it.
     def engine_container_dns(info)
       { servers: Array(info.dig('HostConfig', 'Dns')), search: Array(info.dig('HostConfig', 'DnsSearch')) }
@@ -166,6 +172,31 @@ module AmahiHelper
       run_command([DOCKER, 'image', 'rm', image, { allow_failure: true }])
     end
 
+    # --- Networks ---
+
+    # The subnet of the network +name+ (its first), or nil when there's none of that name.
+    def engine_network_subnet(name)
+      out = docker_output('network', 'inspect', '--format', '{{range .IPAM.Config}}{{.Subnet}} {{end}}', name)
+      out && out.split.first.to_s
+    end
+
+    # An app's own network, made unless it's there with this +subnet+: a bridge of its own, its
+    # interface named +bridge+, +gateway+ the NAS's address on it, labelled with the app. One of
+    # the name on another subnet is made again (never while a container is on it: Docker refuses).
+    def engine_network_ensure(name, subnet:, gateway:, bridge:, label:)
+      have = engine_network_subnet(name)
+      return if have == subnet
+
+      engine_network_remove(name) if have
+      run_command([DOCKER, 'network', 'create', '--driver', 'bridge', '--subnet', subnet, '--gateway', gateway,
+                   '--opt', "com.docker.network.bridge.name=#{bridge}", '--label', "amahi.app=#{label}", name])
+    end
+
+    # Gone, if it was there and nothing's on it.
+    def engine_network_remove(name)
+      run_command([DOCKER, 'network', 'rm', name, { allow_failure: true }])
+    end
+
     # --- Containers: changing them ---
 
     # The commands by themselves, for an operation's plan (apps.start, apps.stop, apps.restart).
@@ -224,6 +255,7 @@ module AmahiHelper
     #   memory:            '512m', '2g'
     #   cpus:              the most processors it may use, or nil for no limit
     #   label:             its app id, as the amahi.app label
+    #   network:           the network it's on, or nil for the engine's own bridge
     #   dns:               { servers: [address], search: [domain] }, either left out for the engine's own
     #   env_file:          the file its environment is read from (secrets stay off the command line)
     #   user:              'uid:gid' it runs as, or nil for the image's own
@@ -239,7 +271,7 @@ module AmahiHelper
                    '--pids-limit', spec.fetch(:pids_limit).to_s,
                    '--log-opt', "max-size=#{log.fetch(:size)}", '--log-opt', "max-file=#{log.fetch(:files)}",
                    '--memory', spec.fetch(:memory), *(spec[:cpus] ? ['--cpus', spec[:cpus].to_s] : []),
-                   '--label', "amahi.app=#{spec.fetch(:label)}",
+                   '--label', "amahi.app=#{spec.fetch(:label)}", *(spec[:network] ? ['--network', spec[:network]] : []),
                    *Array(dns[:servers]).flat_map { |server| ['--dns', server] },
                    *Array(dns[:search]).flat_map { |domain| ['--dns-search', domain] },
                    '--env-file', spec.fetch(:env_file),

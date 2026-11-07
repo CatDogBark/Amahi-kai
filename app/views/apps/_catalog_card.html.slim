@@ -27,6 +27,8 @@ article.kai-app-card id="docker_app_#{identifier}"
           | Reached only through Tailscale, over HTTPS: it needs Tailscale on the NAS, connected, with
             MagicDNS and HTTPS Certificates on in Tailscale's admin console (DNS).
         =< link_to 'Remote Access', remote_access_index_path
+  / What it reaches out to, before it's installed (an app asking for the LAN says so here)
+  p.kai-app-card-note id="app-network-#{identifier}" = AppCatalog.network_words(entry[:network])
   - if AppCatalog.data_kept?(identifier)
     p.kai-app-card-note
       | Its data from an earlier install is kept and used again.

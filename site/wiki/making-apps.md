@@ -42,6 +42,8 @@ When someone clicks **Install**, Amahi-kai's root helper:
      ones if not. Only the server's LAN and Tailscale can reach them;
    - kept off the server's own services: your app can ask the server's DNS and ping it, but not
      reach its SSH, admin page or file sharing (it gets its files through the shares it's given);
+   - on a network of its own, so it can't reach any other app, and reaching out only as far as
+     its `network` says (below): the internet, unless it asks for the LAN too;
    - asking the server's DNS while it's on (Network → DNS), so your app reaches the LAN's
      devices by their names (Network → Devices), not addresses that change.
 6. Starts it, and announces it on the LAN as "<Name> on <server>", so devices can find it.
@@ -156,6 +158,14 @@ environment:
   in its environment is that address (Vaultwarden's `DOMAIN`). It's installed only once the
   server's Tailscale is connected with MagicDNS and HTTPS Certificates on, and it isn't announced
   on the LAN. It needs `requires: 5`: an older Amahi-kai would put the app on the LAN instead.
+
+- **`network`** says what your app reaches out to: `internet` (the default: the internet, but
+  not the devices on the server's LAN, its Tailscale network or other private addresses), `lan`
+  (the internet and the LAN's devices too: cameras, a monitor checking the network's machines),
+  or `none` (nothing past the server; it still asks the server's DNS). Ask for `lan` only when
+  your app needs it: the Apps page says so on its card, before anyone installs it. No setting
+  lets an app reach another app, or the server's own services. An older Amahi-kai ignores the
+  field and lets the app reach everything, as it always did, so it needs no `requires`.
 
 Every field is in the catalog's [README](https://github.com/CatDogBark/amahi-kai-apps#readme).
 
