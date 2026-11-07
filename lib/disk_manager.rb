@@ -259,8 +259,14 @@ class DiskManager
   end
 
   # The whole disk a device belongs to: /dev/sda1 -> /dev/sda, /dev/nvme0n1p2 -> /dev/nvme0n1.
+  # Its trailing digits are found from the end (rindex), not with a regex anchored at the end,
+  # which backtracks across a long run of digits.
   def self.base_device(device)
-    device.match?(VALID_NVME_PATTERN) ? device.sub(/p\d+\z/, '') : device.sub(/\d+\z/, '')
+    last = device.rindex(/\D/) or return device
+    head = device[0..last]
+    return head unless device.match?(VALID_NVME_PATTERN)
+
+    head.end_with?('p') ? head.delete_suffix('p') : device
   end
 
   OS_MOUNTPOINTS = ['/', '/boot', '/boot/efi'].freeze

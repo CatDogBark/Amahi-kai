@@ -11,8 +11,9 @@ require 'network_ports'
 class NetworkController < ApplicationController
   before_action :admin_required, except: :address_reached
   before_action :set_page_title
-  # The moving page's probe comes from a browser whose session cookie is for the old address,
-  # and it can do nothing but keep a change already waiting (address_reached).
+  # The moving page's probe comes from a browser whose session cookie is for the old address, so
+  # it has no session to carry a CSRF token: it carries the change's own one-time code instead,
+  # and can do nothing but keep the change it was made for (address_reached).
   skip_before_action :verify_authenticity_token, :check_setup_completed, only: :address_reached
 
   def index
@@ -77,7 +78,8 @@ class NetworkController < ApplicationController
                     'with nothing to put it back. Change it from a computer on your LAN, where the NAS can check that you still reach it')
     end
     guard = arrival == interface
-    NetworkAddress.change!(interface: interface, mode: mode, guard: guard, address: address, gateway: gateway, dns: dns)
+    @probe = SecureRandom.hex(16) if guard
+    NetworkAddress.change!(interface: interface, mode: mode, guard: guard, address: address, gateway: gateway, dns: dns, probe: @probe)
     if guard
       @interface = interface
       @mode = mode
@@ -98,13 +100,17 @@ class NetworkController < ApplicationController
     refuse(e.message)
   end
 
-  # The NAS was reached at its new address (the moving page's probe, or the admin arriving): the
-  # change waiting is kept. No sign-in, since the browser's cookie is for the old address; it
-  # does nothing unless a change is waiting, and only for a request that came in through the
-  # changed interface, which is what reaching the NAS there means.
+  # The NAS was reached at its new address (the moving page's probe): the change waiting is kept.
+  # No sign-in, since the browser's cookie is for the old address; it does nothing unless a change
+  # is waiting, the probe sends that change's one-time code (so a page from elsewhere can't), and
+  # the request came in through the changed interface, which is what reaching the NAS there means.
   def address_reached
     state = NetworkAddress.state
-    NetworkAddress.keep! if NetworkAddress.pending? && NetworkAddress.arrival_interface(request.env) == state['interface']
+    code = state&.dig('probe').to_s
+    if NetworkAddress.pending? && code.present? && ActiveSupport::SecurityUtils.secure_compare(code, params[:probe].to_s) &&
+       NetworkAddress.arrival_interface(request.env) == state['interface']
+      NetworkAddress.keep!
+    end
     head :no_content
   rescue Privileged::Error => e
     Rails.logger.warn("address_reached: #{e.message}")

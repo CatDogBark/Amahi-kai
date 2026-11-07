@@ -1,5 +1,10 @@
 module IconHelper
+  # One of Amahi-kai's own icons (app/assets/images/icons, part of the code), named in the views:
+  # a name that isn't one (lowercase letters, digits and hyphens) is no icon, so nothing outside
+  # that folder is ever read.
   def lucide_icon(name, size: 18, css_class: '', **attrs)
+    return '' unless name.to_s.match?(/\A[a-z0-9]+(?:-[a-z0-9]+)*\z/)
+
     path = Rails.root.join('app', 'assets', 'images', 'icons', "#{name}.svg")
     return '' unless File.exist?(path)
     svg = File.read(path)

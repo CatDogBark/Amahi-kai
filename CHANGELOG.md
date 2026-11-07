@@ -4,6 +4,15 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.8.4] — 2026-11-07
+
+The fixes for the code scanner's last open findings: the address change's check carries a code of its own, and a few checks are made sturdier.
+
+### 🔒 Security & Fixes
+
+- **The address change's check carries a one-time code** — After you change the NAS's address from the page you're on, that page tries the NAS at the new address, and the request that gets there keeps the change. It can't carry your sign-in (your browser's is for the old address), so it had no proof it came from that page. Now it sends a code made for that change alone, so a page from another site can't keep a change for you.
+- **Sturdier checks, from code scanning** — Working out a drive's disk from its partition, and turning a server name into a host name, no longer use patterns that a long crafted value could slow down. Trash's Restore checks that a file goes back inside its share before looking at the folder, as well as after. An icon is read only by a plain name, from Amahi-kai's own icons.
+
 ## [1.8.3] — 2026-11-07
 
 A port's label box on the form for an app of your own reads as empty when it is, and the web page's port says "web".

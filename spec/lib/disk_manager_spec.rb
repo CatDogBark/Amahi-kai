@@ -195,6 +195,12 @@ RSpec.describe DiskManager do
       expect(DiskManager.base_device('/dev/sda1')).to eq('/dev/sda')
       expect(DiskManager.base_device('/dev/nvme0n1p2')).to eq('/dev/nvme0n1')
       expect(DiskManager.base_device('/dev/nvme0n1')).to eq('/dev/nvme0n1')
+      expect(DiskManager.base_device('/dev/sda')).to eq('/dev/sda')
+      expect(DiskManager.base_device('/dev/mmcblk0p1')).to eq('/dev/mmcblk0p')
+    end
+
+    it 'takes no longer for a long run of digits' do
+      expect(DiskManager.base_device("/dev/sd#{'0' * 100_000}x")).to eq("/dev/sd#{'0' * 100_000}x")
     end
   end
 

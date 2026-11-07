@@ -6,6 +6,12 @@ RSpec.describe IconHelper, type: :helper do
       expect(helper.lucide_icon('nonexistent_icon_xyz')).to eq('')
     end
 
+    # Only Amahi-kai's own icons, by a plain name: nothing outside their folder is read
+    it "reads nothing for a name that isn't a plain icon name" do
+      expect(File).not_to receive(:read)
+      ['../icons/lock', '/etc/passwd', 'Lock', 'lock.svg', "lock\n", nil].each { |name| expect(helper.lucide_icon(name)).to eq('') }
+    end
+
     it 'returns SVG for existing icon' do
       # Use an icon we know exists
       icons_dir = Rails.root.join('app', 'assets', 'images', 'icons')

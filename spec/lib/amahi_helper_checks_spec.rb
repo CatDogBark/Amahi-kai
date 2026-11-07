@@ -110,8 +110,8 @@ RSpec.describe 'AmahiHelper: the checks on every argument' do
                              may_hold: { 'dns' => optional, 'lan_only' => optional } },
     'network.router_off' => { good: { 'keep_lan' => true } },
     'network.set_address' => { good: { 'interface' => 'eth1', 'mode' => 'fixed', 'address' => '10.99.0.5/24', 'gateway' => '10.99.0.254',
-                                       'dns' => ['9.9.9.9'], 'guard' => true },
-                               may_hold: { 'gateway' => optional, 'dns' => optional, 'guard' => optional } },
+                                       'dns' => ['9.9.9.9'], 'guard' => true, 'probe' => 'a' * 32 },
+                               may_hold: { 'gateway' => optional, 'dns' => optional, 'guard' => optional, 'probe' => optional } },
     'network.blink_port' => { good: { 'interface' => 'eth1' } },
     # A token goes in a root-only file, never on a command line, and it's trimmed. Cloudflare's
     # alphabet holds these.
