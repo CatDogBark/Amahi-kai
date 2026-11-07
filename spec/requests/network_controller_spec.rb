@@ -8,10 +8,16 @@ describe "Network Controller", type: :request do
       expect(response).to redirect_to(new_user_session_url)
     end
 
-    it "lets the moving page's probe in without a sign-in: it only keeps a change already waiting" do
-      allow(NetworkAddress).to receive_messages(state: { 'state' => 'pending', 'interface' => 'ens18', 'since' => Time.now.to_i, 'until' => Time.now.to_i + 80 },
+    it "lets the moving page's probe in without a sign-in: it only keeps a change already waiting, with that change's code" do
+      allow(NetworkAddress).to receive_messages(state: { 'state' => 'pending', 'interface' => 'ens18', 'probe' => 'a' * 32, 'since' => Time.now.to_i,
+                                                         'until' => Time.now.to_i + 80 },
                                                 arrival_interface: 'ens18', settle!: nil)
+      # A page from elsewhere doesn't know the code
       post "/network/address/reached"
+      post "/network/address/reached", params: { probe: 'b' * 32 }
+      expect(response).to have_http_status(:no_content)
+      expect(Privileged.calls).to be_empty
+      post "/network/address/reached", params: { probe: 'a' * 32 }
       expect(response).to have_http_status(:no_content)
       expect(Privileged.calls).to eq([['network.keep_address', {}]])
       get "/network/address", headers: { 'Accept' => 'application/json' }
@@ -242,13 +248,15 @@ describe "Network Controller", type: :request do
         allow(SystemInfo).to receive(:hostname).and_return('nas')
         put "/network/address", params: { interface: 'ens18', mode: 'fixed', address: '192.168.1.111', prefix: '24' }
         expect(response).to have_http_status(:ok)
-        expect(response.body).to include('Moving the NAS to 192.168.1.111', 'data-probe="http://192.168.1.111:3000/network/address/reached"',
-                                         'data-target="http://192.168.1.111:3000/network"', 'data-status="/network/address"')
+        expect(response.body).to include('Moving the NAS to 192.168.1.111', 'data-target="http://192.168.1.111:3000/network"', 'data-status="/network/address"')
+        probe = response.body[%r{data-probe="http://192\.168\.1\.111:3000/network/address/reached\?probe=(\h{32})"}, 1]
+        expect(probe).to be_present
         # The probe calls the new address, another origin: this page's policy lets it, and only this page's
         expect(response.headers['Content-Security-Policy']).to include("connect-src 'self' http://192.168.1.111:3000")
         get "/network"
         expect(response.headers['Content-Security-Policy']).to include("connect-src 'self';")
-        expect(Privileged.calls.last).to eq(['network.set_address', { interface: 'ens18', mode: 'fixed', guard: true, address: '192.168.1.111/24', gateway: nil, dns: [] }])
+        expect(Privileged.calls.last).to eq(['network.set_address', { interface: 'ens18', mode: 'fixed', guard: true, probe: probe, address: '192.168.1.111/24',
+                                                                       gateway: nil, dns: [] }])
         expect(NetworkAddress).not_to have_received(:settle!)
         put "/network/address", params: { interface: 'ens18', mode: 'automatic' }
         expect(response.body).to include('Moving the NAS to nas.local', 'asks the network for an address')
@@ -288,14 +296,15 @@ describe "Network Controller", type: :request do
         expect(flash[:alert]).to eq("\"192.168.1.0/24\" is the network's own address.")
       end
 
-      it "keeps a change waiting only when reached through the changed port" do
-        allow(NetworkAddress).to receive(:state).and_return('state' => 'pending', 'interface' => 'ens18', 'since' => Time.now.to_i, 'until' => Time.now.to_i + 80)
+      it "keeps a change waiting only when reached through the changed port, with its code" do
+        allow(NetworkAddress).to receive(:state).and_return('state' => 'pending', 'interface' => 'ens18', 'probe' => 'c' * 32, 'since' => Time.now.to_i,
+                                                            'until' => Time.now.to_i + 80)
         allow(NetworkAddress).to receive(:arrival_interface).and_return('ens19')
-        post "/network/address/reached"
+        post "/network/address/reached", params: { probe: 'c' * 32 }
         expect(response).to have_http_status(:no_content)
         expect(Privileged.calls).to be_empty
         allow(NetworkAddress).to receive(:arrival_interface).and_return('ens18')
-        post "/network/address/reached"
+        post "/network/address/reached", params: { probe: 'c' * 32 }
         expect(response).to have_http_status(:no_content)
         expect(Privileged.calls).to eq([['network.keep_address', {}]])
         expect(NetworkAddress).to have_received(:settle!)

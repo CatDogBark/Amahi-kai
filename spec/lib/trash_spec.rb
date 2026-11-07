@@ -48,6 +48,18 @@ RSpec.describe Trash do
       expect(Dir.children(File.join(folder, '.recycle'))).to be_empty
     end
 
+    # A folder of the share that's a link out of it: the file doesn't follow it out
+    it "won't put a file back through a link that leads out of the share" do
+      outside = Dir.mktmpdir
+      File.symlink(outside, File.join(folder, 'reports'))
+      put(folder, '.recycle/reports/q3.odt', 'Q3')
+      expect { described_class.restore!('share', 'Docs', 'reports/q3.odt') }.to raise_error(Trash::Error, "Docs/reports/q3.odt can't go back there")
+      expect(Dir.children(outside)).to be_empty
+      expect(File).to exist(File.join(folder, '.recycle/reports/q3.odt'))
+    ensure
+      FileUtils.rm_rf(outside)
+    end
+
     it "won't restore over a file there now, or anything reached through a link or outside the bin" do
       put(folder, '.recycle/q3.odt', 'old')
       put(folder, 'q3.odt', 'new')

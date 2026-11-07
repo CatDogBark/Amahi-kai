@@ -148,9 +148,15 @@ module Trash
       !path.empty? && !path.start_with?('/') && path.split('/').none? { |part| part.empty? || part == '.' || part == '..' }
     end
 
+    # Whether +path+ is +root+ or inside it: as written first (a path that leaves +root+ is out
+    # before anything is looked up), then where it really is, its links followed.
     def inside?(root, path)
-      real = File.realpath(path)
-      real == File.realpath(root) || real.start_with?("#{File.realpath(root)}/")
+      base = File.expand_path(root)
+      candidate = File.expand_path(path)
+      return false unless candidate == base || candidate.start_with?("#{base}/")
+
+      real = File.realpath(candidate)
+      real == File.realpath(base) || real.start_with?("#{File.realpath(base)}/")
     end
 
     # Removes the folders a restore or delete left empty, up to the recycle bin itself.

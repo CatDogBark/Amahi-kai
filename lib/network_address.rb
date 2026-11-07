@@ -86,9 +86,11 @@ module NetworkAddress
     end
 
     # Asks the helper for the change. Without +guard+ (another interface than the admin came in
-    # through) it's applied and kept at once, and what follows the address follows now.
-    def change!(interface:, mode:, guard:, address: nil, gateway: nil, dns: [])
+    # through) it's applied and kept at once, and what follows the address follows now. With it,
+    # +probe+ is the code the moving page's probe must send back to keep it (address_reached).
+    def change!(interface:, mode:, guard:, address: nil, gateway: nil, dns: [], probe: nil)
       args = { interface: interface, mode: mode, guard: guard }
+      args[:probe] = probe if probe
       args.merge!(address: address, gateway: gateway.presence, dns: dns) if mode == 'fixed'
       Privileged.call('network.set_address', **args)
       settle! unless guard

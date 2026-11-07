@@ -42,8 +42,15 @@ class Platform
     # characters a hostname can't hold become hyphens ("My NAS" -> "my-nas").
     # Returns true, or false with the reason logged.
     def set_hostname!(name)
-      hostname = name.to_s.downcase.gsub(/[^a-z0-9-]+/, '-').gsub(/\A-+|-+\z/, '')[0, 63].to_s.chomp('-')
+      hostname = trim_hyphens(trim_hyphens(name.to_s.downcase.gsub(/[^a-z0-9-]+/, '-'))[0, 63].to_s)
       privileged('network.set_hostname', hostname: hostname)
+    end
+
+    # +text+ without the hyphens at either end, found from each end (index, rindex), not with a
+    # regex anchored at the end, which backtracks across a long run of hyphens
+    def trim_hyphens(text)
+      first = text.index(/[^-]/) or return ''
+      text[first..text.rindex(/[^-]/)]
     end
 
     # Reboot and power off go through the root helper (sudo had no rule for them, so

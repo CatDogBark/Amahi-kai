@@ -2193,9 +2193,11 @@ RSpec.describe 'AmahiHelper' do
       end
 
       it 'takes a fixed address with its network, its router and DNS servers, or automatic' do
-        args = { 'interface' => 'ens19', 'mode' => 'fixed', 'address' => '10.99.0.5/24', 'gateway' => '10.99.0.254', 'dns' => ['10.99.0.254', '9.9.9.9'], 'guard' => true }
-        expect(steps('network.set_address', args)).to eq([[:set_address, 'ens19', 'fixed', '10.99.0.5/24', '10.99.0.254', ['10.99.0.254', '9.9.9.9'], true]])
-        expect(steps('network.set_address', 'interface' => 'ens19', 'mode' => 'automatic')).to eq([[:set_address, 'ens19', 'automatic', nil, nil, [], false]])
+        args = { 'interface' => 'ens19', 'mode' => 'fixed', 'address' => '10.99.0.5/24', 'gateway' => '10.99.0.254', 'dns' => ['10.99.0.254', '9.9.9.9'], 'guard' => true,
+                 'probe' => 'f' * 32 }
+        expect(steps('network.set_address', args)).to eq([[:set_address, 'ens19', 'fixed', '10.99.0.5/24', '10.99.0.254', ['10.99.0.254', '9.9.9.9'], true, 'f' * 32]])
+        expect(steps('network.set_address', 'interface' => 'ens19', 'mode' => 'automatic')).to eq([[:set_address, 'ens19', 'automatic', nil, nil, [], false, nil]])
+        expect(refusal('network.set_address', args.merge('probe' => 'not hex'))).to eq('probe must be 32 hex digits')
       end
 
       it "blinks a port's light with ethtool, where it's installed" do
@@ -2225,13 +2227,13 @@ RSpec.describe 'AmahiHelper' do
 
     describe 'a guarded change (the admin came in through the interface)' do
       it 'rewrites the IPv4 part, keeps a copy, checks it and arms the apply; the apply arms the revert; keep tidies up' do
-        helper.do_set_address('ens19', 'fixed', '10.99.0.5/24', '10.99.0.254', ['9.9.9.9'], true)
+        helper.do_set_address('ens19', 'fixed', '10.99.0.5/24', '10.99.0.254', ['9.9.9.9'], true, 'e' * 32)
         expect(entry).to eq('dhcp4' => false, 'dhcp6' => false, 'addresses' => ['10.99.0.5/24'],
                             'routes' => [{ 'to' => 'default', 'via' => '10.99.0.254' }], 'nameservers' => { 'addresses' => ['9.9.9.9'] })
         expect(File.read("#{installer_file}.amahi-kai-before-address")).to eq(installer_yaml)
         expect(File.stat(installer_file).mode & 0o777).to eq(0o600)
         expect(state).to include('state' => 'pending', 'interface' => 'ens19', 'mode' => 'fixed', 'address' => '10.99.0.5/24',
-                                 'before' => ['10.99.0.1'], 'guard' => true, 'applied' => false, 'files' => [installer_file])
+                                 'before' => ['10.99.0.1'], 'guard' => true, 'probe' => 'e' * 32, 'applied' => false, 'files' => [installer_file])
         expect(ran).to include('/usr/sbin/netplan generate',
                                '/usr/bin/systemd-run --unit=amahi-kai-address-apply --on-active=2 --timer-property=AccuracySec=1s /usr/local/sbin/amahi-helper network.apply_address')
         expect(ran).not_to include('/usr/sbin/netplan apply')

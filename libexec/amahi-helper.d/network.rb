@@ -206,7 +206,7 @@ module AmahiHelper
     # admin is connected through this interface, so the change is applied after the reply and
     # kept only once the NAS is reached at the new address (the three operations below).
     'network.set_address' => {
-      params: %w[interface mode address gateway dns guard],
+      params: %w[interface mode address gateway dns guard probe],
       validate: lambda { |a|
         interface = network_interface(a['interface'])
         raise Refused, "#{interface} isn't a LAN interface" if interface.match?(NOT_LAN_INTERFACES)
@@ -214,7 +214,10 @@ module AmahiHelper
           raise Refused, "#{interface} is the internet side while the NAS is the router (Network → Internet)"
         end
         raise Refused, 'guard must be true or false' unless [true, false, nil].include?(a['guard'])
-        values = { interface: interface, mode: listed(a['mode'], 'mode', %w[automatic fixed]), guard: a['guard'] == true }
+        # The code the moving page's probe sends back (address_reached): only that page knows it
+        probe = a['probe'].nil? ? nil : string(a['probe'], 'probe', max: 32)
+        raise Refused, 'probe must be 32 hex digits' unless probe.nil? || probe.match?(/\A\h{32}\z/)
+        values = { interface: interface, mode: listed(a['mode'], 'mode', %w[automatic fixed]), guard: a['guard'] == true, probe: probe }
         if values[:mode] == 'fixed'
           values[:address] = ipv4_cidr(a['address'])
           values[:gateway] = a['gateway'].nil? ? nil : ipv4_in(a['gateway'], 'gateway', values[:address])
@@ -222,7 +225,7 @@ module AmahiHelper
         end
         installed!(NETPLAN) && values
       },
-      plan: ->(v) { [[:set_address, v[:interface], v[:mode], v[:address], v[:gateway], v[:dns] || [], v[:guard]]] }
+      plan: ->(v) { [[:set_address, v[:interface], v[:mode], v[:address], v[:gateway], v[:dns] || [], v[:guard], v[:probe]]] }
     },
     'network.apply_address' => {
       params: [],
@@ -809,7 +812,7 @@ module AmahiHelper
     # before anything is applied. With +guard+, the apply waits for the reply to get out
     # (ADDRESS_APPLY_UNIT) and the change is kept only once the NAS is reached; without, it's
     # applied and kept here and now.
-    def do_set_address(interface, mode, address, gateway, dns, guard)
+    def do_set_address(interface, mode, address, gateway, dns, guard, probe = nil)
       state = read_json(ADDRESS_STATE)
       if state && state['state'] == 'pending'
         raise Refused, "a change to #{state['interface']} is still waiting; try again in a minute" if Time.now.to_i - state['since'].to_i < ADDRESS_STALE
@@ -834,7 +837,8 @@ module AmahiHelper
         run_command([NETPLAN, 'generate'])
         before = Socket.getifaddrs.filter_map { |i| i.addr.ip_address if i.name == interface && i.addr&.ipv4? }
         write_address_state('state' => 'pending', 'interface' => interface, 'mode' => mode, 'address' => address, 'files' => files,
-                            'created' => created, 'before' => before, 'guard' => guard, 'applied' => false, 'since' => Time.now.to_i, 'until' => nil)
+                            'created' => created, 'before' => before, 'guard' => guard, 'probe' => probe, 'applied' => false,
+                            'since' => Time.now.to_i, 'until' => nil)
         if guard
           arm_timer(ADDRESS_APPLY_UNIT, ADDRESS_APPLY_WAIT, 'network.apply_address')
         else

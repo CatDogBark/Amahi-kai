@@ -1,6 +1,6 @@
 <div class="container-fluid dns-page">
   <div class="card mb-4 mt-3" id="address-move"
-       data-probe="<%= amahi_url(@new_host) %>network/address/reached"
+       data-probe="<%= amahi_url(@new_host) %>network/address/reached?probe=<%= @probe %>"
        data-target="<%= amahi_url(@new_host) %>network"
        data-back="<%= amahi_url(request.host) %>network"
        data-status="<%= network_address_status_path %>"

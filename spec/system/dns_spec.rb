@@ -55,8 +55,12 @@ RSpec.describe 'DNS & DHCP', type: :system do
   it "reaches the NAS at the new address from the browser, keeps the change and goes there" do
     rows = [NetworkAddress::Interface.new(name: 'ens18', addresses: [NetworkInterfaces::Address.new(ip: IPAddr.new('127.0.0.1'), prefix: 8)],
                                           automatic: false, gateway: nil, part: nil)]
-    allow(NetworkAddress).to receive_messages(interfaces: rows, nameservers: [], settle!: nil, arrival_interface: 'ens18',
-                                              state: { 'state' => 'pending', 'interface' => 'ens18', 'since' => Time.now.to_i, 'until' => Time.now.to_i + 90 })
+    allow(NetworkAddress).to receive_messages(interfaces: rows, nameservers: [], settle!: nil, arrival_interface: 'ens18')
+    # The change waiting, as the helper keeps it: with the one-time code the page was given
+    allow(NetworkAddress).to receive(:state) do
+      asked = Privileged.calls.find { |op, _args| op == 'network.set_address' }
+      { 'state' => 'pending', 'interface' => 'ens18', 'probe' => asked&.last&.dig(:probe), 'since' => Time.now.to_i, 'until' => Time.now.to_i + 90 }
+    end
     allow(NetworkPorts).to receive(:all).and_return({})
     allow(Leases).to receive(:all).and_return([])
     sign_in_as_admin

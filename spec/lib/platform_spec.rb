@@ -33,7 +33,8 @@ describe Platform do
 
   describe ".set_hostname!" do
     it "turns a server name into a hostname and sets it through the root helper" do
-      { "My NAS" => "my-nas", "  Bob's NAS! " => "bob-s-nas", "amahi-kai" => "amahi-kai" }.each do |name, hostname|
+      { "My NAS" => "my-nas", "  Bob's NAS! " => "bob-s-nas", "amahi-kai" => "amahi-kai", "--nas--" => "nas", "!!!" => "",
+        "#{'a' * 62}-b" => 'a' * 62, "a#{'-' * 100_000}b" => 'a' }.each do |name, hostname|
         Privileged.reset!
         expect(Platform.set_hostname!(name)).to be true
         expect(Privileged.calls).to eq([['network.set_hostname', { hostname: hostname }]])
