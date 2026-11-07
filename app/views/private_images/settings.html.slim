@@ -1,0 +1,20 @@
+/ Setup → Settings → Tokens (PrivateImagesController#settings): the tokens this NAS keeps, in one
+/ place. The tokens for private images are the same list and form as Private images, under Apps;
+/ the Cloudflare Tunnel's is set on Network → Remote Access.
+.kai-custom.kai-private-images
+  p.kai-custom-lede
+    | The tokens this NAS keeps. Each is kept where only the system can read it, and never shown again.
+  = render 'tokens', from: 'settings'
+  section.kai-app-panel.kai-tokens aria-labelledby="other-tokens-head"
+    .kai-tokens-head
+      h2#other-tokens-head Other tokens
+    article.kai-token#token-cloudflare-tunnel
+      .kai-token-head
+        span.kai-token-icon aria-hidden="true" = lucide_icon('cloud', size: 20)
+        .kai-token-title
+          h3 Cloudflare Tunnel
+          span.kai-token-sub = @tunnel ? 'Set: it connects the NAS to Cloudflare, so it can be reached from outside' : 'Not set'
+        a.btn.btn-outline-secondary.btn-sm href=remote_access_index_path Manage on Remote Access
+  = render 'form', from: 'settings'
+
+= javascript_include_tag 'private_images'

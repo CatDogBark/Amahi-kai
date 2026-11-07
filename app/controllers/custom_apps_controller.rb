@@ -116,7 +116,7 @@ class CustomAppsController < ApplicationController
   # Check for a newer version: a newer release of its image (a tag of the same shape), or a newer
   # build of its tag, from the image's registry. Only when asked; nothing changes.
   def check_version
-    found = AppVersions.new.check_image(@app.image)
+    found = AppVersions.new(tokens: RegistryTokens).check_image(@app.image)
     flash[:custom_version] = if found.kind == :current
                                { 'kind' => 'current' }
                              else
@@ -131,7 +131,7 @@ class CustomAppsController < ApplicationController
   # saved as its image, then the app page updates it. The image's repository is the one the owner
   # chose, so this doesn't ask for the password again.
   def version
-    found = AppVersions.new.check_image(@app.image)
+    found = AppVersions.new(tokens: RegistryTokens).check_image(@app.image)
     if found.kind == :current || found.latest != params[:tag].to_s
       return redirect_to apps_app_path(@app.id), alert: "#{params[:tag]} isn't the newest version any more: check again."
     end
@@ -166,7 +166,11 @@ class CustomAppsController < ApplicationController
     return false if app.errors.any?
 
     begin
-      app.pin(AppVersions.new.pin(app.image))
+      app.pin(AppVersions.new(tokens: RegistryTokens).pin(app.image))
+    rescue AppVersions::Private => e
+      app.errors[:image] = "Couldn't find that image: #{e.message}. If it's private, the NAS needs a token for #{e.place}."
+      @token_place = e.place
+      return false
     rescue StandardError => e
       app.errors[:image] = "Couldn't find that image: #{e.message}"
       return false

@@ -72,10 +72,12 @@ module ApplicationHelper
   # The header's section for this page, whose link is marked current, and the line above the
   # page title: the dashboard, Files (the file browser, the Trash and search), Apps, or Setup.
   def page_section
+    return @page_section if @page_section
+
     case controller_name
     when 'front' then :dashboard
     when 'file_browser', 'trash', 'search' then :files
-    when 'apps', 'custom_apps' then :apps
+    when 'apps', 'custom_apps', 'private_images' then :apps
     else :setup
     end
   end

@@ -1,0 +1,57 @@
+/ The tokens for private images on this NAS (RegistryTokens): each one's place, who it signs in
+/ as, whether its registry took it the last time it was used, the apps of yours that use it, and
+/ never the token itself. Check it, Replace (the form below, filled in) and Remove, which asks
+/ first. from: where the buttons come back to (settings, or Private images).
+- from = local_assigns[:from]
+- back = ->(**query) { from == 'settings' ? settings_tokens_path(**query) : private_images_index_path(**query) }
+section.kai-app-panel.kai-tokens aria-labelledby="tokens-head"
+  .kai-tokens-head
+    h2#tokens-head = from == 'settings' ? 'Tokens for private images' : 'Tokens on this NAS'
+    span.kai-tokens-count = @tokens.empty? ? 'None yet' : pluralize(@tokens.size, 'token')
+  - if @tokens.empty?
+    p.kai-custom-hint.mb-0 None yet: images download without signing in, as public ones do. Add one for images their owner keeps private.
+  - @tokens.each do |token|
+    - using = RegistryTokens.apps_using(token, @apps)
+    article.kai-token id="token-#{token.place.parameterize}" class=("kai-token-refused" if token.refused?)
+      .kai-token-head
+        span.kai-token-icon aria-hidden="true" = lucide_icon(token.refused? ? 'alert-triangle' : 'key-round', size: 20)
+        .kai-token-title
+          h3.kai-mono = token.place
+          span.kai-token-sub = "#{token.registry_name} · signs in as #{token.username}"
+        - if token.refused?
+          span.kai-pill.kai-pill-amber = token.checked_at ? "Refused #{time_ago_in_words(token.checked_at)} ago" : 'Refused'
+        - elsif token.worked && token.checked_at
+          span.kai-pill.kai-pill-running = "✓ Worked #{time_ago_in_words(token.checked_at)} ago"
+      - if token.refused?
+        p.kai-notice.kai-notice-warn.mb-0
+          = "#{token.error.to_s.upcase_first}. It may have expired or been deleted: replace it with a new one."
+          - if using.any?
+            = " Until then, #{using.map(&:name).to_sentence} #{using.one? ? 'keeps' : 'keep'} running, but can't update or install again."
+      dl.kai-app-facts.kai-token-facts
+        dt Used for
+        dd
+          ' Images that start with
+          code = "#{token.place}/"
+        dt Your apps using it
+        dd
+          - if using.any?
+            = safe_join(using.map { |app| link_to(app.name, apps_app_path(app.identifier)) }, ', ')
+          - else
+            | None yet
+        - if token.added_at
+          dt Added
+          dd = token.added_at.strftime('%b %-d, %Y')
+        - if token.note
+          dt Your note
+          dd = token.note
+        dt The token
+        dd.kai-token-hidden Kept on the NAS, never shown
+      .kai-token-actions
+        = button_to 'Check it', private_images_check_path, params: { place: token.place, from: from }, class: 'btn btn-outline-secondary btn-sm',
+                    form_class: 'd-inline', data: { 'disable-with' => 'Checking…' }
+        a.btn.btn-sm class=(token.refused? ? 'btn-primary' : 'btn-outline-secondary') href=back.call(replace: token.place, anchor: 'add-token') Replace
+        = button_to 'Remove', private_images_remove_path, params: { place: token.place, from: from }, class: 'btn btn-outline-danger btn-sm',
+                    form_class: 'd-inline',
+                    data: { confirm: ["Remove the token for #{token.place}?",
+                                      ("#{using.map(&:name).to_sentence} #{using.one? ? 'keeps' : 'keep'} running, but can't update or install again until you add one." if using.any?),
+                                      'Its registry still has it: delete it there too if you\'re done with it.'].compact.join(' ') }

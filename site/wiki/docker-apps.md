@@ -39,14 +39,12 @@ against a pinned fingerprint), installs Docker and turns the service on.
 
 | App | What it's for | Usual address |
 |-----|---------------|---------------|
-| **bitTube** | Your YouTube channels and streaming services in one place, YouTube ad-free | `http://<server>:8484` |
 | **Jellyfin** | Your own streaming service for movies, TV and music | `http://<server>:8096` |
 | **PiGallery2** | Your photos and home videos as a gallery, folder by folder, as they are on the NAS | `http://<server>:8098` |
 | **Vaultwarden** | A password manager server for the Bitwarden apps; reached only through Tailscale, over HTTPS (see below) | `https://<the server's name on your tailnet>:8880` |
 | **Uptime Kuma** | Watches websites and services, and tells you when one goes down | `http://<server>:3001` |
 | **Gitea** | Your own Git server, like a small GitHub | `http://<server>:3300` (Git over SSH on port 2222) |
 | **Transmission** | A BitTorrent client with a web interface | `http://<server>:9091` (peers on port 51413) |
-| **bitShare** (early: version 0.3, a project of its own) | Keeps folders in sync across your computers through the NAS, every version kept; its data goes on a ZFS pool | `https://<server>:8443` (its own certificate: the browser warns once) |
 
 If an app's usual port is already used by something else on the server, it gets the next free one
 at install, and keeps it. Each installed app's page (**Manage**) shows its ports.
@@ -82,9 +80,9 @@ its port.
 
 ### Apps on your network
 
-Each installed app is announced on your LAN (mDNS, through Avahi), as "bitTube on <your server>",
-"Jellyfin on <your server>" and so on, so devices and apps can find it without being told the
-server's address: bitTube Desktop finds bitTube that way. **Settings → Servers** lists Avahi.
+Each installed app is announced on your LAN (mDNS, through Avahi), as "Jellyfin on <your server>",
+"Gitea on <your server>" and so on, so devices and apps can find it without being told the
+server's address. **Settings → Servers** lists Avahi.
 
 ## Reaching apps
 
@@ -136,10 +134,10 @@ them to create the admin account, so open the app and do that as soon as it's in
 
 ### Giving an app shares
 
-An app that works with files in shares (Jellyfin, PiGallery2, Transmission, bitTube, Gitea) asks at
+An app that works with files in shares (Jellyfin, PiGallery2, Transmission, Gitea) asks at
 **Install** which shares to give it (none by default). The others install without asking
-(Vaultwarden, Uptime Kuma), or ask only for the ZFS pool their data goes on (bitShare), and
-their pages say shares aren't used. Shares appear inside the app at `/shares/<name>`: in Jellyfin, for
+(Vaultwarden, Uptime Kuma), or ask only for the ZFS pool their data goes on, and their pages say
+shares aren't used. Shares appear inside the app at `/shares/<name>`: in Jellyfin, for
 example, add `/shares/Movies` as a library. To change them
 later, click **Change** next to **Shares** on the app's page (**Manage**): the app restarts with the new ones,
 keeping its data and the version it runs. The new container is made before the old one goes, so a
@@ -242,7 +240,8 @@ asks for:
 - its **name**, a line about it, and a category;
 - its **image**, with its tag, as you'd give `docker pull` (`ghcr.io/mealie-recipes/mealie:v2.4.1`,
   or `nginx:1.27` for Docker Hub's). Amahi-kai asks the image's registry for the build that tag
-  names now and pins it, so it changes only when you change it. Public images only, for now;
+  names now and pins it, so it changes only when you change it. A private image needs a token
+  first: see [Private images](#private-images) below;
 - **how it runs**: as its own user (most images), or as the image says, usually root at first
   (linuxserver.io's images, which switch to the user given in `PUID` and `PGID`). One that starts
   as root gets back only the kernel permissions you tick (linuxserver.io's take four);
@@ -283,6 +282,35 @@ On its page:
 own: one the catalog has, or one an app on the server used before (its data still kept), is
 refused, so an app of your own never takes over another app's data or passwords.
 
+### Private images
+
+An image its owner keeps private downloads only with a token from its registry. **Private
+images**, from the line under **Add apps** on the Apps page (and **Setup → Settings → Tokens**,
+which lists the same tokens), keeps them: one for each place, a registry and whose images there
+(`ghcr.io/you`). For each it shows who it signs in as, your note, when it last worked, and your
+apps that use it; it never shows the token. **Add a token** asks for the registry (GitHub,
+Docker Hub, or another, by its address), whose images, who it signs in as, the token and your
+password. Amahi-kai tries the token with the registry first and keeps it only if the registry
+takes it. When **Review** finds an image is private, it offers **Add a token for** its place.
+
+For GitHub's registry (ghcr.io), make a classic token:
+
+1. On GitHub: your picture → **Settings** → **Developer settings** → **Personal access tokens** →
+   **Tokens (classic)** → **Generate new token (classic)**.
+2. Give it a note that names the server, and an expiration (a year is a good choice; GitHub emails
+   you before it ends).
+3. Tick **read:packages** and nothing else: it can download your images, not change them or
+   anything else in your account.
+4. Generate it, copy it, and paste it on Private images. GitHub shows it only once.
+
+The server keeps each token in a file only the system can read, and uses it only for images that
+start with its place: everything else downloads without signing in. The token goes only to its
+registry, and your apps never see it. **Check it** tries a token again; **Replace** takes a new
+one for the same place; **Remove** takes it off the server (your apps keep running, but those
+using it can't update or install again until you add one; delete it on its registry too). An
+app's page says when its image is private, and when its registry refused the token (expired or
+deleted): replace it then.
+
 ### From the command line
 
 The web UI is the usual way; these are for looking closer:
@@ -320,9 +348,9 @@ Shares you give an app stay where they are: the app reads (or writes) them in pl
 
 ### Apps that keep their data on a ZFS pool
 
-Some apps keep the data that grows on a ZFS pool (bitShare's files, say), so it isn't on the
-system disk. Installing one asks for the pool, under **Storage**; it can't be installed before
-there's a pool (**Disks → ZFS Pools**). Its data goes in a dataset of its own,
+Some apps keep the data that grows on a ZFS pool, so it isn't on the system disk. Installing one
+asks for the pool, under **Storage**; it can't be installed before there's a pool (**Disks → ZFS
+Pools**). Its data goes in a dataset of its own,
 `<pool>/apps/<app>` (mounted at `/srv/pools/<pool>/apps/<app>`), and stays on that pool: its
 settings stay in its folder on the system disk. The app's page says which pool.
 

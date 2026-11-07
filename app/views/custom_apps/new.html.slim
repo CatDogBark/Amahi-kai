@@ -43,8 +43,12 @@ p.kai-apps-back
       button.kai-custom-tab type="button" role="tab" id="custom-tab-form" aria-controls="custom-panel-form" aria-selected=(tab == 'form').to_s data-custom-tab="form" Describe it
       button.kai-custom-tab type="button" role="tab" id="custom-tab-file" aria-controls="custom-panel-file" aria-selected=(tab == 'file').to_s data-custom-tab="file" I have an app file
 
-    - if errors[:file]
-      p.kai-notice.kai-notice-alert#custom-app-problem role="alert" = "That doesn't work yet: #{errors[:file]}"
+    / What's wrong with a file pasted (its image's, too: the form's fields are hidden on that tab)
+    - problem = errors[:file] || (errors[:image] if tab == 'file')
+    - if problem
+      p.kai-notice.kai-notice-alert#custom-app-problem role="alert" = "That doesn't work yet: #{problem}"
+    - if @token_place && tab == 'file'
+      = render 'add_token_link'
 
     #custom-panel-form.kai-custom-panels role="tabpanel" aria-labelledby="custom-tab-form" data-custom-panel="form" hidden=(tab != 'form')
       section.kai-app-panel aria-labelledby="custom-app-head"
@@ -70,6 +74,8 @@ p.kai-apps-back
           input.form-control.kai-mono#custom-image type="text" name="app[image]" value=fields['image'] placeholder="ghcr.io/mealie-recipes/mealie:v2.4.1" spellcheck="false" autocapitalize="off" aria-describedby="custom-image-hint"
           - if errors[:image]
             p.kai-custom-problem#custom-image-hint = errors[:image]
+            - if @token_place && tab == 'form'
+              = render 'add_token_link'
           - else
             p.kai-custom-hint#custom-image-hint
               | Its name and tag, as you'd give docker pull (Docker Hub's, or with its registry first).

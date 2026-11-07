@@ -88,6 +88,34 @@ RSpec.describe AppVersions do
     expect(described_class.newest("0.1.0", %w[0.1.0 0.2.0 latest main sha-abc1234])).to eq("0.2.0")
   end
 
+  # The owner's token for it goes through the root helper (RegistryTokens), never the web app
+  it 'asks through the token an image is under, when there is one' do
+    tokens = Module.new do
+      def self.for_repo(repo) = repo.start_with?('ghcr.io/catdogbark/')
+      def self.digest(_repo, tag) = "sha256:#{tag == '0.3.0' ? 'b' * 64 : 'a' * 64}"
+      def self.tags(_repo) = %w[0.2.1 0.3.0]
+    end
+    versions = described_class.new(tokens: tokens)
+    expect(versions.registry_for('ghcr.io/catdogbark/bitstream')).to be(tokens)
+    expect(versions.registry_for('ghcr.io/someone/else')).to be_a(AppVersions::Ghcr)
+    expect(versions.pin('ghcr.io/catdogbark/bitstream:0.2.1')).to eq("ghcr.io/catdogbark/bitstream:0.2.1@sha256:#{'a' * 64}")
+    expect(versions.check_image("ghcr.io/catdogbark/bitstream:0.2.1@sha256:#{'a' * 64}")).to have_attributes(kind: :newer, latest: '0.3.0')
+  end
+
+  it "says where a token would go for a private image on GitHub's registry or Docker Hub" do
+    ghcr = AppVersions::Ghcr.new
+    allow(ghcr).to receive(:answer).and_return(Net::HTTPForbidden.new('1.1', '403', ''))
+    expect { ghcr.digest('ghcr.io/catdogbark/bitshare', '1') }.to raise_error(AppVersions::Private, "ghcr.io says catdogbark/bitshare is private, or isn't there") { |e|
+      expect(e.place).to eq('ghcr.io/catdogbark')
+    }
+    hub = AppVersions::DockerHub.new
+    ok = Net::HTTPOK.new('1.1', '200', '')
+    ok.instance_variable_set(:@body, '{"token":"t"}')
+    ok.instance_variable_set(:@read, true)
+    allow(hub).to receive(:answer) { |url, **| url.include?('auth.docker.io') ? ok : Net::HTTPUnauthorized.new('1.1', '401', '') }
+    expect { hub.digest('me/app', '1') }.to raise_error(AppVersions::Private) { |e| expect(e.place).to eq('docker.io/me') }
+  end
+
   it "knows the real catalog's apps and their release notes" do
     versions = described_class.new
     expect(versions.ids).to eq(%w[gitea jellyfin pigallery2 transmission uptimekuma vaultwarden])
@@ -178,7 +206,9 @@ RSpec.describe AppVersions do
       answers(lambda do |url, _headers|
         url.start_with?('https://quay.io/v2/auth') ? answer(Net::HTTPOK, body: '{"token":"t0k"}') : answer(Net::HTTPUnauthorized, headers: { 'WWW-Authenticate' => challenge })
       end)
-      expect { registry.digest('quay.io/nosuch/thing', '1') }.to raise_error("quay.io has no nosuch/thing, or it's private: only public images can be added")
+      expect { registry.digest('quay.io/nosuch/thing', '1') }.to raise_error(AppVersions::Private, "quay.io says nosuch/thing is private, or isn't there") { |e|
+        expect(e.place).to eq('quay.io/nosuch')
+      }
       answers(->(_url, _headers) { answer(Net::HTTPNotFound) })
       expect { registry.digest('quay.io/prometheus/node-exporter', 'v0') }.to raise_error('quay.io has no prometheus/node-exporter, or not that tag')
     end

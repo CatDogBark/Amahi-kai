@@ -94,8 +94,9 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
 - **Root access goes through the helper.** User accounts, Samba's files, share folders, Settings →
   Servers, the hostname, dnsmasq, swap, reboot/power off, data drives (format, mount, fstab),
   ZFS pools, Greyhole, package installs (pinned apt repositories, a fixed package list), the Cloudflare
-  Tunnel, Tailscale, Docker apps and the security audit's fixes are changed by `libexec/amahi-helper`
-  (`Privileged.call('users.create', ...)`), which validates and logs every call. Add an operation
+  Tunnel, Tailscale, Docker apps (and the tokens for their private images) and the security audit's
+  fixes are changed by `libexec/amahi-helper` (`Privileged.call('users.create', ...)`), which
+  validates and logs every call. Add an operation
   there, not a sudoers rule: in its area's part in `libexec/amahi-helper.d/` (`add_operations`, with
   its code beside it; a new area is a new part, listed in `libexec/amahi-helper`), and list it in
   `spec/lib/amahi_helper_checks_spec.rb`, which tries every argument with bad values.

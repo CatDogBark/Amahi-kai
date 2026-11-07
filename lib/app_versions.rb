@@ -52,15 +52,30 @@ class AppVersions
   # Docker Hub, and no port.
   IMAGE = %r{\A(?<repo>[a-z0-9]+(?:[._/-][a-z0-9]+)*):(?<tag>[A-Za-z0-9._-]{1,64})(?:@(?<digest>sha256:\h{64}))?\z}
 
+  # The registry says an image is private, or that it isn't there (it can't tell which). +place+
+  # is where a token for it would be (RegistryTokens: its registry and its name's first part).
+  class Private < RuntimeError
+    attr_reader :place
+
+    def initialize(place, message)
+      @place = place
+      super(message)
+    end
+  end
+
   # +registry+ answers for every image (tests); otherwise each image's own registry: Docker Hub,
-  # GitHub's (ghcr.io), or any other by the registry API (Registry).
-  def initialize(registry: nil, dir: CATALOG_DIR)
+  # GitHub's (ghcr.io), or any other by the registry API (Registry). +tokens+ (RegistryTokens, in
+  # the web app) answers for an image under a place the owner keeps a token for: the root helper
+  # asks its registry with the token.
+  def initialize(registry: nil, dir: CATALOG_DIR, tokens: nil)
     @registry = registry
     @dir = dir
+    @tokens = tokens
   end
 
   def registry_for(repo)
     return @registry if @registry
+    return @tokens if @tokens&.for_repo(repo)
 
     host = repo.split('/').first
     if !repo.include?('/') || !host.include?('.') || host.match?(/\Adocker\.io\z/) then DockerHub.new
@@ -159,7 +174,7 @@ class AppVersions
       response = answer("https://registry-1.docker.io/v2/#{full(repo)}/manifests/#{tag}", method: :head,
                         headers: { 'Authorization' => "Bearer #{token}", 'Accept' => INDEX_TYPES })
       # Docker Hub says 401 for a repository it doesn't have, as for a private one
-      raise "Docker Hub has no #{repo}, or it's private" if response.is_a?(Net::HTTPUnauthorized)
+      raise Private.new("docker.io/#{full(repo).split('/').first}", "Docker Hub says #{repo} is private, or isn't there") if response.is_a?(Net::HTTPUnauthorized)
       raise "Docker Hub's #{repo} has no tag #{tag}" if response.is_a?(Net::HTTPNotFound)
       raise "registry-1.docker.io answered #{response.code}" unless response.is_a?(Net::HTTPSuccess)
 
@@ -175,7 +190,7 @@ class AppVersions
   end
 
   # GitHub's registry (ghcr.io), through the registry API with an anonymous token: it answers
-  # for public packages (a private one says 401).
+  # for public packages (a private one says 401 or 403: Private).
   class Ghcr
     include Http
 
@@ -188,7 +203,7 @@ class AppVersions
       name = repo.delete_prefix('ghcr.io/')
       response = answer("https://ghcr.io/v2/#{name}/manifests/#{tag}", method: :head, headers: auth(name).merge('Accept' => INDEX_TYPES))
       # ghcr.io says 403 for a package it doesn't have, as for a private one
-      raise "ghcr.io has no #{name}, or it's private (it must be public for a NAS to pull it)" if response.is_a?(Net::HTTPForbidden) || response.is_a?(Net::HTTPUnauthorized)
+      raise private_image(name) if response.is_a?(Net::HTTPForbidden) || response.is_a?(Net::HTTPUnauthorized)
       raise "ghcr.io's #{name} has no tag #{tag}" if response.is_a?(Net::HTTPNotFound)
       raise "ghcr.io answered #{response.code}" unless response.is_a?(Net::HTTPSuccess)
 
@@ -202,13 +217,18 @@ class AppVersions
       { 'Authorization' => "Bearer #{token}" }
     rescue RuntimeError => e
       raise e unless e.message.match?(/answered 40[13]\z/)
-      raise "ghcr.io has no #{name}, or it's private (it must be public for a NAS to pull it)"
+      raise private_image(name)
+    end
+
+    def private_image(name)
+      Private.new("ghcr.io/#{name.split('/').first}", "ghcr.io says #{name} is private, or isn't there")
     end
   end
 
   # Any other registry (quay.io, lscr.io, codeberg.org, one of your own): the registry API (the
   # OCI distribution spec's), with the anonymous token it asks for (WWW-Authenticate: Bearer).
-  # Public images only: one that needs a sign-in says so. The registry, and where it sends for a
+  # An image that needs a sign-in says so (Private): the owner's token for it goes through the
+  # root helper instead (RegistryTokens). The registry, and where it sends for a
   # token, mustn't be the NAS itself or a link-local address (a cloud's metadata), so an image's
   # name can't be used to make Amahi-kai ask those.
   class Registry
@@ -257,7 +277,7 @@ class AppVersions
         @token = token(response['WWW-Authenticate'], name)
         response = answer(url, method: method, headers: headers.merge('Authorization' => "Bearer #{@token}"))
       end
-      raise "#{@host} has no #{name}, or it's private: only public images can be added" if response.is_a?(Net::HTTPUnauthorized) || response.is_a?(Net::HTTPForbidden)
+      raise private_image(name) if response.is_a?(Net::HTTPUnauthorized) || response.is_a?(Net::HTTPForbidden)
       raise "#{@host} has no #{name}, or not that tag" if response.is_a?(Net::HTTPNotFound)
       raise "#{@host} answered #{response.code}" unless response.is_a?(Net::HTTPSuccess)
 
@@ -274,11 +294,15 @@ class AppVersions
       query = { 'service' => fields['service'], 'scope' => "repository:#{name}:pull" }.compact
       realm.query = [realm.query, URI.encode_www_form(query)].compact.join('&')
       response = answer(realm.to_s)
-      raise "#{@host} has no #{name}, or it's private: only public images can be added" if response.is_a?(Net::HTTPUnauthorized) || response.is_a?(Net::HTTPForbidden)
+      raise private_image(name) if response.is_a?(Net::HTTPUnauthorized) || response.is_a?(Net::HTTPForbidden)
       raise "#{realm.host} answered #{response.code}" unless response.is_a?(Net::HTTPSuccess)
 
       body = JSON.parse(response.body)
       body['token'] || body['access_token'] or raise "#{realm.host} gave no token"
+    end
+
+    def private_image(name)
+      Private.new("#{@host}/#{name.split('/').first}", "#{@host} says #{name} is private, or isn't there")
     end
 
     # The next page of tags, from the Link header (on this registry only).

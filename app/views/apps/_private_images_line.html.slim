@@ -1,0 +1,15 @@
+/ Private images (PrivateImagesController): how many tokens the NAS keeps for them, any its
+/ registry refused, and the way to their page.
+- tokens = RegistryTokens.all
+- refused = tokens.count(&:refused?)
+p.kai-private-line#private-images-line
+  = lucide_icon('key-round', size: 15)
+  - if tokens.empty?
+    span Private images: no tokens
+    a href=private_images_index_path Add one
+  - else
+    span
+      = tokens.one? ? "Private images: 1 token, for #{tokens.first.place}" : "Private images: #{tokens.size} tokens"
+      - if refused.positive?
+        span.text-warning = " · #{refused} refused"
+    a href=private_images_index_path Manage tokens

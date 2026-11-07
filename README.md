@@ -47,10 +47,11 @@ network, drives, storage pool and a first share. More in [docs/NATIVE-INSTALL.md
 - **Storage:** Greyhole pooling across plain drives, or ZFS pools (mirrors and RAIDZ) with hourly
   and daily snapshots, roll-back, scrubs and drive health
 - **Docker apps:** one-click installs from a catalog of its own, [amahi-kai-apps](https://github.com/CatDogBark/amahi-kai-apps)
-  (Jellyfin, PiGallery2, Vaultwarden, Gitea, Uptime Kuma, Transmission, bitTube, and bitShare,
-  which is early), with updates that copy the app's data first and roll back by themselves;
-  [make your own](https://amahi-kai.com/wiki/making-apps). Vaultwarden, which needs HTTPS, is
-  reached only through Tailscale, over HTTPS with Tailscale's certificate.
+  (Jellyfin, PiGallery2, Vaultwarden, Gitea, Uptime Kuma and Transmission), signed, with updates
+  that copy the app's data first and roll back by themselves; or apps of your own, added in the
+  web UI, private images included ([make your own](https://amahi-kai.com/wiki/making-apps)).
+  Vaultwarden, which needs HTTPS, is reached only through Tailscale, over HTTPS with Tailscale's
+  certificate.
 - **Networking:** the NAS as your network's DNS server (encrypted lookups, DNSSEC, ad and
   tracker blocking), its DHCP server, and if you like its router, with nothing from the internet
   let in but the ports you choose; the NAS's own address set from the page

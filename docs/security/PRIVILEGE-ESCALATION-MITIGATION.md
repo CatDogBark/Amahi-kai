@@ -30,6 +30,8 @@ updater run everything that loads the app or its gems as `amahi`.
 | `/etc/sudoers.d/amahi-kai` | root:root 0440 | From `config/sudoers/amahi-kai`, installed only if `visudo -cf` accepts it |
 | `/etc/amahi-kai/amahi.env` | root:amahi 0640 | Database password and `SECRET_KEY_BASE`; the app reads it |
 | `/etc/amahi-kai/tunnel.token` | root:root 0600 | systemd reads it and hands it to `cloudflared`, which runs as a user made for it (`DynamicUser`), since whoever holds a token decides from Cloudflare's side where the tunnel connects |
+| `/etc/amahi-kai/registry-tokens.json` | root:root 0600 | The tokens for private images, by place (`ghcr.io/catdogbark`): only the root helper reads them, to sign Docker and its own registry lookups in (`registry.rb`) |
+| `/var/lib/amahi-kai/registry-tokens.json` | root:amahi 0640 | What the pages show of those tokens (place, who each signs in as, a note, when it last worked): never a token |
 | `/etc/amahi-kai/allowed_signers` | root:root 0644 | The release keys' public halves, from `config/allowed_signers`: the update check checks a release's tag against them |
 | `/etc/amahi-kai/allow-development` | root:root 0644, empty, on some servers | Root's permission to switch to the `development` channel, which isn't signature-checked; the root helper refuses the switch without it |
 | `/etc/greyhole.conf` | root:amahi 0640 | Holds the database password |
@@ -211,6 +213,21 @@ link-local address). Nobody reviews its image. Its logo is a picture the helper 
 bytes (PNG, JPEG, WebP, or an SVG with no entities of its own, 256 KB at most) and keeps beside
 its file; the web app serves it from the NAS under `default-src 'none'; sandbox`, so a script in
 an SVG can't run as the person signed in, even opened on its own.
+
+A private image downloads with a token the owner adds on Private images (`registry.rb`,
+`registry.save`, after the password again). The helper signs in with it first (the token request
+`docker login` makes) and keeps it only if the registry takes it, in
+`/etc/amahi-kai/registry-tokens.json`, root's alone; no operation hands a token back, and the
+helper's log filters it by name. A token is for one place, a registry and the first parts of an
+image's name there, and the helper uses it only for images under that place: `docker pull` gets
+it in a config folder made for that one pull and removed after (`--config`, never root's own
+`~/.docker`), and the lookups Review and Check for a newer version need for those images are
+`registry.digest` and `registry.tags`, made by the helper, so the web app never holds a token and
+a break-in there can't read one. Every other image downloads without signing in, so a stale token
+can't break a public one's pull. The token goes only to the registry's own address and to the
+sign-in address its challenge names when that's https and in the registry's own domain
+(`auth.docker.io` for Docker Hub), never the NAS itself or a link-local address. A container
+never sees it.
 
 Updates (`apps.update`) run the version the catalog pins; the web app names the app. The helper
 copies the app's folders (`cp -a`) into a root-only folder first, and puts them back

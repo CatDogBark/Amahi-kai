@@ -39,8 +39,10 @@ Inside:
   point, model, serial), the pools (name, GUID, drives), the network (mode, each port's name, label
   and address), the apps (image, where their data lives) and the packages in use.
 - The database (`mysqldump --single-transaction`).
-- From `/etc/amahi-kai`: the tunnel token, `trash-days`, `greyhole-pool.conf`, and the update
-  channel's line of `amahi.env`. The rest of `amahi.env` stays the new install's: its database
+- From `/etc/amahi-kai`: the tunnel token, the tokens for private images
+  (`registry-tokens.json`, with their status from `/var/lib/amahi-kai`, so the apps that download
+  with them update after a restore; CatDogBark's call, 2026-11-07), `trash-days`,
+  `greyhole-pool.conf`, and the update channel's line of `amahi.env`. The rest of `amahi.env` stays the new install's: its database
   password, and its session key (nothing in the database is encrypted with that key; a new one only
   means signing in again).
 - Samba's passwords (`pdbedit -e smbpasswd:`), so nobody has to set theirs again.

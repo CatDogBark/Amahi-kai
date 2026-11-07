@@ -30,6 +30,12 @@ RSpec.describe ReportScrubber do
 
   # On a real install, every line of Amahi-kai's log starts with its request's id, and a long path
   # was taken for a key
+  # Tokens for private images (registry.rb) never reach a log, but one pasted anywhere is taken out
+  it "takes out a registry's token: GitHub's, classic or fine-grained, and Docker Hub's" do
+    text = "ghp_#{'aB3' * 12} github_pat_11ABCDEFG0#{'x9' * 40} dckr_pat_#{'Qw7' * 9}"
+    expect(scrubber.scrub(text)).to eq('<secret> <secret> <secret>')
+  end
+
   it "keeps request ids and paths, which name no one" do
     line = 'I, [2026-10-29T22:54:18.916876 #3820]  INFO -- : [0f8fad5b-d9cb-469f-a165-70867728950e] Started GET ' \
            '"/settings/help/log?source=journal" from /opt/amahi-kai/app/controllers/settings_controller_with_a_long_name2026.rb'

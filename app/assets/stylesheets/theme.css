@@ -1203,6 +1203,7 @@ table.settings tbody tr { border-bottom-color: var(--kai-line); }
 }
 .kai-apps-head h2 { margin: 0; font-size: 22px; font-weight: 600; color: var(--kai-title); }
 .kai-apps-head .catalog-status { margin: 0 !important; }
+.kai-apps-head .kai-private-line { flex-basis: 100%; justify-content: flex-end; margin: 0; }
 .kai-apps-count { margin: 0; color: var(--kai-muted); }
 .kai-apps-grid {
   display: grid;
@@ -1471,6 +1472,61 @@ table.settings tbody tr { border-bottom-color: var(--kai-line); }
 .kai-custom-warning p { margin: 0; line-height: 1.5; }
 .kai-custom-back { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; text-decoration: none; }
 .kai-custom-newer { margin: 0 0 10px; color: var(--kai-text); line-height: 1.45; }
+/* Private images (PrivateImagesController): the tokens the NAS keeps, and the form to add one */
+.kai-tokens-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.kai-tokens-count { color: var(--kai-muted); font-size: 14px; }
+.kai-token { display: flex; flex-direction: column; gap: 12px; padding: 16px 18px; border-radius: 14px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--kai-line); }
+.kai-token-refused { border-color: rgba(255, 197, 110, 0.4); }
+.kai-token-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.kai-token-icon {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--kai-mint-soft);
+  color: var(--kai-mint-text);
+}
+.kai-token-refused .kai-token-icon { background: rgba(255, 197, 110, 0.12); color: var(--kai-accent); }
+.kai-token-title { display: flex; flex-direction: column; gap: 2px; flex: 1 1 220px; min-width: 0; }
+.kai-token-title h3 { margin: 0; font-size: 16px; font-weight: 600; color: var(--kai-title); overflow-wrap: anywhere; }
+.kai-token-sub { color: var(--kai-muted); font-size: 13.5px; }
+.kai-token-facts { grid-template-columns: minmax(0, 150px) minmax(0, 1fr); margin: 0; }
+.kai-token-facts code { overflow-wrap: anywhere; }
+.kai-token-hidden { color: var(--kai-muted); }
+.kai-token-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.kai-token-optional { margin-left: 4px; font-weight: 400; color: var(--kai-muted); }
+.kai-token-form form { display: flex; flex-direction: column; gap: 16px; }
+.kai-token-form .kai-custom-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.kai-token-form fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+.kai-token-form legend { float: none; width: auto; margin: 0 0 6px; font-size: 13.5px; font-weight: 600; }
+.kai-registry-choices { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.kai-registry-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  cursor: pointer;
+}
+.kai-registry-choice:has(input:checked) { border-color: var(--kai-mint-ring); background: var(--kai-mint-soft); }
+.kai-registry-choice input { margin: 0; }
+.kai-registry-choice code { color: var(--kai-muted); font-size: 12.5px; }
+.kai-token-howto { padding: 12px 16px; border-radius: 12px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--kai-line); }
+.kai-token-howto[hidden] { display: none; }
+.kai-token-howto summary { font-weight: 600; color: var(--kai-link); cursor: pointer; }
+.kai-token-howto ol { margin: 10px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; line-height: 1.5; }
+.kai-private-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 8px; color: var(--kai-muted); font-size: 14px; }
+.kai-private-line svg { color: var(--kai-mint-text); }
+@media (max-width: 767.98px) {
+  .kai-token-form .kai-custom-grid, .kai-token-facts { grid-template-columns: minmax(0, 1fr); }
+  .kai-token-facts dd { margin-bottom: 6px; }
+}
 @media (max-width: 767.98px) {
   .kai-custom-grid, .kai-custom-row-folder, .kai-custom-row-secret, .kai-custom-row-setting,
   .kai-custom-row-setting:has([data-custom-value][hidden]) { grid-template-columns: minmax(0, 1fr) auto; }

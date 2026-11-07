@@ -4,7 +4,8 @@
 # amahi-helper: the program Amahi-kai runs as root for user accounts, Samba, share
 # folders, system services, the hostname, dnsmasq's and Unbound's configs, swap, reboot/power off, data
 # drives, ZFS pools, Greyhole, package installs, the Cloudflare Tunnel, Tailscale, the
-# security audit's fixes and the Docker apps. It is the app's only sudo rule.
+# security audit's fixes, and the Docker apps with the tokens for their private images. It is the
+# app's only sudo rule.
 #
 #   sudo -n /usr/local/sbin/amahi-helper users.create    (stdin: {"login":"ann","name":"Ann"})
 #   stdout: {"ok":true}  or  {"ok":false,"error":"..."}
@@ -42,6 +43,9 @@ require 'yaml'
 require 'fileutils'
 require 'ipaddr'
 require 'socket'
+require 'net/http'
+require 'openssl'
+require 'uri'
 
 # The helper's parts, in this order: core (the operation table, the entry points and what every
 # area uses), engine (the container engine: every command Docker is given), then one part per
@@ -58,6 +62,7 @@ require_relative 'amahi-helper.d/dns'
 require_relative 'amahi-helper.d/network'
 require_relative 'amahi-helper.d/apps'
 require_relative 'amahi-helper.d/custom'
+require_relative 'amahi-helper.d/registry'
 require_relative 'amahi-helper.d/system'
 
 AmahiHelper::OPERATIONS.freeze

@@ -152,6 +152,19 @@ describe 'Apps of your own', type: :request do
       expect(Privileged.calls).to be_empty
     end
 
+    # Its token goes on Private images, in a tab of its own, so the form is kept here
+    it "offers to add a token for an image its registry says is private, on either tab" do
+      allow_any_instance_of(AppVersions).to receive(:pin)
+        .and_raise(AppVersions::Private.new('ghcr.io/catdogbark', "ghcr.io says catdogbark/bitshare is private, or isn't there"))
+      post '/apps/custom/review', params: { source: 'form', app: fields.merge(image: 'ghcr.io/catdogbark/bitshare:0.3.0') }
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(response.body).to include("ghcr.io says catdogbark/bitshare is private, or isn&#39;t there. If it&#39;s private, the NAS needs a token for ghcr.io/catdogbark.",
+                                       'href="/apps/private-images?owner=catdogbark&amp;registry=ghcr.io#add-token"', 'target="_blank"', 'Add a token for ghcr.io/catdogbark')
+      post '/apps/custom/review', params: { source: 'file', manifest: file.sub(%r{image: .*}, 'image: ghcr.io/catdogbark/bitshare:0.3.0') }
+      expect(response.body).to include("That doesn&#39;t work yet: Couldn&#39;t find that image: ghcr.io says catdogbark/bitshare is private")
+      expect(response.body.scan('id="custom-add-token"').size).to eq(1)
+    end
+
     it "says what the helper's checks found" do
       allow(Privileged).to receive(:call).and_call_original
       allow(Privileged).to receive(:call).with('apps.custom_check', any_args)
