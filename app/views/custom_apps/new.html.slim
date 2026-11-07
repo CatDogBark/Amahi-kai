@@ -30,7 +30,8 @@ p.kai-apps-back
   p.kai-custom-lede
     - if editing
       | Change what you described. Saving asks for your password, then #{app.name} is updated to it:
-        its data is copied first, and it goes back if it doesn't come up.
+        its data is copied first, and it goes back if it doesn't come up. A change only to how it's
+        listed (its name, description, category, sign-in words or logo) doesn't restart it.
     - else
       | An app that runs from a container image, described by you. It runs the way the catalog's apps
         do: as its own user, on a network of its own, with only what you give it here.

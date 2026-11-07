@@ -131,7 +131,8 @@ section.kai-app-panel.kai-app-hero id="docker_app_#{identifier}" aria-label=name
         h2#app-custom-head Change it
         p.kai-app-panel-text
           | Edit opens what you described, filled in. Saving asks for your password, then updates it: its
-            data is copied first, and it goes back if it doesn't come up.
+            data is copied first, and it goes back if it doesn't come up. A change only to how it's
+            listed, its logo say, doesn't restart it.
         a.btn.btn-outline-secondary id="app-edit-#{identifier}" href=custom_apps_edit_path(identifier)
           = lucide_icon('pencil', size: 15)
           |  Edit
