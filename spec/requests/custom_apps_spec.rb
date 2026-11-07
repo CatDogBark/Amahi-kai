@@ -250,6 +250,7 @@ describe 'Apps of your own', type: :request do
       expect(response).to redirect_to('/apps/mealie#app-version-mealie')
       follow_redirect!
       expect(response.body).to include('v2.5.0 is out, from the same image.', 'Update to v2.5.0', 'action="/apps/custom/mealie/version"')
+      expect(response.body).not_to include('flash-data') # what it found is on the page, not a toast
 
       post '/apps/custom/mealie/version', params: { tag: 'v2.5.0' }
       expect(saved_manifest).to eq(file.sub(pinned, newer.image))

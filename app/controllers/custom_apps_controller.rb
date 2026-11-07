@@ -53,8 +53,7 @@ class CustomAppsController < ApplicationController
     return review_again(@app, taken_message(@app.id)) if AppCatalog.custom_file(@app.id)
 
     save(@app) or return
-    redirect_to apps_index_path(install: @app.id, anchor: "docker_app_#{@app.id}"),
-                notice: "#{@app.name} is added. Install it: it asks for its shares first, if it uses any."
+    redirect_to apps_index_path(install: @app.id, anchor: "docker_app_#{@app.id}"), notice: "#{@app.name} is added."
   end
 
   # Saves the changes, then the app page updates it to them when it's installed.
