@@ -132,6 +132,8 @@ class CustomApp
 
         port = { 'host' => number(row['host']), 'container' => number(row['container']) }
         port['protocol'] = 'udp' if row['protocol'] == 'udp'
+        label = row['label'].to_s.squish
+        port['label'] = label if label.present?
         web ||= port['host'] if row['key'] == fields['web'].to_s && port['protocol'].nil?
         port
       end
@@ -197,15 +199,19 @@ class CustomApp
   end
 
   # The form's fields for this file (posted, or read back from it), or nil when the file says
-  # more than the form shows: it's edited as a file then.
+  # more than the form shows: it's edited as a file then. That's also when the form would give
+  # back another file, so saving it from the form never drops what the form can't show (as a
+  # port's label once did).
   def form
     return @fields if @fields
     return nil unless (@data.keys - FORM_FIELDS - FORM_IGNORES).empty?
+    return nil if Array(@data['ports']).any? { |port| !port.is_a?(Hash) }
     return nil if Array(@data['folders']).any? { |folder| !folder.is_a?(Hash) || (folder.keys - %w[name path]).any? }
     return nil if Array(@data['secrets']).any? { |secret| !secret.is_a?(Hash) || (secret.keys - %w[env label]).any? }
     return nil unless @data['environment'].nil? || @data['environment'].is_a?(Hash)
 
-    form_fields
+    fields = form_fields
+    fields if as_saved(self.class.from_form(fields, id: id).data) == as_saved(@data)
   end
 
   # [[label, words]] for the review page: what it will be able to do.
@@ -235,7 +241,8 @@ class CustomApp
       'capabilities' => capabilities, 'network' => @data['network'] || 'internet', 'memory' => (@data['memory'] || '1g').to_s,
       'web' => Array(@data['ports']).index { |port| port.is_a?(Hash) && port['host'] == @data['web_port'] }.to_s,
       'ports' => Array(@data['ports']).each_with_index.to_h do |port, index|
-        [index.to_s, { 'host' => port['host'], 'container' => port['container'], 'protocol' => port['protocol'] || 'tcp' }]
+        [index.to_s, { 'host' => port['host'], 'container' => port['container'], 'protocol' => port['protocol'] || 'tcp',
+                       'label' => port['label'] }]
       end,
       'folders' => Array(@data['folders']).each_with_index.to_h { |folder, index| [index.to_s, folder.slice('name', 'path')] },
       'settings' => environment.each_with_index.to_h do |(name, value), index|
@@ -245,6 +252,18 @@ class CustomApp
       'secrets' => Array(@data['secrets']).each_with_index.to_h { |secret, index| [index.to_s, { 'name' => secret['env'], 'label' => secret['label'] }] },
       'shares' => @data['shares'] == true || @data['writes_shares'] == true ? '1' : nil,
       'writes_shares' => @data['writes_shares'] == true ? '1' : nil }
+  end
+
+  # +data+ with what the form leaves unsaid as the helper reads it (the defaults: the internet,
+  # 1g of memory, tcp, no shares), and without what it doesn't keep: the image's pin (review pins
+  # its tag again), the format it needs (the form works it out) and a logo link.
+  def as_saved(data)
+    data.except('image', 'requires', *FORM_IGNORES).merge(
+      'network' => data['network'] || 'internet', 'memory' => (data['memory'] || '1g').to_s,
+      'capabilities' => Array(data['capabilities']), 'writes_shares' => data['writes_shares'] == true,
+      'shares' => data['shares'] == true || data['writes_shares'] == true,
+      'ports' => Array(data['ports']).map { |port| { 'protocol' => 'tcp' }.merge(port) }
+    )
   end
 
   def runs_words

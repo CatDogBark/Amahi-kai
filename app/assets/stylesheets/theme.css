@@ -1441,7 +1441,7 @@ table.settings tbody tr { border-bottom-color: var(--kai-line); }
 .kai-custom-rows { display: flex; flex-direction: column; gap: 12px; }
 .kai-custom-rows:empty { display: none; }
 .kai-custom-row { display: grid; gap: 10px; align-items: end; }
-.kai-custom-row-port { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 110px) auto auto; }
+.kai-custom-row-port { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 110px) minmax(0, 1.2fr) auto auto; }
 .kai-custom-row-folder, .kai-custom-row-secret { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; }
 .kai-custom-row-setting { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto; }
 .kai-custom-row-setting:has([data-custom-value][hidden]) { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; }

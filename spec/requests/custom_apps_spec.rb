@@ -297,6 +297,22 @@ describe 'Apps of your own', type: :request do
       expect(DockerApp.find_by(identifier: 'mealie').description).to eq('All our recipes')
     end
 
+    # Its page lists the ports it was given at install, which a listing-only save doesn't touch
+    it "gives its page a port's new label when that's all that changed" do
+      installed(ports: [{ host: 9925, container: 9000, protocol: 'tcp', label: 'web' }, { host: 8554, container: 8554, protocol: 'tcp' }])
+      two = "ports:\n- host: 9925\n  container: 9000\n- host: 8554\n  container: 8554\n"
+      keep('mealie', file.sub("ports:\n- host: 9925\n  container: 9000\n", two))
+      labelled = file.sub("ports:\n- host: 9925\n  container: 9000\n", "#{two}  label: RTSP\n")
+      allow(Privileged).to receive(:call).and_call_original
+      allow(Privileged).to receive(:call).with('apps.custom_save', any_args) do
+        keep('mealie', labelled) # as the helper writes it
+        { 'ok' => true, 'saved' => true, 'update' => false }
+      end
+      post '/apps/custom/mealie/save', params: { manifest: labelled, password: 'secretpassword' }
+      expect(response).to redirect_to('/apps/mealie')
+      expect(DockerApp.find_by(identifier: 'mealie').port_summary).to eq('9925 (web) · 8554 (RTSP)')
+    end
+
     it 'opens Edit on the form, filled in, or on its file when it says more than the form shows' do
       get '/apps/custom/mealie/edit'
       expect(response.body).to include('Edit Mealie', 'value="Mealie"', 'value="SECRET_KEY"', 'name="editing" type="hidden" value="mealie"',

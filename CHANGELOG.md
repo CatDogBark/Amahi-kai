@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+### 🔒 Security & Fixes
+
+- **Edit keeps a port's label** — Edit opened an app of your own's file on its form when it could, but the form had no place for a port's label (bitStream's RTSP, say), so saving it from there dropped the label. The form has one now ("Its page calls it"), a file the form wouldn't give back exactly as it is opens as a file instead, and a change only to a label shows on the app's page straight away.
+
 ## [1.8.1] — 2026-11-07
 
 Apps of your own can have a logo, kept on your server, and a change to how one is listed doesn't restart it.

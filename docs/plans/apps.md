@@ -417,8 +417,10 @@ label. Docker stays (Podman later or not at all).
   `apps.custom_save` records the file as its definition too, and replies `update: false`, so the
   page saves it without an update (1.8.1).
 - [x] **The pages** (`CustomAppsController`, `CustomApp`): **Add your own app** on the Apps page,
-  a form (name, image, how it runs and the kernel permissions it gets back, ports and its web
-  page, folders, settings and secrets, shares, what it reaches, memory) or **I have an app file**;
+  a form (name, image, how it runs and the kernel permissions it gets back, ports with their
+  labels and its web page, folders, settings and secrets, shares, what it reaches, memory) or
+  **I have an app file**; Edit opens a file on the form only when the form gives it back as it
+  is (1.8.2: before, it dropped a port's label);
   **Review** pins the image's tag to its digest (`AppVersions#pin`: Docker Hub, ghcr.io, or any
   registry by the registry API with its anonymous token; https only, never the NAS itself or a
   link-local address) and says in words what the app will be able to do, the processors computed

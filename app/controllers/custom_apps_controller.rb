@@ -86,6 +86,7 @@ class CustomAppsController < ApplicationController
       redirect_to apps_app_path(@app.id), alert: "#{@app.name}'s changes are saved, but #{AppCatalog.tag(@app.image)} is older than " \
                                                  "the #{installed.version} it runs, and an app isn't updated to an older version."
     elsif installed && saved['update'] == false
+      installed.relabel_ports(AppCatalog.find(@app.id)&.dig(:ports))
       redirect_to apps_app_path(@app.id), notice: "#{@app.name}'s changes are saved. They're only how it's listed, so it keeps running as it is."
     elsif installed && %w[running stopped].include?(installed.status)
       redirect_to apps_app_path(@app.id, apply: 1), notice: "#{@app.name}'s changes are saved: it updates to them now."

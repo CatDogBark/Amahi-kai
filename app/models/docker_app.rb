@@ -135,6 +135,21 @@ class DockerApp < ApplicationRecord
     end.map { |share| self.class.share_label(share) }
   end
 
+  # After a change only to how it's listed (apps.custom_save's update: false), the ports it was
+  # given with the labels +listed+ (its catalog entry's ports) gives them now: the same container
+  # has the same ports, in the same order. One that doesn't match keeps its label.
+  def relabel_ports(listed)
+    listed = Array(listed)
+    return if listed.size != ports.size
+
+    relabeled = ports.zip(listed).map do |port, now|
+      next port unless port[:container] == now[:container] && port[:protocol] == now[:protocol]
+
+      now[:label] ? port.merge(label: now[:label]) : port.except(:label)
+    end
+    update(ports: relabeled) if relabeled != ports
+  end
+
   # "3300 (web) · 2222 (Git over SSH)", "51413 (peers, TCP and UDP)": for the Apps page.
   def port_summary
     ports.group_by { |port| [port[:host], port[:label]] }.map do |(host, label), group|

@@ -57,6 +57,11 @@ RSpec.describe 'Apps of your own', type: :system do
     expect(page).to have_css('[data-custom-rows="ports"] [data-custom-row]', count: 2)
     all('[data-custom-rows="ports"] [data-custom-row]').last.find('[aria-label="Remove this port"]').click
     expect(page).to have_css('[data-custom-rows="ports"] [data-custom-row]', count: 1)
+    click_button '+ Add a port'
+    port = all('[data-custom-rows="ports"] [data-custom-row]').last
+    port.fill_in('On the NAS', with: '9926')
+    port.fill_in('In the app', with: '9001')
+    port.fill_in('Its page calls it', with: 'API')
     click_button '+ Add a setting'
     setting = all('[data-custom-rows="settings"] [data-custom-row]').last
     setting.fill_in('Setting', with: 'ALLOW_SIGNUP')
@@ -77,6 +82,7 @@ RSpec.describe 'Apps of your own', type: :system do
     click_button 'Back to describing it'
     expect(page).to have_field('Name', with: 'Mealie')
     expect(page).to have_field('Setting', with: 'ALLOW_SIGNUP')
+    expect(page).to have_field('Its page calls it', with: 'API')
     click_button 'Review'
     expect(page).to have_text('What it will be able to do')
     fill_in 'Your password, to add an app of your own', with: User::SEED_ADMIN_PASSWORD

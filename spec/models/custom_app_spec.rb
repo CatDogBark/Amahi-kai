@@ -6,7 +6,8 @@ describe CustomApp do
   let(:form) do
     { 'name' => 'Home Box', 'description' => 'A box', 'category' => 'home', 'image' => 'ghcr.io/me/box:1.0', 'run_as' => 'app',
       'network' => 'lan', 'memory' => '2g', 'web' => 'b', 'shares' => '1',
-      'ports' => { 'a' => { 'host' => '9001', 'container' => '53', 'protocol' => 'udp' }, 'b' => { 'host' => '9000', 'container' => '80' },
+      'ports' => { 'a' => { 'host' => '9001', 'container' => '53', 'protocol' => 'udp', 'label' => '  DNS   queries ' },
+                   'b' => { 'host' => '9000', 'container' => '80', 'label' => '' },
                    'c' => { 'host' => '', 'container' => '' } },
       'folders' => { 'a' => { 'name' => 'data', 'path' => '/data' }, 'b' => { 'name' => '', 'path' => '' } },
       'settings' => { 'a' => { 'name' => 'TZ', 'kind' => 'timezone' }, 'b' => { 'name' => 'PUID', 'kind' => 'uid', 'value' => 'ignored' },
@@ -20,7 +21,7 @@ describe CustomApp do
     expect(app.data).to eq(
       'requires' => 4, 'name' => 'Home Box', 'description' => 'A box', 'category' => 'home', 'image' => 'ghcr.io/me/box:1.0',
       'run_as' => 'app', 'network' => 'lan', 'memory' => '2g', 'web_port' => 9000,
-      'ports' => [{ 'host' => 9001, 'container' => 53, 'protocol' => 'udp' }, { 'host' => 9000, 'container' => 80 }],
+      'ports' => [{ 'host' => 9001, 'container' => 53, 'protocol' => 'udp', 'label' => 'DNS queries' }, { 'host' => 9000, 'container' => 80 }],
       'folders' => [{ 'name' => 'data', 'path' => '/data' }], 'shares' => true,
       'environment' => { 'TZ' => '{{timezone}}', 'PUID' => '{{uid}}', 'Media-folder' => '/shares' },
       'secrets' => [{ 'env' => 'API_KEY', 'label' => 'Api key' }]
@@ -42,6 +43,46 @@ describe CustomApp do
                                                 '2' => { 'name' => 'Media-folder', 'kind' => 'value', 'value' => '/shares' } })
     expect(described_class.from_file("name: X\nimage: a/b:1\naccess: tailscale\n").form).to be_nil
     expect(described_class.from_file("name: X\nfolders:\n  - { name: d, path: /d, kind: dataset }\n").form).to be_nil
+  end
+
+  # bitStream's file from the catalog, as its install kept it: the form gave it back without its
+  # RTSP port's label
+  it 'opens a file with a port label on the form, which keeps the label' do
+    text = <<~YAML
+      name: bitStream
+      description: Your home's cameras
+      category: security
+      logo: https://example.com/bitstream.svg
+      image: ghcr.io/catdogbark/bitstream:0.2.1@sha256:#{'c' * 64}
+      run_as: app
+      network: lan
+      web_port: 1984
+      memory: 512m
+      ports:
+        - { host: 1984, container: 1984 }
+        - { host: 8554, container: 8554, label: RTSP }
+      folders:
+        - { name: config, path: /config }
+      secrets:
+        - { env: BITSTREAM_PASSWORD, label: Password (user admin) }
+      environment:
+        TZ: "{{timezone}}"
+    YAML
+    app = described_class.from_file(text, id: 'bitstream')
+    expect(app.form['ports']['1']).to include('host' => 8554, 'label' => 'RTSP')
+    back = described_class.from_form(app.form, id: 'bitstream')
+    expect(back.data).to eq(app.data.except('logo').merge('image' => 'ghcr.io/catdogbark/bitstream:0.2.1'))
+  end
+
+  it 'leaves a file to the file when the form would give back another one' do
+    base = "name: X\nimage: a/b:1\nrun_as: app\n"
+    expect(described_class.from_file("#{base}environment:\n  PORT: 8080\n").form).to be_nil
+    expect(described_class.from_file("#{base}capabilities: [CHOWN]\n").form).to be_nil
+    expect(described_class.from_file("#{base}secrets:\n  - { env: KEY }\n").form).to be_nil
+    expect(described_class.from_file("name: '  X '\nimage: a/b:1\nrun_as: app\n").form).to be_nil
+    # What it only says the way the helper would read it anyway is no matter
+    expect(described_class.from_file("#{base}network: internet\nmemory: 1g\nshares: false\nports:\n  - { host: 9000, container: 80, protocol: tcp }\n").form)
+      .to include('network' => 'internet', 'memory' => '1g')
   end
 
   # A logo link is no matter: its logo is a picture kept on the NAS
