@@ -417,8 +417,10 @@ label. Docker stays (Podman later or not at all).
   `apps.custom_save` records the file as its definition too, and replies `update: false`, so the
   page saves it without an update (1.8.1).
 - [x] **The pages** (`CustomAppsController`, `CustomApp`): **Add your own app** on the Apps page,
-  a form (name, image, how it runs and the kernel permissions it gets back, ports and its web
-  page, folders, settings and secrets, shares, what it reaches, memory) or **I have an app file**;
+  a form (name, image, how it runs and the kernel permissions it gets back, ports with their
+  labels and its web page, folders, settings and secrets, shares, what it reaches, memory) or
+  **I have an app file**; Edit opens a file on the form only when the form gives it back as it
+  is (1.8.2: before, it dropped a port's label);
   **Review** pins the image's tag to its digest (`AppVersions#pin`: Docker Hub, ghcr.io, or any
   registry by the registry API with its anonymous token; https only, never the NAS itself or a
   link-local address) and says in words what the app will be able to do, the processors computed
@@ -445,9 +447,21 @@ label. Docker stays (Podman later or not at all).
   fetched: a merge reaches servers at the next signed version. The Apps page names the version
   and the key ("catalog-7, signed with release key B"). The catalog's CI checks a pushed tag the
   same way. Enforced in one step: `catalog-1` was signed before the release that requires it.
-- [ ] The bit apps that aren't for everyone move out of the catalog into apps of their own on
-  CatDogBark's NAS.
-- [ ] **Private images** (a registry sign-in for the NAS, for a closed bitShare): to discuss.
+- [x] The bit apps that aren't for everyone moved out of the catalog (catalog-2) and out of
+  `config/apps` (1.8.1), into apps of their own on CatDogBark's NAS.
+- [x] **Private images** (1.8.2, decided 2026-11-07 from mockups): a token for a place (a registry
+  and the first parts of an image's name there, `ghcr.io/catdogbark`), added on **Private images**
+  (`/apps/private-images`, a line under Add apps leads there) and listed under **Setup → Settings
+  → Tokens** too, with the Cloudflare Tunnel's. Each token shows who it signs in as, a note, when
+  it last worked or was refused, and the apps using it; never the token. Add and Replace ask for
+  the password again; Remove asks first. The root helper (`registry.rb`) tries the token with the
+  registry before keeping it (root-only file), signs `docker pull` in only for images under its
+  place (a config folder for that pull alone), and makes the lookups Review and Check for a newer
+  version need for them (`registry.digest`, `registry.tags`), so the web app never holds one.
+  Review says when an image is private and offers **Add a token for** its place; an app's page
+  says when its image is private and when its token was refused. GitHub's registry still wants a
+  classic token (`read:packages` only). Any registry works, Basic or token sign-in; ghcr.io is
+  the one tried.
 
 ### Also in Phase 4
 

@@ -1,0 +1,16 @@
+/ Private images (PrivateImagesController#index), under Apps: the tokens the NAS keeps for images
+/ their owners keep private, and the form to add one or replace one.
+p.kai-apps-back
+  a href=apps_index_path(anchor: 'add')
+    = lucide_icon('chevron-left', size: 16)
+    | All apps
+
+.kai-custom.kai-private-images
+  p.kai-custom-lede
+    | An image its owner keeps private downloads only with a token from its registry. The NAS keeps
+      each token where only the system can read it, uses it only for images that start with its
+      place, and never shows it again. Your apps never see it.
+  = render 'tokens', from: nil
+  = render 'form', from: nil
+
+= javascript_include_tag 'private_images'

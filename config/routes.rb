@@ -86,6 +86,7 @@ Rails.application.routes.draw do
     post 'reboot', action: 'reboot'
     post 'poweroff', action: 'poweroff'
     get 'servers', action: 'servers'
+    get 'tokens', to: 'private_images#settings', as: 'tokens'
     post 'servers/:key/:verb', action: 'service_action', as: 'service_action',
          constraints: { verb: /start|stop|restart/ }
     get 'jobs', action: 'jobs'
@@ -119,6 +120,15 @@ Rails.application.routes.draw do
     post ':id/check', action: 'check_version', as: 'check', constraints: { id: /[a-z][a-z0-9]{1,23}/ }
     post ':id/version', action: 'version', as: 'version', constraints: { id: /[a-z][a-z0-9]{1,23}/ }
     get ':id/logo', action: 'logo', as: 'logo', constraints: { id: /[a-z][a-z0-9]{1,23}/ }
+  end
+
+  # Private images (PrivateImagesController): the tokens the NAS keeps for them. The page is under
+  # Apps; Setup → Settings → Tokens (settings_tokens) lists them too.
+  scope '/apps/private-images', controller: 'private_images', as: 'private_images' do
+    get '/', action: 'index', as: 'index'
+    post 'save', action: 'save', as: 'save'
+    post 'check', action: 'check', as: 'check'
+    post 'remove', action: 'remove', as: 'remove'
   end
 
   # Apps (consolidated from plugin)

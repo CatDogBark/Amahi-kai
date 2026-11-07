@@ -1,0 +1,5 @@
+/ A private image (AppVersions::Private, @token_place): its token goes on Private images, opened
+/ in a tab of its own so this form is kept for Review again
+- host, owner = @token_place.split('/', 2)
+a.btn.btn-primary.btn-sm.align-self-start#custom-add-token href=private_images_index_path(registry: host, owner: owner, anchor: 'add-token') target="_blank" rel="noopener"
+  = "Add a token for #{@token_place}"

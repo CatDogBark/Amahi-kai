@@ -4,6 +4,19 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.8.2] — 2026-11-07
+
+Apps whose images their owners keep private can run, with a token the server keeps; Edit keeps a port's label.
+
+### 🚀 Major Features
+
+- **Private images** — An app whose image its owner keeps private can run now. **Private images** (a line under Add apps on the Apps page leads there, and Setup → Settings → Tokens lists the same tokens) keeps a token for each place, a registry and whose images there (`ghcr.io/you`): add one with your password, and Amahi-kai tries it with the registry before keeping it. Each token shows who it signs in as, your note, when it last worked and the apps using it, but never the token itself; Check it, Replace and Remove are beside it. The server keeps tokens where only the system can read them and uses each only for images under its place, with that registry: your apps never see it, and the web app never holds it. Review offers to add a token when it finds an image is private, and an app's page says when its image is private and when its token was refused. GitHub's registry wants a classic token with only **read:packages**; the page says how to make one.
+
+### 🔒 Security & Fixes
+
+- **The website and README don't list the bit apps** — The wiki's Docker Apps, ZFS Pools and Storage Pooling pages, and the README, still named bitTube and bitShare after they left the catalog. Now they name only the catalog's apps.
+- **Edit keeps a port's label** — Edit opened an app of your own's file on its form when it could, but the form had no place for a port's label (bitStream's RTSP, say), so saving it from there dropped the label. The form has one now ("Its page calls it"), a file the form wouldn't give back exactly as it is opens as a file instead, and a change only to a label shows on the app's page straight away.
+
 ## [1.8.1] — 2026-11-07
 
 Apps of your own can have a logo, kept on your server, and a change to how one is listed doesn't restart it.

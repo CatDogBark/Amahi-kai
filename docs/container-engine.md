@@ -33,4 +33,7 @@ Outside the engine part, these are tied to Docker and would change with it:
 
 The web app never talks to Docker: it asks the helper (`apps.*`), and names in it like `DockerApp`
 are only names. App images come from container registries (`lib/app_versions.rb` reads Docker Hub
-and GitHub's), which any engine can pull from.
+and GitHub's), which any engine can pull from. A private image's pull is signed in with a token
+the helper keeps (`registry.rb`): `engine_pull` hands Docker a config folder made for that one
+pull (`docker --config`); another engine takes the same sign-in its own way (Podman's
+`--authfile`).

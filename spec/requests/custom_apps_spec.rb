@@ -152,6 +152,19 @@ describe 'Apps of your own', type: :request do
       expect(Privileged.calls).to be_empty
     end
 
+    # Its token goes on Private images, in a tab of its own, so the form is kept here
+    it "offers to add a token for an image its registry says is private, on either tab" do
+      allow_any_instance_of(AppVersions).to receive(:pin)
+        .and_raise(AppVersions::Private.new('ghcr.io/catdogbark', "ghcr.io says catdogbark/bitshare is private, or isn't there"))
+      post '/apps/custom/review', params: { source: 'form', app: fields.merge(image: 'ghcr.io/catdogbark/bitshare:0.3.0') }
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(response.body).to include("ghcr.io says catdogbark/bitshare is private, or isn&#39;t there. If it&#39;s private, the NAS needs a token for ghcr.io/catdogbark.",
+                                       'href="/apps/private-images?owner=catdogbark&amp;registry=ghcr.io#add-token"', 'target="_blank"', 'Add a token for ghcr.io/catdogbark')
+      post '/apps/custom/review', params: { source: 'file', manifest: file.sub(%r{image: .*}, 'image: ghcr.io/catdogbark/bitshare:0.3.0') }
+      expect(response.body).to include("That doesn&#39;t work yet: Couldn&#39;t find that image: ghcr.io says catdogbark/bitshare is private")
+      expect(response.body.scan('id="custom-add-token"').size).to eq(1)
+    end
+
     it "says what the helper's checks found" do
       allow(Privileged).to receive(:call).and_call_original
       allow(Privileged).to receive(:call).with('apps.custom_check', any_args)
@@ -297,6 +310,22 @@ describe 'Apps of your own', type: :request do
       expect(DockerApp.find_by(identifier: 'mealie').description).to eq('All our recipes')
     end
 
+    # Its page lists the ports it was given at install, which a listing-only save doesn't touch
+    it "gives its page a port's new label when that's all that changed" do
+      installed(ports: [{ host: 9925, container: 9000, protocol: 'tcp', label: 'web' }, { host: 8554, container: 8554, protocol: 'tcp' }])
+      two = "ports:\n- host: 9925\n  container: 9000\n- host: 8554\n  container: 8554\n"
+      keep('mealie', file.sub("ports:\n- host: 9925\n  container: 9000\n", two))
+      labelled = file.sub("ports:\n- host: 9925\n  container: 9000\n", "#{two}  label: RTSP\n")
+      allow(Privileged).to receive(:call).and_call_original
+      allow(Privileged).to receive(:call).with('apps.custom_save', any_args) do
+        keep('mealie', labelled) # as the helper writes it
+        { 'ok' => true, 'saved' => true, 'update' => false }
+      end
+      post '/apps/custom/mealie/save', params: { manifest: labelled, password: 'secretpassword' }
+      expect(response).to redirect_to('/apps/mealie')
+      expect(DockerApp.find_by(identifier: 'mealie').port_summary).to eq('9925 (web) · 8554 (RTSP)')
+    end
+
     it 'opens Edit on the form, filled in, or on its file when it says more than the form shows' do
       get '/apps/custom/mealie/edit'
       expect(response.body).to include('Edit Mealie', 'value="Mealie"', 'value="SECRET_KEY"', 'name="editing" type="hidden" value="mealie"',
@@ -353,6 +382,15 @@ describe 'Apps of your own', type: :request do
       post '/apps/custom/mealie/version', params: { tag: 'v2.5.0' }
       expect(saved_manifest).to eq(file.sub(pinned, newer.image))
       expect(response).to redirect_to('/apps/mealie?apply=1')
+    end
+
+    it 'points to Private images when its image turns out private' do
+      installed
+      allow_any_instance_of(AppVersions).to receive(:check_image)
+        .and_raise(AppVersions::Private.new('ghcr.io/mealie-recipes', "ghcr.io says mealie-recipes/mealie is private, or isn't there"))
+      post '/apps/custom/mealie/check'
+      expect(flash[:alert]).to eq("Couldn't ask its registry for a newer version: ghcr.io says mealie-recipes/mealie is private, or isn't there. " \
+                                  'If it\'s private, add a token for ghcr.io/mealie-recipes on Private images (under Apps).')
     end
 
     it "doesn't update to a tag that isn't the newest any more" do

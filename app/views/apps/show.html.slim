@@ -35,6 +35,9 @@
 - waiting = custom && versioned && !app.update_available? && app.changes_waiting?
 - newer = flash[:custom_version] if custom
 - apply_now = custom && versioned && params[:apply].present? && (app.update_available? || waiting)
+/ A private image: the token it downloads with (Private images, RegistryTokens), and whether its
+/ registry refused it the last time
+- token = RegistryTokens.for_image(app.image) if app.image.present?
 
 p.kai-apps-back
   a href=apps_index_path
@@ -78,6 +81,10 @@ section.kai-app-panel.kai-app-hero id="docker_app_#{identifier}" aria-label=name
   - if missing.any?
     p.kai-notice.kai-notice-warn id="app-missing-folders-#{identifier}"
       = "#{missing.to_sentence} #{missing.one? ? "isn't" : "aren't"} there any more (renamed, moved or deleted): #{name} can't start until Change gives it its folders again."
+  - if token&.refused?
+    p.kai-notice.kai-notice-warn id="app-token-refused-#{identifier}"
+      = "#{token.host} refused your token for #{token.owner}#{" #{time_ago_in_words(token.checked_at)} ago" if token.checked_at}: it may have expired. #{name} keeps running as it is, but can't update or install again until it's replaced. "
+      a href=private_images_index_path(replace: token.place, anchor: 'add-token') Replace the token
 
 .kai-app-columns
   .kai-app-column
@@ -153,6 +160,11 @@ section.kai-app-panel.kai-app-hero id="docker_app_#{identifier}" aria-label=name
           dd id="app-ports-#{identifier}" = app.port_summary
         dt Network
         dd id="app-network-#{identifier}" = AppCatalog.network_words(entry[:network])
+        - if token
+          dt Image
+          dd id="app-image-#{identifier}"
+            ' Private: downloaded with
+            a href=private_images_index_path = "your token for #{token.place}"
         / Versions (P4.5): Update when the catalog has another one, Undo update while the copy from
         / before the last update is kept. Both run in the install window (apps.js).
         - if versioned

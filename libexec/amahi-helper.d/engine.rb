@@ -177,8 +177,13 @@ module AmahiHelper
       !docker_output('image', 'inspect', '--format', '{{.Id}}', image.sub(%r{:[^:@/]+@}, '@')).nil?
     end
 
+    # An image under a place the owner keeps a token for (registry.rb) downloads signed in: Docker
+    # reads the sign-in from a config folder made for this pull alone (--config); any other image
+    # downloads without one.
     def engine_pull(image)
-      run_command([DOCKER, 'pull', image, { stream: true }])
+      registry_signed_in(image) do |config|
+        run_command([DOCKER, *(config ? ['--config', config] : []), 'pull', image, { stream: true }])
+      end
     end
 
     def engine_remove_image(image)

@@ -35,7 +35,7 @@ Amahi-kai has two kinds of storage, and each drive belongs to one of them.
 
 | | Share storage (simple drives, Greyhole) | ZFS pools |
 | --- | --- | --- |
-| For | SMB shares: your files over the network | SMB shares, bitShare and apps' data |
+| For | SMB shares: your files over the network | SMB shares, and apps' data |
 | Drives | Any sizes, added one at a time | Matched drives, added a group at a time |
 | Redundancy | Extra copies per share | Mirror or RAIDZ1/2/3, for the whole pool |
 | Snapshots | No | Hourly and daily, to roll back to |

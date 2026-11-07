@@ -1,0 +1,80 @@
+/ Add a token, or replace a place's (@fields[:replacing]): its registry (GitHub's, Docker Hub, or
+/ another, typed), whose images there, who it signs in as, the token, a note, and the owner's
+/ password. The root helper tries the token with the registry before it keeps it. A token typed
+/ is never put back in the page. from: where the form comes back to (settings, or Private images).
+- from = local_assigns[:from]
+- fields = @fields
+- problem = @problem || {}
+- registry = PrivateImagesController::REGISTRIES.include?(fields[:host]) ? fields[:host] : 'other'
+- host = fields[:host].presence || 'ghcr.io'
+section.kai-app-panel.kai-token-form#add-token aria-labelledby="add-token-head"
+  h2#add-token-head = fields[:replacing] ? "Replace the token for #{fields[:replacing]}" : 'Add a token'
+  - if problem[:form]
+    p.kai-notice.kai-notice-alert.mb-0#token-problem role="alert" = problem[:form]
+  = form_tag private_images_save_path, id: 'token-form', data: { 'token-form' => '' } do
+    input type="hidden" name="from" value=from
+    - if fields[:replacing]
+      input type="hidden" name="replacing" value=fields[:replacing]
+    fieldset.kai-custom-field
+      legend.form-label Its registry
+      .kai-registry-choices
+        label.kai-registry-choice
+          input.form-check-input type="radio" name="registry" value="ghcr.io" checked=(registry == 'ghcr.io') data-token-registry=""
+          span GitHub
+          code ghcr.io
+        label.kai-registry-choice
+          input.form-check-input type="radio" name="registry" value="docker.io" checked=(registry == 'docker.io') data-token-registry=""
+          span Docker Hub
+          code docker.io
+        label.kai-registry-choice
+          input.form-check-input type="radio" name="registry" value="other" checked=(registry == 'other') data-token-registry=""
+          span Another registry
+      .kai-custom-field.kai-custom-narrow data-token-other="" hidden=(registry != 'other')
+        label.form-label for="token-host" Its address
+        input.form-control.kai-mono#token-host type="text" name="host" value=(fields[:host] if registry == 'other') placeholder="registry.example.com" spellcheck="false" autocapitalize="off"
+    .kai-custom-grid
+      .kai-custom-field
+        label.form-label for="token-owner" Whose images
+        input.form-control.kai-mono#token-owner type="text" name="owner" value=fields[:owner] placeholder="catdogbark" required=true spellcheck="false" autocapitalize="off" aria-describedby="token-owner-hint" data-token-owner=""
+        p.kai-custom-hint#token-owner-hint data-token-where=""
+          ' Used only for images that start with
+          code = "#{host}/#{fields[:owner].presence || 'catdogbark'}/"
+      .kai-custom-field
+        label.form-label for="token-username" It signs in as
+        input.form-control#token-username type="text" name="username" value=fields[:username] required=true autocomplete="off" spellcheck="false" autocapitalize="off" aria-describedby="token-username-hint"
+        p.kai-custom-hint#token-username-hint Your user name there: on GitHub, yours
+      .kai-custom-field
+        label.form-label for="token-token" The token
+        input.form-control#token-token type="password" name="token" required=true autocomplete="new-password" spellcheck="false" aria-describedby="token-token-hint"
+        p.kai-custom-hint#token-token-hint Pasted once, here: the NAS never shows it again
+      .kai-custom-field
+        label.form-label for="token-note"
+          ' Your note
+          span.kai-token-optional (if you like)
+        input.form-control#token-note type="text" name="note" value=fields[:note] maxlength="120" aria-describedby="token-note-hint"
+        p.kai-custom-hint#token-note-hint To tell it apart in its registry's list of tokens
+
+    details.kai-token-howto data-token-howto="" open=@tokens.empty? hidden=(registry != 'ghcr.io')
+      summary How to make one on GitHub
+      ol
+        li
+          ' On GitHub: your picture → Settings → Developer settings → Personal access tokens →
+          strong Tokens (classic)
+          |  → Generate new token (classic).
+        li Note: what this NAS is, so you'll know it later. Expiration: a year is a good choice (GitHub emails you before it ends).
+        li
+          ' Tick
+          strong read:packages
+          |  and nothing else: it can download your images, not change them or anything else in your account.
+        li Generate it, copy it, and paste it above. GitHub shows it only once too.
+
+    .kai-custom-field.kai-custom-narrow
+      label.form-label for="token-password" = fields[:replacing] ? 'Your password, to replace a token' : 'Your password, to add a token'
+      input.form-control#token-password type="password" name="password" required=true autocomplete="current-password" aria-describedby=("token-password-problem" if problem[:password])
+      - if problem[:password]
+        p.kai-custom-problem#token-password-problem role="alert" = problem[:password]
+    p.kai-custom-hint.mb-0
+      | Asked even though you're signed in, as for an app of your own. Amahi-kai tries the token with its
+        registry first, and keeps it only if the registry takes it.
+    .kai-custom-actions
+      button.btn.btn-primary type="submit" data-disable-with="Checking…" Check and save it

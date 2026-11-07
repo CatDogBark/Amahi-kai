@@ -86,6 +86,7 @@ class CustomAppsController < ApplicationController
       redirect_to apps_app_path(@app.id), alert: "#{@app.name}'s changes are saved, but #{AppCatalog.tag(@app.image)} is older than " \
                                                  "the #{installed.version} it runs, and an app isn't updated to an older version."
     elsif installed && saved['update'] == false
+      installed.relabel_ports(AppCatalog.find(@app.id)&.dig(:ports))
       redirect_to apps_app_path(@app.id), notice: "#{@app.name}'s changes are saved. They're only how it's listed, so it keeps running as it is."
     elsif installed && %w[running stopped].include?(installed.status)
       redirect_to apps_app_path(@app.id, apply: 1), notice: "#{@app.name}'s changes are saved: it updates to them now."
@@ -115,13 +116,16 @@ class CustomAppsController < ApplicationController
   # Check for a newer version: a newer release of its image (a tag of the same shape), or a newer
   # build of its tag, from the image's registry. Only when asked; nothing changes.
   def check_version
-    found = AppVersions.new.check_image(@app.image)
+    found = AppVersions.new(tokens: RegistryTokens).check_image(@app.image)
     flash[:custom_version] = if found.kind == :current
                                { 'kind' => 'current' }
                              else
                                { 'kind' => found.kind.to_s, 'tag' => found.latest, 'major' => found.major }
                              end
     redirect_to apps_app_path(@app.id, anchor: "app-version-#{@app.id}")
+  rescue AppVersions::Private => e
+    redirect_to apps_app_path(@app.id), alert: "Couldn't ask its registry for a newer version: #{e.message}. If it's private, add a token " \
+                                               "for #{e.place} on Private images (under Apps)."
   rescue StandardError => e
     redirect_to apps_app_path(@app.id), alert: "Couldn't ask its registry for a newer version: #{e.message}"
   end
@@ -130,7 +134,7 @@ class CustomAppsController < ApplicationController
   # saved as its image, then the app page updates it. The image's repository is the one the owner
   # chose, so this doesn't ask for the password again.
   def version
-    found = AppVersions.new.check_image(@app.image)
+    found = AppVersions.new(tokens: RegistryTokens).check_image(@app.image)
     if found.kind == :current || found.latest != params[:tag].to_s
       return redirect_to apps_app_path(@app.id), alert: "#{params[:tag]} isn't the newest version any more: check again."
     end
@@ -165,7 +169,11 @@ class CustomAppsController < ApplicationController
     return false if app.errors.any?
 
     begin
-      app.pin(AppVersions.new.pin(app.image))
+      app.pin(AppVersions.new(tokens: RegistryTokens).pin(app.image))
+    rescue AppVersions::Private => e
+      app.errors[:image] = "Couldn't find that image: #{e.message}. If it's private, the NAS needs a token for #{e.place}."
+      @token_place = e.place
+      return false
     rescue StandardError => e
       app.errors[:image] = "Couldn't find that image: #{e.message}"
       return false

@@ -164,6 +164,7 @@
   # server area
   running: Running
   servers: Servers
+  tokens: Tokens
   status: Status
   stop: Stop
   stopped: Stopped

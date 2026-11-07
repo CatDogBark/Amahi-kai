@@ -10,7 +10,7 @@ working and nothing is lost, and you replace the drive from the web UI. Pools al
 daily snapshots you can roll back to, and check every block of their data for damage.
 
 Pools are on **Setup → Disks → ZFS Pools**. A share can live on one (see
-[File Sharing](file-sharing#where-a-share-lives)), and bitShare keeps its data on one. Each drive
+[File Sharing](file-sharing#where-a-share-lives)), and so can an app's data. Each drive
 belongs either to a pool or to share storage (**Devices** and the Greyhole pool, see
 [Storage Pooling](storage-pooling)), never both.
 

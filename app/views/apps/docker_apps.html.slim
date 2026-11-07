@@ -35,6 +35,7 @@
     .kai-apps-head
       h2#apps-add Add apps
       = render 'catalog_status'
+      = render 'private_images_line'
     - if @categories.any?
       nav.kai-apps-filters aria-label="Categories"
         = link_to t('all', default: 'All'), apps_index_path(anchor: 'add'), class: 'kai-chip', aria: { current: ('page' unless @current_category) }

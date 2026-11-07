@@ -27,15 +27,17 @@ ruby:
       { id: 'servers', label: 'servers', url: '/settings/servers', advanced: true },
       { id: 'jobs', label: 'jobs', url: '/settings/jobs', advanced: true },
       { id: 'dependencies', label: 'dependencies', url: '/settings/dependencies', advanced: true },
+      { id: 'tokens', label: 'tokens', url: '/settings/tokens', controller: 'private_images', action: 'settings' },
       { id: 'help', label: 'help', url: '/settings/help', actions: %w[help report] }
     ]}
   ]
   visible_tabs = advanced? ? tabs : tabs.reject { |t| t[:advanced] }
   ctrl = params[:controller].to_s
   act = params[:action].to_s
-  # A tab owns the controller named after it plus any listed in :controllers.
+  # A tab owns the controller named after it plus any listed in :controllers, or the one a page
+  # names (@setup_tab: Settings → Tokens, whose controller is Private images').
   # (Matching on the action name alone lit up Shares for every page whose action is "index".)
-  active_tab = visible_tabs.find { |t| t[:id] == ctrl || t[:controllers]&.include?(ctrl) }
+  active_tab = visible_tabs.find { |t| t[:id] == (@setup_tab || ctrl) || t[:controllers]&.include?(ctrl) }
   # A subtab with its own :controller is active on that controller's pages (one with an :action
   # too, on that action's page only); the others only on the tab's own controller.
   subtab_active = lambda do |tab, subtab|

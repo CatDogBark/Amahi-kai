@@ -42,6 +42,11 @@ RSpec.describe 'AmahiHelper: the checks on every argument' do
 
   logo_png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
 
+  # A token for private images, and what one, or who it signs in as, may hold
+  registry_token = "ghp_#{'a' * 36}"
+  registry_name_may_hold = %w[comma equals semicolon hash_sign percent dollar backtick single_quote double_quote backslash slash dot_dot leading_dash
+                              leading_two_dashes].freeze
+
   # The operations with arguments: a request that's accepted, and what each argument may hold
   # beyond it.
   requests = {
@@ -130,6 +135,19 @@ RSpec.describe 'AmahiHelper: the checks on every argument' do
                             may_hold: { 'manifest' => blank_lines, 'logo' => %w[empty null] } },
     'apps.custom_remove' => { good: { 'app' => 'mine' } },
 
+    # Tokens for private images (registry.rb). Who it signs in as and the token reach the
+    # registry inside one Basic sign-in, base64'd, never a command line: any printable ASCII
+    # character but a space (and a colon, in the name).
+    'registry.save' => { good: { 'host' => 'ghcr.io', 'owner' => 'catdogbark', 'username' => 'CatDogBark', 'token' => registry_token, 'note' => 'Amahi-kai NAS' },
+                         may_hold: { 'owner' => ['slash'], 'username' => registry_name_may_hold, 'token' => [*registry_name_may_hold, 'colon'],
+                                     'note' => [*optional, 'empty', *punctuation, 'non_ascii', 'folds_to_k', 'colon', 'slash', 'dot_dot', 'leading_dash',
+                                                'leading_two_dashes'] } },
+    'registry.check' => { good: { 'place' => 'ghcr.io/catdogbark' } },
+    'registry.remove' => { good: { 'place' => 'ghcr.io/catdogbark' } },
+    # An image under the place: a deeper name is still under it
+    'registry.digest' => { good: { 'repo' => 'ghcr.io/catdogbark/mine', 'tag' => '1.0' }, may_hold: { 'repo' => ['slash'] } },
+    'registry.tags' => { good: { 'repo' => 'ghcr.io/catdogbark/mine' }, may_hold: { 'repo' => ['slash'] } },
+
     'services.start' => { good: { 'service' => 'smbd' } },
     'services.stop' => { good: { 'service' => 'smbd' } },
     'services.restart' => { good: { 'service' => 'smbd' } },
@@ -205,6 +223,9 @@ RSpec.describe 'AmahiHelper: the checks on every argument' do
     Privileged.operations # loads the helper's source once
     FileUtils.mkdir_p(["#{files}/vault/media", "#{mnt}/storage-1/.gh_trash/Photos", "#{fake}/definitions", "#{fake}/custom-apps"])
     File.write("#{fake}/custom-apps/mine.yml", 'name: Mine')
+    # A token for ghcr.io/catdogbark (registry.rb)
+    FileUtils.mkdir_p("#{fake}/etc")
+    File.write("#{fake}/etc/registry-tokens.json", JSON.generate('tokens' => { 'ghcr.io/catdogbark' => { 'username' => 'CatDogBark', 'token' => registry_token } }))
     # pooled: a catalog app whose folders go on a ZFS pool, chosen at install
     FileUtils.mkdir_p("#{fake}/catalog/apps")
     File.write("#{fake}/catalog/apps/pooled.yml", <<~YAML)
@@ -241,6 +262,8 @@ RSpec.describe 'AmahiHelper: the checks on every argument' do
     # mine: an app of your own, not installed (no container), its data gone
     stub_const('AmahiHelper::APP_CUSTOM', "#{fake}/custom-apps")
     stub_const('AmahiHelper::APPS_ROOT', "#{fake}/apps")
+    stub_const('AmahiHelper::REGISTRY_TOKENS', "#{fake}/etc/registry-tokens.json")
+    stub_const('AmahiHelper::REGISTRY_STATUS', "#{fake}/registry-tokens.json")
     File.write("#{fake}/fstab", "UUID=os / ext4 defaults 0 1\n")
 
     allow(helper).to receive(:installed!).and_return(true)
