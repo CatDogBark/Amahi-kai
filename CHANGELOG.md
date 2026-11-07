@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.6.2] — 2026-11-06
+
+The apps, hardened: each on a network of its own, reaching out only as far as it says, kept off the server's own services and from taking all of its processors; Docker updated with the automatic security updates; and a router's boot no longer waits for the internet. **Each app restarts once at this update**, as it moves to its own network.
+
 ### 🔒 Security & Fixes
 
 - **Each app on a network of its own, reaching out only as far as it says** — The apps shared one network, so an app could reach any other app directly (Vaultwarden's own server, say) and every device on the LAN. Now each app has a network of its own: no app reaches another, and an app reaches the internet only, unless its manifest asks for the devices on the LAN too (Uptime Kuma and bitStream do: the Apps page says so on an app's card and its page) or for nothing at all. The update moves each installed app to its own network, so **each app restarts once**, keeping its version, its data and its shares.
