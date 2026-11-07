@@ -5,11 +5,13 @@
 .catalog-status.small.text-secondary.mb-2.d-flex.flex-wrap.align-items-center.gap-1
   - if status&.dig(:checked_at)
     span
-      ' App catalog
       - if status[:tag]
+        ' App catalog:
         span#catalog-signed = "#{status[:tag]}, signed with #{status[:signer]} ✓,"
         '
-      ' checked
+        ' checked
+      - else
+        ' App catalog checked
       = relative_time_tag(status[:checked_at])
   - else
     span App catalog: the copy that came with Amahi-kai
