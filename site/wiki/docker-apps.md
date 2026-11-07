@@ -54,7 +54,9 @@ at install, and keeps it. Each installed app's page (**Manage**) shows its ports
 Each app is defined by a small file, its manifest, in the app catalog,
 [CatDogBark/amahi-kai-apps](https://github.com/CatDogBark/amahi-kai-apps): the image and its exact
 version, its ports, its folders, its settings and a memory limit. Versions are pinned, so
-installing an app always gets the version that was tested. Amahi-kai fetches the catalog with its
+installing an app always gets the version that was tested. Amahi-kai fetches the catalog's newest
+signed version (a `catalog-N` tag signed with a release key, never an older one than it has, named
+at the top of **Add apps**) with its
 update check, every 6 hours, so new apps and new versions arrive without an Amahi-kai update. To
 make an app of your own, see [Making Apps](making-apps).
 

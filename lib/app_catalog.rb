@@ -93,11 +93,14 @@ class AppCatalog
       production? ? FETCHED_DIR : Rails.root.join('tmp', 'catalog', 'apps').to_s
     end
 
-    # { checked_at: Time, commit:, apps: [ids], problems: [{ app:, problem: }], error: } from the
-    # last fetch, or nil before the first.
+    # { checked_at: Time, tag:, signer:, commit:, apps: [ids], problems: [{ app:, problem: }], error: }
+    # from the last fetch, or nil before the first. tag is the signed version it has (catalog-N),
+    # and signer the release key that signed it ("release key B"); neither before signed versions.
     def status
       data = JSON.parse(File.read(status_path))
+      signer = data['signer'].to_s[/\Arelease-key-([a-z])\z/, 1]
       { checked_at: (Time.iso8601(data['checked_at'].to_s) rescue nil), commit: data['commit'].presence,
+        tag: data['tag'].to_s[/\Acatalog-[1-9][0-9]{0,5}\z/], signer: signer && "release key #{signer.upcase}",
         apps: Array(data['apps']).grep(String),
         problems: Array(data['problems']).select { |p| p.is_a?(Hash) }.map { |p| { app: p['app'].to_s, problem: p['problem'].to_s } },
         error: data['error'].presence }

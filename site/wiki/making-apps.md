@@ -8,8 +8,9 @@ title: "Making Apps"
 Any app that runs in one Docker container can become an Amahi-kai app. You describe it in one
 small file, a **manifest**, and add that file to the app catalog,
 [CatDogBark/amahi-kai-apps](https://github.com/CatDogBark/amahi-kai-apps). Every Amahi-kai server
-fetches the catalog every 6 hours, so once your manifest is merged, your app is on every
-server's **Apps** page within hours, without an Amahi-kai update.
+fetches the catalog's newest signed version every 6 hours, so once your manifest is merged and
+the maintainer signs the next version, your app is on every server's **Apps** page within hours,
+without an Amahi-kai update.
 
 This page covers what Amahi-kai does with an app, what its image needs, how to try it the way a
 server will run it, and how to add it. The catalog's
@@ -209,7 +210,8 @@ It prints `<id>: ok` for every app, or what's wrong.
    (and `logos/<id>.svg`, if your logo is your own).
 2. Open a pull request. Its checks run Amahi-kai's own manifest checks, so a manifest a server
    would refuse can't be merged.
-3. Once it's merged, every server shows the app within 6 hours (or at once, with **Check now**
+3. Once it's merged, the maintainer signs the catalog's next version (a `catalog-N` tag, with a
+   release key: servers take nothing else), and every server shows the app within 6 hours (or at once, with **Check now**
    on its Apps page).
 
 ### Releasing a new version

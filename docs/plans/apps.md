@@ -254,14 +254,15 @@ Decided (CatDogBark, 2026-10-06): app updates mustn't wait for an Amahi-kai upda
   --update APP`).
 - [x] **Fetched by the root helper with the update check** (`system.check_update`: every 6 hours
   by `amahi-kai-update-check.timer`, and on System Update's and the Apps page's **Check now**,
-  so every check looks at Amahi-kai and its apps; none installs anything): main, over https only, into a
-  bare repo of root's (`/var/lib/amahi-kai/catalog-src`), with git's hooks off. Every manifest is
+  so every check looks at Amahi-kai and its apps; none installs anything): its newest signed
+  version (since 1.8.0: P4.8), over https only, into a bare repo of root's
+  (`/var/lib/amahi-kai/catalog-src`), with git's hooks off. Every manifest is
   checked as an install would check it, plus what the pages show (name, description, category,
   logo and release notes on https); the ones that pass are written beside the current catalog
   and swapped in (`/var/lib/amahi-kai/catalog/apps`). One that fails is skipped and named on the
   Apps page; a fetch that fails, or finds nothing that passes, keeps the catalog there was. What
-  happened is in `/var/lib/amahi-kai/catalog-status.json`. Trust is unchanged: System Update pulls
-  Amahi-kai's own code from the same GitHub account.
+  happened is in `/var/lib/amahi-kai/catalog-status.json`. (Before 1.8.0 it fetched `main`, trusting
+  the GitHub account as System Update then did.)
 - [x] **The fetched catalog comes first** for the helper and the pages; `config/apps` is the copy
   that comes with Amahi-kai, for a NAS that hasn't fetched one yet, and for an app the catalog
   no longer lists. Bring it up to date with the repo now and then.
@@ -423,8 +424,18 @@ label. Docker stays (Podman later or not at all).
   shape, or a newer build of its tag; updating to it doesn't ask for the password, as the image's
   repository is the one the owner chose). **Remove** on its card. Logs filter the file and
   setting values (a key typed in).
-- [ ] **Signed catalog** (`catalog-N` tags), then the bit apps that aren't for everyone move out
-  of the catalog into apps of their own on CatDogBark's NAS.
+- [x] **A signed catalog** (1.8.0, decided with the rest above): the catalog's versions are
+  `catalog-N` tags (N from 1) on its `main`, each signed with a release key (`git tag -s`, the
+  same keys and `/etc/amahi-kai/allowed_signers` as releases). The update check lists the tags,
+  takes the highest, refuses one lower than the version it has (`catalog-status.json`'s
+  `number`), fetches it and checks it as a release's tag (`tag_signature`: an SSH signature by a
+  listed key, and the tag calls itself by its name), then reads the manifests from its commit;
+  anything else keeps the catalog there was, and the Apps page says why. `main` itself is never
+  fetched: a merge reaches servers at the next signed version. The Apps page names the version
+  and the key ("catalog-7, signed with release key B"). The catalog's CI checks a pushed tag the
+  same way. Enforced in one step: `catalog-1` was signed before the release that requires it.
+- [ ] The bit apps that aren't for everyone move out of the catalog into apps of their own on
+  CatDogBark's NAS.
 - [ ] **Private images** (a registry sign-in for the NAS, for a closed bitShare): to discuss.
 
 ### Also in Phase 4

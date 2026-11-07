@@ -142,14 +142,32 @@ RSpec.describe 'AmahiHelper apps' do
       out.strip
     end
 
-    # Makes the remote's apps/ exactly +files+, commits, and returns the commit.
-    def publish(files)
+    # Makes the remote's apps/ exactly +files+, commits, signs it as catalog-+number+ (the next one
+    # unless it says; none for false) with +key+ (a release key unless it says), and returns the
+    # commit. (Positional, as a hash of files would be taken for keywords.)
+    def publish(files, number = (@published = @published.to_i + 1), key = 'a')
       FileUtils.rm_rf("#{remote}/apps")
       FileUtils.mkdir_p("#{remote}/apps")
       files.each { |name, content| File.write("#{remote}/apps/#{name}", content) }
       git('add', '-A')
       git('commit', '-q', '--allow-empty', '-m', 'Catalog')
+      sign("catalog-#{number}", key) if number
       git('rev-parse', 'HEAD')
+    end
+
+    def sign(tag, key, commit = 'HEAD', message: tag)
+      git('-c', 'gpg.format=ssh', '-c', "user.signingkey=#{signing_key(key)}", 'tag', '-f', '-s', '-m', message, tag, commit)
+    end
+
+    # A throwaway SSH key without a passphrase, made the first time it's asked for: its private file.
+    def signing_key(name)
+      path = "#{dir}/keys/#{name}"
+      unless File.exist?(path)
+        FileUtils.mkdir_p("#{dir}/keys")
+        _out, err, status = Open3.capture3('ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-C', name, '-f', path)
+        raise err unless status.success?
+      end
+      path
     end
 
     def kept
@@ -165,6 +183,11 @@ RSpec.describe 'AmahiHelper apps' do
       stub_const('AmahiHelper::CATALOG_STATUS', "#{dir}/catalog-status.json")
       stub_const('AmahiHelper::CATALOG_LOCK', "#{dir}/catalog.lock")
       allow(helper).to receive(:do_install) { |path, content, *| File.write(path, content) }
+      # The release keys: a and b
+      stub_const('AmahiHelper::ALLOWED_SIGNERS', "#{dir}/allowed_signers")
+      File.write(AmahiHelper::ALLOWED_SIGNERS, %w[a b].map do |name|
+        "release-key-#{name} namespaces=\"git\" #{File.read("#{signing_key(name)}.pub").split[0, 2].join(' ')}\n"
+      end.join)
     end
 
     it "is fetched by the update check, after Amahi-kai's own" do
@@ -176,7 +199,8 @@ RSpec.describe 'AmahiHelper apps' do
       commit = publish('gitea.yml' => gitea.sub('memory: 1g', 'memory: 3g'), 'future.yml' => future,
                        'broken.yml' => broken, 'notes.md' => 'not a manifest')
       reply = helper.do_refresh_catalog
-      expect(reply['catalog']).to include('commit' => commit, 'apps' => %w[future gitea], 'error' => nil,
+      expect(reply['catalog']).to include('commit' => commit, 'tag' => 'catalog-1', 'number' => 1, 'signer' => 'release-key-a',
+                                          'apps' => %w[future gitea], 'error' => nil,
                                           'problems' => [{ 'app' => 'broken', 'problem' => 'image must be name:tag@sha256:digest' }])
       expect(JSON.parse(File.read("#{dir}/catalog-status.json"))).to include('commit' => commit)
       expect(kept).to eq(%w[future.yml gitea.yml])
@@ -188,11 +212,12 @@ RSpec.describe 'AmahiHelper apps' do
       expect { helper.app_manifest('broken') }.to raise_error(AmahiHelper::Refused, /isn't in Amahi-kai's catalog/)
     end
 
-    it 'takes a newer commit, and keeps what it has when the fetch fails or nothing passes' do
+    it 'takes a newer signed version, and keeps what it has when the fetch fails or nothing passes' do
       publish('gitea.yml' => gitea)
       helper.do_refresh_catalog
-      second = publish('gitea.yml' => gitea, 'jellyfin.yml' => jellyfin)
-      expect(helper.do_refresh_catalog['catalog']).to include('commit' => second, 'apps' => %w[gitea jellyfin])
+      second = publish({ 'gitea.yml' => gitea, 'jellyfin.yml' => jellyfin }, 2, 'b')
+      expect(helper.do_refresh_catalog['catalog']).to include('commit' => second, 'tag' => 'catalog-2', 'signer' => 'release-key-b',
+                                                              'apps' => %w[gitea jellyfin])
 
       publish('broken.yml' => broken)
       expect(helper.do_refresh_catalog['catalog'])
@@ -204,6 +229,64 @@ RSpec.describe 'AmahiHelper apps' do
       expect(status['error']).to start_with("couldn't fetch the catalog from GitHub: ")
       expect(status).to include('commit' => second)
       expect(kept).to eq(%w[gitea.yml jellyfin.yml])
+    end
+
+    # Signed versions (CATALOG_TAG): main itself is never fetched
+    describe 'its signed versions' do
+      def refresh
+        helper.do_refresh_catalog['catalog']
+      end
+
+      it 'takes the highest catalog-N, never main, nor a tag that only looks like one' do
+        first = publish('gitea.yml' => gitea)
+        publish({ 'gitea.yml' => gitea, 'jellyfin.yml' => jellyfin }, false) # merged, not signed yet
+        %w[catalog-01 catalog-x catalog-9a v9 catalog-1234567].each { |name| sign(name, 'a') }
+        expect(refresh).to include('commit' => first, 'tag' => 'catalog-1', 'apps' => %w[gitea])
+        nine = publish({ 'gitea.yml' => gitea, 'jellyfin.yml' => jellyfin }, 9)
+        expect(refresh).to include('commit' => nine, 'tag' => 'catalog-9', 'number' => 9, 'apps' => %w[gitea jellyfin])
+      end
+
+      it "refuses one that isn't signed with a release key, and keeps the catalog it has" do
+        first = publish('gitea.yml' => gitea)
+        refresh
+        publish({ 'jellyfin.yml' => jellyfin }, 2, 'other')
+        expect(refresh).to include('commit' => first, 'tag' => 'catalog-1',
+                                   'error' => "catalog-2 is refused: it isn't signed with a release key (the tag catalog-2's signature doesn't match a release key)")
+        git('tag', '-d', 'catalog-2')
+        git('tag', '-a', '-m', 'catalog-2', 'catalog-2')
+        expect(refresh['error']).to end_with('(the tag catalog-2 has no SSH signature)')
+        git('tag', '-d', 'catalog-2')
+        git('tag', 'catalog-2')
+        expect(refresh['error']).to end_with('(the tag catalog-2 is a plain one, with no signature)')
+        # An old version's signed tag under a newer number
+        git('tag', '-d', 'catalog-2')
+        git('update-ref', 'refs/tags/catalog-2', git('rev-parse', 'refs/tags/catalog-1'))
+        expect(refresh['error']).to end_with('(the tag catalog-2 calls itself "catalog-1" inside)')
+        expect(kept).to eq(%w[gitea.yml])
+      end
+
+      it 'never goes back to a lower version than the one it has' do
+        publish('gitea.yml' => gitea)
+        second = publish('gitea.yml' => gitea, 'jellyfin.yml' => jellyfin)
+        refresh
+        git('tag', '-d', 'catalog-2')
+        expect(refresh).to include('commit' => second, 'tag' => 'catalog-2', 'number' => 2,
+                                   'error' => "the catalog's newest signed version, catalog-1, is older than catalog-2, which this NAS has, so it keeps that")
+        expect(kept).to eq(%w[gitea.yml jellyfin.yml])
+        # The same version signed again, on another commit, is still that version
+        moved = publish({ 'gitea.yml' => gitea }, false)
+        sign('catalog-2', 'b', moved)
+        expect(refresh).to include('commit' => moved, 'tag' => 'catalog-2', 'signer' => 'release-key-b', 'error' => nil)
+      end
+
+      it 'says when there is none yet, or no list of release keys' do
+        publish({ 'gitea.yml' => gitea }, false)
+        expect(refresh['error']).to eq('the catalog has no signed version yet (no catalog-N tag)')
+        sign('catalog-1', 'a')
+        FileUtils.rm_f(AmahiHelper::ALLOWED_SIGNERS)
+        expect(refresh['error']).to include("no list of release keys to check the tag catalog-1 against")
+        expect(File.exist?("#{dir}/catalog")).to be(false)
+      end
     end
 
     it 'fetches over the allowed protocols only, and once at a time' do

@@ -577,33 +577,62 @@ module AmahiHelper
       { 'catalog' => status }
     end
 
-    # The new status: what was fetched and kept, or, when the fetch failed or nothing in it
-    # passed, the last status with the error (the catalog there was stays).
+    # The new status: what was fetched and kept, or, when the fetch failed, the tag was refused or
+    # nothing in it passed, the last status with the error (the catalog there was stays).
     def refresh_catalog
       checked = Time.now.utc.iso8601
-      error = fetch_catalog
-      fetched = error ? nil : read_fetched_catalog
-      error ||= fetched[:error]
-      return (read_json(CATALOG_STATUS) || {}).merge('checked_at' => checked, 'error' => error) if error
+      last = read_json(CATALOG_STATUS)
+      last = {} unless last.is_a?(Hash)
+      fetched = catalog_tag(last['number'].is_a?(Integer) ? last['number'] : nil)
+      fetched = fetched.merge(read_fetched_catalog(fetched[:tag])) unless fetched[:error]
+      return last.merge('checked_at' => checked, 'error' => fetched[:error]) if fetched[:error]
 
       install_catalog(fetched[:files])
-      { 'checked_at' => checked, 'commit' => fetched[:commit], 'apps' => fetched[:files].keys.sort,
-        'problems' => fetched[:problems], 'error' => nil }
+      { 'checked_at' => checked, 'tag' => fetched[:tag], 'number' => fetched[:number], 'signer' => fetched[:signer],
+        'commit' => fetched[:commit], 'apps' => fetched[:files].keys.sort, 'problems' => fetched[:problems], 'error' => nil }
     end
 
-    # nil when main was fetched (it's then FETCH_HEAD in CATALOG_SRC), else why not.
-    def fetch_catalog
+    # The catalog's newest signed version (CATALOG_TAG), fetched into CATALOG_SRC: { tag:, number:,
+    # signer: }, or { error: }. Its tag must be signed with a release key (tag_signature, the same
+    # check as a release's), and its number can't be lower than +have+, the one this NAS has: so
+    # whoever controls the catalog's repo can't offer apps nobody signed, nor take a NAS back to an
+    # older catalog's versions.
+    def catalog_tag(have)
       unless File.file?(File.join(CATALOG_SRC, 'HEAD'))
         _out, err, status = catalog_git('init', '--quiet', '--bare', CATALOG_SRC, repo: false)
-        return "couldn't set up #{CATALOG_SRC}: #{last_lines(err, 1)}" unless status.success?
+        return { error: "couldn't set up #{CATALOG_SRC}: #{last_lines(err, 1)}" } unless status.success?
       end
-      _out, err, status = catalog_git('fetch', '--quiet', '--depth', '1', '--no-tags', CATALOG_REPO, 'main', timeout: 60)
-      return nil if status.success?
+      out, err, status = catalog_git('ls-remote', '--tags', '--refs', CATALOG_REPO, 'refs/tags/catalog-*', timeout: 60)
+      return { error: catalog_fetch_failure(err) } unless status.success?
 
+      number = out.lines.filter_map { |line| line.split("\t", 2)[1].to_s.strip[CATALOG_TAG, 1]&.to_i }.max
+      return { error: 'the catalog has no signed version yet (no catalog-N tag)' } unless number
+
+      tag = "catalog-#{number}"
+      if have && number < have
+        return { error: "the catalog's newest signed version, #{tag}, is older than catalog-#{have}, which this NAS has, so it keeps that" }
+      end
+
+      _out, err, status = catalog_git('fetch', '--quiet', '--depth', '1', '--no-tags', CATALOG_REPO, "+refs/tags/#{tag}:refs/tags/#{tag}",
+                                      timeout: 60)
+      return { error: catalog_fetch_failure(err) } unless status.success?
+
+      signature = tag_signature(tag, catalog_git_options)
+      return { error: "#{tag} is refused: it isn't signed with a release key (#{signature['why']})" } unless signature['trusted']
+
+      { tag: tag, number: number, signer: signature['signer'] }
+    rescue SystemCallError => e
+      { error: "couldn't run git: #{e.message}" }
+    end
+
+    def catalog_fetch_failure(err)
       reason = err.lines.map(&:strip).find { |line| line.start_with?('fatal:') } || last_lines(err, 1)
       "couldn't fetch the catalog from GitHub: #{reason.delete_prefix('fatal: ')}"
-    rescue SystemCallError => e
-      "couldn't run git: #{e.message}"
+    end
+
+    # git's options in CATALOG_SRC, for reading and checking what's been fetched there.
+    def catalog_git_options
+      ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-C', CATALOG_SRC]
     end
 
     # git with hooks off and only CATALOG_PROTOCOLS allowed, in CATALOG_SRC (unless +repo+ is
@@ -618,10 +647,10 @@ module AmahiHelper
     end
 
     # { commit:, files: { id => manifest }, problems: [{ 'app' =>, 'problem' => }] } for the
-    # apps/ of what was fetched, or { error: } when none of them passes.
-    def read_fetched_catalog
-      out, _err, status = catalog_git('rev-parse', '--verify', '--quiet', 'FETCH_HEAD^{commit}')
-      return { error: 'the fetched catalog has no commit' } unless status.success?
+    # apps/ of +tag+'s commit, or { error: } when none of them passes.
+    def read_fetched_catalog(tag)
+      out, _err, status = catalog_git('rev-parse', '--verify', '--quiet', "refs/tags/#{tag}^{commit}")
+      return { error: "the catalog's #{tag} has no commit" } unless status.success?
 
       commit = out.strip
       listing, _err, status = catalog_git('ls-tree', '-l', commit, 'apps/')
@@ -823,17 +852,18 @@ module AmahiHelper
     # The tag must also call itself +tag+, so an old release's signed tag can't be offered under a
     # newer name. Only ssh-keygen checks it: git gets no GPG or X.509 program, so nothing else runs
     # as root on what the tag holds.
-    def tag_signature(tag)
+    # +options+: git's for the repo the tag is in (Amahi-kai's own, or the catalog's: catalog_tag).
+    def tag_signature(tag, options = GIT_OPTIONS)
       ref = "refs/tags/#{tag}"
       return untrusted("no list of release keys to check the tag #{tag} against (#{ALLOWED_SIGNERS})") unless File.file?(ALLOWED_SIGNERS)
-      return untrusted("the tag #{tag} is a plain one, with no signature") unless git_output('cat-file', '-t', ref) == 'tag'
+      return untrusted("the tag #{tag} is a plain one, with no signature") unless git_output_with(options, 'cat-file', '-t', ref) == 'tag'
 
-      object = git_output('cat-file', 'tag', ref).to_s
+      object = git_output_with(options, 'cat-file', 'tag', ref).to_s
       name = object[/^tag (.*)$/, 1]
       return untrusted("the tag #{tag} calls itself #{name.to_s[0, 80].inspect} inside") unless name == tag
       return untrusted("the tag #{tag} has no SSH signature") unless object.include?("\n-----BEGIN SSH SIGNATURE-----\n")
 
-      _out, err, status = Open3.capture3(ENV_MIN, [GIT, GIT], *GIT_OPTIONS, *signature_options, 'verify-tag', '--raw', ref,
+      _out, err, status = Open3.capture3(ENV_MIN, [GIT, GIT], *options, *signature_options, 'verify-tag', '--raw', ref,
                                          unsetenv_others: true, chdir: '/')
       signer = err.dup.force_encoding('UTF-8').scrub('?')[/^Good "git" signature for (\S+) with /, 1]
       return { 'trusted' => true, 'signer' => signer } if status.success? && signer
@@ -957,7 +987,11 @@ module AmahiHelper
 
     # git's output in the app's checkout, or nil if git failed.
     def git_output(*args)
-      out, _err, status = Open3.capture3(ENV_MIN, [GIT, GIT], *GIT_OPTIONS, *args, unsetenv_others: true, chdir: '/')
+      git_output_with(GIT_OPTIONS, *args)
+    end
+
+    def git_output_with(options, *args)
+      out, _err, status = Open3.capture3(ENV_MIN, [GIT, GIT], *options, *args, unsetenv_others: true, chdir: '/')
       status.success? ? out.dup.force_encoding('UTF-8').scrub('?').strip : nil
     rescue SystemCallError
       nil

@@ -44,6 +44,13 @@ describe "Docker Apps", type: :request do
       get "/apps"
       expect(response.body).to include('App catalog checked', 'the last check failed: GitHub is offline',
                                        'skipped broken (image must be name:tag@sha256:digest)')
+
+      # A signed version (the helper's CATALOG_TAG), and the release key that signed it
+      File.write(status_path, { checked_at: 1.hour.ago.utc.iso8601, tag: 'catalog-7', number: 7, signer: 'release-key-b',
+                                commit: 'abc1234', apps: %w[gitea], problems: [], error: nil }.to_json)
+      get "/apps"
+      expect(response.body).to include('catalog-7, signed with release key B ✓,')
+      expect(response.body).not_to include('the last check failed')
     end
 
     it "fetches it on Check now, and says what happened" do
