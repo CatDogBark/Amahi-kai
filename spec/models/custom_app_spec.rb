@@ -44,6 +44,22 @@ describe CustomApp do
     expect(described_class.from_file("name: X\nfolders:\n  - { name: d, path: /d, kind: dataset }\n").form).to be_nil
   end
 
+  # A logo link is no matter: its logo is a picture kept on the NAS
+  it 'opens a file with a logo link on the form, which leaves the link out' do
+    app = described_class.from_file("name: X\nimage: a/b:1\nrun_as: app\nlogo: https://example.com/x.svg\n")
+    expect(app.form).to include('name' => 'X')
+    expect(described_class.from_form(app.form).data).not_to have_key('logo')
+  end
+
+  it "tells a logo's type by its first bytes, for the pages to show it" do
+    expect(described_class.logo_type("\x89PNG\r\n\x1A\nrest".b)).to eq('image/png')
+    expect(described_class.logo_type("\xFF\xD8\xFF\xE0".b)).to eq('image/jpeg')
+    expect(described_class.logo_type("RIFF\0\0\0\0WEBPVP8 ".b)).to eq('image/webp')
+    expect(described_class.logo_type('<?xml version="1.0"?><svg/>')).to eq('image/svg+xml')
+    expect(described_class.logo_type('GIF89a')).to be_nil
+    expect(described_class.logo_type("\xFF\xFE<svg".b)).to be_nil
+  end
+
   it 'pins a pasted file by its image line only, keeping the rest as it was written' do
     app = described_class.from_file("# mine\nname: Box\nimage: 'ghcr.io/me/box:1.0'   \nrun_as: app\n")
     expect(app.id).to eq('box')

@@ -1,6 +1,7 @@
 / The review of an app of your own (CustomAppsController#review): what it will be able to do, in
 / words, the warning, and the owner's password to add it (or save the changes). The app file goes
-/ back in a hidden field, its image pinned; the root helper checks it all again when it's saved.
+/ back in a hidden field, its image pinned, with its logo (_logo_fields); the root helper checks it
+/ all again when it's saved.
 - app = @app
 - editing = @editing
 - repo_tag, digest = app.image_parts
@@ -13,6 +14,7 @@
   input type="hidden" name="source" value="file"
   input type="hidden" name="editing" value=editing
   input type="hidden" name="manifest" value=app.text
+  = render 'logo_fields'
 p.kai-apps-back
   button.btn.btn-link.p-0.kai-custom-back type="submit" form="custom-app-back"
     = lucide_icon('chevron-left', size: 16)
@@ -20,7 +22,7 @@ p.kai-apps-back
 
 .kai-custom
   .kai-custom-review-head
-    = render 'apps/app_logo', name: app.name, logo: app.data['logo']
+    = render 'apps/app_logo', name: app.name, logo: logo_src
     .kai-app-pills
       span.kai-pill.kai-pill-amber Custom
       - if app.data['category'].present?
@@ -59,6 +61,7 @@ p.kai-apps-back
     = form_tag (editing ? custom_apps_save_path(editing) : custom_apps_create_path), id: 'custom-app-confirm' do
       input type="hidden" name="id" value=app.id
       input type="hidden" name="manifest" value=app.text
+      = render 'logo_fields'
       .kai-custom-field.kai-custom-narrow
         label.form-label for="custom-password" = editing ? 'Your password, to change an app of your own' : 'Your password, to add an app of your own'
         input.form-control#custom-password type="password" name="password" autocomplete="current-password" required=true aria-describedby=("custom-password-problem" if errors[:password])
@@ -67,7 +70,8 @@ p.kai-apps-back
       p.kai-custom-hint
         | Asked even though you're signed in, so a page left open, or a stolen sign-in, can't add an app.
         - if editing
-          |  Saving then updates it: its data is copied first, and it goes back if it doesn't come up.
+          |  Saving then updates it: its data is copied first, and it goes back if it doesn't come up. A
+            change only to how it's listed doesn't restart it.
         - else
           |  Install then asks which shares to give it, if any, and opens the install window.
       .kai-custom-actions

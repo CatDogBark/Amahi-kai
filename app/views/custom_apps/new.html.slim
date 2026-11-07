@@ -1,7 +1,8 @@
 / Add your own app (CustomAppsController, docs/plans/apps.md): describe it in the form, or paste
 / an app file written the way the catalog's are, then Review. Edit opens here too, filled in; on
 / the file tab when the file says more than the form shows. The rows (ports, folders, settings,
-/ secrets) are added and removed by custom_apps.js from the templates at the end.
+/ secrets) are added and removed by custom_apps.js from the templates at the end. Its logo, under
+/ both tabs, is a picture sent with the form (CustomAppsController#chosen_logo).
 - editing = @editing
 - app = @app
 - errors = app ? app.errors : {}
@@ -29,12 +30,13 @@ p.kai-apps-back
   p.kai-custom-lede
     - if editing
       | Change what you described. Saving asks for your password, then #{app.name} is updated to it:
-        its data is copied first, and it goes back if it doesn't come up.
+        its data is copied first, and it goes back if it doesn't come up. A change only to how it's
+        listed (its name, description, category, sign-in words or logo) doesn't restart it.
     - else
       | An app that runs from a container image, described by you. It runs the way the catalog's apps
         do: as its own user, on a network of its own, with only what you give it here.
 
-  = form_tag custom_apps_review_path, id: 'custom-app-form', data: { 'custom-form' => '' } do
+  = form_tag custom_apps_review_path, id: 'custom-app-form', multipart: true, data: { 'custom-form' => '' } do
     input type="hidden" name="editing" value=editing
     input type="hidden" name="source" value=tab data-custom-source=""
     .kai-custom-tabs role="tablist" aria-label="How to add it"
@@ -200,6 +202,27 @@ p.kai-apps-back
         p.kai-custom-hint
           | Nothing in one asks for what no app gets: privileged mode, the NAS's own network, devices, or
             folders outside its own. There's no field for them.
+
+    section.kai-app-panel aria-labelledby="custom-logo-head"
+      h2#custom-logo-head Its logo
+      .kai-custom-logo-row
+        span data-custom-logo-preview=""
+          = render 'apps/app_logo', name: fields['name'].presence || app&.name, logo: logo_src
+        .kai-custom-field
+          label.form-label for="custom-logo" A picture, if you have one
+          input.form-control#custom-logo type="file" name="logo" accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml" data-custom-logo="" aria-describedby="custom-logo-hint"
+          - if @logo.is_a?(Hash)
+            input type="hidden" name="logo_data" value=@logo[:data]
+          - if @logo.is_a?(Hash) || current_logo_url
+            label.kai-custom-check
+              input.form-check-input type="checkbox" name="logo_remove" value="1" checked=(@logo == :remove) data-custom-logo-remove=""
+              span Remove its logo
+          - if errors[:logo]
+            p.kai-custom-problem#custom-logo-hint role="alert" = errors[:logo]
+          - else
+            p.kai-custom-hint#custom-logo-hint
+              | A PNG, JPEG, WebP or SVG, up to #{CustomAppsController::LOGO_MAX_BYTES / 1024} KB. It's kept on your NAS and shown
+                from there: nothing is loaded from elsewhere for your apps, so a logo link in an app file isn't used.
 
     .kai-custom-actions
       a.btn.btn-outline-secondary href=(editing ? apps_app_path(editing) : apps_index_path(anchor: 'add')) Cancel

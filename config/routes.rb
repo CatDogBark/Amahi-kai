@@ -118,6 +118,7 @@ Rails.application.routes.draw do
     post ':id/remove', action: 'destroy', as: 'remove', constraints: { id: /[a-z][a-z0-9]{1,23}/ }
     post ':id/check', action: 'check_version', as: 'check', constraints: { id: /[a-z][a-z0-9]{1,23}/ }
     post ':id/version', action: 'version', as: 'version', constraints: { id: /[a-z][a-z0-9]{1,23}/ }
+    get ':id/logo', action: 'logo', as: 'logo', constraints: { id: /[a-z][a-z0-9]{1,23}/ }
   end
 
   # Apps (consolidated from plugin)

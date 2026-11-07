@@ -26,6 +26,17 @@ RSpec.describe 'AmahiHelper custom apps' do
     YAML
   end
 
+  # A 1x1 PNG, and an SVG with all an editor puts before its <svg>
+  let(:png) { 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=' }
+  let(:svg) do
+    <<~SVG
+      <?xml version="1.0" encoding="UTF-8"?>
+      <!-- Made in an editor -->
+      <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 5 5"><rect width="5" height="5" fill="#ff0055"/></svg>
+    SVG
+  end
+
   before(:all) { Privileged.operations } # loads the helper's source once
 
   before do
@@ -43,7 +54,7 @@ RSpec.describe 'AmahiHelper custom apps' do
     allow(helper).to receive(:group_id).and_call_original
     allow(helper).to receive(:group_id).with('amahi').and_return(Process.gid)
     allow(File).to receive(:chown)
-    allow(helper).to receive(:do_install) { |path, content, *| File.write(path, content) }
+    allow(helper).to receive(:do_install) { |path, content, *| File.binwrite(path, content) }
   end
 
   after { FileUtils.rm_rf(dir) }
@@ -66,11 +77,55 @@ RSpec.describe 'AmahiHelper custom apps' do
   end
 
   it "keeps a file that passes as the app's, for the web app's group to read" do
-    expect(run('apps.custom_save', 'app' => 'mealie', 'manifest' => file.chomp)).to eq('app' => 'mealie', 'saved' => true)
+    expect(run('apps.custom_save', 'app' => 'mealie', 'manifest' => file.chomp)).to eq('app' => 'mealie', 'saved' => true, 'update' => false)
     expect(File.read("#{custom}/mealie.yml")).to eq(file)
     expect(File.stat(custom).mode & 0o777).to eq(0o750)
     expect(File).to have_received(:chown).with(0, Process.gid, custom)
     expect(helper).to have_received(:do_install).with("#{custom}/mealie.yml", file, nil, '0640', 'amahi')
+  end
+
+  it 'keeps its logo beside its file, for the web app to serve, and changes or removes it only when asked' do
+    run('apps.custom_save', 'app' => 'mealie', 'manifest' => file, 'logo' => png)
+    expect(File.binread("#{custom}/mealie.png")).to eq(png.unpack1('m0'))
+    expect(helper).to have_received(:do_install).with("#{custom}/mealie.png", png.unpack1('m0'), nil, '0640', 'amahi')
+    run('apps.custom_save', 'app' => 'mealie', 'manifest' => file.sub('Recipes', 'All the recipes'))
+    expect(Dir.children(custom)).to contain_exactly('mealie.yml', 'mealie.png') # left out: kept
+    run('apps.custom_save', 'app' => 'mealie', 'manifest' => file, 'logo' => [svg].pack('m0'))
+    expect(Dir.children(custom)).to contain_exactly('mealie.yml', 'mealie.svg') # another type: the other goes
+    run('apps.custom_save', 'app' => 'mealie', 'manifest' => file, 'logo' => '')
+    expect(Dir.children(custom)).to contain_exactly('mealie.yml')
+  end
+
+  it "refuses a logo that isn't a PNG, JPEG, WebP or SVG of 256 KB at most" do
+    check = ->(logo) { refusal('apps.custom_check', 'app' => 'mealie', 'manifest' => file, 'logo' => logo) }
+    expect(check.call(png)).to be_nil
+    expect(check.call([svg].pack('m0'))).to be_nil
+    expect(check.call(["\xFF\xD8\xFF\xE0rest".b].pack('m0'))).to be_nil
+    expect(check.call(["RIFF\x10\0\0\0WEBPVP8 ".b].pack('m0'))).to be_nil
+    expect(check.call("#{png}\n")).to eq('the logo must be a picture, in base64')
+    expect(check.call('not base64!')).to eq('the logo must be a picture, in base64')
+    expect(check.call(1)).to eq('the logo must be a picture, in base64')
+    expect(check.call(['GIF89a'].pack('m0'))).to eq("the logo isn't a PNG, JPEG, WebP or SVG picture")
+    expect(check.call(['<html><svg></svg></html>'].pack('m0'))).to eq("the logo isn't a PNG, JPEG, WebP or SVG picture")
+    expect(check.call(['<!DOCTYPE svg [<!ENTITY a "aaaa">]><svg>&a;</svg>'].pack('m0'))).to eq("the logo isn't a PNG, JPEG, WebP or SVG picture")
+    expect(check.call(['<!-- never closed <svg></svg>'].pack('m0'))).to eq("the logo isn't a PNG, JPEG, WebP or SVG picture")
+    expect(check.call(["<svg>\0</svg>"].pack('m0'))).to eq("the logo isn't a PNG, JPEG, WebP or SVG picture")
+    expect(check.call(["\x89PNG\r\n\x1A\n#{'x' * 256 * 1024}".b].pack('m0'))).to eq('the logo is over 256 KB')
+  end
+
+  # Its name, how it's listed, and a field written out as its default: the same container
+  it "records a change its container doesn't see as what the container was made from, so it needs no update" do
+    run('apps.custom_save', 'app' => 'mealie', 'manifest' => file)
+    allow(helper).to receive(:engine_container?).and_return(true)
+    FileUtils.mkdir_p("#{dir}/app-definitions")
+    File.write("#{dir}/app-definitions/mealie.json", YAML.safe_load(file).to_json)
+    listed = file.sub('Recipes', 'All the recipes').sub('category: home', "category: other\nsign_in: Make an account\nmemory: 1g\nnetwork: internet")
+    expect(run('apps.custom_save', 'app' => 'mealie', 'manifest' => listed)).to include('update' => false)
+    expect(JSON.parse(File.read("#{dir}/app-definitions/mealie.json"))).to include('description' => 'All the recipes and meal plans', 'memory' => '1g')
+
+    moved = listed.sub('host: 9925, container: 9000', 'host: 9926, container: 9000').sub('web_port: 9925', 'web_port: 9926')
+    expect(run('apps.custom_save', 'app' => 'mealie', 'manifest' => moved)).to include('update' => true)
+    expect(JSON.parse(File.read("#{dir}/app-definitions/mealie.json"))['web_port']).to eq(9925) # until the update runs
   end
 
   it "says what's wrong with a file, in the owner's words, as a refusal" do
@@ -147,7 +202,8 @@ RSpec.describe 'AmahiHelper custom apps' do
     expect(refusal('apps.custom_remove', 'app' => 'mealie')).to eq("mealie's data from an earlier install is kept: delete it first")
     FileUtils.rm_rf("#{dir}/apps")
     expect(refusal('apps.custom_remove', 'app' => 'jellyfin')).to eq("jellyfin isn't an app of your own")
+    run('apps.custom_save', 'app' => 'mealie', 'manifest' => file, 'logo' => png)
     expect(run('apps.custom_remove', 'app' => 'mealie')).to eq('app' => 'mealie', 'removed' => true)
-    expect(File.exist?("#{custom}/mealie.yml")).to be false
+    expect(Dir.children(custom)).to be_empty
   end
 end

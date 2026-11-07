@@ -74,10 +74,10 @@ describe "Front page", type: :request do
 
     it "names three and counts the rest" do
       login_as_admin
-      %w[bittube gitea jellyfin transmission].each { |id| installed(id) }
+      %w[gitea jellyfin pigallery2 transmission].each { |id| installed(id) }
       get root_path
       notice = Nokogiri::HTML(response.body).at_css('a.update-notice[href="/apps"]').text
-      expect(notice).to include('App updates:', 'bitTube old →', ' · Gitea old →', ' · Jellyfin old →', 'and 1 more')
+      expect(notice).to include('App updates:', 'Gitea old →', ' · Jellyfin old →', ' · PiGallery2 old →', 'and 1 more')
       expect(notice).not_to include('Transmission old') # the System Update dialog lists all four
       expect(response.body).to include('4 updates')
     end

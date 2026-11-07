@@ -96,24 +96,28 @@ and anything other than `amd64`.
 ## Writing the manifest
 
 The file is `apps/<id>.yml`, where `<id>` is the app's name in lowercase letters and digits
-(`uptimekuma`). Here's bitTube's:
+(`uptimekuma`). Here's Gitea's:
 
 ```yaml
-name: bitTube
-description: Your YouTube channels and streaming services in one place, with YouTube ad-free.
-sign_in: "Its first page asks you to make an account, its admin; the admin adds everyone else in Settings → People."
-category: media
-logo: https://cdn.jsdelivr.net/gh/CatDogBark/amahi-kai-apps@main/logos/bittube.svg
-releases: https://github.com/CatDogBark/bitTube/releases/tag/v{version}
-image: ghcr.io/catdogbark/bittube:0.1.7@sha256:5243...
+name: Gitea
+description: Your own Git server, like a small GitHub, for code and its history.
+sign_in: "Its first page sets it up: make the admin account there (or the first account you register is the admin), and to keep its repositories in a share folder you gave it, set Repository Root Path to that folder under /shares."
+category: development
+logo: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/gitea.png
+releases: https://github.com/go-gitea/gitea/releases/tag/v{version}
+image: gitea/gitea:1.27.3-rootless@sha256:1c17...
 run_as: app
-web_port: 8484
-memory: 1g
+# It can keep its repositories in a share given read and write (a share Greyhole doesn't pool).
 writes_shares: true
+web_port: 3300
+memory: 1g
 ports:
-  - { host: 8484, container: 8080 }
+  # 3000 is Amahi-kai's own web page.
+  - { host: 3300, container: 3000 }
+  - { host: 2222, container: 2222, label: Git over SSH }
 folders:
-  - { name: data, path: /data }
+  - { name: data, path: /var/lib/gitea }
+  - { name: config, path: /etc/gitea }
 environment:
   TZ: "{{timezone}}"
 ```
@@ -148,8 +152,10 @@ environment:
   a pool. An optional one is left out until a pool is chosen, so your app must run without it.
   Before an update, Amahi-kai snapshots the dataset instead of copying it, and rolls back to the
   snapshot if the update fails. It needs `requires: 3`.
-- **`logo`** is an `https` link. A logo of your own goes in the catalog's `logos/` folder.
-- **`web_tls: true`** says the app's page is HTTPS with its own certificate (as bitShare's is):
+- **`logo`** is an `https` link. A logo of your own goes in the catalog's `logos/` folder. (An app
+  added on the Apps page as one of your own takes a picture instead, kept on your server: its
+  file's `logo` isn't used.)
+- **`web_tls: true`** says the app's page is HTTPS with its own certificate:
   **Open** goes to `https://`, and the app is announced on the LAN as HTTPS. It needs
   `requires: 2`, since older Amahi-kai versions don't know it.
 - **`access: tailscale`** makes the app reachable only from devices on the server's Tailscale

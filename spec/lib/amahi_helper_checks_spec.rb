@@ -40,6 +40,8 @@ RSpec.describe 'AmahiHelper: the checks on every argument' do
                 "image: ghcr.io/catdogbark/mine:1.0@sha256:#{'a' * 64}\nrun_as: app\nports:\n  - { host: 9925, container: 9000 }\n" \
                 'web_port: 9925'
 
+  logo_png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+
   # The operations with arguments: a request that's accepted, and what each argument may hold
   # beyond it.
   requests = {
@@ -110,7 +112,7 @@ RSpec.describe 'AmahiHelper: the checks on every argument' do
     # alphabet holds these.
     'tunnel.configure' => { good: { 'token' => token }, may_hold: { 'token' => [*blank_lines, 'equals', 'slash', 'leading_dash', 'leading_two_dashes'] } },
 
-    'apps.install' => { good: { 'app' => 'bitshare', 'shares' => [{ 'name' => 'vault', 'folder' => 'media', 'write' => false }], 'pool' => 'old' },
+    'apps.install' => { good: { 'app' => 'pooled', 'shares' => [{ 'name' => 'vault', 'folder' => 'media', 'write' => false }], 'pool' => 'old' },
                         may_hold: { 'shares' => shares_may_hold } },
     'apps.start' => { good: { 'app' => 'gitea' } },
     'apps.stop' => { good: { 'app' => 'gitea' } },
@@ -120,8 +122,12 @@ RSpec.describe 'AmahiHelper: the checks on every argument' do
     'apps.uninstall' => { good: { 'app' => 'gitea', 'delete_data' => true } },
     'apps.logs' => { good: { 'app' => 'gitea', 'lines' => 150 } },
     # An app file is YAML: a blank line before or after it reads the same.
-    'apps.custom_check' => { good: { 'app' => 'mine', 'manifest' => custom_file }, may_hold: { 'manifest' => blank_lines } },
-    'apps.custom_save' => { good: { 'app' => 'mine', 'manifest' => custom_file }, may_hold: { 'manifest' => blank_lines } },
+    # A logo left out is kept, an empty one removed; a 1x1 PNG, whose base64 ends in padding, so
+    # what's added to it isn't base64 (helper: custom_logo_type)
+    'apps.custom_check' => { good: { 'app' => 'mine', 'manifest' => custom_file, 'logo' => logo_png },
+                             may_hold: { 'manifest' => blank_lines, 'logo' => %w[empty null] } },
+    'apps.custom_save' => { good: { 'app' => 'mine', 'manifest' => custom_file, 'logo' => logo_png },
+                            may_hold: { 'manifest' => blank_lines, 'logo' => %w[empty null] } },
     'apps.custom_remove' => { good: { 'app' => 'mine' } },
 
     'services.start' => { good: { 'service' => 'smbd' } },
@@ -199,6 +205,21 @@ RSpec.describe 'AmahiHelper: the checks on every argument' do
     Privileged.operations # loads the helper's source once
     FileUtils.mkdir_p(["#{files}/vault/media", "#{mnt}/storage-1/.gh_trash/Photos", "#{fake}/definitions", "#{fake}/custom-apps"])
     File.write("#{fake}/custom-apps/mine.yml", 'name: Mine')
+    # pooled: a catalog app whose folders go on a ZFS pool, chosen at install
+    FileUtils.mkdir_p("#{fake}/catalog/apps")
+    File.write("#{fake}/catalog/apps/pooled.yml", <<~YAML)
+      name: Pooled
+      description: Keeps its folders on a pool
+      category: files
+      image: ghcr.io/catdogbark/pooled:1.0@sha256:#{'b' * 64}
+      run_as: app
+      requires: 3
+      web_port: 8443
+      ports:
+        - { host: 8443, container: 8443 }
+      folders:
+        - { name: data, path: /data, kind: dataset }
+    YAML
     File.write("#{mnt}/storage-1/.gh_trash/Photos/a.jpg", 'x')
   end
 

@@ -3,10 +3,20 @@
 # owner's password again, and the root helper keeps it (apps.custom_save) with the catalog's
 # checks; Install then works as it does for the catalog's apps. An installed one's Edit saves
 # the same way and updates it (apps.update: its data copied first, and back if it doesn't come
-# up). Check for a newer version asks the image's registry, only when asked.
+# up), unless the change is one its container doesn't see (its name, say, or its logo). Check for
+# a newer version asks the image's registry, only when asked.
+#
+# Its logo is a picture given on the form (LOGO_MAX_BYTES at most), carried through the review
+# as base64 (logo_data) and kept by the helper beside its file; the NAS serves it (#logo).
 class CustomAppsController < ApplicationController
   before_action :admin_required
   before_action :find_custom, only: %i[edit update destroy check_version version]
+  helper_method :logo_src, :current_logo_url
+
+  LOGO_MAX_BYTES = 256 * 1024
+  # The policy a logo is served under: no script runs and nothing loads, even in an SVG opened on
+  # its own
+  LOGO_POLICY = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; sandbox".freeze
 
   # The password again: a few tries a minute for each admin, so a stolen sign-in can't guess it.
   PASSWORD_TRIES = ActiveSupport::Cache::MemoryStore.new
@@ -35,13 +45,16 @@ class CustomAppsController < ApplicationController
     @editing = params[:editing].presence if AppCatalog.custom_file(params[:editing])
     @tab = params[:source] == 'file' ? 'file' : 'form'
     @app = @tab == 'file' ? CustomApp.from_file(params[:manifest], id: @editing) : CustomApp.from_form(form_fields, id: @editing)
+    @logo, problem = chosen_logo
     set_title @editing ? "Edit #{@app.name}" : 'Add your own app'
     # Back, from the review: the form again, as it was described (the file, when the form can't show it)
     if params[:back]
       @tab = @app.form ? 'form' : 'file'
       return render(:new)
     end
-    return render(:new, status: :unprocessable_content) unless checked(@app)
+    ok = checked(@app)
+    @app.errors[:logo] = problem if problem
+    return render(:new, status: :unprocessable_content) unless ok && !problem
 
     set_title "Review: #{@app.name}"
     render :review
@@ -49,6 +62,7 @@ class CustomAppsController < ApplicationController
 
   def create
     @app = CustomApp.from_file(params[:manifest], id: params[:id])
+    @logo, = chosen_logo
     return unless password_given(@app)
     return review_again(@app, taken_message(@app.id)) if AppCatalog.custom_file(@app.id)
 
@@ -56,19 +70,23 @@ class CustomAppsController < ApplicationController
     redirect_to apps_index_path(install: @app.id, anchor: "docker_app_#{@app.id}"), notice: "#{@app.name} is added."
   end
 
-  # Saves the changes, then the app page updates it to them when it's installed.
+  # Saves the changes, then the app page updates it to them when it's installed and they're ones
+  # its container sees (the helper says: update).
   def update
     @editing = @app.id
     @app = CustomApp.from_file(params[:manifest], id: @app.id)
+    @logo, = chosen_logo
     return unless password_given(@app)
 
-    save(@app) or return
+    saved = save(@app) or return
     installed = DockerApp.find_by(identifier: @app.id)
     installed&.update(name: @app.name, description: @app.data['description'], category: @app.data['category'])
     # The helper doesn't go back a version (Undo update does, for a while)
     if installed&.version && AppCatalog.version_below?(AppCatalog.tag(@app.image), installed.version)
       redirect_to apps_app_path(@app.id), alert: "#{@app.name}'s changes are saved, but #{AppCatalog.tag(@app.image)} is older than " \
                                                  "the #{installed.version} it runs, and an app isn't updated to an older version."
+    elsif installed && saved['update'] == false
+      redirect_to apps_app_path(@app.id), notice: "#{@app.name}'s changes are saved. They're only how it's listed, so it keeps running as it is."
     elsif installed && %w[running stopped].include?(installed.status)
       redirect_to apps_app_path(@app.id, apply: 1), notice: "#{@app.name}'s changes are saved: it updates to them now."
     else
@@ -83,6 +101,15 @@ class CustomAppsController < ApplicationController
     render json: { status: 'ok' }
   rescue Privileged::Error => e
     render json: { status: 'error', message: e.message }, status: :unprocessable_content
+  end
+
+  # Its logo, from the NAS (AppCatalog.custom_logo), under LOGO_POLICY. Its address names the
+  # picture (v), so that one is cached.
+  def logo
+    logo = AppCatalog.custom_logo(params[:id]) or return head(:not_found)
+    response.headers['Content-Security-Policy'] = LOGO_POLICY
+    params[:v] == logo[:version] ? expires_in(1.year) : expires_now
+    send_file logo[:path], type: logo[:type], disposition: 'inline'
   end
 
   # Check for a newer version: a newer release of its image (a tag of the same shape), or a newer
@@ -143,11 +170,63 @@ class CustomAppsController < ApplicationController
       app.errors[:image] = "Couldn't find that image: #{e.message}"
       return false
     end
-    Privileged.call('apps.custom_check', app: app.id, manifest: app.text)
+    Privileged.call('apps.custom_check', app: app.id, manifest: app.text, **logo_argument)
     true
   rescue Privileged::Error => e
-    app.errors[:file] = e.message
+    if e.message.start_with?('the logo')
+      app.errors[:logo] = e.message.upcase_first
+      @logo = nil
+    else
+      app.errors[:file] = e.message
+    end
     false
+  end
+
+  # The logo the request gives: [:remove, { data:, type: } for a picture (chosen now, or before the
+  # review and carried in logo_data), or nil to keep the one it has; and what's wrong with a
+  # picture chosen, or nil]. The helper checks the picture itself again.
+  def chosen_logo
+    return [:remove, nil] if params[:logo_remove] == '1'
+
+    upload = params[:logo]
+    if upload.respond_to?(:read)
+      bytes = upload.read(LOGO_MAX_BYTES + 1).to_s.b
+      return [nil, "That picture is over #{LOGO_MAX_BYTES / 1024} KB: give it a smaller one"] if bytes.bytesize > LOGO_MAX_BYTES
+
+      type = CustomApp.logo_type(bytes) or return [nil, "That isn't a PNG, JPEG, WebP or SVG picture"]
+      return [{ data: [bytes].pack('m0'), type: type }, nil]
+    end
+
+    data = params[:logo_data].to_s
+    type = CustomApp.logo_type(data.unpack1('m0')) if data.match?(%r{\A[A-Za-z0-9+/]+={0,2}\z})
+    [type && { data: data, type: type }, nil]
+  rescue ArgumentError
+    [nil, nil]
+  end
+
+  # The helper's logo argument for the logo chosen: the picture, empty to remove it, or none.
+  def logo_argument
+    case @logo
+    when Hash then { logo: @logo[:data] }
+    when :remove then { logo: '' }
+    else {}
+    end
+  end
+
+  # What the pages show as its logo: the picture chosen, none when it's to be removed, else the
+  # one it has.
+  def logo_src
+    case @logo
+    when Hash then "data:#{@logo[:type]};base64,#{@logo[:data]}"
+    when :remove then nil
+    else current_logo_url
+    end
+  end
+
+  # The logo kept for the app being edited, or nil.
+  def current_logo_url
+    entry = @editing && AppCatalog.find(@editing)
+    entry[:logo_url] if entry&.dig(:custom)
   end
 
   def catalog_app?(id)
@@ -173,10 +252,11 @@ class CustomAppsController < ApplicationController
     render :review, status: :unprocessable_content
   end
 
+  # The helper's reply (update: whether its container needs the change), or false.
   def save(app)
-    Privileged.call('apps.custom_save', app: app.id, manifest: app.text)
+    reply = Privileged.call('apps.custom_save', app: app.id, manifest: app.text, **logo_argument)
     AppCatalog.reload!
-    true
+    reply
   rescue Privileged::Error => e
     review_again(app, e.message)
     false

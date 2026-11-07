@@ -207,7 +207,10 @@ definition, secrets, storage or `app-<id>` user from an app before), so it can't
 app's folders, secrets or user, and one that starts as root keeps its folders off ZFS pools. The
 web app asks for the owner's password again before it saves one, and the image is pinned by
 digest from the registry the owner named (`AppVersions`, https only, never the NAS itself or a
-link-local address). Nobody reviews its image.
+link-local address). Nobody reviews its image. Its logo is a picture the helper checks by its
+bytes (PNG, JPEG, WebP, or an SVG with no entities of its own, 256 KB at most) and keeps beside
+its file; the web app serves it from the NAS under `default-src 'none'; sandbox`, so a script in
+an SVG can't run as the person signed in, even opened on its own.
 
 Updates (`apps.update`) run the version the catalog pins; the web app names the app. The helper
 copies the app's folders (`cp -a`) into a root-only folder first, and puts them back

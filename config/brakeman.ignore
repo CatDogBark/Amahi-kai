@@ -110,6 +110,29 @@
         502
       ],
       "note": "Marshal.load(Marshal.dump(data)) deep-copies a Hash the root helper itself parsed with YAML.safe_load from the root-owned /etc/netplan files, to tell whether it changed: no serialized data from outside is ever loaded."
+    },
+    {
+      "warning_type": "File Access",
+      "warning_code": 16,
+      "fingerprint": "3a7364531f117507ba3a71b0880e439b21307410d7e7c048c74d6bd2340b8d21",
+      "check_name": "SendFile",
+      "message": "Parameter value used in file name",
+      "file": "app/controllers/custom_apps_controller.rb",
+      "line": 112,
+      "link": "https://brakemanscanner.org/docs/warning_types/file_access/",
+      "code": "send_file(AppCatalog.custom_logo(params[:id])[:path], :type => AppCatalog.custom_logo(params[:id])[:type], :disposition => \"inline\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "CustomAppsController",
+        "method": "logo"
+      },
+      "user_input": "params[:id]",
+      "confidence": "Weak",
+      "cwe_id": [
+        22
+      ],
+      "note": "The path is never made from the id: AppCatalog.custom_logo takes only an id matching AppCatalog::ID (lowercase letters and digits) and picks the file from a listing of the custom apps folder, by its name and a logo type. Admin-only (before_action :admin_required)."
     }
   ],
   "brakeman_version": "8.1.0"

@@ -252,7 +252,10 @@ asks for:
 - whether it works with **files in shares**, and may write in them;
 - **what it reaches**: the internet, the internet and your network's devices, or nothing past
   the server;
-- the most **memory** it may use. Like every app, it may use all of the server's processors but one.
+- the most **memory** it may use. Like every app, it may use all of the server's processors but one;
+- a **logo**, if you have one: a PNG, JPEG, WebP or SVG picture, up to 256 KB. It's kept on your
+  server and shown from there. A logo link in an app file isn't used, so the Apps page loads
+  nothing from elsewhere for your apps.
 
 If you have an app file, written the way the catalog's are (see [Making Apps](making-apps)),
 **I have an app file** takes it as it is. **Review** then says what the app will be able to do, in
@@ -270,6 +273,8 @@ On its page:
 - **Edit** opens what you described, filled in (or its file, when it uses fields the form doesn't
   show). Saving asks for your password, then updates the app to it: its data is copied first, and
   it goes back by itself if it doesn't come up, as an update does; **Undo update** works the same.
+  A change only to how it's listed (its name, description, category, how to sign in, or its logo)
+  is saved without restarting it.
 - **Check for a newer version** asks the image's registry for a newer release of the same image
   (a tag of the same shape: `v2.4.1` finds `v2.5.0`, not `nightly`), or a newer build of its tag.
   Amahi-kai looks only when you ask, and never updates an app of your own by itself.

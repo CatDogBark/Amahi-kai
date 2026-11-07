@@ -1452,6 +1452,9 @@ table.settings tbody tr { border-bottom-color: var(--kai-line); }
 .kai-custom-file { min-height: 420px; line-height: 1.6; resize: vertical; }
 .kai-custom-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
 .kai-custom-review-head { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+.kai-custom-logo-row { display: flex; align-items: flex-start; gap: 16px; }
+.kai-custom-logo-row > .kai-custom-field { flex: 1 1 auto; min-width: 0; }
+.kai-custom-logo-row .kai-custom-check { margin-top: 10px; }
 .kai-custom-facts { grid-template-columns: minmax(0, 150px) minmax(0, 1fr); }
 .kai-custom-warning {
   display: flex;

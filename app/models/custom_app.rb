@@ -31,9 +31,11 @@ class CustomApp
                     'gid' => "Its group's number" }.freeze
   PLACEHOLDERS = { 'timezone' => '{{timezone}}', 'uid' => '{{uid}}', 'gid' => '{{gid}}' }.freeze
   # The fields the form writes; a file with others (access, web_tls, ping, a folder's kind, a
-  # hashed secret...) is edited as a file
+  # hashed secret...) is edited as a file. A logo link it has is no matter: the form leaves it
+  # out, and an app of your own's logo is a picture kept on the NAS, never a link.
   FORM_FIELDS = %w[requires name description category sign_in image run_as capabilities network memory web_port ports folders
                    shares writes_shares environment secrets].freeze
+  FORM_IGNORES = %w[logo].freeze
   # The order an app file made here has its fields in
   ORDER = %w[requires name description category sign_in logo releases image run_as capabilities network access memory web_port
              web_tls ports folders shares writes_shares environment secrets ping].freeze
@@ -68,6 +70,17 @@ class CustomApp
     def dump(data)
       ordered = ORDER.filter_map { |key| [key, data[key]] if data.key?(key) }.to_h.merge(data.except(*ORDER))
       ordered.to_yaml.delete_prefix("---\n")
+    end
+
+    # A logo's type, as the pages show it (image/png...), by its first bytes, or nil. The helper
+    # checks it again, fully (custom.rb).
+    def logo_type(bytes)
+      bytes = bytes.to_s.b
+      if bytes.start_with?("\x89PNG\r\n\x1A\n".b) then 'image/png'
+      elsif bytes.start_with?("\xFF\xD8\xFF".b) then 'image/jpeg'
+      elsif bytes.bytesize > 12 && bytes[0, 4] == 'RIFF' && bytes[8, 4] == 'WEBP' then 'image/webp'
+      elsif bytes.dup.force_encoding('UTF-8').then { |text| text.valid_encoding? && text.include?('<svg') } then 'image/svg+xml'
+      end
     end
 
     # Processors an app may use, and the NAS's (the helper's app_cpus): all but one.
@@ -187,7 +200,7 @@ class CustomApp
   # more than the form shows: it's edited as a file then.
   def form
     return @fields if @fields
-    return nil unless (@data.keys - FORM_FIELDS).empty?
+    return nil unless (@data.keys - FORM_FIELDS - FORM_IGNORES).empty?
     return nil if Array(@data['folders']).any? { |folder| !folder.is_a?(Hash) || (folder.keys - %w[name path]).any? }
     return nil if Array(@data['secrets']).any? { |secret| !secret.is_a?(Hash) || (secret.keys - %w[env label]).any? }
     return nil unless @data['environment'].nil? || @data['environment'].is_a?(Hash)

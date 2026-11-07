@@ -1,6 +1,7 @@
 require 'yaml'
 require 'json'
 require 'time'
+require 'digest'
 
 # The app catalog (docs/plans/apps.md): one manifest per app, <id>.yml. It has a repo of its
 # own (CatDogBark/amahi-kai-apps), which the root helper fetches with the update check
@@ -38,6 +39,9 @@ class AppCatalog
   # app's file saved since shows as changes waiting.
   DEFINITIONS_DIR = '/var/lib/amahi-kai/app-definitions'.freeze
   ID = /\A[a-z][a-z0-9]{1,23}\z/
+  # A custom app's logo, kept beside its file as <id>.<type> (the helper's APP_LOGO_TYPES): the
+  # NAS serves it (CustomAppsController#logo). A logo link in a custom app's file isn't used.
+  LOGO_TYPES = { 'png' => 'image/png', 'jpg' => 'image/jpeg', 'webp' => 'image/webp', 'svg' => 'image/svg+xml' }.freeze
 
   class << self
     # Read again whenever the helper swaps in a newly fetched catalog (a new folder).
@@ -48,7 +52,7 @@ class AppCatalog
       @stamp = stamp
       @all ||= begin
         custom = Dir[File.join(custom_dir, '*.yml')].select { |path| File.basename(path, '.yml').match?(ID) }
-                                                    .filter_map { |path| entry(path)&.merge(custom: true) }
+                                                    .filter_map { |path| custom_entry(path) }
         ids = custom.map { |app| app[:identifier] }
         official = Dir[File.join(dir, '*.yml')].filter_map { |path| entry(path) }.reject { |app| ids.include?(app[:identifier]) }
         (official + custom).sort_by { |app| app[:name].downcase }
@@ -66,6 +70,19 @@ class AppCatalog
 
       path = Dir[File.join(custom_dir, '*.yml')].find { |file| File.basename(file, '.yml') == id.to_s }
       path && File.read(path)
+    rescue SystemCallError
+      nil
+    end
+
+    # A custom app's logo, { path:, type:, version: } (version: a short hash of the picture, for its
+    # address), or nil. Found among the files there, as custom_file is.
+    def custom_logo(id)
+      return nil unless id.to_s.match?(ID)
+
+      path = Dir[File.join(custom_dir, '*')].find do |file|
+        LOGO_TYPES.key?(File.extname(file).delete_prefix('.')) && File.basename(file, '.*') == id.to_s
+      end
+      path && { path: path, type: LOGO_TYPES.fetch(File.extname(path).delete_prefix('.')), version: Digest::SHA256.file(path).hexdigest[0, 12] }
     rescue SystemCallError
       nil
     end
@@ -240,6 +257,14 @@ class AppCatalog
     end
 
     private
+
+    # A custom app's entry: its logo is the one kept on the NAS, or none, never its file's link.
+    def custom_entry(path)
+      found = entry(path) or return nil
+      logo = custom_logo(found[:identifier])
+      url = Rails.application.routes.url_helpers.custom_apps_logo_path(found[:identifier], v: logo[:version]) if logo
+      found.merge(custom: true, logo_url: url)
+    end
 
     # nil for a manifest that can't be read (the helper's checks make that a bug, but one
     # broken entry mustn't take the Apps page down).

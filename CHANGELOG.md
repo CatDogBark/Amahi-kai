@@ -4,6 +4,19 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.8.1] — 2026-11-07
+
+Apps of your own can have a logo, kept on your server, and a change to how one is listed doesn't restart it.
+
+### 🚀 Major Features
+
+- **Logos for apps of your own** — An app of your own can have a logo now: a PNG, JPEG, WebP or SVG picture of up to 256 KB, chosen on its form (Add your own app, or Edit). It's kept on your server and shown from there, so the Apps page loads nothing from elsewhere for your apps; a logo link in an app file isn't used.
+
+### 🔒 Security & Fixes
+
+- **A change to how an app of your own is listed doesn't restart it** — Saving a new name, description, category, sign-in words or logo for an installed app of your own updated it (its data copied, the app restarted), though its container doesn't see those. Now they're saved, and it keeps running as it is. A file edited on the form that writes out a default (its memory, say) isn't a change either.
+- **The bit apps aren't in the catalog that comes with Amahi-kai** — bitShare, bitStream and bitTube left the official catalog in catalog-2, and now the copy that ships with Amahi-kai, which a new server offers before its first update check, doesn't list them either.
+
 ## [1.8.0] — 2026-11-06
 
 The app catalog is signed: a server takes only its newest version signed with a release key, never an older one. At this update it takes the first signed version, catalog-1, which has the same apps and versions as before.

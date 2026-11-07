@@ -1,0 +1,6 @@
+/ The logo chosen, carried to the next step (CustomAppsController#chosen_logo): a picture, in
+/ base64, or that it's to be removed. Neither: it keeps the one it has.
+- if @logo.is_a?(Hash)
+  input type="hidden" name="logo_data" value=@logo[:data]
+- elsif @logo == :remove
+  input type="hidden" name="logo_remove" value="1"

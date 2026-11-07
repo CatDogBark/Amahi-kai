@@ -11,7 +11,7 @@ RSpec.describe AppCatalog do
 
   describe ".all" do
     it "lists the apps, by name" do
-      expect(AppCatalog.all.map { |app| app[:identifier] }).to eq(%w[bitshare bitstream bittube gitea jellyfin pigallery2 transmission uptimekuma vaultwarden])
+      expect(AppCatalog.all.map { |app| app[:identifier] }).to eq(%w[gitea jellyfin pigallery2 transmission uptimekuma vaultwarden])
     end
 
     it "gives each app what the pages show" do
@@ -29,15 +29,15 @@ RSpec.describe AppCatalog do
     # Install asks for shares only for apps that work with files in them (shares, or writes_shares)
     it "says which apps work with files in shares" do
       uses = AppCatalog.all.to_h { |app| [app[:identifier], app[:uses_shares]] }
-      expect(uses).to eq("bitshare" => false, "bitstream" => false, "bittube" => true, "gitea" => true, "jellyfin" => true, "pigallery2" => true,
-                         "transmission" => true, "uptimekuma" => false, "vaultwarden" => false)
+      expect(uses).to eq("gitea" => true, "jellyfin" => true, "pigallery2" => true, "transmission" => true, "uptimekuma" => false,
+                         "vaultwarden" => false)
     end
 
     # P4.8: each app reaches the internet unless its manifest says the LAN too, or nothing
     it "says what each app reaches out to, in words for the Apps page" do
       reach = AppCatalog.all.to_h { |app| [app[:identifier], app[:network]] }
-      expect(reach.values_at('bitstream', 'uptimekuma')).to eq(%w[lan lan])
-      expect(reach.except('bitstream', 'uptimekuma').values.uniq).to eq(['internet'])
+      expect(reach['uptimekuma']).to eq('lan')
+      expect(reach.except('uptimekuma').values.uniq).to eq(['internet'])
       expect(AppCatalog.network_words('lan')).to eq('Reaches the internet and the devices on your network')
       expect(AppCatalog.network_words('none')).to eq('Reaches nothing past the NAS')
       expect(AppCatalog.network_words(nil)).to eq('Reaches the internet, not the devices on your network')
@@ -149,6 +149,20 @@ RSpec.describe AppCatalog do
       expect(AppCatalog.custom_file("../etc/passwd")).to be_nil
     end
 
+    it "gives one the logo kept beside its file, at an address that changes with it, and never its file's link" do
+      File.write("#{custom}/mealie.yml", "name: Mealie\nlogo: https://example.com/mealie.svg\n")
+      AppCatalog.reload!
+      expect(AppCatalog.find("mealie")[:logo_url]).to be_nil
+      File.write("#{custom}/mealie.webp", "RIFF....WEBPVP8 ")
+      File.write("#{custom}/gitea.svg", "<svg/>") # no app file: no app
+      AppCatalog.reload!
+      version = Digest::SHA256.hexdigest("RIFF....WEBPVP8 ")[0, 12]
+      expect(AppCatalog.find("mealie")[:logo_url]).to eq("/apps/custom/mealie/logo?v=#{version}")
+      expect(AppCatalog.custom_logo("mealie")).to eq(path: "#{custom}/mealie.webp", type: "image/webp", version: version)
+      expect(AppCatalog.custom_logo("../mealie")).to be_nil
+      expect(AppCatalog.find("gitea")[:logo_url]).to start_with("https://cdn.jsdelivr.net/") # the catalog's own
+    end
+
     it "sees one saved, or removed, without a restart" do
       expect(AppCatalog.find("mealie")).to be_nil
       sleep 0.01
@@ -169,7 +183,7 @@ RSpec.describe AppCatalog do
 
   describe "filters" do
     it "finds apps by category and by name or description" do
-      expect(AppCatalog.by_category("media").map { |app| app[:identifier] }).to eq(%w[bittube jellyfin pigallery2])
+      expect(AppCatalog.by_category("media").map { |app| app[:identifier] }).to eq(%w[jellyfin pigallery2])
       expect(AppCatalog.by_category("gaming")).to eq([])
       expect(AppCatalog.search("GITEA").map { |app| app[:identifier] }).to eq(["gitea"])
       expect(AppCatalog.search("password").map { |app| app[:identifier] }).to eq(["vaultwarden"])

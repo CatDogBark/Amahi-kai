@@ -65,6 +65,13 @@ describe 'Apps of your own', type: :request do
     Privileged.calls.find { |op, _args| op == 'apps.custom_save' }&.last&.dig(:manifest)
   end
 
+  # A 1x1 PNG, as the form sends a picture chosen
+  let(:png) { 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=' }
+
+  def picture(bytes, name = 'logo.png')
+    Rack::Test::UploadedFile.new(StringIO.new(bytes), 'application/octet-stream', true, original_filename: name)
+  end
+
   describe 'on the Apps page' do
     it 'offers Add your own app' do
       get '/apps'
@@ -154,6 +161,37 @@ describe 'Apps of your own', type: :request do
       expect(response.body).to include("That doesn&#39;t work yet: host port 445 must be from 1024 to 65535", 'aria-selected="true" class="kai-custom-tab" data-custom-tab="file"')
     end
 
+    it 'takes a picture for its logo with the form, shows it on the review, and gives it to the helper with the file' do
+      post '/apps/custom/review', params: { source: 'form', app: fields, logo: picture(png.unpack1('m0')) }
+      expect(response).to have_http_status(:ok)
+      expect(Privileged.calls).to eq([['apps.custom_check', { app: 'mealie', manifest: file, logo: png }]])
+      expect(response.body).to include(%(src="data:image/png;base64,#{png}"), %(name="logo_data" type="hidden" value="#{png}"))
+
+      post '/apps/custom/add', params: { id: 'mealie', manifest: file, logo_data: png, password: 'secretpassword' }
+      expect(Privileged.calls.last).to eq(['apps.custom_save', { app: 'mealie', manifest: file, logo: png }])
+    end
+
+    it "says what's wrong with a picture, beside its logo" do
+      post '/apps/custom/review', params: { source: 'form', app: fields, logo: picture('GIF89a', 'logo.gif') }
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(response.body).to include('id="custom-logo-hint" role="alert">That isn&#39;t a PNG, JPEG, WebP or SVG picture')
+      post '/apps/custom/review', params: { source: 'form', app: fields, logo: picture("\x89PNG\r\n\x1A\n#{'x' * 256 * 1024}".b) }
+      expect(response.body).to include('That picture is over 256 KB: give it a smaller one')
+      expect(Privileged.calls.map(&:first)).to eq(%w[apps.custom_check apps.custom_check]) # the file is still checked, without it
+
+      allow(Privileged).to receive(:call).and_call_original
+      allow(Privileged).to receive(:call).with('apps.custom_check', hash_including(:logo))
+                                         .and_raise(Privileged::Error.new('apps.custom_check', "the logo isn't a PNG, JPEG, WebP or SVG picture"))
+      post '/apps/custom/review', params: { source: 'form', app: fields, logo: picture('<svg') }
+      expect(response.body).to include('role="alert">The logo isn&#39;t a PNG, JPEG, WebP or SVG picture')
+      expect(response.body).not_to include('name="logo_data"') # not carried on
+    end
+
+    it 'goes back from the review to the form with the picture chosen, to keep or remove' do
+      post '/apps/custom/review', params: { back: '1', source: 'file', manifest: file, logo_data: png }
+      expect(response.body).to include(%(src="data:image/png;base64,#{png}"), %(name="logo_data" type="hidden" value="#{png}"), 'Remove its logo')
+    end
+
     it 'goes back from the review to the form, filled in as it was' do
       post '/apps/custom/review', params: { back: '1', source: 'file', id: 'mealie', manifest: file }
       expect(response.body).to include('value="Mealie"', 'value="ghcr.io/mealie-recipes/mealie:v2.4.1"', 'value="ALLOW_SIGNUP"', 'value="9925"')
@@ -198,6 +236,66 @@ describe 'Apps of your own', type: :request do
     end
 
     before { keep('mealie', file) }
+
+    def logo(type, bytes)
+      FileUtils.mkdir_p(custom)
+      File.binwrite("#{custom}/mealie.#{type}", bytes)
+      AppCatalog.reload!
+    end
+
+    it 'shows the logo kept on the NAS, never a link in its file' do
+      keep('mealie', "#{file}logo: https://example.com/mealie.svg\n")
+      installed(logo_url: 'https://example.com/mealie.svg')
+      get '/apps'
+      expect(response.body).not_to include('example.com/mealie.svg')
+      logo('png', png.unpack1('m0'))
+      version = Digest::SHA256.hexdigest(png.unpack1('m0'))[0, 12]
+      get '/apps'
+      expect(response.body).to include(%(src="/apps/custom/mealie/logo?v=#{version}"))
+      get '/apps/mealie'
+      expect(response.body).to include(%(src="/apps/custom/mealie/logo?v=#{version}"))
+      get '/apps/custom/mealie/edit'
+      expect(response.body).to include(%(src="/apps/custom/mealie/logo?v=#{version}"), 'Remove its logo',
+                                       'aria-selected="true" class="kai-custom-tab" data-custom-tab="form"') # the link is no matter
+    end
+
+    it 'serves its logo from the NAS under a policy that runs no script, cached by its address' do
+      get '/apps/custom/mealie/logo'
+      expect(response).to have_http_status(:not_found)
+      svg = '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'
+      logo('svg', svg)
+      get '/apps/custom/mealie/logo', params: { v: Digest::SHA256.hexdigest(svg)[0, 12] }
+      expect(response).to have_http_status(:ok)
+      expect(response.media_type).to eq('image/svg+xml')
+      expect(response.body).to eq(svg)
+      expect(response.headers['Content-Security-Policy']).to eq("default-src 'none'; img-src data:; style-src 'unsafe-inline'; sandbox")
+      expect(response.headers['Cache-Control']).to include("max-age=#{1.year.to_i}", 'private')
+      get '/apps/custom/mealie/logo', params: { v: 'old' }
+      expect(response.headers['Cache-Control']).to include('no-cache')
+      get '/apps/custom/gitea/logo'
+      expect(response).to have_http_status(:not_found)
+    end
+
+    it 'keeps its logo through an edit, unless another picture is chosen or Remove is' do
+      post '/apps/custom/mealie/save', params: { manifest: file, password: 'secretpassword' }
+      expect(Privileged.calls.last).to eq(['apps.custom_save', { app: 'mealie', manifest: file }])
+      post '/apps/custom/mealie/save', params: { manifest: file, logo_remove: '1', password: 'secretpassword' }
+      expect(Privileged.calls.last).to eq(['apps.custom_save', { app: 'mealie', manifest: file, logo: '' }])
+      post '/apps/custom/mealie/save', params: { manifest: file, logo_data: png, password: 'secretpassword' }
+      expect(Privileged.calls.last).to eq(['apps.custom_save', { app: 'mealie', manifest: file, logo: png }])
+      post '/apps/custom/mealie/save', params: { manifest: file, logo_data: png, logo_remove: '1', password: 'secretpassword' }
+      expect(Privileged.calls.last).to eq(['apps.custom_save', { app: 'mealie', manifest: file, logo: '' }]) # Remove, ticked last
+    end
+
+    it "saves a change to how it's listed alone without updating it, as the helper says" do
+      installed
+      allow(Privileged).to receive(:call).and_call_original
+      allow(Privileged).to receive(:call).with('apps.custom_save', any_args).and_return('ok' => true, 'saved' => true, 'update' => false)
+      post '/apps/custom/mealie/save', params: { manifest: file.sub('Recipes and meal plans', 'All our recipes'), logo_data: png, password: 'secretpassword' }
+      expect(response).to redirect_to('/apps/mealie')
+      expect(flash[:notice]).to eq("Mealie's changes are saved. They're only how it's listed, so it keeps running as it is.")
+      expect(DockerApp.find_by(identifier: 'mealie').description).to eq('All our recipes')
+    end
 
     it 'opens Edit on the form, filled in, or on its file when it says more than the form shows' do
       get '/apps/custom/mealie/edit'
