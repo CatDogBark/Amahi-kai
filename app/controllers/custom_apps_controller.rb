@@ -123,6 +123,9 @@ class CustomAppsController < ApplicationController
                                { 'kind' => found.kind.to_s, 'tag' => found.latest, 'major' => found.major }
                              end
     redirect_to apps_app_path(@app.id, anchor: "app-version-#{@app.id}")
+  rescue AppVersions::Private => e
+    redirect_to apps_app_path(@app.id), alert: "Couldn't ask its registry for a newer version: #{e.message}. If it's private, add a token " \
+                                               "for #{e.place} on Private images (under Apps)."
   rescue StandardError => e
     redirect_to apps_app_path(@app.id), alert: "Couldn't ask its registry for a newer version: #{e.message}"
   end

@@ -384,6 +384,15 @@ describe 'Apps of your own', type: :request do
       expect(response).to redirect_to('/apps/mealie?apply=1')
     end
 
+    it 'points to Private images when its image turns out private' do
+      installed
+      allow_any_instance_of(AppVersions).to receive(:check_image)
+        .and_raise(AppVersions::Private.new('ghcr.io/mealie-recipes', "ghcr.io says mealie-recipes/mealie is private, or isn't there"))
+      post '/apps/custom/mealie/check'
+      expect(flash[:alert]).to eq("Couldn't ask its registry for a newer version: ghcr.io says mealie-recipes/mealie is private, or isn't there. " \
+                                  'If it\'s private, add a token for ghcr.io/mealie-recipes on Private images (under Apps).')
+    end
+
     it "doesn't update to a tag that isn't the newest any more" do
       allow_any_instance_of(AppVersions).to receive(:check_image).and_return(AppVersions::Result.new(kind: :current, latest: 'v2.4.1'))
       post '/apps/custom/mealie/version', params: { tag: 'v1.0.0' }
