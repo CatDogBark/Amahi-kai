@@ -1521,7 +1521,8 @@ table.settings tbody tr { border-bottom-color: var(--kai-line); }
 .kai-token-howto[hidden] { display: none; }
 .kai-token-howto summary { font-weight: 600; color: var(--kai-link); cursor: pointer; }
 .kai-token-howto ol { margin: 10px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; line-height: 1.5; }
-.kai-private-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 8px; color: var(--kai-muted); font-size: 14px; }
+.kai-private-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 8px; color: var(--kai-muted); font-size: 0.875em; }
+.kai-private-images code, .kai-private-line code { color: var(--kai-text); }
 .kai-private-line svg { color: var(--kai-mint-text); }
 @media (max-width: 767.98px) {
   .kai-token-form .kai-custom-grid, .kai-token-facts { grid-template-columns: minmax(0, 1fr); }

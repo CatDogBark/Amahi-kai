@@ -34,7 +34,7 @@ class PrivateImagesController < ApplicationController
     registry = RegistryTokens::NAMES[@fields[:host]] || @fields[:host]
     redirect_to back_path, notice: "The token for #{reply['place']} is #{reply['replaced'] ? 'replaced' : 'saved'}: #{registry} took it."
   rescue Privileged::Error => e
-    show_again(e.message.upcase_first)
+    show_again("Not saved: #{e.message.sub(/[^.)]\z/, '\\0.')}")
   end
 
   def check
@@ -42,7 +42,7 @@ class PrivateImagesController < ApplicationController
     if reply['worked']
       redirect_to back_path, notice: "#{host_of(params[:place])} still takes the token for #{params[:place]}."
     else
-      redirect_to back_path, alert: "#{reply['error'].to_s.upcase_first}: it may have expired or been deleted. Replace it with a new one."
+      redirect_to back_path, alert: "The token for #{params[:place]} didn't work: #{reply['error']}. It may have expired or been deleted: replace it with a new one."
     end
   rescue Privileged::Error => e
     redirect_to back_path, alert: "Couldn't check it: #{e.message}"

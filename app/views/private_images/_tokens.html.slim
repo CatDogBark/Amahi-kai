@@ -9,7 +9,7 @@ section.kai-app-panel.kai-tokens aria-labelledby="tokens-head"
     h2#tokens-head = from == 'settings' ? 'Tokens for private images' : 'Tokens on this NAS'
     span.kai-tokens-count = @tokens.empty? ? 'None yet' : pluralize(@tokens.size, 'token')
   - if @tokens.empty?
-    p.kai-custom-hint.mb-0 None yet: images download without signing in, as public ones do. Add one for images their owner keeps private.
+    p.kai-custom-hint.mb-0 Images download without signing in, as public ones do. Add a token for images their owner keeps private.
   - @tokens.each do |token|
     - using = RegistryTokens.apps_using(token, @apps)
     article.kai-token id="token-#{token.place.parameterize}" class=("kai-token-refused" if token.refused?)
@@ -24,7 +24,7 @@ section.kai-app-panel.kai-tokens aria-labelledby="tokens-head"
           span.kai-pill.kai-pill-running = "✓ Worked #{time_ago_in_words(token.checked_at)} ago"
       - if token.refused?
         p.kai-notice.kai-notice-warn.mb-0
-          = "#{token.error.to_s.upcase_first}. It may have expired or been deleted: replace it with a new one."
+          = "The last time it was used, #{token.error || "#{token.host} refused it"}. It may have expired or been deleted: replace it with a new one."
           - if using.any?
             = " Until then, #{using.map(&:name).to_sentence} #{using.one? ? 'keeps' : 'keep'} running, but can't update or install again."
       dl.kai-app-facts.kai-token-facts

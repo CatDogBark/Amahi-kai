@@ -56,7 +56,7 @@ describe 'Private images', type: :request do
       keep_status(ghcr_token('worked' => false, 'error' => 'ghcr.io refused the token'))
       DockerApp.create!(identifier: 'bitstream', name: 'bitStream', status: 'running', image: "ghcr.io/catdogbark/bitstream:0.2.1@#{digest}")
       get '/apps/private-images'
-      expect(response.body).to include('Refused about 1 hour ago', 'Ghcr.io refused the token. It may have expired or been deleted',
+      expect(response.body).to include('Refused about 1 hour ago', 'The last time it was used, ghcr.io refused the token. It may have expired or been deleted',
                                        'Until then, bitStream keeps running, but can&#39;t update or install again.')
     end
 
@@ -102,7 +102,7 @@ describe 'Private images', type: :request do
       allow(Privileged).to receive(:call).with('registry.save', any_args).and_raise(Privileged::Error.new('registry.save', 'ghcr.io refused the token'))
       post '/apps/private-images/save', params: save_params
       expect(response).to have_http_status(:unprocessable_content)
-      expect(response.body).to include('Ghcr.io refused the token')
+      expect(response.body).to include('Not saved: ghcr.io refused the token.')
       expect(response.body).not_to include(token)
     end
 
@@ -114,7 +114,7 @@ describe 'Private images', type: :request do
       allow(Privileged).to receive(:call).with('registry.check', place: 'ghcr.io/catdogbark').and_return('worked' => false, 'error' => 'ghcr.io refused the token')
       post '/apps/private-images/check', params: { place: 'ghcr.io/catdogbark', from: 'settings' }
       expect(response).to redirect_to('/settings/tokens')
-      expect(flash[:alert]).to eq('Ghcr.io refused the token: it may have expired or been deleted. Replace it with a new one.')
+      expect(flash[:alert]).to eq("The token for ghcr.io/catdogbark didn't work: ghcr.io refused the token. It may have expired or been deleted: replace it with a new one.")
     end
 
     it 'removes a token, and says its registry still has it' do
