@@ -131,7 +131,7 @@ firewall and NAT. Still behind, to consider after 1.0 unless listed earlier:
   router (a Pi-hole, another Amahi-kai) can't use DNS over TLS, since the router keeps port 853
   from LAN devices. Not needed in the house (2026-10-24); for whoever runs one.
 
-### HTTPS on the LAN
+### HTTPS on the LAN, and signing in to apps with Amahi-kai
 
 CatDogBark (2026-10-06): the web UI and every app's page are plain HTTP on the LAN, so anyone on the
 network can read or change what passes (bitTube Desktop's updates come from the NAS this way:
@@ -167,13 +167,38 @@ is reached **only through Tailscale**, over HTTPS with Tailscale's certificate (
 on each device, and a password server is better off the LAN and the internet anyway. LAN HTTPS for
 Amahi-kai and every app stays the optional front door above, for when users ask: the NAS's own
 certificate authority as the default (Caddy does one, and fetches Tailscale's certificates
-too), Let's Encrypt through a DNS challenge for those with a domain.
+too), Let's Encrypt through a DNS challenge for those with a domain. (The certificate authority
+was dropped on 2026-11-09, below.)
 
-### Signing in to apps with Amahi-kai
+Decided (CatDogBark, 2026-11-09):
+
+- **No certificate authority of the NAS's own.** LAN HTTPS is Let's Encrypt through a DNS
+  challenge, for those with a domain (a wildcard certificate covers every app's name). Apps
+  reached only through Tailscale keep Tailscale's certificates.
+- **HTTPS and signing in to apps with Amahi-kai are one phase.** They're built on the same proxy
+  and the same names: a certificate is for a name, not an address and a port.
+
+The phase, in order:
+
+1. **Each app at a name of its own** (`<app>.<the NAS's name>`), through a proxy on the NAS
+   (Caddy), on plain HTTP. It's the shared foundation: HTTPS needs names to put on its
+   certificate, and the sign-in's gate needs the proxy. dnsmasq answers the names where the NAS
+   is the network's DNS.
+2. **HTTPS as an option on that proxy**: Let's Encrypt through a DNS challenge, for those with a
+   domain.
+3. **Amahi-kai as the sign-in provider** (below). It works over plain HTTP: HTTPS needs a domain,
+   and nobody should need one to get it. When HTTPS is on, its cookies are Secure and `__Host-`,
+   which an app on another name can't set or overwrite.
+4. **The apps, one by one** (below).
+
+Once step 1 is done, steps 2 and 3 don't depend on each other. HTTPS goes first: it's smaller and
+well understood, and the sign-in is then tried over HTTPS from the start.
+
+#### Signing in to apps with Amahi-kai
 
 Discussed with CatDogBark (2026-11-08): past a few apps, an account and a password for each one
-is a burden, so Amahi-kai becomes a way to sign in to its apps. Wanted soon, planned as its own
-phase. **It adds a way in; it never replaces an app's own accounts** (CatDogBark):
+is a burden, so Amahi-kai becomes a way to sign in to its apps. Wanted soon; it's steps 3 and 4 of
+the phase above. **It adds a way in; it never replaces an app's own accounts** (CatDogBark):
 
 - An Amahi-kai account is a NAS account (a system account, Samba, shares). A friend who only uses
   one app shouldn't need one.
@@ -227,15 +252,8 @@ phase. **It adds a way in; it never replaces an app's own accounts** (CatDogBark
 - **Vaultwarden:** unchanged. Its master password is what decrypts the vault, so no sign-in service
   can replace it: it's the one password kept, and it keeps the rest.
 
-**Order:**
-
-1. Each app at a name of its own (`<app>.<the NAS's name>`), through a proxy on the NAS: the gate
-   needs it, and it's the same proxy as the HTTPS front door above (Caddy). dnsmasq answers the
-   names where the NAS is the network's DNS.
-2. Amahi-kai as the provider, with the who-may-sign-in list on each app's page.
-3. bitTube, then bitStream and bitShare.
-4. Gitea and PiGallery2, through their definitions (a catalog format bump).
-5. The gate for Uptime Kuma and Transmission.
+**The apps' order** (step 4): bitTube, then bitStream and bitShare; then Gitea and PiGallery2,
+through their definitions (a catalog format bump); then the gate for Uptime Kuma and Transmission.
 
 Desktop clients (bitTube Desktop, bitShare's sync client) come later: they open the browser to
 sign in once, then keep a token on the device.
