@@ -56,6 +56,8 @@ jobs:
           path: coverage/
           include-hidden-files: true
           if-no-files-found: warn
+          # Only the coverage job of this same run reads it.
+          retention-days: 1
 
   requests:
     name: Request Specs
@@ -90,6 +92,8 @@ jobs:
           path: coverage/
           include-hidden-files: true
           if-no-files-found: warn
+          # Only the coverage job of this same run reads it.
+          retention-days: 1
       - name: Show failures
         if: failure()
         run: |
@@ -137,6 +141,8 @@ jobs:
           path: coverage/
           include-hidden-files: true
           if-no-files-found: warn
+          # Only the coverage job of this same run reads it.
+          retention-days: 1
       - name: Show failures
         if: failure()
         run: |
