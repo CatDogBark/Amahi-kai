@@ -264,29 +264,30 @@ describe 'Apps of your own', type: :request do
       logo('png', png.unpack1('m0'))
       version = Digest::SHA256.hexdigest(png.unpack1('m0'))[0, 12]
       get '/apps'
-      expect(response.body).to include(%(src="/apps/custom/mealie/logo?v=#{version}"))
+      expect(response.body).to include(%(src="/apps/logos/mealie?v=#{version}"))
       get '/apps/mealie'
-      expect(response.body).to include(%(src="/apps/custom/mealie/logo?v=#{version}"))
+      expect(response.body).to include(%(src="/apps/logos/mealie?v=#{version}"))
       get '/apps/custom/mealie/edit'
-      expect(response.body).to include(%(src="/apps/custom/mealie/logo?v=#{version}"), 'Remove its logo',
+      expect(response.body).to include(%(src="/apps/logos/mealie?v=#{version}"), 'Remove its logo',
                                        'aria-selected="true" class="kai-custom-tab" data-custom-tab="form"') # the link is no matter
     end
 
     it 'serves its logo from the NAS under a policy that runs no script, cached by its address' do
-      get '/apps/custom/mealie/logo'
+      get '/apps/logos/mealie'
       expect(response).to have_http_status(:not_found)
       svg = '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'
       logo('svg', svg)
-      get '/apps/custom/mealie/logo', params: { v: Digest::SHA256.hexdigest(svg)[0, 12] }
+      get '/apps/logos/mealie', params: { v: Digest::SHA256.hexdigest(svg)[0, 12] }
       expect(response).to have_http_status(:ok)
       expect(response.media_type).to eq('image/svg+xml')
       expect(response.body).to eq(svg)
       expect(response.headers['Content-Security-Policy']).to eq("default-src 'none'; img-src data:; style-src 'unsafe-inline'; sandbox")
       expect(response.headers['Cache-Control']).to include("max-age=#{1.year.to_i}", 'private')
-      get '/apps/custom/mealie/logo', params: { v: 'old' }
+      get '/apps/logos/mealie', params: { v: 'old' }
       expect(response.headers['Cache-Control']).to include('no-cache')
-      get '/apps/custom/gitea/logo'
-      expect(response).to have_http_status(:not_found)
+      get '/apps/logos/gitea' # a catalog app's: the catalog's, from the NAS too
+      expect(response).to have_http_status(:ok)
+      expect(response.media_type).to eq('image/png')
     end
 
     it 'keeps its logo through an edit, unless another picture is chosen or Remove is' do

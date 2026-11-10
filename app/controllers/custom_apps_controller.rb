@@ -7,16 +7,14 @@
 # a newer version asks the image's registry, only when asked.
 #
 # Its logo is a picture given on the form (LOGO_MAX_BYTES at most), carried through the review
-# as base64 (logo_data) and kept by the helper beside its file; the NAS serves it (#logo).
+# as base64 (logo_data) and kept by the helper beside its file; the NAS serves it
+# (AppLogosController).
 class CustomAppsController < ApplicationController
   before_action :admin_required
   before_action :find_custom, only: %i[edit update destroy check_version version]
   helper_method :logo_src, :current_logo_url
 
   LOGO_MAX_BYTES = 256 * 1024
-  # The policy a logo is served under: no script runs and nothing loads, even in an SVG opened on
-  # its own
-  LOGO_POLICY = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; sandbox".freeze
 
   # The password again: a few tries a minute for each admin, so a stolen sign-in can't guess it.
   PASSWORD_TRIES = ActiveSupport::Cache::MemoryStore.new
@@ -102,15 +100,6 @@ class CustomAppsController < ApplicationController
     render json: { status: 'ok' }
   rescue Privileged::Error => e
     render json: { status: 'error', message: e.message }, status: :unprocessable_content
-  end
-
-  # Its logo, from the NAS (AppCatalog.custom_logo), under LOGO_POLICY. Its address names the
-  # picture (v), so that one is cached.
-  def logo
-    logo = AppCatalog.custom_logo(params[:id]) or return head(:not_found)
-    response.headers['Content-Security-Policy'] = LOGO_POLICY
-    params[:v] == logo[:version] ? expires_in(1.year) : expires_now
-    send_file logo[:path], type: logo[:type], disposition: 'inline'
   end
 
   # Check for a newer version: a newer release of its image (a tag of the same shape), or a newer

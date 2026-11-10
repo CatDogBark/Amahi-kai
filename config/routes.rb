@@ -119,8 +119,10 @@ Rails.application.routes.draw do
     post ':id/remove', action: 'destroy', as: 'remove', constraints: { id: /[a-z][a-z0-9]{1,23}/ }
     post ':id/check', action: 'check_version', as: 'check', constraints: { id: /[a-z][a-z0-9]{1,23}/ }
     post ':id/version', action: 'version', as: 'version', constraints: { id: /[a-z][a-z0-9]{1,23}/ }
-    get ':id/logo', action: 'logo', as: 'logo', constraints: { id: /[a-z][a-z0-9]{1,23}/ }
   end
+
+  # An app's logo, from the NAS (AppLogosController): a catalog app's or an app of your own's
+  get '/apps/logos/:id', to: 'app_logos#show', as: 'app_logo', constraints: { id: /[a-z][a-z0-9]{1,23}/ }
 
   # Private images (PrivateImagesController): the tokens the NAS keeps for them. The page is under
   # Apps; Setup → Settings → Tokens (settings_tokens) lists them too.

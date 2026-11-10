@@ -100,9 +100,10 @@ describe DockerApp do
   end
 
   describe 'logo' do
-    it "shows the catalog's logo, even one added after the install, else the one saved then" do
-      expect(build_app(identifier: 'jellyfin', logo_url: nil).logo_url).to eq('https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/jellyfin.png')
-      expect(build_app(identifier: 'portainer', logo_url: 'https://example.com/p.png').logo_url).to eq('https://example.com/p.png')
+    it "shows the catalog's logo from the NAS, never a link saved at install" do
+      expect(build_app(identifier: 'jellyfin', logo_url: 'https://example.com/j.png').logo_url).to eq(AppCatalog.logo_url('jellyfin'))
+      expect(AppCatalog.logo_url('jellyfin')).to start_with('/apps/logos/jellyfin?v=')
+      expect(build_app(identifier: 'portainer', logo_url: 'https://example.com/p.png').logo_url).to be_nil # no logo in the catalog
     end
   end
 

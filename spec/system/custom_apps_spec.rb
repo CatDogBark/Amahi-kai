@@ -121,7 +121,7 @@ RSpec.describe 'Apps of your own', type: :system do
     click_button 'Add it'
     expect(page).to have_css('#app-install-modal', visible: :visible)
     logo = find('#docker_app_mealie img.kai-app-logo', visible: :all)
-    expect(logo[:src]).to match(%r{/apps/custom/mealie/logo\?v=\h{12}\z})
+    expect(logo[:src]).to match(%r{/apps/logos/mealie\?v=\h{12}\z})
     expect(page.evaluate_script("document.querySelector('#docker_app_mealie img.kai-app-logo').naturalWidth")).to eq(1) # it loaded
   ensure
     FileUtils.rm_f(png)

@@ -50,14 +50,11 @@ class DockerApp < ApplicationRecord
     false
   end
 
-  # The catalog's logo, which may have changed (or arrived) since the install, else the one
-  # saved then. An app of the owner's has the one kept on the NAS, or none: never a link saved
-  # when it was the catalog's.
+  # Its logo's address on the NAS (AppCatalog.logo_url): the catalog's, which comes with its
+  # signed versions, or an app of the owner's own; never a link to elsewhere (the one saved at
+  # install isn't used), so a page loads no picture from another site.
   def logo_url
-    entry = AppCatalog.find(identifier)
-    return entry[:logo_url] if entry&.dig(:custom)
-
-    entry&.dig(:logo_url).presence || super
+    AppCatalog.logo_url(identifier)
   end
 
   # The app's page, on its own port of the NAS (docs/plans/apps.md, O3): HTTPS when its manifest

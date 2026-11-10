@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+### 🔒 Security & Fixes
+
+- **Apps' logos come from your server** — The Apps page and the dashboard loaded every catalog app's logo from a public file host on each visit, so your browser told a third party you were looking, logos went missing without the internet, and a hiccup there broke them. Now each logo comes with the signed app catalog, checked like the rest of it, and your server shows it itself; nothing on Amahi-kai's pages loads a picture from another site any more. The logos of your own apps now show on the dashboard for everyone signed in, not only admins.
+
 ## [1.8.4] — 2026-11-07
 
 The fixes for the code scanner's last open findings: the address change's check carries a code of its own, and a few checks are made sturdier.
