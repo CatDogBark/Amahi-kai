@@ -211,9 +211,10 @@ for a newer release of the version it runs (a tag of the same shape: Jellyfin `1
 `12.4`, Gitea `1.27.3-rootless` finds `28.3.0-rootless`, not `nightly`), or a newer build of the
 same tag. The catalog says what each app is allowed to do and which version it starts from, signed;
 newer versions of the same image don't need a new catalog. When there's a newer version, the
-dashboard says so, the update button in the header gets its dot, the app says **Update ready**
-on the Apps page, and its page offers **Update to <version>**, next to **What's new** (the release
-notes). A new major version says so: read what's new before you update, as it can change how the
+dashboard says so, the update button in the header gets its dot, the app's card on the Apps page
+says **Update ready** with an **Update** button beside Manage, and its page offers **Update to
+<version>**, next to **What's new** (the release notes). For a new major version, the card's
+button is **Review update**: it opens the app's page, to read what's new first. A new major version says so: read what's new before you update, as it can change how the
 app works. Nothing updates on its own, and a version older than the one an app runs isn't offered.
 If the check couldn't reach an app's registry, the app's page says why. A new install takes the
 newest version of the major version the catalog names; a newer major version is then offered as

@@ -54,7 +54,7 @@ document.addEventListener('click', function(event) {
 
 // Installing an app: the install window (shared/install_terminal), titled with the app's name.
 function openAppInstall(identifier, url, name, heading) {
-  var title = document.querySelector('#app-install-modal [style*="font-family:monospace"]');
+  var title = document.getElementById('app-title'); // the window's title bar (shared/install_terminal)
   if (title) title.textContent = heading || 'Installing ' + (name || identifier) + '...';
   openInstallTerminal('app', url);
 }

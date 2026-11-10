@@ -493,7 +493,8 @@ from the signed manifest), and can't skip the data copy.
   its token (`RegistryTokens`). The result is kept per app in the database (a newer release or
   build, or current; whether it's a new major version; the notes link; when; the error when the
   registry couldn't be asked), in a migration safe to rerun.
-- [x] **Shown where catalog updates show** (1.8.5): the app's card (Update ready), its page ("12.4 is
+- [x] **Shown where catalog updates show** (1.8.5): the app's card (Update ready; since 1.8.6
+  **Update** beside Manage, or **Review update** to the app's page for a new major version), its page ("12.4 is
   out", Update to 12.4, the notes link, the major version's warning), the dashboard's App updates
   notice, the header's count and the System Update dialog. A catalog bump still counts (the newer
   of the two). The app's page says when it was last checked. A failed check is said there only,
