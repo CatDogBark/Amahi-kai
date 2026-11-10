@@ -1,0 +1,21 @@
+# Checks every installed app's image for a newer version (docs/plans/apps.md, P4.9) and keeps what
+# it finds, for the pages to show; it updates nothing. As the app's user, never root: a private
+# image's lookups go through the root helper, as the web app's do.
+# Started by amahi-kai-app-versions.timer.
+[Unit]
+Description=Amahi-kai: check the apps for newer versions
+After=network-online.target mariadb.service amahi-kai.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=amahi
+Group=amahi
+WorkingDirectory=/opt/amahi-kai
+EnvironmentFile=/etc/amahi-kai/amahi.env
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
+ExecStart=/usr/bin/bundle exec rails apps:check_versions
+TimeoutStartSec=10min
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=amahi-kai-app-versions

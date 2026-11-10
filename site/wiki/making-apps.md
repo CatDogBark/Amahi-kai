@@ -50,8 +50,10 @@ When someone clicks **Install**, Amahi-kai's root helper:
      devices by their names (Network → Devices), not addresses that change.
 6. Starts it, and announces it on the LAN as "<Name> on <server>", so devices can find it.
 
-**Updates:** when your manifest's `image` changes in the catalog, each server's Apps page offers
-**Update**. Amahi-kai copies the app's folders first (except those marked `backup: false`, and
+**Updates:** each server checks your app's image every 6 hours for a newer release of the tag in
+your manifest (a tag of the same shape: `1.27.3-rootless` finds `28.3.0-rootless`, not
+`nightly-rootless`), or a newer build of it, and offers **Update** (Amahi-kai 1.8.5 and later; a
+change of `image` in the catalog does too). Amahi-kai copies the app's folders first (except those marked `backup: false`, and
 snapshots a dataset instead of copying it), starts
 the new version, and waits up to 5 minutes for it to be healthy. If it isn't, Amahi-kai puts the
 old version and its data back. "Healthy" means your image's Docker `HEALTHCHECK` passes, or,
@@ -152,9 +154,10 @@ environment:
   a pool. An optional one is left out until a pool is chosen, so your app must run without it.
   Before an update, Amahi-kai snapshots the dataset instead of copying it, and rolls back to the
   snapshot if the update fails. It needs `requires: 3`.
-- **`logo`** is an `https` link. A logo of your own goes in the catalog's `logos/` folder. (An app
-  added on the Apps page as one of your own takes a picture instead, kept on your server: its
-  file's `logo` isn't used.)
+- **The logo** is `logos/<id>.png` (or `.jpg`, `.webp`, `.svg`; 256 KB at most) in the catalog's
+  repo, beside `apps/`. It comes with the catalog's signed versions, and each server shows it
+  itself. **`logo`**, an `https` link, is only for servers older than 1.8.5. (An app added on the
+  Apps page as one of your own takes a picture instead, kept on your server.)
 - **`web_tls: true`** says the app's page is HTTPS with its own certificate:
   **Open** goes to `https://`, and the app is announced on the LAN as HTTPS. It needs
   `requires: 2`, since older Amahi-kai versions don't know it.
@@ -213,7 +216,7 @@ It prints `<id>: ok` for every app, or what's wrong.
 ## Adding it to the catalog
 
 1. Fork [amahi-kai-apps](https://github.com/CatDogBark/amahi-kai-apps) and add `apps/<id>.yml`
-   (and `logos/<id>.svg`, if your logo is your own).
+   and its logo, `logos/<id>.png` (or `.svg`, `.jpg`, `.webp`).
 2. Open a pull request. Its checks run Amahi-kai's own manifest checks, so a manifest a server
    would refuse can't be merged.
 3. Once it's merged, the maintainer signs the catalog's next version (a `catalog-N` tag, with a
@@ -222,16 +225,20 @@ It prints `<id>: ok` for every app, or what's wrong.
 
 ### Releasing a new version
 
-Change `image` to the new tag and digest, and open a pull request. From an Amahi-kai checkout,
-`script/app-versions` finds newer versions on the registry and writes them for you:
+Nothing to do in the catalog: publish the new version as a tag of the same shape on your image's
+registry, and each server (Amahi-kai 1.8.5 and later) finds it within 6 hours and offers it. A
+new major version is offered too, with a word to read what's new first, so say in your release
+notes what changes. Change the catalog only when what your app needs changes (a port, a folder, a
+setting), or to raise the version a new install starts from: change `image` to the new tag and
+digest, and open a pull request. From an Amahi-kai checkout, `script/app-versions` finds newer
+versions on the registry and writes them for you:
 
 ```bash
 script/app-versions --catalog ../amahi-kai-apps/apps --update yourapp
 ```
 
-Read the release notes first: a new major version can need changes to the manifest. Within 6
-hours of the merge, every server running your app marks it **Update ready** on the Apps page, with
-**Update** on its page, and the update notice on its dashboard.
+Read the release notes first: a new major version can need changes to the manifest. Servers older
+than 1.8.5 offer only the version the catalog names, once it's in a signed version.
 
 ### New manifest fields
 

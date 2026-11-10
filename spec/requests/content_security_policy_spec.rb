@@ -1,7 +1,8 @@
 require 'rails_helper'
 
 # The policy is enforced (not report-only): scripts only from Amahi-kai itself, no inline
-# scripts; logos from https sites; the PDF preview's frame from Amahi-kai itself.
+# scripts; pictures only from Amahi-kai itself (apps' logos are served by the NAS, P4.10); the
+# PDF preview's frame from Amahi-kai itself.
 RSpec.describe 'Content-Security-Policy', type: :request do
   def directives(header)
     header.split(';').map(&:strip).to_h { |d| name, *values = d.split; [name, values] }
@@ -17,7 +18,7 @@ RSpec.describe 'Content-Security-Policy', type: :request do
       expect(policy['default-src']).to eq(["'self'"]), path
       expect(policy['object-src']).to eq(["'none'"]), path
       expect(policy['frame-src']).to eq(["'self'"]), path
-      expect(policy['img-src']).to include("'self'", 'https:'), path
+      expect(policy['img-src']).to eq(["'self'", 'data:']), path
       expect(policy['form-action']).to eq(["'self'"]), path
     end
   end

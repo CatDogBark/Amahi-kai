@@ -84,6 +84,7 @@ for unit in amahi-kai.service amahi-kai-indexer.service amahi-kai-indexer.timer 
             amahi-kai-snapshots.service amahi-kai-snapshots.timer amahi-kai-app-firewall.service \
             amahi-kai-app-firewall-early.service amahi-kai-app-shares.service \
             amahi-kai-app-backups.service amahi-kai-app-backups.timer \
+            amahi-kai-app-versions.service amahi-kai-app-versions.timer \
             amahi-kai-trash.service amahi-kai-trash.timer \
             amahi-kai-tailscale.service amahi-kai-tailscale.path; do
   install -o root -g root -m 0644 "$APP_DIR/config/systemd/$unit" "/etc/systemd/system/$unit"
@@ -109,6 +110,8 @@ if [[ -d /run/systemd/system ]]; then
     || echo "Couldn't enable amahi-kai-snapshots.timer; pools won't take snapshots on their own" >&2
   systemctl enable --now amahi-kai-app-backups.timer >/dev/null 2>&1 \
     || echo "Couldn't enable amahi-kai-app-backups.timer; app update copies won't be deleted after 30 days" >&2
+  systemctl enable --now amahi-kai-app-versions.timer >/dev/null 2>&1 \
+    || echo "Couldn't enable amahi-kai-app-versions.timer; the Apps page's Check now still checks the apps" >&2
   systemctl enable --now amahi-kai-trash.timer >/dev/null 2>&1 \
     || echo "Couldn't enable amahi-kai-trash.timer; the Trash won't delete old files on its own" >&2
   systemctl enable --now amahi-kai-tailscale.path >/dev/null 2>&1 \

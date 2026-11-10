@@ -4,6 +4,8 @@
 # ports, secrets and firewall, and checking the catalog.
 module AmahiHelper
   APP_IMAGE = %r{\A[a-z0-9]+(?:[._/-][a-z0-9]+)*:[A-Za-z0-9._-]{1,64}@sha256:[0-9a-f]{64}\z}
+  # A version on an app's track (P4.9, app_on_track): a tag, as a registry spells them
+  APP_TRACK_TAG = /\A[A-Za-z0-9][A-Za-z0-9._-]{0,63}\z/
 
   APP_FOLDER = /\A[a-z][a-z0-9_-]{0,31}\z/
 
@@ -175,11 +177,13 @@ module AmahiHelper
     # Changing an app's shares is a reinstall, which keeps the version it runs and its settings
     # (APP_DEFINITIONS): only apps.update moves it to the manifest's. An app with dataset folders
     # (P4.6) takes the ZFS pool they go on (pool), the first time; after that they stay on theirs
-    # (APP_STORAGE). A job of its own (APP_JOBS).
+    # (APP_STORAGE). A first install of a catalog app may ask for a newer version on its track
+    # (tag, app_on_track, P4.9). A job of its own (APP_JOBS).
     'apps.install' => {
-      params: %w[app shares pool],
+      params: %w[app shares pool tag],
       validate: lambda { |a|
         engine_installed! && app_install_request(a['app']).then do |v|
+          v = v.merge(manifest: app_on_track(v[:id], v[:manifest], a['tag'], install: true)) unless a['tag'].nil?
           v.merge(shares: app_share_choices(a['shares'], v[:id], v[:manifest]), pool: app_pool_choice(v[:id], v[:manifest], a['pool']))
         end
       },
@@ -203,10 +207,15 @@ module AmahiHelper
     },
     # Updates an installed app to its manifest's version: a copy of its data first, the new
     # version started, and the old version and the copy put back if it isn't healthy in time.
+    # Updates an app to its manifest's version, or to a newer one on its track (tag, app_on_track,
+    # P4.9), with its data copied first and its old version back if the new one isn't healthy.
     'apps.update' => {
-      params: %w[app shares],
+      params: %w[app shares tag],
       validate: lambda { |a|
-        engine_installed! && app_request(a['app']).then { |v| v.merge(shares: app_share_choices(a['shares'], v[:id], v[:manifest])) }
+        engine_installed! && app_request(a['app']).then do |v|
+          v = v.merge(manifest: app_on_track(v[:id], v[:manifest], a['tag'])) unless a['tag'].nil?
+          v.merge(shares: app_share_choices(a['shares'], v[:id], v[:manifest]))
+        end
       },
       plan: ->(v) { [[:update_app, v[:id], v[:manifest], v[:shares]]] }
     },
@@ -365,6 +374,44 @@ module AmahiHelper
       id = app_id(value)
       before = definition_from(id, Hash(app_backup_info(id))['definition'])
       { id: id, manifest: tailscale_ready_for!(before || app_definition(id) || app_manifest(id)) }
+    end
+
+    # A catalog app at a newer version on its track (P4.9): the signed catalog covers what the app
+    # is allowed to do, and its version floats on the manifest's tag. +value+ must have that tag's
+    # shape (its digits may change, nothing else: 12.1 takes 12.4, 1.27.3-rootless takes
+    # 28.3.0-rootless, not nightly-rootless), and can't be lower than the manifest's tag, nor than
+    # the version the app runs (the same tag is a newer build of it). The repository is always the
+    # manifest's. The build is the one the registry names for the tag when it's downloaded
+    # (app_pull_track); an app of your own's file says its version, and a reinstall keeps the one
+    # it ran, so neither takes one.
+    def app_on_track(id, manifest, value, install: false)
+      raise Refused, "#{id} is an app of your own: its file says which version it runs" if custom_app?(id)
+      raise Refused, "#{id} is installed: a reinstall keeps the version it runs, and Update changes it" if install && app_image(id)
+
+      tag = string(value, 'tag', max: 64)
+      raise Refused, "the tag #{tag.inspect} must be letters, digits, . _ or - (not first)" unless tag.match?(APP_TRACK_TAG)
+
+      floor = image_tag(manifest[:image])
+      raise Refused, "#{tag} isn't a version of #{id} like the catalog's #{floor}" unless tag.match?(app_track_shape(floor))
+      raise Refused, "#{tag} is older than the catalog's #{floor}" if version_below?(tag, floor)
+
+      running = app_image(id)
+      raise Refused, "#{tag} is older than the #{image_tag(running)} #{id} runs" if running && version_below?(tag, image_tag(running))
+
+      repo = manifest[:image].sub(/@.*\z/, '').delete_suffix(":#{floor}")
+      manifest.merge(image: "#{repo}:#{tag}", track: tag)
+    end
+
+    # A tag's shape, its digits as wildcards (AppVersions.shape in the web app, the same rule)
+    def app_track_shape(tag)
+      Regexp.new("\\A#{Regexp.escape(tag).gsub(/\d+/, '\\d+')}\\z")
+    end
+
+    # The build of the version on the app's track asked for (app_on_track): downloaded by its tag,
+    # and pinned to the digest the registry named for that tag then.
+    def app_pull_track(manifest)
+      say("Downloading #{manifest[:image]}...")
+      manifest.except(:track).merge(image: "#{manifest[:image]}@#{engine_pull_tag(manifest[:image])}")
     end
 
     # An app reached through Tailscale (APP_ACCESS) is refused, before anything changes, while
@@ -678,6 +725,7 @@ module AmahiHelper
     end
 
     def do_install_app(id, manifest, shares = [], keep_version = false, pool = nil)
+      manifest = app_pull_track(manifest) if manifest[:track]
       if keep_version && (running = app_image(id)) && running != manifest[:image]
         say("Keeping the version it runs (#{image_tag(running)})")
         manifest = manifest.merge(image: running)
@@ -1258,6 +1306,7 @@ module AmahiHelper
     # same copy first, health check and way back as a new version gets.
     def do_update_app(id, manifest, shares)
       from = app_image(id) or raise Failed, "#{id} isn't installed"
+      manifest = app_pull_track(manifest) if manifest[:track]
       # What it runs now, for the copy and a way back: the definition its container was made from
       # (one made before these were kept: the catalog's, on the image it runs)
       definition = app_definition(id)

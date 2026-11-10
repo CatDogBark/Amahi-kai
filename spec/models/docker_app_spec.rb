@@ -97,12 +97,58 @@ describe DockerApp do
       expect(AppCatalog.version_below?('1.27.3-rootless', '1.28.0-rootless')).to be true
       expect(AppCatalog.version_below?('latest', '1.0')).to be false
     end
+
+    # P4.9: the update check's find, beside the catalog's version: Update brings the newer
+    describe 'and a newer one the update check found' do
+      let(:current) { AppCatalog.find('gitea')[:image] }
+
+      def found(tag, kind: 'newer', major: false, digest: '9')
+        { newer_tag: tag, newer_image: "gitea/gitea:#{tag}@sha256:#{digest * 64}", newer_kind: kind, newer_major: major,
+          newer_notes: "https://github.com/go-gitea/gitea/releases/tag/v#{tag[/\A[\d.]+/]}" }
+      end
+
+      it 'offers it, with what Update asks the helper for: its tag' do
+        app = build_app(image: current, **found('28.3.0-rootless', major: true))
+        expect(app).to be_update_available
+        expect(app).not_to be_catalog_update
+        expect(app.update_target).to include(tag: '28.3.0-rootless', kind: 'newer', major: true, from: :check,
+                                             notes: 'https://github.com/go-gitea/gitea/releases/tag/v28.3.0')
+        expect(app.update_tag).to eq('28.3.0-rootless')
+      end
+
+      it "takes the newer of the catalog's and the one found, and the catalog's needs no tag" do
+        older = "gitea/gitea:1.27.2-rootless@sha256:#{'b' * 64}"
+        expect(build_app(image: older, **found('1.27.9-rootless')).update_target).to include(tag: '1.27.9-rootless', from: :check)
+        expect(build_app(image: older, **found('1.27.3-rootless', kind: 'rebuilt')).update_tag).to be_nil # not a newer build of what it runs
+        app = build_app(image: older, **found('1.27.2-rootless', kind: 'rebuilt'))
+        expect(app.update_target).to include(tag: '1.27.3-rootless', from: :catalog)
+        expect(app.update_tag).to be_nil
+      end
+
+      it 'offers a newer build of the tag it runs, and nothing once it runs it or an update brought a newer one' do
+        app = build_app(image: current, **found(AppCatalog.tag(current), kind: 'rebuilt'))
+        expect(app.update_target).to include(kind: 'rebuilt', from: :check)
+        expect(app.update_tag).to eq(AppCatalog.tag(current))
+        expect(build_app(**found('1.27.9-rootless'), image: "gitea/gitea:1.27.9-rootless@sha256:#{'9' * 64}")).not_to be_update_available
+        expect(build_app(**found('1.27.9-rootless'), image: "gitea/gitea:28.0.0-rootless@sha256:#{'c' * 64}")).not_to be_update_available
+        expect(build_app(**found('1.27.9-rootless'), image: "gitea/gitea:1.27.9-rootless@sha256:#{'c' * 64}")).not_to be_update_available
+      end
+
+      it "asks for no tag for an app of your own (its file says its version), and forgets a find once it's spent" do
+        app = DockerApp.create!(identifier: 'gitea', name: 'Gitea', image: current, status: 'running', **found('28.3.0-rootless'))
+        allow(app).to receive(:custom?).and_return(true)
+        expect(app.update_tag).to be_nil
+        app.forget_newer!
+        expect(app.reload).to have_attributes(newer_tag: nil, newer_image: nil, newer_kind: nil, newer_major: false, newer_notes: nil)
+      end
+    end
   end
 
   describe 'logo' do
-    it "shows the catalog's logo, even one added after the install, else the one saved then" do
-      expect(build_app(identifier: 'jellyfin', logo_url: nil).logo_url).to eq('https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/jellyfin.png')
-      expect(build_app(identifier: 'portainer', logo_url: 'https://example.com/p.png').logo_url).to eq('https://example.com/p.png')
+    it "shows the catalog's logo from the NAS, never a link saved at install" do
+      expect(build_app(identifier: 'jellyfin', logo_url: 'https://example.com/j.png').logo_url).to eq(AppCatalog.logo_url('jellyfin'))
+      expect(AppCatalog.logo_url('jellyfin')).to start_with('/apps/logos/jellyfin?v=')
+      expect(build_app(identifier: 'portainer', logo_url: 'https://example.com/p.png').logo_url).to be_nil # no logo in the catalog
     end
   end
 

@@ -393,14 +393,16 @@ module AmahiHelper
       "can't be read: #{e.message.lines.first.to_s.strip}"
     end
 
-    # --check-catalog DIR: every DIR/<id>.yml checked as the update check's catalog fetch would, and no host
-    # port listed by two apps. Prints a line per app; 0 when they all pass.
+    # --check-catalog DIR: every DIR/<id>.yml checked as the update check's catalog fetch would, no host
+    # port listed by two apps, and the logos beside them (check_catalog_logos). Prints a line per
+    # app; 0 when they all pass.
     def check_catalog(dir, output)
       paths = Dir[File.join(dir, '*.yml')].sort
       return output.puts("no app manifests in #{dir}") || 1 if paths.empty?
 
       ports = Hash.new { |h, k| h[k] = [] }
-      failed = false
+      failed = check_catalog_logos(File.join(File.dirname(File.expand_path(dir)), 'logos'),
+                                   paths.map { |path| File.basename(path, '.yml') }, output)
       paths.each do |path|
         id = File.basename(path, '.yml')
         content = File.read(path)
@@ -418,6 +420,29 @@ module AmahiHelper
         failed = true
       end
       failed ? 1 : 0
+    end
+
+    # The logos in +logos_dir+ (a catalog's logos/, beside its apps/), checked as the update check's
+    # fetch does: each an app's, a picture of its type, APP_LOGO_MAX_BYTES at most. Prints a line
+    # for each that fails, else "logos: ok"; true when one fails. A catalog from before logos has
+    # none, which is fine.
+    def check_catalog_logos(logos_dir, ids, output)
+      names = Dir[File.join(logos_dir, '*')].map { |path| File.basename(path) }.reject { |name| name.start_with?('LICENSE', 'README') }.sort
+      problems = names.filter_map do |name|
+        path = File.join(logos_dir, name)
+        id = File.basename(name, '.*')
+        kind = File.extname(name).delete_prefix('.')
+        problem = if !ids.include?(id) then "there's no app called #{id}"
+                  elsif !APP_LOGO_TYPES.include?(kind) then 'not a .png, .jpg, .webp or .svg file'
+                  elsif !File.file?(path) || File.symlink?(path) then 'not a file'
+                  elsif File.size(path) > APP_LOGO_MAX_BYTES then "over #{APP_LOGO_MAX_BYTES / 1024} KB"
+                  elsif logo_type(File.binread(path)) != kind then "isn't a #{kind} picture"
+                  end
+        "logos/#{name}: #{problem}" if problem
+      end
+      problems.each { |line| output.puts(line) }
+      output.puts('logos: ok') if problems.empty? && names.any?
+      problems.any?
     end
 
     def ssh_hardening(value)
@@ -587,9 +612,10 @@ module AmahiHelper
       fetched = fetched.merge(read_fetched_catalog(fetched[:tag])) unless fetched[:error]
       return last.merge('checked_at' => checked, 'error' => fetched[:error]) if fetched[:error]
 
-      install_catalog(fetched[:files])
+      install_catalog(fetched[:files], fetched[:logos])
       { 'checked_at' => checked, 'tag' => fetched[:tag], 'number' => fetched[:number], 'signer' => fetched[:signer],
-        'commit' => fetched[:commit], 'apps' => fetched[:files].keys.sort, 'problems' => fetched[:problems], 'error' => nil }
+        'commit' => fetched[:commit], 'apps' => fetched[:files].keys.sort, 'logos' => fetched[:logos].keys.sort,
+        'problems' => fetched[:problems], 'error' => nil }
     end
 
     # The catalog's newest signed version (CATALOG_TAG), fetched into CATALOG_SRC: { tag:, number:,
@@ -646,8 +672,9 @@ module AmahiHelper
                      unsetenv_others: true, chdir: '/')
     end
 
-    # { commit:, files: { id => manifest }, problems: [{ 'app' =>, 'problem' => }] } for the
-    # apps/ of +tag+'s commit, or { error: } when none of them passes.
+    # { commit:, files: { id => manifest }, logos: { id => [type, bytes] }, problems: [{ 'app' =>,
+    # 'problem' => }] } for the apps/ and logos/ of +tag+'s commit, or { error: } when none of the
+    # apps passes.
     def read_fetched_catalog(tag)
       out, _err, status = catalog_git('rev-parse', '--verify', '--quiet', "refs/tags/#{tag}^{commit}")
       return { error: "the catalog's #{tag} has no commit" } unless status.success?
@@ -674,19 +701,50 @@ module AmahiHelper
       end
       return { error: 'no app in the fetched catalog passes the checks', problems: problems } if files.empty?
 
-      { commit: commit, files: files, problems: problems }
+      { commit: commit, files: files, logos: fetched_logos(commit, files.keys), problems: problems }
     end
 
-    # The checked manifests become APP_CATALOG/apps: written beside it, then swapped in.
-    def install_catalog(files)
+    # { id => [type, bytes] }: the logos in logos/ of +commit+ (logos/<id>.<type>, P4.10) of the
+    # apps kept, each a picture of its type by its bytes (logo_type, as an app of your own's) and
+    # APP_LOGO_MAX_BYTES at most; the first in APP_LOGO_TYPES' order when an app has two. Any other
+    # is left out, and its app shows none. A catalog from before logos has no logos/.
+    def fetched_logos(commit, ids)
+      listing, _err, status = catalog_git('ls-tree', '-l', commit, 'logos/')
+      return {} unless status.success?
+
+      logos = {}
+      listing.lines(chomp: true).first(CATALOG_MAX_APPS * APP_LOGO_TYPES.size).each do |line|
+        meta, path = line.split("\t", 2)
+        _mode, type, object, size = meta.to_s.split
+        name = File.basename(path.to_s)
+        kind = File.extname(name).delete_prefix('.')
+        id = File.basename(name, '.*')
+        next unless type == 'blob' && ids.include?(id) && APP_LOGO_TYPES.include?(kind) && size.to_i <= APP_LOGO_MAX_BYTES
+        next if logos[id] && APP_LOGO_TYPES.index(logos[id][0]) < APP_LOGO_TYPES.index(kind)
+
+        bytes, _err, status = catalog_git('cat-file', 'blob', object)
+        logos[id] = [kind, bytes.b] if status.success? && logo_type(bytes) == kind
+      end
+      logos
+    end
+
+    # The checked manifests become APP_CATALOG/apps, and their logos APP_CATALOG/logos: written
+    # beside it, then swapped in.
+    def install_catalog(files, logos = {})
       fresh = "#{APP_CATALOG}.new"
       old = "#{APP_CATALOG}.old"
       FileUtils.rm_rf([fresh, old])
-      FileUtils.mkdir_p(File.join(fresh, 'apps'), mode: 0o755)
-      File.chmod(0o755, fresh)
+      %w[apps logos].each { |dir| FileUtils.mkdir_p(File.join(fresh, dir), mode: 0o755) }
+      [fresh, File.join(fresh, 'apps'), File.join(fresh, 'logos')].each { |dir| File.chmod(0o755, dir) }
       files.each do |id, content|
         File.open(File.join(fresh, 'apps', "#{id}.yml"), File::WRONLY | File::CREAT | File::EXCL | File::NOFOLLOW, 0o644) do |f|
           f.write(content)
+        end
+      end
+      logos.each do |id, (kind, bytes)|
+        File.open(File.join(fresh, 'logos', "#{id}.#{kind}"), File::WRONLY | File::CREAT | File::EXCL | File::NOFOLLOW, 0o644) do |f|
+          f.binmode
+          f.write(bytes)
         end
       end
       File.rename(APP_CATALOG, old) if File.exist?(APP_CATALOG)

@@ -149,12 +149,16 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
   `http://host:port` (`spec/lib/addresses_spec.rb` fails CI if you do). HTTPS is planned as an
   optional front door, with plain HTTP staying fully working (CatDogBark, 2026-10-06; roadmap), and it
   depends on this.
-- **App versions and new apps are PRs on the catalog's repo** (`amahi-kai-apps`), not here:
-  `script/app-versions --catalog ../amahi-kai-apps/apps --update <app>`. Servers fetch only its
-  signed `catalog-N` tags (the maintainer signs the next one after merging; its README says how),
-  never `main`. `config/apps` is only the
-  copy that comes with Amahi-kai (`config/apps/README.md`); the wiki's `site/wiki/making-apps.md`
-  is the guide to making one.
+- **New apps, and changes to what an app may do, are PRs on the catalog's repo** (`amahi-kai-apps`),
+  not here. Servers fetch only its signed `catalog-N` tags (the maintainer signs the next one after
+  merging; its README says how), never `main`; each app's logo comes with them (`logos/`, served
+  by the NAS: `AppLogosController`). **An app's version floats** (docs/plans/apps.md, P4.9): every
+  6 hours each server asks an installed app's image for a newer tag of the manifest's shape
+  (`AppUpdateCheck`), and `apps.update`/`apps.install` take that `tag`, checked by the helper
+  (`app_on_track`). So no catalog change is needed for a new version; `script/app-versions
+  --catalog ../amahi-kai-apps/apps --update <app>` only raises the version a new install starts
+  from. `config/apps` and `config/logos` are only the copy that comes with Amahi-kai
+  (`config/apps/README.md`); the wiki's `site/wiki/making-apps.md` is the guide to making one.
 - `lib/system_services.rb` is the one list of system services (dashboard, System Status and
   Settings → Servers). The services it gives `actions` to must match the helper's `SERVICES` list
   (a spec checks).

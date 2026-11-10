@@ -186,6 +186,22 @@ module AmahiHelper
       end
     end
 
+    # Downloads +ref+ (name:tag) as engine_pull does, and returns the build the registry named for
+    # its tag then: the digest docker pull ends with ("Digest: sha256:..."). An app updated to a
+    # version on its track is pinned to it (P4.9).
+    def engine_pull_tag(ref)
+      registry_signed_in(ref) do |config|
+        digest = nil
+        argv = [DOCKER, *(config ? ['--config', config] : []), 'pull', ref]
+        tail, status = stream_command(ENV_MIN, argv) { |line| digest = Regexp.last_match(1) if line =~ /\ADigest: (sha256:\h{64})\s*\z/ }
+        raise Failed, "docker exited #{status.exitstatus}: #{last_lines(tail, 3)}" unless status.success?
+
+        digest or raise Failed, "docker didn't say which build of #{ref} it downloaded"
+      end
+    rescue SystemCallError => e
+      raise Failed, "#{DOCKER}: #{e.message}"
+    end
+
     def engine_remove_image(image)
       run_command([DOCKER, 'image', 'rm', image, { allow_failure: true }])
     end

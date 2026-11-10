@@ -21,15 +21,57 @@ class DockerApp < ApplicationRecord
     AppCatalog.tag(image)
   end
 
-  # The catalog has a newer version of it (P4.5): System Update brought a newer manifest. One
-  # with a lower version number isn't an update (the root helper refuses it too).
+  # An update is waiting: the catalog has a newer version of it, or the update check found one.
   def update_available?
+    catalog_update? || newer_found.present?
+  end
+
+  # The catalog has a newer version of it (P4.5): a newer manifest came with the catalog (for an
+  # app of your own, its file names one its container doesn't run yet). One with a lower version
+  # number isn't an update (the root helper refuses it too).
+  def catalog_update?
     entry = AppCatalog.find(identifier)
     entry.present? && image.present? && entry[:image] != image && !AppCatalog.version_below?(AppCatalog.tag(entry[:image]), version)
   end
 
   def catalog_version
     AppCatalog.tag(AppCatalog.find(identifier)&.dig(:image))
+  end
+
+  # A newer version the update check found that it doesn't run yet (P4.9, AppUpdateCheck), or
+  # nil: { tag:, image:, kind: 'newer' or 'rebuilt' (a newer build of the tag it runs), major: (a
+  # new major version), notes: (its release notes) }. Not one it runs already, or older than one
+  # an update has brought since.
+  def newer_found
+    return nil if newer_image.blank? || newer_tag.blank? || newer_image == image
+    return nil if newer_kind == 'newer' && (newer_tag == version || AppCatalog.version_below?(newer_tag, version))
+    return nil if newer_kind == 'rebuilt' && newer_tag != version
+
+    { tag: newer_tag, image: newer_image, kind: newer_kind, major: newer_major == true, notes: newer_notes }
+  end
+
+  # What Update brings, or nil: { tag:, kind:, major:, notes:, from: :catalog or :check }, the
+  # newer of the catalog's version and the one the update check found (P4.9). A catalog app's
+  # update to the one found asks the helper for that tag; an app of your own's saves it in its
+  # file first (CustomAppsController#version).
+  def update_target
+    catalog = { tag: catalog_version, kind: 'newer', major: false, notes: nil, from: :catalog } if catalog_update?
+    found = newer_found&.merge(from: :check)
+    return catalog || found unless catalog && found
+
+    AppCatalog.version_below?(catalog[:tag], found[:tag]) || (catalog[:tag] == found[:tag] && found[:kind] == 'rebuilt') ? found : catalog
+  end
+
+  # The tag apps.update asks for, for a catalog app whose update is one the check found; nil for
+  # the catalog's own version, and for an app of your own (its file says its version).
+  def update_tag
+    target = update_target
+    target[:tag] if target && target[:from] == :check && !custom?
+  end
+
+  # What the update check found is spent once an update brings that version, or another.
+  def forget_newer!
+    update_columns(newer_tag: nil, newer_image: nil, newer_kind: nil, newer_major: false, newer_notes: nil)
   end
 
   # An app of the owner's own (CustomApp), not the catalog's.
@@ -50,14 +92,11 @@ class DockerApp < ApplicationRecord
     false
   end
 
-  # The catalog's logo, which may have changed (or arrived) since the install, else the one
-  # saved then. An app of the owner's has the one kept on the NAS, or none: never a link saved
-  # when it was the catalog's.
+  # Its logo's address on the NAS (AppCatalog.logo_url): the catalog's, which comes with its
+  # signed versions, or an app of the owner's own; never a link to elsewhere (the one saved at
+  # install isn't used), so a page loads no picture from another site.
   def logo_url
-    entry = AppCatalog.find(identifier)
-    return entry[:logo_url] if entry&.dig(:custom)
-
-    entry&.dig(:logo_url).presence || super
+    AppCatalog.logo_url(identifier)
   end
 
   # The app's page, on its own port of the NAS (docs/plans/apps.md, O3): HTTPS when its manifest

@@ -205,11 +205,19 @@ Docker to be running.
 
 ### Updating an app
 
-Each installed app's page says which version it runs. When the update check (every 6 hours, or
-**Check now**) finds a newer version of an app in the catalog, the dashboard says so, the update
-button in the header gets its dot, the app says **Update ready** on the Apps page, and its page
-offers **Update to <version>**, next to **What's new** (the release notes). Nothing updates on its own, and a catalog version older than
-the one an app runs isn't offered.
+Each installed app's page says which version it runs, and when Amahi-kai last checked for a
+newer one. Every 6 hours, and when you press **Check now**, it asks each installed app's image
+for a newer release of the version it runs (a tag of the same shape: Jellyfin `12.1` finds
+`12.4`, Gitea `1.27.3-rootless` finds `28.3.0-rootless`, not `nightly`), or a newer build of the
+same tag. The catalog says what each app is allowed to do and which version it starts from, signed;
+newer versions of the same image don't need a new catalog. When there's a newer version, the
+dashboard says so, the update button in the header gets its dot, the app says **Update ready**
+on the Apps page, and its page offers **Update to <version>**, next to **What's new** (the release
+notes). A new major version says so: read what's new before you update, as it can change how the
+app works. Nothing updates on its own, and a version older than the one an app runs isn't offered.
+If the check couldn't reach an app's registry, the app's page says why. A new install takes the
+newest version of the major version the catalog names; a newer major version is then offered as
+an update, with its word to read what's new.
 
 **Update**:
 
@@ -274,9 +282,11 @@ On its page:
   it goes back by itself if it doesn't come up, as an update does; **Undo update** works the same.
   A change only to how it's listed (its name, description, category, how to sign in, or its logo)
   is saved without restarting it.
-- **Check for a newer version** asks the image's registry for a newer release of the same image
-  (a tag of the same shape: `v2.4.1` finds `v2.5.0`, not `nightly`), or a newer build of its tag.
-  Amahi-kai looks only when you ask, and never updates an app of your own by itself.
+- **Newer versions:** every 6 hours, and when you press **Check for a newer version**, Amahi-kai
+  asks the image's registry for a newer release of the same image (a tag of the same shape:
+  `v2.4.1` finds `v2.5.0`, not `nightly`), or a newer build of its tag. What it finds stays on
+  the app's page and shows with the other updates, on the dashboard and in the header. It never
+  updates an app of your own by itself.
 
 **Remove**, on its card once it's uninstalled and its data deleted, forgets it. Its name is its
 own: one the catalog has, or one an app on the server used before (its data still kept), is

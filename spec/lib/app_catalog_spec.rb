@@ -22,7 +22,7 @@ RSpec.describe AppCatalog do
       expect(vaultwarden[:sign_in]).to start_with("Open it from a device on your Tailscale network")
       expect(vaultwarden).to include(access: "tailscale", requires: 5, installable: true)
       expect(vaultwarden[:image]).to start_with("vaultwarden/server:1.37.3@sha256:")
-      expect(vaultwarden[:logo_url]).to start_with("https://")
+      expect(vaultwarden[:logo_url]).to start_with("/apps/logos/vaultwarden?v=") # served by the NAS
       expect(vaultwarden[:web_tls]).to be(false)
     end
 
@@ -43,8 +43,16 @@ RSpec.describe AppCatalog do
       expect(AppCatalog.network_words(nil)).to eq('Reaches the internet, not the devices on your network')
     end
 
-    it "has a logo for each app, on https" do
-      AppCatalog.all.each { |app| expect(app[:logo_url]).to start_with("https://"), app[:identifier] }
+    # P4.10: the catalog's logos come with it (config/logos in the copy here), served by the NAS
+    it "has a logo for each app, served by the NAS at an address naming the picture" do
+      AppCatalog.all.each do |app|
+        logo = AppCatalog.logo(app[:identifier])
+        expect(logo).to include(path: File.join(AppCatalog::CATALOG_LOGOS_DIR, "#{app[:identifier]}.png"), type: "image/png"), app[:identifier]
+        expect(app[:logo_url]).to eq("/apps/logos/#{app[:identifier]}?v=#{logo[:version]}")
+        expect(AppCatalog.logo_url(app[:identifier])).to eq(app[:logo_url])
+      end
+      expect(AppCatalog.logo("../config/logos/gitea")).to be_nil
+      expect(AppCatalog.logo("nosuchapp")).to be_nil
     end
   end
 
@@ -95,6 +103,18 @@ RSpec.describe AppCatalog do
       ensure
         FileUtils.rm_f(path)
       end
+    end
+
+    it "has the logos the fetch brought, else the ones in the copy here" do
+      logos = File.join(File.dirname(fetched), "logos")
+      FileUtils.mkdir_p(logos)
+      File.write("#{logos}/gitea.svg", "<svg xmlns='http://www.w3.org/2000/svg'/>")
+      AppCatalog.reload!
+      version = Digest::SHA256.hexdigest("<svg xmlns='http://www.w3.org/2000/svg'/>")[0, 12]
+      expect(AppCatalog.fetched_logos_dir).to eq(logos)
+      expect(AppCatalog.logo("gitea")).to eq(path: "#{logos}/gitea.svg", type: "image/svg+xml", version: version)
+      expect(AppCatalog.find("gitea")[:logo_url]).to eq("/apps/logos/gitea?v=#{version}")
+      expect(AppCatalog.logo("jellyfin")[:path]).to eq(File.join(AppCatalog::CATALOG_LOGOS_DIR, "jellyfin.png")) # not listed: the copy's
     end
 
     it "is what the pages list, read again when the helper swaps in a new one" do
@@ -157,10 +177,18 @@ RSpec.describe AppCatalog do
       File.write("#{custom}/gitea.svg", "<svg/>") # no app file: no app
       AppCatalog.reload!
       version = Digest::SHA256.hexdigest("RIFF....WEBPVP8 ")[0, 12]
-      expect(AppCatalog.find("mealie")[:logo_url]).to eq("/apps/custom/mealie/logo?v=#{version}")
+      expect(AppCatalog.find("mealie")[:logo_url]).to eq("/apps/logos/mealie?v=#{version}")
       expect(AppCatalog.custom_logo("mealie")).to eq(path: "#{custom}/mealie.webp", type: "image/webp", version: version)
+      expect(AppCatalog.logo("mealie")).to eq(AppCatalog.custom_logo("mealie"))
       expect(AppCatalog.custom_logo("../mealie")).to be_nil
-      expect(AppCatalog.find("gitea")[:logo_url]).to start_with("https://cdn.jsdelivr.net/") # the catalog's own
+      expect(AppCatalog.find("gitea")[:logo_url]).to start_with("/apps/logos/gitea?v=") # the catalog's own
+
+      # An app of your own with a catalog app's id has its own logo, or none: never the catalog's
+      File.write("#{custom}/jellyfin.yml", "name: My Jellyfin
+")
+      AppCatalog.reload!
+      expect(AppCatalog.logo("jellyfin")).to be_nil
+      expect(AppCatalog.find("jellyfin")[:logo_url]).to be_nil
     end
 
     it "sees one saved, or removed, without a restart" do

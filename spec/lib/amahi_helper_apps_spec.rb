@@ -231,6 +231,40 @@ RSpec.describe 'AmahiHelper apps' do
       expect(kept).to eq(%w[gitea.yml jellyfin.yml])
     end
 
+    # The catalog's logos (P4.10): logos/<id>.<type> in the signed version, kept beside the manifests
+    describe 'its logos' do
+      let(:png) { File.binread(Rails.root.join('config/logos/gitea.png')) }
+
+      def logos(files)
+        FileUtils.rm_rf("#{remote}/logos")
+        FileUtils.mkdir_p("#{remote}/logos")
+        files.each { |name, content| File.binwrite("#{remote}/logos/#{name}", content) }
+      end
+
+      it "keeps the logos of the apps it keeps, each a picture of its type, and only those" do
+        logos('gitea.png' => png, 'gitea.svg' => '<svg xmlns="http://www.w3.org/2000/svg"/>', # two: the PNG comes first
+              'jellyfin.png' => 'not a picture', 'broken.png' => png, 'other.png' => png,
+              'future.webp' => "\x89PNG\r\n\x1A\n#{'0' * AmahiHelper::APP_LOGO_MAX_BYTES}", 'LICENSE-icons' => 'license')
+        publish('gitea.yml' => gitea, 'jellyfin.yml' => jellyfin, 'broken.yml' => broken, 'future.yml' => future)
+        expect(helper.do_refresh_catalog['catalog']).to include('apps' => %w[future gitea jellyfin], 'logos' => %w[gitea])
+        expect(Dir.children("#{dir}/catalog/logos")).to eq(['gitea.png'])
+        expect(File.binread("#{dir}/catalog/logos/gitea.png")).to eq(png)
+        expect(File.stat("#{dir}/catalog/logos/gitea.png").mode & 0o777).to eq(0o644)
+        expect(File.stat("#{dir}/catalog/logos").mode & 0o777).to eq(0o755)
+        expect(AppCatalog.fetched_logos_dir).to end_with('/catalog/logos') # where the web app reads them
+      end
+
+      it 'has none from a version from before logos, and a new version replaces them' do
+        logos('gitea.png' => png)
+        publish('gitea.yml' => gitea)
+        expect(helper.do_refresh_catalog['catalog']).to include('logos' => %w[gitea])
+        FileUtils.rm_rf("#{remote}/logos")
+        publish({ 'gitea.yml' => gitea }, 2)
+        expect(helper.do_refresh_catalog['catalog']).to include('tag' => 'catalog-2', 'logos' => [])
+        expect(Dir.children("#{dir}/catalog/logos")).to be_empty
+      end
+    end
+
     # Signed versions (CATALOG_TAG): main itself is never fetched
     describe 'its signed versions' do
       def refresh
@@ -318,10 +352,11 @@ RSpec.describe 'AmahiHelper apps' do
       expect(AmahiHelper::CATALOG_FORMAT).to eq(AppCatalog::FORMAT)
     end
 
-    it "checks a whole catalog for its repo's CI, ports included" do
+    it "checks a whole catalog for its repo's CI, ports and logos included" do
       out = StringIO.new
       expect(helper.check_catalog(catalog, out)).to eq(0)
-      expect(out.string.lines.size).to eq(Dir["#{catalog}/*.yml"].size)
+      expect(out.string.lines.size).to eq(Dir["#{catalog}/*.yml"].size + 1) # an app's line each, and the logos'
+      expect(out.string).to include("logos: ok\n")
 
       FileUtils.mkdir_p("#{dir}/check")
       File.write("#{dir}/check/gitea.yml", gitea)
@@ -330,6 +365,29 @@ RSpec.describe 'AmahiHelper apps' do
       out = StringIO.new
       expect(helper.check_catalog("#{dir}/check", out)).to eq(1)
       expect(out.string).to include('broken: image must be name:tag@sha256:digest', 'forge and gitea: both list host port 3300/tcp')
+      expect(out.string).not_to include('logos') # none beside them: a catalog from before logos
+
+      # The logos beside the manifests (logos/, as in the catalog's repo), checked as a fetch does
+      FileUtils.mkdir_p("#{dir}/logos")
+      png = File.binread(Rails.root.join('config/logos/gitea.png'))
+      File.binwrite("#{dir}/logos/gitea.png", png)
+      File.write("#{dir}/logos/LICENSE-icons", "The icons' license")
+      File.write("#{dir}/check/broken.yml", gitea.sub('name: Gitea', 'name: Broken').gsub('3300', '3301').gsub('host: 2222', 'host: 2223'))
+      File.write("#{dir}/check/forge.yml", gitea.sub('name: Gitea', 'name: Forge').gsub('3300', '3302').gsub('host: 2222', 'host: 2224'))
+      out = StringIO.new
+      expect(helper.check_catalog("#{dir}/check", out)).to eq(0)
+      expect(out.string).to include("logos: ok\n")
+
+      File.write("#{dir}/logos/forge.png", 'not a picture')
+      File.binwrite("#{dir}/logos/other.png", png)
+      File.binwrite("#{dir}/logos/broken.gif", png)
+      File.binwrite("#{dir}/logos/gitea.svg", "\x89PNG\r\n\x1A\n#{'0' * AmahiHelper::APP_LOGO_MAX_BYTES}")
+      out = StringIO.new
+      expect(helper.check_catalog("#{dir}/check", out)).to eq(1)
+      expect(out.string).to include("logos/forge.png: isn't a png picture", "logos/other.png: there's no app called other",
+                                    'logos/broken.gif: not a .png, .jpg, .webp or .svg file',
+                                    "logos/gitea.svg: over #{AmahiHelper::APP_LOGO_MAX_BYTES / 1024} KB")
+      expect(out.string).not_to include('LICENSE')
     end
   end
 
@@ -1266,6 +1324,17 @@ RSpec.describe 'AmahiHelper apps' do
       expect(File.exist?("#{dir}/app-definitions/gitea.json")).to be false
     end
 
+    # P4.9: a first install takes the newest version on its track, as the web app found it
+    it "installs a newer version on the app's track, downloaded by its tag and pinned to its build" do
+      digest = "sha256:#{'f' * 64}"
+      allow(helper).to receive(:engine_pull_tag).with('gitea/gitea:1.27.9-rootless').and_return(digest)
+      track = helper.app_on_track('gitea', helper.app_manifest('gitea'), '1.27.9-rootless', install: true)
+      reply = helper.do_install_app('gitea', track)
+      expect(reply['image']).to eq("gitea/gitea:1.27.9-rootless@#{digest}")
+      expect(ran.find { |argv| argv[1] == 'create' }).to include("gitea/gitea:1.27.9-rootless@#{digest}")
+      expect(JSON.parse(File.read("#{dir}/app-definitions/gitea.json"))['image']).to eq("gitea/gitea:1.27.9-rootless@#{digest}")
+    end
+
     it "doesn't download an image it has already (so changing shares works offline)" do
       allow(helper).to receive(:docker_output).and_return("sha256:abc\n")
       helper.do_install_app('gitea', helper.app_manifest('gitea'))
@@ -1490,6 +1559,85 @@ RSpec.describe 'AmahiHelper apps' do
         expect { helper.do_undo_app_update('vaultwarden', manifest, []) }.to raise_error(AmahiHelper::Failed, /no such image/)
         expect(File.read("#{data}/db.sqlite3")).to eq('upgraded') # untouched
         expect(ran).to eq([])
+      end
+
+      # P4.9: the catalog's signature covers what the app may do; its version floats on its tag
+      describe 'to a newer version on its track' do
+        let(:digest) { "sha256:#{'e' * 64}" }
+
+        before { allow(helper).to receive(:engine_pull_tag).with('vaultwarden/server:1.37.5').and_return(digest) }
+
+        it "takes a tag of the catalog's shape, not older than the catalog's nor the one it runs, from the same image" do
+          floor = AmahiHelper.send(:image_tag, manifest[:image])
+          expect(floor).to eq('1.37.3')
+          expect(helper.app_on_track('vaultwarden', manifest, '1.37.5')).to include(image: 'vaultwarden/server:1.37.5', track: '1.37.5')
+          expect(helper.app_on_track('vaultwarden', manifest, floor)).to include(track: floor) # a newer build of the catalog's own
+          expect { helper.app_on_track('vaultwarden', manifest, '1.37.5-alpine') }
+            .to raise_error(AmahiHelper::Refused, "1.37.5-alpine isn't a version of vaultwarden like the catalog's 1.37.3")
+          expect { helper.app_on_track('vaultwarden', manifest, 'latest') }.to raise_error(AmahiHelper::Refused, /isn't a version of vaultwarden/)
+          expect { helper.app_on_track('vaultwarden', manifest, '1.36.9') }.to raise_error(AmahiHelper::Refused, "1.36.9 is older than the catalog's 1.37.3")
+          expect { helper.app_on_track('vaultwarden', manifest, '-1.37.5') }.to raise_error(AmahiHelper::Refused, /must be letters, digits/)
+          expect { helper.app_on_track('vaultwarden', manifest, '1.37.5/../x') }.to raise_error(AmahiHelper::Refused, /must be letters, digits/)
+          running['vaultwarden'] = "vaultwarden/server:1.38.0@sha256:#{'c' * 64}"
+          expect { helper.app_on_track('vaultwarden', manifest, '1.37.5') }
+            .to raise_error(AmahiHelper::Refused, '1.37.5 is older than the 1.38.0 vaultwarden runs')
+        end
+
+        it "isn't for an app of your own (its file says its version), nor a reinstall (it keeps the one it runs)" do
+          allow(helper).to receive(:custom_app?).with('vaultwarden').and_return(true)
+          expect { helper.app_on_track('vaultwarden', manifest, '1.37.5') }.to raise_error(AmahiHelper::Refused, /an app of your own: its file says/)
+          allow(helper).to receive(:custom_app?).with('vaultwarden').and_return(false)
+          expect { helper.app_on_track('vaultwarden', manifest, '1.37.5', install: true) }
+            .to raise_error(AmahiHelper::Refused, /is installed: a reinstall keeps the version it runs/)
+          running.delete('vaultwarden')
+          expect(helper.app_on_track('vaultwarden', manifest, '1.37.5', install: true)).to include(track: '1.37.5') # a first install
+        end
+
+        it 'downloads it by its tag, pinned to the build the registry named, which it then runs and remembers' do
+          newer = "vaultwarden/server:1.37.5@#{digest}"
+          reply = helper.do_update_app('vaultwarden', helper.app_on_track('vaultwarden', manifest, '1.37.5'), [])
+          expect(helper).to have_received(:engine_pull_tag).with('vaultwarden/server:1.37.5')
+          expect(reply).to include('updated' => true, 'image' => newer, 'from' => old_image)
+          expect(running['vaultwarden']).to eq(newer)
+          expect(JSON.parse(File.read("#{dir}/app-definitions/vaultwarden.json"))['image']).to eq(newer) # reinstalls and Undo go by it
+          expect(backup_info).to include('from' => old_image, 'to' => newer)
+          expect { helper.do_update_app('vaultwarden', helper.app_on_track('vaultwarden', manifest, '1.37.5'), []) }
+            .to raise_error(AmahiHelper::Failed, /runs 1\.37\.5/) # the same build again: nothing to update to
+        end
+
+        it 'goes through apps.update, with tag left out for the catalog\'s own version' do
+          expect(steps('apps.update', 'app' => 'vaultwarden', 'tag' => '1.37.5').first[2]).to include(image: 'vaultwarden/server:1.37.5', track: '1.37.5')
+          expect(steps('apps.update', 'app' => 'vaultwarden', 'tag' => nil).first[2]).to include(image: manifest[:image])
+          expect(steps('apps.update', 'app' => 'vaultwarden').first[2]).not_to have_key(:track)
+        end
+      end
+    end
+
+    # The build docker pull names for a tag (P4.9): the "Digest:" line it ends with
+    describe 'downloading a version by its tag' do
+      let(:status) { instance_double(Process::Status, success?: true, exitstatus: 0) }
+      let(:lines) { ["12.4: Pulling from jellyfin/jellyfin\n", "Digest: sha256:#{'d' * 64}\n", "Status: Downloaded newer image for jellyfin/jellyfin:12.4\n"] }
+
+      before { allow(helper).to receive(:registry_place_for).and_return(nil) }
+
+      it 'returns the digest the registry named for it' do
+        allow(helper).to receive(:stream_command) do |_env, argv, &block|
+          expect(argv).to eq([AmahiHelper::DOCKER, 'pull', 'jellyfin/jellyfin:12.4'])
+          lines.each(&block)
+          [lines.last(3).join, status]
+        end
+        expect(helper.engine_pull_tag('jellyfin/jellyfin:12.4')).to eq("sha256:#{'d' * 64}")
+      end
+
+      it "fails when docker does, or doesn't say which build it downloaded" do
+        failed = instance_double(Process::Status, success?: false, exitstatus: 1)
+        allow(helper).to receive(:stream_command).and_return(["Error response from daemon: manifest unknown\n", failed])
+        expect { helper.engine_pull_tag('jellyfin/jellyfin:99') }.to raise_error(AmahiHelper::Failed, /docker exited 1: .*manifest unknown/)
+        allow(helper).to receive(:stream_command) do |*, &block|
+          block.call("Status: Image is up to date\n")
+          ['', status]
+        end
+        expect { helper.engine_pull_tag('jellyfin/jellyfin:12.4') }.to raise_error(AmahiHelper::Failed, "docker didn't say which build of jellyfin/jellyfin:12.4 it downloaded")
       end
     end
 

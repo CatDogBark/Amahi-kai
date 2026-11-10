@@ -34,6 +34,14 @@ RSpec.describe AppVersions do
       expect(described_class.newest('12.0', jellyfin)).to eq('12.1')
     end
 
+    # A new install stays on the catalog's major version (P4.9): a new one is offered as an update
+    it 'keeps to the same major version when asked' do
+      gitea = %w[1.27.3-rootless 1.27.5-rootless 28.0.0-rootless 28.3.0-rootless 1.26.9-rootless]
+      expect(described_class.newest('1.27.3-rootless', gitea)).to eq('28.3.0-rootless')
+      expect(described_class.newest('1.27.3-rootless', gitea, same_major: true)).to eq('1.27.5-rootless')
+      expect(described_class.newest('1.27.5-rootless', gitea, same_major: true)).to be_nil
+    end
+
     it "builds the release notes link from the tag's leading number" do
       expect(described_class.release_notes('https://github.com/go-gitea/gitea/releases/tag/v{version}', '28.0.0-rootless'))
         .to eq('https://github.com/go-gitea/gitea/releases/tag/v28.0.0')

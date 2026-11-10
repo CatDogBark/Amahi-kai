@@ -56,7 +56,8 @@ RSpec.describe "SettingsController extended", type: :request do
   end
 
   describe "POST check_updates" do
-    it "runs the check through the helper" do
+    it "runs the check through the helper, then checks the apps' versions (P4.9)" do
+      expect(AppUpdateCheck).to receive(:run).with(wait: AppUpdateCheck::CHECK_NOW_WAIT)
       post "/settings/check_updates", as: :json
       expect(response.parsed_body['status']).to eq('ok')
       expect(Privileged.calls).to include(['system.check_update', {}])

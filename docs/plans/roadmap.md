@@ -88,6 +88,14 @@ signed with the same keys, and a server takes only the newest signed one, never 
 (`docs/plans/apps.md`, P4.8). It's still fetched apart from System Update, so an app's change never
 updates the server itself.
 
+### App updates the NAS finds itself, and the catalog's logos on the NAS
+
+Next (CatDogBark, 2026-11-09), planned in [`apps.md`](apps.md), P4.9 and P4.10. The catalog's
+signature covers what each app is allowed to do, and its version floats: every 6 hours a NAS
+checks each installed app's image for a newer release of the same shape (a new major version
+with a warning) and offers it; nothing updates by itself. The apps of your own get the same.
+The catalog's logos come with its signed versions and are served by the NAS, never jsDelivr.
+
 ### Backups
 
 Amahi-kai 1.0 makes none (the wiki's Getting Started says what to keep copies of).
@@ -131,7 +139,7 @@ firewall and NAT. Still behind, to consider after 1.0 unless listed earlier:
   router (a Pi-hole, another Amahi-kai) can't use DNS over TLS, since the router keeps port 853
   from LAN devices. Not needed in the house (2026-10-24); for whoever runs one.
 
-### HTTPS on the LAN
+### HTTPS on the LAN, and signing in to apps with Amahi-kai
 
 CatDogBark (2026-10-06): the web UI and every app's page are plain HTTP on the LAN, so anyone on the
 network can read or change what passes (bitTube Desktop's updates come from the NAS this way:
@@ -167,7 +175,107 @@ is reached **only through Tailscale**, over HTTPS with Tailscale's certificate (
 on each device, and a password server is better off the LAN and the internet anyway. LAN HTTPS for
 Amahi-kai and every app stays the optional front door above, for when users ask: the NAS's own
 certificate authority as the default (Caddy does one, and fetches Tailscale's certificates
-too), Let's Encrypt through a DNS challenge for those with a domain.
+too), Let's Encrypt through a DNS challenge for those with a domain. (The certificate authority
+was dropped on 2026-11-09, below.)
+
+Decided (CatDogBark, 2026-11-09):
+
+- **No certificate authority of the NAS's own.** LAN HTTPS is Let's Encrypt through a DNS
+  challenge, for those with a domain (a wildcard certificate covers every app's name). Apps
+  reached only through Tailscale keep Tailscale's certificates.
+- **HTTPS and signing in to apps with Amahi-kai are one phase.** They're built on the same proxy
+  and the same names: a certificate is for a name, not an address and a port.
+
+The phase, in order:
+
+1. **Each app at a name of its own** (`<app>.<the NAS's name>`), through a proxy on the NAS
+   (Caddy), on plain HTTP. It's the shared foundation: HTTPS needs names to put on its
+   certificate, and the sign-in's gate needs the proxy. dnsmasq answers the names where the NAS
+   is the network's DNS.
+2. **HTTPS as an option on that proxy**: Let's Encrypt through a DNS challenge, for those with a
+   domain.
+3. **Amahi-kai as the sign-in provider** (below). It works over plain HTTP: HTTPS needs a domain,
+   and nobody should need one to get it. When HTTPS is on, its cookies are Secure and `__Host-`,
+   which an app on another name can't set or overwrite.
+4. **The apps, one by one** (below).
+
+Once step 1 is done, steps 2 and 3 don't depend on each other. HTTPS goes first: it's smaller and
+well understood, and the sign-in is then tried over HTTPS from the start.
+
+#### Signing in to apps with Amahi-kai
+
+Discussed with CatDogBark (2026-11-08): past a few apps, an account and a password for each one
+is a burden, so Amahi-kai becomes a way to sign in to its apps. Wanted soon; it's steps 3 and 4 of
+the phase above. **It adds a way in; it never replaces an app's own accounts** (CatDogBark):
+
+- An Amahi-kai account is a NAS account (a system account, Samba, shares). A friend who only uses
+  one app shouldn't need one.
+- Some devices only know a username and password: Jellyfin's TV and phone apps, git over HTTPS,
+  desktop clients.
+- An app's own accounts are the way in when Amahi-kai's sign-in isn't working.
+
+**How it works:**
+
+- Amahi-kai is an OpenID Connect provider (doorkeeper with doorkeeper-openid_connect is the
+  likely pair). Installing an app registers it as a client; the app gets its client ID and secret
+  through its definition, the way secrets reach it today.
+- Opening the app sends the browser to Amahi-kai, which already knows who it is and sends it
+  straight back, signed in. Amahi-kai tells the app the username and whether the person is an
+  Amahi-kai admin.
+- Each app's page lists who may sign in to it with Amahi-kai (the per-app permissions of the
+  Direction below). The app's own accounts are still managed in the app.
+- The app's sign-in page offers both: Sign in with Amahi-kai, and its own username and password.
+  Later, a per-app "Amahi-kai sign-in only" switch, off by default.
+
+**Accounts:**
+
+- Signing in with Amahi-kai gives you your own account in the app, named after your Amahi-kai
+  username. Amahi-kai admins are the app's admins, brought from Amahi-kai at each sign-in, so
+  making someone a plain user in Amahi-kai takes it away at their next sign-in. Everyone else's
+  admin rights are set in the app.
+- **The app's install admin stays, as a spare key**: its password is under the app's Passwords and
+  keys, for when Amahi-kai's sign-in is down or broken. It isn't merged into anyone's account:
+  their things would belong to a generic name, and two admins would share it.
+- An app whose first visit makes its admin (Gitea, bitTube) gets its spare key made at install
+  instead, as PiGallery2 and Transmission already do, once it takes Amahi-kai's sign-in. Nobody
+  has to remember a password made on a first visit.
+- An existing app account with the same name is linked only once it's proven: the app asks once
+  for that account's password (Gitea does), or an app admin links it. A name alone never links, so
+  an Amahi-kai user can't take over an app account made for someone else.
+
+**App by app** (2026-11-08):
+
+- **bitTube, bitStream, bitShare:** written in (bitTube's accounts code already plans for it). They
+  keep their People page, with each account marked as Amahi-kai's or the app's own.
+- **Gitea:** its own OpenID Connect support, set up by its definition; its own accounts keep
+  working.
+- **PiGallery2:** its own OpenID Connect setting, beside its users. Check that its own logins keep
+  working with it on.
+- **Uptime Kuma, Transmission:** no support and a single login each, so a gate at the proxy:
+  Amahi-kai checks that the person is signed in and allowed, then passes them through, with the
+  app's own login turned off. A switch per app, off by default. Safe only with the app's own port
+  closed to the network, which the app firewall can do.
+- **Jellyfin:** unchanged. It has no built-in support (the add-on for it was archived; forks carry
+  it on), and its TV and phone apps wouldn't use it.
+- **Vaultwarden:** unchanged. Its master password is what decrypts the vault, so no sign-in service
+  can replace it: it's the one password kept, and it keeps the rest.
+
+**The apps' order** (step 4): bitTube, then bitStream and bitShare; then Gitea and PiGallery2,
+through their definitions (a catalog format bump); then the gate for Uptime Kuma and Transmission.
+
+Desktop clients (bitTube Desktop, bitShare's sync client) come later: they open the browser to
+sign in once, then keep a token on the device.
+
+**To decide:**
+
+- Whether an app's old address (the NAS's address and the app's port) closes once it has a name of
+  its own. Closing it is what makes the gate safe; non-web ports, like a camera stream's RTSP, stay
+  open.
+- Whether a plain (non-admin) Amahi-kai user may sign in to every app until they're taken off, or
+  only to the apps they're added to.
+- The names over remote access: Tailscale needs them sent to the NAS (split DNS), and the
+  Cloudflare Tunnel needs a name per app. Home first, then these.
+- The names on a network where the NAS isn't the DNS server.
 
 ### The phone layout
 

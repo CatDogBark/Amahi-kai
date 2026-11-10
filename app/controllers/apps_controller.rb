@@ -156,6 +156,7 @@ class AppsController < ApplicationController
   def refresh_catalog
     Privileged.call('system.check_update')
     AppCatalog.reload!
+    AppUpdateCheck.run(wait: AppUpdateCheck::CHECK_NOW_WAIT)
     status = AppCatalog.status
     if status&.dig(:error)
       redirect_back fallback_location: apps_index_path, alert: "Couldn't refresh the app catalog: #{status[:error]}"
@@ -181,30 +182,36 @@ class AppsController < ApplicationController
     end
   end
 
-  # Update (P4.5): the helper copies the app's data, starts the catalog's version, and goes back
-  # to the old one if it isn't healthy within 5 minutes.
+  # Update (P4.5): the helper copies the app's data, starts the new version, and goes back to the
+  # old one if it isn't healthy within 5 minutes. The new version is the catalog's, or a newer one
+  # the update check found (P4.9), which the helper downloads by its tag.
   def docker_update_stream
-    app_stream('apps.update') do |app, entry, reply, sse|
+    target = DockerApp.find_by(identifier: params[:id].to_s)&.update_target
+    args = ->(app) { (tag = app.update_tag) ? { tag: tag } : {} }
+    app_stream('apps.update', args: args) do |app, entry, reply, sse|
       if reply['updated'] && reply['image'] == reply['from']
         # An app of your own changed on the same version (CustomAppsController#update)
         sse.emit("✓ #{entry[:name]} runs with your changes")
         sse.emit("  Undo update, on its page, goes back to how it was for #{AppCatalog::BACKUP_DAYS} days.")
         true
       elsif reply['updated']
+        app.forget_newer!
         sse.emit("✓ #{entry[:name]} is updated to #{AppCatalog.tag(reply['image'])} and running")
         sse.emit("  Undo update, on its page, goes back to #{AppCatalog.tag(reply['from'])} for #{AppCatalog::BACKUP_DAYS} days.")
         true
       else
-        sse.emit("✗ #{AppCatalog.tag(entry[:image])} didn't come up healthy: #{reply['problem']}")
+        sse.emit("✗ #{target&.dig(:tag) || AppCatalog.tag(entry[:image])} didn't come up healthy: #{reply['problem']}")
         sse.emit("  #{entry[:name]} is back on #{app.version}, with its data as it was before.")
         false
       end
     end
   end
 
-  # Undo update: the version and data from before the last update come back.
+  # Undo update: the version and data from before the last update come back, and the update
+  # check looks again at once (P4.9), so the newer version is offered again.
   def docker_undo_update_stream
     app_stream('apps.undo_update') do |app, entry, _reply, sse|
+      AppUpdateCheck.check(app)
       sse.emit("✓ #{entry[:name]} is back on #{app.version}, with its data from before the update")
       true
     end
@@ -275,6 +282,7 @@ class AppsController < ApplicationController
   def install_app(entry, host, sse, shares, pool = nil)
     sse.emit("Installing #{entry[:name]}...")
     app = DockerApp.find_or_initialize_by(identifier: entry[:identifier])
+    fresh = app.new_record?
     # The shares chosen are saved once the helper has given them: until then the app keeps the
     # ones its container has (a failed reinstall leaves it those)
     app.update!(name: entry[:name], description: entry[:description], image: app.image.presence || entry[:image],
@@ -282,6 +290,8 @@ class AppsController < ApplicationController
                 container_name: "amahi-#{entry[:identifier]}", status: 'installing', error_message: nil)
     args = { app: entry[:identifier], shares: shares }
     args[:pool] = pool if pool
+    tag = install_tag(entry, sse) if fresh && !entry[:custom]
+    args[:tag] = tag if tag
     follow_docker_dns
     reply = Privileged.call('apps.install', **args) { |line| sse.emit("  #{line}") }
     ports = DockerApp.assigned_ports(entry, reply['ports'])
@@ -303,6 +313,22 @@ class AppsController < ApplicationController
     sse.done('error')
   end
 
+  # A new install takes the newest version on the app's track (P4.9): a newer release of the
+  # catalog's tag, by its shape, or a newer build of it, as the update check finds them, but not a
+  # new major version, which the catalog's settings weren't made for: that one is offered as an
+  # update afterwards, with its word to read what's new first. The catalog's own version when its
+  # registry can't be asked. A reinstall keeps the version it ran.
+  def install_tag(entry, sse)
+    found = AppVersions.new(tokens: RegistryTokens).check_image(entry[:image], releases: entry[:releases], same_major: true)
+    return nil if found.kind == :current
+
+    sse.emit(found.kind == :rebuilt ? "  Taking the newest build of #{found.tag}" : "  Taking #{found.latest}, the newest version (the catalog names #{found.tag})")
+    found.latest
+  rescue StandardError => e
+    sse.emit("  Couldn't ask its registry for a newer version (#{e.message}), so it gets the catalog's #{AppCatalog.tag(entry[:image])}")
+    nil
+  end
+
   # [{ name:, folder:, write: }] from the share dialog: share[]=Movies for a whole share,
   # share[]=Vault/media/Pictures for a folder of one, and write[] naming the same way what the app
   # may write in. Only shares that exist, and write only where the app writes shares and Greyhole
@@ -321,7 +347,7 @@ class AppsController < ApplicationController
   # Runs +operation+ on an installed app with its shares, streaming the helper's progress, then
   # records the version (and ports) it runs. The block writes the outcome and returns whether
   # it worked.
-  def app_stream(operation)
+  def app_stream(operation, args: nil)
     app = DockerApp.find_by(identifier: params[:id])
     entry = AppCatalog.find(params[:id])
     host = request.host
@@ -333,7 +359,8 @@ class AppsController < ApplicationController
       end
       begin
         follow_docker_dns
-        reply = Privileged.call(operation, app: app.identifier, shares: app.shares) { |line| sse.emit("  #{line}") }
+        extra = args ? args.call(app) : {}
+        reply = Privileged.call(operation, app: app.identifier, shares: app.shares, **extra) { |line| sse.emit("  #{line}") }
         ports = reply['ports'] ? DockerApp.assigned_ports(entry, reply['ports']) : app.ports
         app.update!(image: reply['image'].presence || app.image, status: 'running', error_message: nil,
                     ports: ports, host_port: ports.find { |port| port[:label] == 'web' }&.dig(:host) || app.host_port)

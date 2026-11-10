@@ -39,9 +39,13 @@ class AppCatalog
   # app's file saved since shows as changes waiting.
   DEFINITIONS_DIR = '/var/lib/amahi-kai/app-definitions'.freeze
   ID = /\A[a-z][a-z0-9]{1,23}\z/
-  # A custom app's logo, kept beside its file as <id>.<type> (the helper's APP_LOGO_TYPES): the
-  # NAS serves it (CustomAppsController#logo). A logo link in a custom app's file isn't used.
+  # A custom app's logo, kept beside its file as <id>.<type> (the helper's APP_LOGO_TYPES), and a
+  # catalog app's, which comes with the catalog's signed versions (docs/plans/apps.md, P4.10):
+  # <id>.<type> in a logos folder beside the manifests' folder, as in the catalog's repo; the copy
+  # that comes with Amahi-kai keeps its own in config/logos. The NAS serves them
+  # (AppLogosController); a logo link in a manifest or an app file isn't used.
   LOGO_TYPES = { 'png' => 'image/png', 'jpg' => 'image/jpeg', 'webp' => 'image/webp', 'svg' => 'image/svg+xml' }.freeze
+  CATALOG_LOGOS_DIR = File.expand_path('../config/logos', __dir__)
 
   class << self
     # Read again whenever the helper swaps in a newly fetched catalog (a new folder).
@@ -77,14 +81,35 @@ class AppCatalog
     # A custom app's logo, { path:, type:, version: } (version: a short hash of the picture, for its
     # address), or nil. Found among the files there, as custom_file is.
     def custom_logo(id)
-      return nil unless id.to_s.match?(ID)
+      id.to_s.match?(ID) ? logo_in(custom_dir, id) : nil
+    end
 
-      path = Dir[File.join(custom_dir, '*')].find do |file|
-        LOGO_TYPES.key?(File.extname(file).delete_prefix('.')) && File.basename(file, '.*') == id.to_s
-      end
-      path && { path: path, type: LOGO_TYPES.fetch(File.extname(path).delete_prefix('.')), version: Digest::SHA256.file(path).hexdigest[0, 12] }
+    # An app's logo, as custom_logo gives it, or nil. An app of your own has the one kept on the
+    # NAS, or none (never the catalog's); a catalog app has the one its fetched catalog brought,
+    # else the one in the copy that comes with Amahi-kai, also for an app the catalog no longer
+    # lists.
+    def logo(id)
+      return nil unless id.to_s.match?(ID)
+      return custom_logo(id) if custom_app?(id)
+
+      logo_in(fetched_logos_dir, id) || logo_in(CATALOG_LOGOS_DIR, id)
+    end
+
+    # The address the NAS serves an app's logo at, naming the picture, or nil when it has none.
+    def logo_url(id)
+      found = logo(id) or return nil
+      Rails.application.routes.url_helpers.app_logo_path(id.to_s, v: found[:version])
+    end
+
+    def fetched_logos_dir
+      File.join(File.dirname(fetched_dir), 'logos')
+    end
+
+    # Whether +id+ is an app of your own (its file is among the custom apps' files).
+    def custom_app?(id)
+      Dir[File.join(custom_dir, '*.yml')].any? { |path| File.basename(path, '.yml') == id.to_s }
     rescue SystemCallError
-      nil
+      false
     end
 
     # The fields of the definition the app's container was made from, or nil.
@@ -262,8 +287,19 @@ class AppCatalog
     def custom_entry(path)
       found = entry(path) or return nil
       logo = custom_logo(found[:identifier])
-      url = Rails.application.routes.url_helpers.custom_apps_logo_path(found[:identifier], v: logo[:version]) if logo
+      url = Rails.application.routes.url_helpers.app_logo_path(found[:identifier], v: logo[:version]) if logo
       found.merge(custom: true, logo_url: url)
+    end
+
+    # The logo <id>.<type> in +dir+, as custom_logo gives it, or nil. Found among the files there,
+    # never by a path made from the id asked for (the pages pass one from the request).
+    def logo_in(dir, id)
+      path = Dir[File.join(dir, '*')].find do |file|
+        LOGO_TYPES.key?(File.extname(file).delete_prefix('.')) && File.basename(file, '.*') == id.to_s && File.file?(file)
+      end
+      path && { path: path, type: LOGO_TYPES.fetch(File.extname(path).delete_prefix('.')), version: Digest::SHA256.file(path).hexdigest[0, 12] }
+    rescue SystemCallError
+      nil
     end
 
     # nil for a manifest that can't be read (the helper's checks make that a bug, but one
@@ -274,7 +310,7 @@ class AppCatalog
       { identifier: File.basename(path, '.yml'), name: data['name'].to_s, description: data['description'],
         sign_in: (data['sign_in'].strip.presence if data['sign_in'].is_a?(String)),
         requires: requires, installable: requires <= FORMAT, custom: false,
-        category: data['category'], logo_url: data['logo'], image: data['image'], web_port: data['web_port'],
+        category: data['category'], logo_url: catalog_logo_url(File.basename(path, '.yml')), image: data['image'], web_port: data['web_port'],
         web_tls: data['web_tls'] == true, access: data['access'] == 'tailscale' ? 'tailscale' : 'lan',
         writes_shares: data['writes_shares'] == true, releases: data['releases'],
         # What it reaches out to (the helper's APP_NETWORK_ACCESS): the internet unless it says
@@ -291,6 +327,12 @@ class AppCatalog
     rescue Psych::Exception, SystemCallError, NoMethodError, TypeError => e
       Rails.logger.warn("AppCatalog: #{path}: #{e.message}") if defined?(Rails.logger)
       nil
+    end
+
+    # A catalog app's logo address: its fetched catalog's logo, else the copy in the code's.
+    def catalog_logo_url(id)
+      found = logo_in(fetched_logos_dir, id) || logo_in(CATALOG_LOGOS_DIR, id) or return nil
+      Rails.application.routes.url_helpers.app_logo_path(id, v: found[:version])
     end
 
     # Whether the app keeps folders on a ZFS pool (kind: dataset): :required, :optional or nil, as

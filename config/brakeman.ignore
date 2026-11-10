@@ -114,25 +114,25 @@
     {
       "warning_type": "File Access",
       "warning_code": 16,
-      "fingerprint": "3a7364531f117507ba3a71b0880e439b21307410d7e7c048c74d6bd2340b8d21",
+      "fingerprint": "1c249b7fefaf178f27e97a458b09aac89c71232321b2c63aa7afb862ffa6bc5b",
       "check_name": "SendFile",
       "message": "Parameter value used in file name",
-      "file": "app/controllers/custom_apps_controller.rb",
-      "line": 112,
+      "file": "app/controllers/app_logos_controller.rb",
+      "line": 14,
       "link": "https://brakemanscanner.org/docs/warning_types/file_access/",
-      "code": "send_file(AppCatalog.custom_logo(params[:id])[:path], :type => AppCatalog.custom_logo(params[:id])[:type], :disposition => \"inline\")",
+      "code": "send_file(AppCatalog.logo(params[:id])[:path], :type => AppCatalog.logo(params[:id])[:type], :disposition => \"inline\")",
       "render_path": null,
       "location": {
         "type": "method",
-        "class": "CustomAppsController",
-        "method": "logo"
+        "class": "AppLogosController",
+        "method": "show"
       },
       "user_input": "params[:id]",
       "confidence": "Weak",
       "cwe_id": [
         22
       ],
-      "note": "The path is never made from the id: AppCatalog.custom_logo takes only an id matching AppCatalog::ID (lowercase letters and digits) and picks the file from a listing of the custom apps folder, by its name and a logo type. Admin-only (before_action :admin_required)."
+      "note": "The path is never made from the id: AppCatalog.logo takes only an id matching AppCatalog::ID (lowercase letters and digits) and picks the file from a listing of the custom apps folder, or the catalog's logos folders, by its name and a logo type. For anyone signed in (before_action :login_required): a logo is shown on the dashboard, and is served under a sandboxed policy."
     }
   ],
   "brakeman_version": "8.1.0"
