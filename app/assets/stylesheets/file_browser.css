@@ -63,12 +63,15 @@
   width: min(320px, calc(100vw - 32px));
   padding: 12px;
   border-radius: 14px;
-  background: var(--kai-glass-strong, rgba(8, 13, 12, 0.94));
+  background: rgba(4, 8, 8, 0.96);
   box-shadow: inset 0 0 0 1px var(--kai-line, rgba(255, 255, 255, 0.09)), 0 18px 40px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 .fb-new-folder-label { display: block; margin-bottom: 8px; font-size: 0.85rem; color: var(--kai-muted, #9eabb2); }
 .fb-new-folder-row { display: flex; gap: 8px; }
 .fb-new-folder-row .form-control { flex: 1 1 auto; min-width: 0; }
+.fb-new-folder-row .btn { flex: 0 0 auto; white-space: nowrap; }
 
 /* ── Panels ── */
 .fb-panel {
