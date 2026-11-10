@@ -110,6 +110,7 @@ function openShareDialog(button) {
     var folders = shareFoldersRow(row);
     folders.querySelector('[data-role="folder-list"]').replaceChildren();
     folders.querySelector('[data-role="browser"]').hidden = true;
+    folders.querySelector('[data-role="add-folder"]').hidden = false;
     given.filter(function(share) { return share.folder; }).forEach(function(share) { addShareFolder(row, share.folder, share.write); });
     setShareScope(row, given.length > 0 && !whole ? 'folders' : 'all');
   });
@@ -187,16 +188,20 @@ function addShareFolder(row, folder, write) {
   shareFoldersRow(row).querySelector('[data-role="folder-list"]').appendChild(item);
 }
 
-// The folder browser, at +path+ in the row's share: its folders (apps/share_folders), a way back
-// up, and Choose for the folder it's at.
+// The folder browser, at +path+ in the row's share: its folders (apps/share_folders), each to open
+// or to Choose, a way back up, Choose for the folder it's at, and New folder here. "+ Choose
+// another folder" waits below while it's open (it would only open it again).
 function browseShareFolders(row, path) {
   var dialog = document.getElementById('app-shares-dialog');
-  var browser = shareFoldersRow(row).querySelector('[data-role="browser"]');
+  var folders = shareFoldersRow(row);
+  var browser = folders.querySelector('[data-role="browser"]');
   var crumbs = browser.querySelector('[data-role="crumbs"]');
   var entries = browser.querySelector('[data-role="entries"]');
   var choose = browser.querySelector('[data-role="choose-here"]');
   browser.hidden = false;
   browser.dataset.path = path;
+  folders.querySelector('[data-role="add-folder"]').hidden = true;
+  showNewFolderForm(browser, false);
   choose.disabled = !path;
   choose.textContent = path ? 'Choose ' + path : 'Open a folder to choose it';
   crumbs.replaceChildren();
@@ -221,13 +226,25 @@ function browseShareFolders(row, path) {
       if (!reply.ok) { entries.textContent = reply.body.error || "Couldn't read the folders"; return; }
       if (!reply.body.folders.length) { entries.textContent = 'No folders in here.'; return; }
       reply.body.folders.forEach(function(folder) {
+        var group = document.createElement('span');
+        group.className = 'btn-group btn-group-sm';
         var entry = document.createElement('button');
         entry.type = 'button';
         entry.className = 'btn btn-sm btn-outline-secondary';
         entry.dataset.role = 'folder-entry';
         entry.dataset.path = path ? path + '/' + folder : folder;
+        entry.setAttribute('aria-label', 'Open ' + folder);
         entry.textContent = '📁 ' + folder;
-        entries.appendChild(entry);
+        var pick = document.createElement('button');
+        pick.type = 'button';
+        pick.className = 'btn btn-sm btn-outline-primary';
+        pick.dataset.role = 'choose-entry';
+        pick.dataset.path = entry.dataset.path;
+        pick.setAttribute('aria-label', 'Choose ' + entry.dataset.path);
+        pick.textContent = 'Choose';
+        group.appendChild(entry);
+        group.appendChild(pick);
+        entries.appendChild(group);
       });
     })
     .catch(function() { entries.textContent = "Couldn't read the folders"; });
@@ -243,6 +260,66 @@ function shareFolderClash(row, folder) {
     if (chosen[i].indexOf(folder + '/') === 0) return chosen[i] + ', chosen already, is inside ' + folder + ': remove it first';
   }
   return null;
+}
+
+// New folder here: its name box, or the button that opens it.
+function showNewFolderForm(browser, show) {
+  browser.querySelector('[data-role="new-folder-form"]').hidden = !show;
+  browser.querySelector('[data-role="new-folder"]').hidden = show;
+  browser.querySelector('[data-role="new-folder-problem"]').hidden = true;
+  if (show) {
+    var name = browser.querySelector('[data-role="new-folder-name"]');
+    name.value = '';
+    name.focus();
+  }
+}
+
+// +folder+ given to the app (when it doesn't clash with one chosen already), and the browser put
+// away; false, with why, when it can't be.
+function chooseShareFolder(row, folders, folder) {
+  var browser = folders.querySelector('[data-role="browser"]');
+  var clash = shareFolderClash(row, folder);
+  if (clash) {
+    var problem = browser.querySelector('[data-role="new-folder-problem"]');
+    problem.textContent = clash;
+    problem.hidden = false;
+    return false;
+  }
+  addShareFolder(row, folder, false);
+  folders.querySelector('[data-role="folders-needed"]').hidden = true;
+  browser.hidden = true;
+  folders.querySelector('[data-role="add-folder"]').hidden = false;
+  return true;
+}
+
+// New folder here: made in the folder the browser is at (AppsController#make_share_folder, as
+// Files' New folder), then given to the app at once. A name the NAS refuses says why.
+function makeShareFolder(row, folders) {
+  var dialog = document.getElementById('app-shares-dialog');
+  var browser = folders.querySelector('[data-role="browser"]');
+  var nameBox = browser.querySelector('[data-role="new-folder-name"]');
+  var problem = browser.querySelector('[data-role="new-folder-problem"]');
+  var make = browser.querySelector('[data-role="new-folder-make"]');
+  var name = nameBox.value.trim();
+  var parent = browser.dataset.path || '';
+  var say = function(text) { problem.textContent = text; problem.hidden = false; };
+  if (!name) { say('Give it a name'); nameBox.focus(); return; }
+  var clash = shareFolderClash(row, parent ? parent + '/' + name : name);
+  if (clash) { say(clash); return; }
+  make.disabled = true;
+  fetch(dialog.dataset.foldersUrl, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: Object.assign(csrfHeaders(), { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' }),
+    body: new URLSearchParams({ share: row.dataset.share, path: parent, name: name })
+  })
+    .then(function(response) { return response.json().then(function(body) { return { ok: response.ok, body: body }; }); })
+    .then(function(reply) {
+      make.disabled = false;
+      if (!reply.ok) { say(reply.body.error || "Couldn't make the folder"); return; }
+      chooseShareFolder(row, folders, reply.body.folder);
+    })
+    .catch(function() { make.disabled = false; say("Couldn't make the folder"); });
 }
 
 // The dialog's own controls, listened to once.
@@ -270,17 +347,24 @@ function shareDialogEvents(dialog) {
       case 'add-folder': browseShareFolders(row, ''); break;
       case 'folder-entry':
       case 'crumb': browseShareFolders(row, target.dataset.path); break;
-      case 'browser-cancel': browser.hidden = true; break;
-      case 'remove-folder': target.closest('[data-folder]').remove(); break;
-      case 'choose-here': {
-        var clash = shareFolderClash(row, browser.dataset.path);
-        if (clash) { browser.querySelector('[data-role="entries"]').textContent = clash; break; }
-        addShareFolder(row, browser.dataset.path, false);
-        folders.querySelector('[data-role="folders-needed"]').hidden = true;
+      case 'browser-cancel':
         browser.hidden = true;
+        folders.querySelector('[data-role="add-folder"]').hidden = false;
         break;
-      }
+      case 'remove-folder': target.closest('[data-folder]').remove(); break;
+      case 'choose-here': chooseShareFolder(row, folders, browser.dataset.path); break;
+      case 'choose-entry': chooseShareFolder(row, folders, target.dataset.path); break;
+      case 'new-folder': showNewFolderForm(browser, true); break;
+      case 'new-folder-cancel': showNewFolderForm(browser, false); break;
+      case 'new-folder-make': makeShareFolder(row, folders); break;
     }
+  });
+  // Enter in the new folder's name makes it (the dialog has no form to send)
+  dialog.addEventListener('keydown', function(event) {
+    if (event.key !== 'Enter' || !event.target.matches('[data-role="new-folder-name"]')) return;
+    event.preventDefault();
+    var folders = event.target.closest('[data-share-folders]');
+    makeShareFolder(folders.previousElementSibling, folders);
   });
 }
 

@@ -162,7 +162,8 @@ class DockerApp < ApplicationRecord
   end
 
   # The folders the app was given that aren't there now (renamed, moved or deleted): until it's
-  # given its folders again, it can't start (the root helper only mounts real folders).
+  # given its folders again, it can't start (the root helper only mounts real folders). A folder
+  # of a share that's gone is one of missing_shares instead.
   def missing_folders
     given = shares.select { |share| share[:folder] }
     return [] if given.empty?
@@ -170,8 +171,22 @@ class DockerApp < ApplicationRecord
     paths = Share.where(name: given.map { |share| share[:name] }).to_h { |share| [share.name.downcase, share.path] }
     given.reject do |share|
       root = paths[share[:name].downcase]
-      root && File.directory?(File.join(root, share[:folder]))
+      root.nil? || File.directory?(File.join(root, share[:folder]))
     end.map { |share| self.class.share_label(share) }
+  end
+
+  # [the shares it was given that the NAS has, those it hasn't any more], as #shares gives them.
+  # A share can be gone with an app still listing it (deleted before 1.x kept a share an app has,
+  # say): Update, Undo update and Change carry on without it, and its page says so.
+  def shares_by_presence
+    names = shares.map { |share| share[:name].downcase }.uniq
+    have = names.empty? ? [] : Share.where('LOWER(name) IN (?)', names).pluck(:name).map(&:downcase)
+    shares.partition { |share| have.include?(share[:name].downcase) }
+  end
+
+  # The shares (and folders of shares) it was given that are gone from the NAS: "Test", "Old/media".
+  def missing_shares
+    shares_by_presence.last.map { |share| self.class.share_label(share) }
   end
 
   # After a change only to how it's listed (apps.custom_save's update: false), the ports it was

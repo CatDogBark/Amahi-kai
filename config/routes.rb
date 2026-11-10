@@ -143,6 +143,7 @@ Rails.application.routes.draw do
     get 'installed_apps', action: 'installed_apps'
     post 'refresh_catalog', action: 'refresh_catalog'
     get 'share_folders', action: 'share_folders'
+    post 'share_folders', action: 'make_share_folder'
     get 'docker/install_stream/:id', action: 'docker_install_stream', as: 'docker_install_stream'
     get 'docker/update_stream/:id', action: 'docker_update_stream', as: 'docker_update_stream'
     get 'docker/undo_update_stream/:id', action: 'docker_undo_update_stream', as: 'docker_undo_update_stream'
@@ -255,6 +256,8 @@ Rails.application.routes.draw do
   post 'files/trash/delete',           to: 'trash#delete',         as: :trash_delete
   post 'files/trash/empty',            to: 'trash#empty',          as: :trash_empty
   post 'files/trash/keep',             to: 'trash#keep',           as: :trash_keep
+  # New folder (Files' one change: FileBrowserController#make_folder)
+  post 'files/:share_id/folders',      to: 'file_browser#make_folder', as: :file_browser_folders, format: false
   get  'files/:share_id/browse',       to: 'file_browser#browse',  as: :file_browser, defaults: { path: '' }
   get  'files/:share_id/browse/*path', to: 'file_browser#browse',  as: :file_browser_path
   get  'files/:share_id/download',       to: 'file_browser#download', as: :file_browser_download_root, defaults: { path: '' }

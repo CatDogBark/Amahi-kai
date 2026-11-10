@@ -16,6 +16,19 @@ RSpec.describe 'Files', type: :system do
 
   after { FileUtils.rm_rf(folder) }
 
+  # New folder (1.8.7): a small form in the toolbar, its name box ready to type in
+  it 'makes a new folder in the folder shown' do
+    sign_in_as_admin
+    visit '/files/Docs/browse/Reports'
+    find('#fb-new-folder summary', text: 'New folder').click
+    expect(page).to have_css('#fb-new-folder-name:focus')
+    expect(page).to have_text('A new folder in Reports')
+    fill_in 'fb-new-folder-name', with: 'Q2'
+    click_button 'Make it'
+    expect(page).to have_current_path('/files/Docs/browse/Reports')
+    expect(Privileged.calls).to include(['shares.make_folder', { path: "#{folder}/Reports/Q2" }])
+  end
+
   it 'lists the shares, opens one, selects a file and switches to the grid' do
     sign_in_as_admin
     visit '/files'

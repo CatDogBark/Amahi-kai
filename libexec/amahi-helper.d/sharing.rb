@@ -142,6 +142,16 @@ module AmahiHelper
       validate: ->(a) { { path: share_path(a['path']) } },
       plan: ->(v) { [[:mkdir_p, v[:path]], [:own_dir, v[:path], APP_USER, USERS_GROUP, '2775']] }
     },
+    # A new folder in a share (Files' New folder, and an app's share dialog): one folder, in a
+    # folder of one of the NAS's shares that's there already, never one that's there itself, with
+    # a name Windows, macOS and Linux all take (new_share_folder). It's made through handles from
+    # the share root down, as do_mkdir_p's are, and owned as a share folder is: amahi:users,
+    # setgid, 2775, so Samba users and apps reach it as they do the share.
+    'shares.make_folder' => {
+      params: %w[path],
+      validate: ->(a) { { path: new_share_folder(a['path']) } },
+      plan: ->(v) { [[:make_folder, v[:path]], [:own_dir, v[:path], APP_USER, USERS_GROUP, '2775']] }
+    },
     # Removes a share folder only if it is empty.
     'shares.remove_dir' => {
       params: %w[path],
@@ -268,6 +278,46 @@ module AmahiHelper
       raise Refused, "path #{value} holds #{reserved}, a name Greyhole or the Trash keeps for itself" if reserved
       share_root_of(value) or raise Refused, "path #{value} is not inside #{SHARE_ROOT}, a data drive under #{DRIVES_ROOT} or a ZFS pool's shares folder"
       value
+    end
+
+    # A folder to make in a share (shares.make_folder): a share path (share_path) inside one of the
+    # shares in smb.conf, in a folder that's there, not there itself, and named as a folder can be
+    # on every computer that opens the share: no \ / : * ? " < > |, control character, leading
+    # dot, or trailing dot or space, 255 bytes at most.
+    def new_share_folder(value)
+      path = share_path(value)
+      name = File.basename(path)
+      parent = File.dirname(path)
+      raise Refused, "a folder's name can't hold \\ : * ? \" < > | or a control character" if name.match?(/[\\:*?"<>|[:cntrl:]]/)
+      raise Refused, "a folder's name can't start with a dot, or end with a dot or a space" if name.start_with?('.') || name.end_with?('.', ' ')
+      raise Refused, "#{name} is too long for a folder's name" if name.bytesize > 255
+      unless samba_shares.values.any? { |share| share[:path] && (parent == share[:path] || parent.start_with?("#{share[:path]}/")) }
+        raise Refused, "#{parent} isn't in one of the NAS's shares"
+      end
+      raise Refused, "#{name} is there already" if File.exist?(path) || File.symlink?(path)
+      raise Refused, "#{parent} isn't a folder" unless File.directory?(parent) && !File.symlink?(parent)
+
+      path
+    end
+
+    # Makes the folder at +path+ (new_share_folder) in its folder, opened through handles from
+    # the share root down, never through the path (no link on the way, as do_mkdir_p). Refused
+    # when something of that name is there by now.
+    def do_make_folder(path)
+      root = share_root_of(path) or raise Failed, "#{path} is no longer inside a share root"
+      parts = path.delete_prefix("#{root}/").split('/')
+      dir = open_dir(root)
+      current = root
+      parts[0...-1].each do |part|
+        current = "#{current}/#{part}"
+        dir = open_dir("#{fd_path(dir)}/#{part}", dir, current)
+      end
+      Dir.mkdir("#{fd_path(dir)}/#{parts.last}", 0o755)
+      nil
+    rescue Errno::EEXIST
+      raise Failed, "#{parts.last} is there already"
+    ensure
+      dir&.close
     end
 
     # The root +path+ sits in (the share root, a data drive's mount point, or a ZFS pool's shares

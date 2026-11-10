@@ -515,6 +515,22 @@ describe "Docker Apps", type: :request do
         get '/apps/share_folders', params: { share: 'Vault' }
         expect(response.body).not_to include('media')
       end
+
+      # New folder here (1.8.7): made as Files' New folder makes one, then chosen in the dialog
+      it 'makes a new folder in the folder the browser is at, and says where it is in the share' do
+        post '/apps/share_folders', params: { share: 'vault', path: 'media', name: 'Downloads' }
+        expect(response.parsed_body).to eq('folder' => 'media/Downloads')
+        expect(Privileged.calls.last).to eq(['shares.make_folder', { path: "#{root}/vault/media/Downloads" }])
+        post '/apps/share_folders', params: { share: 'Vault', path: '', name: 'a|b' }
+        expect(response).to have_http_status(:unprocessable_content)
+        expect(response.parsed_body).to eq('error' => %(a folder's name can't hold / \\ : * ? " < > |))
+        post '/apps/share_folders', params: { share: 'Photos', path: '', name: 'x' }
+        expect(response).to have_http_status(:not_found)
+        login_as(create(:user))
+        Privileged.calls.clear
+        post '/apps/share_folders', params: { share: 'Vault', path: '', name: 'Mine' }
+        expect(Privileged.calls).to be_empty # admins only
+      end
     end
 
     it "refuses an app that isn't in the catalog" do
@@ -670,6 +686,24 @@ describe "Docker Apps", type: :request do
         get "/"
         expect(response.body).not_to include('503')
       end
+    end
+
+    # A share it was given that's gone from the NAS (deleted before 1.x kept a share an app has):
+    # marked, and left out of the update, which says so (1.8.7)
+    it "marks a share that's gone, and updates without it" do
+      gitea(image: old, volume_mappings: [{ name: 'Test', write: false }].to_json)
+      get "/apps/gitea"
+      expect(Nokogiri::HTML(response.body).at_css('#app-gone-shares-gitea').text)
+        .to eq('Test, which Gitea was given, is gone from the NAS. Change, an update or Undo update carries on without it.')
+      get "/apps"
+      expect(Nokogiri::HTML(response.body).at_css('#docker_app_gitea').text).to include('Share gone')
+      helper_replies('apps.update', 'updated' => true, 'image' => catalog, 'from' => old) # with shares: [], as below
+      get "/apps/docker/update_stream/gitea", headers: same_origin
+      expect(response.body).to include('Test, which Gitea was given, is gone from the NAS: it carries on without it',
+                                       '✓ Gitea is updated to 1.27.3-rootless and running')
+      expect(DockerApp.find_by(identifier: 'gitea')).to have_attributes(image: catalog, shares: [])
+      get "/apps/gitea"
+      expect(response.body).not_to include('app-gone-shares-gitea')
     end
 
     it "shows the helper's reason when it couldn't start the update" do

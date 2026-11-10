@@ -4,6 +4,16 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.8.7] — 2026-11-09
+
+New folder, in Files and when giving an app folders, and apps whose share is gone carry on without it.
+
+### 🔒 Security & Fixes
+
+- **New folder in Files** — Files has a **New folder** button: type a name and it's made in the folder you're in, for anyone the network share would let write there (an admin, everyone in a share for everyone that isn't read only, those on a share's write list). It's the one change Files makes; files themselves still come and go over the network share.
+- **New folder, and one-click choosing, when you give an app folders** — Giving an app only some folders of a share, each folder in the browser has its own **Choose**, its name still opens it, and **+ New folder here** makes a folder where you are and gives it to the app at once. The button for another folder says **+ Choose another folder**, and waits while the browser is open (it used to open the same browser again, which looked like it did nothing).
+- **An app whose share is gone carries on** — A share an app was given that's no longer on your server (deleted before shares an app has were kept, say) stopped its update with "isn't one of the NAS's shares". Now its page says the share is gone and its card says **Share gone**, and Change, an update or Undo update carries on without it, saying so.
+
 ## [1.8.6] — 2026-11-09
 
 Update from an app's card on the Apps page.

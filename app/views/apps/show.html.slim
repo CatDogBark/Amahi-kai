@@ -28,6 +28,7 @@
 - secrets = AppCatalog.secrets(identifier)
 - sign_in = entry[:sign_in]
 - missing = app.missing_folders
+- gone_shares = app.missing_shares
 - versioned = %w[running stopped].include?(status)
 / An app of your own (CustomAppsController): Edit, Check for a newer version, and its changes saved
 / but not in its container yet (Apply them); apply=1 after a save runs the update by itself.
@@ -82,6 +83,11 @@ section.kai-app-panel.kai-app-hero id="docker_app_#{identifier}" aria-label=name
   - if status == 'error' && app.error_message.present?
     p.kai-notice.kai-notice-alert id="app-error-#{identifier}" = app.error_message
   / A folder it was given that's gone (renamed or moved): it can't start until it's given its folders again
+  / A share it was given that's gone from the NAS (deleted before 1.x kept a share an app has): an
+  / update, Undo update or Change carries on without it
+  - if gone_shares.any?
+    p.kai-notice.kai-notice-warn id="app-gone-shares-#{identifier}"
+      = "#{gone_shares.to_sentence}, which #{name} was given, #{gone_shares.one? ? 'is' : 'are'} gone from the NAS. Change, an update or Undo update carries on without #{gone_shares.one? ? 'it' : 'them'}."
   - if missing.any?
     p.kai-notice.kai-notice-warn id="app-missing-folders-#{identifier}"
       = "#{missing.to_sentence} #{missing.one? ? "isn't" : "aren't"} there any more (renamed, moved or deleted): #{name} can't start until Change gives it its folders again."

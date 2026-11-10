@@ -171,10 +171,14 @@ Inside a share:
 - **Download folder** zips the folder you're in, and the download button on a folder's row zips that
   one. The page says the zip is coming until the download starts; then the browser shows its
   progress.
+- **New folder** makes a folder in the folder you're in: type its name and **Make it**. It's there
+  for anyone who may write in the share, as the network share would let them: an admin, everyone
+  in a share that's for everyone and not read only, and those on a share's write list. A name
+  every computer can open is required (no `/ \ : * ? " < > |`, and no dot at its start or end).
 
-The file browser only views: it doesn't upload, rename, move or delete. Files change over the
-network share (SMB, above), so Samba, and [Greyhole](storage-pooling) on pooled shares, sees every
-change, and each user's share permissions apply. Away from home, connect over
+Apart from New folder, the file browser only views: it doesn't upload, rename, move or delete.
+Files change over the network share (SMB, above), so Samba, and [Greyhole](storage-pooling) on
+pooled shares, sees every change, and each user's share permissions apply. Away from home, connect over
 [Tailscale](remote-access) and use the share as usual. A stolen web login can't change your files.
 
 Users only see the shares they have access to. HTML, JavaScript and XML files are shown as plain
