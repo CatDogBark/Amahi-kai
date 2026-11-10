@@ -207,9 +207,11 @@ class AppsController < ApplicationController
     end
   end
 
-  # Undo update: the version and data from before the last update come back.
+  # Undo update: the version and data from before the last update come back, and the update
+  # check looks again at once (P4.9), so the newer version is offered again.
   def docker_undo_update_stream
     app_stream('apps.undo_update') do |app, entry, _reply, sse|
+      AppUpdateCheck.check(app)
       sse.emit("✓ #{entry[:name]} is back on #{app.version}, with its data from before the update")
       true
     end

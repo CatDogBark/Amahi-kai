@@ -658,6 +658,7 @@ describe "Docker Apps", type: :request do
       get "/apps/gitea"
       expect(response.body).to include("and so are the ZFS pool&#39;s own snapshots of its data taken since")
       helper_replies('apps.undo_update', 'image' => old)
+      expect(AppUpdateCheck).to receive(:check).with(have_attributes(identifier: 'gitea', image: old)) # looks again at once (P4.9)
       get "/apps/docker/undo_update_stream/gitea", headers: same_origin
       expect(response.body).to include('✓ Gitea is back on 1.27.2-rootless, with its data from before the update')
       expect(DockerApp.find_by(identifier: 'gitea').image).to eq(old)
