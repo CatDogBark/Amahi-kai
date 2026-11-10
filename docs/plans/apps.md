@@ -240,7 +240,8 @@ app needs a public hostname. HTTPS for apps through Tailscale (Vaultwarden needs
 - [x] **Version bumps are a person's job, no automation.** `script/app-versions` lists newer
   releases of the same tag shape (and newer builds of the pinned tag) with release notes links;
   `--update APP` writes the new tag and digest. Someone reads the notes and opens a PR. No bot,
-  no schedule, no Claude session runs it.
+  no schedule, no Claude session runs it. (Superseded 2026-11-09 by P4.9: a NAS finds newer
+  versions itself, so no bump is needed for it to see one.)
 - [x] **What's new** links to the new version's release notes (the manifest's `releases`).
 
 ### P4.5b: The catalog's own repo
@@ -462,6 +463,78 @@ label. Docker stays (Podman later or not at all).
   says when its image is private and when its token was refused. GitHub's registry still wants a
   classic token (`read:packages` only). Any registry works, Basic or token sign-in; ghcr.io is
   the one tried.
+
+### P4.9: Updates the NAS finds itself
+
+**Decided (CatDogBark, 2026-11-09):** a signed bump for every new version of every app would be
+upkeep that grows with the catalog, so it isn't done.
+
+- **The signature covers what an app is allowed to do; the version floats.** A manifest's image
+  repository, ports, what it reaches, kernel permissions, shares, secrets and folders are signed
+  with the catalog and rarely change. Its version doesn't need a bump: a NAS offers a newer
+  release of the same image (a tag of the same shape as the manifest's, `AppVersions.newest`, the
+  rule `script/app-versions` uses) or a newer build of the tag it runs. The manifest's tag is the
+  oldest a NAS installs. There's no new catalog format: every manifest's tag becomes that floor.
+  `script/app-versions` stays, to raise the floor now and then.
+- **A new major version is offered like the others, with a warning** to read its notes first
+  (Gitea 1.27 to 28). The data copy and Undo update are behind every update.
+- **Nothing updates by itself.** The admin presses Update, as now.
+- **The apps of your own get the same:** checked on the same schedule, with the result kept and
+  shown in the same places. Before, only when asked, and shown once.
+
+What it trusts: no person looks at each version before it's offered, as with Docker anywhere. A
+bad upstream version still can't give itself more permissions, network or shares (those come
+from the signed manifest), and can't skip the data copy.
+
+- [ ] **One check for every installed app**, every 6 hours (`amahi-kai-app-versions.timer`, a
+  task run as the app's user, like the indexer, never root) and with Check now (the Apps page,
+  the System Update dialog): `AppVersions#check_image` on the image each app runs, with its
+  manifest's `releases` for the notes link; a private image's lookups go through the helper with
+  its token (`RegistryTokens`). The result is kept per app in the database (a newer release or
+  build, or current; whether it's a new major version; the notes link; when; the error when the
+  registry couldn't be asked), in a migration safe to rerun.
+- [ ] **Shown where catalog updates show:** the app's card (Update ready), its page ("12.4 is
+  out", Update to 12.4, the notes link, the major version's warning), the dashboard's App updates
+  notice, the header's count and the System Update dialog. A catalog bump still counts (the newer
+  of the two). The app's page says when it was last checked. A failed check is said there only,
+  not on the dashboard (a registry's hiccup isn't news); a refused token shows as it does now, on
+  the app's page and on Private images.
+- [ ] **Check for a newer version** (an app of your own) runs the same check for that app and
+  keeps the result, so it's still there after leaving the page. The app's note and the Custom
+  note say Amahi-kai checks every 6 hours and never updates it by itself.
+- [ ] **The helper takes a version on the track.** `apps.update` and `apps.install` take an
+  optional `tag` for a catalog app, refused unless it has the shape of the manifest's tag and
+  isn't lower than the manifest's, nor (an update) than the one the app runs. The repository is
+  always the manifest's. The helper asks the registry itself for that tag's digest (anonymously,
+  or with the place's token, `registry.rb`), pulls that build, and keeps `repo:tag@digest` as the
+  definition the container is made from (`APP_DEFINITIONS`), so Undo and rebuilds use it. A newer
+  build is the tag the app runs, with the registry's new digest. The checks spec tries `tag` with
+  bad values, another shape and a lower version.
+- [ ] **Install takes the newest version on the track,** found just before (the manifest's own
+  tag when the registry can't be asked), and says which.
+
+### P4.10: The catalog's logos, on the NAS
+
+**Decided (CatDogBark, 2026-11-09):** a NAS gets each catalog app's logo once, with the catalog,
+and serves it itself. Before, every visit to the Apps page loaded the logos from jsDelivr: a
+third party, nothing without the internet, and a browser spec failing whenever jsDelivr refused
+CI's runner (2026-11-09).
+
+- [ ] **The catalog's repo:** `logos/<id>.<png|jpg|webp|svg>`, one for each app (the six from
+  homarr-labs/dashboard-icons, Apache-2.0, credited in its README). Its Check requires one for
+  each app, checked by its bytes and 256 KB at most, as an app of your own's logo is, and
+  `script/check-logos` reads them there. Manifests keep their `logo` links for older Amahi-kai,
+  which doesn't read the folder. Then a signed catalog-3.
+- [ ] **The helper's catalog fetch** reads `logos/` from the signed version's commit with the
+  manifests (so the signature covers them), checks each the same way and keeps it beside them.
+  `config/apps` gets the same files, so a new install and the browser specs never fetch a logo.
+- [ ] **The web app serves a catalog logo from the NAS** as it serves an app of your own's
+  (`LOGO_POLICY`, an address naming the picture, cached). An app without one shows the plain
+  icon, never a link. Then the Content-Security-Policy's `img-src` narrows to the NAS itself
+  (`self`, `data:`).
+
+**Order (P4.9, P4.10):** the logos first (the catalog's PR and its signed version, then a
+release), then the update check, a release of its own.
 
 ### Also in Phase 4
 

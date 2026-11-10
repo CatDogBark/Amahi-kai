@@ -88,6 +88,14 @@ signed with the same keys, and a server takes only the newest signed one, never 
 (`docs/plans/apps.md`, P4.8). It's still fetched apart from System Update, so an app's change never
 updates the server itself.
 
+### App updates the NAS finds itself, and the catalog's logos on the NAS
+
+Next (CatDogBark, 2026-11-09), planned in [`apps.md`](apps.md), P4.9 and P4.10. The catalog's
+signature covers what each app is allowed to do, and its version floats: every 6 hours a NAS
+checks each installed app's image for a newer release of the same shape (a new major version
+with a warning) and offers it; nothing updates by itself. The apps of your own get the same.
+The catalog's logos come with its signed versions and are served by the NAS, never jsDelivr.
+
 ### Backups
 
 Amahi-kai 1.0 makes none (the wiki's Getting Started says what to keep copies of).
