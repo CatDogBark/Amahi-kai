@@ -251,6 +251,17 @@ class AppsController < ApplicationController
     render json: { error: "#{path} isn't a folder in #{share&.name} that can be read" }, status: :unprocessable_content
   end
 
+  # A new folder in a share, from the share dialog's folder browser (1.8.7), made as Files' New
+  # folder makes one (Share#make_folder), then chosen there: { folder: its path in the share }.
+  def make_share_folder
+    share = Share.by_name.find { |s| s.name.casecmp?(params[:share].to_s) }
+    return render json: { error: "There's no share #{params[:share]}" }, status: :not_found unless share
+
+    render json: { folder: share.make_folder(params[:path].to_s, params[:name]) }
+  rescue Share::FolderRefused => e
+    render json: { error: e.message }, status: :unprocessable_content
+  end
+
   def docker_start
     app_action(&:start!)
   end
@@ -360,10 +371,14 @@ class AppsController < ApplicationController
       begin
         follow_docker_dns
         extra = args ? args.call(app) : {}
-        reply = Privileged.call(operation, app: app.identifier, shares: app.shares, **extra) { |line| sse.emit("  #{line}") }
+        # A share it was given that's gone from the NAS is left out, and said so (the helper refuses one)
+        shares, gone = app.shares_by_presence
+        gone.each { |share| sse.emit("  #{DockerApp.share_label(share)}, which #{app.name} was given, is gone from the NAS: it carries on without it") }
+        reply = Privileged.call(operation, app: app.identifier, shares: shares, **extra) { |line| sse.emit("  #{line}") }
         ports = reply['ports'] ? DockerApp.assigned_ports(entry, reply['ports']) : app.ports
         app.update!(image: reply['image'].presence || app.image, status: 'running', error_message: nil,
-                    ports: ports, host_port: ports.find { |port| port[:label] == 'web' }&.dig(:host) || app.host_port)
+                    ports: ports, host_port: ports.find { |port| port[:label] == 'web' }&.dig(:host) || app.host_port,
+                    **(gone.any? ? { shares: shares } : {}))
         sse.emit('')
         worked = yield app, entry, reply, sse
         sse.emit("  Open it at #{app.url(host)} (#{where_to_open(app)})") if app.url(host)

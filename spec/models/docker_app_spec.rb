@@ -170,6 +170,25 @@ describe DockerApp do
       expect(app.reload.shares).to eq([{ name: 'Vault', folder: 'media/Pictures', write: false }, { name: 'Vault', write: true }])
       expect(app.share_summary).to eq('Vault/media/Pictures (read only) · Vault (read and write)')
     end
+
+    # A share it lists that the NAS doesn't have any more (deleted before 1.x kept a share an app
+    # has): marked, and left out of an update or Undo update (1.8.7)
+    it "tells the shares the NAS still has from those it hasn't, whatever their capitals" do
+      allow(Share).to receive(:push_shares)
+      Dir.mktmpdir do |dir|
+        create(:share, name: 'Vault', path: dir)
+        Dir.mkdir("#{dir}/media")
+        app = build_app
+        app.shares = [{ name: 'vault', folder: 'media' }, { name: 'Test' }, { name: 'Old', folder: 'x' }, { name: 'Vault', folder: 'gone' }]
+        app.save!
+        kept, gone = app.shares_by_presence
+        expect(kept).to eq([{ name: 'vault', folder: 'media', write: false }, { name: 'Vault', folder: 'gone', write: false }])
+        expect(gone).to eq([{ name: 'Test', write: false }, { name: 'Old', folder: 'x', write: false }])
+        expect(app.missing_shares).to eq(%w[Test Old/x])
+        expect(app.missing_folders).to eq(['Vault/gone']) # a folder of a share that's gone is one of missing_shares
+        expect(build_app.missing_shares).to eq([])
+      end
+    end
   end
 
   describe 'start, stop and restart' do

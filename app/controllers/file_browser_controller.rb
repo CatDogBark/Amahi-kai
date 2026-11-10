@@ -1,9 +1,10 @@
 require 'file_browser_service'
 require 'zip_kit'
 
-# The web file browser: browse, preview and download. It changes nothing. Files are added,
-# renamed and deleted over the SMB shares, so Samba, and Greyhole on pooled shares, sees
-# every change (docs/plans/storage.md, S5).
+# The web file browser: browse, preview and download, and New folder. Files are added, renamed
+# and deleted over the SMB shares, so Samba, and Greyhole on pooled shares, sees every change
+# (docs/plans/storage.md, S5); an empty folder is the one thing it makes (1.8.7), as Samba
+# would, for someone who may write in the share.
 class FileBrowserController < ApplicationController
   include ZipKit::RailsStreaming
 
@@ -44,6 +45,20 @@ class FileBrowserController < ApplicationController
     @page_heading = false
     @entries = FileBrowserService.list_directory(@full_path)
     @breadcrumbs = FileBrowserService.build_breadcrumbs(@share.name, @relative_path)
+  end
+
+  # POST /files/:share_id/folders: New folder, named +name+, in the folder at +path+ (its path in
+  # the share), made by the root helper as a share folder is (Share#make_folder), for someone who
+  # may write in the share as Samba lets them (User#can_write_share?). Back to that folder, where
+  # it's listed.
+  def make_folder
+    back = helpers.browse_path(@share, @relative_path.presence)
+    return redirect_to(back, flash: { error: "You can't make folders in #{@share.name}" }) unless current_user.can_write_share?(@share)
+
+    folder = @share.make_folder(@relative_path, params[:name])
+    redirect_to back, flash: { success: "Made the folder #{File.basename(folder)}" }
+  rescue Share::FolderRefused => e
+    redirect_to back, flash: { error: "Couldn't make the folder: #{e.message}" }
   end
 
   # GET /files/:share_id/download/*path

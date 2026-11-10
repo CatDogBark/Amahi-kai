@@ -23,7 +23,10 @@ tested on the physical drives ([Tests on real drives](#tests-on-real-drives)).
   typed name. Only Amahi-kai's own snapshots are ever deleted or pruned (#51).
 - [x] **S5.** The web file browser only views and downloads (CatDogBark, 2026-10-05), so every change
   to a share goes through Samba and Greyhole needs no special handling; pooled files preview and
-  download, and folder zips work (#53).
+  download, and folder zips work (#53). **One exception since 1.8.7 (CatDogBark, 2026-11-09): New
+  folder**, an empty folder made by the root helper (`shares.make_folder`, owned as a share folder
+  is) for someone Samba lets write in the share (`User#can_write_share?`). An empty folder needs
+  nothing of Greyhole, which handles the files written into it later, over SMB.
 
 ## Decisions
 
@@ -141,8 +144,8 @@ The first idea (2026-10-04) was to tell Greyhole about the web file browser's ch
 instead (CatDogBark, 2026-10-05): **Greyhole is basic SMB mass storage with simple redundancy, and is
 treated as nothing more.**
 
-- The web file browser only views and downloads (S5). Files change over SMB, so every change
-  goes through Samba and Greyhole needs nothing special.
+- The web file browser only views and downloads (S5), and makes empty folders (New folder, 1.8.7).
+  Files change over SMB, so every change goes through Samba and Greyhole needs nothing special.
 - Apps don't write into pooled shares directly: an app's files that people use go in a share
   written through Samba, and an app's private data in a ZFS dataset (P4.6 in
   [`apps.md`](apps.md#p46-app-storage-and-bitshare)).

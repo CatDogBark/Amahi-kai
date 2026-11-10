@@ -495,6 +495,55 @@ RSpec.describe 'AmahiHelper' do
       expect(File.directory?("#{root}/a/b")).to be true
     end
 
+    # Files' New folder and an app's share dialog: one new folder, in a folder of a share
+    describe 'a new folder' do
+      before do
+        Dir.mkdir("#{root}/vault")
+        Dir.mkdir("#{root}/vault/media")
+        allow(helper).to receive(:samba_shares).and_return('vault' => { name: 'Vault', path: "#{root}/vault", pooled: false })
+      end
+
+      it "plans it made, then owned as a share folder is, and makes it through the folders above it" do
+        planned = steps('shares.make_folder', { 'path' => "#{root}/vault/media/Shows 2026" })
+        expect(planned).to eq([[:make_folder, "#{root}/vault/media/Shows 2026"], [:own_dir, "#{root}/vault/media/Shows 2026", 'amahi', 'users', '2775']])
+        made = []
+        allow(Dir).to receive(:mkdir).and_wrap_original { |m, path, *args| made << path; m.call(path, *args) }
+        helper.do_make_folder("#{root}/vault/media/Shows 2026")
+        expect(made).to match([%r{\A/proc/self/fd/\d+/Shows 2026\z}])
+        expect(File.directory?("#{root}/vault/media/Shows 2026")).to be true
+        expect(steps('shares.make_folder', { 'path' => "#{root}/vault/Downloads" }).first).to eq([:make_folder, "#{root}/vault/Downloads"]) # at its top
+      end
+
+      it "refuses one that's there, outside a share, in a folder that isn't there, or with a name a computer can't take" do
+        problem = ->(path) { refusal('shares.make_folder', { 'path' => path }) }
+        expect(problem.call("#{root}/vault/media")).to eq('media is there already')
+        File.write("#{root}/vault/notes", '')
+        expect(problem.call("#{root}/vault/notes")).to eq('notes is there already')
+        expect(problem.call("#{root}/vault/notes/x")).to eq("#{root}/vault/notes isn't a folder")
+        expect(problem.call("#{root}/vault/missing/x")).to eq("#{root}/vault/missing isn't a folder")
+        expect(problem.call("#{root}/other/x")).to eq("#{root}/other isn't in one of the NAS's shares")
+        expect(problem.call('/etc/x')).to include('is not inside')
+        %w[a\\b a:b a*b a?b a"b a<b a>b a|b].each do |name|
+          expect(problem.call("#{root}/vault/#{name}")).to start_with("a folder's name can't hold"), name
+        end
+        expect(problem.call("#{root}/vault/a\tb")).not_to be_nil # a control character: refused by share_path itself
+        ['.hidden', 'trailing.', 'trailing '].each do |name|
+          expect(problem.call("#{root}/vault/#{name}")).to eq("a folder's name can't start with a dot, or end with a dot or a space"), name
+        end
+        expect(problem.call("#{root}/vault/#{'é' * 128}")).to eq("#{'é' * 128} is too long for a folder's name")
+        expect(problem.call("#{root}/vault/Shows 2026 (Rhonda's)")).to be_nil
+      end
+
+      it "won't make one through a link, and says so when something took the name meanwhile" do
+        Dir.mkdir("#{@tmp}/elsewhere")
+        File.symlink("#{@tmp}/elsewhere", "#{root}/vault/linked")
+        expect(refusal('shares.make_folder', { 'path' => "#{root}/vault/linked/x" })).to eq("#{root}/vault/linked isn't a folder")
+        expect { helper.do_make_folder("#{root}/vault/linked/x") }.to raise_error(AmahiHelper::Failed, /is a symbolic link/)
+        expect(Dir.children("#{@tmp}/elsewhere")).to eq([])
+        expect { helper.do_make_folder("#{root}/vault/media") }.to raise_error(AmahiHelper::Failed, 'media is there already')
+      end
+    end
+
     it 'turns guest write on and off on the folder only' do
       path = "#{root}/public"
       Dir.mkdir(path, 0o2775)

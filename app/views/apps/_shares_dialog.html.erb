@@ -71,13 +71,29 @@
                   </div>
                   <div data-role="folders" hidden>
                     <ul class="list-unstyled small mb-1" data-role="folder-list"></ul>
+                    <%# The folder browser (apps.js): a folder's name opens it, its Choose gives it to the
+                        app, and New folder here makes one in the folder it's at (Share#make_folder),
+                        given to the app at once %>
                     <div class="border rounded p-2 mb-1 small" data-role="browser" hidden>
                       <div class="text-secondary mb-1" data-role="crumbs"></div>
                       <div class="d-flex flex-wrap gap-1 mb-2" data-role="entries"></div>
-                      <button type="button" class="btn btn-sm btn-outline-primary" data-role="choose-here"></button>
-                      <button type="button" class="btn btn-sm btn-link" data-role="browser-cancel">Cancel</button>
+                      <div class="d-flex flex-wrap align-items-center gap-1">
+                        <button type="button" class="btn btn-sm btn-outline-primary" data-role="choose-here"></button>
+                        <button type="button" class="btn btn-sm btn-link" data-role="new-folder">+ New folder here</button>
+                        <button type="button" class="btn btn-sm btn-link" data-role="browser-cancel">Cancel</button>
+                      </div>
+                      <%# A wrapper carries [hidden]: Bootstrap's d-flex would override it %>
+                      <div data-role="new-folder-form" hidden>
+                        <div class="d-flex flex-wrap align-items-center gap-1 mt-2">
+                          <input type="text" class="form-control form-control-sm" style="flex: 1 1 12em; width: auto;" maxlength="255" autocomplete="off"
+                                 placeholder="The new folder's name" aria-label="The new folder's name" data-role="new-folder-name">
+                          <button type="button" class="btn btn-sm btn-primary" data-role="new-folder-make">Make it and choose it</button>
+                          <button type="button" class="btn btn-sm btn-link" data-role="new-folder-cancel">Cancel</button>
+                        </div>
+                      </div>
+                      <div class="text-warning mt-1" data-role="new-folder-problem" role="status" hidden></div>
                     </div>
-                    <button type="button" class="btn btn-sm btn-link p-0" data-role="add-folder">+ Add a folder</button>
+                    <button type="button" class="btn btn-sm btn-link p-0" data-role="add-folder">+ Choose another folder</button>
                     <span class="small text-warning ms-2" data-role="folders-needed" hidden>Choose a folder, or All of <%= share.name %></span>
                   </div>
                 </td>

@@ -1,6 +1,7 @@
-<%# The web file browser only views and downloads. Files are added, renamed and deleted over
-    the SMB share, so Samba, and Greyhole on pooled shares, sees every change. A whole row is
-    the link: a folder opens, a file shows in the panel beside the list (file_browser_controller.js). %>
+<%# The web file browser views and downloads, and makes folders (New folder, for someone who
+    may write in the share). Files are added, renamed and deleted over the SMB share, so Samba,
+    and Greyhole on pooled shares, sees every change. A whole row is the link: a folder opens, a
+    file shows in the panel beside the list (file_browser_controller.js). %>
 <% folder_path = ->(name) { [@relative_path, name].reject(&:blank?).join('/') } %>
 <div class="file-browser" data-controller="file-browser">
 
@@ -17,6 +18,21 @@
       <% end %>
     </nav>
     <div class="fb-actions">
+      <%# New folder, in the folder shown (FileBrowserController#make_folder), for someone who may
+          write in the share; the form works without the page's script too %>
+      <% if current_user.can_write_share?(@share) %>
+        <details class="fb-new-folder" id="fb-new-folder" data-action="toggle->file-browser#focusNewFolder">
+          <summary class="btn btn-sm btn-outline-info"><%= lucide_icon('folder-plus', size: 16) %> New folder</summary>
+          <%= form_tag file_browser_folders_path(@share), class: 'fb-new-folder-form', id: 'fb-new-folder-form' do %>
+            <input type="hidden" name="path" value="<%= @relative_path %>">
+            <label class="fb-new-folder-label" for="fb-new-folder-name">A new folder in <%= @breadcrumbs.last[:name] %></label>
+            <div class="fb-new-folder-row">
+              <input type="text" id="fb-new-folder-name" name="name" class="form-control form-control-sm" placeholder="Its name" maxlength="255" required autocomplete="off">
+              <button type="submit" class="btn btn-sm btn-primary" data-disable-with="Making it…">Make it</button>
+            </div>
+          <% end %>
+        </details>
+      <% end %>
       <% if @entries.any? %>
         <div class="fb-viewtoggle" role="group" aria-label="View">
           <button type="button" class="fb-viewbtn" data-view="list" aria-pressed="true" aria-label="List" data-action="click->file-browser#setView"><%= lucide_icon('list', size: 17) %></button>

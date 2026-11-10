@@ -90,6 +90,16 @@ class User < ApplicationRecord
     admin? || user?
   end
 
+  # Can this user make a folder in a share from the web UI (Files' New folder), as Samba lets
+  # them write in it (Share#share_conf): an admin, always; a share for everyone, unless it's read
+  # only; any other share, those on its write list.
+  def can_write_share?(share)
+    return true if admin?
+    return false unless can_access_share?(share)
+
+    share.everyone? ? !share.rdonly : share.users_with_write_access.include?(self)
+  end
+
   # Can this user access a specific share via the web UI?
   def can_access_share?(share)
     return true if admin?

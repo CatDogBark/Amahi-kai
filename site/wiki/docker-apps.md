@@ -146,10 +146,17 @@ change that fails leaves the app as it was, running.
 A share whose folder is a link (to somewhere else on the server) isn't given to an app.
 
 **Only some folders of a share** can be given instead of all of it: tick the share, choose **Only
-some folders**, and pick each folder in the share's folders (**+ Add a folder**). Each appears in
+some folders**, and pick each folder in the share's folders: **Choose** beside a folder gives it,
+its name opens it to go deeper, and **+ New folder here** makes a new folder where you are and
+gives it at once (as [New folder](file-sharing#file-browser) does in Files). **+ Choose another
+folder** gives one more. Each appears in
 the app where it is in the share, at `/shares/<name>/<folder>` (`/shares/Vault/media/Pictures`),
 so an app's own settings keep working when you narrow what it's given, and the rest of the share
 is out of the app's reach. A share can give several folders, none inside another.
+
+A share can't be deleted while an app has it. If one an app was given is gone anyway (deleted
+before that rule, say), the app's page says so and its card says **Share gone**: **Change**, an
+update or **Undo update** carries on without it.
 
 - Amahi-kai mounts each folder given to an app itself, after checking that it's a real folder and
   that no link is on the way to it, and mounts it again before Docker starts the apps after a

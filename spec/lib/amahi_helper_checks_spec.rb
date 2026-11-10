@@ -64,6 +64,9 @@ RSpec.describe 'AmahiHelper: the checks on every argument' do
     'samba.write_lmhosts' => { good: { 'content' => '192.168.1.5 nas' }, may_hold: { 'content' => blank_lines } },
     'shares.create_dir' => { good: { 'path' => "#{files}/photos" }, may_hold: { 'path' => folder_may_hold } },
     'shares.remove_dir' => { good: { 'path' => "#{files}/photos" }, may_hold: { 'path' => folder_may_hold } },
+    # A new folder's name is one every computer takes: \\ : * ? " < > | refused, and a leading dot
+    'shares.make_folder' => { good: { 'path' => "#{files}/vault/Downloads" },
+                              may_hold: { 'path' => [*(punctuation - %w[double_quote backslash]), *letters] } },
     'shares.set_guest_write' => { good: { 'path' => "#{files}/photos", 'writable' => true }, may_hold: { 'path' => folder_may_hold } },
     'trash.set_days' => { good: { 'days' => 14 } },
 

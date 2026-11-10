@@ -229,4 +229,34 @@ describe Share do
     end
   end
 
+
+  # Files' New folder and an app's share dialog (1.8.7): the root helper makes it as a share folder
+  describe "#make_folder" do
+    let(:share) { create(:share, name: 'Vault', path: '/var/lib/amahi-kai/files/vault') }
+
+    it "asks the helper for one new folder in the folder given, and says where it is in the share" do
+      expect(share.make_folder('media', '  Shows 2026  ')).to eq('media/Shows 2026')
+      expect(Privileged.calls.last).to eq(['shares.make_folder', { path: '/var/lib/amahi-kai/files/vault/media/Shows 2026' }])
+      expect(share.make_folder('', 'Downloads')).to eq('Downloads') # at the share's top
+      expect(share.make_folder('/media/Shows/', "Rhonda's")).to eq("media/Shows/Rhonda's")
+    end
+
+    it "says, before asking the helper, what's wrong with a name every computer can't take" do
+      Privileged.calls.clear
+      { '' => 'Give it a name', '   ' => 'Give it a name', 'a/b' => %(a folder's name can't hold / \\ : * ? " < > |),
+        'a:b' => %(a folder's name can't hold / \\ : * ? " < > |), '.hidden' => "a folder's name can't start or end with a dot",
+        'end.' => "a folder's name can't start or end with a dot", "tab\tbed" => "that name has a character a folder can't have",
+        'x' * 256 => 'that name is too long for a folder' }.each do |name, why|
+        expect { share.make_folder('', name) }.to raise_error(Share::FolderRefused, why), name
+      end
+      expect { share.make_folder('../etc', 'x') }.to raise_error(Share::FolderRefused, "../etc isn't a folder in Vault")
+      expect(Privileged.calls).to be_empty
+    end
+
+    it "passes on why the helper refused" do
+      allow(Privileged).to receive(:call).with('shares.make_folder', anything).and_raise(Privileged::Error.new('shares.make_folder', 'media is there already'))
+      expect { share.make_folder('', 'media') }.to raise_error(Share::FolderRefused, 'media is there already')
+    end
+  end
+
 end

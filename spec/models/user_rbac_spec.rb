@@ -76,6 +76,32 @@ RSpec.describe User, 'RBAC', type: :model do
     end
   end
 
+  # Files' New folder (1.8.7): as Samba lets them write in the share (Share#share_conf)
+  describe '#can_write_share?' do
+    it 'lets an admin make folders in any share, even a read-only one' do
+      expect(create(:admin).can_write_share?(create(:share, everyone: false, rdonly: true))).to be true
+    end
+
+    it "follows a share for everyone's read only, and any other share's write list" do
+      user = create(:user, role: 'user')
+      expect(user.can_write_share?(create(:share, everyone: true, rdonly: false))).to be true
+      expect(user.can_write_share?(create(:share, everyone: true, rdonly: true))).to be false
+      listed = create(:share, everyone: false)
+      listed.users_with_share_access << user
+      expect(user.can_write_share?(listed)).to be false # it can read it, not write in it
+      listed.users_with_write_access << user
+      expect(user.reload.can_write_share?(listed.reload)).to be true
+    end
+
+    it "never lets a guest, or someone who can't open the share" do
+      expect(create(:user, role: 'guest').can_write_share?(create(:share, everyone: true))).to be false
+      stranger = create(:user, role: 'user')
+      share = create(:share, everyone: false)
+      share.users_with_write_access << stranger
+      expect(stranger.reload.can_write_share?(share.reload)).to be false
+    end
+  end
+
   describe '#accessible_shares' do
     it 'admin gets all shares' do
       admin = create(:admin)

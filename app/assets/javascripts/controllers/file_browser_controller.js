@@ -1,7 +1,8 @@
 // File Browser Controller
 //
-// The web file browser only views: files are added, renamed and deleted over the SMB shares,
-// so Samba (and Greyhole on pooled shares) sees every change. A row is one link: a folder opens
+// The web file browser views, and makes folders (New folder, a form of its own): files are added,
+// renamed and deleted over the SMB shares, so Samba (and Greyhole on pooled shares) sees every
+// change. A row is one link: a folder opens
 // (the link's own job), a file is shown in the panel beside the list (select; clicking it again
 // closes it), with Download and, for pictures, video, audio, PDFs and text, Open full screen. The
 // list can be a grid of tiles
@@ -190,6 +191,12 @@
     // The zip is made as it's sent, so its download starts within moments; until then the
     // page says it's coming. The server returns the link's token in the fb_download cookie
     // when it starts sending.
+    // New folder: its name box, ready to type in, when it opens
+    focusNewFolder(event) {
+      var box = event.currentTarget;
+      if (box.open) box.querySelector('input[name="name"]').focus();
+    }
+
     downloadZip(event) {
       var link = event.currentTarget;
       var token = Math.random().toString(36).slice(2, 12) + Date.now().toString(36);

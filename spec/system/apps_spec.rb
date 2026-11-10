@@ -131,7 +131,7 @@ RSpec.describe 'Apps', type: :system do
         expect(page).to have_text('No folders in here.')
         click_button 'Choose media/Pictures'
         find('[data-folder="media/Pictures"] select').select('Read and write')
-        click_button '+ Add a folder'
+        click_button '+ Choose another folder'
         click_button '📁 media'
         click_button 'Choose media'
         expect(page).to have_text('media/Pictures, chosen already, is inside media: remove it first')
@@ -140,6 +140,36 @@ RSpec.describe 'Apps', type: :system do
       within('#app-shares-dialog') { click_button 'Save and restart' }
       within('#app-install-modal') { expect(page).to have_text('Transmission is installed and running', wait: 15) }
       expect(Privileged.calls).to include(['apps.install', { app: 'transmission', shares: [{ name: 'Vault', folder: 'media/Pictures', write: true }] }])
+    end
+
+    # 1.8.7: each folder's own Choose, and New folder here, made and given to the app at once
+    it 'chooses a folder in one click, and makes a new one there for the app' do
+      app = create(:docker_app, identifier: 'transmission', name: 'Transmission', status: 'running')
+      app.update!(shares: [{ name: 'Vault', write: false }])
+      open_change(app)
+      within('#app-shares-dialog tr[data-share-folders="Vault"]') do
+        choose 'Only some folders'
+        expect(page).to have_button('📁 media')
+        expect(page).to have_no_button('+ Choose another folder') # it would only open the browser again
+        find('[data-role="choose-entry"][data-path="media"]').click
+        expect(page).to have_css('[data-folder="media"]')
+        click_button '+ Choose another folder'
+        click_button '+ New folder here'
+        expect(page).to have_css('[data-role="new-folder-name"]:focus')
+        expect_browser_error(/status of 422/) # the NAS refuses the name
+        find('[data-role="new-folder-name"]').fill_in(with: 'a:b')
+        click_button 'Make it and choose it'
+        expect(page).to have_text(%(a folder's name can't hold / \\ : * ? " < > |))
+        find('[data-role="new-folder-name"]').fill_in(with: 'Downloads')
+        click_button 'Make it and choose it'
+        expect(page).to have_css('[data-folder="Downloads"]')
+        expect(page).to have_button('+ Choose another folder')
+      end
+      expect(Privileged.calls).to include(['shares.make_folder', { path: "#{root}/vault/Downloads" }])
+      within('#app-shares-dialog') { click_button 'Save and restart' }
+      within('#app-install-modal') { expect(page).to have_text('Transmission is installed and running', wait: 15) }
+      installed = Privileged.calls.find { |call| call.first == 'apps.install' }.last
+      expect(installed[:shares]).to contain_exactly({ name: 'Vault', folder: 'media', write: false }, { name: 'Vault', folder: 'Downloads', write: false })
     end
 
     it 'shows the folders an app was given, and asks for one before giving only some' do

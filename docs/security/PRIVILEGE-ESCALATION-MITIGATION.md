@@ -63,7 +63,10 @@ so passwords never appear on a command line. Each operation:
 - logs one JSON line per call, with secrets filtered out and file contents summarized as a size
   and a hash.
 
-The areas it covers: Linux and Samba accounts, Samba's config, share folders, system services,
+The areas it covers: Linux and Samba accounts, Samba's config, share folders (and a new folder
+in a share, `shares.make_folder`: one folder, in a folder of a share that's there, never one that
+is, with a name every computer takes, made through handles so no link on the way can send it
+elsewhere, owned as a share folder is; Files' New folder and an app's share dialog), system services,
 reboot and power off, the hostname, swap, data drives and fstab, ZFS pools (created only on
 whole data disks with nothing in use on them, imported only when Amahi-kai made them; pools
 mount under `/srv/pools`, where no share folder may be made), Greyhole, package installs (from

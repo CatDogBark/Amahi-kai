@@ -205,6 +205,32 @@ class Share < ApplicationRecord
     SambaService.push_config
   end
 
+  # A folder name the helper would refuse (Share#make_folder), told in words first.
+  class FolderRefused < StandardError; end
+
+  # A new folder named +name+ in the folder at +parent+ (its path in the share; blank for the
+  # share's top), made by the root helper as a share folder is (shares.make_folder: amahi:users,
+  # 2775): Files' New folder, and an app's share dialog. Returns its path in the share. Raises
+  # FolderRefused with why, for a name every computer that opens the share can't take, one that's
+  # there already, or a folder that isn't.
+  def make_folder(parent, name)
+    name = name.to_s.strip
+    raise FolderRefused, 'Give it a name' if name.empty?
+    raise FolderRefused, %(a folder's name can't hold / \\ : * ? " < > |) if name.match?(%r{[/\\:*?"<>|]})
+    raise FolderRefused, "a folder's name can't start or end with a dot" if name.start_with?('.') || name.end_with?('.')
+    raise FolderRefused, "that name has a character a folder can't have" if name.match?(/[[:cntrl:]]/)
+    raise FolderRefused, 'that name is too long for a folder' if name.bytesize > 255
+
+    parts = parent.to_s.split('/').reject(&:empty?)
+    raise FolderRefused, "#{parent} isn't a folder in #{self.name}" if parts.any? { |part| %w[. ..].include?(part) }
+
+    folder = [*parts, name].join('/')
+    Privileged.call('shares.make_folder', path: File.join(path, folder))
+    folder
+  rescue Privileged::Error => e
+    raise FolderRefused, e.message
+  end
+
   # --- Samba config generation ---
 
   def share_conf

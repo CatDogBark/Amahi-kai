@@ -24,6 +24,49 @@ describe "FileBrowser Controller", type: :request do
     end
   end
 
+  # New folder (1.8.7): the one change Files makes, as Samba would, for someone who may write
+  describe "New folder" do
+    before { FileUtils.mkdir_p(File.join(tmpdir, 'media')) }
+
+    it "makes one in the folder shown, through the helper, and goes back to it" do
+      login_as_admin
+      get "/files/#{share.name}/browse/media"
+      form = Nokogiri::HTML(response.body).at_css('#fb-new-folder form')
+      expect(form['action']).to eq("/files/#{share.name}/folders")
+      expect(form.at_css('input[name="path"]')['value']).to eq('media')
+      post "/files/#{share.name}/folders", params: { path: 'media', name: 'Shows 2026' }
+      expect(Privileged.calls.last).to eq(['shares.make_folder', { path: File.join(tmpdir, 'media', 'Shows 2026') }])
+      expect(response).to redirect_to("/files/#{share.name}/browse/media")
+      expect(flash[:success]).to eq('Made the folder Shows 2026')
+      post "/files/#{share.name}/folders", params: { path: '', name: 'Downloads' }
+      expect(response).to redirect_to("/files/#{share.name}/browse")
+    end
+
+    it "says why when the name won't do or the helper refuses it" do
+      login_as_admin
+      post "/files/#{share.name}/folders", params: { path: 'media', name: 'a:b' }
+      expect(flash[:error]).to eq(%(Couldn't make the folder: a folder's name can't hold / \\ : * ? " < > |))
+      allow(Privileged).to receive(:call).with('shares.make_folder', anything).and_raise(Privileged::Error.new('shares.make_folder', 'Shows is there already'))
+      post "/files/#{share.name}/folders", params: { path: 'media', name: 'Shows' }
+      expect(flash[:error]).to eq("Couldn't make the folder: Shows is there already")
+    end
+
+    it "is only for someone who may write in the share, as Samba lets them" do
+      user = create(:user, role: 'user')
+      read_only = create(:share, path: Dir.mktmpdir, name: 'archive', everyone: true, rdonly: true)
+      login_as(user)
+      get "/files/archive/browse"
+      expect(response.body).not_to include('fb-new-folder')
+      post "/files/archive/folders", params: { path: '', name: 'Mine' }
+      expect(flash[:error]).to eq("You can't make folders in archive")
+      expect(Privileged.calls.map(&:first)).not_to include('shares.make_folder')
+      get "/files/#{share.name}/browse" # for everyone, and not read only
+      expect(response.body).to include('fb-new-folder')
+    ensure
+      FileUtils.remove_entry(read_only.path, true) if read_only
+    end
+  end
+
   describe "the Shares page" do
     let!(:open_share) { create(:share, name: "Photos", path: Dir.mktmpdir, everyone: true) }
     let!(:private_share) { create(:share, name: "Finance", path: Dir.mktmpdir, everyone: false) }
