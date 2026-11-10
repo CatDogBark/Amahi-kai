@@ -131,6 +131,17 @@ RSpec.describe 'install and update scripts' do
     expect(File.read(Rails.root.join('config/systemd/amahi-kai-update-check.timer'))).to include('OnUnitActiveSec=6h')
   end
 
+  # P4.9: as the app's user, 15 minutes after the timer starts (so not in the middle of the update
+  # that installs it), then every 6 hours
+  it "installs and enables the check of the apps' versions" do
+    text = File.read(Rails.root.join('bin/amahi-install-helper'))
+    expect(text).to include('amahi-kai-app-versions.service amahi-kai-app-versions.timer')
+    expect(text).to include('systemctl enable --now amahi-kai-app-versions.timer')
+    expect(File.read(Rails.root.join('config/systemd/amahi-kai-app-versions.service')))
+      .to include('User=amahi', 'ExecStart=/usr/bin/bundle exec rails apps:check_versions', 'EnvironmentFile=/etc/amahi-kai/amahi.env')
+    expect(File.read(Rails.root.join('config/systemd/amahi-kai-app-versions.timer'))).to include('OnActiveSec=15min', 'OnUnitActiveSec=6h')
+  end
+
   it 'installs Avahi and announces the apps each time Docker starts' do
     expect(File.read(Rails.root.join('bin/amahi-install'))).to include('  avahi-daemon \\')
     expect(File.read(Rails.root.join('bin/amahi-update'))).to include('apt-get install -y -qq --no-install-recommends avahi-daemon')

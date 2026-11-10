@@ -43,7 +43,7 @@ updater run everything that loads the app or its gems as `amahi`.
 | `/var/lib/amahi-kai/app-ports.json` | root:amahi 0640 | The host ports each app was given; the Apps page shows them |
 | `/var/lib/amahi-kai/app-backups/<app>/` | root:root 0700, in a root:amahi 0750 folder | The copy of an app's data from before its last update, kept 30 days; `<app>.json` beside it (root:amahi 0640) describes it for Undo update |
 | `/var/lib/amahi-kai/app-definitions/<app>.json` | root:amahi 0640 | What each installed app's container was made from (its manifest and image), so a reinstall, an Undo and a roll-back rebuild it as it was |
-| `/var/lib/amahi-kai/catalog-src`, `/var/lib/amahi-kai/catalog` | root:root, readable | The app catalog as fetched (a bare git repo), and the manifests from it that passed the helper's checks |
+| `/var/lib/amahi-kai/catalog-src`, `/var/lib/amahi-kai/catalog` | root:root, readable | The app catalog as fetched (a bare git repo), and the manifests and logos from it that passed the helper's checks (`catalog/apps`, `catalog/logos`) |
 | `/var/lib/amahi-kai-dns/` | root:root 0755 | The network's state: the router's rules (`router.json`), the NAS's last address change, the blocklists, the netplan files as last applied |
 
 `bin/amahi-set-ownership` sets this up. The installer runs it, and System Update runs it at the
@@ -111,7 +111,9 @@ an SSH signature by a key in `/etc/amahi-kai/allowed_signers`, and the tag namin
 highest N is taken, never one lower than the version the server has, and `main` is never
 fetched, so whoever controls the catalog's repository can neither offer manifests nobody signed
 nor take a server back to an older version's images. A version that fails any of this leaves the
-catalog as it was. It checks every field: an image pinned by tag and
+catalog as it was. The apps' logos come from the same signed commit (`logos/<id>.<type>`), each a
+PNG, JPEG, WebP or SVG by its bytes and 256 KB at most, as an app of your own's is, and the web
+app serves them under a sandbox policy: no page loads a picture from another site. It checks every field: an image pinned by tag and
 digest, published ports from 1024 up and none of the NAS's own, folders only under the app's own
 folder (plain names, never where shares go), environment values on one line, and no
 `DOCKER_MODS` (it makes an image download more code at start). There is no field for privileged
@@ -229,11 +231,19 @@ sign-in address its challenge names when that's https and in the registry's own 
 (`auth.docker.io` for Docker Hub), never the NAS itself or a link-local address. A container
 never sees it.
 
-Updates (`apps.update`) run the version the catalog pins; the web app names the app. The helper
-copies the app's folders (`cp -a`) into a root-only folder first, and puts them back
-(`apps.undo_update`, or by itself when the new version isn't healthy) only from that copy, by
-folder names it checks against the manifest's pattern. A version older than the one an app runs
-is refused.
+Updates (`apps.update`) run the version the catalog pins, or a newer one on the app's track; the
+web app names the app, and the version by its tag (`tag`, from the update check, P4.9). The
+signed catalog covers what an app is allowed to do; its version floats on the manifest's tag. So
+the helper takes a tag only for a catalog app (an app of your own's file says its version), only
+of the manifest tag's shape (its digits may change, nothing else), never lower than the
+manifest's tag nor than the one the app runs, and always from the manifest's repository. It
+downloads that tag and pins the app to the build the registry names for it then (the digest
+`docker pull` ends with), recorded as the definition the container is made from. A first install
+takes a tag the same way; a reinstall keeps the version it runs. A bad upstream version still
+gets only what the manifest gives an app. The helper copies the app's folders (`cp -a`) into a
+root-only folder first, and puts them back (`apps.undo_update`, or by itself when the new version
+isn't healthy) only from that copy, by folder names it checks against the manifest's pattern. A
+version older than the one an app runs is refused.
 
 ## Release keys
 

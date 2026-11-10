@@ -117,12 +117,15 @@ RSpec.describe 'AmahiHelper: the checks on every argument' do
     # alphabet holds these.
     'tunnel.configure' => { good: { 'token' => token }, may_hold: { 'token' => [*blank_lines, 'equals', 'slash', 'leading_dash', 'leading_two_dashes'] } },
 
-    'apps.install' => { good: { 'app' => 'pooled', 'shares' => [{ 'name' => 'vault', 'folder' => 'media', 'write' => false }], 'pool' => 'old' },
-                        may_hold: { 'shares' => shares_may_hold } },
+    # tag: a newer version on a catalog app's track (P4.9), left out for the manifest's own
+    'apps.install' => { good: { 'app' => 'pooled', 'shares' => [{ 'name' => 'vault', 'folder' => 'media', 'write' => false }], 'pool' => 'old',
+                                'tag' => '1.2' },
+                        may_hold: { 'shares' => shares_may_hold, 'tag' => optional } },
     'apps.start' => { good: { 'app' => 'gitea' } },
     'apps.stop' => { good: { 'app' => 'gitea' } },
     'apps.restart' => { good: { 'app' => 'gitea' } },
-    'apps.update' => { good: { 'app' => 'gitea', 'shares' => [{ 'name' => 'vault', 'folder' => 'media', 'write' => true }] }, may_hold: { 'shares' => shares_may_hold } },
+    'apps.update' => { good: { 'app' => 'gitea', 'shares' => [{ 'name' => 'vault', 'folder' => 'media', 'write' => true }], 'tag' => '28.3.0-rootless' },
+                       may_hold: { 'shares' => shares_may_hold, 'tag' => optional } },
     'apps.undo_update' => { good: { 'app' => 'gitea', 'shares' => [{ 'name' => 'vault', 'folder' => 'media', 'write' => true }] }, may_hold: { 'shares' => shares_may_hold } },
     'apps.uninstall' => { good: { 'app' => 'gitea', 'delete_data' => true } },
     'apps.logs' => { good: { 'app' => 'gitea', 'lines' => 150 } },

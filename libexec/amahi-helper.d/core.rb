@@ -652,6 +652,7 @@ module AmahiHelper
         *env.map { |key, value| "--setenv=#{key}=#{value}" }, *argv], ENV_MIN]
     end
 
+    # [the output's last lines, the exit status]; each line also goes to the block, when given.
     def stream_command(env, argv)
       tail = []
       status = Open3.popen2e(env, [argv[0], argv[0]], *argv.drop(1), unsetenv_others: true, chdir: '/') do |stdin, out, wait|
@@ -659,6 +660,7 @@ module AmahiHelper
         forwarding = true
         out.each_line do |line|
           tail = (tail << line).last(3)
+          yield line if block_given?
           next unless forwarding
           begin
             $stderr.puts(line.chomp)

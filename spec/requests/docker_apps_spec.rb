@@ -54,6 +54,7 @@ describe "Docker Apps", type: :request do
     end
 
     it "fetches it on Check now, and says what happened" do
+      expect(AppUpdateCheck).to receive(:run).with(wait: AppUpdateCheck::CHECK_NOW_WAIT).twice # the apps' versions (P4.9)
       post "/apps/refresh_catalog"
       expect(Privileged.calls).to include(['system.check_update', {}]) # Amahi-kai and the catalog
       expect(response).to redirect_to('/apps')
@@ -323,6 +324,28 @@ describe "Docker Apps", type: :request do
       expect(page.at_css('[data-role="storage-missing"]').text.squish).to include("there isn't one yet", 'Disks → ZFS Pools')
     end
 
+    # P4.9: a first install takes the newest version on the app's track; a reinstall keeps its own
+    it "installs the newest version on its track the first time, and the catalog's when its registry can't be asked" do
+      newer = AppVersions::Result.new(kind: :newer, tag: '1.27.3-rootless', latest: '1.27.9-rootless',
+                                      image: "gitea/gitea:1.27.9-rootless@sha256:#{'9' * 64}")
+      allow_any_instance_of(AppVersions).to receive(:check_image).and_return(newer)
+      get "/apps/docker/install_stream/gitea", headers: same_origin
+      expect(Privileged.calls).to include(['apps.install', { app: 'gitea', shares: [], tag: '1.27.9-rootless' }])
+      expect(response.body).to include('Taking 1.27.9-rootless, the newest version (the catalog names 1.27.3-rootless)')
+
+      DockerApp.where(identifier: 'gitea').delete_all
+      Privileged.calls.clear
+      allow_any_instance_of(AppVersions).to receive(:check_image).and_raise(RuntimeError, 'registry-1.docker.io answered 503')
+      get "/apps/docker/install_stream/gitea", headers: same_origin
+      expect(Privileged.calls).to include(['apps.install', { app: 'gitea', shares: [] }])
+      expect(response.body).to include("Couldn't ask its registry for a newer version (registry-1.docker.io answered 503), so it gets the catalog's 1.27.3-rootless")
+
+      Privileged.calls.clear
+      allow_any_instance_of(AppVersions).to receive(:check_image).and_return(newer)
+      get "/apps/docker/install_stream/gitea", headers: same_origin # installed: a reinstall
+      expect(Privileged.calls).to include(['apps.install', { app: 'gitea', shares: [] }])
+    end
+
     it "passes the pool chosen to the helper, only for an app that keeps data on one" do
       get "/apps/docker/install_stream/store", params: { pool: 'tank' }, headers: same_origin
       expect(Privileged.calls).to include(['apps.install', { app: 'store', shares: [], pool: 'tank' }])
@@ -560,6 +583,54 @@ describe "Docker Apps", type: :request do
       expect(response.body).to include("✗ 1.27.3-rootless didn't come up healthy: it stopped (exit code 1)",
                                        'Gitea is back on 1.27.2-rootless', 'data: error')
       expect(DockerApp.find_by(identifier: 'gitea')).to have_attributes(image: old, status: 'running')
+    end
+
+    # P4.9: a newer version the update check found, which the catalog doesn't name yet
+    describe 'to a version the update check found' do
+      let(:newer) { "gitea/gitea:28.3.0-rootless@sha256:#{'9' * 64}" }
+      let(:found) do
+        { newer_tag: '28.3.0-rootless', newer_image: newer, newer_kind: 'newer', newer_major: true,
+          newer_notes: 'https://github.com/go-gitea/gitea/releases/tag/v28.3.0', versions_checked_at: 2.hours.ago }
+      end
+
+      it 'offers it on its page with its notes and a word on a new major version, on its card, and on the dashboard' do
+        gitea(image: catalog, show_in_dashboard: true, **found)
+        get "/apps/gitea"
+        page = Nokogiri::HTML(response.body)
+        expect(page.at_css('#app-version-gitea button').text).to eq('Update to 28.3.0-rootless')
+        expect(page.at_css('#app-version-gitea a')['href']).to eq('https://github.com/go-gitea/gitea/releases/tag/v28.3.0')
+        expect(page.at_css('#app-major-gitea').text).to eq("A new major version: read what's new before you update.")
+        expect(page.at_css('#app-checked-gitea').text.squish).to eq('About 2 hours ago')
+        get "/apps"
+        expect(Nokogiri::HTML(response.body).at_css('#docker_app_gitea').text).to include('Update ready')
+        get "/"
+        expect(response.body).to include('Gitea 1.27.3-rootless → 28.3.0-rootless (a new major version)')
+      end
+
+      it "asks the helper for its tag, says so if it didn't come up, and forgets it once it runs" do
+        gitea(image: catalog, volume_mappings: [].to_json, **found)
+        allow(Privileged).to receive(:call).and_call_original
+        allow(Privileged).to receive(:call).with('apps.update', app: 'gitea', shares: [], tag: '28.3.0-rootless')
+                                           .and_return('ok' => true, 'updated' => false, 'image' => catalog, 'problem' => 'it stopped (exit code 1)')
+        get "/apps/docker/update_stream/gitea", headers: same_origin
+        expect(response.body).to include("✗ 28.3.0-rootless didn't come up healthy: it stopped (exit code 1)")
+        expect(DockerApp.find_by(identifier: 'gitea').newer_found).to include(tag: '28.3.0-rootless')
+
+        allow(Privileged).to receive(:call).with('apps.update', app: 'gitea', shares: [], tag: '28.3.0-rootless')
+                                           .and_return('ok' => true, 'updated' => true, 'image' => newer, 'from' => catalog)
+        get "/apps/docker/update_stream/gitea", headers: same_origin
+        expect(response.body).to include('✓ Gitea is updated to 28.3.0-rootless and running')
+        expect(DockerApp.find_by(identifier: 'gitea')).to have_attributes(image: newer, newer_tag: nil, newer_image: nil)
+      end
+
+      it "says when the check couldn't ask the image's registry, on the app's page only" do
+        gitea(image: catalog, show_in_dashboard: true, versions_checked_at: 5.minutes.ago, versions_error: 'registry-1.docker.io answered 503')
+        get "/apps/gitea"
+        expect(Nokogiri::HTML(response.body).at_css('#app-checked-gitea').text.squish)
+          .to eq("5 minutes ago It couldn't ask the image's registry: registry-1.docker.io answered 503")
+        get "/"
+        expect(response.body).not_to include('503')
+      end
     end
 
     it "shows the helper's reason when it couldn't start the update" do

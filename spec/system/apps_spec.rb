@@ -215,4 +215,29 @@ RSpec.describe 'Apps', type: :system do
     click_link 'All apps'
     expect(page).to have_current_path('/apps')
   end
+
+  # P4.9: a newer version the update check found, offered on the app's page and on the dashboard,
+  # with its logo from the NAS (P4.10)
+  it "offers a newer version the update check found, with a word on a new major version" do
+    allow(DockerService).to receive_messages(installed?: true, running?: true)
+    create(:docker_app, identifier: 'gitea', name: 'Gitea', status: 'running', image: AppCatalog.find('gitea')[:image],
+                        show_in_dashboard: true, newer_tag: '28.3.0-rootless', newer_image: "gitea/gitea:28.3.0-rootless@sha256:#{'9' * 64}",
+                        newer_kind: 'newer', newer_major: true, newer_notes: 'https://github.com/go-gitea/gitea/releases/tag/v28.3.0',
+                        versions_checked_at: 1.hour.ago)
+    sign_in_as_admin
+    expect(page).to have_css('.update-notice', text: 'Gitea 1.27.3-rootless → 28.3.0-rootless (a new major version)')
+    visit '/apps'
+    within('#docker_app_gitea') do
+      expect(page).to have_css('.kai-pill', text: 'Update ready')
+      expect(page).to have_css("img.kai-app-logo[src^='/apps/logos/gitea?v=']")
+      click_link 'Manage'
+    end
+    within('#app-version-gitea') do
+      expect(page).to have_button('Update to 28.3.0-rootless')
+      expect(page).to have_link("What's new", href: 'https://github.com/go-gitea/gitea/releases/tag/v28.3.0')
+      expect(page).to have_text("A new major version: read what's new before you update.")
+    end
+    expect(page).to have_css('#app-checked-gitea', text: 'About 1 hour ago')
+    expect(page.evaluate_script("document.querySelector('#docker_app_gitea img.kai-app-logo').naturalWidth")).to be > 0 # the NAS served it
+  end
 end

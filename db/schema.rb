@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_25_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_09_000000) do
   create_table "cap_accesses", force: :cascade do |t|
     t.integer "user_id"
     t.integer "share_id"
@@ -57,6 +57,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_25_000001) do
     t.text "error_message"
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
+    t.string "newer_tag"
+    t.string "newer_image"
+    t.string "newer_kind"
+    t.string "newer_notes"
+    t.datetime "versions_checked_at"
+    t.string "versions_error"
+    t.boolean "newer_major", default: false, null: false
     t.index ["identifier"], name: "index_docker_apps_on_identifier", unique: true
   end
 

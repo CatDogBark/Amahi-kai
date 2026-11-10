@@ -20,8 +20,9 @@ cp ../amahi-kai-apps/apps/*.yml config/apps/
 cp ../amahi-kai-apps/logos/* config/logos/
 ```
 
-Changes to apps go to the catalog's repo, not here. `script/app-versions` writes new versions
-there:
+Changes to apps go to the catalog's repo, not here. A new version of an app needs no change at
+all: each server finds newer releases of an app's tag itself (docs/plans/apps.md, P4.9).
+`script/app-versions` raises the version a new install starts from, in the catalog's repo:
 
 ```bash
 script/app-versions --catalog ../amahi-kai-apps/apps --update gitea

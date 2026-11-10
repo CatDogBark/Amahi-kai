@@ -1,0 +1,13 @@
+# Runs amahi-kai-app-versions.service 15 minutes after the timer starts (at boot, or when System
+# Update installs it, after the update has finished), then every 6 hours.
+# Installed and enabled by bin/amahi-install-helper.
+[Unit]
+Description=Amahi-kai: check the apps for newer versions every 6 hours
+
+[Timer]
+OnActiveSec=15min
+OnUnitActiveSec=6h
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

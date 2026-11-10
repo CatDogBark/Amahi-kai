@@ -168,6 +168,7 @@ class SettingsController < ApplicationController
 
   def check_updates
     Privileged.call('system.check_update')
+    AppUpdateCheck.run(wait: AppUpdateCheck::CHECK_NOW_WAIT)
     render json: { status: 'ok' }
   rescue Privileged::Error => e
     render json: { status: 'error', error: e.message }, status: :unprocessable_entity

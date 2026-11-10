@@ -32,9 +32,13 @@
 / An app of your own (CustomAppsController): Edit, Check for a newer version, and its changes saved
 / but not in its container yet (Apply them); apply=1 after a save runs the update by itself.
 - custom = entry[:custom] == true
-- waiting = custom && versioned && !app.update_available? && app.changes_waiting?
-- newer = flash[:custom_version] if custom
-- apply_now = custom && versioned && params[:apply].present? && (app.update_available? || waiting)
+- waiting = custom && versioned && !app.catalog_update? && app.changes_waiting?
+- apply_now = custom && versioned && params[:apply].present? && (app.catalog_update? || waiting)
+/ Update (P4.5, P4.9): to the catalog's version or one the update check found, the newer. An app of
+/ your own's found one is offered below (Check for a newer version), as its file takes it first.
+- row_target = app.update_target if versioned && !custom
+- row_target = { tag: app.catalog_version, kind: 'newer', major: false, notes: nil, from: :catalog } if versioned && custom && app.catalog_update?
+- newer = app.newer_found if versioned && custom
 / A private image: the token it downloads with (Private images, RegistryTokens), and whether its
 / registry refused it the last time
 - token = RegistryTokens.for_image(app.image) if app.image.present?
@@ -73,8 +77,8 @@ section.kai-app-panel.kai-app-hero id="docker_app_#{identifier}" aria-label=name
   p.kai-app-hero-text = app.description.presence || t('no_description_supplied')
   - if custom
     p.kai-notice.kai-notice-warn id="app-custom-#{identifier}"
-      | Added by you. It isn't from the Amahi-kai catalog: nobody checks its new versions for you, and it
-        changes only when you change it.
+      | Added by you. It isn't from the Amahi-kai catalog: Amahi-kai checks its image for newer versions
+        and tells you, and it changes only when you change it.
   - if status == 'error' && app.error_message.present?
     p.kai-notice.kai-notice-alert id="app-error-#{identifier}" = app.error_message
   / A folder it was given that's gone (renamed or moved): it can't start until it's given its folders again
@@ -165,21 +169,23 @@ section.kai-app-panel.kai-app-hero id="docker_app_#{identifier}" aria-label=name
           dd id="app-image-#{identifier}"
             ' Private: downloaded with
             a href=private_images_index_path = "your token for #{token.place}"
-        / Versions (P4.5): Update when the catalog has another one, Undo update while the copy from
-        / before the last update is kept. Both run in the install window (apps.js).
+        / Versions (P4.5, P4.9): Update to a newer one, Undo update while the copy from before the
+        / last update is kept. Both run in the install window (apps.js).
         - if versioned
           - backup = AppCatalog.backup(identifier)
           dt Version
           dd id="app-version-#{identifier}"
             = app.version
-            - if app.update_available? && entry[:installable] == false
-              span.text-warning.ms-2 = "#{app.catalog_version} needs a newer Amahi-kai: run System Update first"
-            - elsif app.update_available?
-              - target = app.catalog_version
-              button.btn.btn-link.p-0.ms-2.align-baseline.fw-semibold type="button" style="font-size: inherit" data-app-stream=identifier data-url=apps_docker_update_stream_path(identifier) data-title="Updating #{name}..." data-confirm="Update #{name} to #{target}? It stops for a minute or two. A copy of its data is kept for #{AppCatalog::BACKUP_DAYS} days, and if #{target} doesn't come up, #{name} goes back to #{app.version} by itself." = "Update to #{target}"
-              - releases = AppCatalog.releases_url(identifier, entry[:image])
+            - if row_target && entry[:installable] == false
+              span.text-warning.ms-2 = "#{row_target[:tag]} needs a newer Amahi-kai: run System Update first"
+            - elsif row_target
+              - target = row_target[:kind] == 'rebuilt' ? "a newer build of #{row_target[:tag]}" : row_target[:tag]
+              button.btn.btn-link.p-0.ms-2.align-baseline.fw-semibold type="button" style="font-size: inherit" data-app-stream=identifier data-url=apps_docker_update_stream_path(identifier) data-title="Updating #{name}..." data-confirm="Update #{name} to #{target}? It stops for a minute or two. A copy of its data is kept for #{AppCatalog::BACKUP_DAYS} days, and if #{target} doesn't come up, #{name} goes back to #{app.version} by itself." = row_target[:kind] == 'rebuilt' ? 'Update to the newer build' : "Update to #{row_target[:tag]}"
+              - releases = row_target[:notes] || (AppCatalog.releases_url(identifier, entry[:image]) if row_target[:from] == :catalog)
               - if releases
                 a.ms-2 href=releases target="_blank" rel="noopener" What's new
+              - if row_target[:major]
+                span.text-warning.ms-2 id="app-major-#{identifier}" A new major version: read what's new before you update.
             - if waiting
               span.text-warning.ms-2 Your changes aren't in it yet:
               button.btn.btn-link.p-0.ms-1.align-baseline.fw-semibold type="button" style="font-size: inherit" data-app-stream=identifier data-url=apps_docker_update_stream_path(identifier) data-title="Updating #{name} to your changes..." data-confirm="Update #{name} to your changes? It stops for a minute or two. A copy of its data is kept for #{AppCatalog::BACKUP_DAYS} days, and if it doesn't come up, #{name} goes back by itself." Apply them
@@ -188,30 +194,40 @@ section.kai-app-panel.kai-app-hero id="docker_app_#{identifier}" aria-label=name
             - if backup
               button.btn.btn-link.p-0.ms-2.align-baseline type="button" style="font-size: inherit" data-app-stream=identifier data-url=apps_docker_undo_update_stream_path(identifier) data-title="Undoing #{name}'s update..." data-confirm="Undo the update? #{name} goes back to #{AppCatalog.tag(backup[:from])} with its data from #{time_ago_in_words(backup[:taken_at])} ago. Anything changed in #{name} since then is lost#{backup[:snapshot] ? ", and so are the ZFS pool's own snapshots of its data taken since" : ''}." Undo update
               span.text-secondary.ms-1 = safe_join(['(until ', local_time_tag(backup[:until], 'month-day'), ')'])
-      / Check for a newer version (CustomAppsController#check_version): asked of its image's registry,
-      / only when you ask
+          / The update check (P4.9): when it last asked the image's registry, and why it couldn't
+          - if app.versions_checked_at
+            dt Checked
+            dd id="app-checked-#{identifier}"
+              = relative_time_tag(app.versions_checked_at, capitalize: true)
+              - if app.versions_error.present?
+                = ' '
+                span.text-warning.ms-1 = "It couldn't ask the image's registry: #{app.versions_error}"
+      / An app of your own: a newer version the update check found (every 6 hours, or Check for a
+      / newer version, CustomAppsController#check_version) is saved in its file, then updated to
       - if custom && versioned
         .kai-app-panel-note.kai-custom-version id="app-newer-#{identifier}"
-          - if newer && newer['kind'] != 'current'
-            - tag = newer['tag']
+          - if newer
+            - tag = newer[:tag]
             p.kai-custom-newer
-              - if newer['kind'] == 'rebuilt'
+              - if newer[:kind] == 'rebuilt'
                 = "A newer build of #{tag} is out, from the same image."
               - else
-                = "#{tag} is out, from the same image#{newer['major'] ? ': a new major version, so read what changed first' : ''}."
+                = "#{tag} is out, from the same image#{newer[:major] ? ': a new major version, so read what changed first' : ''}."
+              - if newer[:notes]
+                a.ms-2 href=newer[:notes] target="_blank" rel="noopener" What's new
               br
               | Its data is copied first, so you can undo it for #{AppCatalog::BACKUP_DAYS} days.
             = form_tag custom_apps_version_path(identifier), class: 'd-inline' do
               input type="hidden" name="tag" value=tag
-              button.btn.btn-primary.btn-sm type="submit" data-disable-with="Saving…" = newer['kind'] == 'rebuilt' ? 'Update to the newer build' : "Update to #{tag}"
+              button.btn.btn-primary.btn-sm type="submit" data-disable-with="Saving…" = newer[:kind] == 'rebuilt' ? 'Update to the newer build' : "Update to #{tag}"
           - else
-            - if newer
+            - if flash[:custom_version] == 'current'
               p.kai-custom-newer = "#{app.version} is its newest version."
             = form_tag custom_apps_check_path(identifier), class: 'd-inline' do
               button.btn.btn-outline-primary.btn-sm type="submit" data-disable-with="Asking its registry…"
                 = lucide_icon('refresh-cw', size: 14)
                 |  Check for a newer version
-            p.mb-0.mt-2 Amahi-kai looks only when you ask, and only at the image it came from. It never updates an app of your own by itself.
+          p.mb-0.mt-2 Amahi-kai checks its image for a newer version every 6 hours, and when you ask. It never updates an app of your own by itself.
       - if entry[:access] == 'tailscale'
         .kai-app-panel-note id="app-tailscale-#{identifier}"
           - if !tailnet

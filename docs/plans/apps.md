@@ -486,23 +486,23 @@ What it trusts: no person looks at each version before it's offered, as with Doc
 bad upstream version still can't give itself more permissions, network or shares (those come
 from the signed manifest), and can't skip the data copy.
 
-- [ ] **One check for every installed app**, every 6 hours (`amahi-kai-app-versions.timer`, a
+- [x] **One check for every installed app** (1.8.5), every 6 hours (`amahi-kai-app-versions.timer`, a
   task run as the app's user, like the indexer, never root) and with Check now (the Apps page,
   the System Update dialog): `AppVersions#check_image` on the image each app runs, with its
   manifest's `releases` for the notes link; a private image's lookups go through the helper with
   its token (`RegistryTokens`). The result is kept per app in the database (a newer release or
   build, or current; whether it's a new major version; the notes link; when; the error when the
   registry couldn't be asked), in a migration safe to rerun.
-- [ ] **Shown where catalog updates show:** the app's card (Update ready), its page ("12.4 is
+- [x] **Shown where catalog updates show** (1.8.5): the app's card (Update ready), its page ("12.4 is
   out", Update to 12.4, the notes link, the major version's warning), the dashboard's App updates
   notice, the header's count and the System Update dialog. A catalog bump still counts (the newer
   of the two). The app's page says when it was last checked. A failed check is said there only,
   not on the dashboard (a registry's hiccup isn't news); a refused token shows as it does now, on
   the app's page and on Private images.
-- [ ] **Check for a newer version** (an app of your own) runs the same check for that app and
+- [x] **Check for a newer version** (an app of your own, 1.8.5) runs the same check for that app and
   keeps the result, so it's still there after leaving the page. The app's note and the Custom
   note say Amahi-kai checks every 6 hours and never updates it by itself.
-- [ ] **The helper takes a version on the track.** `apps.update` and `apps.install` take an
+- [x] **The helper takes a version on the track** (1.8.5). `apps.update` and `apps.install` take an
   optional `tag` for a catalog app, refused unless it has the shape of the manifest's tag and
   isn't lower than the manifest's, nor (an update) than the one the app runs. The repository is
   always the manifest's. The helper asks the registry itself for that tag's digest (anonymously,
@@ -510,7 +510,7 @@ from the signed manifest), and can't skip the data copy.
   definition the container is made from (`APP_DEFINITIONS`), so Undo and rebuilds use it. A newer
   build is the tag the app runs, with the registry's new digest. The checks spec tries `tag` with
   bad values, another shape and a lower version.
-- [ ] **Install takes the newest version on the track,** found just before (the manifest's own
+- [x] **Install takes the newest version on the track** (1.8.5), found just before (the manifest's own
   tag when the registry can't be asked), and says which.
 
 ### P4.10: The catalog's logos, on the NAS
@@ -520,21 +520,21 @@ and serves it itself. Before, every visit to the Apps page loaded the logos from
 third party, nothing without the internet, and a browser spec failing whenever jsDelivr refused
 CI's runner (2026-11-09).
 
-- [ ] **The catalog's repo:** `logos/<id>.<png|jpg|webp|svg>`, one for each app (the six from
+- [ ] **The catalog's repo** (PR #29, then catalog-3): `logos/<id>.<png|jpg|webp|svg>`, one for each app (the six from
   homarr-labs/dashboard-icons, Apache-2.0, credited in its README). Its Check requires one for
   each app, checked by its bytes and 256 KB at most, as an app of your own's logo is, and
   `script/check-logos` reads them there. Manifests keep their `logo` links for older Amahi-kai,
   which doesn't read the folder. Then a signed catalog-3.
-- [ ] **The helper's catalog fetch** reads `logos/` from the signed version's commit with the
+- [x] **The helper's catalog fetch** (1.8.5) reads `logos/` from the signed version's commit with the
   manifests (so the signature covers them), checks each the same way and keeps it beside them.
   `config/apps` gets the same files, so a new install and the browser specs never fetch a logo.
-- [ ] **The web app serves a catalog logo from the NAS** as it serves an app of your own's
+- [x] **The web app serves a catalog logo from the NAS** (1.8.5) as it serves an app of your own's
   (`LOGO_POLICY`, an address naming the picture, cached). An app without one shows the plain
   icon, never a link. Then the Content-Security-Policy's `img-src` narrows to the NAS itself
   (`self`, `data:`).
 
-**Order (P4.9, P4.10):** the logos first (the catalog's PR and its signed version, then a
-release), then the update check, a release of its own.
+**Order (P4.9, P4.10):** one release, 1.8.5 (CatDogBark: a fix, putting back the update notices
+the bit apps had in the catalog), after the catalog's PR and its signed version.
 
 ### Also in Phase 4
 

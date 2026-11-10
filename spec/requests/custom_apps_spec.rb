@@ -378,7 +378,8 @@ describe 'Apps of your own', type: :request do
       expect(response.body).to include('Check for a newer version', 'href="/apps/custom/mealie/edit"')
     end
 
-    it 'finds a newer version only when asked, and updates to it without the password' do
+    # P4.9: what Check finds is kept, as the 6-hourly check's is, so it's still there after leaving the page
+    it 'finds a newer version when asked, keeps it on its page, and updates to it without the password' do
       installed
       made_from(file)
       newer = AppVersions::Result.new(kind: :newer, latest: 'v2.5.0', image: "ghcr.io/mealie-recipes/mealie:v2.5.0@sha256:#{'b' * 64}", major: false)
@@ -387,7 +388,11 @@ describe 'Apps of your own', type: :request do
       expect(response).to redirect_to('/apps/mealie#app-version-mealie')
       follow_redirect!
       expect(response.body).to include('v2.5.0 is out, from the same image.', 'Update to v2.5.0', 'action="/apps/custom/mealie/version"')
-      expect(response.body).not_to include('flash-data') # what it found is on the page, not a toast
+      expect(response.body).not_to match(/flash-data[^<]*v2\.5\.0/) # what it found is on the page, not a toast
+      get '/apps'
+      get '/apps/mealie'
+      expect(response.body).to include('v2.5.0 is out, from the same image.', 'Checked')
+      expect(DockerApp.find_by(identifier: 'mealie')).to have_attributes(newer_tag: 'v2.5.0', newer_kind: 'newer', versions_error: nil)
 
       post '/apps/custom/mealie/version', params: { tag: 'v2.5.0' }
       expect(saved_manifest).to eq(file.sub(pinned, newer.image))

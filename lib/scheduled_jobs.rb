@@ -27,7 +27,10 @@ class ScheduledJobs
     { key: 'trash', name: 'Trash', timer: 'amahi-kai-trash', schedule: 'Daily',
       about: 'Deletes files that have been in the Trash (Shares → Trash) longer than it keeps them' },
     { key: 'update-check', name: 'Check for updates', timer: 'amahi-kai-update-check', schedule: 'Every 6 hours',
-      about: 'Asks GitHub whether Amahi-kai or an app has an update waiting; never installs one' },
+      about: 'Asks GitHub whether Amahi-kai has an update waiting, and fetches the app catalog; never installs one' },
+    { key: 'app-versions', name: 'Check the apps for newer versions', timer: 'amahi-kai-app-versions', schedule: 'Every 6 hours',
+      check: '/usr/bin/docker',
+      about: "Asks each installed app's image for a newer version, for the Apps page; never installs one" },
     { key: 'security-updates', name: 'Security updates', timer: 'apt-daily-upgrade', schedule: 'Daily',
       check: '/usr/bin/unattended-upgrade',
       about: "Ubuntu's unattended-upgrades installs security fixes, when the security audit has turned it on" }

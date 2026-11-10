@@ -4,7 +4,7 @@
 # checks; Install then works as it does for the catalog's apps. An installed one's Edit saves
 # the same way and updates it (apps.update: its data copied first, and back if it doesn't come
 # up), unless the change is one its container doesn't see (its name, say, or its logo). Check for
-# a newer version asks the image's registry, only when asked.
+# a newer version asks the image's registry now, as the update check does every 6 hours.
 #
 # Its logo is a picture given on the form (LOGO_MAX_BYTES at most), carried through the review
 # as base64 (logo_data) and kept by the helper beside its file; the NAS serves it
@@ -102,21 +102,18 @@ class CustomAppsController < ApplicationController
     render json: { status: 'error', message: e.message }, status: :unprocessable_content
   end
 
-  # Check for a newer version: a newer release of its image (a tag of the same shape), or a newer
-  # build of its tag, from the image's registry. Only when asked; nothing changes.
+  # Check for a newer version: the update check for this app, now (AppUpdateCheck, P4.9): a newer
+  # release of its image (a tag of the same shape), or a newer build of its tag, from the image's
+  # registry. Its answer is kept as the 6-hourly check's is, so the app's page still shows it after
+  # it's left. Nothing changes.
   def check_version
-    found = AppVersions.new(tokens: RegistryTokens).check_image(@app.image)
-    flash[:custom_version] = if found.kind == :current
-                               { 'kind' => 'current' }
-                             else
-                               { 'kind' => found.kind.to_s, 'tag' => found.latest, 'major' => found.major }
-                             end
+    app = DockerApp.find_by(identifier: @app.id) or return redirect_to(apps_app_path(@app.id), alert: "#{@app.name} isn't installed")
+
+    found = AppUpdateCheck.check(app)
+    return redirect_to(apps_app_path(@app.id), alert: "Couldn't ask its registry for a newer version: #{app.reload.versions_error}") unless found
+
+    flash[:custom_version] = 'current' if found.kind == :current
     redirect_to apps_app_path(@app.id, anchor: "app-version-#{@app.id}")
-  rescue AppVersions::Private => e
-    redirect_to apps_app_path(@app.id), alert: "Couldn't ask its registry for a newer version: #{e.message}. If it's private, add a token " \
-                                               "for #{e.place} on Private images (under Apps)."
-  rescue StandardError => e
-    redirect_to apps_app_path(@app.id), alert: "Couldn't ask its registry for a newer version: #{e.message}"
   end
 
   # Update to the newer version Check found: asked for again (the tag must still be the newest),

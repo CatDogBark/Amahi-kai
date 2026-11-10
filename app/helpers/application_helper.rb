@@ -96,11 +96,17 @@ module ApplicationHelper
     content_tag('span', '', class: "spinner #{css_class}", style: "display: none")
   end
 
-  # "bitTube 0.1.2 → 0.1.3", for the dashboard's app update notice (just the name when either
-  # version isn't known).
+  # "Jellyfin 12.1 → 12.4", for the dashboard's app update notice and the System Update dialog:
+  # the version Update brings (the catalog's, or one the update check found, P4.9), "(a newer
+  # build)" for a newer build of the same tag, and a word on a new major version. Just the name
+  # when either version isn't known.
   def app_update_label(app)
-    from, to = app.version, app.catalog_version
-    from.present? && to.present? ? "#{app.name} #{from} → #{to}" : app.name
+    from = app.version
+    target = app.update_target
+    return app.name unless from.present? && target&.dig(:tag).present?
+    return "#{app.name} #{from} (a newer build)" if target[:kind] == 'rebuilt'
+
+    "#{app.name} #{from} → #{target[:tag]}#{' (a new major version)' if target[:major]}"
   end
 
   # A time shown as "3 hours ago", or "in 2 hours" when +future+ ("any moment" once it's
