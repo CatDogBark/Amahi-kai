@@ -626,6 +626,42 @@ describe "Docker Apps", type: :request do
         expect(DockerApp.find_by(identifier: 'gitea')).to have_attributes(image: newer, newer_tag: nil, newer_image: nil)
       end
 
+      # The app's card: Update beside Manage, in the install window, or Review update for a new
+      # major version (its page, to read what's new first)
+      it "puts Update on the app's card beside Manage, and Review update for a new major version" do
+        gitea(image: catalog, **found, newer_tag: '1.27.9-rootless', newer_image: "gitea/gitea:1.27.9-rootless@sha256:#{'9' * 64}", newer_major: false)
+        get "/apps"
+        card = Nokogiri::HTML(response.body).at_css('#docker_app_gitea')
+        update = card.at_css('#app-update-gitea')
+        expect(update.text).to eq('Update')
+        expect(update['data-url']).to eq('/apps/docker/update_stream/gitea')
+        expect(update['data-title']).to eq('Updating Gitea...')
+        expect(update['data-confirm']).to start_with('Update Gitea to 1.27.9-rootless? It stops for a minute or two.')
+        expect(card.css('.kai-app-card-actions .btn').map(&:text).map(&:squish)).to eq(%w[Open Manage Update])
+
+        DockerApp.find_by(identifier: 'gitea').update!(**found) # 28.3.0, a new major version
+        get "/apps"
+        card = Nokogiri::HTML(response.body).at_css('#docker_app_gitea')
+        expect(card.at_css('#app-update-gitea')).to be_nil
+        expect(card.at_css('#app-review-gitea').text).to eq('Review update')
+        expect(card.at_css('#app-review-gitea')['href']).to eq('/apps/gitea#app-version-gitea')
+
+        DockerApp.find_by(identifier: 'gitea').update!(newer_tag: nil, newer_image: nil, newer_kind: nil)
+        get "/apps"
+        card = Nokogiri::HTML(response.body).at_css('#docker_app_gitea')
+        expect(card.css('.kai-btn-update')).to be_empty
+        expect(card.text).not_to include('Update ready')
+      end
+
+      it "offers the catalog's newer version from the card too, and nothing while the app is installing" do
+        gitea(image: "gitea/gitea:1.27.2-rootless@sha256:#{'b' * 64}")
+        get "/apps"
+        expect(Nokogiri::HTML(response.body).at_css('#app-update-gitea')['data-confirm']).to start_with('Update Gitea to 1.27.3-rootless?')
+        DockerApp.find_by(identifier: 'gitea').update!(status: 'installing')
+        get "/apps"
+        expect(Nokogiri::HTML(response.body).at_css('#app-update-gitea')).to be_nil
+      end
+
       it "says when the check couldn't ask the image's registry, on the app's page only" do
         gitea(image: catalog, show_in_dashboard: true, versions_checked_at: 5.minutes.ago, versions_error: 'registry-1.docker.io answered 503')
         get "/apps/gitea"

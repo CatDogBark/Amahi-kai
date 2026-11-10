@@ -399,6 +399,24 @@ describe 'Apps of your own', type: :request do
       expect(response).to redirect_to('/apps/mealie?apply=1')
     end
 
+    # Its card: Update saves the version found in its file first, then its page updates it
+    it "puts Update on its card, which saves the version found first, or Review update for a new major version" do
+      installed(newer_tag: 'v2.5.0', newer_image: "ghcr.io/mealie-recipes/mealie:v2.5.0@sha256:#{'b' * 64}", newer_kind: 'newer')
+      made_from(file)
+      get '/apps'
+      form = Nokogiri::HTML(response.body).at_css('#docker_app_mealie form#app-update-mealie')
+      expect(form['action']).to eq('/apps/custom/mealie/version')
+      expect(form.at_css('input[name="tag"]')['value']).to eq('v2.5.0')
+      expect(form.at_css('button').text).to eq('Update')
+      expect(form.at_css('button')['data-confirm']).to start_with('Update Mealie to v2.5.0?')
+
+      DockerApp.find_by(identifier: 'mealie').update!(newer_tag: 'v3.0.0', newer_image: "ghcr.io/mealie-recipes/mealie:v3.0.0@sha256:#{'c' * 64}",
+                                                      newer_major: true)
+      get '/apps'
+      review = Nokogiri::HTML(response.body).at_css('#docker_app_mealie #app-review-mealie')
+      expect([review.text, review['href']]).to eq(['Review update', '/apps/mealie#app-newer-mealie'])
+    end
+
     it 'points to Private images when its image turns out private' do
       installed
       allow_any_instance_of(AppVersions).to receive(:check_image)

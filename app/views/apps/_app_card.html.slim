@@ -30,3 +30,21 @@ article.kai-app-card id="docker_app_#{app.identifier}"
     - elsif app.status == 'stopped'
       button.btn.btn-primary type="button" data-call="dockerAppAction" data-args='["/apps/docker/start/#{app.identifier}", "@el"]' Start
     a.btn.btn-outline-secondary href=apps_app_path(app.identifier) Manage
+    / Update, beside Manage when one is ready (P4.9), the version Update brings named in its question.
+    / A new major version opens the app's page at its version instead, to read what's new first; an
+    / app of your own saves a version the check found in its file first (CustomAppsController#version),
+    / then its page runs the update. Either way the update runs in the install window.
+    - target = app.update_target if %w[running stopped].include?(app.status) && entry[:installable] != false
+    - if target
+      - found_mine = entry[:custom] && target[:from] == :check
+      - if target[:major]
+        a.btn.kai-btn-update id="app-review-#{app.identifier}" href=apps_app_path(app.identifier, anchor: found_mine ? "app-newer-#{app.identifier}" : "app-version-#{app.identifier}") Review update
+      - else
+        - version = target[:kind] == 'rebuilt' ? "a newer build of #{target[:tag]}" : target[:tag]
+        - question = "Update #{app.name} to #{version}? It stops for a minute or two. A copy of its data is kept for #{AppCatalog::BACKUP_DAYS} days, and if #{version} doesn't come up, #{app.name} goes back to #{app.version} by itself."
+        - if found_mine
+          = form_tag custom_apps_version_path(app.identifier), class: 'd-inline', id: "app-update-#{app.identifier}" do
+            input type="hidden" name="tag" value=target[:tag]
+            button.btn.kai-btn-update type="submit" data-confirm=question data-disable-with="Saving…" Update
+        - else
+          button.btn.kai-btn-update type="button" id="app-update-#{app.identifier}" data-app-stream=app.identifier data-url=apps_docker_update_stream_path(app.identifier) data-title="Updating #{app.name}..." data-confirm=question Update

@@ -1292,6 +1292,9 @@ table.settings tbody tr { border-bottom-color: var(--kai-line); }
 .kai-pill-alert::before { border-radius: 2px; background: #ff8f8f; }
 .kai-pill-outline { background: transparent; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16); font-weight: 500; }
 .kai-pill-amber { background: transparent; box-shadow: inset 0 0 0 1px rgba(255, 197, 110, 0.6); color: #ffd79a; }
+/* Update on an app's card (P4.9): the "Update ready" pill's amber, as a button */
+.kai-btn-update { color: #ffd79a; border-color: rgba(255, 197, 110, 0.6); }
+.kai-btn-update:hover, .kai-btn-update:focus-visible { color: #1a1206; background-color: #ffd79a; border-color: #ffd79a; }
 @keyframes kai-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .kai-pill-busy::before { animation: none; } }
 /* The catalog's categories */

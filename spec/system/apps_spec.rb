@@ -240,4 +240,33 @@ RSpec.describe 'Apps', type: :system do
     expect(page).to have_css('#app-checked-gitea', text: 'About 1 hour ago')
     expect(page.evaluate_script("document.querySelector('#docker_app_gitea img.kai-app-logo').naturalWidth")).to be > 0 # the NAS served it
   end
+
+  # The app's card: Update beside Manage runs the update in the install window, after asking;
+  # a new major version is Review update, to the app's page
+  it "updates from the app's card, and sends a new major version to the app's page" do
+    allow(DockerService).to receive_messages(installed?: true, running?: true)
+    current = AppCatalog.find('gitea')[:image]
+    newer = "gitea/gitea:1.27.9-rootless@sha256:#{'9' * 64}"
+    create(:docker_app, identifier: 'gitea', name: 'Gitea', status: 'running', image: current, newer_tag: '1.27.9-rootless', newer_image: newer,
+                        newer_kind: 'newer', newer_major: false, versions_checked_at: 1.hour.ago)
+    allow(Privileged).to receive(:call).and_call_original
+    allow(Privileged).to receive(:call).with('apps.update', hash_including(app: 'gitea', tag: '1.27.9-rootless'))
+                                       .and_return('ok' => true, 'updated' => true, 'image' => newer, 'from' => current)
+    sign_in_as_admin
+    visit '/apps'
+    within('#docker_app_gitea') do
+      accept_confirm(/Update Gitea to 1\.27\.9-rootless\?/) { click_button 'Update' }
+    end
+    within('#app-install-modal') do
+      expect(page).to have_text('Updating Gitea...')
+      expect(page).to have_text('✓ Gitea is updated to 1.27.9-rootless and running', wait: 15)
+    end
+
+    DockerApp.find_by(identifier: 'gitea').update!(image: current, newer_tag: '28.3.0-rootless', newer_major: true,
+                                                   newer_image: "gitea/gitea:28.3.0-rootless@sha256:#{'8' * 64}")
+    visit '/apps'
+    within('#docker_app_gitea') { click_link 'Review update' }
+    expect(page).to have_current_path('/apps/gitea')
+    expect(page).to have_css('#app-major-gitea', text: 'A new major version')
+  end
 end

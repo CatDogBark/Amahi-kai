@@ -4,6 +4,15 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.8.6] — 2026-11-09
+
+Update from an app's card on the Apps page.
+
+### 🔒 Security & Fixes
+
+- **Update on the app's card** — When an update is ready, an app's card on the Apps page has an **Update** button beside Manage: it asks first, naming the version, then updates in the window, with its data copied first as always. For a new major version the button is **Review update** and opens the app's page, where its release notes and warning are, so you read what's new first. An app of your own saves the newer version in its file and updates on its page.
+- **The install window says what it's doing** — The window that installs, updates or undoes an app said "Installing App" whatever it did, since the October restyle. It says "Installing Gitea...", "Updating Gitea..." and so on again.
+
 ## [1.8.5] — 2026-11-09
 
 Every app's updates are found again, your own apps' too, and apps' logos come from your server.
