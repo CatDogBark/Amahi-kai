@@ -328,7 +328,10 @@ describe "Docker Apps", type: :request do
     it "installs the newest version on its track the first time, and the catalog's when its registry can't be asked" do
       newer = AppVersions::Result.new(kind: :newer, tag: '1.27.3-rootless', latest: '1.27.9-rootless',
                                       image: "gitea/gitea:1.27.9-rootless@sha256:#{'9' * 64}")
-      allow_any_instance_of(AppVersions).to receive(:check_image).and_return(newer)
+      allow_any_instance_of(AppVersions).to receive(:check_image) do |_versions, image, **options|
+        expect([image, options[:same_major]]).to eq([AppCatalog.find('gitea')[:image], true]) # never a new major version
+        newer
+      end
       get "/apps/docker/install_stream/gitea", headers: same_origin
       expect(Privileged.calls).to include(['apps.install', { app: 'gitea', shares: [], tag: '1.27.9-rootless' }])
       expect(response.body).to include('Taking 1.27.9-rootless, the newest version (the catalog names 1.27.3-rootless)')

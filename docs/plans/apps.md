@@ -511,7 +511,9 @@ from the signed manifest), and can't skip the data copy.
   build is the tag the app runs, with the registry's new digest. The checks spec tries `tag` with
   bad values, another shape and a lower version.
 - [x] **Install takes the newest version on the track** (1.8.5), found just before (the manifest's own
-  tag when the registry can't be asked), and says which.
+  tag when the registry can't be asked), and says which; but not a new major version, which the
+  manifest's settings weren't made for: that's offered as an update right after, with its warning
+  (`same_major`; decided while building it, 2026-11-09).
 
 ### P4.10: The catalog's logos, on the NAS
 

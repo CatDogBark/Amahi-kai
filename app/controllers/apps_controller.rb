@@ -312,10 +312,12 @@ class AppsController < ApplicationController
   end
 
   # A new install takes the newest version on the app's track (P4.9): a newer release of the
-  # catalog's tag, by its shape, or a newer build of it, as the update check finds them; the
-  # catalog's own when its registry can't be asked. A reinstall keeps the version it ran.
+  # catalog's tag, by its shape, or a newer build of it, as the update check finds them, but not a
+  # new major version, which the catalog's settings weren't made for: that one is offered as an
+  # update afterwards, with its word to read what's new first. The catalog's own version when its
+  # registry can't be asked. A reinstall keeps the version it ran.
   def install_tag(entry, sse)
-    found = AppVersions.new(tokens: RegistryTokens).check_image(entry[:image], releases: entry[:releases])
+    found = AppVersions.new(tokens: RegistryTokens).check_image(entry[:image], releases: entry[:releases], same_major: true)
     return nil if found.kind == :current
 
     sse.emit(found.kind == :rebuilt ? "  Taking the newest build of #{found.tag}" : "  Taking #{found.latest}, the newest version (the catalog names #{found.tag})")

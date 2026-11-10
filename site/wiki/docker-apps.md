@@ -216,7 +216,8 @@ on the Apps page, and its page offers **Update to <version>**, next to **What's 
 notes). A new major version says so: read what's new before you update, as it can change how the
 app works. Nothing updates on its own, and a version older than the one an app runs isn't offered.
 If the check couldn't reach an app's registry, the app's page says why. A new install takes the
-newest version.
+newest version of the major version the catalog names; a newer major version is then offered as
+an update, with its word to read what's new.
 
 **Update**:
 

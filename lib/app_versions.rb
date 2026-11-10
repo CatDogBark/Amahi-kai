@@ -28,9 +28,12 @@ class AppVersions
       tag.scan(/\d+/).map(&:to_i)
     end
 
-    # The highest release of the same shape as +current+, if it's higher than +current+.
-    def newest(current, tags)
-      best = tags.grep(shape(current)).max_by { |tag| numbers(tag) }
+    # The highest release of the same shape as +current+, if it's higher than +current+; with
+    # +same_major+, only one whose first number is +current+'s (no new major version).
+    def newest(current, tags, same_major: false)
+      found = tags.grep(shape(current))
+      found = found.select { |tag| numbers(tag).first == numbers(current).first } if same_major
+      best = found.max_by { |tag| numbers(tag) }
       best if best && (numbers(best) <=> numbers(current)) == 1
     end
 
@@ -94,14 +97,15 @@ class AppVersions
   end
 
   # A newer release of the image +image+ runs (name:tag@sha256:digest), as #check finds one:
-  # Result with kind :newer or :rebuilt, or :current. Raises when the registry can't be asked.
-  def check_image(image, releases: nil, id: nil)
+  # Result with kind :newer or :rebuilt, or :current; with +same_major+, not a new major version
+  # (a new install stays on the catalog's). Raises when the registry can't be asked.
+  def check_image(image, releases: nil, id: nil, same_major: false)
     match = image.to_s.match(IMAGE)
     raise ArgumentError, 'its image is not name:tag@sha256:digest' unless match && match[:digest]
 
     repo, tag = match[:repo], match[:tag]
     registry = registry_for(repo)
-    latest = self.class.newest(tag, registry.tags(repo))
+    latest = self.class.newest(tag, registry.tags(repo), same_major: same_major)
     digest = registry.digest(repo, latest || tag)
     kind = if latest then :newer
            elsif digest != match[:digest] then :rebuilt
