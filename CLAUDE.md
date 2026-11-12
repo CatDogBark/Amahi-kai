@@ -26,6 +26,10 @@ allowed).
   `CHANGELOG.md` up to date in each PR (Unreleased → "Security & Fixes" or "Architecture & Code
   Quality"), written for users.
 - Don't decide things a plan marks as the maintainer's decision; ask.
+- A feature lands with its docs in the same change: its plan in `docs/plans/` (decisions marked
+  Decided with CatDogBark and the date, items ticked with the release that shipped them), the
+  user page in `site/wiki/`, the CHANGELOG's Unreleased entry, and the checklist in `docs/testing/`.
+- English only: `config/locales/en.yml` is the one locale; no language picker, no right-to-left (#40).
 
 ## Tests and CI
 
@@ -36,6 +40,8 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
 | Models | `bundle exec rspec spec/models/ spec/services/ spec/helpers/` |
 | Lib | `bundle exec rspec spec/lib/` |
 | Requests | `bundle exec rspec spec/requests/` |
+| Root Specs | the examples that need root in `spec/lib/install_scripts_spec.rb`, `amahi_helper_spec.rb` and `amahi_helper_apps_spec.rb`, through `sudo` |
+| Real Tools | `spec/lib/amahi_helper_real_tools_spec.rb` on ubuntu-24.04 with `REAL_TOOLS=required`: what the helper's config checks approve, read by the real dnsmasq, Unbound, radvd and Samba |
 | MariaDB | models + requests again on MariaDB 10.11 (`DATABASE_URL`), the production database |
 | Lint & Security | RuboCop 1.91.0 (+ rails 2.38.0, rspec 3.10.2), Brakeman 8.1.0, bundle-audit 0.9.3, installed as gems, not bundled |
 | Browser | `bundle exec rspec spec/system`: Chrome, headless, loads the pages as an admin and clicks (`docs/plans/browser-tests.md`) |
@@ -53,13 +59,22 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
   skips itself (`skip 'needs root' unless Process.euid.zero?`).
 - **Ruby is 3.2 where Amahi-kai runs (Ubuntu 24.04's `ruby3.2`, 3.2.3).** Change `Gemfile.lock`
   only under Ruby 3.2.x with Bundler 2.4.19, so the resolver can't pick gems an install can't
-  run. Update gems minimally (`bundle update --conservative --patch <gem>`).
+  run. Update gems minimally (`bundle update --conservative --patch <gem>`). To patch Rails, name
+  every component gem (rails, actionpack, activerecord, activesupport and the rest); naming only
+  `rails` moves nothing.
 - Outside production `Shell.simulated?` is true (no setting changes it), so `Privileged.call`
   records calls in `Privileged.calls` (reset before each example) instead of running the helper.
   Commands that only read the system (`Shell.output`, `Shell.success?`, `Open3`) do run in tests,
   so stub them. Request specs log in with `login_as_admin` or `login_as(user)`
   (`spec/support/request_helpers.rb`).
 - Migrations must be safe to rerun (`if_exists`, `column_exists?`): MariaDB can't roll back DDL.
+- Specs run with forgery protection off, but production checks each form's CSRF token: a button
+  sending one form's fields to another address (`formaction`) passed the specs and was refused in
+  production. Turn `ActionController::Base.allow_forgery_protection` on around such examples
+  (`spec/system/custom_apps_spec.rb` does).
+- GitHub's CodeQL (its own setup; there is no workflow file) checks pull requests into `main`. Find
+  a file among `Dir[]` entries instead of building its path from input (`AppCatalog.custom_file`),
+  and compare `URI(url).host == …` instead of `url.include?(host)`.
 
 ## Things that have bitten us
 
@@ -122,6 +137,8 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
   specs stub `tailscale_https_name` and `argon2_hash` for everything but those methods' own specs.
   To check a spec doesn't lean on a tool you have, hide it the way CI lacks it:
   `unshare -rm sh -c 'mount --bind /dev/null /usr/bin/tailscale && bundle exec rspec …'`.
+  CI's runners have Docker, so helper specs stub `refresh_app_firewall` across the file
+  (`spec/lib/amahi_helper_spec.rb`), or they run the real firewall code.
 - **`systemctl enable --now` / `disable --now` only start and stop native units.** Greyhole's is an
   init script (a generated unit): `--now` switched its boot start but left the daemon as it
   was. Switch a unit with two commands (enable then start, disable then stop), as the helper's
@@ -165,3 +182,20 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
 - Production refuses to boot without `SECRET_KEY_BASE` and creates `/var/lib/amahi-kai` at boot.
   To check production boot without root: `unshare -rm` and bind a scratch dir over `/var/lib`.
 - Samba config is generated from `Share.samba_conf` and must pass `testparm` before it's installed.
+- In production the app logs to the journal, not `log/production.log`
+  (`config/systemd/amahi-kai.service` sets `RAILS_LOG_TO_STDOUT`): read it with `journalctl -u amahi-kai`.
+
+## The interface
+
+- Every install and progress window is one partial, `app/views/shared/_install_terminal.html.erb`.
+- Errors are toast flags (`showToast` in `toast.js`), never `alert()`. On the server,
+  `ApplicationController#flash_failure(message, error)` shows something that broke as a failed flag
+  (with Report a problem) and a refusal as a plain red flag (`ReportableError#failed?`,
+  `Privileged::Error#refused?`). Inline errors on a page are only form checks and status banners.
+- Copy buttons must work on plain HTTP, which the LAN UI is: the async Clipboard API needs a secure
+  context, so copy through a selected text field with `document.execCommand('copy')` (`apps.js`
+  falls back to it; `report.js` uses only that).
+- Tooltips: never a `title` attribute (`spec/requests/tooltips_spec.rb` fails on one). Use `data-tip`
+  (`tooltips.js`); mark extra information with `.tip-info` or `.tip-text` plus `tabindex="0"`; icon
+  buttons get a plain `data-tip` and an `aria-label`. The short version goes on the page, and only
+  extras go in a tooltip.
