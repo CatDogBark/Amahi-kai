@@ -43,7 +43,7 @@ CI (`.github/workflows/ci.yml`) blocks merges on all of these:
 | Root Specs | the examples that need root in `spec/lib/install_scripts_spec.rb`, `amahi_helper_spec.rb` and `amahi_helper_apps_spec.rb`, through `sudo` |
 | Real Tools | `spec/lib/amahi_helper_real_tools_spec.rb` on ubuntu-24.04 with `REAL_TOOLS=required`: what the helper's config checks approve, read by the real dnsmasq, Unbound, radvd and Samba |
 | MariaDB | models + requests again on MariaDB 10.11 (`DATABASE_URL`), the production database |
-| Lint & Security | RuboCop 1.91.0 (+ rails 2.38.0, rspec 3.10.2), Brakeman 8.1.0, bundle-audit 0.9.3, installed as gems, not bundled |
+| Lint & Security | RuboCop 1.91.0 (+ rails 2.38.0, rspec 3.10.2), Brakeman 8.1.0, bundle-audit 0.9.3, installed as gems, not bundled; then the root helper's self-test without gems (`ruby --disable-gems libexec/amahi-helper --self-test`, as it is in the repo and joined by `bin/amahi-join-helper`), and `visudo -cf config/sudoers/amahi-kai` |
 | Browser | `bundle exec rspec spec/system`: Chrome, headless, loads the pages as an admin and clicks (`docs/plans/browser-tests.md`) |
 
 - Prepare the test DB with `RAILS_ENV=test bundle exec rails db:schema:load`. Tests use SQLite.
