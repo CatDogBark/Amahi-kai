@@ -32,6 +32,12 @@ module StoragePools
   # each bind as one more mount of the drive the folder is on, so they say nothing about the drive.
   APP_SHARE_BINDS = '/run/amahi-kai-app-shares/'
 
+  # What Greyhole keeps on each of its drives for itself and leaves there when a drive leaves its
+  # pool: its files' metadata, a backup of that, and a copy of its settings. Nothing of anyone's,
+  # so a drive out of the pool with only these on it may be freed. Its trash (.gh_trash) holds
+  # people's deleted files, so it isn't one of them.
+  GREYHOLE_LEFTOVERS = %w[.gh_metastore .gh_metastore_backup .gh_settings.bak].freeze
+
   # The layouts a new pool may have (the helper's POOL_LAYOUTS). parity: drives that may
   # fail in a RAIDZ group; pairs: striped mirrors take drives two by two.
   LAYOUTS = [
@@ -353,14 +359,15 @@ module StoragePools
     end
 
     # Why a drive in share storage can't be freed for a pool, or nil: a share's folder or the
-    # Greyhole pool on it, or files on it (anything but lost+found).
+    # Greyhole pool on it, or files on it (anything but lost+found, and what Greyhole left of its
+    # own once the drive is out of its pool: GREYHOLE_LEFTOVERS).
     def share_drive_blocker(drive, shares: Share.pluck(:name, :path), greyhole: DiskPoolPartition.pluck(:path))
       drive[:mounts].each do |mount|
         inside = ->(path) { path.to_s == mount || path.to_s.start_with?("#{mount}/") }
         share = shares.find { |_name, path| inside.call(path) }
         return "#{share.first}'s folder is on it" if share
         return 'it is in the Greyhole pool' if greyhole.any? { |path| inside.call(path) }
-        entries = Dir.children(mount) - ['lost+found']
+        entries = Dir.children(mount) - ['lost+found'] - GREYHOLE_LEFTOVERS
         return "it has files on it (#{entries.sort.first(3).join(', ')}#{', …' if entries.size > 3})" if entries.any?
       rescue SystemCallError
         return "#{mount} can't be read"

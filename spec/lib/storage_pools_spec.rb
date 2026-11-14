@@ -133,6 +133,21 @@ RSpec.describe StoragePools do
         .to eq("/nonexistent/storage-9 can't be read")
     end
 
+    # What a drive taken out of the Greyhole pool on Disks → Greyhole Pool still has on it
+    it "is not blocked by what Greyhole left of its own, but is by its trash and anything else" do
+      Dir.mkdir("#{dir}/lost+found")
+      FileUtils.mkdir_p(["#{dir}/.gh_metastore/Vault/media", "#{dir}/.gh_metastore_backup"])
+      File.write("#{dir}/.gh_metastore/Vault/media/photo.jpg", 'x')
+      File.write("#{dir}/.gh_settings.bak", 'x')
+      expect(described_class.share_drive_blocker(drive, shares: [], greyhole: [])).to be_nil
+      expect(described_class.share_drive_blocker(drive, shares: [], greyhole: [dir])).to eq('it is in the Greyhole pool') # still in it
+      FileUtils.mkdir_p("#{dir}/.gh_trash/Vault")
+      expect(described_class.share_drive_blocker(drive, shares: [], greyhole: [])).to eq('it has files on it (.gh_trash)')
+      FileUtils.rm_rf("#{dir}/.gh_trash")
+      FileUtils.mkdir_p("#{dir}/Vault/media")
+      expect(described_class.share_drive_blocker(drive, shares: [], greyhole: [])).to eq('it has files on it (Vault)')
+    end
+
     it 'unmounts an empty, unused one, and refuses a drive that is not share storage or is in use' do
       lsblk = { 'blockdevices' => [
         { 'path' => '/dev/sdb', 'type' => 'disk', 'size' => 1_000, 'fstype' => 'ext4', 'mountpoints' => ['/mnt/storage-2'] },
