@@ -286,8 +286,9 @@ and the internet). Add apps only from people you trust.
 On its page:
 
 - **Edit** opens what you described, filled in (or its file, when it uses fields the form doesn't
-  show). Saving asks for your password, then updates the app to it: its data is copied first, and
-  it goes back by itself if it doesn't come up, as an update does; **Undo update** works the same.
+  show). Saving asks for your password, then updates the app to it: its data is copied first (a
+  snapshot for data on a ZFS pool), and it goes back by itself if it doesn't come up, as an update
+  does; **Undo update** works the same.
   A change only to how it's listed (its name, description, category, how to sign in, or its logo)
   is saved without restarting it.
 - **Newer versions:** every 6 hours, and when you press **Check for a newer version**, Amahi-kai

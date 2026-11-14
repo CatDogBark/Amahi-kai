@@ -91,6 +91,9 @@ RSpec.describe AppCatalog do
       expect(AppCatalog.find("store")[:storage]).to eq(:required)
       expect(AppCatalog.find("maybe")[:storage]).to eq(:optional)
       expect(AppCatalog.find("gitea")[:storage]).to be_nil
+      # what an update copies first: folders on the system disk; a dataset gets a snapshot instead
+      expect(AppCatalog.find("store")[:copies]).to be false
+      expect(AppCatalog.find("gitea")[:copies]).to be true
 
       path = AppCatalog.storage_path
       begin

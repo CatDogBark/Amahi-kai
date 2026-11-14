@@ -1468,6 +1468,18 @@ RSpec.describe 'AmahiHelper apps' do
         expect(helper.app_backup_folders('jellyfin', jellyfin)).to eq(["#{apps_root}/jellyfin/config"])
       end
 
+      it "says in its window what it does first: copies the system disk's folders, takes a snapshot of a pool's" do
+        jellyfin = helper.app_manifest('jellyfin')
+        FileUtils.mkdir_p("#{apps_root}/jellyfin/config")
+        expect(helper.app_backup_words('jellyfin', jellyfin)).to eq('Copying its data first, so the update can be undone...')
+        allow(helper).to receive(:app_storage_pool).with('jellyfin').and_return('data')
+        pooled = jellyfin.merge(storage: :required)
+        expect(helper.app_backup_words('jellyfin', pooled))
+          .to eq("Copying its data first, with a snapshot of what's on the pool data, so the update can be undone...")
+        FileUtils.rm_rf("#{apps_root}/jellyfin/config") # all its data on the pool, as bitShare's is
+        expect(helper.app_backup_words('jellyfin', pooled)).to eq('Taking a snapshot of its data on the pool data first, so the update can be undone...')
+      end
+
       it 'undoes the update within 30 days: the old version and data come back, and the copy goes' do
         helper.do_update_app('vaultwarden', manifest, [])
         reply = helper.do_undo_app_update('vaultwarden', manifest, [])

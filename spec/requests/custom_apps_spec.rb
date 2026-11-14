@@ -387,7 +387,8 @@ describe 'Apps of your own', type: :request do
       post '/apps/custom/mealie/check'
       expect(response).to redirect_to('/apps/mealie#app-version-mealie')
       follow_redirect!
-      expect(response.body).to include('v2.5.0 is out, from the same image.', 'Update to v2.5.0', 'action="/apps/custom/mealie/version"')
+      expect(response.body).to include('v2.5.0 is out, from the same image.', 'Update to v2.5.0', 'action="/apps/custom/mealie/version"',
+                                       'Its data is copied first, so you can undo it for 30 days.')
       expect(response.body).not_to match(/flash-data[^<]*v2\.5\.0/) # what it found is on the page, not a toast
       get '/apps'
       get '/apps/mealie'

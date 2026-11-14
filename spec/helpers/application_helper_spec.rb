@@ -1,6 +1,16 @@
 require 'rails_helper'
 
 RSpec.describe ApplicationHelper, type: :helper do
+  # An update copies the app's folders on the system disk and takes a snapshot of its data on a pool
+  describe "#update_first_words" do
+    it 'says which, by where its data is' do
+      expect(helper.update_first_words({ copies: true }, nil)).to eq('its data is copied first')
+      expect(helper.update_first_words({ copies: false }, 'data')).to eq('a snapshot of its data on the ZFS pool data is taken first')
+      expect(helper.update_first_words({ copies: true }, 'data'))
+        .to eq('its data is copied first, with a snapshot of what it keeps on the ZFS pool data')
+    end
+  end
+
   describe "#full_page_title" do
     it "returns default title when no page_title" do
       helper.instance_variable_set(:@page_title, nil)

@@ -1333,7 +1333,7 @@ module AmahiHelper
       end
       say("Stopping it (#{image_tag(from)})...")
       engine_stop(app_container(id))
-      say('Copying its data first, so the update can be undone...')
+      say(app_backup_words(id, before))
       begin
         app_backup(id, before, from, manifest[:image])
       rescue Failed, SystemCallError => e
@@ -1406,6 +1406,17 @@ module AmahiHelper
 
       raise Failed, "there isn't room to copy #{id}'s data before updating (#{gigabytes(need)} GB, and " \
                     "#{gigabytes(have)} GB is free); free some space or grow the disk"
+    end
+
+    # What the update window says app_backup does first: the system disk's folders are copied, a
+    # dataset gets a snapshot (app_update_snapshot).
+    def app_backup_words(id, manifest)
+      copies = app_backup_folders(id, manifest).any?
+      pool = app_storage_pool(id) if manifest[:storage]
+      if pool && copies then "Copying its data first, with a snapshot of what's on the pool #{pool}, so the update can be undone..."
+      elsif pool then "Taking a snapshot of its data on the pool #{pool} first, so the update can be undone..."
+      else 'Copying its data first, so the update can be undone...'
+      end
     end
 
     # The folders an update copies first: the system disk's that the manifest backs up. A dataset

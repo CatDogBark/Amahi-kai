@@ -319,6 +319,7 @@ class AppCatalog
         # says so (`shares: true`), and one that writes in them does too
         uses_shares: data['shares'] == true || data['writes_shares'] == true,
         storage: storage_need(data['folders']),
+        copies: copies_folders?(data['folders']),
         ports: Array(data['ports']).map do |p|
           { host: p['host'], container: p['container'], protocol: p['protocol'] || 'tcp',
             label: p['host'] == data['web_port'] ? 'web' : p['label'] }
@@ -342,6 +343,12 @@ class AppCatalog
       return nil if datasets.empty?
 
       datasets.any? { |folder| folder.fetch('required', true) != false } ? :required : :optional
+    end
+
+    # Whether an update copies some of the app's folders first: its own on the system disk that
+    # it backs up (the helper's app_backup_folders). A dataset folder gets a snapshot instead.
+    def copies_folders?(folders)
+      Array(folders).any? { |folder| folder.is_a?(Hash) && folder.fetch('kind', 'state') == 'state' && folder['backup'] != false }
     end
 
     def production?

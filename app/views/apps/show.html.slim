@@ -147,9 +147,9 @@ section.kai-app-panel.kai-app-hero id="docker_app_#{identifier}" aria-label=name
       section.kai-app-panel.kai-app-panel-custom aria-labelledby="app-custom-head"
         h2#app-custom-head Change it
         p.kai-app-panel-text
-          | Edit opens what you described, filled in. Saving asks for your password, then updates it: its
-            data is copied first, and it goes back if it doesn't come up. A change only to how it's
-            listed, its logo say, doesn't restart it.
+          | Edit opens what you described, filled in. Saving asks for your password, then updates it:
+            #{update_first_words(entry, storage_pool)}, and it goes back if it doesn't come up. A change
+            only to how it's listed, its logo say, doesn't restart it.
         a.btn.btn-outline-secondary id="app-edit-#{identifier}" href=custom_apps_edit_path(identifier)
           = lucide_icon('pencil', size: 15)
           |  Edit
@@ -222,7 +222,7 @@ section.kai-app-panel.kai-app-hero id="docker_app_#{identifier}" aria-label=name
               - if newer[:notes]
                 a.ms-2 href=newer[:notes] target="_blank" rel="noopener" What's new
               br
-              | Its data is copied first, so you can undo it for #{AppCatalog::BACKUP_DAYS} days.
+              | #{update_first_words(entry, storage_pool).upcase_first}, so you can undo it for #{AppCatalog::BACKUP_DAYS} days.
             = form_tag custom_apps_version_path(identifier), class: 'd-inline' do
               input type="hidden" name="tag" value=tag
               button.btn.btn-primary.btn-sm type="submit" data-disable-with="Saving…" = newer[:kind] == 'rebuilt' ? 'Update to the newer build' : "Update to #{tag}"
