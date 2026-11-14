@@ -490,10 +490,10 @@ module AmahiHelper
     # A pool an installed app keeps its data on isn't taken offline or deleted: the app would lose
     # it. Data kept from an uninstalled app doesn't stop it (deleting the pool deletes that too).
     def no_apps_on!(name, what)
-      on = apps_on_pool(name).select { |_id, installed| installed }.map(&:first)
+      on = apps_on_pool(name).select { |_id, installed| installed }.map { |id, _installed| app_label(id) }
       return if on.empty?
 
-      raise Refused, "#{on.join(' and ')} #{on.size == 1 ? 'keeps its' : 'keep their'} data on #{name}, so it can't be #{what}: " \
+      raise Refused, "#{on.join(' and ')} #{on.size == 1 ? 'keeps its' : 'keep their'} data on the pool #{name}, so it can't be #{what}: " \
                      "uninstall #{on.size == 1 ? 'it' : 'them'} on Apps first (the data stays on the pool unless you delete it)"
     end
 

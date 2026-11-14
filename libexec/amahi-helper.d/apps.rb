@@ -460,6 +460,13 @@ module AmahiHelper
       definition_from(id, read_json("#{APP_DEFINITIONS}/#{id}.json"))
     end
 
+    # An app's name for a message, as the pages show it (bitShare, not bitshare): its definition's,
+    # else its id.
+    def app_label(id)
+      name = Hash(read_json("#{APP_DEFINITIONS}/#{id}.json"))['name']
+      name.is_a?(String) && name.strip.match?(/\A[[:print:]]{1,60}\z/) ? name.strip : id
+    end
+
     # A definition (a manifest's source, with its image) checked again; nil when it isn't one, or
     # no longer passes.
     def definition_from(id, source)
