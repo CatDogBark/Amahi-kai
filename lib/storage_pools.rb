@@ -25,6 +25,13 @@ module StoragePools
   # The roles (StoragePools.drives) of a free disk with an old ZFS label on it, which Erase clears.
   OLD_LABEL = %i[left_pool old_zfs].freeze
 
+  # The mounts that make a disk the one the system runs from (lsblk calls swap [SWAP]).
+  SYSTEM_MOUNTS = %w[/ /boot /boot/efi [SWAP]].freeze
+
+  # Where the helper binds the share folders it gives apps (its APP_SHARE_BIND_ROOT). lsblk lists
+  # each bind as one more mount of the drive the folder is on, so they say nothing about the drive.
+  APP_SHARE_BINDS = '/run/amahi-kai-app-shares/'
+
   # The layouts a new pool may have (the helper's POOL_LAYOUTS). parity: drives that may
   # fail in a RAIDZ group; pairs: striped mirrors take drives two by two.
   LAYOUTS = [
@@ -222,20 +229,22 @@ module StoragePools
     end
 
     # Every whole disk, with what it's used for (:role) and whether a new pool may take it
-    # (:free). Roles: :os (the system runs from it), :share (mounted as share storage),
-    # :in_use (mounted elsewhere, or LVM, RAID or encryption on it), :pool (in an imported
+    # (:free). Roles: :os (the system runs from it: SYSTEM_MOUNTS), :share (mounted under /mnt as
+    # share storage), :in_use (mounted elsewhere, or LVM, RAID or encryption on it), :pool (in an imported
     # pool), :offline (in a pool taken offline here), :found (in a pool found on the drives, not
     # imported), :listed (share storage in fstab, :fstab, that isn't mounted now: its drive came
     # back unmounted), :left_pool (replaced out of a pool here, its old ZFS label still on it),
     # :old_zfs (a ZFS label from a pool that isn't on this server), :free. A new pool, or Erase,
     # clears an old label. :contents: the filesystems on it, which a new pool erases; :ref: the
-    # name the page gives it (DiskManager.by_id_refs).
+    # name the page gives it (DiskManager.by_id_refs); :mounts: where it's mounted, without the
+    # apps' share folders (APP_SHARE_BINDS), which are folders of those mounts seen again.
     def drives(pools = [], offline = [], found = [])
       refs = DiskManager.by_id_refs
       sources = DiskManager.fstab_sources
       lsblk.select { |d| d['type'] == 'disk' }.map do |disk|
         nodes = subtree(disk)
-        mounts = nodes.flat_map { |n| Array(n['mountpoints']).compact }
+        listed = nodes.flat_map { |n| Array(n['mountpoints']).compact }
+        mounts = listed.reject { |m| m.start_with?(APP_SHARE_BINDS) }
         label = nodes.find { |n| n['fstype'] == 'zfs_member' }&.dig('label')
         on = ->(devices) { devices.any? { |d| nodes.any? { |n| n['path'] == d } } }
         pool = pools.find { |p| on.call(p.drives.map { |d| d['device'] }) }&.name
@@ -244,9 +253,12 @@ module StoragePools
         fstab = nodes.filter_map do |n|
           sources[n['path']] || (n['uuid'] && sources["UUID=#{n['uuid']}"]) || (n['partuuid'] && sources["PARTUUID=#{n['partuuid']}"])
         end.first
-        role = if mounts.any? { |m| !m.start_with?('/mnt/') } then :os
+        # An app's share folder bound from a drive that isn't mounted itself any more still holds
+        # the drive, so it counts as in use, never free.
+        role = if mounts.intersect?(SYSTEM_MOUNTS) then :os
+               elsif mounts.any? { |m| !m.start_with?('/mnt/') } then :in_use
                elsif mounts.any? then :share
-               elsif nodes.any? { |n| !%w[disk part].include?(n['type']) } then :in_use
+               elsif listed.any? || nodes.any? { |n| !%w[disk part].include?(n['type']) } then :in_use
                elsif away then :offline
                elsif kept then :found
                elsif pool then :pool

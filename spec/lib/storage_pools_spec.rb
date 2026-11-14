@@ -171,9 +171,20 @@ RSpec.describe StoragePools do
           'children' => [{ 'path' => '/dev/md0', 'type' => 'raid1', 'mountpoints' => [nil] }] },
         { 'path' => '/dev/sdg', 'type' => 'disk', 'size' => 1_000, 'mountpoints' => [nil],
           'children' => [{ 'path' => '/dev/sdg1', 'type' => 'part', 'fstype' => 'zfs_member', 'label' => 'tank', 'mountpoints' => [nil] }] },
+        { 'path' => '/dev/sdh', 'type' => 'disk', 'size' => 1_000, 'mountpoints' => [nil],
+          'children' => [{ 'path' => '/dev/sdh1', 'type' => 'part', 'fstype' => 'ext4',
+                           'mountpoints' => ['/mnt/storage-2', "#{binds}/1", "#{binds}/4"] }] },
+        { 'path' => '/dev/sdi', 'type' => 'disk', 'size' => 1_000, 'mountpoints' => [nil],
+          'children' => [{ 'path' => '/dev/sdi1', 'type' => 'part', 'fstype' => 'ext4', 'mountpoints' => ['/srv/backup'] }] },
+        { 'path' => '/dev/sdj', 'type' => 'disk', 'size' => 1_000, 'mountpoints' => [nil],
+          'children' => [{ 'path' => '/dev/sdj1', 'type' => 'part', 'fstype' => 'swap', 'mountpoints' => ['[SWAP]'] }] },
+        { 'path' => '/dev/sdk', 'type' => 'disk', 'size' => 1_000, 'mountpoints' => [nil],
+          'children' => [{ 'path' => '/dev/sdk1', 'type' => 'part', 'fstype' => 'ext4', 'mountpoints' => ["#{binds}/2"] }] },
         { 'path' => '/dev/sr0', 'type' => 'rom', 'size' => 1, 'mountpoints' => [nil] }
       ] }.to_json
     end
+    # Gitea's share folders on a share drive, bound for it by the helper (APP_SHARE_BIND_ROOT)
+    let(:binds) { '/run/amahi-kai-app-shares/gitea/20261110035207-b533d3' }
 
     before do
       allow(Open3).to receive(:capture3)
@@ -187,13 +198,18 @@ RSpec.describe StoragePools do
       expect(drives.to_h { |d| [d[:path], [d[:role], d[:free]]] }).to eq(
         '/dev/sda' => [:os, false], '/dev/sdb' => [:share, false], '/dev/sdc' => [:pool, false],
         '/dev/sdd' => [:old_zfs, true], '/dev/sde' => [:free, true], '/dev/sdf' => [:in_use, false],
-        '/dev/sdg' => [:left_pool, true] # replaced out of tank: its label names the pool, its drives don't
+        '/dev/sdg' => [:left_pool, true], # replaced out of tank: its label names the pool, its drives don't
+        '/dev/sdh' => [:share, false], # not the system disk because an app has its folders
+        '/dev/sdi' => [:in_use, false], '/dev/sdj' => [:os, false],
+        '/dev/sdk' => [:in_use, false] # an app's folder still bound from it holds it
       )
       expect(drives.find { |d| d[:path] == '/dev/sdg' }[:pool]).to eq('tank')
       expect(described_class.drives.find { |d| d[:path] == '/dev/sdg' }[:role]).to eq(:old_zfs) # no pool tank here
       expect(drives.find { |d| d[:path] == '/dev/sde' }).to include(model: 'Samsung SSD 870 EVO 1TB', serial: 'S6P', size: 1_000_000, ssd: true)
       expect(drives.find { |d| d[:path] == '/dev/sdc' }[:pool]).to eq('tank')
       expect(drives.find { |d| d[:path] == '/dev/sdb' }[:mounts]).to eq(['/mnt/storage-1'])
+      expect(drives.find { |d| d[:path] == '/dev/sdh' }[:mounts]).to eq(['/mnt/storage-2'])
+      expect(drives.find { |d| d[:path] == '/dev/sdk' }[:mounts]).to eq([])
     end
 
     it "keeps an offline pool's drives for it, by the drives found or by their label" do
