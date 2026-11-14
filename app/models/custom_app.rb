@@ -287,13 +287,26 @@ class CustomApp
     "#{ports.one? ? 'Port' : 'Ports'} #{list.to_sentence}, #{who}"
   end
 
+  # Where each folder is kept: its own on the system disk, a dataset folder on the ZFS pool chosen
+  # at install, never the system disk. The app needs that pool when a dataset folder is required
+  # (the default), or runs without one, those folders left out (the helper's app_storage_need).
   def folder_words
     folders = Array(@data['folders']).select { |folder| folder.is_a?(Hash) }
     return 'No folders: what it writes is lost when its container is made again' if folders.empty?
 
-    list = folders.map { |folder| "#{folder['name']} (in the app at #{folder['path']})" }
-    where = folders.any? { |folder| folder['kind'] == 'dataset' } ? 'on the system disk, or a ZFS pool' : 'on the system disk'
-    "#{folders.one? ? 'One folder' : "#{folders.size} folders"}, #{list.to_sentence}, #{where}"
+    named = ->(list) { list.map { |folder| "#{folder['name']} (in the app at #{folder['path']})" }.to_sentence }
+    pool, disk = folders.partition { |folder| folder['kind'] == 'dataset' }
+    count = folders.one? ? 'One folder' : "#{folders.size} folders"
+    return "#{count}, #{named.call(disk)}, on the system disk" if pool.empty?
+
+    on_pool = if pool.any? { |folder| folder.fetch('required', true) != false }
+                "on a ZFS pool you choose at install (it can't be installed without one)"
+              else
+                "on a ZFS pool if you choose one at install (until then it runs without #{pool.one? ? 'it' : 'them'})"
+              end
+    return "#{count}, #{named.call(pool)}, #{on_pool}" if disk.empty?
+
+    "#{count}: #{named.call(disk)} on the system disk, and #{named.call(pool)} #{on_pool}"
   end
 
   def share_words

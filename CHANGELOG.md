@@ -8,6 +8,7 @@ All notable changes to Amahi-kai are documented here.
 
 - **A share drive an app uses isn't called the system disk** — On Disks → ZFS Pools, a drive in share storage (a Greyhole pool drive, say) said **System disk** while an app had been given folders of a share on it, because each folder an app gets shows up as one more place the drive is mounted. Those folders don't count now: the drive says **Share storage** as it should. The system disk is the one holding the system itself (its root, boot or swap), and a drive mounted anywhere else says **In use (mounted at …)**.
 - **A drive taken out of the Greyhole pool can be freed for a ZFS pool** — Greyhole leaves its own records on a drive when it leaves the pool (its metadata and a copy of its settings, in hidden `.gh_` folders), and **Free this drive** on Disks → ZFS Pools refused it as "it has files on it", which nothing on the pages could clear. Those records don't count now. Anything else on the drive still does, Greyhole's trash of deleted files included.
+- **An app of your own's review says where each folder is kept** — Reviewing an app of your own whose folders go on a ZFS pool said they were kept "on the system disk, or a ZFS pool", which was never so: such a folder is only ever on the pool you choose at install. The review now names each folder's place, and says when the app can't be installed without a pool, or runs without one until you choose it.
 
 ## [1.8.7] — 2026-11-09
 
