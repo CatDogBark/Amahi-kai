@@ -9,6 +9,13 @@ RSpec.describe ApplicationHelper, type: :helper do
       expect(helper.update_first_words({ copies: true }, 'data'))
         .to eq('its data is copied first, with a snapshot of what it keeps on the ZFS pool data')
     end
+
+    it 'says what is kept to undo it, for the Update question' do
+      expect(helper.update_kept_words({ copies: true }, nil)).to eq('A copy of its data is kept')
+      expect(helper.update_kept_words({ copies: false }, 'data')).to eq('A snapshot of its data on the ZFS pool data is kept')
+      expect(helper.update_kept_words({ copies: true }, 'data'))
+        .to eq('A copy of its data, with a snapshot of what it keeps on the ZFS pool data, is kept')
+    end
   end
 
   describe "#full_page_title" do

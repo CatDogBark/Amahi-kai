@@ -653,6 +653,7 @@ describe "Docker Apps", type: :request do
         expect(update['data-url']).to eq('/apps/docker/update_stream/gitea')
         expect(update['data-title']).to eq('Updating Gitea...')
         expect(update['data-confirm']).to start_with('Update Gitea to 1.27.9-rootless? It stops for a minute or two.')
+        expect(update['data-confirm']).to include('A copy of its data is kept for 30 days') # its folders are on the system disk
         expect(card.css('.kai-app-card-actions .btn').map(&:text).map(&:squish)).to eq(%w[Open Manage Update])
 
         DockerApp.find_by(identifier: 'gitea').update!(**found) # 28.3.0, a new major version

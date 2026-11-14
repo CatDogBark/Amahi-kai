@@ -43,7 +43,7 @@ article.kai-app-card id="docker_app_#{app.identifier}"
         a.btn.kai-btn-update id="app-review-#{app.identifier}" href=apps_app_path(app.identifier, anchor: found_mine ? "app-newer-#{app.identifier}" : "app-version-#{app.identifier}") Review update
       - else
         - version = target[:kind] == 'rebuilt' ? "a newer build of #{target[:tag]}" : target[:tag]
-        - question = "Update #{app.name} to #{version}? It stops for a minute or two. A copy of its data is kept for #{AppCatalog::BACKUP_DAYS} days, and if #{version} doesn't come up, #{app.name} goes back to #{app.version} by itself."
+        - question = "Update #{app.name} to #{version}? It stops for a minute or two. #{update_kept_words(entry, (AppCatalog.storage_pool(app.identifier) if entry[:storage]))} for #{AppCatalog::BACKUP_DAYS} days, and if #{version} doesn't come up, #{app.name} goes back to #{app.version} by itself."
         - if found_mine
           = form_tag custom_apps_version_path(app.identifier), class: 'd-inline', id: "app-update-#{app.identifier}" do
             input type="hidden" name="tag" value=target[:tag]
