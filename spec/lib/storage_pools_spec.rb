@@ -171,9 +171,9 @@ RSpec.describe StoragePools do
           'children' => [{ 'path' => '/dev/md0', 'type' => 'raid1', 'mountpoints' => [nil] }] },
         { 'path' => '/dev/sdg', 'type' => 'disk', 'size' => 1_000, 'mountpoints' => [nil],
           'children' => [{ 'path' => '/dev/sdg1', 'type' => 'part', 'fstype' => 'zfs_member', 'label' => 'tank', 'mountpoints' => [nil] }] },
-        { 'path' => '/dev/sdh', 'type' => 'disk', 'size' => 1_000, 'mountpoints' => [nil],
-          'children' => [{ 'path' => '/dev/sdh1', 'type' => 'part', 'fstype' => 'ext4',
-                           'mountpoints' => ['/mnt/storage-2', "#{binds}/1", "#{binds}/4"] }] },
+        # as Disks → Devices formats a drive (no partition), with lsblk's order of its mounts
+        { 'path' => '/dev/sdh', 'type' => 'disk', 'size' => 1_000, 'fstype' => 'ext4',
+          'mountpoints' => ["#{binds}/1", "#{binds}/4", '/mnt/storage-2'] },
         { 'path' => '/dev/sdi', 'type' => 'disk', 'size' => 1_000, 'mountpoints' => [nil],
           'children' => [{ 'path' => '/dev/sdi1', 'type' => 'part', 'fstype' => 'ext4', 'mountpoints' => ['/srv/backup'] }] },
         { 'path' => '/dev/sdj', 'type' => 'disk', 'size' => 1_000, 'mountpoints' => [nil],
