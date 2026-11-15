@@ -1354,6 +1354,7 @@ module AmahiHelper
         say("It didn't come up healthy: #{problem}")
         say("Going back to #{image_tag(from)}, with its data from before the update...")
         app_restore(id, before, from, shares)
+        custom_app_put_back(id, before[:source].merge('image' => from), only_version: true) if before[:source].is_a?(Hash)
         app_forget_backup(id)
         return { 'app' => id, 'updated' => false, 'image' => from, 'problem' => problem }
       end

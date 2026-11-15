@@ -1462,9 +1462,9 @@ RSpec.describe 'AmahiHelper apps' do
         expect { helper.do_update_app('vaultwarden', helper.app_manifest('vaultwarden'), []) }.to raise_error(AmahiHelper::Failed, /as its app file says already/)
       end
 
-      # Left naming the version undone, it was offered as an update again, and the next change
-      # saved (its memory, say) brought it back.
-      describe "an app of your own's update undone" do
+      # Left naming the version undone, or one that didn't come up, it was offered twice, and the
+      # next change saved (its memory, say) brought it back.
+      describe "an app of your own's file, when its update is undone or doesn't come up" do
         let(:path) { "#{dir}/custom-apps/vaultwarden.yml" }
         let(:before_update) { manifest[:source].merge('image' => old_image) }
         let(:owners) { "# Our passwords\n#{before_update.to_yaml.delete_prefix("---\n")}" }
@@ -1491,6 +1491,25 @@ RSpec.describe 'AmahiHelper apps' do
           update_and_undo(before_update.merge('image' => manifest[:image], 'memory' => '1g').to_yaml)
           expect(YAML.safe_load(File.read(path))).to eq(before_update)
           expect(helper.app_manifest('vaultwarden')).to include(image: old_image, memory: manifest[:memory])
+        end
+
+        describe "an update that doesn't come up" do
+          before { allow(helper).to receive(:app_health_problem).and_return('it stopped (exit code 1)') }
+
+          it 'puts its file back on the version it runs, when only its version changed' do
+            File.write(path, owners.sub(old_image, manifest[:image]))
+            expect(helper.do_update_app('vaultwarden', helper.app_manifest('vaultwarden'), [])).to include('updated' => false)
+            expect(running['vaultwarden']).to eq(old_image)
+            expect(File.read(path)).to eq(owners)
+          end
+
+          it "keeps the owner's edit in it, to fix and apply again" do
+            edited = before_update.merge('memory' => '1g').to_yaml
+            File.write(path, edited)
+            expect(helper.do_update_app('vaultwarden', helper.app_manifest('vaultwarden'), [])).to include('updated' => false)
+            expect(File.read(path)).to eq(edited)
+            expect(helper).not_to have_received(:say).with('Putting its app file back as it was before the update...')
+          end
         end
       end
 
