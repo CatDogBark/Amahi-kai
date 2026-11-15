@@ -882,10 +882,11 @@ RSpec.describe 'AmahiHelper apps' do
       let(:root) { "#{dir}/pools/tank/apps/store" }
       let(:datasets) { [] }
 
-      def store(required: true)
+      def store(required: true, name: nil)
         FileUtils.mkdir_p(manifests)
         FileUtils.cp(Rails.root.join('config/apps/vaultwarden.yml'), manifests)
         File.write("#{manifests}/store.yml", {
+          **(name ? { 'name' => name } : {}),
           'image' => "example/store:1.0@sha256:#{'a' * 64}", 'run_as' => 'app', 'requires' => 3,
           'ports' => [{ 'host' => 8600, 'container' => 8443 }],
           'folders' => [{ 'name' => 'config', 'path' => '/config' },
@@ -942,6 +943,19 @@ RSpec.describe 'AmahiHelper apps' do
         expect(helper.validate('apps.install', { 'app' => 'store' })).to include(pool: 'tank')
         expect(refusal('apps.install', { 'app' => 'store', 'pool' => 'other' }))
           .to eq("store's data is on the pool tank: uninstall it with its data to move it to other")
+      end
+
+      # It said "bitshare keeps its data…", and "there's no pool named" for one only offline: what a
+      # dialog left open while the pool went offline would show
+      it 'names the app as the pages do, and says when the pool chosen is offline' do
+        store(name: 'Store Box')
+        expect(refusal('apps.install', { 'app' => 'store' })).to eq('Store Box keeps its data on a ZFS pool: choose one (make one on Disks → ZFS Pools first)')
+        stub_const('AmahiHelper::OFFLINE_POOLS', "#{dir}/offline-pools.json")
+        File.write("#{dir}/offline-pools.json", { 'away' => '1234' }.to_json)
+        expect(refusal('apps.install', { 'app' => 'store', 'pool' => 'away' })).to eq('the pool away is offline; bring it online on Disks → ZFS Pools first')
+        File.write("#{dir}/app-storage.json", { 'store' => 'tank' }.to_json)
+        expect(refusal('apps.install', { 'app' => 'store', 'pool' => 'other' }))
+          .to eq("Store Box's data is on the pool tank: uninstall it with its data to move it to other")
       end
 
       it 'makes the dataset, gives the container its folders from it, and records the pool' do

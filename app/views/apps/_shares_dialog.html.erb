@@ -29,8 +29,8 @@
             </select>
           </div>
           <p class="small text-warning mb-0" data-role="storage-missing">
-            <span data-fill="name"></span> keeps its data on a ZFS pool, and there isn't one yet: make one on
-            <%= link_to 'Disks → ZFS Pools', disks_pools_path %> first.
+            <span data-fill="name"></span> keeps its data on a ZFS pool, and none is online: make one, or bring
+            yours back online, on <%= link_to 'Disks → ZFS Pools', disks_pools_path %> first.
           </p>
         </div>
         <%# Hidden for an app that doesn't work with files in shares (the catalog's shares), which only

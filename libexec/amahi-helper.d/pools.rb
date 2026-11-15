@@ -675,8 +675,10 @@ module AmahiHelper
 
     def existing_pool(value)
       value = string(value, 'name', max: 32)
-      raise Refused, "there's no pool named #{value.inspect}" unless value.match?(POOL_NAME) && pool_names.include?(value)
-      value
+      return value if value.match?(POOL_NAME) && pool_names.include?(value)
+      raise Refused, "the pool #{value} is offline; bring it online on Disks → ZFS Pools first" if offline_records.key?(value)
+
+      raise Refused, "there's no pool named #{value.inspect}"
     end
 
     # One of Amahi-kai's own pools, the only ones it changes: one it made or imported, mounted at

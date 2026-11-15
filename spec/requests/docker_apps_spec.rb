@@ -345,7 +345,9 @@ describe "Docker Apps", type: :request do
       get "/apps"
       page = Nokogiri::HTML(response.body)
       expect(page.css('#app-storage-pool option').size).to eq(1)
-      expect(page.at_css('[data-role="storage-missing"]').text.squish).to include("there isn't one yet", 'Disks → ZFS Pools')
+      # Said "there isn't one yet" while a pool was there, only offline
+      expect(page.at_css('[data-role="storage-missing"]').text.squish)
+        .to eq('keeps its data on a ZFS pool, and none is online: make one, or bring yours back online, on Disks → ZFS Pools first.')
     end
 
     # P4.9: a first install takes the newest version on the app's track; a reinstall keeps its own

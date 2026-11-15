@@ -48,20 +48,20 @@ RSpec.describe 'Apps', type: :system do
         expect(page).to have_css('[data-role="shares-part"]', visible: :hidden)
         expect(page).to have_text('Store keeps its data on a ZFS pool')
         expect(page).to have_select('app-storage-pool', selected: 'ZFS pool tank (Mirror)')
-        expect(page).to have_no_text("there isn't one yet")
+        expect(page).to have_no_text('none is online')
         click_button 'Install'
       end
       within('#app-install-modal') { expect(page).to have_text('Store is installed and running', wait: 15) }
       expect(Privileged.calls).to include(['apps.install', { app: 'store', shares: [], pool: 'tank' }])
     end
 
-    it "can't install before there's a pool" do
+    it "can't install while no pool is online" do
       allow(StoragePools).to receive(:status).and_return(installed: true, offline: [], error: nil, pools: [])
       sign_in_as_admin
       visit '/apps'
       within('#docker_app_store') { click_button 'Install' }
       within('#app-shares-dialog') do
-        expect(page).to have_text("Store keeps its data on a ZFS pool, and there isn't one yet")
+        expect(page).to have_text('Store keeps its data on a ZFS pool, and none is online: make one, or bring yours back online, on Disks → ZFS Pools first.')
         expect(page).to have_button('Install', disabled: true)
       end
     end

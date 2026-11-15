@@ -460,11 +460,12 @@ module AmahiHelper
       definition_from(id, read_json("#{APP_DEFINITIONS}/#{id}.json"))
     end
 
-    # An app's name for a message, as the pages show it (bitShare, not bitshare): its definition's,
-    # else its id.
-    def app_label(id)
-      name = Hash(read_json("#{APP_DEFINITIONS}/#{id}.json"))['name']
-      name.is_a?(String) && name.strip.match?(/\A[[:print:]]{1,60}\z/) ? name.strip : id
+    # An app's name for a message, as the pages show it (bitShare, not bitshare): +manifest+'s
+    # (the one it's installed from), else its definition's, else its id.
+    def app_label(id, manifest = nil)
+      names = [Hash(manifest && manifest[:source])['name'], Hash(read_json("#{APP_DEFINITIONS}/#{id}.json"))['name']]
+      name = names.find { |n| n.is_a?(String) && n.strip.match?(/\A[[:print:]]{1,60}\z/) }
+      name ? name.strip : id
     end
 
     # A definition (a manifest's source, with its image) checked again; nil when it isn't one, or
@@ -2006,11 +2007,15 @@ module AmahiHelper
       return nil unless manifest[:storage]
       chosen = value.nil? || value == '' ? nil : string(value, 'pool', max: 32)
       if (have = app_storage_pool(id))
-        raise Refused, "#{id}'s data is on the pool #{have}: uninstall it with its data to move it to #{chosen}" if chosen && chosen != have
+        if chosen && chosen != have
+          raise Refused, "#{app_label(id, manifest)}'s data is on the pool #{have}: uninstall it with its data to move it to #{chosen}"
+        end
         return have
       end
       return managed_pool(chosen) if chosen
-      raise Refused, "#{id} keeps its data on a ZFS pool: choose one (make one on Disks → ZFS Pools first)" if manifest[:storage] == :required
+      if manifest[:storage] == :required
+        raise Refused, "#{app_label(id, manifest)} keeps its data on a ZFS pool: choose one (make one on Disks → ZFS Pools first)"
+      end
 
       nil
     end
