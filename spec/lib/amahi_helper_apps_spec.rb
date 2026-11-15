@@ -1462,6 +1462,38 @@ RSpec.describe 'AmahiHelper apps' do
         expect { helper.do_update_app('vaultwarden', helper.app_manifest('vaultwarden'), []) }.to raise_error(AmahiHelper::Failed, /as its app file says already/)
       end
 
+      # Left naming the version undone, it was offered as an update again, and the next change
+      # saved (its memory, say) brought it back.
+      describe "an app of your own's update undone" do
+        let(:path) { "#{dir}/custom-apps/vaultwarden.yml" }
+        let(:before_update) { manifest[:source].merge('image' => old_image) }
+        let(:owners) { "# Our passwords\n#{before_update.to_yaml.delete_prefix("---\n")}" }
+
+        before do
+          stub_const('AmahiHelper::APP_CUSTOM', "#{dir}/custom-apps")
+          FileUtils.mkdir_p("#{dir}/custom-apps")
+        end
+
+        def update_and_undo(file)
+          File.write(path, file)
+          helper.do_update_app('vaultwarden', helper.app_manifest('vaultwarden'), [])
+          helper.do_undo_app_update('vaultwarden', helper.validate('apps.undo_update', { 'app' => 'vaultwarden' })[:manifest], [])
+        end
+
+        it 'puts its file back as the owner wrote it, when only its version changed' do
+          update_and_undo(owners.sub(old_image, manifest[:image]))
+          expect(running['vaultwarden']).to eq(old_image)
+          expect(File.read(path)).to eq(owners)
+          expect(helper).to have_received(:say).with('Putting its app file back as it was before the update...')
+        end
+
+        it 'writes it from what it ran before, when the update changed more than its version' do
+          update_and_undo(before_update.merge('image' => manifest[:image], 'memory' => '1g').to_yaml)
+          expect(YAML.safe_load(File.read(path))).to eq(before_update)
+          expect(helper.app_manifest('vaultwarden')).to include(image: old_image, memory: manifest[:memory])
+        end
+      end
+
       it 'leaves out folders the manifest marks backup: false' do
         jellyfin = helper.app_manifest('jellyfin')
         FileUtils.mkdir_p(%W[#{apps_root}/jellyfin/config #{apps_root}/jellyfin/cache])

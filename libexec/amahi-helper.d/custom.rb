@@ -203,6 +203,29 @@ module AmahiHelper
       { 'app' => id, 'saved' => true, 'update' => !definition.nil? && !same }
     end
 
+    # Undo update puts an app of your own's file back as it was before the update, +source+ (the
+    # definition its container is made from again), so the file says what it runs: left naming
+    # the version undone, that version was offered as an update again, and the next change saved
+    # brought it back. When only the image line differs, the file is kept as the owner wrote it
+    # (its comments, its layout), with that line put back; otherwise it's written from +source+.
+    def custom_app_put_back(id, source)
+      return unless custom_app?(id) && source.is_a?(Hash)
+
+      text = File.read(custom_app_path(id))
+      return if custom_file_data(text) == source
+
+      say('Putting its app file back as it was before the update...')
+      kept = text.sub(/^image:[ \t]*\S.*$/, "image: #{source['image']}")
+      content = custom_file_data(kept) == source ? kept : YAML.dump(source).delete_prefix("---\n")
+      do_install(custom_app_path(id), content, nil, '0640', APP_USER)
+    end
+
+    def custom_file_data(text)
+      YAML.safe_load(text)
+    rescue Psych::Exception
+      nil
+    end
+
     def do_custom_app_remove(id)
       FileUtils.rm_f([custom_app_path(id), *custom_logo_paths(id)])
       { 'app' => id, 'removed' => true }

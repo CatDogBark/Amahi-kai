@@ -434,6 +434,18 @@ describe 'Apps of your own', type: :request do
       expect(Privileged.calls).to be_empty
     end
 
+    # Its file named it already, as after an update that didn't come up: it refused, saying the
+    # version wasn't the newest any more
+    it 'updates to the newest version when its file names it already and its container runs an older one' do
+      newest = "ghcr.io/mealie-recipes/mealie:v2.5.0@sha256:#{'b' * 64}"
+      keep('mealie', file.sub(pinned, newest))
+      installed(newer_tag: 'v2.5.0', newer_image: newest, newer_kind: 'newer')
+      allow_any_instance_of(AppVersions).to receive(:check_image).and_return(AppVersions::Result.new(kind: :current, latest: 'v2.5.0'))
+      post '/apps/custom/mealie/version', params: { tag: 'v2.5.0' }
+      expect(response).to redirect_to('/apps/mealie?apply=1')
+      expect(Privileged.calls).to be_empty # nothing to save: the page updates it
+    end
+
     it 'removes it through the helper' do
       post '/apps/custom/mealie/remove'
       expect(response.parsed_body).to eq('status' => 'ok')

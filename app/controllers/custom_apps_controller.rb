@@ -118,9 +118,13 @@ class CustomAppsController < ApplicationController
 
   # Update to the newer version Check found: asked for again (the tag must still be the newest),
   # saved as its image, then the app page updates it. The image's repository is the one the owner
-  # chose, so this doesn't ask for the password again.
+  # chose, so this doesn't ask for the password again. When its file names that version already
+  # and its container runs an older one (an update that didn't come up), the page updates it to it.
   def version
     found = AppVersions.new(tokens: RegistryTokens).check_image(@app.image)
+    if found.kind == :current && AppCatalog.tag(@app.image) == params[:tag].to_s && DockerApp.find_by(identifier: @app.id)&.catalog_update?
+      return redirect_to apps_app_path(@app.id, apply: 1)
+    end
     if found.kind == :current || found.latest != params[:tag].to_s
       return redirect_to apps_app_path(@app.id), alert: "#{params[:tag]} isn't the newest version any more: check again."
     end

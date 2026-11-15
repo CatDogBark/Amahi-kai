@@ -1377,6 +1377,7 @@ module AmahiHelper
       engine_stop(app_container(id), allow_failure: true)
       say("Going back to #{image_tag(from)}, with its data from before the update...")
       reply = app_restore(id, manifest, from, shares)
+      custom_app_put_back(id, manifest[:source].merge('image' => from)) if manifest[:source].is_a?(Hash)
       app_forget_backup(id)
       # The version the update brought, which nothing runs now (Docker keeps one another container uses)
       engine_remove_image(newer) if newer && newer != from
