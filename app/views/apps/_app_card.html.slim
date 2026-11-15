@@ -32,9 +32,6 @@ article.kai-app-card id="docker_app_#{app.identifier}"
     - elsif app.status == 'stopped'
       button.btn.btn-primary type="button" data-call="dockerAppAction" data-args='["/apps/docker/start/#{app.identifier}", "@el"]' Start
     a.btn.btn-outline-secondary href=apps_app_path(app.identifier) Manage
-    / One that keeps restarting has nothing to open: its page says why and has Stop
-    - if app.status == 'restarting'
-      span.kai-app-card-note It stops soon after it starts
     / Update, beside Manage when one is ready (P4.9), the version Update brings named in its question.
     / A new major version opens the app's page at its version instead, to read what's new first; an
     / app of your own saves a version the check found in its file first (CustomAppsController#version),
@@ -53,3 +50,7 @@ article.kai-app-card id="docker_app_#{app.identifier}"
             button.btn.kai-btn-update type="submit" data-confirm=question data-disable-with="Saving…" Update
         - else
           button.btn.kai-btn-update type="button" id="app-update-#{app.identifier}" data-app-stream=app.identifier data-url=apps_docker_update_stream_path(app.identifier) data-title="Updating #{app.name}..." data-confirm=question Update
+    / One that keeps restarting has nothing to open: its page says why and has Stop (after the
+    / buttons, so they stay together)
+    - if app.status == 'restarting'
+      span.kai-app-card-note It stops soon after it starts

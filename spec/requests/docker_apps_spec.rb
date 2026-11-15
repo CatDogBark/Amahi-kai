@@ -139,7 +139,7 @@ describe "Docker Apps", type: :request do
       expect(page.at_css('#docker_app_transmission button.btn-primary')['data-args']).to eq('["/apps/docker/start/transmission", "@el"]')
       # One that keeps restarting has nothing to open: Manage, and why
       expect(page.at_css('#docker_app_vaultwarden .btn-primary')).to be_nil
-      expect(page.at_css('#docker_app_vaultwarden .kai-app-card-note').text).to eq('It stops soon after it starts')
+      expect(page.at_css('#docker_app_vaultwarden .kai-app-card-actions > :last-child').text).to eq('It stops soon after it starts')
       expect(yours.css('a.btn-outline-secondary').map { |manage| manage['href'] })
         .to eq(%w[/apps/gitea /apps/jellyfin /apps/transmission /apps/uptimekuma /apps/vaultwarden])
       expect(yours.css('[data-app-shares]')).to be_empty # nothing to install up here, and no passwords either
