@@ -4,6 +4,10 @@ All notable changes to Amahi-kai are documented here.
 
 ## [Unreleased]
 
+## [1.8.8] — 2026-11-15
+
+An app that keeps crashing says so, Undo update puts your own app's file back, and ZFS Pools names drives and apps as it should.
+
 ### 🔒 Security & Fixes
 
 - **A share drive an app uses isn't called the system disk** — On Disks → ZFS Pools, a drive in share storage (a Greyhole pool drive, say) said **System disk** while an app had been given folders of a share on it, because each folder an app gets shows up as one more place the drive is mounted. Those folders don't count now: the drive says **Share storage** as it should. The system disk is the one holding the system itself (its root, boot or swap), and a drive mounted anywhere else says **In use (mounted at …)**.
