@@ -1357,6 +1357,9 @@ module AmahiHelper
         app_restore(id, before, from, shares)
         custom_app_put_back(id, before[:source].merge('image' => from), only_version: true) if before[:source].is_a?(Hash)
         app_forget_backup(id)
+        # The version that didn't come up, which nothing runs now, as Undo update does (Docker
+        # keeps one another container uses)
+        engine_remove_image(manifest[:image]) unless manifest[:image] == from
         return { 'app' => id, 'updated' => false, 'image' => from, 'problem' => problem }
       end
       engine_remove_image(from) unless from == manifest[:image]
