@@ -94,7 +94,7 @@ RSpec.describe 'ZFS pools', type: :request do
     end
 
     it 'offers only free drives to a new pool, with every layout, and a free name' do
-      stub_pools(installed: true, pools: [pool])
+      stub_pools(installed: true, pools: [pool], drives: drives + [drive('/dev/sdh', :in_use, mounts: ['/srv/backup']), drive('/dev/sdi', :in_use)])
       get '/disks/pools'
       form = page.at_css('#pool-form')
       expect(form['action']).to eq('/disks/create_pool')
@@ -109,6 +109,7 @@ RSpec.describe 'ZFS pools', type: :request do
       expect(roles).to include('/dev/sda' => 'System disk', '/dev/sdb' => 'Share storage (/mnt/storage-1)',
                                '/dev/sdc' => 'ZFS pool tank', '/dev/sdd' => 'Free')
       expect(roles['/dev/sdf']).to include('old ZFS label (pool old')
+      expect(roles).to include('/dev/sdh' => 'In use (mounted at /srv/backup)', '/dev/sdi' => 'In use (LVM, RAID or encryption)')
     end
 
     it 'says when there are too few free drives' do

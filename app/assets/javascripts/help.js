@@ -1,13 +1,15 @@
-// Settings → Help's logs: a tab per log. Amahi-kai's own is in the page; the others are fetched
-// from help_log the first time their tab is opened, and kept for when it's opened again.
+// Settings → Help's logs: a tab per log. The selected one's (Amahi-kai's own, or the one the
+// address named) is in the page; the others are fetched from help_log the first time their tab is
+// opened, and kept for when it's opened again.
 document.addEventListener('DOMContentLoaded', function() {
   var log = document.getElementById('help-log');
   if (!log) return;
   var about = document.getElementById('help-log-about');
   var tabs = Array.prototype.slice.call(document.querySelectorAll('[data-log-source]'));
   var loaded = {};
-  if (tabs.length) loaded[tabs[0].dataset.logSource] = log.textContent;
-  var current = tabs.length ? tabs[0].dataset.logSource : null;
+  var first = tabs.filter(function(t) { return t.getAttribute('aria-selected') === 'true'; })[0] || tabs[0];
+  if (first) loaded[first.dataset.logSource] = log.textContent;
+  var current = first ? first.dataset.logSource : null;
 
   function show(tab) {
     var key = tab.dataset.logSource;

@@ -882,10 +882,11 @@ RSpec.describe 'AmahiHelper apps' do
       let(:root) { "#{dir}/pools/tank/apps/store" }
       let(:datasets) { [] }
 
-      def store(required: true)
+      def store(required: true, name: nil)
         FileUtils.mkdir_p(manifests)
         FileUtils.cp(Rails.root.join('config/apps/vaultwarden.yml'), manifests)
         File.write("#{manifests}/store.yml", {
+          **(name ? { 'name' => name } : {}),
           'image' => "example/store:1.0@sha256:#{'a' * 64}", 'run_as' => 'app', 'requires' => 3,
           'ports' => [{ 'host' => 8600, 'container' => 8443 }],
           'folders' => [{ 'name' => 'config', 'path' => '/config' },
@@ -942,6 +943,19 @@ RSpec.describe 'AmahiHelper apps' do
         expect(helper.validate('apps.install', { 'app' => 'store' })).to include(pool: 'tank')
         expect(refusal('apps.install', { 'app' => 'store', 'pool' => 'other' }))
           .to eq("store's data is on the pool tank: uninstall it with its data to move it to other")
+      end
+
+      # It said "bitshare keeps its data…", and "there's no pool named" for one only offline: what a
+      # dialog left open while the pool went offline would show
+      it 'names the app as the pages do, and says when the pool chosen is offline' do
+        store(name: 'Store Box')
+        expect(refusal('apps.install', { 'app' => 'store' })).to eq('Store Box keeps its data on a ZFS pool: choose one (make one on Disks → ZFS Pools first)')
+        stub_const('AmahiHelper::OFFLINE_POOLS', "#{dir}/offline-pools.json")
+        File.write("#{dir}/offline-pools.json", { 'away' => '1234' }.to_json)
+        expect(refusal('apps.install', { 'app' => 'store', 'pool' => 'away' })).to eq('the pool away is offline; bring it online on Disks → ZFS Pools first')
+        File.write("#{dir}/app-storage.json", { 'store' => 'tank' }.to_json)
+        expect(refusal('apps.install', { 'app' => 'store', 'pool' => 'other' }))
+          .to eq("Store Box's data is on the pool tank: uninstall it with its data to move it to other")
       end
 
       it 'makes the dataset, gives the container its folders from it, and records the pool' do
@@ -1462,10 +1476,73 @@ RSpec.describe 'AmahiHelper apps' do
         expect { helper.do_update_app('vaultwarden', helper.app_manifest('vaultwarden'), []) }.to raise_error(AmahiHelper::Failed, /as its app file says already/)
       end
 
+      # Left naming the version undone, or one that didn't come up, it was offered twice, and the
+      # next change saved (its memory, say) brought it back.
+      describe "an app of your own's file, when its update is undone or doesn't come up" do
+        let(:path) { "#{dir}/custom-apps/vaultwarden.yml" }
+        let(:before_update) { manifest[:source].merge('image' => old_image) }
+        let(:owners) { "# Our passwords\n#{before_update.to_yaml.delete_prefix("---\n")}" }
+
+        before do
+          stub_const('AmahiHelper::APP_CUSTOM', "#{dir}/custom-apps")
+          FileUtils.mkdir_p("#{dir}/custom-apps")
+        end
+
+        def update_and_undo(file)
+          File.write(path, file)
+          helper.do_update_app('vaultwarden', helper.app_manifest('vaultwarden'), [])
+          helper.do_undo_app_update('vaultwarden', helper.validate('apps.undo_update', { 'app' => 'vaultwarden' })[:manifest], [])
+        end
+
+        it 'puts its file back as the owner wrote it, when only its version changed' do
+          update_and_undo(owners.sub(old_image, manifest[:image]))
+          expect(running['vaultwarden']).to eq(old_image)
+          expect(File.read(path)).to eq(owners)
+          expect(helper).to have_received(:say).with('Putting its app file back as it was before the update...')
+        end
+
+        it 'writes it from what it ran before, when the update changed more than its version' do
+          update_and_undo(before_update.merge('image' => manifest[:image], 'memory' => '1g').to_yaml)
+          expect(YAML.safe_load(File.read(path))).to eq(before_update)
+          expect(helper.app_manifest('vaultwarden')).to include(image: old_image, memory: manifest[:memory])
+        end
+
+        describe "an update that doesn't come up" do
+          before { allow(helper).to receive(:app_health_problem).and_return('it stopped (exit code 1)') }
+
+          it 'puts its file back on the version it runs, when only its version changed' do
+            File.write(path, owners.sub(old_image, manifest[:image]))
+            expect(helper.do_update_app('vaultwarden', helper.app_manifest('vaultwarden'), [])).to include('updated' => false)
+            expect(running['vaultwarden']).to eq(old_image)
+            expect(File.read(path)).to eq(owners)
+          end
+
+          it "keeps the owner's edit in it, to fix and apply again" do
+            edited = before_update.merge('memory' => '1g').to_yaml
+            File.write(path, edited)
+            expect(helper.do_update_app('vaultwarden', helper.app_manifest('vaultwarden'), [])).to include('updated' => false)
+            expect(File.read(path)).to eq(edited)
+            expect(helper).not_to have_received(:say).with('Putting its app file back as it was before the update...')
+          end
+        end
+      end
+
       it 'leaves out folders the manifest marks backup: false' do
         jellyfin = helper.app_manifest('jellyfin')
         FileUtils.mkdir_p(%W[#{apps_root}/jellyfin/config #{apps_root}/jellyfin/cache])
         expect(helper.app_backup_folders('jellyfin', jellyfin)).to eq(["#{apps_root}/jellyfin/config"])
+      end
+
+      it "says in its window what it does first: copies the system disk's folders, takes a snapshot of a pool's" do
+        jellyfin = helper.app_manifest('jellyfin')
+        FileUtils.mkdir_p("#{apps_root}/jellyfin/config")
+        expect(helper.app_backup_words('jellyfin', jellyfin)).to eq('Copying its data first, so the update can be undone...')
+        allow(helper).to receive(:app_storage_pool).with('jellyfin').and_return('data')
+        pooled = jellyfin.merge(storage: :required)
+        expect(helper.app_backup_words('jellyfin', pooled))
+          .to eq("Copying its data first, with a snapshot of what's on the pool data, so the update can be undone...")
+        FileUtils.rm_rf("#{apps_root}/jellyfin/config") # all its data on the pool, as bitShare's is
+        expect(helper.app_backup_words('jellyfin', pooled)).to eq('Taking a snapshot of its data on the pool data first, so the update can be undone...')
       end
 
       it 'undoes the update within 30 days: the old version and data come back, and the copy goes' do

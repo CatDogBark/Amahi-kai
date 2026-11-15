@@ -126,4 +126,19 @@ describe CustomApp do
     allow(Etc).to receive(:nprocessors).and_return(1)
     expect(described_class.processors).to eq("the NAS's one processor")
   end
+
+  # A dataset folder is never on the system disk: install refuses without a pool when one is
+  # required (the default), and leaves an optional one out until a pool is chosen.
+  it 'says where each folder is kept' do
+    keeps = ->(folders) { described_class.from_file("name: X\nimage: a/b:1\nrun_as: app\nrequires: 3\nfolders:\n#{folders}").facts.to_h['Keeps'] }
+    expect(described_class.from_form(form).facts.to_h['Keeps']).to eq('One folder, data (in the app at /data), on the system disk')
+    expect(keeps.call("  - { name: data, path: /data, kind: dataset }\n  - { name: chunks, path: /chunks, kind: dataset }\n"))
+      .to eq("2 folders, data (in the app at /data) and chunks (in the app at /chunks), on a ZFS pool you choose at install (it can't be installed without one)")
+    expect(keeps.call("  - { name: media, path: /media, kind: dataset, required: false }\n"))
+      .to eq('One folder, media (in the app at /media), on a ZFS pool if you choose one at install (until then it runs without it)')
+    expect(keeps.call("  - { name: config, path: /config }\n  - { name: data, path: /data, kind: dataset }\n"))
+      .to eq("2 folders: config (in the app at /config) on the system disk, and data (in the app at /data) on a ZFS pool you choose at install (it can't be installed without one)")
+    expect(described_class.from_file("name: X\nimage: a/b:1\nrun_as: app\n").facts.to_h['Keeps'])
+      .to eq('No folders: what it writes is lost when its container is made again')
+  end
 end

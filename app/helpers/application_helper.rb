@@ -172,6 +172,24 @@ module ApplicationHelper
     (request.env["HTTP_USER_AGENT"] =~ /Macintosh/) ? true : false
   end
 
+  # What an app's update does first, so it can be undone, as the middle of a sentence: its own
+  # folders on the system disk are copied, its data on a ZFS pool gets a snapshot (the helper's
+  # app_backup). +entry+: its catalog entry (AppCatalog.find); +pool+: the pool its data is on.
+  def update_first_words(entry, pool)
+    if pool && entry[:copies] then "its data is copied first, with a snapshot of what it keeps on the ZFS pool #{pool}"
+    elsif pool then "a snapshot of its data on the ZFS pool #{pool} is taken first"
+    else 'its data is copied first'
+    end
+  end
+
+  # The same, as what an update keeps to undo it, for its question: "… is kept for 30 days".
+  def update_kept_words(entry, pool)
+    if pool && entry[:copies] then "A copy of its data, with a snapshot of what it keeps on the ZFS pool #{pool}, is kept"
+    elsif pool then "A snapshot of its data on the ZFS pool #{pool} is kept"
+    else 'A copy of its data is kept'
+    end
+  end
+
   # Firewall helpers removed — will be re-added when firewall plugin is built
   # (fw_rule_type, fw_rule_details, fw_rule_state, fw_prot, msg_bad, msg_good, msg_warn, delete_icon)
 

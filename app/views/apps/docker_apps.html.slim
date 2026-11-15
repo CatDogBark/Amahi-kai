@@ -21,6 +21,7 @@
         - counts = @installed_apps.map { |app| app.status == 'pulling' ? 'installing' : app.status }.tally
         p.kai-apps-count
           = ["#{@installed_apps.size} installed", "#{counts['running'].to_i} running",
+             ("#{counts['restarting']} #{counts['restarting'] == 1 ? 'keeps' : 'keep'} restarting" if counts['restarting']),
              ("#{counts['stopped']} stopped" if counts['stopped']),
              ("#{counts['installing']} installing" if counts['installing']),
              ("#{counts['error']} #{counts['error'] == 1 ? 'needs' : 'need'} attention" if counts['error'])].compact.join(' · ')

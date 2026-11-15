@@ -1070,9 +1070,14 @@ RSpec.describe 'AmahiHelper ZFS pools' do
     it "won't take a pool offline or delete it under an installed app's data, and forgets the data an uninstalled one kept" do
       File.write("#{dir}/app-storage.json", { 'store' => 'old', 'gone' => 'old', 'other' => 'tank' }.to_json)
       allow(helper).to receive(:app_image) { |id| id == 'store' ? "example/store:1@sha256:#{'a' * 64}" : nil }
-      why = "store keeps its data on old, so it can't be %s: uninstall it on Apps first (the data stays on the pool unless you delete it)"
+      stub_const('AmahiHelper::APP_DEFINITIONS', "#{dir}/app-definitions")
+      Dir.mkdir("#{dir}/app-definitions")
+      File.write("#{dir}/app-definitions/store.json", { 'name' => 'Store Box', 'image' => "example/store:1@sha256:#{'a' * 64}" }.to_json)
+      why = "Store Box keeps its data on the pool old, so it can't be %s: uninstall it on Apps first (the data stays on the pool unless you delete it)"
       expect(refusal('pools.export', { 'name' => 'old' })).to eq(format(why, 'taken offline'))
       expect(refusal('pools.destroy', { 'name' => 'old', 'confirm' => 'old' })).to eq(format(why, 'deleted'))
+      File.delete("#{dir}/app-definitions/store.json") # made before definitions were kept: its id
+      expect(refusal('pools.export', { 'name' => 'old' })).to start_with('store keeps its data on the pool old')
 
       allow(helper).to receive(:app_image).and_return(nil) # store uninstalled too, its data kept
       expect(steps('pools.destroy', { 'name' => 'old', 'confirm' => 'old' })).to include([:forget_app_storage, %w[gone store]])

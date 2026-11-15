@@ -41,6 +41,12 @@ RSpec.describe ServerSummary do
     expect(described_class.text.lines(chomp: true).last(2)).to eq(['  Gitea: running', '  Transmission: needs attention (setfacl exited 1)'])
   end
 
+  it 'says when an app keeps restarting, as its page does' do
+    DockerApp.find_by(identifier: 'gitea').update!(status: 'restarting')
+    expect(described_class.rows.to_h['Apps']).to eq('1 keeps restarting · 1 needs attention')
+    expect(described_class.text.lines(chomp: true)).to include('  Gitea: keeps restarting')
+  end
+
   it 'names a service that should run and does not, Greyhole and storage on the system disk' do
     allow(SystemServices).to receive(:all).and_return([service.new('Samba', false, false)])
     allow(StoragePools).to receive(:status).and_return(pools: [], offline: [], found: [], installed: false)

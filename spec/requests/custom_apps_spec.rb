@@ -387,7 +387,8 @@ describe 'Apps of your own', type: :request do
       post '/apps/custom/mealie/check'
       expect(response).to redirect_to('/apps/mealie#app-version-mealie')
       follow_redirect!
-      expect(response.body).to include('v2.5.0 is out, from the same image.', 'Update to v2.5.0', 'action="/apps/custom/mealie/version"')
+      expect(response.body).to include('v2.5.0 is out, from the same image.', 'Update to v2.5.0', 'action="/apps/custom/mealie/version"',
+                                       'Its data is copied first, so you can undo it for 30 days.')
       expect(response.body).not_to match(/flash-data[^<]*v2\.5\.0/) # what it found is on the page, not a toast
       get '/apps'
       get '/apps/mealie'
@@ -431,6 +432,18 @@ describe 'Apps of your own', type: :request do
       post '/apps/custom/mealie/version', params: { tag: 'v1.0.0' }
       expect(flash[:alert]).to include("isn't the newest version any more")
       expect(Privileged.calls).to be_empty
+    end
+
+    # Its file named it already, as after an update that didn't come up: it refused, saying the
+    # version wasn't the newest any more
+    it 'updates to the newest version when its file names it already and its container runs an older one' do
+      newest = "ghcr.io/mealie-recipes/mealie:v2.5.0@sha256:#{'b' * 64}"
+      keep('mealie', file.sub(pinned, newest))
+      installed(newer_tag: 'v2.5.0', newer_image: newest, newer_kind: 'newer')
+      allow_any_instance_of(AppVersions).to receive(:check_image).and_return(AppVersions::Result.new(kind: :current, latest: 'v2.5.0'))
+      post '/apps/custom/mealie/version', params: { tag: 'v2.5.0' }
+      expect(response).to redirect_to('/apps/mealie?apply=1')
+      expect(Privileged.calls).to be_empty # nothing to save: the page updates it
     end
 
     it 'removes it through the helper' do

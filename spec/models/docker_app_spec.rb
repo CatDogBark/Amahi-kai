@@ -319,6 +319,18 @@ describe DockerApp do
       expect(DockerApp.find_by(identifier: 'immich')).to have_attributes(status: 'error', error_message: 'Its install was cut off: install it again')
     end
 
+    # It read Running while its container crashed and Docker started it again, over and over
+    it "says when its container keeps restarting, and Running again once it stays up" do
+      docker_reports({ 'gitea' => { 'state' => 'restarting' }, 'jellyfin' => { 'state' => 'running' }, 'vaultwarden' => { 'state' => 'exited' } })
+      DockerApp.refresh_statuses!
+      gitea = DockerApp.find_by(identifier: 'gitea')
+      expect(gitea.status).to eq('restarting')
+      expect(gitea).to be_settled # Update, Undo update and its changes still apply
+      docker_reports({ 'gitea' => { 'state' => 'running' } })
+      DockerApp.refresh_statuses!
+      expect(gitea.reload.status).to eq('running')
+    end
+
     it "changes nothing when Docker can't be asked" do
       docker_reports({}, docker: false)
       expect { DockerApp.refresh_statuses! }.not_to(change { DockerApp.pluck(:status) })

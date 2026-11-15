@@ -125,19 +125,26 @@ describe "Docker Apps", type: :request do
       DockerApp.create!(identifier: 'uptimekuma', name: 'Uptime Kuma', image: AppCatalog.find('uptimekuma')[:image], status: 'error',
                         error_message: 'docker exited 1: pull access denied')
       DockerApp.create!(identifier: 'jellyfin', name: 'Jellyfin', image: AppCatalog.find('jellyfin')[:image], status: 'installing')
+      DockerApp.create!(identifier: 'vaultwarden', name: 'Vaultwarden', image: AppCatalog.find('vaultwarden')[:image], status: 'restarting',
+                        host_port: 8880)
       get "/apps"
       page = Nokogiri::HTML(response.body)
       yours = page.at_css('section[aria-labelledby="apps-yours"]')
-      expect(yours.css('article h3').map { |name| name.text.squish }).to eq(['Gitea', 'Jellyfin', 'Transmission', 'Uptime Kuma'])
-      expect(yours.at_css('.kai-apps-count').text.squish).to eq('4 installed · 1 running · 1 stopped · 1 installing · 1 needs attention')
-      expect(%w[gitea transmission uptimekuma jellyfin].map { |id| page.at_css("#docker_app_#{id} .kai-pill").text })
-        .to eq(['Running', 'Stopped', 'Needs attention', 'Installing…'])
+      expect(yours.css('article h3').map { |name| name.text.squish }).to eq(['Gitea', 'Jellyfin', 'Transmission', 'Uptime Kuma', 'Vaultwarden'])
+      expect(yours.at_css('.kai-apps-count').text.squish)
+        .to eq('5 installed · 1 running · 1 keeps restarting · 1 stopped · 1 installing · 1 needs attention')
+      expect(%w[gitea transmission uptimekuma jellyfin vaultwarden].map { |id| page.at_css("#docker_app_#{id} .kai-pill").text.squish })
+        .to eq(['Running', 'Stopped', 'Needs attention', 'Installing…', 'Keeps restarting'])
       expect(page.at_css('#docker_app_gitea a.btn-primary').text.squish).to eq('Open')
       expect(page.at_css('#docker_app_transmission button.btn-primary')['data-args']).to eq('["/apps/docker/start/transmission", "@el"]')
-      expect(yours.css('a.btn-outline-secondary').map { |manage| manage['href'] }).to eq(%w[/apps/gitea /apps/jellyfin /apps/transmission /apps/uptimekuma])
+      # One that keeps restarting has nothing to open: Manage, and why
+      expect(page.at_css('#docker_app_vaultwarden .btn-primary')).to be_nil
+      expect(page.at_css('#docker_app_vaultwarden .kai-app-card-actions > :last-child').text).to eq('It stops soon after it starts')
+      expect(yours.css('a.btn-outline-secondary').map { |manage| manage['href'] })
+        .to eq(%w[/apps/gitea /apps/jellyfin /apps/transmission /apps/uptimekuma /apps/vaultwarden])
       expect(yours.css('[data-app-shares]')).to be_empty # nothing to install up here, and no passwords either
       add = page.at_css('section#add')
-      expect(add.css('article[id^="docker_app_"]').map { |card| card['id'] }).to eq(%w[docker_app_pigallery2 docker_app_vaultwarden])
+      expect(add.css('article[id^="docker_app_"]').map { |card| card['id'] }).to eq(%w[docker_app_pigallery2])
     end
 
     it "filters only the apps to add, and says when a category has none left" do
@@ -166,6 +173,23 @@ describe "Docker Apps", type: :request do
       expect(page.at_css('#docker_app_gitea .kai-pill').text).to eq('Running')
       expect(page.at_css('#docker_app_gitea button[data-call="dockerAppAction"]')['data-args']).to eq('["/apps/docker/stop/gitea", "@el"]')
       expect(page.at_css('.kai-app-danger button')['data-args']).to eq('["/apps/docker/uninstall/gitea", "@el"]')
+    end
+
+    # It read Running, with Open, while its container crashed and Docker started it again
+    it "says on its page when an app keeps restarting: nothing to open, why, its output, and Stop" do
+      gitea(status: 'restarting', image: "gitea/gitea:1.27.2-rootless@sha256:#{'b' * 64}")
+      get "/apps/gitea"
+      page = Nokogiri::HTML(response.body)
+      hero = page.at_css('#docker_app_gitea')
+      expect(hero.at_css('.kai-pill').text.squish).to eq('Keeps restarting')
+      expect(hero.at_css('.kai-app-hero-actions').css('a, button').map { |b| b.text.squish }).to eq(['Stop'])
+      expect(hero.at_css('.kai-app-hero-actions button')['data-args']).to eq('["/apps/docker/stop/gitea", "@el"]')
+      notice = page.at_css('#app-restarting-gitea')
+      expect(notice.text.squish).to eq("Gitea keeps stopping soon after it starts, and Docker starts it again each time, so it isn't working. " \
+                                       'Its own output usually says why: See its output. Stop ends the restarts until you start it again.')
+      expect(notice.at_css('a')['href']).to eq('/settings/help?log=app%3Agitea')
+      # A new version may be what fixes it
+      expect(page.at_css('#app-version-gitea button').text).to eq('Update to 1.27.3-rootless')
     end
 
     # How to sign in the first time, above the passwords Amahi-kai made, which stay hidden until Show
@@ -321,7 +345,9 @@ describe "Docker Apps", type: :request do
       get "/apps"
       page = Nokogiri::HTML(response.body)
       expect(page.css('#app-storage-pool option').size).to eq(1)
-      expect(page.at_css('[data-role="storage-missing"]').text.squish).to include("there isn't one yet", 'Disks → ZFS Pools')
+      # Said "there isn't one yet" while a pool was there, only offline
+      expect(page.at_css('[data-role="storage-missing"]').text.squish)
+        .to eq('keeps its data on a ZFS pool, and none is online: make one, or bring yours back online, on Disks → ZFS Pools first.')
     end
 
     # P4.9: a first install takes the newest version on the app's track; a reinstall keeps its own
@@ -653,6 +679,7 @@ describe "Docker Apps", type: :request do
         expect(update['data-url']).to eq('/apps/docker/update_stream/gitea')
         expect(update['data-title']).to eq('Updating Gitea...')
         expect(update['data-confirm']).to start_with('Update Gitea to 1.27.9-rootless? It stops for a minute or two.')
+        expect(update['data-confirm']).to include('A copy of its data is kept for 30 days') # its folders are on the system disk
         expect(card.css('.kai-app-card-actions .btn').map(&:text).map(&:squish)).to eq(%w[Open Manage Update])
 
         DockerApp.find_by(identifier: 'gitea').update!(**found) # 28.3.0, a new major version

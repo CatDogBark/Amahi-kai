@@ -460,6 +460,14 @@ module AmahiHelper
       definition_from(id, read_json("#{APP_DEFINITIONS}/#{id}.json"))
     end
 
+    # An app's name for a message, as the pages show it (bitShare, not bitshare): +manifest+'s
+    # (the one it's installed from), else its definition's, else its id.
+    def app_label(id, manifest = nil)
+      names = [Hash(manifest && manifest[:source])['name'], Hash(read_json("#{APP_DEFINITIONS}/#{id}.json"))['name']]
+      name = names.find { |n| n.is_a?(String) && n.strip.match?(/\A[[:print:]]{1,60}\z/) }
+      name ? name.strip : id
+    end
+
     # A definition (a manifest's source, with its image) checked again; nil when it isn't one, or
     # no longer passes.
     def definition_from(id, source)
@@ -1326,7 +1334,7 @@ module AmahiHelper
       end
       say("Stopping it (#{image_tag(from)})...")
       engine_stop(app_container(id))
-      say('Copying its data first, so the update can be undone...')
+      say(app_backup_words(id, before))
       begin
         app_backup(id, before, from, manifest[:image])
       rescue Failed, SystemCallError => e
@@ -1347,6 +1355,7 @@ module AmahiHelper
         say("It didn't come up healthy: #{problem}")
         say("Going back to #{image_tag(from)}, with its data from before the update...")
         app_restore(id, before, from, shares)
+        custom_app_put_back(id, before[:source].merge('image' => from), only_version: true) if before[:source].is_a?(Hash)
         app_forget_backup(id)
         return { 'app' => id, 'updated' => false, 'image' => from, 'problem' => problem }
       end
@@ -1370,6 +1379,7 @@ module AmahiHelper
       engine_stop(app_container(id), allow_failure: true)
       say("Going back to #{image_tag(from)}, with its data from before the update...")
       reply = app_restore(id, manifest, from, shares)
+      custom_app_put_back(id, manifest[:source].merge('image' => from)) if manifest[:source].is_a?(Hash)
       app_forget_backup(id)
       # The version the update brought, which nothing runs now (Docker keeps one another container uses)
       engine_remove_image(newer) if newer && newer != from
@@ -1399,6 +1409,17 @@ module AmahiHelper
 
       raise Failed, "there isn't room to copy #{id}'s data before updating (#{gigabytes(need)} GB, and " \
                     "#{gigabytes(have)} GB is free); free some space or grow the disk"
+    end
+
+    # What the update window says app_backup does first: the system disk's folders are copied, a
+    # dataset gets a snapshot (app_update_snapshot).
+    def app_backup_words(id, manifest)
+      copies = app_backup_folders(id, manifest).any?
+      pool = app_storage_pool(id) if manifest[:storage]
+      if pool && copies then "Copying its data first, with a snapshot of what's on the pool #{pool}, so the update can be undone..."
+      elsif pool then "Taking a snapshot of its data on the pool #{pool} first, so the update can be undone..."
+      else 'Copying its data first, so the update can be undone...'
+      end
     end
 
     # The folders an update copies first: the system disk's that the manifest backs up. A dataset
@@ -1986,11 +2007,15 @@ module AmahiHelper
       return nil unless manifest[:storage]
       chosen = value.nil? || value == '' ? nil : string(value, 'pool', max: 32)
       if (have = app_storage_pool(id))
-        raise Refused, "#{id}'s data is on the pool #{have}: uninstall it with its data to move it to #{chosen}" if chosen && chosen != have
+        if chosen && chosen != have
+          raise Refused, "#{app_label(id, manifest)}'s data is on the pool #{have}: uninstall it with its data to move it to #{chosen}"
+        end
         return have
       end
       return managed_pool(chosen) if chosen
-      raise Refused, "#{id} keeps its data on a ZFS pool: choose one (make one on Disks → ZFS Pools first)" if manifest[:storage] == :required
+      if manifest[:storage] == :required
+        raise Refused, "#{app_label(id, manifest)} keeps its data on a ZFS pool: choose one (make one on Disks → ZFS Pools first)"
+      end
 
       nil
     end

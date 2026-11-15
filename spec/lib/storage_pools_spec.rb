@@ -133,6 +133,21 @@ RSpec.describe StoragePools do
         .to eq("/nonexistent/storage-9 can't be read")
     end
 
+    # What a drive taken out of the Greyhole pool on Disks → Greyhole Pool still has on it
+    it "is not blocked by what Greyhole left of its own, but is by its trash and anything else" do
+      Dir.mkdir("#{dir}/lost+found")
+      FileUtils.mkdir_p(["#{dir}/.gh_metastore/Vault/media", "#{dir}/.gh_metastore_backup"])
+      File.write("#{dir}/.gh_metastore/Vault/media/photo.jpg", 'x')
+      File.write("#{dir}/.gh_settings.bak", 'x')
+      expect(described_class.share_drive_blocker(drive, shares: [], greyhole: [])).to be_nil
+      expect(described_class.share_drive_blocker(drive, shares: [], greyhole: [dir])).to eq('it is in the Greyhole pool') # still in it
+      FileUtils.mkdir_p("#{dir}/.gh_trash/Vault")
+      expect(described_class.share_drive_blocker(drive, shares: [], greyhole: [])).to eq('it has files on it (.gh_trash)')
+      FileUtils.rm_rf("#{dir}/.gh_trash")
+      FileUtils.mkdir_p("#{dir}/Vault/media")
+      expect(described_class.share_drive_blocker(drive, shares: [], greyhole: [])).to eq('it has files on it (Vault)')
+    end
+
     it 'unmounts an empty, unused one, and refuses a drive that is not share storage or is in use' do
       lsblk = { 'blockdevices' => [
         { 'path' => '/dev/sdb', 'type' => 'disk', 'size' => 1_000, 'fstype' => 'ext4', 'mountpoints' => ['/mnt/storage-2'] },
@@ -171,9 +186,20 @@ RSpec.describe StoragePools do
           'children' => [{ 'path' => '/dev/md0', 'type' => 'raid1', 'mountpoints' => [nil] }] },
         { 'path' => '/dev/sdg', 'type' => 'disk', 'size' => 1_000, 'mountpoints' => [nil],
           'children' => [{ 'path' => '/dev/sdg1', 'type' => 'part', 'fstype' => 'zfs_member', 'label' => 'tank', 'mountpoints' => [nil] }] },
+        # as Disks → Devices formats a drive (no partition), with lsblk's order of its mounts
+        { 'path' => '/dev/sdh', 'type' => 'disk', 'size' => 1_000, 'fstype' => 'ext4',
+          'mountpoints' => ["#{binds}/1", "#{binds}/4", '/mnt/storage-2'] },
+        { 'path' => '/dev/sdi', 'type' => 'disk', 'size' => 1_000, 'mountpoints' => [nil],
+          'children' => [{ 'path' => '/dev/sdi1', 'type' => 'part', 'fstype' => 'ext4', 'mountpoints' => ['/srv/backup'] }] },
+        { 'path' => '/dev/sdj', 'type' => 'disk', 'size' => 1_000, 'mountpoints' => [nil],
+          'children' => [{ 'path' => '/dev/sdj1', 'type' => 'part', 'fstype' => 'swap', 'mountpoints' => ['[SWAP]'] }] },
+        { 'path' => '/dev/sdk', 'type' => 'disk', 'size' => 1_000, 'mountpoints' => [nil],
+          'children' => [{ 'path' => '/dev/sdk1', 'type' => 'part', 'fstype' => 'ext4', 'mountpoints' => ["#{binds}/2"] }] },
         { 'path' => '/dev/sr0', 'type' => 'rom', 'size' => 1, 'mountpoints' => [nil] }
       ] }.to_json
     end
+    # Gitea's share folders on a share drive, bound for it by the helper (APP_SHARE_BIND_ROOT)
+    let(:binds) { '/run/amahi-kai-app-shares/gitea/20261110035207-b533d3' }
 
     before do
       allow(Open3).to receive(:capture3)
@@ -187,13 +213,18 @@ RSpec.describe StoragePools do
       expect(drives.to_h { |d| [d[:path], [d[:role], d[:free]]] }).to eq(
         '/dev/sda' => [:os, false], '/dev/sdb' => [:share, false], '/dev/sdc' => [:pool, false],
         '/dev/sdd' => [:old_zfs, true], '/dev/sde' => [:free, true], '/dev/sdf' => [:in_use, false],
-        '/dev/sdg' => [:left_pool, true] # replaced out of tank: its label names the pool, its drives don't
+        '/dev/sdg' => [:left_pool, true], # replaced out of tank: its label names the pool, its drives don't
+        '/dev/sdh' => [:share, false], # not the system disk because an app has its folders
+        '/dev/sdi' => [:in_use, false], '/dev/sdj' => [:os, false],
+        '/dev/sdk' => [:in_use, false] # an app's folder still bound from it holds it
       )
       expect(drives.find { |d| d[:path] == '/dev/sdg' }[:pool]).to eq('tank')
       expect(described_class.drives.find { |d| d[:path] == '/dev/sdg' }[:role]).to eq(:old_zfs) # no pool tank here
       expect(drives.find { |d| d[:path] == '/dev/sde' }).to include(model: 'Samsung SSD 870 EVO 1TB', serial: 'S6P', size: 1_000_000, ssd: true)
       expect(drives.find { |d| d[:path] == '/dev/sdc' }[:pool]).to eq('tank')
       expect(drives.find { |d| d[:path] == '/dev/sdb' }[:mounts]).to eq(['/mnt/storage-1'])
+      expect(drives.find { |d| d[:path] == '/dev/sdh' }[:mounts]).to eq(['/mnt/storage-2'])
+      expect(drives.find { |d| d[:path] == '/dev/sdk' }[:mounts]).to eq([])
     end
 
     it "keeps an offline pool's drives for it, by the drives found or by their label" do

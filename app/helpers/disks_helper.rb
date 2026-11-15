@@ -55,7 +55,7 @@ module DisksHelper
     case drive[:role]
     when :os then 'System disk'
     when :share then "Share storage (#{drive[:mounts].join(', ')})"
-    when :in_use then 'In use (LVM, RAID or encryption)'
+    when :in_use then drive[:mounts].any? ? "In use (mounted at #{drive[:mounts].join(', ')})" : 'In use (LVM, RAID or encryption)'
     when :pool then "ZFS pool #{drive[:pool]}"
     when :offline then "ZFS pool #{drive[:pool]} (offline)"
     when :found then "ZFS pool #{drive[:pool]}, on the drive but not imported"

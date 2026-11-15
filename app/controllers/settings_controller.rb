@@ -215,13 +215,19 @@ class SettingsController < ApplicationController
   end
 
   # Settings → Help: Report a problem, this server in a few lines, and its logs. Amahi-kai's own
-  # is on the page; each other log comes when its tab is opened (help_log), since the journal's
-  # and the apps' each take a call to the root helper.
+  # is on the page, or the one ?log= names (an app's page links to its own output); each other log
+  # comes when its tab is opened (help_log), since the journal's and the apps' each take a call to
+  # the root helper.
   def help
     @page_title = t('settings')
     @summary = ServerSummary.rows
     @log_sources = HelpLogs.sources
-    @first_log = HelpLogs.lines('amahi')
+    @log = @log_sources.find { |source| source.key == params[:log].to_s } || @log_sources.first
+    @first_log = begin
+      HelpLogs.lines(@log.key)
+    rescue HelpLogs::Unreadable => e
+      ["Couldn't read it: #{e.message}"]
+    end
   end
 
   # One log's newest lines, for its tab on Help.

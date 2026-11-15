@@ -10,11 +10,18 @@ class DockerApp < ApplicationRecord
   validates :identifier, presence: true, uniqueness: true
   validates :name, presence: true
   validates :image, presence: true
-  validates :status, inclusion: { in: %w[available pulling installing running stopped error] }
+  # restarting: its container keeps stopping and Docker keeps starting it again, so it isn't working
+  validates :status, inclusion: { in: %w[available pulling installing running restarting stopped error] }
 
   scope :running, -> { where(status: 'running') }
   scope :dashboard, -> { where(show_in_dashboard: true) }
   scope :by_category, ->(cat) { where(category: cat) }
+
+  # Its container is made and no install runs: up, stopped, or crashing and started again (Update,
+  # Undo update and its changes still apply; a new version may be what fixes it).
+  def settled?
+    %w[running restarting stopped].include?(status)
+  end
 
   # The version it runs ("1.37.3"), from the image it was installed or updated with.
   def version
@@ -295,7 +302,7 @@ class DockerApp < ApplicationRecord
       where.not(id: busy.select(:id)).find_each do |app|
         state = states.dig(app.identifier, 'state')
         status = case state
-                 when 'running', 'restarting' then 'running'
+                 when 'running', 'restarting' then state
                  when 'exited', 'created', 'paused', 'dead' then 'stopped'
                  end
         if state.nil?

@@ -203,6 +203,33 @@ module AmahiHelper
       { 'app' => id, 'saved' => true, 'update' => !definition.nil? && !same }
     end
 
+    # Puts an app of your own's file back as it was before an update, +source+ (the definition
+    # its container is made from again), so the file says what it runs: left naming the version
+    # undone, or one that didn't come up, that version was offered twice, and the next change
+    # saved brought it back. When only the image line differs, the file is kept as the owner wrote
+    # it (its comments, its layout), with that line put back; otherwise it's written from +source+.
+    # +only_version+ (an update that didn't come up) leaves a file with more changed than its
+    # version: the owner's edit stays, shown as changes waiting, to fix and apply again.
+    def custom_app_put_back(id, source, only_version: false)
+      return unless custom_app?(id) && source.is_a?(Hash)
+
+      text = File.read(custom_app_path(id))
+      return if custom_file_data(text) == source
+
+      kept = text.sub(/^image:[ \t]*\S.*$/, "image: #{source['image']}")
+      version = custom_file_data(kept) == source
+      return if only_version && !version
+
+      say('Putting its app file back as it was before the update...')
+      do_install(custom_app_path(id), version ? kept : YAML.dump(source).delete_prefix("---\n"), nil, '0640', APP_USER)
+    end
+
+    def custom_file_data(text)
+      YAML.safe_load(text)
+    rescue Psych::Exception
+      nil
+    end
+
     def do_custom_app_remove(id)
       FileUtils.rm_f([custom_app_path(id), *custom_logo_paths(id)])
       { 'app' => id, 'removed' => true }

@@ -202,7 +202,10 @@ Reinstalling keeps the same values.
 **Open** and **Start** are on the Apps page; **Stop** and **Uninstall** are on the app's page
 (**Manage**). The Apps page shows what Docker reports, so an app that stopped on its own says
 **Stopped**, and one whose container was removed outside Amahi-kai says **Needs attention**, with
-the reason and **Install again** on its page. They work for an app the catalog no longer lists too.
+the reason and **Install again** on its page. One whose container keeps stopping soon after it
+starts, which Docker then starts again, says **Keeps restarting**: it isn't working, so there's
+nothing to open, and its page links to its own output (Settings → Help), which usually says why.
+**Stop** ends the restarts. They work for an app the catalog no longer lists too.
 
 **Uninstall keeps the app's data.** It removes the container and its image; the app's folder,
 passwords and user stay, and installing the app again picks them up, on the version it ran (Update
@@ -286,8 +289,9 @@ and the internet). Add apps only from people you trust.
 On its page:
 
 - **Edit** opens what you described, filled in (or its file, when it uses fields the form doesn't
-  show). Saving asks for your password, then updates the app to it: its data is copied first, and
-  it goes back by itself if it doesn't come up, as an update does; **Undo update** works the same.
+  show). Saving asks for your password, then updates the app to it: its data is copied first (a
+  snapshot for data on a ZFS pool), and it goes back by itself if it doesn't come up, as an update
+  does; **Undo update** works the same.
   A change only to how it's listed (its name, description, category, how to sign in, or its logo)
   is saved without restarting it.
 - **Newer versions:** every 6 hours, and when you press **Check for a newer version**, Amahi-kai

@@ -548,7 +548,8 @@ the bit apps had in the catalog), after the catalog's PR and its signed version.
 - **The Apps page laid out again (2026-10-27, CatDogBark's pick of three mockups).** The table put
   each app's sign-in and passwords on a row of their own, which read as another app, and only the
   buttons told whether an app ran. Now: your apps first, as cards saying in a word where each is
-  (Running, Stopped, Installing…, Needs attention) with Open or Start, and Manage; then **Add
+  (Running, Stopped, Installing…, Needs attention; Keeps restarting since 2026-11, CatDogBark's pick
+  of a mockup) with Open or Start, and Manage; then **Add
   apps**, the catalog's others, by category. Everything else moved to the app's own page
   (`/apps/<id>`): how to sign in and the passwords Amahi-kai made (hidden until Show), its address,
   ports and version (Update, Undo update), its shares and storage, Stop and Uninstall. The

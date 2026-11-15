@@ -206,6 +206,25 @@ own (`run_as: app`, `requires: 3`), here called `pooled`, with a `data` folder:
   Install Uptime Kuma: the window says "Port 3001 is in use, so it gets port 3002", its page says
   **Port 3002**, and Open goes there. Stop the test server with Ctrl+C.
 
+## 8b. Optional: an app that keeps crashing
+
+- [ ] **Add your own app** with this file (busybox's shell exits at once, so Docker keeps starting
+  it again), and install it:
+
+  ```yaml
+  name: Crashtest
+  description: Exits at once
+  category: utilities
+  image: busybox:1.36.0
+  run_as: app
+  memory: 64m
+  ```
+
+  A minute later its card says **Keeps restarting**, with Manage and "It stops soon after it
+  starts", and no Open. Its page has only **Stop**, and a red notice whose **See its output** opens
+  Settings → Help on its log. **Stop** ends it (**Stopped**). Remove it after: uninstall, delete its
+  data, then **Remove** on its card.
+
 ---
 
 ## If something fails
