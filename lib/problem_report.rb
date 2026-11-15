@@ -1,7 +1,8 @@
 # A problem's report (Settings → Help → Report a problem): what the red flag said and on which
 # page, this server in a few lines (ServerSummary), and the newest lines of the logs most likely to
-# show what went wrong, with an app's own when it needs attention. The page takes the names and
-# addresses out (ReportScrubber) and the browser sends it (report.js): Amahi-kai sends nothing.
+# show what went wrong, with an app's own when it needs attention or keeps restarting. The page
+# takes the names and addresses out (ReportScrubber) and the browser sends it (report.js):
+# Amahi-kai sends nothing.
 module ProblemReport
   ISSUES_URL = 'https://github.com/CatDogBark/Amahi-kai/issues/new'.freeze
   EMAIL = 'catdogbark@pm.me'.freeze
@@ -18,8 +19,8 @@ module ProblemReport
     parts << "The flag said#{" on #{page}" if page}: #{about}" if about.present?
     parts << ServerSummary.text
     LOGS.each { |key, count| parts << log(key, HelpLogs.source(key, []).label, count) }
-    DockerApp.where(status: 'error').order(:name).each do |app|
-      parts << log("app:#{app.identifier}", "#{app.name} (needs attention)", APP_LINES)
+    DockerApp.where(status: %w[error restarting]).order(:name).each do |app|
+      parts << log("app:#{app.identifier}", "#{app.name} (#{app.status == 'error' ? 'needs attention' : 'keeps restarting'})", APP_LINES)
     end
     parts.join("\n\n")
   end

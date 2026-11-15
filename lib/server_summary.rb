@@ -69,7 +69,7 @@ module ServerSummary
   # [{ name:, state:, detail: }]: each app as its page names its state.
   def apps
     DockerApp.order(:name).map do |app|
-      state = { 'running' => 'running', 'stopped' => 'stopped', 'error' => 'needs attention',
+      state = { 'running' => 'running', 'restarting' => 'keeps restarting', 'stopped' => 'stopped', 'error' => 'needs attention',
                 'installing' => 'installing', 'pulling' => 'installing' }.fetch(app.status, app.status)
       { name: app.name, state: state, detail: (app.error_message if app.status == 'error') }
     end

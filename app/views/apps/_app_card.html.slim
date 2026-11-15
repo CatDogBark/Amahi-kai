@@ -32,11 +32,14 @@ article.kai-app-card id="docker_app_#{app.identifier}"
     - elsif app.status == 'stopped'
       button.btn.btn-primary type="button" data-call="dockerAppAction" data-args='["/apps/docker/start/#{app.identifier}", "@el"]' Start
     a.btn.btn-outline-secondary href=apps_app_path(app.identifier) Manage
+    / One that keeps restarting has nothing to open: its page says why and has Stop
+    - if app.status == 'restarting'
+      span.kai-app-card-note It stops soon after it starts
     / Update, beside Manage when one is ready (P4.9), the version Update brings named in its question.
     / A new major version opens the app's page at its version instead, to read what's new first; an
     / app of your own saves a version the check found in its file first (CustomAppsController#version),
     / then its page runs the update. Either way the update runs in the install window.
-    - target = app.update_target if %w[running stopped].include?(app.status) && entry[:installable] != false
+    - target = app.update_target if app.settled? && entry[:installable] != false
     - if target
       - found_mine = entry[:custom] && target[:from] == :check
       - if target[:major]

@@ -44,9 +44,9 @@
             | Download logs
         .card-body
           .kai-help-sources role="tablist" aria-label="Which log"
-            - @log_sources.each_with_index do |source, index|
-              button.kai-help-source type="button" role="tab" aria-selected=(index.zero? ? 'true' : 'false') aria-controls="help-log" data-log-source=source.key data-log-about=source.about
+            - @log_sources.each do |source|
+              button.kai-help-source type="button" role="tab" aria-selected=(source == @log ? 'true' : 'false') aria-controls="help-log" data-log-source=source.key data-log-about=source.about
                 = source.label
-          p.small.text-muted.mt-3.mb-2#help-log-about = @log_sources.first.about
+          p.small.text-muted.mt-3.mb-2#help-log-about = @log.about
           pre.kai-help-log#help-log role="tabpanel" tabindex="0" data-log-url=settings_help_log_path aria-live="polite"
             = @first_log.join("\n").presence || '(empty)'

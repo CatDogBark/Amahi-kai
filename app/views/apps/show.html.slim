@@ -29,7 +29,7 @@
 - sign_in = entry[:sign_in]
 - missing = app.missing_folders
 - gone_shares = app.missing_shares
-- versioned = %w[running stopped].include?(status)
+- versioned = app.settled?
 / An app of your own (CustomAppsController): Edit, Check for a newer version, and its changes saved
 / but not in its container yet (Apply them); apply=1 after a save runs the update by itself.
 - custom = entry[:custom] == true
@@ -71,6 +71,9 @@ section.kai-app-panel.kai-app-hero id="docker_app_#{identifier}" aria-label=name
             | Open
             = lucide_icon('arrow-up-right', size: 15)
         button.btn.btn-outline-secondary type="button" data-call="dockerAppAction" data-args='["/apps/docker/stop/#{identifier}", "@el"]' Stop
+      / It keeps stopping and Docker keeps starting it again: nothing to open, and Stop ends that
+      - when 'restarting'
+        button.btn.btn-outline-secondary type="button" data-call="dockerAppAction" data-args='["/apps/docker/stop/#{identifier}", "@el"]' Stop
       - when 'stopped'
         button.btn.btn-primary type="button" data-call="dockerAppAction" data-args='["/apps/docker/start/#{identifier}", "@el"]' Start
       - when 'error'
@@ -82,6 +85,12 @@ section.kai-app-panel.kai-app-hero id="docker_app_#{identifier}" aria-label=name
         and tells you, and it changes only when you change it.
   - if status == 'error' && app.error_message.present?
     p.kai-notice.kai-notice-alert id="app-error-#{identifier}" = app.error_message
+  / Its own output (Settings → Help, its tab open) usually says why
+  - if status == 'restarting'
+    p.kai-notice.kai-notice-alert id="app-restarting-#{identifier}"
+      = "#{name} keeps stopping soon after it starts, and Docker starts it again each time, so it isn't working. Its own output usually says why: "
+      a href=settings_help_path(log: "app:#{identifier}") See its output
+      | . Stop ends the restarts until you start it again.
   / A folder it was given that's gone (renamed or moved): it can't start until it's given its folders again
   / A share it was given that's gone from the NAS (deleted before 1.x kept a share an app has): an
   / update, Undo update or Change carries on without it

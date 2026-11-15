@@ -1,7 +1,8 @@
 require 'rails_helper'
 
 # A problem's report (ProblemReport): what the flag said and where, this server, the newest lines
-# of the logs most likely to show the fault, and an app's own when it needs attention.
+# of the logs most likely to show the fault, and an app's own when it needs attention or keeps
+# restarting.
 RSpec.describe ProblemReport do
   before do
     allow(ServerSummary).to receive(:text).and_return("Amahi-kai: 1.4.4 (bc809de) · releases\nApps: 1 needs attention")
@@ -32,6 +33,11 @@ RSpec.describe ProblemReport do
       ── Transmission (needs attention), last 20 lines ──
       app:transmission line (20)
     TEXT
+  end
+
+  it "quotes the output of an app that keeps restarting, which is where it says why" do
+    create(:docker_app, identifier: 'gitea', name: 'Gitea', status: 'restarting')
+    expect(described_class.details).to end_with("── Gitea (keeps restarting), last 20 lines ──\napp:gitea line (20)")
   end
 
   it "says when a log couldn't be read, and leaves the flag out when there was none" do

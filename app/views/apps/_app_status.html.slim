@@ -1,8 +1,13 @@
 / An installed app's state in a word (DockerApp#status): running, stopped, installing, or one that
-/ needs you (its install or its container failed: its page says why).
+/ needs you (its install or its container failed, or its container keeps stopping and Docker
+/ keeps starting it again: its page says why).
 - case app.status
 - when 'running'
   span.kai-pill.kai-pill-running Running
+- when 'restarting'
+  span.kai-pill.kai-pill-restarting
+    = lucide_icon('rotate-ccw', size: 11, 'aria-hidden': 'true')
+    | Keeps restarting
 - when 'stopped'
   span.kai-pill.kai-pill-stopped Stopped
 - when 'pulling', 'installing'

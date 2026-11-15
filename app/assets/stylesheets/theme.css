@@ -1290,6 +1290,9 @@ table.settings tbody tr { border-bottom-color: var(--kai-line); }
 }
 .kai-pill-alert { background: rgba(255, 143, 143, 0.14); color: #ffb0b0; }
 .kai-pill-alert::before { border-radius: 2px; background: #ff8f8f; }
+/* Keeps restarting: the red of Needs attention (it isn't working), its arrow telling the two apart */
+.kai-pill-restarting { background: rgba(255, 143, 143, 0.14); color: #ffb0b0; }
+.kai-pill-restarting svg { color: #ff8f8f; stroke-width: 3; }
 .kai-pill-outline { background: transparent; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16); font-weight: 500; }
 .kai-pill-amber { background: transparent; box-shadow: inset 0 0 0 1px rgba(255, 197, 110, 0.6); color: #ffd79a; }
 /* Update on an app's card (P4.9): the "Update ready" pill's amber, as a button */
@@ -1327,6 +1330,7 @@ table.settings tbody tr { border-bottom-color: var(--kai-line); }
 .kai-notice { margin: 0 0 16px; padding: 12px 16px; border-radius: 12px; line-height: 1.45; }
 .kai-notice-warn { background: rgba(255, 197, 110, 0.08); border: 1px solid rgba(255, 197, 110, 0.4); color: #ffe2b5; }
 .kai-notice-alert { background: rgba(255, 143, 143, 0.08); border: 1px solid rgba(255, 143, 143, 0.4); color: #ffd0d0; }
+.kai-notice-alert a { color: inherit; font-weight: 600; }
 /* An app's own page */
 .kai-apps-back { margin: 0 0 14px; }
 .kai-apps-back a { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; font-weight: 600; text-decoration: none; }

@@ -202,7 +202,10 @@ Reinstalling keeps the same values.
 **Open** and **Start** are on the Apps page; **Stop** and **Uninstall** are on the app's page
 (**Manage**). The Apps page shows what Docker reports, so an app that stopped on its own says
 **Stopped**, and one whose container was removed outside Amahi-kai says **Needs attention**, with
-the reason and **Install again** on its page. They work for an app the catalog no longer lists too.
+the reason and **Install again** on its page. One whose container keeps stopping soon after it
+starts, which Docker then starts again, says **Keeps restarting**: it isn't working, so there's
+nothing to open, and its page links to its own output (Settings → Help), which usually says why.
+**Stop** ends the restarts. They work for an app the catalog no longer lists too.
 
 **Uninstall keeps the app's data.** It removes the container and its image; the app's folder,
 passwords and user stay, and installing the app again picks them up, on the version it ran (Update

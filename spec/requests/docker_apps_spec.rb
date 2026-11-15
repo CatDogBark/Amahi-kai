@@ -125,19 +125,26 @@ describe "Docker Apps", type: :request do
       DockerApp.create!(identifier: 'uptimekuma', name: 'Uptime Kuma', image: AppCatalog.find('uptimekuma')[:image], status: 'error',
                         error_message: 'docker exited 1: pull access denied')
       DockerApp.create!(identifier: 'jellyfin', name: 'Jellyfin', image: AppCatalog.find('jellyfin')[:image], status: 'installing')
+      DockerApp.create!(identifier: 'vaultwarden', name: 'Vaultwarden', image: AppCatalog.find('vaultwarden')[:image], status: 'restarting',
+                        host_port: 8880)
       get "/apps"
       page = Nokogiri::HTML(response.body)
       yours = page.at_css('section[aria-labelledby="apps-yours"]')
-      expect(yours.css('article h3').map { |name| name.text.squish }).to eq(['Gitea', 'Jellyfin', 'Transmission', 'Uptime Kuma'])
-      expect(yours.at_css('.kai-apps-count').text.squish).to eq('4 installed · 1 running · 1 stopped · 1 installing · 1 needs attention')
-      expect(%w[gitea transmission uptimekuma jellyfin].map { |id| page.at_css("#docker_app_#{id} .kai-pill").text })
-        .to eq(['Running', 'Stopped', 'Needs attention', 'Installing…'])
+      expect(yours.css('article h3').map { |name| name.text.squish }).to eq(['Gitea', 'Jellyfin', 'Transmission', 'Uptime Kuma', 'Vaultwarden'])
+      expect(yours.at_css('.kai-apps-count').text.squish)
+        .to eq('5 installed · 1 running · 1 keeps restarting · 1 stopped · 1 installing · 1 needs attention')
+      expect(%w[gitea transmission uptimekuma jellyfin vaultwarden].map { |id| page.at_css("#docker_app_#{id} .kai-pill").text.squish })
+        .to eq(['Running', 'Stopped', 'Needs attention', 'Installing…', 'Keeps restarting'])
       expect(page.at_css('#docker_app_gitea a.btn-primary').text.squish).to eq('Open')
       expect(page.at_css('#docker_app_transmission button.btn-primary')['data-args']).to eq('["/apps/docker/start/transmission", "@el"]')
-      expect(yours.css('a.btn-outline-secondary').map { |manage| manage['href'] }).to eq(%w[/apps/gitea /apps/jellyfin /apps/transmission /apps/uptimekuma])
+      # One that keeps restarting has nothing to open: Manage, and why
+      expect(page.at_css('#docker_app_vaultwarden .btn-primary')).to be_nil
+      expect(page.at_css('#docker_app_vaultwarden .kai-app-card-note').text).to eq('It stops soon after it starts')
+      expect(yours.css('a.btn-outline-secondary').map { |manage| manage['href'] })
+        .to eq(%w[/apps/gitea /apps/jellyfin /apps/transmission /apps/uptimekuma /apps/vaultwarden])
       expect(yours.css('[data-app-shares]')).to be_empty # nothing to install up here, and no passwords either
       add = page.at_css('section#add')
-      expect(add.css('article[id^="docker_app_"]').map { |card| card['id'] }).to eq(%w[docker_app_pigallery2 docker_app_vaultwarden])
+      expect(add.css('article[id^="docker_app_"]').map { |card| card['id'] }).to eq(%w[docker_app_pigallery2])
     end
 
     it "filters only the apps to add, and says when a category has none left" do
@@ -166,6 +173,23 @@ describe "Docker Apps", type: :request do
       expect(page.at_css('#docker_app_gitea .kai-pill').text).to eq('Running')
       expect(page.at_css('#docker_app_gitea button[data-call="dockerAppAction"]')['data-args']).to eq('["/apps/docker/stop/gitea", "@el"]')
       expect(page.at_css('.kai-app-danger button')['data-args']).to eq('["/apps/docker/uninstall/gitea", "@el"]')
+    end
+
+    # It read Running, with Open, while its container crashed and Docker started it again
+    it "says on its page when an app keeps restarting: nothing to open, why, its output, and Stop" do
+      gitea(status: 'restarting', image: "gitea/gitea:1.27.2-rootless@sha256:#{'b' * 64}")
+      get "/apps/gitea"
+      page = Nokogiri::HTML(response.body)
+      hero = page.at_css('#docker_app_gitea')
+      expect(hero.at_css('.kai-pill').text.squish).to eq('Keeps restarting')
+      expect(hero.at_css('.kai-app-hero-actions').css('a, button').map { |b| b.text.squish }).to eq(['Stop'])
+      expect(hero.at_css('.kai-app-hero-actions button')['data-args']).to eq('["/apps/docker/stop/gitea", "@el"]')
+      notice = page.at_css('#app-restarting-gitea')
+      expect(notice.text.squish).to eq("Gitea keeps stopping soon after it starts, and Docker starts it again each time, so it isn't working. " \
+                                       'Its own output usually says why: See its output. Stop ends the restarts until you start it again.')
+      expect(notice.at_css('a')['href']).to eq('/settings/help?log=app%3Agitea')
+      # A new version may be what fixes it
+      expect(page.at_css('#app-version-gitea button').text).to eq('Update to 1.27.3-rootless')
     end
 
     # How to sign in the first time, above the passwords Amahi-kai made, which stay hidden until Show

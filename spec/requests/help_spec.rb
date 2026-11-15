@@ -38,6 +38,24 @@ describe 'Settings → Help', type: :request do
       expect(page.at_css('.setup-subtab .active-subtab-link').text.strip).to eq('Help')
     end
 
+    # An app's page links to its own output (one that keeps restarting)
+    it "opens on the log the address names, else Amahi-kai's own" do
+      create(:docker_app, identifier: 'gitea', name: 'Gitea', status: 'restarting')
+      allow(HelpLogs).to receive(:lines).with('app:gitea').and_return(['panic: config not found'])
+      get '/settings/help', params: { log: 'app:gitea' }
+      page = Nokogiri::HTML(response.body)
+      expect(page.css('[aria-selected="true"]').map { |tab| tab['data-log-source'] }).to eq(['app:gitea'])
+      expect(page.at_css('#help-log-about').text).to eq("Gitea's own output, from its container.")
+      expect(page.at_css('#help-log').text.strip).to eq('panic: config not found')
+
+      allow(HelpLogs).to receive(:lines).with('app:gitea').and_raise(HelpLogs::Unreadable, 'docker exited 1')
+      get '/settings/help', params: { log: 'app:gitea' }
+      expect(Nokogiri::HTML(response.body).at_css('#help-log').text.strip).to eq("Couldn't read it: docker exited 1")
+
+      get '/settings/help', params: { log: 'app:nothere' }
+      expect(Nokogiri::HTML(response.body).css('[aria-selected="true"]').map { |tab| tab['data-log-source'] }).to eq(['amahi'])
+    end
+
     it 'gives one log at a time, and says when there is none by that name or it could not be read' do
       allow(HelpLogs).to receive(:lines).with('journal').and_return(['Oct 29 03:41:06 nas systemd[1]: Started x.'])
       get '/settings/help/log', params: { source: 'journal' }

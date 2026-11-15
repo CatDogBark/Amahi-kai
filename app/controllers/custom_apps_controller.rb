@@ -86,7 +86,7 @@ class CustomAppsController < ApplicationController
     elsif installed && saved['update'] == false
       installed.relabel_ports(AppCatalog.find(@app.id)&.dig(:ports))
       redirect_to apps_app_path(@app.id), notice: "#{@app.name}'s changes are saved. They're only how it's listed, so it keeps running as it is."
-    elsif installed && %w[running stopped].include?(installed.status)
+    elsif installed&.settled?
       redirect_to apps_app_path(@app.id, apply: 1), notice: "#{@app.name}'s changes are saved: it updates to them now."
     else
       redirect_to apps_index_path(anchor: "docker_app_#{@app.id}"), notice: "#{@app.name}'s changes are saved."
