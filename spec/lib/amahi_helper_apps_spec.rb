@@ -1413,7 +1413,20 @@ RSpec.describe 'AmahiHelper apps' do
         expect(File.read("#{data}/db.sqlite3")).to eq('before')
         expect(running['vaultwarden']).to eq(old_image)
         expect(File.exist?("#{backups}/vaultwarden.json")).to be false
-        expect(ran.map { |argv| argv[1..2] }).not_to include(['image', 'rm'])
+        # The version that didn't come up goes, as Undo update's does; the one it runs stays
+        expect(ran.last).to eq(['/usr/bin/docker', 'image', 'rm', manifest[:image], { allow_failure: true }])
+        expect(ran).not_to include(['/usr/bin/docker', 'image', 'rm', old_image, { allow_failure: true }])
+      end
+
+      it "keeps the image when the change that didn't come up was an app of your own's, on the same version" do
+        stub_const('AmahiHelper::APP_CUSTOM', "#{dir}/custom-apps")
+        FileUtils.mkdir_p("#{dir}/custom-apps")
+        changed = manifest[:source].merge('image' => old_image, 'environment' => manifest[:source]['environment'].merge('LOG_LEVEL' => 'warn'))
+        File.write("#{dir}/custom-apps/vaultwarden.yml", changed.to_yaml)
+        allow(helper).to receive(:app_health_problem).and_return('it stopped (exit code 1)')
+        expect(helper.do_update_app('vaultwarden', helper.app_manifest('vaultwarden'), [])).to include('updated' => false, 'image' => old_image)
+        expect(running['vaultwarden']).to eq(old_image)
+        expect(ran.map { |argv| argv[1..2] }).not_to include(['image', 'rm']) # the image it still runs
       end
 
       it "goes back too when the new version can't even be created" do
